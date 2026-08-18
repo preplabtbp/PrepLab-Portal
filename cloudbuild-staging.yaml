@@ -1,0 +1,32 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/preplab-portal-staging:$COMMIT_SHA', '.']
+  
+  # Push the container image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/preplab-portal-staging:$COMMIT_SHA']
+  
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'preplab-portal-staging'
+      - '--image'
+      - 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/preplab-portal-staging:$COMMIT_SHA'
+      - '--region'
+      - 'asia-southeast2'
+      - '--project'
+      - '$PROJECT_ID'
+      - '--set-env-vars'
+      - 'SQL_HOST=/cloudsql/project-1bcc4549-c8d6-4962-958:us-central1:db-instance-tbp,SQL_USER=postgres,SQL_DB_NAME=appdb_staging,GCP_PROJECT_ID=project-1bcc4549-c8d6-4962-958,GCP_LOCATION=us-central1,SMTP_USER=prep.lab.tbp@gmail.com,VAPID_PUBLIC_KEY=BIgHti1XLzsQJwoWj5T_KY9HyCMN-9KZBfdrBm_0fb1oyf9pTxafwUxdl3U-LIHBya3Jg3CsCtGbVdLadi_-5Hg'
+      - '--set-secrets'
+      - 'SQL_PASSWORD=SQL_PASSWORD:latest,DATABASE_URL=DATABASE_URL_STAGING:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,SMTP_PASS=SMTP_PASS:latest,VAPID_PRIVATE_KEY=VAPID_PRIVATE_KEY:latest'
+
+images:
+  - 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/preplab-portal-staging:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
