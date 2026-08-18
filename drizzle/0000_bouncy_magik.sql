@@ -124,6 +124,21 @@ CREATE TABLE "employees" (
 	"status_kontrak" text,
 	"department" text,
 	"position" text,
+	"status_karyawan" text,
+	"tanggal_jabatan_baru" text,
+	"masa_kerja" text,
+	"masa_kerja_jabatan_terakhir" text,
+	"tanggal_permanent" text,
+	"tempat_lahir" text,
+	"phone" text,
+	"keluarga_kandung" text,
+	"phone_keluarga" text,
+	"orang_terdekat" text,
+	"phone_darurat" text,
+	"alamat_ktp" text,
+	"alamat_domisili" text,
+	"ktp" text,
+	"sponsor" text,
 	"email" text,
 	"password_hash" text,
 	"avatar" text,
@@ -173,6 +188,7 @@ CREATE TABLE "induksi" (
 --> statement-breakpoint
 CREATE TABLE "inspections" (
 	"id" serial PRIMARY KEY NOT NULL,
+	"import_id" text,
 	"date" timestamp DEFAULT now(),
 	"inspector_name" text,
 	"equipment_code" text,
@@ -255,7 +271,8 @@ CREATE TABLE "pemantauan" (
 	"kelembapan_upper" text,
 	"kelembapan_lower" text,
 	"file_report" text,
-	"ttd" text
+	"ttd" text,
+	CONSTRAINT "pemantauan_id_pemantauan_unique" UNIQUE("id_pemantauan")
 );
 --> statement-breakpoint
 CREATE TABLE "preplab_cloud_logs" (

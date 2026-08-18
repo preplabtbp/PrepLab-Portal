@@ -1,5 +1,5 @@
 {
-  "id": "53fab04c-228f-4576-a8ee-4ee17cc4edff",
+  "id": "de17d9c8-e561-4d1b-b94b-42360b1026cf",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -745,6 +745,96 @@
           "primaryKey": false,
           "notNull": false
         },
+        "status_karyawan": {
+          "name": "status_karyawan",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tanggal_jabatan_baru": {
+          "name": "tanggal_jabatan_baru",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "masa_kerja": {
+          "name": "masa_kerja",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "masa_kerja_jabatan_terakhir": {
+          "name": "masa_kerja_jabatan_terakhir",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tanggal_permanent": {
+          "name": "tanggal_permanent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tempat_lahir": {
+          "name": "tempat_lahir",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone": {
+          "name": "phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "keluarga_kandung": {
+          "name": "keluarga_kandung",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_keluarga": {
+          "name": "phone_keluarga",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "orang_terdekat": {
+          "name": "orang_terdekat",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_darurat": {
+          "name": "phone_darurat",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alamat_ktp": {
+          "name": "alamat_ktp",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alamat_domisili": {
+          "name": "alamat_domisili",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ktp": {
+          "name": "ktp",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sponsor": {
+          "name": "sponsor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "email": {
           "name": "email",
           "type": "text",
@@ -1031,6 +1121,12 @@
           "type": "serial",
           "primaryKey": true,
           "notNull": true
+        },
+        "import_id": {
+          "name": "import_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "date": {
           "name": "date",
@@ -1519,7 +1615,15 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "pemantauan_id_pemantauan_unique": {
+          "name": "pemantauan_id_pemantauan_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id_pemantauan"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

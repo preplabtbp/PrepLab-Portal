@@ -26,6 +26,8 @@ RUN npm install --production --legacy-peer-deps
 
 # Copy the built output from builder
 COPY --from=builder /app/dist ./dist
+# Copy migrations folder
+COPY drizzle ./drizzle
 
 # Optional: copy any static assets if they are served outside of dist
 COPY firebase-applet-config.json* ./
