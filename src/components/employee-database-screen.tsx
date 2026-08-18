@@ -41,7 +41,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
   if (loading) {
     return (
-      <div className="flex-1 p-4 max-w-7xl mx-auto w-full h-full bg-slate-50 flex items-center justify-center">
+      <div className="flex-1 p-4 w-full max-w-full px-4 md:px-8 w-full h-full bg-transparent flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto mb-4"></div>
           <p className="text-slate-500">Memuat database karyawan...</p>
@@ -52,7 +52,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
   if (error) {
     return (
-      <div className="flex-1 p-4 max-w-7xl mx-auto w-full h-full bg-slate-50 flex items-center justify-center text-center">
+      <div className="flex-1 p-4 w-full max-w-full px-4 md:px-8 w-full h-full bg-transparent flex items-center justify-center text-center">
         <div>
           <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-slate-800 mb-2">Terjadi Kesalahan</h2>

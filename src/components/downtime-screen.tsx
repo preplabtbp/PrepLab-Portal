@@ -47,7 +47,7 @@ export function DowntimeScreen({ equipmentCategories, inspectorNik }: { equipmen
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 md:max-w-2xl md:mx-auto">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full max-w-full md:px-8">
       <div className="px-1">
         <h2 className="text-2xl font-display font-semibold text-slate-800">Downtime</h2>
         <p className="text-sm text-slate-500 mt-1">Status Alat Breakdown</p>

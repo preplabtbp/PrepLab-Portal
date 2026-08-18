@@ -208,7 +208,7 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 md:max-w-2xl md:mx-auto">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full max-w-full md:px-8">
       <PageHeader 
         title="Checklist Harian"
         description={`Hello, ${inspectorName}`}

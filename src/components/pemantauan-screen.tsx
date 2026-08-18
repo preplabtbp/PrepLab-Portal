@@ -99,7 +99,7 @@ export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorNam
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full max-w-full px-4 md:px-8 px-2 sm:px-4 lg:px-8">
       <PageHeader 
         title="Pemantauan Rutin"
         description="Preparation & Laboratory"

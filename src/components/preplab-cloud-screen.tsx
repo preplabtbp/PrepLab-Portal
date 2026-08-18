@@ -367,7 +367,7 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
   const filteredFiles = files.filter(f => f.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="w-full h-full min-h-screen bg-slate-50 flex flex-col pb-24">
+    <div className="w-full h-full min-h-screen bg-transparent flex flex-col pb-24">
       <div className="bg-white p-4 flex items-center shadow-sm sticky top-0 z-10">
         <button onClick={() => {
           if (showLogs) setShowLogs(false);

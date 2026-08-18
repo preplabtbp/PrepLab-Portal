@@ -682,7 +682,7 @@ export default function App() {
           </button></div></div></header>
 
       {/* Main Content Area */}
-      <main className="@container flex-1 flex flex-col w-full max-w-full h-full bg-slate-50">
+      <main className="@container flex-1 flex flex-col w-full h-full bg-transparent">
         
       <Suspense fallback={<div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
               <AnimatePresence mode="wait">
@@ -795,9 +795,9 @@ export default function App() {
         )}
       </AnimatePresence>
       {!isCrewRole && (
-        <nav className="fixed bottom-0 inset-x-0 h-[4.5rem] bg-white/90 backdrop-blur-xl border-t border-slate-200 z-40 px-2 flex items-center justify-around pb-safe md:max-w-xl md:mx-auto md:bottom-6 md:rounded-2xl md:border md:shadow-lg md:pb-0">
+        <nav className="fixed bottom-0 w-full bg-white/90 backdrop-blur-xl border-t border-slate-200 z-40 flex items-center justify-around h-[4.5rem] pb-safe" style={{ backgroundColor: 'var(--bg-main)' }}>
           <NavItem 
-            icon={<Home className="w-5 h-5" />} 
+            icon={<Home className="w-5 h-5" />}
             label="Home" 
             active={activeTab === 'home'} 
             onClick={() => handleNav('home')} 

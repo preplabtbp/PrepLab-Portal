@@ -166,7 +166,7 @@ export function BulletinTopicDetail({
   const attachments = comments.filter(c => Boolean(c.fileUrl));
 
   return (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3, ease: "easeOut" }} className="flex flex-col h-full pb-36 w-full max-w-7xl mx-auto md:px-0">
+    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3, ease: "easeOut" }} className="flex flex-col h-full pb-36 w-full w-full max-w-full px-4 md:px-8 md:px-0">
       
       {/* Header / Breadcrumb */}
       <div className="bg-white/90 backdrop-blur-md p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">

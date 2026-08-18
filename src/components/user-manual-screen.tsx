@@ -186,7 +186,7 @@ export function UserManualScreen({ onBack }: { onBack: () => void }) {
   const [openSection, setOpenSection] = useState<string | null>('intro');
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="min-h-screen bg-transparent pb-20 md:pb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center gap-3">
           <button 

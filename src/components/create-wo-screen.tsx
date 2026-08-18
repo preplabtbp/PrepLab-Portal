@@ -228,7 +228,7 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in pb-10 md:max-w-2xl md:mx-auto">
+    <div className="space-y-6 animate-in fade-in pb-10 w-full max-w-full md:px-8">
       <PageHeader 
         title="Buat Work Order"
         description="Form laporan kerusakan dan permintaan"

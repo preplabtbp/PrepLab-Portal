@@ -276,7 +276,7 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 px-4 md:px-6 pt-6">
+    <div className="w-full w-full max-w-full px-4 md:px-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 px-4 md:px-6 pt-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-3xl shadow-sm border border-slate-100 gap-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 shadow-inner">
