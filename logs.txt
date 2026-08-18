@@ -1,0 +1,6 @@
+
+> react-example@0.0.0 dev
+> tsx server.ts
+
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+Cron job untuk sinkronisasi Roster dijadwalkan pada jam 12 malam WIT.

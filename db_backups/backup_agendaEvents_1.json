@@ -1,0 +1,23 @@
+{
+  "table": "agendaEvents",
+  "data": [
+    {
+      "universe": "TBP_GPS",
+      "id": "bulletin_7",
+      "title": "Tes1",
+      "startDate": "2026-07-22T20:34:00.000Z",
+      "endDate": null,
+      "kategori": "SPV UP",
+      "pic": "Muhamad Anugrah Ramadhan",
+      "deskripsi": "Ket1",
+      "routineId": null,
+      "creatorNik": "02D25000055",
+      "attachmentUrl": null,
+      "isRoutine": false,
+      "frekuensi": null,
+      "department": "Quality Assurance",
+      "bulletinPostId": 7,
+      "createdAt": "2026-07-21T11:34:37.862Z"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "table": "userThemes",
+  "data": [
+    {
+      "id": 2,
+      "nik": "M0412251310",
+      "mode": "afternoon",
+      "themeName": "afternoon",
+      "colors": "{\"--bg-main\":\"#FBF5DB\",\"--primary\":\"#76944C\",\"--primary-hover\":\"#5d753c\",\"--accent\":\"#FFD21F\",\"--card-bg\":\"#FFFFFF\",\"--text-main\":\"#333333\",\"--text-muted\":\"#8c8278\",\"--border-main\":\"#C0B6AC\",\"--input-bg\":\"#FFFFFF\",\"--bubble-color\":\"#EF4444\"}",
+      "createdAt": "2026-07-19T05:50:32.081Z",
+      "updatedAt": "2026-07-19T05:50:32.081Z"
+    },
+    {
+      "id": 3,
+      "nik": "M0411251243",
+      "mode": "afternoon",
+      "themeName": "afternoon",
+      "colors": "{\"--bg-main\":\"#0F172A\",\"--primary\":\"#3B82F6\",\"--primary-hover\":\"#2563EB\",\"--accent\":\"#8B5CF6\",\"--card-bg\":\"#1E293B\",\"--text-main\":\"#F8FAFC\",\"--text-muted\":\"#94A3B8\",\"--border-main\":\"#334155\",\"--input-bg\":\"#0F172A\",\"--bubble-color\":\"#8B5CF6\"}",
+      "createdAt": "2026-07-20T03:06:05.168Z",
+      "updatedAt": "2026-07-20T03:06:05.168Z"
+    },
+    {
+      "id": 1,
+      "nik": "02D25000055",
+      "mode": "afternoon",
+      "themeName": "afternoon",
+      "colors": "{\"--bg-main\":\"#F8FAFC\",\"--primary\":\"#1E293B\",\"--primary-hover\":\"#0F172A\",\"--accent\":\"#64748B\",\"--card-bg\":\"#FFFFFF\",\"--text-main\":\"#0F172A\",\"--text-muted\":\"#64748B\",\"--border-main\":\"#E2E8F0\",\"--input-bg\":\"#FFFFFF\",\"--bubble-color\":\"#475569\"}",
+      "createdAt": "2026-07-19T05:40:10.623Z",
+      "updatedAt": "2026-07-19T05:40:10.623Z"
+    },
+    {
+      "id": 4,
+      "nik": "02D25000055",
+      "mode": "evening",
+      "themeName": "evening",
+      "colors": "{\"--bg-main\":\"#F8FAFC\",\"--primary\":\"#1E293B\",\"--primary-hover\":\"#0F172A\",\"--accent\":\"#64748B\",\"--card-bg\":\"#FFFFFF\",\"--text-main\":\"#0F172A\",\"--text-muted\":\"#64748B\",\"--border-main\":\"#E2E8F0\",\"--input-bg\":\"#FFFFFF\",\"--bubble-color\":\"#475569\"}",
+      "createdAt": "2026-07-20T09:01:10.328Z",
+      "updatedAt": "2026-07-20T09:01:10.328Z"
+    },
+    {
+      "id": 6,
+      "nik": "04D23000035",
+      "mode": "afternoon",
+      "themeName": "afternoon",
+      "colors": "{\"--bg-main\":\"#FBF5DB\",\"--primary\":\"#76944C\",\"--primary-hover\":\"#5d753c\",\"--accent\":\"#FFD21F\",\"--card-bg\":\"#FFFFFF\",\"--text-main\":\"#333333\",\"--text-muted\":\"#8c8278\",\"--border-main\":\"#C0B6AC\",\"--input-bg\":\"#FFFFFF\",\"--bubble-color\":\"#EF4444\"}",
+      "createdAt": "2026-07-22T06:07:31.209Z",
+      "updatedAt": "2026-07-22T06:07:31.209Z"
+    },
+    {
+      "id": 5,
+      "nik": "02D25000055",
+      "mode": "morning",
+      "themeName": "morning",
+      "colors": "{\"--bg-main\":\"#FFFFFF\",\"--primary\":\"#2A9D8F\",\"--primary-hover\":\"#23A3B4\",\"--accent\":\"#E9930D\",\"--card-bg\":\"#FFFFFF\",\"--text-main\":\"#333333\",\"--text-muted\":\"#4A4A4A\",\"--border-main\":\"#DCE8F8\",\"--input-bg\":\"#FFFFFF\",\"--bubble-color\":\"#E9930D\"}",
+      "createdAt": "2026-07-21T00:31:06.202Z",
+      "updatedAt": "2026-07-21T00:31:06.202Z"
+    }
+  ]
+}

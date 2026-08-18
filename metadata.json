@@ -1,0 +1,8 @@
+{
+  "name": "PrepLab All In One Portal",
+  "description": "Aplikasi web app mobile view yang futuristik untuk pengecekan harian dan downtime alat preparasi \u0026 laboratorium dengan database Google Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

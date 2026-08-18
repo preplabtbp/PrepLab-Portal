@@ -1,0 +1,15 @@
+{
+  "table": "privateNotes",
+  "data": [
+    {
+      "id": "note_1784438113839",
+      "nik": "02D25000055",
+      "title": "testing note",
+      "content": "sadfasd",
+      "color": "#ECFDF5",
+      "attachmentUrl": null,
+      "updatedAt": "2026-07-19T05:15:14.522Z",
+      "createdAt": "2026-07-19T05:15:14.522Z"
+    }
+  ]
+}

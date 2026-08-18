@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* Teal Utama (Ikon, Diagram, Header) */
+  --color-blue-50: #eff8f7;
+  --color-blue-100: #d6eeeb;
+  --color-blue-200: #aee1da;
+  --color-blue-300: #7ccdc3;
+  --color-blue-400: #51b5aa;
+  --color-blue-500: #2a9d8f;
+  --color-blue-600: #23a3b4;
+  --color-blue-700: #1b818e;
+  --color-blue-800: #196974;
+  --color-blue-900: #175760;
+  --color-blue-950: #0d373f;
+
+  /* Oranye / Kuning Tua (Cuti, Helm & Highlight), Kuning Lembut */
+  --color-amber-50: #fff9ed;
+  --color-amber-100: #fef0d4;
+  --color-amber-200: #f7d279;
+  --color-amber-300: #fcd583;
+  --color-amber-400: #f9b945;
+  --color-amber-500: #e9930d;
+  --color-amber-600: #e28e00;
+  --color-amber-700: #b56c00;
+  --color-amber-800: #915406;
+  --color-amber-900: #78470a;
+  --color-amber-950: #452402;
+
+  --color-orange-50: #fff9ed;
+  --color-orange-100: #fef0d4;
+  --color-orange-200: #f7d279;
+  --color-orange-300: #fcd583;
+  --color-orange-400: #f9b945;
+  --color-orange-500: #e9930d;
+  --color-orange-600: #e28e00;
+  --color-orange-700: #b56c00;
+  --color-orange-800: #915406;
+  --color-orange-900: #78470a;
+  --color-orange-950: #452402;
+
+  /* Abu-Abu Tua (Teks Utama & Judul), Biru Muda / Abu-Abu Terang (Aksesori) */
+  --color-slate-50: #ffffff;
+  --color-slate-100: #dce8f8;
+  --color-slate-200: #c6d6eb;
+  --color-slate-300: #a2b9d6;
+  --color-slate-400: #7a98bd;
+  --color-slate-500: #4a4a4a;
+  --color-slate-600: #3f3f3f;
+  --color-slate-700: #333333;
+  --color-slate-800: #222222;
+  --color-slate-900: #111111;
+  --color-slate-950: #0a0a0a;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background-color: #FFFFFF;
+  color: #333333;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar for a sleek look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E0;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #A0AEC0;
+}
+
+/* Glassmorphism helpers for light pastel theme */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 1);
+  box-shadow: 0 4px 20px rgba(113, 128, 150, 0.08), inset 0 2px 0 rgba(255, 255, 255, 0.8);
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display);
+}
+
+@keyframes marquee-custom {
+  0%, 15% { transform: translateX(0); }
+  85%, 100% { transform: translateX(var(--overflow, -50px)); }
+}

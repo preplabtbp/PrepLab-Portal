@@ -1,0 +1,159 @@
+{
+  "table": "appSettings",
+  "data": [
+    {
+      "id": 1,
+      "settingKey": "WO_TEMPLATE_DOC_ID",
+      "settingValue": "1yechtOPL904YREPCfsxR5AJbyHyfVD9MwORu_ymD7eY",
+      "description": "Google Docs Template ID for WO PDF Generation",
+      "updatedAt": "2026-07-22T03:46:00.268Z"
+    },
+    {
+      "id": 3,
+      "settingKey": "INSPECTION_SUHU_TEMPLATE_DOC_ID",
+      "settingValue": "1NEmvv2ZzVICoU_3TZWsdfIQNqc2pq6gLZnJHNFLbezk",
+      "description": "Google Docs Template ID for Suhu & Kelembapan PDF",
+      "updatedAt": "2026-07-22T07:54:13.591Z"
+    },
+    {
+      "id": 4,
+      "settingKey": "INSPECTION_GAS_TEMPLATE_DOC_ID",
+      "settingValue": "1EzTAqn_8Xm0zL3Eo9kqMrbWT-GAGDVuwAVXP8kiUY44",
+      "description": "Google Docs Template ID for Gas PDF",
+      "updatedAt": "2026-07-22T07:54:13.590Z"
+    },
+    {
+      "id": 5,
+      "settingKey": "INSPECTION_PDF_DRIVE_FOLDER_ID",
+      "settingValue": "1K60yDsIjxQOm-m4FSgq-6w6L-JxKruGa",
+      "description": "Folder ID Drive untuk menyimpan PDF Laporan Inspeksi",
+      "updatedAt": "2026-07-22T07:54:13.604Z"
+    },
+    {
+      "id": 6,
+      "settingKey": "TEMPLATE_UMUM_TBP",
+      "settingValue": "1BQ-zEfNQyeqO2VmNvjDGkV73AgDeXBZSALakp4erfvA",
+      "description": "Template ID Docs Inspeksi Umum PT TBP",
+      "updatedAt": "2026-07-22T08:15:13.690Z"
+    },
+    {
+      "id": 7,
+      "settingKey": "TEMPLATE_UMUM_GPS",
+      "settingValue": "16bL1aG7QEfp_1UF38RfjCKybGP-hzJ0Qu-hlaxfjamE",
+      "description": "Template ID Docs Inspeksi Umum PT GPS",
+      "updatedAt": "2026-07-22T08:15:14.052Z"
+    },
+    {
+      "id": 8,
+      "settingKey": "TEMPLATE_P3K_TBP",
+      "settingValue": "1v-zGqnsInsrRs2eUmnQxcxw9V6xj7HWYLyPdMziOBf4",
+      "description": "Template ID Docs Kotak P3K PT TBP",
+      "updatedAt": "2026-07-22T08:15:14.408Z"
+    },
+    {
+      "id": 9,
+      "settingKey": "TEMPLATE_P3K_GPS",
+      "settingValue": "1wbc64avy6q74hJJSVQpTgp-WGzcZFGy9qnCU_GGn1Lc",
+      "description": "Template ID Docs Kotak P3K PT GPS",
+      "updatedAt": "2026-07-22T08:15:14.765Z"
+    },
+    {
+      "id": 10,
+      "settingKey": "TEMPLATE_PERKAKAS_TBP",
+      "settingValue": "1LT0BlSj35X3_ZfwFsRF3k9P2zlhpSIAI_Uzinin0l5c",
+      "description": "Template ID Docs Perkakas Tangan PT TBP",
+      "updatedAt": "2026-07-22T08:15:15.120Z"
+    },
+    {
+      "id": 11,
+      "settingKey": "TEMPLATE_PERKAKAS_GPS",
+      "settingValue": "1SRTNEY9lu__7cqxPL_UnpCXgJ95mIDUPaVDqiIHMEdI",
+      "description": "Template ID Docs Perkakas Tangan PT GPS",
+      "updatedAt": "2026-07-22T08:15:15.477Z"
+    },
+    {
+      "id": 12,
+      "settingKey": "TEMPLATE_TABUNG_TBP",
+      "settingValue": "1Em-HadJE5WpR1Rq31tvtE3mR0lZABeuIy-EcVa2k-QI",
+      "description": "Template ID Docs Tabung Gas PT TBP",
+      "updatedAt": "2026-07-22T08:15:15.832Z"
+    },
+    {
+      "id": 13,
+      "settingKey": "TEMPLATE_TABUNG_GPS",
+      "settingValue": "1S_WUHkSt9fIc7zhYYSnJZpc_HEibe8j2KY8OlEoHu0I",
+      "description": "Template ID Docs Tabung Gas PT GPS",
+      "updatedAt": "2026-07-22T08:15:16.189Z"
+    },
+    {
+      "id": 14,
+      "settingKey": "TEMPLATE_SARANA_TBP",
+      "settingValue": "10m-Mrp4L9l95BTyTBXFQV8Vpp1iOhBGNs4qcdtdR2zM",
+      "description": "Template ID Docs Sarana Prasarana PT TBP",
+      "updatedAt": "2026-07-22T08:15:16.545Z"
+    },
+    {
+      "id": 15,
+      "settingKey": "TEMPLATE_SARANA_GPS",
+      "settingValue": "1HY2kt0rLpZQG5qOc0HUAINwgmmiQId9fKHdLAeqXOJo",
+      "description": "Template ID Docs Sarana Prasarana PT GPS",
+      "updatedAt": "2026-07-22T08:15:16.899Z"
+    },
+    {
+      "id": 16,
+      "settingKey": "TEMPLATE_TANGGA_TBP",
+      "settingValue": "1aHo4fHPPdOPBwytxXsuSXEEeMTkr9IuE6szDOoQk4qU",
+      "description": "Template ID Docs Tangga Portabel PT TBP",
+      "updatedAt": "2026-07-22T08:15:17.254Z"
+    },
+    {
+      "id": 17,
+      "settingKey": "TEMPLATE_TANGGA_GPS",
+      "settingValue": "1KylGdIK7oKoyBbyxrUmcfm8XHVJYRM9RuQVTK3Akzjg",
+      "description": "Template ID Docs Tangga Portabel PT GPS",
+      "updatedAt": "2026-07-22T08:15:17.609Z"
+    },
+    {
+      "id": 18,
+      "settingKey": "TEMPLATE_APD_TBP",
+      "settingValue": "14yUFPY64xH8GapL8NwSA2KM7HwdXd6k-vLh52pJ0HzQ",
+      "description": "Template ID Docs Inspeksi APD PT TBP",
+      "updatedAt": "2026-07-22T08:15:17.967Z"
+    },
+    {
+      "id": 19,
+      "settingKey": "TEMPLATE_APD_GPS",
+      "settingValue": "1EJPapWAzQw71CFazi7qFZldVjpx9GNZwMGwevP35pBY",
+      "description": "Template ID Docs Inspeksi APD PT GPS",
+      "updatedAt": "2026-07-22T08:15:18.324Z"
+    },
+    {
+      "id": 20,
+      "settingKey": "GAS_WEB_APP_URL",
+      "settingValue": "https://script.google.com/macros/s/AKfycbwwZ-J8Ok3teJGe2RKljnZRxcYLSIPnjv_lUvdlhw1hc7NyyXjb3fF-wQZXx-MJw9nr/exec",
+      "description": "URL Web App Google Apps Script untuk cetak PDF Laporan (Opsional)",
+      "updatedAt": "2026-07-22T08:22:45.205Z"
+    },
+    {
+      "id": 2,
+      "settingKey": "WO_PDF_DRIVE_FOLDER_ID",
+      "settingValue": "1JJZKj7X1vsNNP5dTWDYJ_-0xYVhU0Bu7",
+      "description": "Google Drive Folder ID for storing WO PDFs",
+      "updatedAt": "2026-07-22T03:46:00.268Z"
+    },
+    {
+      "id": 21,
+      "settingKey": "QUIZ_CONFIG",
+      "settingValue": "{\"counts\":{\"Administrasi\":5,\"Golden Rules\":2,\"Kebijakan K3 Perusahaan\":3,\"Basic Safety\":7,\"Istilah Teknis\":2,\"Lingkungan\":3,\"SPDK\":3},\"activeQuestionIds\":[11,35,98,45,68,65,95,46,13,78,92,39,97,5,3,69,51,21,89,42,57,53,81,84,63]}",
+      "description": "Quiz Configuration",
+      "updatedAt": "2026-07-31T23:20:48.106Z"
+    },
+    {
+      "id": 22,
+      "settingKey": "QUIZ_LIVE_STATUS",
+      "settingValue": "false",
+      "description": "Quiz Live Status",
+      "updatedAt": "2026-08-09T07:15:37.129Z"
+    }
+  ]
+}
