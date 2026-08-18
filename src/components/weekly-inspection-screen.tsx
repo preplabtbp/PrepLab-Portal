@@ -39,10 +39,11 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
       
       if (Array.isArray(data)) {
         data.forEach((item: any) => {
-          if (!mapForm.has(item.idForm)) {
-            mapForm.set(item.idForm, true);
-            let jdl = item.judulForm || "";
-            let tipe = (item.tipeInput || "").toString().trim().toUpperCase();
+          if (!mapForm.has(item.id_form || item.idForm)) {
+            const formId = item.id_form || item.idForm;
+            mapForm.set(formId, true);
+            let jdl = item.judul_form || item.judulForm || "";
+            let tipe = (item.tipe_input || item.tipeInput || "").toString().trim().toUpperCase();
             
             // Clean up title
             let lowerJdl = jdl.toLowerCase();
@@ -58,7 +59,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
             if (cutIdx !== -1) jdl = jdl.substring(cutIdx);
             jdl = jdl.charAt(0).toUpperCase() + jdl.slice(1).trim();
             
-            listUniqueForm.push({ id: item.idForm, judul: jdl, tipe: tipe });
+            listUniqueForm.push({ id: formId, judul: jdl, tipe: tipe });
           }
         });
       }
@@ -216,7 +217,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
   const tipeFormActive = uniqueForms.find(f => f.id === selectedForm)?.tipe;
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 md:max-w-3xl md:mx-auto">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full">
       <PageHeader 
         title="Inspeksi Terpadu JSA"
         description="Formulir dinamis terintegrasi Preparation & Laboratory"
@@ -272,7 +273,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
 
       {selectedForm && tipeFormActive === "UMUM" && (
         <FormUmum 
-          data={masterForms?.filter(f => f.idForm === selectedForm) || []} 
+          data={masterForms?.filter(f => (f.id_form || f.idForm) === selectedForm) || []} 
           inspectorName={inspectorName}
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitUniversal} 
@@ -281,7 +282,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
 
       {selectedForm && tipeFormActive === "P3K" && (
         <FormP3K
-          data={masterForms?.filter(f => f.idForm === selectedForm) || []}
+          data={masterForms?.filter(f => (f.id_form || f.idForm) === selectedForm) || []}
           inspectorName={inspectorName}
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitUniversal}
@@ -290,7 +291,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
 
       {selectedForm && tipeFormActive === "PERKAKAS" && (
         <FormPerkakas
-          data={masterForms?.filter(f => f.idForm === selectedForm) || []}
+          data={masterForms?.filter(f => (f.id_form || f.idForm) === selectedForm) || []}
           inspectorName={inspectorName}
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitUniversal}
@@ -299,7 +300,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
 
       {selectedForm && (tipeFormActive === "TABUNG_MINGGUAN" || tipeFormActive === "TABUNG") && (
         <FormTabung
-          data={masterForms?.filter(f => f.idForm === selectedForm) || []}
+          data={masterForms?.filter(f => (f.id_form || f.idForm) === selectedForm) || []}
           inspectorName={inspectorName}
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitUniversal}
@@ -316,7 +317,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
 
       {selectedForm && tipeFormActive === "TANGGA" && (
         <FormTangga
-          data={masterForms?.filter(f => f.idForm === selectedForm) || []}
+          data={masterForms?.filter(f => (f.id_form || f.idForm) === selectedForm) || []}
           inspectorName={inspectorName}
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitUniversal}
