@@ -125,16 +125,15 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
   };
 
   const handleRegeneratePdf = async (id: number) => {
+    const toastId = toast.loading('Sedang memproses ulang PDF...');
     try {
-      setLoading(true);
       const res = await fetch(`/api/admin/inspections/${id}/regenerate-pdf`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to regenerate PDF');
-      toast.success('PDF berhasil di-generate ulang!');
+      toast.success('Berhasil memproses PDF', { id: toastId });
       fetchData();
     } catch (e: any) {
-      console.error(e);
-      toast.error(e.message || 'Gagal regenerate PDF');
+      toast.error(e.message || 'Gagal memproses PDF', { id: toastId });
     } finally {
       setLoading(false);
     }
@@ -405,9 +404,10 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       result = result.filter(item => 
-        Object.values(item).some(val => 
-          String(val).toLowerCase().includes(lowerSearch)
-        )
+        Object.entries(item).some(([key, val]) => {
+          if (key.toLowerCase() === 'dataf' || key.toLowerCase() === 'json') return false;
+          return String(val).toLowerCase().includes(lowerSearch);
+        })
       );
     }
     if (sortConfig !== null) {
@@ -491,7 +491,7 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-20 px-2 sm:px-0">
       <PageHeader 
         title="Developer Panel"
         description="Modular Panel Konfigurasi Sistem"
@@ -661,7 +661,7 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
                         </>
                       ) : (
                         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-1">
-                          {selectedTable === 'inspections' && (!row.pdfUrl || row.pdfUrl === '-' || row.pdfUrl === 'GAS_GENERATED') && (
+                          {selectedTable === 'inspections' && (
                             <button onClick={() => handleRegeneratePdf(row.id)} title="Regenerate PDF" className="text-orange-600 hover:bg-orange-100 p-1.5 rounded-md transition-colors border border-orange-200 bg-white shadow-sm"><FileText className="w-4 h-4" /></button>
                           )}
                           <button onClick={() => { setEditingId(row.id); setEditForm(row); setIsAdding(false); }} className="text-blue-600 hover:bg-blue-100 p-1.5 rounded-md transition-colors"><Edit2 className="w-4 h-4" /></button>

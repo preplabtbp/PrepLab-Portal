@@ -32,6 +32,12 @@ router.post("/api/inspections/universal", async (req, res) => {
       
       const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
       
+      let finalTtd1 = ttd1;
+      let finalTtd2 = ttd2;
+      let finalTtd3 = ttd3;
+      let finalFotoProses = fotoProses;
+      let finalFotoTemuanArray = fotoTemuanArray;
+
       if (gasUrl) {
           try {
               console.log("Forwarding to GAS Web App...");
@@ -44,24 +50,35 @@ router.post("/api/inspections/universal", async (req, res) => {
                   },
                   ttd1, ttd2, ttd3, fotoTemuanArray, fotoProses
               };
-              
+
               const gasRes = await fetch(gasUrl, {
                   method: 'POST',
                   headers: { 'Content-Type': 'text/plain' },
                   body: JSON.stringify(payloadToGas)
               });
               
-              
               const gasText = await gasRes.text();
-              console.log("GAS Response:", gasText.substring(0, 200));
+              console.log("GAS Response (Universal):", gasText.substring(0, 200));
               try {
                   const gasData = JSON.parse(gasText);
                   if (gasData.success && gasData.data) {
-                     // Check if GAS returned a JSON string or object
                      let parsedData = gasData.data;
                      if (typeof parsedData === 'string' && parsedData.startsWith('{')) {
                         parsedData = JSON.parse(parsedData);
                      }
+                     
+                     if (parsedData.urlTTD1 && parsedData.urlTTD1 !== '-') finalTtd1 = parsedData.urlTTD1;
+                     if (parsedData.urlTTD2 && parsedData.urlTTD2 !== '-') finalTtd2 = parsedData.urlTTD2;
+                     if (parsedData.urlTTD3 && parsedData.urlTTD3 !== '-') finalTtd3 = parsedData.urlTTD3;
+                     if (parsedData.urlFP && parsedData.urlFP !== '-') finalFotoProses = parsedData.urlFP;
+                     if (parsedData.urlT1 || parsedData.urlT2 || parsedData.urlT3) {
+                         finalFotoTemuanArray = [
+                             parsedData.urlT1 && parsedData.urlT1 !== '-' ? parsedData.urlT1 : (fotoTemuanArray?.[0] || ''),
+                             parsedData.urlT2 && parsedData.urlT2 !== '-' ? parsedData.urlT2 : (fotoTemuanArray?.[1] || ''),
+                             parsedData.urlT3 && parsedData.urlT3 !== '-' ? parsedData.urlT3 : (fotoTemuanArray?.[2] || '')
+                         ];
+                     }
+
                      if (parsedData.pdfUrl && parsedData.pdfUrl !== '-') pdfUrl = parsedData.pdfUrl;
                      else if (parsedData.linkPdf1 && parsedData.linkPdf1 !== '-') pdfUrl = parsedData.linkPdf1;
                      else if (parsedData.linkPdf && parsedData.linkPdf !== '-') pdfUrl = parsedData.linkPdf;
@@ -100,23 +117,22 @@ router.post("/api/inspections/universal", async (req, res) => {
                         pdfUrl = "GAS_GENERATED";
                      }
                   }
-              } catch(e) {
-                 console.error("Error parsing GAS response", e);
-              }
+              } catch(e) {}
               
           } catch(e) {
               console.error("Failed forwarding to GAS:", e);
           }
       }
 
-      // Save to Postgres
       const result = await db.insert(inspections as any).values({
         type: finalData?.judulForm || 'Mingguan',
         inspectorName: finalData?.insp1 || 'Unknown',
         location: finalData?.lokasiUmum || 'Area',
         notes: finalData?.catatanUmum || '',
         dataF: JSON.stringify(finalData),
-        pdfUrl: pdfUrl
+        pdfUrl: pdfUrl,
+        signature: JSON.stringify({ ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3 }),
+        photoUrl: JSON.stringify({ fotoTemuanArray: finalFotoTemuanArray, fotoProses: finalFotoProses })
       }).returning();
       
       
@@ -215,6 +231,12 @@ router.post("/api/inspections", async (req, res) => {
       
       const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
       
+      let finalTtd1 = ttd1;
+      let finalTtd2 = ttd2;
+      let finalTtd3 = ttd3;
+      let finalFotoProses = fotoProses;
+      let finalFotoTemuanArray = req.body.fotoTemuanArray;
+
       if (gasUrl) {
           try {
               console.log("Forwarding APD to GAS Web App...");
@@ -231,7 +253,6 @@ router.post("/api/inspections", async (req, res) => {
                   body: JSON.stringify(payloadToGas)
               });
               
-              
               const gasText = await gasRes.text();
               console.log("GAS Response (APD):", gasText.substring(0, 200));
               try {
@@ -241,6 +262,12 @@ router.post("/api/inspections", async (req, res) => {
                      if (typeof parsedData === 'string' && parsedData.startsWith('{')) {
                         parsedData = JSON.parse(parsedData);
                      }
+                     
+                     if (parsedData.urlTTD1 && parsedData.urlTTD1 !== '-') finalTtd1 = parsedData.urlTTD1;
+                     if (parsedData.urlTTD2 && parsedData.urlTTD2 !== '-') finalTtd2 = parsedData.urlTTD2;
+                     if (parsedData.urlTTD3 && parsedData.urlTTD3 !== '-') finalTtd3 = parsedData.urlTTD3;
+                     if (parsedData.urlFP && parsedData.urlFP !== '-') finalFotoProses = parsedData.urlFP;
+
                      if (parsedData.pdfUrl && parsedData.pdfUrl !== '-') pdfUrl = parsedData.pdfUrl;
                      else if (parsedData.linkPdf1 && parsedData.linkPdf1 !== '-') pdfUrl = parsedData.linkPdf1;
                      else if (parsedData.linkPdf && parsedData.linkPdf !== '-') pdfUrl = parsedData.linkPdf;
@@ -291,7 +318,9 @@ router.post("/api/inspections", async (req, res) => {
           inspectorName: (dataF && dataF.length > 0 && dataF[0][16]) || 'Unknown',
           location: (dataF && dataF.length > 0 && dataF[0][2]) || 'Area',
           dataF: JSON.stringify(dataF),
-          pdfUrl: pdfUrl
+          pdfUrl: pdfUrl,
+          signature: JSON.stringify({ ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3 }),
+          photoUrl: JSON.stringify({ fotoProses: finalFotoProses, fotoTemuanArray: finalFotoTemuanArray })
       }).returning();
       
       let waMessageText = `*==== LAPORAN KEPATUHAN APD ====*\n\n`;
@@ -377,14 +406,35 @@ router.post("/api/admin/inspections/:id/regenerate-pdf", async (req, res) => {
 
         if (!gasUrl) return res.status(500).json({ error: "GAS_WEB_APP_URL not configured" });
 
+        let parsedSignature: any = { ttd1: "", ttd2: "", ttd3: "" };
+        let parsedPhoto: any = { fotoProses: "", fotoTemuanArray: [] };
+
+        if (record.signature) {
+            try { parsedSignature = JSON.parse(record.signature); } catch(e) {}
+        }
+        if (record.photoUrl) {
+            try { parsedPhoto = JSON.parse(record.photoUrl); } catch(e) {}
+        }
+
         const isUniversal = Array.isArray(parsedDataF) ? false : true;
+        
         const payloadToGas = isUniversal ? {
             action: "submitInspeksiUniversal",
-            finalData: { ...parsedDataF, devOptions: { isDev: true, db: false, pdf: true, verboseLog: true } }
+            finalData: { ...parsedDataF, devOptions: { isDev: true, db: false, pdf: true, verboseLog: true } },
+            ttd1: parsedSignature.ttd1 || "",
+            ttd2: parsedSignature.ttd2 || "",
+            ttd3: parsedSignature.ttd3 || "",
+            fotoProses: parsedPhoto.fotoProses || "",
+            fotoTemuanArray: parsedPhoto.fotoTemuanArray || []
         } : {
             action: "submitInspeksi",
             dataF: parsedDataF,
-            devOptions: { isDev: true, db: false, pdf: true, verboseLog: true }
+            devOptions: { isDev: true, db: false, pdf: true, verboseLog: true },
+            ttd1: parsedSignature.ttd1 || "",
+            ttd2: parsedSignature.ttd2 || "",
+            ttd3: parsedSignature.ttd3 || "",
+            fotoProses: parsedPhoto.fotoProses || "",
+            fotoTemuanArray: parsedPhoto.fotoTemuanArray || []
         };
 
         const gasRes = await fetch(gasUrl, {
