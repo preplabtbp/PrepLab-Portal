@@ -1,0 +1,1 @@
+import 'dotenv/config'; import { drive } from './google-services.ts'; async function run() { try { const res = await drive.files.list({ q: "name contains 'Master_Pertanyaan' and mimeType='application/vnd.google-apps.spreadsheet'", fields: 'files(id, name, createdTime)' }); console.log('Found:', res.data.files); } catch(e) { console.error(e); } } run();

@@ -111,7 +111,8 @@ router.post("/api/inspections/universal", async (req, res) => {
 
       // Save to Postgres
       const result = await db.insert(inspections as any).values({
-        type: 'Mingguan',
+        type: finalData?.judulForm || 'Mingguan',
+        inspectorName: finalData?.insp1 || 'Unknown',
         location: finalData?.lokasiUmum || 'Area',
         notes: finalData?.catatanUmum || '',
         dataF: JSON.stringify(finalData),
@@ -137,6 +138,41 @@ router.post("/api/inspections/universal", async (req, res) => {
               if (t.keterangan) waMessageText += `   - Ket: ${t.keterangan}\n`;
               if (t.tindakLanjut) waMessageText += `   - Tindakan: ${t.tindakLanjut}\n`;
           });
+          
+          // --- BEGIN MIGRASI REKAP TEMUAN KE SQL ---
+          try {
+              const ticketValues = finalData.temuanUmum.map((t: any, i: number) => {
+                  let photoUrl = '';
+                  // If fotoTemuanArray is passed and has a corresponding photo (assuming index matches)
+                  if (fotoTemuanArray && fotoTemuanArray.length > i && fotoTemuanArray[i]) {
+                      photoUrl = typeof fotoTemuanArray[i] === 'string' ? fotoTemuanArray[i] : (fotoTemuanArray[i].base64 || '');
+                  }
+                  
+                  return {
+                      ticketId: `TKT-INS-${Date.now()}-${i}`,
+                      requestorName: finalData.insp1 || 'Inspector',
+                      category: finalData.judulForm || 'Inspeksi',
+                      location: finalData.lokasiUmum || 'Area',
+                      description: t.pertanyaan || t.temuan || 'Temuan Inspeksi',
+                      risk: t.keterangan || null,
+                      initialControl: t.tindakLanjut || null,
+                      source: 'inspeksi',
+                      status: 'OPEN',
+                      priority: 'Medium',
+                      photoUrl: photoUrl || null,
+                      date: new Date()
+                  };
+              });
+              
+              if (ticketValues.length > 0) {
+                  await db.insert(tickets).values(ticketValues);
+                  console.log(`Inserted ${ticketValues.length} temuan into tickets table.`);
+              }
+          } catch(e) {
+              console.error("Failed to insert temuan to tickets table:", e);
+          }
+          // --- END MIGRASI REKAP TEMUAN KE SQL ---
+          
       } else {
           waMessageText += `\n*DAFTAR TEMUAN*: Nihil\n`;
       }
@@ -156,7 +192,7 @@ router.post("/api/inspections/universal", async (req, res) => {
       res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl, waMessageText });
     } catch (error: any) {
       console.error(error);
-      res.status(500).json({ error: "Failed to save universal inspection" });
+      res.status(500).json({ error: "Failed to save universal inspection: " + (error.message || String(error)) });
     }
   });
 
@@ -251,7 +287,9 @@ router.post("/api/inspections", async (req, res) => {
       }
 
       const result = await db.insert(inspections as any).values({
-          type: 'Mingguan',
+          type: 'Kepatuhan APD',
+          inspectorName: (dataF && dataF.length > 0 && dataF[0][16]) || 'Unknown',
+          location: (dataF && dataF.length > 0 && dataF[0][2]) || 'Area',
           dataF: JSON.stringify(dataF),
           pdfUrl: pdfUrl
       }).returning();
@@ -320,6 +358,85 @@ router.post("/api/inspections", async (req, res) => {
       res.status(500).json({ error: "Failed to save inspection" });
     }
   });
+
+router.post("/api/admin/inspections/:id/regenerate-pdf", async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const recordList = await db.select().from(inspections).where(eq(inspections.id, id));
+        if (recordList.length === 0) return res.status(404).json({ error: "Inspection not found" });
+        
+        const record = recordList[0];
+        if (!record.dataF) return res.status(400).json({ error: "No payload data saved for this inspection" });
+
+        const parsedDataF = JSON.parse(record.dataF as string);
+
+        const settingsObj: any = {};
+        const allSettings = await db.select().from(appSettings);
+        allSettings.forEach((s: any) => { settingsObj[s.settingKey] = s.settingValue || ''; });
+        const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
+
+        if (!gasUrl) return res.status(500).json({ error: "GAS_WEB_APP_URL not configured" });
+
+        const isUniversal = Array.isArray(parsedDataF) ? false : true;
+        const payloadToGas = isUniversal ? {
+            action: "submitInspeksiUniversal",
+            finalData: { ...parsedDataF, devOptions: { isDev: true, db: false, pdf: true, verboseLog: true } }
+        } : {
+            action: "submitInspeksi",
+            dataF: parsedDataF,
+            devOptions: { isDev: true, db: false, pdf: true, verboseLog: true }
+        };
+
+        const gasRes = await fetch(gasUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payloadToGas)
+        });
+
+        const gasText = await gasRes.text();
+        let pdfUrl = '';
+        try {
+            const gasData = JSON.parse(gasText);
+            if (gasData.success && gasData.data) {
+                let pd = gasData.data;
+                if (typeof pd === 'string' && pd.startsWith('{')) pd = JSON.parse(pd);
+                
+                pdfUrl = pd.pdfUrl || pd.linkPdf1 || pd.linkPdf || pd.fileUrl || '';
+                
+                if (!pdfUrl) {
+                     let urlsFound = [];
+                     function deepFindUrls(obj, arr) {
+                         if (typeof obj === 'string') {
+                             const matches = obj.match(/https?:\/\/[^\s"',]+/g);
+                             if (matches) matches.forEach(m => arr.push(m));
+                         } else if (typeof obj === 'object' && obj !== null) {
+                             for (let k in obj) deepFindUrls(obj[k], arr);
+                         }
+                     }
+                     deepFindUrls(pd, urlsFound);
+                     let uniqueUrls = [...new Set(urlsFound)];
+                     if (uniqueUrls.length > 0) pdfUrl = uniqueUrls[0];
+                }
+            }
+        } catch(e) {
+            return res.status(500).json({ error: "Failed parsing GAS response", details: gasText });
+        }
+
+        if (!pdfUrl || pdfUrl === '-') {
+            return res.status(500).json({ error: "GAS did not return a valid PDF URL", details: gasText });
+        }
+
+        await db.update(inspections)
+            .set({ pdfUrl: pdfUrl })
+            .where(eq(inspections.id, id));
+
+        res.json({ success: true, pdfUrl: pdfUrl });
+
+    } catch (error: any) {
+        console.error("Regenerate PDF Error:", error);
+        res.status(500).json({ error: "Failed to regenerate PDF: " + (error.message || String(error)) });
+    }
+});
 
 router.post("/api/inspections/bulk-harian", async (req, res) => {
     try {

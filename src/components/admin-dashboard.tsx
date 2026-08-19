@@ -124,6 +124,23 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
     }
   };
 
+  const handleRegeneratePdf = async (id: number) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/admin/inspections/${id}/regenerate-pdf`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to regenerate PDF');
+      toast.success('PDF berhasil di-generate ulang!');
+      fetchData();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.message || 'Gagal regenerate PDF');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
   const handleAdd = async () => {
     try {
       const res = await fetch(`/api/admin/tables/${selectedTable}`, {
@@ -437,6 +454,17 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
       return <span className="font-mono text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 shadow-sm">{valStr}</span>;
     }
 
+    if (lowerCol === 'pdfurl') {
+      if (!valStr || valStr === '-' || valStr === 'GAS_GENERATED') {
+         return <span className="text-xs text-rose-500 font-semibold bg-rose-50 px-2 py-1 rounded">Belum ada PDF</span>;
+      }
+      return <a href={valStr} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline truncate max-w-[150px] inline-block" title={valStr}>Lihat PDF</a>;
+    }
+
+    if (lowerCol === 'dataf') {
+      return <span className="text-xs text-slate-400 italic">Hidden Data</span>;
+    }
+
     if (lowerCol === 'item' || lowerCol === 'deskripsi') {
        return <span className="text-sm text-slate-600 block max-w-[250px] truncate" title={valStr}>{valStr}</span>;
     }
@@ -633,6 +661,9 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
                         </>
                       ) : (
                         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-1">
+                          {selectedTable === 'inspections' && (!row.pdfUrl || row.pdfUrl === '-' || row.pdfUrl === 'GAS_GENERATED') && (
+                            <button onClick={() => handleRegeneratePdf(row.id)} title="Regenerate PDF" className="text-orange-600 hover:bg-orange-100 p-1.5 rounded-md transition-colors border border-orange-200 bg-white shadow-sm"><FileText className="w-4 h-4" /></button>
+                          )}
                           <button onClick={() => { setEditingId(row.id); setEditForm(row); setIsAdding(false); }} className="text-blue-600 hover:bg-blue-100 p-1.5 rounded-md transition-colors"><Edit2 className="w-4 h-4" /></button>
                           <button onClick={() => handleDelete(row.id)} className="text-rose-600 hover:bg-rose-100 p-1.5 rounded-md transition-colors"><Trash2 className="w-4 h-4" /></button>
                         </div>

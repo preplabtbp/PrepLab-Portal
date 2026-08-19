@@ -11,6 +11,7 @@ import { Toaster, toast } from 'sonner';
 import ThemeModal from './components/ThemeModal';
 import { Palette } from 'lucide-react';
 import { initAuth, googleSignIn } from './google-auth';
+import { WhatsAppModal } from './components/whatsapp-modal';
 
 
 
@@ -62,6 +63,9 @@ const UserManualScreen = lazy(() => import('./components/user-manual-screen').th
 const EmployeeDatabaseScreen = lazy(() => import('./components/employee-database-screen').then(m => ({ default: m.EmployeeDatabaseScreen })));
 
 export default function App() {
+
+  // Global WhatsApp modal state — lifted here so it survives route changes
+  const [globalWaMessage, setGlobalWaMessage] = useState('');
 
   // Listen for SW messages (push received)
   useEffect(() => {
@@ -315,6 +319,16 @@ export default function App() {
       console.error("Gagal load master data", err);
     }
   };
+
+  const { data: appEnv } = useQuery({
+    queryKey: ['appEnv'],
+    queryFn: async () => {
+      const res = await fetch('/api/config/env');
+      const data = await res.json();
+      return data.env;
+    },
+    staleTime: Infinity,
+  });
 
   useEffect(() => {
     if (employeesData) {
@@ -630,12 +644,18 @@ export default function App() {
     );
   }
 
+
   return (
     <div className="flex w-full min-h-[100dvh] overflow-hidden" style={{ backgroundColor: 'var(--bg-main, #F4F7F6)' }}>
       <div 
         className={`flex-1 relative transition-all duration-300 overflow-x-hidden overflow-y-auto h-[100dvh] ${showProfileScreen ? 'md:mr-[400px] lg:mr-[480px]' : ''}`}
         style={{ backgroundColor: 'var(--bg-main, #F4F7F6)', color: 'var(--text-main, #333)' }}
       >
+        {appEnv === 'staging' && (
+          <div className="w-full bg-orange-500 text-white text-xs font-bold py-1 px-4 text-center z-[100] relative tracking-widest uppercase">
+            STAGING ENVIRONMENT - DATA TEST
+          </div>
+        )}
         <div className="flex flex-col pb-20 relative min-h-[100dvh]">
           <ThemeModal 
             show={showGlobalThemeModal} 
@@ -648,8 +668,8 @@ export default function App() {
       <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-slate-200/50 to-transparent pointer-events-none"></div>
       
       {/* Header */}
-      <header className="px-4 py-3 sticky top-0 z-50 bg-[#F4F7F6]/80 backdrop-blur-md border-b border-slate-200/50 w-full">
-        <div className="flex justify-between items-center w-full max-w-7xl mx-auto">
+      <header className="px-4 py-3 sticky top-0 z-50 bg-[#F4F7F6]/80 backdrop-blur-md border-b border-slate-200/50 w-full flex justify-center">
+        <div className="flex justify-between items-center w-full max-w-3xl mx-auto">
         <div className="flex items-center gap-3">
           {activeTab !== 'home' ? (
             <button 
@@ -695,7 +715,7 @@ export default function App() {
   <Route path="/create-internal-ticket" element={<CreateInternalTicketScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
   <Route path="/wo-list" element={<WOListScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} />} />
   <Route path="/ticket" element={<TicketScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} />} />
-  <Route path="/weekly-inspection" element={<WeeklyInspectionScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorJabatan={userProfile?.jabatan || ""} />} />
+  <Route path="/weekly-inspection" element={<WeeklyInspectionScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorJabatan={userProfile?.jabatan || ""} onInspectionComplete={(msg) => setGlobalWaMessage(msg)} />} />
   <Route path="/pemantauan" element={<PemantauanScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} />} />
   <Route path="/monitoring" element={<MonitoringDashboard inspectorNik={inspectorNik!} />} />
   <Route path="/quiz-admin" element={<QuizAdminScreen userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
@@ -837,6 +857,15 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* Global WhatsApp Modal — survives navigation */}
+      <WhatsAppModal
+        isOpen={!!globalWaMessage}
+        onClose={() => setGlobalWaMessage('')}
+        messageText={globalWaMessage}
+        title="Laporan Inspeksi Berhasil"
+        description="Kirim laporan ke supervisor via WhatsApp."
+      />
 
     </div>
   );

@@ -407,10 +407,22 @@ app.use("/api/debug", debugRouter);
     }
   };
 
+  app.get("/api/questions", async (req, res) => {
+    try {
+      const data = await db.select().from(questions);
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching questions:", error);
+      res.status(500).json({ error: "Failed to fetch questions" });
+    }
+  });
 
+  app.get("/api/config/env", (req, res) => {
+    res.json({
+      env: process.env.APP_ENV || 'production'
+    });
+  });
 
-
-  
   const sanitizePayload = (t: any, payload: any): any => {
     const cleaned: any = {};
     for (const key of Object.keys(payload)) {

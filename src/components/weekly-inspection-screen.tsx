@@ -11,14 +11,12 @@ import { FormSarana } from './inspection-forms/FormSarana';
 import { FormTangga } from './inspection-forms/FormTangga';
 import { FormAPD } from './inspection-forms/FormAPD';
 import { DevModeAccordion, useDevOptions } from './dev-mode-accordion';
-import { WhatsAppModal } from './whatsapp-modal';
 import { PageHeader } from './PageHeader';
 
-export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJabatan }: { inspectorName: string, inspectorNik: string, inspectorJabatan?: string }) {
+export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJabatan, onInspectionComplete }: { inspectorName: string, inspectorNik: string, inspectorJabatan?: string, onInspectionComplete?: (message: string) => void }) {
   const [loading, setLoading] = useState(true);
   const [masterForms, setMasterForms] = useState<any[]>([]);
   const [selectedForm, setSelectedForm] = useState<string>('');
-  const [waMessageToModal, setWaMessageToModal] = useState('');
   
   const { devOptions, setDevOptions, parsedDevOptions } = useDevOptions(inspectorNik);
 
@@ -110,7 +108,8 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
       setIsSubmitting(false);
       setSelectedForm('');
       if (data?.waMessageText) {
-          setWaMessageToModal(data.waMessageText);
+        // Lift to App-level modal so navigating away doesn't lose it
+        onInspectionComplete?.(data.waMessageText);
       }
     }).catch(() => {
       setIsSubmitting(false);
@@ -189,7 +188,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
         setIsSubmitting(false);
         setSelectedForm('');
         if (data?.waMessageText) {
-            setWaMessageToModal(data.waMessageText);
+            onInspectionComplete?.(data.waMessageText);
         }
       }).catch(() => {
         setIsSubmitting(false);
@@ -217,7 +216,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
   const tipeFormActive = uniqueForms.find(f => f.id === selectedForm)?.tipe;
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full max-w-3xl mx-auto px-4 sm:px-0">
       <PageHeader 
         title="Inspeksi Terpadu JSA"
         description="Formulir dinamis terintegrasi Preparation & Laboratory"
@@ -333,14 +332,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
         />
       )}
 
-      {/* Modals */}
-      <WhatsAppModal
-        isOpen={!!waMessageToModal}
-        onClose={() => setWaMessageToModal('')}
-        messageText={waMessageToModal}
-        title="Laporan Inspeksi Berhasil"
-        description="Kirim laporan ke supervisor via WhatsApp."
-      />
+      {/* WhatsApp modal is handled globally in App.tsx */}
     </div>
   );
 }
