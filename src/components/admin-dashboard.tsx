@@ -129,7 +129,13 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
     try {
       const res = await fetch(`/api/admin/inspections/${id}/regenerate-pdf`, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to regenerate PDF');
+      if (!res.ok) {
+        if (data.details) {
+            throw new Error(`${data.error}: ${data.details.substring(0, 100)}`);
+        } else {
+            throw new Error(data.error || 'Failed to regenerate PDF');
+        }
+      }
       toast.success('Berhasil memproses PDF', { id: toastId });
       fetchData();
     } catch (e: any) {
