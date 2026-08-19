@@ -61,6 +61,7 @@ const PelanggaranDashboard = lazy(() => import('./components/pelanggaran-dashboa
 const BulletinBoard = lazy(() => import('./components/bulletin-board').then(m => ({ default: m.BulletinBoard })));
 const UserManualScreen = lazy(() => import('./components/user-manual-screen').then(m => ({ default: m.UserManualScreen })));
 const EmployeeDatabaseScreen = lazy(() => import('./components/employee-database-screen').then(m => ({ default: m.EmployeeDatabaseScreen })));
+const EasterEggGame = lazy(() => import('./components/easter-egg-game').then(m => ({ default: m.EasterEggGame })));
 
 export default function App() {
 
@@ -126,6 +127,18 @@ export default function App() {
   const [googleUser, setGoogleUser] = useState<any>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
+  // Easter Egg State
+  const [logoClickCount, setLogoClickCount] = useState(0);
+  const [showEasterEgg, setShowEasterEgg] = useState(false);
+
+  const handleLogoClick = () => {
+    const newCount = logoClickCount + 1;
+    setLogoClickCount(newCount);
+    if (newCount >= 5) {
+      setShowEasterEgg(true);
+      setLogoClickCount(0);
+    }
+  };
 
   // Global App State
   
@@ -657,6 +670,7 @@ export default function App() {
           </div>
         )}
         <div className="flex flex-col pb-20 relative min-h-[100dvh]">
+          {/* Modals & Portals */}
           <ThemeModal 
             show={showGlobalThemeModal} 
             onClose={() => setShowGlobalThemeModal(false)} 
@@ -665,11 +679,21 @@ export default function App() {
             inspectorNik={inspectorNik} 
             onThemeUpdated={handleThemeUpdated} 
           />
+          
+          {/* Easter Egg Modal */}
+          <AnimatePresence>
+            {showEasterEgg && (
+              <Suspense fallback={null}>
+                <EasterEggGame onClose={() => setShowEasterEgg(false)} />
+              </Suspense>
+            )}
+          </AnimatePresence>
+          
       <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-slate-200/50 to-transparent pointer-events-none"></div>
       
       {/* Header */}
       <header className="px-4 py-3 sticky top-0 z-50 bg-[#F4F7F6]/80 backdrop-blur-md border-b border-slate-200/50 w-full flex justify-center">
-        <div className="flex justify-between items-center w-full max-w-3xl mx-auto">
+        <div className="flex justify-between items-center w-full max-w-5xl mx-auto">
         <div className="flex items-center gap-3">
           {activeTab !== 'home' ? (
             <button 
@@ -679,7 +703,10 @@ export default function App() {
               <ChevronLeft className="w-5 h-5" />
             </button>
           ) : (
-            <div className="w-8 h-8 bg-slate-800 rounded-lg p-1 flex items-center justify-center shadow-sm">
+            <div 
+              className="w-8 h-8 bg-slate-800 rounded-lg p-1 flex items-center justify-center shadow-sm cursor-pointer"
+              onClick={handleLogoClick}
+            >
                <img src="/logo.png" alt="Prep & Lab Logo" className="w-full h-full object-contain" onError={(e) => {
                  (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="%23ccccccc" /><text x="50" y="55" font-family="sans-serif" font-size="20" text-anchor="middle" fill="%23fff">No Logo</text></svg>'; 
                }} />

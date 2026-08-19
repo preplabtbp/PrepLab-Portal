@@ -212,7 +212,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       animate={{ opacity: 1, y: 0 }} 
       exit={{ opacity: 0, y: -15 }} 
       transition={{ duration: 0.4, ease: "easeOut" }} 
-      className="pb-24 w-full h-full max-w-5xl mx-auto space-y-6"
+      className="pb-24 px-4 sm:px-6 lg:px-8 w-full h-full max-w-5xl mx-auto space-y-6"
     >
       
       {/* Compact Hero Section */}
