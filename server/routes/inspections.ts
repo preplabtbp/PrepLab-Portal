@@ -131,6 +131,7 @@ router.post("/api/inspections/universal", async (req, res) => {
         notes: finalData?.catatanUmum || '',
         dataF: JSON.stringify(finalData),
         pdfUrl: pdfUrl,
+        pt: req.body.pt || 'TBP',
         signature: JSON.stringify({ ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3 }),
         photoUrl: JSON.stringify({ fotoTemuanArray: finalFotoTemuanArray, fotoProses: finalFotoProses })
       }).returning();
@@ -175,6 +176,7 @@ router.post("/api/inspections/universal", async (req, res) => {
                       source: 'inspeksi',
                       status: 'OPEN',
                       priority: 'Medium',
+                      pt: req.body.pt || 'TBP',
                       photoUrl: photoUrl || null,
                       date: new Date()
                   };
@@ -319,6 +321,7 @@ router.post("/api/inspections", async (req, res) => {
           location: (dataF && dataF.length > 0 && dataF[0][2]) || 'Area',
           dataF: JSON.stringify(dataF),
           pdfUrl: pdfUrl,
+          pt: req.body.pt || 'TBP',
           signature: JSON.stringify({ ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3 }),
           photoUrl: JSON.stringify({ fotoProses: finalFotoProses, fotoTemuanArray: finalFotoTemuanArray })
       }).returning();
@@ -502,6 +505,7 @@ router.post("/api/inspections/bulk-harian", async (req, res) => {
             status: row.status,
             inspectorName: row.inspectorName,
             notes: row.notes,
+            pt: req.body.pt || 'TBP',
             dataF: JSON.stringify(row)
         }));
 

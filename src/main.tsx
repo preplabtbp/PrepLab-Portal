@@ -17,6 +17,33 @@ const queryClient = new QueryClient({
 
 import { Toaster } from 'sonner';
 
+const originalFetch = window.fetch;
+window.fetch = async (...args) => {
+  let [resource, config] = args;
+  const profileStr = localStorage.getItem('p2h_inspector_profile');
+  let pt = 'TBP';
+  if (profileStr) {
+     try { pt = JSON.parse(profileStr).pt || 'TBP'; } catch(e){}
+  }
+  
+  if (typeof resource === 'string' && resource.startsWith('/api/')) {
+     const urlObj = new URL(resource, window.location.origin);
+     urlObj.searchParams.set('pt', pt);
+     resource = urlObj.pathname + urlObj.search;
+     
+     if (config && config.body && typeof config.body === 'string') {
+        try {
+           const bodyObj = JSON.parse(config.body);
+           if (typeof bodyObj === 'object' && bodyObj !== null && !bodyObj.pt) {
+              bodyObj.pt = pt;
+              config.body = JSON.stringify(bodyObj);
+           }
+        } catch(e) {}
+     }
+  }
+  return originalFetch(resource, config);
+};
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

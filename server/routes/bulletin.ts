@@ -20,7 +20,16 @@ export const router = Router();
 
 router.get("/api/bulletin", async (req, res) => {
     try {
-      const data = await db.select().from(bulletinPosts).orderBy(bulletinPosts.createdAt);
+      const { pt } = req.query;
+      let query: any = db.select().from(bulletinPosts);
+      if (pt) {
+        query = query.where(eq(bulletinPosts.pt, pt as string));
+      } else {
+        query = query.where(eq(bulletinPosts.pt, 'TBP'));
+      }
+      query = query.orderBy(bulletinPosts.createdAt);
+      
+      const data = await query;
       // We will sort them descending in the frontend or we can use desc() if imported
       res.json({ status: "success", data });
     } catch (error) {
@@ -37,8 +46,10 @@ router.get("/api/bulletin/search", async (req, res) => {
       
       const qLower = String(q).toLowerCase();
       
+      const pt = req.query.pt as string || 'TBP';
+      
       // Get all posts for department
-      let allPosts = await db.select().from(bulletinPosts);
+      let allPosts = await db.select().from(bulletinPosts).where(eq(bulletinPosts.pt, pt));
       if (department) {
          allPosts = allPosts.filter(p => p.department === department);
       }
@@ -92,7 +103,10 @@ router.get("/api/bulletin/search", async (req, res) => {
 
 router.post("/api/bulletin", async (req, res) => {
     try {
-      const result = await db.insert(bulletinPosts).values(req.body).returning();
+      const newPostData = req.body;
+      if (!newPostData.pt) newPostData.pt = 'TBP';
+      
+      const result = await db.insert(bulletinPosts).values(newPostData).returning();
       const post = result[0];
       
       // Sync to agenda if there is an agendaDate

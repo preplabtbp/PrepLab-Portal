@@ -849,7 +849,7 @@ export default function App() {
             active={activeTab === 'home'} 
             onClick={() => handleNav('home')} 
           />
-          {userProfile?.pt !== 'GTS' && <NavItem icon={<FileText className="w-5 h-5" />} label="Buletin" active={activeTab.startsWith('bulletin')} onClick={() => setShowBulletinMenu(true)} />}
+          <NavItem icon={<FileText className="w-5 h-5" />} label="Buletin" active={activeTab.startsWith('bulletin')} onClick={() => setShowBulletinMenu(true)} />
           <NavItem 
             icon={<Cloud className="w-5 h-5" />} 
             label="Cloud" 

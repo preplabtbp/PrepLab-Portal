@@ -59,7 +59,15 @@ router.delete("/api/quiz-questions/:id", async (req, res) => {
 
 router.get("/api/quiz-scores", async (req, res) => {
     try {
-      const scores = await db.select().from(quizScores).orderBy(desc(quizScores.timestamp));
+      const { pt } = req.query;
+      let query: any = db.select().from(quizScores);
+      if (pt) {
+        query = query.where(eq(quizScores.pt, pt as string));
+      } else {
+        query = query.where(eq(quizScores.pt, 'TBP'));
+      }
+      query = query.orderBy(desc(quizScores.timestamp));
+      const scores = await query;
       res.json(scores);
     } catch (e) {
       res.status(500).json({ error: "Failed to fetch quiz scores" });
@@ -76,7 +84,11 @@ router.post("/api/quiz-scores", async (req, res) => {
             return res.status(400).json({ error: "Anda sudah mengerjakan kuis ini" });
          }
       }
-      const newScore = await db.insert(quizScores).values(req.body).returning();
+      
+      const newScoreData = req.body;
+      if (!newScoreData.pt) newScoreData.pt = 'TBP';
+      
+      const newScore = await db.insert(quizScores).values(newScoreData).returning();
       res.json(newScore[0]);
     } catch (e) {
       console.error(e);

@@ -30,7 +30,15 @@ router.get("/api/equipments", async (req, res) => {
 
 router.get("/api/work-orders", async (req, res) => {
     try {
-      const data = await db.select().from(workOrders);
+      const { pt } = req.query;
+      let query: any = db.select().from(workOrders);
+      if (pt) {
+        query = query.where(eq(workOrders.pt, pt as string));
+      } else {
+        // Default to TBP if no pt provided for backward compatibility
+        query = query.where(eq(workOrders.pt, 'TBP'));
+      }
+      const data = await query;
       res.json(data);
     } catch (error) {
       console.error("Error fetching work orders:", error);
@@ -56,6 +64,9 @@ router.post("/api/work-orders", async (req, res) => {
       if (newWO.date) newWO.date = new Date(newWO.date);
       if (newWO.repairStart) newWO.repairStart = new Date(newWO.repairStart);
       if (newWO.repairEnd) newWO.repairEnd = new Date(newWO.repairEnd);
+      
+      // Default PT to TBP if not provided
+      if (!newWO.pt) newWO.pt = 'TBP';
       
       const result = await db.insert(workOrders).values(newWO).returning();
       const createdWO = result[0];

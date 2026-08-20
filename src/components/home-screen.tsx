@@ -147,46 +147,8 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
     { id: 'dashboard', label: 'Dashboard' }
   ];
 
-    if (userPt === 'GTS') {
-    tabs = [
-      { id: 'all', label: 'Semua Menu' },
-      { id: 'admin', label: 'HR & Admin' },
-      { id: 'dashboard', label: 'Dashboard' },
-      { id: 'intip-portal', label: 'Intip Portal TBP/GPS' }
-    ];
-  } else if (isCrew) {
-    tabs = [
-      { id: 'all', label: 'Semua Menu' }
-    ];
-  }
-
-
-  
   let allowedSections = sections;
-    if (userPt === 'GTS') {
-    allowedSections = sections.map(s => {
-      const allowedItems = s.items.filter(item => ['agenda', 'roster-admin', 'adm-dashboard'].includes(item.id));
-      return { ...s, items: allowedItems };
-    }).filter(s => s.items.length > 0);
-
-    const intipItems = [
-      { id: 'intip-1', title: 'Inspeksi Harian', desc: 'Checklist P2H harian', icon: <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => setShowGtsIntipModal(true) },
-      { id: 'intip-2', title: 'Work Orders', desc: 'Form temuan & riwayat WO', icon: <Wrench className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => setShowGtsIntipModal(true) },
-      { id: 'intip-3', title: 'KTA / TTA', desc: 'Laporan KTA & TTA', icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => setShowGtsIntipModal(true) },
-      { id: 'intip-4', title: 'Distribusi APD', desc: 'Riwayat & input APD', icon: <Box className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'purple', action: () => setShowGtsIntipModal(true) },
-      { id: 'intip-5', title: 'Quiz Safety & SOP', desc: 'Uji pemahaman prosedur', icon: <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => setShowGtsIntipModal(true) },
-      { id: 'intip-6', title: 'SAP Dashboard', desc: 'Inspeksi & Temuan', icon: <LineChart className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => setShowGtsIntipModal(true) },
-    ];
-
-    allowedSections.push({
-      id: 'intip-portal',
-      title: 'Intip Portal TBP/GPS',
-      icon: <Eye className="w-5 h-5" />,
-      color: 'slate',
-      bgIcon: 'bg-slate-100 text-slate-600',
-      items: intipItems
-    });
-  } else if (isCrew) {
+  if (isCrew) {
 
     allowedSections = sections.map(s => {
       let allowedItemIds = ['quiz', 'food-report', 'manual'];

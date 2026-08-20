@@ -28,7 +28,14 @@ router.post("/api/apd/settings", async (req, res) => {
   });
 
 router.get("/api/apd/history", async (req, res) => {
-    const data = await db.select().from(apdHistory);
+    const { pt } = req.query;
+    let query: any = db.select().from(apdHistory);
+    if (pt) {
+      query = query.where(eq(apdHistory.pt, pt as string));
+    } else {
+      query = query.where(eq(apdHistory.pt, 'TBP'));
+    }
+    const data = await query;
     res.json(data);
   });
 
@@ -37,7 +44,14 @@ router.post("/api/apd/history", async (req, res) => {
   });
 
 router.get("/api/apd/documents", async (req, res) => {
-    const data = await db.select().from(apdDocuments);
+    const { pt } = req.query;
+    let query: any = db.select().from(apdDocuments);
+    if (pt) {
+      query = query.where(eq(apdDocuments.pt, pt as string));
+    } else {
+      query = query.where(eq(apdDocuments.pt, 'TBP'));
+    }
+    const data = await query;
     res.json(data);
   });
 

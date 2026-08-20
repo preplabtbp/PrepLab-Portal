@@ -102,6 +102,7 @@ export const workOrders = pgTable('work_orders', {
   downtimeDuration: text('downtime_duration'), // String format
   shift: text('shift'),
   pdfUrl: text('pdf_url'),
+  pt: text('pt').default('TBP'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -128,6 +129,7 @@ export const tickets = pgTable('tickets', {
   documentLink: text('document_link'),
   sparepartName: text('sparepart_name'),
   sparepartQty: text('sparepart_qty'),
+  pt: text('pt').default('TBP'),
 });
 
 // --- Downtime ---
@@ -172,6 +174,7 @@ export const apdHistory = pgTable('apd_history', {
   itemName: text('item_name'),
   dateTaken: timestamp('date_taken').defaultNow(),
   photoUrl: text('photo_url'),
+  pt: text('pt').default('TBP'),
 });
 
 // --- APD Documents ---
@@ -185,6 +188,7 @@ export const apdDocuments = pgTable('apd_documents', {
   sptSignature: text('spt_signature'),
   managerSignature: text('manager_signature'),
   items: text('items'), // JSON stringified array of items
+  pt: text('pt').default('TBP'),
   pdfUrl: text('pdf_url'),
 });
 
@@ -215,6 +219,7 @@ export const inspections = pgTable('inspections', {
   signature: text('signature'),
   dataF: text('data_f'), // JSON stringified data
   pdfUrl: text('pdf_url'), // PDF generated from Google Apps Script or other source
+  pt: text('pt').default('TBP'),
 });
 
 // --- Pemantauan ---
@@ -311,6 +316,7 @@ export const bulletinPosts = pgTable('bulletin_posts', {
   content: text('content').notNull(),
   authorNik: text('author_nik'),
   authorName: text('author_name'),
+  pt: text('pt').default('TBP'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -425,6 +431,7 @@ export const quizScores = pgTable('quiz_scores', {
   totalQuestions: integer('total_questions').notNull(),
   percentage: integer('percentage').notNull(),
   quizVersion: text('quiz_version'),
+  pt: text('pt').default('TBP'),
   timestamp: timestamp('timestamp').defaultNow(),
 });
 
