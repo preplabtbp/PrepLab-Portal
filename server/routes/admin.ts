@@ -28,7 +28,7 @@ router.get("/api/admin/tables/:name", async (req, res) => {
     try {
       const t = getTableObj(req.params.name);
       if (!t) return res.status(404).json({error: "Table not found"});
-      const data = await db.select().from(t).orderBy(desc((t as any).id)).limit(500);
+      const data = await db.select().from(t).orderBy(desc((t as any).id)).limit(5000);
       res.json(data);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
