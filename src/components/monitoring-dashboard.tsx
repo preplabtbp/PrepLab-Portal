@@ -22,7 +22,7 @@ export function MonitoringDashboard({ inspectorNik }: { inspectorNik?: string })
   const td = new Date();
   const defEnd = td.toISOString().split('T')[0];
   const tm = new Date();
-  tm.setDate(td.getDate() - 7);
+  tm.setDate(td.getDate() - 30);
   const defStart = tm.toISOString().split('T')[0];
 
   const [tglMulai, setTglMulai] = useState(defStart);
