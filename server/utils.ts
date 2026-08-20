@@ -178,7 +178,22 @@ export const sanitizePayload = (t: any, payload: any): any => {
   const cleaned: any = {};
   for (const key of Object.keys(payload)) {
     if (t[key]) {
-      cleaned[key] = payload[key];
+      let val = payload[key];
+      
+      if (val === '' && t[key].dataType !== 'string') {
+        val = null;
+      }
+
+      // Convert string dates to Date objects for pg-core date/timestamp columns
+      if (val !== null && typeof val === 'string' && (t[key].dataType === 'date' || t[key].columnType === 'PgTimestamp' || t[key].columnType === 'PgDate')) {
+        const parsed = new Date(val);
+        if (!isNaN(parsed.getTime())) {
+          val = parsed;
+        } else {
+          val = null;
+        }
+      }
+      cleaned[key] = val;
     }
   }
   return cleaned;
