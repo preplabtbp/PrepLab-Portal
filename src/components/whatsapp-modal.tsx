@@ -30,15 +30,28 @@ export function WhatsAppModal({ isOpen, onClose, messageText, title, description
   if (!isOpen) return null;
 
   const handleSend = () => {
-    let cleanNumber = targetNumber ? targetNumber.replace(/\D/g, '') : '';
-    if (cleanNumber.startsWith('0')) {
-       cleanNumber = '62' + cleanNumber.substring(1);
-    }
-    const waUrl = cleanNumber 
-        ? `https://wa.me/${cleanNumber}?text=${encodeURIComponent(messageText)}`
-        : `https://wa.me/?text=${encodeURIComponent(messageText)}`;
+    let waUrl = `https://wa.me/?text=${encodeURIComponent(messageText)}`;
     
-    window.open(waUrl, '_blank');
+    if (targetNumber) {
+      if (targetNumber.includes('chat.whatsapp.com')) {
+         // Jika link grup, gunakan wa.me/?text= agar user bisa memilih grup dengan text prefilled.
+         waUrl = `https://wa.me/?text=${encodeURIComponent(messageText)}`;
+      } else {
+         // Coba parse nomor HP, ambil nomor pertama jika ada multiple
+         const firstPart = targetNumber.split(/[,\/&]/)[0];
+         let cleanNumber = firstPart.replace(/\D/g, '');
+         if (cleanNumber) {
+            if (cleanNumber.startsWith('0')) {
+               cleanNumber = '62' + cleanNumber.substring(1);
+            }
+            waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(messageText)}`;
+         }
+      }
+    }
+    
+    if (waUrl.startsWith('https://wa.me/')) {
+       window.open(waUrl, '_blank');
+    }
     onClose();
   };
 
