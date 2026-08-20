@@ -428,6 +428,12 @@ export const quizScores = pgTable('quiz_scores', {
   timestamp: timestamp('timestamp').defaultNow(),
 });
 
+export const easterEggProgress = pgTable('easter_egg_progress', {
+  nik: text('nik').primaryKey(),
+  node: integer('node').notNull().default(0),
+  lastUpdated: timestamp('last_updated').defaultNow(),
+});
+
 // --- P5M ---
 export const p5mMateri = pgTable('p5m_materi', {
   id: serial('id').primaryKey(),

@@ -23,7 +23,7 @@ import path from "path";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { db, pool } from "./src/db/index.js";
-import { chatMessages, employees, equipments, workOrders, users, tickets, downtime, spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi, developerUsers } from "./src/db/schema.js";
+import { chatMessages, employees, equipments, workOrders, users, tickets, downtime, spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, easterEggProgress, induksi, developerUsers } from "./src/db/schema.js";
 
 // Initialize web-push
 // We generate keys if they are not in the environment
@@ -201,12 +201,64 @@ const app = express();
       }
     });
 
+    // --- QUIZ GAME LOGIC ---
+    socket.on('quiz:join', (playerInfo) => {
+      const player = { ...playerInfo, node: 0, isQuiz: true };
+      socket.join('quiz_room');
+      onlineUsers.set(socket.id, player);
+      const quizPlayers = Array.from(onlineUsers.values()).filter(u => u.isQuiz);
+      io.to('quiz_room').emit('quiz:state', quizPlayers);
+    });
+
+    socket.on('quiz:progress', async (nodeIndex) => {
+      const user = onlineUsers.get(socket.id);
+      if (user && user.isQuiz) {
+        user.node = nodeIndex;
+        onlineUsers.set(socket.id, user);
+
+        // Update progress in database if user has NIK
+        if (user.nik) {
+          try {
+            await db.insert(easterEggProgress).values({
+              nik: user.nik,
+              node: nodeIndex,
+            }).onConflictDoUpdate({
+              target: easterEggProgress.nik,
+              set: { node: nodeIndex, lastUpdated: new Date() }
+            });
+          } catch (e) {
+            console.error('Failed to update easter egg progress', e);
+          }
+        }
+
+        const quizPlayers = Array.from(onlineUsers.values()).filter(u => u.isQuiz);
+        io.to('quiz_room').emit('quiz:state', quizPlayers);
+      }
+    });
+
+    socket.on('quiz:leave', () => {
+      socket.leave('quiz_room');
+      const user = onlineUsers.get(socket.id);
+      if (user) {
+        user.isQuiz = false;
+        onlineUsers.set(socket.id, user);
+        const quizPlayers = Array.from(onlineUsers.values()).filter(u => u.isQuiz);
+        io.to('quiz_room').emit('quiz:state', quizPlayers);
+      }
+    });
+
     socket.on('disconnect', () => {
       const user = onlineUsers.get(socket.id);
       if (user) {
         onlineUsers.delete(socket.id);
-        const usersInRoom = Array.from(onlineUsers.values()).filter(u => u.room === user.room);
-        io.to(user.room).emit('online_users', usersInRoom);
+        if (user.room) {
+          const usersInRoom = Array.from(onlineUsers.values()).filter(u => u.room === user.room);
+          io.to(user.room).emit('online_users', usersInRoom);
+        }
+        if (user.isQuiz) {
+          const quizPlayers = Array.from(onlineUsers.values()).filter(u => u.isQuiz);
+          io.to('quiz_room').emit('quiz:state', quizPlayers);
+        }
       }
     });
   });
@@ -223,6 +275,43 @@ const app = express();
 
 
   // --- API ROUTES ---
+  app.get('/api/quiz/quest-questions', async (req, res) => {
+    try {
+      // Get all questions for the full RPG adventure
+      const qs = await db.select().from(quizQuestions);
+      // Map to required format
+      const formattedQs = qs.map((q, idx) => ({
+        id: q.id,
+        title: `Node ${idx + 1}`,
+        question: q.text,
+        options: q.options,
+        correctIndex: q.correctAnswerIndex,
+        explanation: 'Lihat buku saku K3LH untuk penjelasan lebih detail.'
+      }));
+      res.json(formattedQs);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send('Error');
+    }
+  });
+
+  app.get('/api/quiz/quest-leaderboard', async (req, res) => {
+    try {
+      const records = await db.select({
+        nik: easterEggProgress.nik,
+        node: easterEggProgress.node,
+        name: employees.name,
+        lastUpdated: easterEggProgress.lastUpdated,
+      })
+      .from(easterEggProgress)
+      .innerJoin(employees, eq(easterEggProgress.nik, employees.nik))
+      .orderBy(desc(easterEggProgress.node), desc(easterEggProgress.lastUpdated));
+      res.json(records);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send('Error');
+    }
+  });
 
   // --- BULLETIN ROUTES ---
 

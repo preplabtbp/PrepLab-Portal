@@ -8,6 +8,13 @@
       "when": 1787028598000,
       "tag": "0000_bouncy_magik",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787180972372,
+      "tag": "0001_kind_smiling_tiger",
+      "breakpoints": true
     }
   ]
 }
