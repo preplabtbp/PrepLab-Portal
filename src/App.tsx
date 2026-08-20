@@ -692,8 +692,8 @@ export default function App() {
       <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-slate-200/50 to-transparent pointer-events-none"></div>
       
       {/* Header */}
-      <header className="px-4 py-3 sticky top-0 z-50 bg-[#F4F7F6]/80 backdrop-blur-md border-b border-slate-200/50 w-full flex justify-center">
-        <div className="flex justify-between items-center w-full max-w-5xl mx-auto">
+      <header className="px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-50 bg-[#F4F7F6]/80 backdrop-blur-md border-b border-slate-200/50 w-full flex justify-center">
+        <div className="flex justify-between items-center w-full">
         <div className="flex items-center gap-3">
           {activeTab !== 'home' ? (
             <button 

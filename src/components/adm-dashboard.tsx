@@ -266,24 +266,25 @@ export function AdmDashboard() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500 pb-20 w-full">
       
-      <div className="flex flex-col gap-6 px-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 relative overflow-hidden">
+      <div className="flex flex-col gap-6 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 relative overflow-hidden">
         {/* Teal Header Line */}
         <div className="absolute top-0 left-0 w-full h-2 bg-[#2A9D8F]"></div>
         
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 pt-2 relative">
           <div className="flex flex-col">
-            <div className="bg-[#F7D279] text-white font-bold px-4 py-1.5 rounded-sm inline-block w-max text-lg tracking-wide mb-4">
+            <div className="bg-[#F7D279] text-white font-bold px-3 py-1 rounded-sm inline-block w-max text-xs tracking-wide mb-2 uppercase shadow-sm">
               Manpower
             </div>
+            <h2 className="text-3xl md:text-4xl font-display font-bold text-[#333333] leading-tight">Laboratory Administration</h2>
+            <p className="text-base md:text-lg text-[#4A4A4A] mt-1 font-medium">Manpower Attendance</p>
           </div>
-          <div className="text-center flex-1">
-             <h2 className="text-4xl font-display font-bold text-[#333333]">Laboratory Administration</h2>
-             <p className="text-lg text-[#4A4A4A] mt-1 font-medium">Manpower Attendance</p>
-          </div>
-          <div className="text-right">
-             <p className="font-bold text-[#2A9D8F] uppercase text-sm">{new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} <span className="text-[#2A9D8F] opacity-70 ml-1">*week {Math.ceil(new Date().getDate() / 7)}</span></p>
+          <div className="text-left md:text-right shrink-0">
+             <p className="font-bold text-[#2A9D8F] uppercase text-sm bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-100 inline-block">
+               {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} 
+               <span className="text-[#2A9D8F] opacity-70 ml-1.5">*week {Math.ceil(new Date().getDate() / 7)}</span>
+             </p>
           </div>
         </div>
         
