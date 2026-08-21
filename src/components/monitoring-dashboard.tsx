@@ -36,6 +36,18 @@ export function MonitoringDashboard({ inspectorNik }: { inspectorNik?: string })
       const parsedSuhu: any = {};
       const parsedGas: any = {};
 
+      const parseDateForSort = (row: any) => {
+        let tglValue = row.tanggal || row.date || row.timestamp;
+        if (typeof tglValue === 'string' && /^\d{5}$/.test(tglValue)) {
+            tglValue = new Date(Math.round((parseInt(tglValue) - 25569) * 86400 * 1000));
+        } else if (typeof tglValue === 'number' && tglValue > 40000 && tglValue < 50000) {
+            tglValue = new Date(Math.round((tglValue - 25569) * 86400 * 1000));
+        }
+        return new Date(tglValue).getTime();
+      };
+
+      resp.sort((a: any, b: any) => parseDateForSort(a) - parseDateForSort(b));
+
       const parseVal = (v: any) => (v === '-' || !v) ? null : parseFloat(v);
       resp.forEach((row: any) => {
         let tglValue = row.tanggal || row.date || row.timestamp;
