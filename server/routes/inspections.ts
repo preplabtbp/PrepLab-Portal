@@ -643,6 +643,7 @@ router.get("/api/pemantauan", async (req, res) => {
 
 router.post("/api/pemantauan", async (req, res) => {
     try {
+      const payload = req.body;
       const ts = new Date();
       const yyyy = ts.getFullYear();
       const mm = String(ts.getMonth() + 1).padStart(2, '0');
@@ -651,7 +652,24 @@ router.post("/api/pemantauan", async (req, res) => {
       const jamStr = `${ts.getHours()}:${String(ts.getMinutes()).padStart(2, '0')}`;
       const randBase = Math.floor(Math.random() * 90000) + 10000;
 
-      const rowsToInsert = payload.items.map((item, idx) => ({
+      // VALIDASI: cek apakah suhu sudah diinput hari ini
+      const hasSuhu = payload.items.some((i: any) => i.kategori === 'SUHU');
+      if (hasSuhu) {
+        const { and, eq } = require("drizzle-orm");
+        const existingSuhu = await db.select().from(pemantauan).where(
+          and(
+            eq(pemantauan.kategori, 'SUHU'),
+            eq(pemantauan.tanggal, tanggalStr)
+          )
+        ).limit(1);
+        
+        if (existingSuhu.length > 0) {
+          const personil = existingSuhu[0].inspektorPetugas || 'seseorang';
+          return res.status(400).json({ error: `Pemantauan suhu sudah dilakukan oleh "${personil}" hari ini` });
+        }
+      }
+
+      const rowsToInsert = payload.items.map((item: any, idx: number) => ({
         inspektorPetugas: payload.inspektor,
         shift: payload.shift,
         catatanRemark: payload.catatan,
