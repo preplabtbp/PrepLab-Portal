@@ -192,7 +192,7 @@ export function BulletinTopicDetail({
               )}
             </div>
             <h1 className="text-lg md:text-2xl font-black text-slate-800 tracking-tight uppercase leading-tight truncate">
-              {currentData.jenisKegiatan || 'Topic Detail'}
+              {post.title || currentData.jenisKegiatan || 'Topic Detail'}
             </h1>
           </div>
         </div>
@@ -225,9 +225,29 @@ export function BulletinTopicDetail({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-         {/* Left Side: Topic Info */}
+         {/* Left Side: Topic Info / Notion Content */}
          <div className="lg:col-span-4 space-y-4">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 md:p-6">
+            {post.notionId ? (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 md:p-6">
+                <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-4">Notion Document</h3>
+                {post.coverImage && (
+                  <img src={post.coverImage} alt="Cover" className="w-full h-32 object-cover rounded-lg mb-4" />
+                )}
+                <div className="prose prose-sm max-w-none prose-slate">
+                  {/* Since we don't have a markdown renderer, we just pre-wrap it for now. In a real app, use react-markdown here */}
+                  <pre className="whitespace-pre-wrap font-sans text-sm text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-100">{post.content}</pre>
+                </div>
+                {post.tags && post.tags.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {post.tags.map((tag: string, i: number) => (
+                      <span key={i} className="px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold rounded-md">#{tag}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+            <>
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 md:p-6">
                <div className="flex justify-between items-center mb-5">
                  <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider">Properties</h3>
                  {!isEditing ? (
@@ -353,6 +373,8 @@ export function BulletinTopicDetail({
                 </div>
               )}
             </div>
+            </>
+            )}
          </div>
 
          {/* Right Side: Comments / Discussion */}

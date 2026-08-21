@@ -311,6 +311,11 @@ export const userThemes = pgTable('user_themes', {
 export const bulletinPosts = pgTable('bulletin_posts', {
   universe: text('universe').default('TBP_GPS'),
   id: serial('id').primaryKey(),
+  title: text('title'),
+  notionId: text('notion_id').unique(),
+  coverImage: text('cover_image'),
+  tags: text('tags').array(),
+  originalCreatedAt: timestamp('original_created_at'),
   department: text('department').notNull(),
   category: text('category').notNull(),
   content: text('content').notNull(),

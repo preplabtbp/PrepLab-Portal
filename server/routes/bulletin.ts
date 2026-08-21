@@ -20,19 +20,26 @@ export const router = Router();
 
 router.get("/api/bulletin", async (req, res) => {
     try {
-      const { pt } = req.query;
+      let { pt } = req.query as { pt?: string };
+      
+      // GPS and TBP share the same universe (TBP_GPS)
+      // so GPS users see TBP data
+      if (pt === 'GPS') pt = 'TBP';
+      
+      console.log('[Bulletin API] GET request, resolved pt:', pt);
       let query: any = db.select().from(bulletinPosts);
       if (pt) {
-        query = query.where(eq(bulletinPosts.pt, pt as string));
+        query = query.where(eq(bulletinPosts.pt, pt));
       } else {
         query = query.where(eq(bulletinPosts.pt, 'TBP'));
       }
       query = query.orderBy(bulletinPosts.createdAt);
       
       const data = await query;
-      // We will sort them descending in the frontend or we can use desc() if imported
+      console.log('[Bulletin API] Returning', data.length, 'posts for pt:', pt);
       res.json({ status: "success", data });
     } catch (error) {
+      console.error('[Bulletin API] Error:', error.message);
       res.status(500).json({ status: "error", message: error.message });
     }
   });
@@ -131,6 +138,37 @@ router.post("/api/bulletin", async (req, res) => {
       
       res.json({ status: "success", data: post });
     } catch (error) {
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
+router.post("/api/bulletin/migrate-notion", async (req, res) => {
+    try {
+      const { title, notionId, coverImage, tags, originalCreatedAt, department, category, content, authorNik, authorName, pt } = req.body;
+      
+      const newPostData = {
+        title,
+        notionId,
+        coverImage,
+        tags,
+        originalCreatedAt: originalCreatedAt ? new Date(originalCreatedAt) : new Date(),
+        department: department || 'General',
+        category: category || 'Update',
+        content,
+        authorNik: authorNik || 'SYSTEM',
+        authorName: authorName || 'Notion Import',
+        pt: pt || 'TBP',
+        createdAt: new Date()
+      };
+      
+      const result = await db.insert(bulletinPosts).values(newPostData).onConflictDoUpdate({
+        target: bulletinPosts.notionId,
+        set: { content, title, coverImage, tags, originalCreatedAt: newPostData.originalCreatedAt }
+      }).returning();
+      
+      res.json({ status: "success", data: result[0] });
+    } catch (error) {
+      console.error(error);
       res.status(500).json({ status: "error", message: error.message });
     }
   });

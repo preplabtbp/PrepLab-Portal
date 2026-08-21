@@ -145,6 +145,7 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const activeTab = location.pathname === '/' ? 'home' : location.pathname.substring(1);
+  const isBulletin = location.pathname.startsWith('/bulletin');
 
   const [syncTick, setSyncTick] = useState(0);
 
@@ -659,10 +660,10 @@ export default function App() {
 
 
   return (
-    <div className="flex w-full min-h-[100dvh] overflow-hidden" style={{ backgroundColor: 'var(--bg-main, #F4F7F6)' }}>
+    <div className="flex w-full min-h-[100dvh] overflow-hidden" style={{ backgroundColor: isBulletin ? '#1e1e1e' : 'var(--bg-main, #F4F7F6)' }}>
       <div 
         className={`flex-1 relative transition-all duration-300 overflow-x-hidden overflow-y-auto h-[100dvh] ${showProfileScreen ? 'md:mr-[400px] lg:mr-[480px]' : ''}`}
-        style={{ backgroundColor: 'var(--bg-main, #F4F7F6)', color: 'var(--text-main, #333)' }}
+        style={{ backgroundColor: isBulletin ? '#1e1e1e' : 'var(--bg-main, #F4F7F6)', color: isBulletin ? '#e2e8f0' : 'var(--text-main, #333)' }}
       >
         {appEnv === 'staging' && (
           <div className="w-full bg-orange-500 text-white text-xs font-bold py-1 px-4 text-center z-[100] relative tracking-widest uppercase">
@@ -692,13 +693,13 @@ export default function App() {
       <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-slate-200/50 to-transparent pointer-events-none"></div>
       
       {/* Header */}
-      <header className="px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-50 bg-[#F4F7F6]/80 backdrop-blur-md border-b border-slate-200/50 w-full flex justify-center">
+      <header className={`px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-50 backdrop-blur-md border-b w-full flex justify-center ${isBulletin ? 'bg-[#1e1e1e]/80 border-slate-800' : 'bg-[#F4F7F6]/80 border-slate-200/50'}`}>
         <div className="flex justify-between items-center w-full">
         <div className="flex items-center gap-3">
           {activeTab !== 'home' ? (
             <button 
               onClick={() => window.history.back()} 
-              className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm text-slate-600 active:scale-95 transition-transform"
+              className={`w-8 h-8 rounded-full border flex items-center justify-center shadow-sm active:scale-95 transition-transform ${isBulletin ? 'bg-[#2a2a2a] border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
@@ -712,7 +713,7 @@ export default function App() {
                }} />
             </div>
           )}
-          <span className="font-semibold font-display tracking-tight text-base text-slate-800 whitespace-nowrap">Prep & Lab Portal</span>
+          <span className={`font-semibold font-display tracking-tight text-base whitespace-nowrap ${isBulletin ? 'text-slate-200' : 'text-slate-800'}`}>Prep & Lab Portal</span>
         </div>
         <div className="flex items-center gap-3">
           <NotificationBell userNik={inspectorNik || undefined} />
@@ -760,9 +761,8 @@ export default function App() {
   <Route path="/sap-dashboard" element={<SapDashboard inspectorNik={inspectorNik!} />} />
   <Route path="/adm-dashboard" element={<AdmDashboard />} />
   <Route path="/pelanggaran-dashboard" element={<PelanggaranDashboard />} />
-  <Route path="/bulletin-prep-lab" element={<BulletinBoard inspectorNik={inspectorNik!} inspectorName={inspectorName!} departmentName="Prep & Lab" />} />
-  <Route path="/bulletin-dept" element={userDept && userDept !== 'ALL' ? <BulletinBoard inspectorNik={inspectorNik!} inspectorName={inspectorName!} departmentName={userDept} /> : <Navigate to="/" />} />
-  <Route path="/bulletin-dept/:deptName" element={userDept === 'ALL' ? <BulletinBoard inspectorNik={inspectorNik!} inspectorName={inspectorName!} departmentName={location.pathname.split("/").pop() || ""} /> : <Navigate to="/" />} />
+  <Route path="/bulletin/:pt" element={<BulletinBoard inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
+  <Route path="/bulletin" element={<Navigate to={`/bulletin/${userProfile?.pt || 'TBP'}`} replace />} />
   <Route path="/agenda" element={<AgendaDashboard key="agenda" inspectorNik={inspectorNik!} inspectorName={inspectorName!} userDept={userDept || undefined} />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
@@ -800,42 +800,23 @@ export default function App() {
               </div>
               <div className="space-y-3">
                 <button 
-                  onClick={() => { handleNav('bulletin-prep-lab'); setShowBulletinMenu(false); }}
-                  className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all ${activeTab === 'bulletin-prep-lab' ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white hover:border-teal-300 hover:bg-slate-50 text-slate-700'}`}
+                  onClick={() => { handleNav('bulletin/TBP'); setShowBulletinMenu(false); }}
+                  className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all ${location.pathname.includes('/bulletin/TBP') ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white hover:border-teal-300 hover:bg-slate-50 text-slate-700'}`}
                 >
-                  <div className={`p-2 rounded-lg ${activeTab === 'bulletin-prep-lab' ? 'bg-teal-100 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>
+                  <div className={`p-2 rounded-lg ${location.pathname.includes('/bulletin/TBP') ? 'bg-teal-100 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>
                     <Building2 className="w-5 h-5" />
                   </div>
-                  <span className="font-medium text-left flex-1">Prep & Lab</span>
+                  <span className="font-medium text-left flex-1">PT Trimegah Bangun Persada (TBP / GPS)</span>
                 </button>
-                {userDept === 'ALL' ? (
-                  <>
-                    {['Administration', 'Preparation', 'Laboratory', 'Maintenance', 'Quality Assurance', 'Inventory Control'].map(dept => (
-                      <button 
-                        key={dept}
-                        onClick={() => { navigate('/bulletin-dept/' + dept); setShowBulletinMenu(false); }}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors"
-                        style={{ color: 'var(--text-main)' }}
-                      >
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center opacity-80" style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
-                          <Building2 className="w-5 h-5" />
-                        </div>
-                        <span className="font-medium text-left flex-1">{dept}</span>
-                      </button>
-                    ))}
-                  </>
-                ) : (userDept && (userDept as string) !== 'Prep & Lab') && (
-                  <button 
-                    onClick={() => { navigate('/bulletin-dept'); setShowBulletinMenu(false); }}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors"
-                    style={{ color: 'var(--text-main)' }}
-                  >
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center opacity-80" style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
-                      <Building2 className="w-5 h-5" />
-                    </div>
-                    <span className="font-medium text-left flex-1">{userDept}</span>
-                  </button>
-                )}
+                <button 
+                  onClick={() => { handleNav('bulletin/GTS'); setShowBulletinMenu(false); }}
+                  className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all ${location.pathname.includes('/bulletin/GTS') ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white hover:border-teal-300 hover:bg-slate-50 text-slate-700'}`}
+                >
+                  <div className={`p-2 rounded-lg ${location.pathname.includes('/bulletin/GTS') ? 'bg-teal-100 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <span className="font-medium text-left flex-1">PT Gane Tambang Sentosa (GTS)</span>
+                </button>
               </div>
             </motion.div>
           </motion.div>
@@ -849,7 +830,18 @@ export default function App() {
             active={activeTab === 'home'} 
             onClick={() => handleNav('home')} 
           />
-          <NavItem icon={<FileText className="w-5 h-5" />} label="Buletin" active={activeTab.startsWith('bulletin')} onClick={() => setShowBulletinMenu(true)} />
+          <NavItem 
+            icon={<FileText className="w-5 h-5" />} 
+            label="Buletin" 
+            active={activeTab.startsWith('bulletin')} 
+            onClick={() => { 
+              if (userDept === 'ALL') {
+                setShowBulletinMenu(true);
+              } else {
+                handleNav(`bulletin/${userProfile?.pt || 'TBP'}`);
+              }
+            }} 
+          />
           <NavItem 
             icon={<Cloud className="w-5 h-5" />} 
             label="Cloud" 

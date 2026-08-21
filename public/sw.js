@@ -41,9 +41,9 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-// A simple fetch handler is required for Chrome to prompt for install
+// Pass all requests through to the network - no caching
 self.addEventListener('fetch', function(event) {
-  // Do nothing, just bypass
+  event.respondWith(fetch(event.request));
 });
 
 

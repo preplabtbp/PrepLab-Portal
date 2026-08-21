@@ -634,7 +634,7 @@ router.post("/api/pemantauan/migrate", async (req, res) => {
 router.get("/api/pemantauan", async (req, res) => {
     try {
       const { asc, sql } = require("drizzle-orm");
-      const data = await db.select().from(pemantauan).orderBy(sql`timestamp ASC, id ASC`);
+      const data = await db.select().from(pemantauan).orderBy(sql`tanggal ASC, jam ASC, id ASC`);
       res.json(data);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch pemantauan" });
