@@ -633,7 +633,8 @@ router.post("/api/pemantauan/migrate", async (req, res) => {
 
 router.get("/api/pemantauan", async (req, res) => {
     try {
-      const data = await db.select().from(pemantauan);
+      const { asc, sql } = require("drizzle-orm");
+      const data = await db.select().from(pemantauan).orderBy(sql`timestamp ASC, id ASC`);
       res.json(data);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch pemantauan" });
@@ -642,8 +643,15 @@ router.get("/api/pemantauan", async (req, res) => {
 
 router.post("/api/pemantauan", async (req, res) => {
     try {
-      const payload = req.body;
-      const rowsToInsert = payload.items.map((item) => ({
+      const ts = new Date();
+      const yyyy = ts.getFullYear();
+      const mm = String(ts.getMonth() + 1).padStart(2, '0');
+      const dd = String(ts.getDate()).padStart(2, '0');
+      const tanggalStr = `${yyyy}-${mm}-${dd}`;
+      const jamStr = `${ts.getHours()}:${String(ts.getMinutes()).padStart(2, '0')}`;
+      const randBase = Math.floor(Math.random() * 90000) + 10000;
+
+      const rowsToInsert = payload.items.map((item, idx) => ({
         inspektorPetugas: payload.inspektor,
         shift: payload.shift,
         catatanRemark: payload.catatan,
@@ -654,7 +662,10 @@ router.post("/api/pemantauan", async (req, res) => {
         kelembapanPersen: item.kelembapan,
         flowGas: item.flow,
         tekananGasPsi: item.tekananGas,
-        kebocoranYn: item.kebocoran
+        kebocoranYn: item.kebocoran,
+        tanggal: tanggalStr,
+        jam: jamStr,
+        idPemantauan: `PMT-${randBase}-${idx + 1}`
       }));
       if (rowsToInsert.length > 0) {
         await db.insert(pemantauan).values(rowsToInsert);
