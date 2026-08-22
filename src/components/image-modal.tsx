@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, ZoomIn, ZoomOut, RotateCw, RotateCcw, Download, ExternalLink, Move, Maximize2 } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, RotateCw, RotateCcw, Download, ExternalLink, Move } from 'lucide-react';
 
 export interface ImageModalProps {
   imageUrl: string | null;
@@ -22,8 +22,11 @@ export function ImageModal({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [rotation, setRotation] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const isDragMoved = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const mouseDownPosRef = useRef({ x: 0, y: 0 });
 
   // Extract Google Drive ID if present
   const driveId = (() => {
@@ -46,6 +49,7 @@ export function ImageModal({
     setScale(1);
     setPosition({ x: 0, y: 0 });
     setRotation(0);
+    isDragMoved.current = false;
   }, [imageUrl]);
 
   // Handle Ctrl+Wheel and Wheel zoom with passive: false to prevent browser page zoom
@@ -73,7 +77,44 @@ export function ImageModal({
     };
   }, []);
 
-  // Keyboard navigation & shortcuts
+  // Global mousemove and mouseup listeners for seamless dragging
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+
+      const dist = Math.hypot(e.clientX - mouseDownPosRef.current.x, e.clientY - mouseDownPosRef.current.y);
+      if (dist > 4) {
+        isDragMoved.current = true;
+      }
+
+      setPosition({
+        x: e.clientX - dragStartRef.current.x,
+        y: e.clientY - dragStartRef.current.y,
+      });
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (isDragging) {
+        setIsDragging(false);
+        // Delay resetting isDragMoved so the subsequent click event won't trigger close
+        setTimeout(() => {
+          isDragMoved.current = false;
+        }, 100);
+      }
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleGlobalMouseMove);
+      window.addEventListener('mouseup', handleGlobalMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isDragging]);
+
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -99,24 +140,16 @@ export function ImageModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // Mouse pan handlers
+  // Mouse pan handlers on container/image
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (scale <= 1) return;
+    // Only primary mouse button (left click)
+    if (e.button !== 0) return;
+    
     e.preventDefault();
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+    dragStartRef.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+    isDragMoved.current = false;
     setIsDragging(true);
-    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
-  };
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isDragging) return;
-    setPosition({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y,
-    });
-  }, [isDragging, dragStart]);
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
   };
 
   // Double click to toggle zoom
@@ -152,10 +185,23 @@ export function ImageModal({
     setRotation((prev) => (prev + 90) % 360);
   };
 
+  // Container click handler - only closes if not dragging and scale is 1
+  const handleContainerClick = (e: React.MouseEvent) => {
+    // If the user just performed a drag gesture, do NOT close
+    if (isDragMoved.current) {
+      e.stopPropagation();
+      return;
+    }
+
+    // Only close if clicking directly on the background (not on buttons or while zoomed)
+    if (e.target === containerRef.current && scale <= 1) {
+      onClose();
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/95 backdrop-blur-md select-none animate-in fade-in duration-200"
-      onClick={onClose}
     >
       {/* Top Bar / Header Controls */}
       <div
@@ -242,15 +288,10 @@ export function ImageModal({
       <div
         ref={containerRef}
         className={`relative w-full h-full flex items-center justify-center overflow-hidden ${
-          scale > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'
+          isDragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
-        onClick={(e) => {
-          if (e.target === containerRef.current) onClose();
-        }}
+        onClick={handleContainerClick}
         onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
       >
         <div
           style={{
