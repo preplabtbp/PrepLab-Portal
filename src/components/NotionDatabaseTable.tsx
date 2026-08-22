@@ -43,6 +43,7 @@ import {
 import { Button } from './ui';
 import { toast } from 'sonner';
 import { uploadPhotoToDrive } from '../sheets-api';
+import { ImageModal } from './image-modal';
 
 export interface CommentAttachmentItem {
   id?: string;
@@ -1675,78 +1676,15 @@ export function NotionDatabaseTable({
         </div>
       )}
 
-      {/* Image Lightbox Preview Modal */}
+      {/* Image Lightbox Preview Modal with Zoom, Pan, Rotate */}
       {previewImage && (
-        <div 
-          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200"
-          onClick={() => setPreviewImage(null)}
-        >
-          <div 
-            className="relative max-w-5xl w-full max-h-[92vh] flex flex-col bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Lightbox Header */}
-            <div className="w-full px-5 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2.5 truncate">
-                <ImageIcon className="w-4 h-4 text-teal-400 shrink-0" />
-                <span className="text-xs font-bold text-slate-200 truncate">{previewImage.title}</span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {previewImage.driveViewUrl && (
-                  <a
-                    href={previewImage.driveViewUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-teal-300 rounded-lg text-xs font-semibold transition-colors"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" /> Buka di Drive
-                  </a>
-                )}
-                {previewImage.driveDownloadUrl && (
-                  <a
-                    href={previewImage.driveDownloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-semibold transition-colors"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Download
-                  </a>
-                )}
-                <button
-                  onClick={() => setPreviewImage(null)}
-                  className="p-1.5 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Lightbox Image Container */}
-            <div className="p-4 flex items-center justify-center max-h-[calc(90vh-70px)] overflow-auto bg-black/50">
-              <img
-                src={(() => {
-                  const dId = extractDriveId(previewImage.url) || extractDriveId(previewImage.driveViewUrl) || extractDriveId(previewImage.driveDownloadUrl);
-                  if (dId) {
-                    return `https://drive.google.com/thumbnail?id=${dId}&sz=w2000`;
-                  }
-                  return previewImage.url;
-                })()}
-                alt={previewImage.title}
-                referrerPolicy="no-referrer"
-                className="max-h-[calc(85vh-90px)] max-w-full object-contain rounded-lg shadow-inner"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  const dId = extractDriveId(previewImage.url) || extractDriveId(previewImage.driveViewUrl) || extractDriveId(previewImage.driveDownloadUrl);
-                  if (dId && !target.src.includes('googleusercontent.com')) {
-                    target.src = `https://lh3.googleusercontent.com/d/${dId}`;
-                  } else if (dId && !target.src.includes('/api/drive/view/')) {
-                    target.src = `/api/drive/view/${dId}`;
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </div>
+        <ImageModal
+          imageUrl={previewImage.url}
+          title={previewImage.title}
+          driveViewUrl={previewImage.driveViewUrl}
+          driveDownloadUrl={previewImage.driveDownloadUrl}
+          onClose={() => setPreviewImage(null)}
+        />
       )}
     </div>
   );

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { uploadPhotoToDrive } from '../sheets-api';
 import { parseCommentAttachments } from './NotionDatabaseTable';
+import { ImageModal } from './image-modal';
 
 export function BulletinTopicDetail({ 
   post, 
@@ -664,55 +665,13 @@ export function BulletinTopicDetail({
           </div>
        </div>
 
-      {/* Image Preview Modal */}
+      {/* Image Preview Modal with Zoom, Pan, Rotate */}
       {previewImage && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={() => setPreviewImage(null)}>
-          <div className="relative max-w-5xl max-h-[90vh] flex flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
-            <button 
-              onClick={() => setPreviewImage(null)}
-              className="absolute -top-12 right-0 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <img 
-              src={(() => {
-                const match = previewImage.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
-                              previewImage.match(/\/d\/([a-zA-Z0-9_-]+)/) ||
-                              previewImage.match(/\/view\/([a-zA-Z0-9_-]+)/) ||
-                              previewImage.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-                if (match) {
-                  return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w2000`;
-                }
-                return previewImage;
-              })()} 
-              alt="Preview" 
-              referrerPolicy="no-referrer"
-              className="max-w-full max-h-[80vh] rounded-xl shadow-2xl object-contain" 
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                const match = previewImage.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
-                              previewImage.match(/\/d\/([a-zA-Z0-9_-]+)/) ||
-                              previewImage.match(/\/view\/([a-zA-Z0-9_-]+)/) ||
-                              previewImage.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-                if (match && !target.src.includes('googleusercontent.com')) {
-                  target.src = `https://lh3.googleusercontent.com/d/${match[1]}`;
-                } else if (match && !target.src.includes('/api/drive/view/')) {
-                  target.src = `/api/drive/view/${match[1]}`;
-                }
-              }}
-            />
-            <div className="mt-3 flex items-center gap-3">
-              <a
-                href={previewImage}
-                target="_blank"
-                rel="noreferrer"
-                className="px-4 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold backdrop-blur-md border border-white/20 flex items-center gap-1.5 transition-colors"
-              >
-                <ExternalLink className="w-3.5 h-3.5" /> Buka Tab Baru
-              </a>
-            </div>
-          </div>
-        </div>
+        <ImageModal
+          imageUrl={previewImage}
+          title="Image Attachment Preview"
+          onClose={() => setPreviewImage(null)}
+        />
       )}
     </motion.div>
   );
