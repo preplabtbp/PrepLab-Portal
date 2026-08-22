@@ -6,13 +6,12 @@ export function ImageModal({ imageUrl, onClose }: { imageUrl: string | null; onC
   
   const formattedUrl = (() => {
     if (!imageUrl || imageUrl === '-') return null;
-    let match = imageUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)\//);
+    let match = imageUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+                imageUrl.match(/\/d\/([a-zA-Z0-9_-]+)/) ||
+                imageUrl.match(/\/view\/([a-zA-Z0-9_-]+)/) ||
+                imageUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
     if (match) {
-      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
-    }
-    match = imageUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    if (match) {
-      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
+      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1600`;
     }
     return imageUrl;
   })();

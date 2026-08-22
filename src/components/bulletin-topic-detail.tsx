@@ -367,15 +367,15 @@ export function BulletinTopicDetail({
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-2 min-w-[140px]">
                               <div className="w-7 h-7 rounded bg-blue-100/80 text-blue-600 flex items-center justify-center shrink-0">
-                                {att.fileUrl?.startsWith('data:image/') ? <ImageIcon className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
+                                {att.isImage ? <ImageIcon className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
                               </div>
-                              <span className="font-semibold text-slate-800 truncate max-w-[150px]" title={att.fileName}>{att.fileName || 'Attachment'}</span>
+                              <span className="font-semibold text-slate-800 truncate max-w-[150px]" title={att.name}>{att.name || 'Attachment'}</span>
                             </div>
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-medium">{att.authorName || '-'}</td>
                           <td className="px-3 py-2 text-center whitespace-nowrap">
                             <button
-                              onClick={() => att.fileUrl?.startsWith('data:image/') ? setPreviewImage(att.fileUrl) : window.open(att.fileUrl, '_blank', 'noopener,noreferrer')}
+                              onClick={() => att.isImage ? setPreviewImage(att.directUrl || att.url) : window.open(att.driveViewUrl || att.url, '_blank', 'noopener,noreferrer')}
                               className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-blue-600 hover:text-white border border-slate-200 hover:border-blue-600 rounded-lg text-[11px] font-semibold text-slate-700 transition-all shadow-2xs"
                             >
                               <ExternalLink className="w-3 h-3" /> Buka
@@ -483,27 +483,47 @@ export function BulletinTopicDetail({
                                         {imageAttachments.map((att, idx) => (
                                           <div 
                                             key={idx}
-                                            className="relative cursor-zoom-in rounded-xl overflow-hidden border border-slate-200 bg-black/10 inline-block group/img shadow-2xs max-w-[260px]"
+                                            className="relative cursor-zoom-in rounded-xl overflow-hidden border border-slate-200 bg-slate-100 inline-block group/img shadow-sm max-w-[260px]"
                                             onClick={() => setPreviewImage(att.directUrl || att.url)}
                                             title={`Klik untuk memperbesar: ${att.name}`}
                                           >
-                                            <img
-                                              src={att.directUrl || att.url}
-                                              alt={att.name}
-                                              loading="lazy"
-                                              className="w-full max-h-[220px] object-cover transition-transform group-hover/img:scale-105"
-                                              onError={(e) => {
-                                                if (att.driveViewUrl && (e.target as any).src !== att.driveViewUrl) {
-                                                  (e.target as any).src = att.driveViewUrl;
-                                                }
-                                              }}
-                                            />
+                                            <div className="w-full h-44 bg-slate-100 flex items-center justify-center overflow-hidden">
+                                              <img
+                                                src={att.directUrl || att.url}
+                                                alt={att.name}
+                                                loading="lazy"
+                                                referrerPolicy="no-referrer"
+                                                className="w-full h-full object-cover transition-transform group-hover/img:scale-105"
+                                                onError={(e) => {
+                                                  const target = e.target as HTMLImageElement;
+                                                  if (att.id && !target.src.includes('googleusercontent.com')) {
+                                                    target.src = `https://lh3.googleusercontent.com/d/${att.id}`;
+                                                  } else if (att.id && !target.src.includes('thumbnail')) {
+                                                    target.src = `https://drive.google.com/thumbnail?id=${att.id}&sz=w1000`;
+                                                  }
+                                                }}
+                                              />
+                                            </div>
                                             <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/25 transition-colors flex items-center justify-center">
                                               <Maximize2 className="w-5 h-5 text-white opacity-0 group-hover/img:opacity-100 drop-shadow-md" />
                                             </div>
-                                            <div className="px-2 py-1 bg-white/95 border-t border-slate-100 flex items-center gap-1.5 text-[10px] text-slate-600 font-medium truncate">
-                                              <ImageIcon className="w-3 h-3 text-blue-500 shrink-0" />
-                                              <span className="truncate">{att.name}</span>
+                                            <div className="px-2 py-1.5 bg-white/95 border-t border-slate-100 flex items-center justify-between gap-1.5 text-[10px] text-slate-600 font-medium truncate">
+                                              <div className="flex items-center gap-1.5 truncate">
+                                                <ImageIcon className="w-3 h-3 text-blue-500 shrink-0" />
+                                                <span className="truncate">{att.name}</span>
+                                              </div>
+                                              {att.driveViewUrl && (
+                                                <a 
+                                                  href={att.driveViewUrl} 
+                                                  target="_blank" 
+                                                  rel="noreferrer"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className="text-blue-500 hover:text-blue-700 hover:underline shrink-0 flex items-center gap-0.5 ml-1"
+                                                  title="Buka di Google Drive"
+                                                >
+                                                  <ExternalLink className="w-2.5 h-2.5" />
+                                                </a>
+                                              )}
                                             </div>
                                           </div>
                                         ))}
@@ -646,11 +666,31 @@ export function BulletinTopicDetail({
 
       {/* Image Preview Modal */}
       {previewImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={() => setPreviewImage(null)}>
-          <button className="absolute top-6 right-6 text-white/70 hover:text-white bg-black/20 hover:bg-black/40 rounded-full p-2 transition-colors">
-            <X className="w-6 h-6" />
-          </button>
-          <img src={previewImage} alt="Preview" className="max-w-full max-h-full rounded-xl shadow-2xl object-contain" onClick={e => e.stopPropagation()} />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={() => setPreviewImage(null)}>
+          <div className="relative max-w-5xl max-h-[90vh] flex flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
+            <button 
+              onClick={() => setPreviewImage(null)}
+              className="absolute -top-12 right-0 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img 
+              src={previewImage} 
+              alt="Preview" 
+              referrerPolicy="no-referrer"
+              className="max-w-full max-h-[80vh] rounded-xl shadow-2xl object-contain" 
+            />
+            <div className="mt-3 flex items-center gap-3">
+              <a
+                href={previewImage}
+                target="_blank"
+                rel="noreferrer"
+                className="px-4 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold backdrop-blur-md border border-white/20 flex items-center gap-1.5 transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Buka Tab Baru
+              </a>
+            </div>
+          </div>
         </div>
       )}
     </motion.div>

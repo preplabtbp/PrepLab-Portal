@@ -9,7 +9,7 @@ import { Calendar, Plus, FolderOpen, StickyNote, X, Search, Filter, Loader2, Edi
 import { Card, Button, Input, Select, Textarea } from './ui';
 import { toast } from 'sonner';
 
-export function AgendaDashboard({ inspectorNik, inspectorName, userDept }: { inspectorNik: string, inspectorName: string, userDept?: string }) {
+export function AgendaDashboard({ inspectorNik, inspectorName, userDept, initialEventId }: { inspectorNik: string, inspectorName: string, userDept?: string, initialEventId?: string }) {
   const [events, setEvents] = useState<any[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [notes, setNotes] = useState<any[]>([]);
@@ -22,14 +22,58 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept }: { ins
   const [showAgendaModal, setShowAgendaModal] = useState(false);
   const [showAgendaDetail, setShowAgendaDetail] = useState(false);
   const [currentAgenda, setCurrentAgenda] = useState<any>(null);
+
+  const [showDayEventsModal, setShowDayEventsModal] = useState(false);
+  const [selectedDayDateStr, setSelectedDayDateStr] = useState<string>('');
+  const [selectedDayEvents, setSelectedDayEvents] = useState<any[]>([]);
   
   const calendarRef = useRef<FullCalendar>(null);
   
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [userDept]);
 
-  
+  useEffect(() => {
+    if (initialEventId && events.length > 0) {
+      const found = events.find(e => String(e.id) === String(initialEventId));
+      if (found) {
+        setCurrentAgenda(found);
+        setShowAgendaDetail(true);
+        if (calendarRef.current && found.start) {
+          try {
+            calendarRef.current.getApi().gotoDate(found.start);
+          } catch(err) {}
+        }
+      }
+    }
+  }, [initialEventId, events]);
+
+  const handleDateClick = (arg: { dateStr: string; date: Date }) => {
+    const dayEvts = filteredEvents.filter(e => {
+      if (!e.start) return false;
+      const d = new Date(e.start);
+      return d.toLocaleDateString('en-CA') === arg.dateStr;
+    });
+
+    if (dayEvts.length === 1) {
+      setCurrentAgenda(dayEvts[0]);
+      setShowAgendaDetail(true);
+    } else if (dayEvts.length > 1) {
+      setSelectedDayDateStr(arg.dateStr);
+      setSelectedDayEvents(dayEvts);
+      setShowDayEventsModal(true);
+    } else {
+      const startIso = new Date(new Date(arg.date).setHours(9, 0, 0, 0)).toISOString().slice(0, 16);
+      const endIso = new Date(new Date(arg.date).setHours(10, 0, 0, 0)).toISOString().slice(0, 16);
+      setCurrentAgenda({
+        extendedProps: {
+          startDate: startIso,
+          endDate: endIso,
+        }
+      });
+      setShowAgendaModal(true);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -43,22 +87,35 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept }: { ins
       
       let evts: any[] = [];
       if (agendaRes.status === 'success') {
-        const filteredAgenda = agendaRes.data.filter((r: any) => {
-          if (r.department) {
-            if (!userDept) return false;
-            if (userDept === 'ALL') return true;
-            return userDept.toLowerCase() === r.department.toLowerCase();
-          }
-          return true;
+        const filteredAgenda = (agendaRes.data || []).filter((r: any) => {
+          // If event has no department or is ALL, it's public for everyone
+          if (!r.department || r.department === 'ALL' || r.department.toLowerCase() === 'all') return true;
+          // If viewing with no department restriction or ALL, show all
+          if (!userDept || userDept === 'ALL' || userDept.toLowerCase() === 'all') return true;
+
+          const uDept = userDept.toLowerCase();
+          const rDept = r.department.toLowerCase();
+
+          if (uDept === rDept) return true;
+
+          // Prep & Lab aliases
+          const isPrepLabUser = uDept.includes('prep') || uDept.includes('lab') || uDept.includes('preparation') || uDept.includes('laboratory');
+          const isPrepLabRecord = rDept.includes('prep') || rDept.includes('lab') || rDept.includes('preparation') || rDept.includes('laboratory');
+          if (isPrepLabUser && isPrepLabRecord) return true;
+
+          return false;
         });
 
         evts = filteredAgenda.map((r: any) => {
           let bgColor = '#3b82f6';
           let textColor = '#ffffff';
-          if (r.kategori === 'General') { bgColor = '#76944C'; }
-          else if (r.kategori === 'SPV UP') { bgColor = '#FFD21F'; textColor = '#2d3748'; }
-          else if (r.kategori === 'Private') { bgColor = '#C0B6AC'; }
-          else { bgColor = '#C8DAA6'; textColor = '#2d3748'; }
+          const kat = (r.kategori || '').toLowerCase();
+          if (kat === 'general') { bgColor = '#76944C'; }
+          else if (kat === 'spv up') { bgColor = '#FFD21F'; textColor = '#2d3748'; }
+          else if (kat === 'private' || kat === 'personal') { bgColor = '#C0B6AC'; }
+          else if (kat === 'rapat' || kat === 'meeting') { bgColor = '#6366F1'; textColor = '#ffffff'; }
+          else if (kat === 'quality assurance' || kat === 'qa') { bgColor = '#3B82F6'; textColor = '#ffffff'; }
+          else { bgColor = '#0D9488'; textColor = '#ffffff'; }
           return {
             id: r.id,
             title: r.title,
@@ -170,6 +227,13 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept }: { ins
            return true;
        });
     }
+    if (categoryFilter === 'Meeting') {
+       return events.filter(e => {
+           if (e.extendedProps?.isHoliday) return true;
+           const k = (e.extendedProps?.kategori || '').toLowerCase();
+           return k === 'meeting' || k === 'rapat' || (e.title || '').toLowerCase().includes('meeting') || (e.title || '').toLowerCase().includes('rapat');
+       });
+    }
     if (categoryFilter === 'Quality Assurance') {
        return events.filter(e => {
            if (e.extendedProps?.isHoliday) return true;
@@ -209,7 +273,7 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept }: { ins
         
         <div className="flex flex-wrap gap-2 w-full md:w-auto justify-start md:justify-end">
           <div className="flex bg-slate-100 p-1 rounded-lg w-full md:w-auto overflow-x-auto hide-scrollbar" style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-main)', borderWidth: 1 }}>
-            {['All', 'Quality Assurance', 'Private', 'SPV UP', 'General'].map(cat => (
+            {['All', 'Meeting', 'Quality Assurance', 'Private', 'SPV UP', 'General'].map(cat => (
               <button 
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}
@@ -219,7 +283,7 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept }: { ins
                   color: categoryFilter === cat ? 'var(--primary)' : 'var(--text-main)'
                 }}
               >
-                {cat === 'All' ? 'Semua' : cat === 'Quality Assurance' ? 'Quality Assurance' : cat === 'SPV UP' ? 'Section' : cat === 'Private' ? 'Pribadi' : 'General'}
+                {cat === 'All' ? 'Semua' : cat === 'Meeting' ? 'Meeting' : cat === 'Quality Assurance' ? 'Quality Assurance' : cat === 'SPV UP' ? 'Section' : cat === 'Private' ? 'Pribadi' : 'General'}
               </button>
             ))}
           </div>
@@ -262,8 +326,21 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept }: { ins
         <div className="w-full lg:w-3/4 p-4 md:p-6 rounded-xl shadow-sm border border-slate-200/50 relative" style={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-main)' }}>
           {loading && <div className="absolute inset-0 z-10 bg-white/50 backdrop-blur-sm flex items-center justify-center rounded-xl"><Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--primary)' }}/></div>}
           
-          {/* Desktop FullCalendar */}
+          {/* Desktop FullCalendar with Clean Pulsing Red Count Bubble */}
           <div className="hidden md:block w-full min-h-[500px]">
+             <style>{`
+               .fc-daygrid-day-events {
+                 display: none !important;
+               }
+               .fc-daygrid-day-frame {
+                 min-height: 72px !important;
+               }
+               .fc-daygrid-day-top {
+                 flex-direction: column !important;
+                 align-items: center !important;
+                 width: 100% !important;
+               }
+             `}</style>
              <FullCalendar
                ref={calendarRef}
                plugins={[ dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin, multiMonthPlugin ]}
@@ -275,10 +352,41 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept }: { ins
                }}
                events={filteredEvents}
                eventClick={handleEventClick}
+               dateClick={(arg) => handleDateClick({ dateStr: arg.dateStr, date: arg.date })}
                height="auto"
                themeSystem="standard"
                buttonText={{ today: 'Hari Ini', month: 'Bulan', week: 'Minggu', list: 'Daftar' }}
                locale="id"
+               dayCellContent={(arg) => {
+                 const cellDateStr = arg.date.toLocaleDateString('en-CA');
+                 const dayEvts = filteredEvents.filter(e => {
+                   if (!e.start) return false;
+                   const evDateStr = new Date(e.start).toLocaleDateString('en-CA');
+                   return evDateStr === cellDateStr;
+                 });
+
+                 return (
+                   <div 
+                     onClick={() => handleDateClick({ dateStr: cellDateStr, date: arg.date })}
+                     className="flex flex-col items-center justify-between h-full min-h-[62px] py-1 px-1 relative w-full cursor-pointer group select-none"
+                   >
+                     <span className="text-xs font-semibold text-slate-700 group-hover:text-teal-600 transition-colors">
+                       {arg.dayNumberText.replace(/tgl|tanggal/gi, '').trim()}
+                     </span>
+                     {dayEvts.length > 0 && (
+                       <div 
+                         className="my-auto cursor-pointer flex items-center justify-center pt-0.5"
+                         title={`${dayEvts.length} Kegiatan pada ${cellDateStr} (Klik untuk melihat)`}
+                       >
+                         <span className="relative flex h-6 min-w-6 px-1.5 items-center justify-center rounded-full bg-red-600 text-white text-[11px] font-black shadow-lg ring-2 ring-red-300/60 hover:scale-125 transition-transform animate-pulse">
+                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                           <span className="relative z-10">{dayEvts.length}</span>
+                         </span>
+                       </div>
+                     )}
+                   </div>
+                 );
+               }}
              />
           </div>
 
@@ -500,6 +608,103 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept }: { ins
                {currentAgenda.extendedProps?.routineId && (
                  <Button onClick={() => deleteAgenda(currentAgenda.id, true, currentAgenda.extendedProps.routineId)} variant="secondary" className="w-full text-rose-500"><CalendarDays className="w-4 h-4 mr-2"/> Hapus Seluruh Sisa Rutinitas</Button>
                )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Day Events List Modal */}
+      {showDayEventsModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh] animate-in fade-in zoom-in duration-200" style={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-main)', borderWidth: 1 }}>
+            <div className="p-4 border-b flex justify-between items-center bg-[#242424]" style={{ borderColor: 'var(--border-main)' }}>
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-400">
+                  <CalendarDays className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-base text-white">
+                    {selectedDayDateStr ? new Date(selectedDayDateStr).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Daftar Agenda'}
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    {selectedDayEvents.length} Kegiatan Terjadwal
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowDayEventsModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#333] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-2.5 overflow-y-auto max-h-[55vh] custom-scrollbar">
+              {selectedDayEvents.map((evt, idx) => (
+                <div 
+                  key={evt.id || idx}
+                  onClick={() => {
+                    setCurrentAgenda(evt);
+                    setShowDayEventsModal(false);
+                    setShowAgendaDetail(true);
+                  }}
+                  className="p-3.5 rounded-xl border flex items-start gap-3 cursor-pointer hover:border-teal-500/50 hover:bg-slate-100/10 transition-all group shadow-sm"
+                  style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-main)' }}
+                >
+                  <div className="w-2 rounded-full self-stretch min-h-[40px] flex-shrink-0" style={{ backgroundColor: evt.backgroundColor || '#6366F1' }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <h4 className="font-bold text-sm truncate group-hover:text-teal-400 transition-colors" style={{ color: 'var(--text-main)' }}>
+                        {evt.title}
+                      </h4>
+                      {evt.extendedProps?.kategori && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex-shrink-0">
+                          {evt.extendedProps.kategori}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      {new Date(evt.start).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                      {evt.end && ` - ${new Date(evt.end).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`}
+                      {evt.extendedProps?.pic && (
+                        <span className="ml-2 truncate">• PIC: {evt.extendedProps.pic}</span>
+                      )}
+                    </p>
+                    {evt.extendedProps?.deskripsi && (
+                      <p className="text-xs mt-1.5 line-clamp-2 leading-snug opacity-75" style={{ color: 'var(--text-muted)' }}>
+                        {evt.extendedProps.deskripsi}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-4 border-t flex items-center justify-between bg-[#242424]" style={{ borderColor: 'var(--border-main)' }}>
+              <Button 
+                onClick={() => {
+                  setShowDayEventsModal(false);
+                  setCurrentAgenda({
+                    extendedProps: {
+                      startDate: selectedDayDateStr ? new Date(`${selectedDayDateStr}T09:00:00`).toISOString() : new Date().toISOString(),
+                      endDate: selectedDayDateStr ? new Date(`${selectedDayDateStr}T10:00:00`).toISOString() : new Date().toISOString(),
+                    }
+                  });
+                  setShowAgendaModal(true);
+                }}
+                className="!w-auto"
+                style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+              >
+                <Plus className="w-4 h-4 mr-1.5" /> Tambah Agenda Baru
+              </Button>
+              <Button 
+                onClick={() => setShowDayEventsModal(false)}
+                variant="secondary"
+                className="!w-auto"
+              >
+                Tutup
+              </Button>
             </div>
           </div>
         </div>

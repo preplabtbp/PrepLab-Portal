@@ -386,26 +386,46 @@ router.get("/api/drive/view/:fileId", async (req, res) => {
     const fileId = req.params.fileId;
     if (!fileId || fileId.length < 5) return res.status(400).send("Invalid file ID");
 
-    // Fetch metadata for mimeType
-    let mimeType = 'application/octet-stream';
+    // 1. Try streaming via Drive SDK if OAuth configured
     try {
-      const meta = await drive.files.get({ fileId, fields: 'mimeType, name, size', supportsAllDrives: true });
-      if (meta?.data?.mimeType) {
-        mimeType = meta.data.mimeType;
+      let mimeType = 'image/jpeg';
+      try {
+        const meta = await drive.files.get({ fileId, fields: 'mimeType, name, size', supportsAllDrives: true });
+        if (meta?.data?.mimeType) mimeType = meta.data.mimeType;
+      } catch (e) {}
+
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+
+      const streamRes = await drive.files.get(
+        { fileId, alt: 'media', supportsAllDrives: true },
+        { responseType: 'stream' }
+      );
+
+      return streamRes.data.pipe(res);
+    } catch (sdkErr) {
+      // 2. Fallback: Stream directly from Google Drive public CDN
+      const publicUrls = [
+        `https://lh3.googleusercontent.com/d/${fileId}`,
+        `https://drive.google.com/thumbnail?id=${fileId}&sz=w2000`,
+        `https://drive.google.com/uc?export=view&id=${fileId}`
+      ];
+
+      for (const pUrl of publicUrls) {
+        try {
+          const fetchRes = await fetch(pUrl);
+          if (fetchRes.ok) {
+            const contentType = fetchRes.headers.get('content-type') || 'image/jpeg';
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+            const arrayBuf = await fetchRes.arrayBuffer();
+            return res.send(Buffer.from(arrayBuf));
+          }
+        } catch (e) {}
       }
-    } catch (e) {
-      // ignore metadata error
+
+      throw new Error("All Drive fetch strategies failed");
     }
-
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
-
-    const streamRes = await drive.files.get(
-      { fileId, alt: 'media', supportsAllDrives: true },
-      { responseType: 'stream' }
-    );
-
-    streamRes.data.pipe(res);
   } catch (err: any) {
     console.error(`[Drive Proxy View] Error streaming file ${req.params.fileId}:`, err.message);
     res.status(404).send("File not found or inaccessible");
@@ -424,19 +444,25 @@ router.get("/api/drive/download/:fileId", async (req, res) => {
       const meta = await drive.files.get({ fileId, fields: 'mimeType, name, size', supportsAllDrives: true });
       if (meta?.data?.name) fileName = meta.data.name;
       if (meta?.data?.mimeType) mimeType = meta.data.mimeType;
-    } catch (e) {
-      // ignore metadata error
-    }
+    } catch (e) {}
 
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
 
-    const streamRes = await drive.files.get(
-      { fileId, alt: 'media', supportsAllDrives: true },
-      { responseType: 'stream' }
-    );
-
-    streamRes.data.pipe(res);
+    try {
+      const streamRes = await drive.files.get(
+        { fileId, alt: 'media', supportsAllDrives: true },
+        { responseType: 'stream' }
+      );
+      return streamRes.data.pipe(res);
+    } catch (sdkErr) {
+      const fetchRes = await fetch(`https://drive.google.com/uc?export=download&id=${fileId}`);
+      if (fetchRes.ok) {
+        const arrayBuf = await fetchRes.arrayBuffer();
+        return res.send(Buffer.from(arrayBuf));
+      }
+      throw sdkErr;
+    }
   } catch (err: any) {
     console.error(`[Drive Proxy Download] Error streaming file ${req.params.fileId}:`, err.message);
     res.status(404).send("File not found or inaccessible");

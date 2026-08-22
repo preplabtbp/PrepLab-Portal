@@ -1429,10 +1429,14 @@ export function NotionDatabaseTable({
                                               src={att.directUrl || att.url}
                                               alt={att.name}
                                               loading="lazy"
+                                              referrerPolicy="no-referrer"
                                               className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-200"
                                               onError={(e) => {
-                                                if (att.driveViewUrl && (e.target as any).src !== att.driveViewUrl) {
-                                                  (e.target as any).src = att.driveViewUrl;
+                                                const target = e.target as HTMLImageElement;
+                                                if (att.id && !target.src.includes('googleusercontent.com')) {
+                                                  target.src = `https://lh3.googleusercontent.com/d/${att.id}`;
+                                                } else if (att.id && !target.src.includes('thumbnail')) {
+                                                  target.src = `https://drive.google.com/thumbnail?id=${att.id}&sz=w1000`;
                                                 }
                                               }}
                                             />

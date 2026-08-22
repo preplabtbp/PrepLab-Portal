@@ -76,6 +76,7 @@ export function BulletinBoard({
   // Agenda & Meetings State
   const [agendaEventsList, setAgendaEventsList] = useState<any[]>([]);
   const [showFullAgendaModal, setShowFullAgendaModal] = useState(false);
+  const [selectedAgendaEventId, setSelectedAgendaEventId] = useState<string | null>(null);
   const [showAiMeetingModal, setShowAiMeetingModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -685,9 +686,9 @@ ${aiMeetingNotes
             title: `[Meeting] ${aiMeetingTitle}`,
             startDate: new Date(aiMeetingDate),
             endDate: new Date(new Date(aiMeetingDate).getTime() + 60 * 60 * 1000),
-            kategori: "Rapat",
+            kategori: "Meeting",
             pic: aiMeetingPic || inspectorName,
-            deskripsi: finalContent.slice(0, 500),
+            deskripsi: finalContent,
             creatorNik: inspectorNik,
             department: "Prep & Lab",
           }),
@@ -840,10 +841,13 @@ ${aiMeetingNotes
                     <span className="truncate">No upcoming events</span>
                   </div>
                 ) : (
-                  upcomingMeetings.slice(0, 2).map((evt: any) => (
+                  upcomingMeetings.slice(0, 5).map((evt: any) => (
                     <div
                       key={evt.id}
-                      onClick={() => setShowFullAgendaModal(true)}
+                      onClick={() => {
+                        setSelectedAgendaEventId(evt.id);
+                        setShowFullAgendaModal(true);
+                      }}
                       className="flex items-center gap-2.5 px-2 py-1.5 text-xs text-slate-300 hover:bg-[#242424] hover:text-teal-300 rounded-md cursor-pointer transition-colors group"
                       title={evt.title}
                     >
@@ -866,7 +870,10 @@ ${aiMeetingNotes
 
                 {/* ↗ View all */}
                 <button
-                  onClick={() => setShowFullAgendaModal(true)}
+                  onClick={() => {
+                    setSelectedAgendaEventId(null);
+                    setShowFullAgendaModal(true);
+                  }}
                   className="w-full flex items-center gap-2.5 px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-[#242424] rounded-md transition-colors text-left group"
                 >
                   <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-teal-400 transition-colors flex-shrink-0" />
@@ -1532,7 +1539,8 @@ ${aiMeetingNotes
               <AgendaDashboard
                 inspectorNik={inspectorNik}
                 inspectorName={inspectorName}
-                userDept="Preparation & Laboratory"
+                userDept="ALL"
+                initialEventId={selectedAgendaEventId || undefined}
               />
             </div>
           </div>
