@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Cloud, Sun, CloudRain, Wind, Play, Pause, RotateCcw } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 
 const WeatherIcon = ({ code, className }: { code: number, className?: string }) => {
   if (code < 3) return <Sun className={`text-yellow-400 ${className}`} />;

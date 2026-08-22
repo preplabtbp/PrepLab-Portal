@@ -1,4 +1,3 @@
-import fetch from 'node-fetch'; // wait, node 22 has global fetch
 import Papa from 'papaparse';
 import { db } from './db/index.js';
 import { employees, roster } from './db/schema.js';

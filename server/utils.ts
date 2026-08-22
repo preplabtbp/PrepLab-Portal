@@ -96,25 +96,34 @@ export async function uploadFileToDrive(token: string, base64Data: string, mimeT
 
 export async function syncBulletinToAgenda(post: any) {
   try {
-    let contentData: any = {};
-    try { contentData = JSON.parse(post.content); } catch (e) {}
-    
-    if (contentData.blocks) {
-      const text = contentData.blocks.map((b: any) => b.data?.text || '').join(' ').toLowerCase();
-      
-      const isEvent = text.includes('meeting') || text.includes('rapat') || text.includes('acara') || text.includes('kegiatan') || text.includes('event');
-      const isUrgent = post.isUrgent || text.includes('urgent') || text.includes('penting') || text.includes('segera');
-      
-      if (isEvent || isUrgent) {
-        await db.insert(agendaEvents).values({
-          title: `[Bulletin] ${post.title}`,
-          date: new Date().toISOString().split('T')[0],
-          description: post.content.substring(0, 100) + '...',
-          type: isUrgent ? 'high' : 'medium',
-          createdBy: post.authorNik,
-          linkedBulletinId: post.id
-        });
-      }
+    const titleLower = (post.title || "").toLowerCase();
+    const contentLower = typeof post.content === 'string' ? post.content.toLowerCase() : "";
+    const isMeeting = 
+      post.category === 'MEETING' ||
+      post.category === 'WEEKLY' ||
+      titleLower.includes('meeting') ||
+      titleLower.includes('rapat') ||
+      titleLower.includes('weekly') ||
+      titleLower.includes('briefing') ||
+      titleLower.includes('p5m') ||
+      contentLower.includes('notulensi') ||
+      contentLower.includes('agenda');
+
+    if (isMeeting) {
+      const eventId = `ag-bulletin-${post.id}-${Date.now()}`;
+      await db.insert(agendaEvents).values({
+        id: eventId,
+        title: post.title.startsWith('[') ? post.title : `[Meeting] ${post.title}`,
+        startDate: new Date(),
+        endDate: new Date(Date.now() + 60 * 60 * 1000),
+        kategori: 'General',
+        pic: post.authorName || 'PIC Prep & Lab',
+        deskripsi: typeof post.content === 'string' ? post.content.substring(0, 500) : '',
+        creatorNik: post.authorNik || null,
+        department: post.department || 'ALL',
+        bulletinPostId: post.id,
+      });
+      console.log(`[Sync] Successfully synced bulletin meeting "${post.title}" to agenda_events (ID: ${eventId})`);
     }
   } catch (err) {
     console.error("Failed to sync bulletin to agenda:", err);

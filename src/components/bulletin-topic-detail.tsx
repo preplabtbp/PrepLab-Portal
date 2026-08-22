@@ -1,10 +1,11 @@
 import { motion } from 'motion/react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button, Input, Textarea } from './ui';
-import { ChevronLeft, Send, X, FileText, User, Paperclip, MessageSquare, Clock, Edit2, Check, ExternalLink, Trash2, Image as ImageIcon } from 'lucide-react';
+import { ChevronLeft, Send, X, FileText, User, Paperclip, MessageSquare, Clock, Edit2, Check, ExternalLink, Trash2, Image as ImageIcon, FileSpreadsheet, Download, Maximize2, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { uploadPhotoToDrive } from '../sheets-api';
+import { parseCommentAttachments } from './NotionDatabaseTable';
 
 export function BulletinTopicDetail({ 
   post, 
@@ -163,7 +164,21 @@ export function BulletinTopicDetail({
     }
   };
 
-  const attachments = comments.filter(c => Boolean(c.fileUrl));
+  const attachments = useMemo(() => {
+    const list: any[] = [];
+    comments.forEach(c => {
+      const parsed = parseCommentAttachments(c.fileUrl, c.fileName);
+      parsed.forEach(att => {
+        list.push({
+          ...att,
+          commentId: c.id,
+          authorName: c.authorName,
+          createdAt: c.createdAt
+        });
+      });
+    });
+    return list;
+  }, [comments]);
 
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3, ease: "easeOut" }} className="flex flex-col h-full pb-36 w-full w-full max-w-full px-4 md:px-8 md:px-0">
@@ -449,113 +464,189 @@ export function BulletinTopicDetail({
                              </div>
                            </div>
                            
-                           <div className={`border shadow-2xs rounded-2xl p-3.5 inline-block min-w-[20%] max-w-[85%] ${isOwn ? 'bg-teal-50/90 border-teal-200/80 rounded-tr-none text-right' : 'bg-white border-slate-200 rounded-tl-none'}`}>
-                             {c.content && <p className={`text-sm text-slate-700 whitespace-pre-wrap leading-relaxed ${isOwn ? 'text-right' : 'text-left'}`}>{c.content}</p>}
-                             {c.fileUrl && (
-                               <div className={`mt-2.5 ${c.content ? (isOwn ? 'pt-2.5 border-t border-teal-200/60' : 'pt-2.5 border-t border-slate-100') : ''} ${isOwn ? 'flex justify-end' : ''}`}>
-                                 {c.fileUrl.startsWith('data:image/') ? (
-                                   <div 
-                                     className="relative cursor-zoom-in rounded-xl overflow-hidden border border-slate-200 inline-block group/img shadow-2xs"
-                                     onClick={() => setPreviewImage(c.fileUrl)}
-                                   >
-                                     <img src={c.fileUrl} alt={c.fileName || 'Attachment'} className="max-w-[260px] max-h-[260px] object-cover transition-transform group-hover/img:scale-105" />
-                                     <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/20 transition-colors flex items-center justify-center">
-                                        <ExternalLink className="w-5 h-5 text-white opacity-0 group-hover/img:opacity-100 drop-shadow-md" />
-                                     </div>
-                                   </div>
-                                 ) : (
-                                   <button type="button" onClick={() => window.open(c.fileUrl, "_blank", "noopener,noreferrer")} className={`inline-flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-xl text-xs font-semibold text-slate-700 hover:text-blue-700 transition-colors ${isOwn ? 'flex-row-reverse' : ''}`}>
-                                     <Paperclip className="w-3.5 h-3.5 text-slate-400" /> 
-                                     <span className="truncate max-w-[180px]">{c.fileName || 'Download File'}</span>
-                                   </button>
-                                 )}
-                               </div>
-                             )}
-                           </div>
-                        </div>
-                     </div>
-                   )})
-                 )}
-               </div>
+                            <div className={`border shadow-2xs rounded-2xl p-3.5 inline-block min-w-[20%] max-w-[85%] ${isOwn ? 'bg-teal-50/90 border-teal-200/80 rounded-tr-none text-right' : 'bg-white border-slate-200 rounded-tl-none'}`}>
+                              {c.content && <p className={`text-sm text-slate-700 whitespace-pre-wrap leading-relaxed ${isOwn ? 'text-right' : 'text-left'}`}>{c.content}</p>}
+                              
+                              {/* Attachments rendering */}
+                              {(() => {
+                                const attachments = parseCommentAttachments(c.fileUrl, c.fileName);
+                                const imageAttachments = attachments.filter(a => a.isImage);
+                                const docAttachments = attachments.filter(a => !a.isImage);
 
-               {/* Chat Input Area (padded at bottom to prevent footer occlusion) */}
-               <div className="p-4 pb-20 md:pb-6 bg-white border-t border-slate-200">
-                  {selectedFile && (
-                    <div className="mb-3 flex items-center">
-                      <div className="bg-blue-50 text-blue-700 px-3 py-2 rounded-xl text-xs flex items-center gap-2.5 border border-blue-200 shadow-2xs">
-                         <Paperclip className="w-3.5 h-3.5 text-blue-500" />
-                         <span className="font-semibold truncate max-w-[200px]">{selectedFile.name}</span>
-                         <button onClick={() => setSelectedFile(null)} className="p-1 hover:bg-blue-100 rounded-md transition-colors text-blue-500 hover:text-blue-700">
-                           <X className="w-3.5 h-3.5" />
-                         </button>
+                                if (attachments.length === 0) return null;
+
+                                return (
+                                  <div className={`mt-2.5 space-y-2 ${c.content ? (isOwn ? 'pt-2.5 border-t border-teal-200/60' : 'pt-2.5 border-t border-slate-100') : ''} ${isOwn ? 'flex flex-col items-end' : ''}`}>
+                                    {/* Images */}
+                                    {imageAttachments.length > 0 && (
+                                      <div className={`flex flex-wrap gap-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                                        {imageAttachments.map((att, idx) => (
+                                          <div 
+                                            key={idx}
+                                            className="relative cursor-zoom-in rounded-xl overflow-hidden border border-slate-200 bg-black/10 inline-block group/img shadow-2xs max-w-[260px]"
+                                            onClick={() => setPreviewImage(att.directUrl || att.url)}
+                                            title={`Klik untuk memperbesar: ${att.name}`}
+                                          >
+                                            <img
+                                              src={att.directUrl || att.url}
+                                              alt={att.name}
+                                              loading="lazy"
+                                              className="w-full max-h-[220px] object-cover transition-transform group-hover/img:scale-105"
+                                              onError={(e) => {
+                                                if (att.driveViewUrl && (e.target as any).src !== att.driveViewUrl) {
+                                                  (e.target as any).src = att.driveViewUrl;
+                                                }
+                                              }}
+                                            />
+                                            <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/25 transition-colors flex items-center justify-center">
+                                              <Maximize2 className="w-5 h-5 text-white opacity-0 group-hover/img:opacity-100 drop-shadow-md" />
+                                            </div>
+                                            <div className="px-2 py-1 bg-white/95 border-t border-slate-100 flex items-center gap-1.5 text-[10px] text-slate-600 font-medium truncate">
+                                              <ImageIcon className="w-3 h-3 text-blue-500 shrink-0" />
+                                              <span className="truncate">{att.name}</span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {/* Documents */}
+                                    {docAttachments.length > 0 && (
+                                      <div className={`flex flex-wrap gap-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                                        {docAttachments.map((att, idx) => {
+                                          const lowerName = att.name.toLowerCase();
+                                          const isExcel = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
+                                          const isPdf = lowerName.endsWith('.pdf');
+
+                                          return (
+                                            <div
+                                              key={idx}
+                                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-xl text-xs font-semibold text-slate-700 transition-all shadow-2xs"
+                                            >
+                                              <div className={`p-1 rounded-md ${isExcel ? 'bg-emerald-100 text-emerald-700' : isPdf ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                {isExcel ? <FileSpreadsheet className="w-3.5 h-3.5" /> : isPdf ? <FileText className="w-3.5 h-3.5" /> : <FileDown className="w-3.5 h-3.5" />}
+                                              </div>
+                                              <div className="min-w-0 pr-1 text-left">
+                                                <span className="truncate block max-w-[160px]" title={att.name}>{att.name}</span>
+                                                {att.size && <span className="text-[9px] text-slate-400 font-mono">{(att.size / 1024).toFixed(0)} KB</span>}
+                                              </div>
+                                              <div className="flex items-center gap-1 shrink-0 pl-1 border-l border-slate-200">
+                                                {att.driveViewUrl && (
+                                                  <a
+                                                    href={att.driveViewUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="p-1 text-slate-400 hover:text-blue-600 rounded transition-colors"
+                                                    title="Buka di Drive"
+                                                  >
+                                                    <ExternalLink className="w-3.5 h-3.5" />
+                                                  </a>
+                                                )}
+                                                {att.driveDownloadUrl && (
+                                                  <a
+                                                    href={att.driveDownloadUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="p-1 text-slate-400 hover:text-blue-600 rounded transition-colors"
+                                                    title="Download"
+                                                  >
+                                                    <Download className="w-3.5 h-3.5" />
+                                                  </a>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                         </div>
                       </div>
-                    </div>
+                    )})
                   )}
-                  <div className="flex items-end gap-3">
-                    <div className="w-9 h-9 rounded-full overflow-hidden bg-teal-100 border border-teal-200 flex-shrink-0 flex items-center justify-center font-bold text-teal-700 text-xs shadow-2xs mb-1">
-                      {currentUserAvatar ? (
-                        <img src={currentUserAvatar} alt={inspectorName || 'Profile'} className="w-full h-full object-cover" />
-                      ) : (
-                        <span>{inspectorName ? inspectorName.charAt(0).toUpperCase() : '?'}</span>
-                      )}
-                    </div>
-                    <div className="flex-1 flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-2 focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all shadow-2xs">
-                      <label className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors shrink-0 cursor-pointer" title="Lampirkan File">
-                        <Paperclip className="w-5 h-5" />
-                        <input type="file" className="hidden" onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            toast.loading('Uploading file...', { id: 'upload' });
-                            const reader = new FileReader();
-                            reader.onload = async (ev) => {
-                               try {
-                                 const base64 = ev.target?.result as string;
-                                 const base64Data = base64.split(',')[1];
-                                 const url = await uploadPhotoToDrive(base64Data, file.type, file.name, 'Bulletin Board');
-                                 setSelectedFile({ name: file.name, url });
-                                 toast.success('Upload selesai', { id: 'upload' });
-                               } catch (err) {
-                                 console.error(err);
-                                 toast.error('Upload gagal', { id: 'upload' });
-                               }
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }} />
-                      </label>
-                      
-                      <textarea 
-                        placeholder="Tulis update atau pesan... (Enter untuk kirim)" 
-                        className="w-full bg-transparent border-none focus:ring-0 text-sm py-2 px-1 resize-none min-h-[40px] max-h-[120px] text-slate-700 placeholder:text-slate-400"
-                        value={newComment}
-                        rows={newComment.split('\n').length > 1 ? Math.min(newComment.split('\n').length, 4) : 1}
-                        onChange={e => setNewComment(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            submitComment();
-                          }
-                        }}
-                      />
-                      
-                      <button 
-                        onClick={submitComment} 
-                        disabled={!newComment.trim() && !selectedFile}
-                        className="shrink-0 p-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl shadow-2xs transition-all flex items-center justify-center mb-0.5"
-                        title="Kirim Komentar"
-                      >
-                        <Send className="w-4 h-4 ml-0.5" />
-                      </button>
-                    </div>
-                 </div>
-               </div>
-            </div>
-         </div>
-      </div>
+                </div>
+
+                {/* Chat Input Area (padded at bottom to prevent footer occlusion) */}
+                <div className="p-4 pb-20 md:pb-6 bg-white border-t border-slate-200">
+                   {selectedFile && (
+                     <div className="mb-3 flex items-center">
+                       <div className="bg-blue-50 text-blue-700 px-3 py-2 rounded-xl text-xs flex items-center gap-2.5 border border-blue-200 shadow-2xs">
+                          <Paperclip className="w-3.5 h-3.5 text-blue-500" />
+                          <span className="font-semibold truncate max-w-[200px]">{selectedFile.name}</span>
+                          <button onClick={() => setSelectedFile(null)} className="p-1 hover:bg-blue-100 rounded-md transition-colors text-blue-500 hover:text-blue-700">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                       </div>
+                     </div>
+                   )}
+                   <div className="flex items-end gap-3">
+                     <div className="w-9 h-9 rounded-full overflow-hidden bg-teal-100 border border-teal-200 flex-shrink-0 flex items-center justify-center font-bold text-teal-700 text-xs shadow-2xs mb-1">
+                       {currentUserAvatar ? (
+                         <img src={currentUserAvatar} alt={inspectorName || 'Profile'} className="w-full h-full object-cover" />
+                       ) : (
+                         <span>{inspectorName ? inspectorName.charAt(0).toUpperCase() : '?'}</span>
+                       )}
+                     </div>
+                     <div className="flex-1 flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-2 focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all shadow-2xs">
+                       <label className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors shrink-0 cursor-pointer" title="Lampirkan File">
+                         <Paperclip className="w-5 h-5" />
+                         <input type="file" className="hidden" onChange={(e) => {
+                           const file = e.target.files?.[0];
+                           if (file) {
+                             toast.loading('Uploading file...', { id: 'upload' });
+                             const reader = new FileReader();
+                             reader.onload = async (ev) => {
+                                try {
+                                  const base64 = ev.target?.result as string;
+                                  const base64Data = base64.split(',')[1];
+                                  const url = await uploadPhotoToDrive(base64Data, file.type, file.name, 'Bulletin Board');
+                                  setSelectedFile({ name: file.name, url });
+                                  toast.success('Upload selesai', { id: 'upload' });
+                                } catch (err) {
+                                  console.error(err);
+                                  toast.error('Upload gagal', { id: 'upload' });
+                                }
+                             };
+                             reader.readAsDataURL(file);
+                           }
+                         }} />
+                       </label>
+                       
+                       <textarea 
+                         placeholder="Tulis update atau pesan... (Enter untuk kirim)" 
+                         className="w-full bg-transparent border-none focus:ring-0 text-sm py-2 px-1 resize-none min-h-[40px] max-h-[120px] text-slate-700 placeholder:text-slate-400"
+                         value={newComment}
+                         rows={newComment.split('\n').length > 1 ? Math.min(newComment.split('\n').length, 4) : 1}
+                         onChange={e => setNewComment(e.target.value)}
+                         onKeyDown={e => {
+                           if (e.key === 'Enter' && !e.shiftKey) {
+                             e.preventDefault();
+                             submitComment();
+                           }
+                         }}
+                       />
+                       
+                       <button 
+                         onClick={submitComment} 
+                         disabled={!newComment.trim() && !selectedFile}
+                         className="shrink-0 p-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl shadow-2xs transition-all flex items-center justify-center mb-0.5"
+                         title="Kirim Komentar"
+                       >
+                         <Send className="w-4 h-4 ml-0.5" />
+                       </button>
+                     </div>
+                  </div>
+                </div>
+             </div>
+          </div>
+       </div>
 
       {/* Image Preview Modal */}
       {previewImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setPreviewImage(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={() => setPreviewImage(null)}>
           <button className="absolute top-6 right-6 text-white/70 hover:text-white bg-black/20 hover:bg-black/40 rounded-full p-2 transition-colors">
             <X className="w-6 h-6" />
           </button>

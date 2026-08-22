@@ -47,11 +47,12 @@ router.get("/api/agenda", async (req, res) => {
                title: `🎂 Ulang Tahun ${emp.name}`,
                startDate: bdayThisYear,
                endDate: bdayThisYear,
-               kategori: 'Private',
+               kategori: 'Quality Assurance',
                pic: emp.name,
                deskripsi: `Hari Ulang Tahun ${emp.name} (${emp.jabatan || 'Karyawan'})`,
-               department: emp.department || 'ALL', 
-               isRoutine: false
+               department: 'Quality Assurance', 
+               isRoutine: false,
+               isBirthday: true,
              });
              
              const bdayNextYear = new Date(birthDate);
@@ -61,11 +62,12 @@ router.get("/api/agenda", async (req, res) => {
                title: `🎂 Ulang Tahun ${emp.name}`,
                startDate: bdayNextYear,
                endDate: bdayNextYear,
-               kategori: 'Private',
+               kategori: 'Quality Assurance',
                pic: emp.name,
                deskripsi: `Hari Ulang Tahun ${emp.name} (${emp.jabatan || 'Karyawan'})`,
-               department: emp.department || 'ALL',
-               isRoutine: false
+               department: 'Quality Assurance',
+               isRoutine: false,
+               isBirthday: true,
              });
           }
         }
@@ -79,20 +81,42 @@ router.get("/api/agenda", async (req, res) => {
 
 router.post("/api/agenda", async (req, res) => {
     try {
-      const result = await db.insert(agendaEvents).values(req.body).returning();
+      const body = req.body;
+      const eventId = body.id || `ag-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+      const startDate = body.startDate ? new Date(body.startDate) : (body.date ? new Date(body.date) : new Date());
+      const endDate = body.endDate ? new Date(body.endDate) : new Date(startDate.getTime() + 60 * 60 * 1000);
+      
+      const payload: any = {
+        id: eventId,
+        title: body.title || "Agenda Baru",
+        startDate: startDate,
+        endDate: endDate,
+        kategori: body.kategori || "General",
+        pic: body.pic || "-",
+        deskripsi: body.deskripsi || "",
+        routineId: body.routineId || null,
+        creatorNik: body.creatorNik || null,
+        isRoutine: Boolean(body.isRoutine),
+        frekuensi: body.frekuensi || null,
+        department: body.department || "ALL",
+        bulletinPostId: body.bulletinPostId ? Number(body.bulletinPostId) : null,
+      };
+
+      const result = await db.insert(agendaEvents).values(payload).returning();
       try {
         const _n = await db.insert(notifications).values({
           userId: null,
-          role: null, // Send to all? Or to assigned dept?
+          role: null,
           title: 'Agenda Baru',
-          message: `Event: ${req.body.title} - ${req.body.date}`,
+          message: `Event: ${payload.title}`,
           type: 'info',
           link: '/agenda'
         }).returning();
         sendWebPush(_n);
       } catch(e) {}
       res.json({ status: "success", data: result[0] });
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Error creating agenda:", error);
       res.status(500).json({ status: "error", message: error.message });
     }
   });

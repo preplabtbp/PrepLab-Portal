@@ -166,11 +166,24 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept }: { ins
     if (categoryFilter === 'All') {
        return events.filter(e => {
            if (e.id && String(e.id).startsWith('bday-')) return false;
+           if (e.extendedProps?.isBirthday) return false;
            return true;
+       });
+    }
+    if (categoryFilter === 'Quality Assurance') {
+       return events.filter(e => {
+           if (e.extendedProps?.isHoliday) return true;
+           return (
+             e.extendedProps?.kategori === 'Quality Assurance' || 
+             (e.id && String(e.id).startsWith('bday-')) ||
+             e.extendedProps?.isBirthday === true
+           );
        });
     }
     return events.filter(e => {
         if (e.extendedProps?.isHoliday) return true; // always show holidays
+        if (e.id && String(e.id).startsWith('bday-')) return false;
+        if (e.extendedProps?.isBirthday) return false;
         return e.extendedProps?.kategori === categoryFilter;
     });
   }, [events, categoryFilter]);
@@ -196,7 +209,7 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept }: { ins
         
         <div className="flex flex-wrap gap-2 w-full md:w-auto justify-start md:justify-end">
           <div className="flex bg-slate-100 p-1 rounded-lg w-full md:w-auto overflow-x-auto hide-scrollbar" style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-main)', borderWidth: 1 }}>
-            {['All', 'Private', 'SPV UP', 'General'].map(cat => (
+            {['All', 'Quality Assurance', 'Private', 'SPV UP', 'General'].map(cat => (
               <button 
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}
@@ -206,7 +219,7 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept }: { ins
                   color: categoryFilter === cat ? 'var(--primary)' : 'var(--text-main)'
                 }}
               >
-                {cat === 'All' ? 'Semua' : cat === 'SPV UP' ? 'Section' : cat === 'Private' ? 'Pribadi' : 'General'}
+                {cat === 'All' ? 'Semua' : cat === 'Quality Assurance' ? 'Quality Assurance' : cat === 'SPV UP' ? 'Section' : cat === 'Private' ? 'Pribadi' : 'General'}
               </button>
             ))}
           </div>
