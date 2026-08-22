@@ -675,10 +675,31 @@ export function BulletinTopicDetail({
               <X className="w-6 h-6" />
             </button>
             <img 
-              src={previewImage} 
+              src={(() => {
+                const match = previewImage.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+                              previewImage.match(/\/d\/([a-zA-Z0-9_-]+)/) ||
+                              previewImage.match(/\/view\/([a-zA-Z0-9_-]+)/) ||
+                              previewImage.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                if (match) {
+                  return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w2000`;
+                }
+                return previewImage;
+              })()} 
               alt="Preview" 
               referrerPolicy="no-referrer"
               className="max-w-full max-h-[80vh] rounded-xl shadow-2xl object-contain" 
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                const match = previewImage.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+                              previewImage.match(/\/d\/([a-zA-Z0-9_-]+)/) ||
+                              previewImage.match(/\/view\/([a-zA-Z0-9_-]+)/) ||
+                              previewImage.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                if (match && !target.src.includes('googleusercontent.com')) {
+                  target.src = `https://lh3.googleusercontent.com/d/${match[1]}`;
+                } else if (match && !target.src.includes('/api/drive/view/')) {
+                  target.src = `/api/drive/view/${match[1]}`;
+                }
+              }}
             />
             <div className="mt-3 flex items-center gap-3">
               <a

@@ -1724,9 +1724,25 @@ export function NotionDatabaseTable({
             {/* Lightbox Image Container */}
             <div className="p-4 flex items-center justify-center max-h-[calc(90vh-70px)] overflow-auto bg-black/50">
               <img
-                src={previewImage.url}
+                src={(() => {
+                  const dId = extractDriveId(previewImage.url) || extractDriveId(previewImage.driveViewUrl) || extractDriveId(previewImage.driveDownloadUrl);
+                  if (dId) {
+                    return `https://drive.google.com/thumbnail?id=${dId}&sz=w2000`;
+                  }
+                  return previewImage.url;
+                })()}
                 alt={previewImage.title}
+                referrerPolicy="no-referrer"
                 className="max-h-[calc(85vh-90px)] max-w-full object-contain rounded-lg shadow-inner"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  const dId = extractDriveId(previewImage.url) || extractDriveId(previewImage.driveViewUrl) || extractDriveId(previewImage.driveDownloadUrl);
+                  if (dId && !target.src.includes('googleusercontent.com')) {
+                    target.src = `https://lh3.googleusercontent.com/d/${dId}`;
+                  } else if (dId && !target.src.includes('/api/drive/view/')) {
+                    target.src = `/api/drive/view/${dId}`;
+                  }
+                }}
               />
             </div>
           </div>
