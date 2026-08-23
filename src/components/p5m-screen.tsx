@@ -7,7 +7,7 @@ import {
   Briefcase, Loader2, Star, Eye, RefreshCw, Image as ImageIcon, ExternalLink,
   Building2
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { Card, Button, Input } from './ui';
 import { toast } from 'sonner';
 
@@ -650,26 +650,26 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       const wasEdit = isEditMode;
       if (wasEdit) setIsEditMode(false);
 
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 250));
 
-      const canvas = await html2canvas(captureRef.current, {
-        scale: 2.5,
-        useCORS: true,
+      const dataUrl = await toPng(captureRef.current, {
+        pixelRatio: 2.5,
         backgroundColor: '#FFFFFF',
-        logging: false
+        cacheBust: true
       });
 
       const link = document.createElement('a');
       const startStr = datesMeta['Senin']?.display || 'Week';
       link.download = `Jadwal_P5M_${selectedPt}_${startStr.replace(/\s+/g, '_')}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
       link.click();
 
       toast.success('Gambar Jadwal P5M berhasil diunduh (High-Res PNG)!');
 
       if (wasEdit) setIsEditMode(true);
     } catch (err: any) {
-      toast.error('Gagal mengunduh gambar: ' + err.message);
+      console.error('Export PNG error:', err);
+      toast.error('Gagal mengunduh gambar: ' + (err?.message || 'Terjadi kesalahan saat rendering'));
     } finally {
       setIsExporting(false);
     }

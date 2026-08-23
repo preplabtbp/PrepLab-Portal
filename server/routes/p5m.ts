@@ -1610,9 +1610,11 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
         }
 
         for (const slot of slotList) {
+          const slotNik = (slot.nik || '').trim().toLowerCase();
+          const slotNama = (slot.nama || '').trim().toLowerCase();
           let isMatch = false;
           if (nik && slotNik) {
-            isMatch = slotNik === nik;
+            isMatch = slotNik === nik || slotNik.replace(/[^a-z0-9]/gi, '') === nik.replace(/[^a-z0-9]/gi, '');
           } else if (name && slotNama) {
             isMatch = slotNama === name || slotNama.includes(name) || name.includes(slotNama);
           }
