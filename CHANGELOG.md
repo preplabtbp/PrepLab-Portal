@@ -4,6 +4,39 @@ All notable changes to the PrepLab Portal project will be documented in this fil
 
 ---
 
+## [2.5.0] - 2026-08-23
+
+### 🚀 Added
+- **P5M & Safety Talk Management Module (`p5m-screen.tsx`)**:
+  - **Materi Management UI/UX**: Added "Bank Data Materi P5M" interface with search, division filters, sub-category tags, and "+ Tambah Materi Baru" modal.
+  - **Direct Flyer Upload**: Supported drag-and-drop / file picker for flyer posters (PNG/JPG up to 10MB) with automatic upload to Google Drive (`P5M_Materi_Flyers`) and metadata storage in PostgreSQL.
+  - **Materi Management Backend Endpoints (`server/routes/p5m.ts`)**:
+    - `GET /api/p5m/materi` & `GET /api/p5m/materi-list`: Fast search & category filtering for briefing materials.
+    - `POST /api/p5m/materi`: Uploads base64 flyer to Google Drive and inserts record into Cloud SQL.
+    - `DELETE /api/p5m/materi/:id`: Safe removal of obsolete briefing materials.
+  - **Reliable Flyer Image & Download Proxy**:
+    - Enhanced `GET /api/p5m/flyer` with streaming and `download=true` support (`Content-Disposition: attachment`), preventing broken links and CORS issues.
+- **Presenter Briefing Notification Modal (`p5m-notification-modal.tsx`)**:
+  - Automatically alerts assigned personnel when logging into the portal with topic title, date, shift, and one-click flyer viewer/download.
+  - **Past Date Filtering**: Integrated WIT (UTC+9) timezone date checks (`todayIso > assignmentDateIso`) so pop-up notifications will not appear for sessions whose scheduled date has already passed.
+
+### 🔄 Migrated
+- **P5M Database & Flyer Storage (Notion ➡️ Cloud SQL & Google Drive)**:
+  - Migrated all **88 P5M briefing topics & flyers** completely from Notion to Google Drive (`P5M_Materi_Flyers`, Folder ID: `1AH151Lrgklv4Q1Ty0vdEgsPES6VcCKps`).
+  - Saved full relational metadata in PostgreSQL table `p5m_materi` with Google Drive direct view URLs, eliminating external Notion dependency.
+
+### 🎨 UI & UX Improvements
+- **Schedule Matrix Color Palette & Visual Index**:
+  - Overhauled color tokens for Day Shift (warm yellow-amber/orange) vs. Night Shift (indigo/navy/slate) and Preparation (orange) vs. Laboratory (emerald green) to eliminate ambiguous visual overlaps.
+  - Hardened text clipping boundaries and badge containers in Shift & Zone headers.
+  - Thickened outline marker (`border-2`) with distinct section color accents for personnel assigned to **2× briefing** in a single week.
+
+### 🧹 Maintenance & Database Cleanup
+- **Schedule Reset (Clean Slate)**:
+  - Cleaned all test scheduling entries from `p5m_schedules` and reset `last_used = NULL` across all 88 materi records in `p5m_materi` to prepare for actual production scheduling.
+
+---
+
 ## [2.4.0] - 2026-08-22
 
 ### 🚀 Added
