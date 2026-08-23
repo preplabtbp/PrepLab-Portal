@@ -95,13 +95,81 @@ router.post("/api/settings", async (req, res) => {
 
 router.get("/api/gallery", async (req, res) => {
     try {
+      const allGallery: any[] = [];
+      const seenUrls = new Set<string>();
+
+      // 1. Fetch from local PostgreSQL inspections
+      const localInspections = await db.select().from(inspections).orderBy(desc(inspections.id)).limit(100);
+
+      function getISOWeekNumber(d: Date) {
+        const date = new Date(d.getTime());
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+        const week1 = new Date(date.getFullYear(), 0, 4);
+        const weekNum = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+        return { year: date.getFullYear(), week: ("0" + weekNum).slice(-2) };
+      }
+
+      for (const insp of localInspections) {
+        const dateObj = insp.createdAt ? new Date(insp.createdAt) : new Date();
+        const dateOpts: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Jayapura', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+        const tglFormatted = dateObj.toLocaleString('id-ID', dateOpts) + ' WIT';
+        const isoWeek = getISOWeekNumber(dateObj);
+        const weekLabel = `W${isoWeek.week}-${isoWeek.year}`;
+
+        let parsedPhoto: any = null;
+        if (insp.photoUrl) {
+          try {
+            parsedPhoto = JSON.parse(insp.photoUrl);
+          } catch(e) {
+            if (insp.photoUrl.startsWith('http') || insp.photoUrl.startsWith('data:')) {
+              parsedPhoto = { fotoProses: insp.photoUrl };
+            }
+          }
+        }
+
+        if (parsedPhoto) {
+          // Process Photo
+          if (parsedPhoto.fotoProses && parsedPhoto.fotoProses !== '-' && !seenUrls.has(parsedPhoto.fotoProses)) {
+            seenUrls.add(parsedPhoto.fotoProses);
+            allGallery.push({
+              tanggal: tglFormatted,
+              week: weekLabel,
+              url: parsedPhoto.fotoProses,
+              inspektor: insp.inspectorName || '-',
+              area: `${insp.type} (${insp.location || 'Area'})`,
+              sumber: insp.type || 'Inspeksi'
+            });
+          }
+
+          // Temuan Photos
+          if (Array.isArray(parsedPhoto.fotoTemuanArray)) {
+            parsedPhoto.fotoTemuanArray.forEach((ft: any, i: number) => {
+              const urlStr = typeof ft === 'string' ? ft : (ft?.base64 || '');
+              if (urlStr && urlStr !== '-' && !seenUrls.has(urlStr)) {
+                seenUrls.add(urlStr);
+                allGallery.push({
+                  tanggal: tglFormatted,
+                  week: weekLabel,
+                  url: urlStr,
+                  inspektor: insp.inspectorName || '-',
+                  area: `Temuan #${i + 1} - ${insp.type} (${insp.location || 'Area'})`,
+                  sumber: 'Temuan'
+                });
+              }
+            });
+          }
+        }
+      }
+
+      // 2. Fetch from GAS if available
       const settingsObj: any = {};
       const allSettings = await db.select().from(appSettings);
       allSettings.forEach((s: any) => { settingsObj[s.settingKey] = s.settingValue || ''; });
-      
       const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
-      
+
       if (gasUrl) {
+        try {
           const payload = { action: "getGalleryPhotos" };
           const gasRes = await fetch(gasUrl, {
               method: 'POST',
@@ -109,14 +177,19 @@ router.get("/api/gallery", async (req, res) => {
               body: JSON.stringify(payload)
           });
           const text = await gasRes.text();
-          try {
-             const json = JSON.parse(text);
-             if (json.success && json.data) {
-                 return res.json(json.data);
-             }
-          } catch(e) {}
+          const json = JSON.parse(text);
+          if (json.success && Array.isArray(json.data)) {
+            json.data.forEach((g: any) => {
+              if (g.url && !seenUrls.has(g.url)) {
+                seenUrls.add(g.url);
+                allGallery.push(g);
+              }
+            });
+          }
+        } catch(e) {}
       }
-      res.json([]);
+
+      res.json(allGallery);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to fetch gallery" });

@@ -148,37 +148,150 @@ router.post("/api/inspections/universal", async (req, res) => {
           waMessageText += `\n*Catatan Keseluruhan*:\n${finalData.catatanUmum}\n`;
       }
 
-      if (finalData.temuanUmum && finalData.temuanUmum.length > 0) {
-          waMessageText += `\n*DAFTAR TEMUAN:*\n`;
+      // Helper function to generate standardized Ticket ID: TKT-W<week>Y<yy>-<counter>
+      function generateTicketId(offset: number = 0, currentCount: number = 0) {
+        const now = new Date();
+        const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+        const weekStr = weekNo < 10 ? `0${weekNo}` : `${weekNo}`;
+        const yearYY = now.getFullYear().toString().slice(-2);
+        
+        const counter = currentCount + offset + 1;
+        const counterStr = counter.toString().padStart(3, '0');
+        
+        return `TKT-W${weekStr}Y${yearYY}-${counterStr}`;
+      }
+
+      // Collect all temuan items from payload or explicit temuanUmum
+      const allTemuan: any[] = [];
+
+      if (finalData.temuanUmum && Array.isArray(finalData.temuanUmum)) {
           finalData.temuanUmum.forEach((t: any, i: number) => {
-              waMessageText += `${i + 1}. ${t.pertanyaan || t.temuan || 'Temuan'}\n`;
-              if (t.keterangan) waMessageText += `   - Ket: ${t.keterangan}\n`;
-              if (t.tindakLanjut) waMessageText += `   - Tindakan: ${t.tindakLanjut}\n`;
+              if (t && (t.temuan || t.deskripsi || t.pertanyaan)) {
+                  let photo = '';
+                  if (t.foto && typeof t.foto === 'string' && t.foto !== '-') {
+                      photo = t.foto;
+                  } else if (fotoTemuanArray && fotoTemuanArray.length > i && fotoTemuanArray[i]) {
+                      photo = typeof fotoTemuanArray[i] === 'string' ? fotoTemuanArray[i] : (fotoTemuanArray[i].base64 || '');
+                  }
+
+                  allTemuan.push({
+                      temuan: t.temuan || t.deskripsi || t.pertanyaan,
+                      risiko: t.risiko || t.risk || 'Potensi Bahaya K3',
+                      pengendalian: t.pengendalian || t.initialControl || t.tindakLanjut || '-',
+                      status: (t.status || 'OPEN').toUpperCase(),
+                      foto: photo
+                  });
+              }
+          });
+      }
+
+      // Auto-extract findings from specific inspection types if no explicit temuan was provided
+      if (allTemuan.length === 0) {
+          if (finalData.tipe === "TANGGA" && Array.isArray(finalData.payload)) {
+              const p = finalData.payload[0];
+              if (p && p.ket && p.ket.trim() !== '' && p.ket !== '-') {
+                  allTemuan.push({
+                      temuan: `Kerusakan Tangga ${p.reg || ''} (${p.lokasi || finalData.lokasiUmum || 'Area'}): ${p.ket}`,
+                      risiko: 'Tergelincir / Jatuh dari Ketinggian',
+                      pengendalian: 'Perbaikan / Isolasi Tangga Rusak',
+                      status: 'OPEN',
+                      foto: finalFotoProses
+                  });
+              }
+          } else if (finalData.tipe === "SARANA" && Array.isArray(finalData.payload)) {
+              finalData.payload.forEach((u: any) => {
+                  const rusakItems: string[] = [];
+                  if (u.checks) {
+                      Object.keys(u.checks).forEach(k => {
+                          if (u.checks[k] === '❌') rusakItems.push(k);
+                      });
+                  }
+                  if (rusakItems.length > 0 || (u.ket && u.ket !== '-' && u.ket.trim() !== '')) {
+                      allTemuan.push({
+                          temuan: `Kerusakan Sarana Unit ${u.unit || ''} (${rusakItems.join(', ') || 'Komponen Rusak'}): ${u.ket || 'Perlu perbaikan'}`,
+                          risiko: 'Kecelakaan Operasional Unit / Kerusakan Aset',
+                          pengendalian: 'Perbaikan Unit / Tag Out',
+                          status: 'OPEN',
+                          foto: u.foto || finalFotoProses
+                      });
+                  }
+              });
+          } else if ((finalData.tipe === "TABUNG_MINGGUAN" || finalData.tipe === "TABUNG") && Array.isArray(finalData.payload)) {
+              finalData.payload.filter((item: any) => item.jawaban === 'TIDAK').forEach((item: any) => {
+                  allTemuan.push({
+                      temuan: `Kendala Tabung Gas ${finalData.tabungMeta?.reg || ''} - ${item.item} (${item.hari || ''}): ${item.keterangan || '-'}`,
+                      risiko: 'Kebocoran Gas / Ledakan / Keracunan',
+                      pengendalian: 'Penggantian / Penanganan Khusus Tabung Gas',
+                      status: 'OPEN',
+                      foto: finalFotoProses
+                  });
+              });
+          } else if (finalData.tipe === "PERKAKAS" && Array.isArray(finalData.payload)) {
+              finalData.payload.filter((item: any) => {
+                  const akt = parseInt(item.aktual);
+                  const mx = parseInt(item.max || '4');
+                  return (akt < mx && item.keterangan && item.keterangan !== '-');
+              }).forEach((item: any) => {
+                  allTemuan.push({
+                      temuan: `Kerusakan Perkakas ${item.item} (${item.merk || '-'}, Lokasi: ${item.lokasi || '-'}): ${item.keterangan}`,
+                      risiko: 'Cedera Fisik / Sengatan Listrik',
+                      pengendalian: 'Perbaikan / Penggantian Perkakas',
+                      status: 'OPEN',
+                      foto: finalFotoProses
+                  });
+              });
+          } else if (finalData.tipe === "P3K" && Array.isArray(finalData.payload)) {
+              finalData.payload.filter((item: any) => item.ketersediaan === 'Kosong' || (item.keterangan && item.keterangan !== '-')).forEach((item: any) => {
+                  allTemuan.push({
+                      temuan: `Kotak P3K (${item.item}): Stok ${item.ketersediaan || 'Kosong'}, ${item.keterangan || ''}`.trim(),
+                      risiko: 'Keterlambatan Pertolongan Pertama Medis',
+                      pengendalian: 'Restok & Pembaruan Item P3K',
+                      status: 'OPEN',
+                      foto: finalFotoProses
+                  });
+              });
+          }
+      }
+
+      if (allTemuan.length > 0) {
+          waMessageText += `\n*DAFTAR TEMUAN:*\n`;
+          allTemuan.forEach((t: any, i: number) => {
+              waMessageText += `${i + 1}. ${t.temuan}\n`;
+              if (t.risiko) waMessageText += `   - Risiko: ${t.risiko}\n`;
+              if (t.pengendalian) waMessageText += `   - Pengendalian: ${t.pengendalian}\n`;
           });
           
-          // --- BEGIN MIGRASI REKAP TEMUAN KE SQL ---
+          // --- BEGIN INSERT REKAP TEMUAN KE DATABASE TICKETS ---
           try {
-              const ticketValues = finalData.temuanUmum.map((t: any, i: number) => {
-                  let photoUrl = '';
-                  // If fotoTemuanArray is passed and has a corresponding photo (assuming index matches)
-                  if (fotoTemuanArray && fotoTemuanArray.length > i && fotoTemuanArray[i]) {
-                      photoUrl = typeof fotoTemuanArray[i] === 'string' ? fotoTemuanArray[i] : (fotoTemuanArray[i].base64 || '');
-                  }
-                  
+              const allExistingTickets = await db.select().from(tickets);
+              const currentTicketCount = allExistingTickets.length;
+              const inspNameOnly = (finalData.insp1 || 'Inspector').split(' | ')[0].trim();
+
+              const ticketValues = allTemuan.map((t: any, i: number) => {
+                  const isClosed = t.status === 'CLOSED';
                   return {
-                      ticketId: `TKT-INS-${Date.now()}-${i}`,
+                      ticketId: generateTicketId(i, currentTicketCount),
                       requestorName: finalData.insp1 || 'Inspector',
-                      category: finalData.judulForm || 'Inspeksi',
+                      category: finalData.judulForm || 'Inspeksi Mingguan',
                       location: finalData.lokasiUmum || 'Area',
-                      description: t.pertanyaan || t.temuan || 'Temuan Inspeksi',
-                      risk: t.keterangan || null,
-                      initialControl: t.tindakLanjut || null,
+                      description: t.temuan || 'Temuan Inspeksi',
+                      risk: t.risiko || null,
+                      initialControl: t.pengendalian || null,
                       source: 'inspeksi',
-                      status: 'OPEN',
-                      priority: 'Medium',
+                      status: isClosed ? 'CLOSED' : 'OPEN',
+                      priority: (t.risiko || '').toUpperCase().includes('TINGGI') ? 'High' : 'Medium',
                       pt: req.body.pt || 'TBP',
-                      photoUrl: photoUrl || null,
-                      date: new Date()
+                      photoUrl: t.foto || null,
+                      documentLink: (pdfUrl && pdfUrl !== 'GAS_GENERATED' && pdfUrl !== '-') ? pdfUrl : null,
+                      date: new Date(),
+                      completionDate: isClosed ? new Date() : null,
+                      pic: isClosed ? inspNameOnly : null,
+                      actionTaken: isClosed ? (t.pengendalian || '-') : null,
+                      closingPhoto: isClosed ? (t.foto || pdfUrl || null) : null
                   };
               });
               
@@ -189,7 +302,7 @@ router.post("/api/inspections/universal", async (req, res) => {
           } catch(e) {
               console.error("Failed to insert temuan to tickets table:", e);
           }
-          // --- END MIGRASI REKAP TEMUAN KE SQL ---
+          // --- END INSERT REKAP TEMUAN KE DATABASE TICKETS ---
           
       } else {
           waMessageText += `\n*DAFTAR TEMUAN*: Nihil\n`;
@@ -369,6 +482,66 @@ router.post("/api/inspections", async (req, res) => {
               dataF.filter((r: any) => r[8] === 'Hadir' && [r[9], r[10], r[11], r[12], r[13], r[14]].includes('❌')).forEach((r: any, idx: number) => {
                   waMessageText += `${idx + 1}. ${r[6]} - Ket: ${r[15]}\n`;
               });
+
+              // --- BEGIN INSERT REKAP TEMUAN KE DATABASE TICKETS (APD) ---
+              try {
+                  const nonCompliant = dataF.filter((r: any) => r[8] === 'Hadir' && [r[9], r[10], r[11], r[12], r[13], r[14]].includes('❌'));
+                  if (nonCompliant.length > 0) {
+                      const allExistingTickets = await db.select().from(tickets);
+                      const currentTicketCount = allExistingTickets.length;
+                      const firstRow = dataF[0];
+                      const insp = firstRow[16] || 'Inspector';
+                      const area = firstRow[2] || 'Area';
+
+                      function generateTicketIdApd(offset: number = 0, currentCount: number = 0) {
+                        const now = new Date();
+                        const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+                        const dayNum = d.getUTCDay() || 7;
+                        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+                        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+                        const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+                        const weekStr = weekNo < 10 ? `0${weekNo}` : `${weekNo}`;
+                        const yearYY = now.getFullYear().toString().slice(-2);
+                        const counter = currentCount + offset + 1;
+                        return `TKT-W${weekStr}Y${yearYY}-${counter.toString().padStart(3, '0')}`;
+                      }
+
+                      const ticketValues = nonCompliant.map((r: any, i: number) => {
+                          const apdIssues: string[] = [];
+                          if (r[9] === '❌') apdIssues.push('Seragam');
+                          if (r[10] === '❌') apdIssues.push('Helm');
+                          if (r[11] === '❌') apdIssues.push('Sepatu');
+                          if (r[12] === '❌') apdIssues.push('Masker');
+                          if (r[13] === '❌') apdIssues.push('Ear Plug');
+                          if (r[14] === '❌') apdIssues.push('Kacamata');
+
+                          return {
+                              ticketId: generateTicketIdApd(i, currentTicketCount),
+                              requestorName: insp,
+                              category: 'Inspeksi Kepatuhan APD',
+                              location: area,
+                              description: `Ketidakpatuhan APD: ${r[6]} (${r[7]}) - Tidak lengkap: ${apdIssues.join(', ')}. Ket: ${r[15] || '-'}`,
+                              risk: 'Paparan Bahaya K3 / Pelanggaran Prosedur APD',
+                              initialControl: 'Teguran Lisan / Pemberian APD yang Sesuai',
+                              source: 'inspeksi',
+                              status: 'OPEN',
+                              priority: 'Medium',
+                              pt: req.body.pt || 'TBP',
+                              photoUrl: finalFotoProses || null,
+                              documentLink: (pdfUrl && pdfUrl !== 'GAS_GENERATED' && pdfUrl !== '-') ? pdfUrl : null,
+                              date: new Date()
+                          };
+                      });
+
+                      if (ticketValues.length > 0) {
+                          await db.insert(tickets).values(ticketValues);
+                          console.log(`Inserted ${ticketValues.length} APD temuan into tickets table.`);
+                      }
+                  }
+              } catch(e) {
+                  console.error("Failed to insert APD temuan to tickets table:", e);
+              }
+              // --- END INSERT REKAP TEMUAN KE DATABASE TICKETS (APD) ---
           }
       }
 

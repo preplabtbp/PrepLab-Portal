@@ -244,7 +244,7 @@ router.put("/api/work-orders/:woId", async (req, res) => {
 
 router.get("/api/tickets", async (req, res) => {
     try {
-      const dbData = await db.select().from(tickets);
+      const dbData = await db.select().from(tickets).orderBy(desc(tickets.id));
       res.json(dbData);
     } catch (error) {
       console.error(error);
@@ -299,27 +299,52 @@ router.post("/api/tickets", async (req, res) => {
 router.put("/api/tickets/:id", async (req, res) => {
     try {
       const updateData = req.body;
-      if (updateData.completionDate) updateData.completionDate = new Date(updateData.completionDate);
-      if (updateData.date) updateData.date = new Date(updateData.date);
+      const isClosedStatus = updateData.status && (updateData.status.toUpperCase() === 'CLOSED' || updateData.status === 'Closed');
+      
+      if (isClosedStatus) {
+        updateData.status = 'CLOSED';
+        if (!updateData.completionDate) {
+          updateData.completionDate = new Date();
+        }
+      }
+      if (updateData.completionDate && typeof updateData.completionDate === 'string') {
+        updateData.completionDate = new Date(updateData.completionDate);
+      }
+      if (updateData.date && typeof updateData.date === 'string') {
+        updateData.date = new Date(updateData.date);
+      }
       
       const result = await db.update(tickets).set(updateData).where(eq(tickets.ticketId, req.params.id)).returning();
       const ticket = result[0];
       let waMessageText = '';
-      if (ticket && req.body.status === 'Closed') {
-         const sparepartStr = ticket.sparepartName ? `${ticket.sparepartName} (Qty: ${ticket.sparepartQty || 1})` : '-';
+      if (ticket && isClosedStatus) {
          const dateOpts: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Jayapura', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
-         const endStr = ticket.completionDate ? new Date(ticket.completionDate).toLocaleString('id-ID', dateOpts) + ' WIT' : '-';
+         const endStr = ticket.completionDate ? new Date(ticket.completionDate).toLocaleString('id-ID', dateOpts) + ' WIT' : new Date().toLocaleString('id-ID', dateOpts) + ' WIT';
          
-         waMessageText = `==== PERMINTAAN SELESAI [${ticket.ticketId}] ====\n` +
-         `*PIC Eksekusi:* ${ticket.pic || '-'}\n\n` +
-         `*Deskripsi Request:*\n${ticket.description || '-'}\n\n` +
-         `*Tindakan Perbaikan:*\n${ticket.actionTaken || '-'}\n\n` +
-         `*Sparepart Digunakan:* ${sparepartStr}\n` +
-         `*Selesai Perbaikan:* ${endStr}\n\n` +
-         `*Link Foto Penyelesaian:*\n${ticket.closingPhoto || '-'}`;
+         const isInspeksiTemuan = ticket.source === 'inspeksi' || ticket.ticketId?.startsWith('TKT-');
+         if (isInspeksiTemuan) {
+            waMessageText = `*==== PENUTUPAN TEMUAN INSPEKSI [${ticket.ticketId}] ====*\n\n` +
+            `*Lokasi/Area:* ${ticket.location || '-'}\n` +
+            `*Deskripsi Temuan:*\n${ticket.description || '-'}\n\n` +
+            `*Tindakan Perbaikan (Closing):*\n${ticket.actionTaken || '-'}\n\n` +
+            `*PIC Closing:* ${ticket.pic || '-'}\n` +
+            `*Waktu Penyelesaian:* ${endStr}\n` +
+            `*Status:* CLOSED (Tuntas)\n` +
+            (ticket.closingPhoto && ticket.closingPhoto !== '-' && !ticket.closingPhoto.startsWith('data:') ? `\n*Bukti Selesai:*\n${ticket.closingPhoto}` : '');
+         } else {
+            const sparepartStr = ticket.sparepartName ? `${ticket.sparepartName} (Qty: ${ticket.sparepartQty || 1})` : '-';
+            waMessageText = `==== PERMINTAAN SELESAI [${ticket.ticketId}] ====\n` +
+            `*PIC Eksekusi:* ${ticket.pic || '-'}\n\n` +
+            `*Deskripsi Request:*\n${ticket.description || '-'}\n\n` +
+            `*Tindakan Perbaikan:*\n${ticket.actionTaken || '-'}\n\n` +
+            `*Sparepart Digunakan:* ${sparepartStr}\n` +
+            `*Selesai Perbaikan:* ${endStr}\n\n` +
+            `*Link Foto Penyelesaian:*\n${ticket.closingPhoto || '-'}`;
+         }
       }
       res.json({ ...(ticket || {}), waMessageText });
     } catch (error) {
+      console.error(error);
       res.status(500).json({ error: "Failed to update ticket" });
     }
   });

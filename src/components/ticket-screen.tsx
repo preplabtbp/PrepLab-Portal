@@ -199,8 +199,14 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
           <Card className={`${isClosed ? 'border-t-4 border-t-teal-500' : 'border-t-4 border-t-rose-500'}`}>
             {selectedTicket.photoUrl && selectedTicket.photoUrl !== '-' && (
               <div className="mb-4">
-                <label className="text-xs font-semibold text-rose-600 mb-1 flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> Foto Temuan Awal</label>
-                <img src={formatImageUrl(selectedTicket.photoUrl) || ''} referrerPolicy="no-referrer" alt="Temuan" className="w-full h-auto max-h-[400px] object-contain bg-slate-50 rounded-lg border border-slate-200" />
+                <label className="text-xs font-semibold text-rose-600 mb-1 flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> Foto Temuan Awal (Klik untuk perbesar)</label>
+                <img 
+                  src={formatImageUrl(selectedTicket.photoUrl) || ''} 
+                  referrerPolicy="no-referrer" 
+                  alt="Temuan" 
+                  onClick={() => setSelectedImage(selectedTicket.photoUrl)} 
+                  className="w-full h-auto max-h-[400px] object-contain bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:opacity-95 transition-opacity" 
+                />
               </div>
             )}
             
@@ -213,26 +219,51 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
                  <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Deskripsi Temuan</p>
                  <p className="font-medium text-rose-600">{selectedTicket.description}</p>
                </div>
+               {selectedTicket.risk && (
+                 <div>
+                   <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Risiko Bahaya</p>
+                   <p className="font-medium text-amber-700">{selectedTicket.risk}</p>
+                 </div>
+               )}
                <div>
                  <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Saran Pengendalian / Rekomendasi</p>
-                 <p className="font-medium text-blue-600">{(selectedTicket.actionTaken || selectedTicket.initialControl)}</p>
+                 <p className="font-medium text-blue-600">{(selectedTicket.initialControl || selectedTicket.actionTaken || '-')}</p>
                </div>
+               {selectedTicket.documentLink && (
+                 <div>
+                   <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Link Dokumen Referensi</p>
+                   <a href={selectedTicket.documentLink} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 underline hover:text-blue-700">
+                     Lihat PDF Laporan Inspeksi
+                   </a>
+                 </div>
+               )}
             </div>
 
             {isClosed ? (
                <div className="mt-6 pt-6 border-t border-slate-100">
                   {selectedTicket.closingPhoto && selectedTicket.closingPhoto !== '-' && (
                     <div className="mb-4">
-                      <label className="text-xs font-semibold text-teal-600 mb-1 flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> Bukti Telah Diperbaiki</label>
-                      <img src={formatImageUrl(selectedTicket.closingPhoto) || ''} referrerPolicy="no-referrer" alt="Bukti Perbaikan" className="w-full h-auto max-h-[400px] object-contain bg-slate-50 rounded-lg border border-teal-200" />
+                      <label className="text-xs font-semibold text-teal-600 mb-1 flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> Bukti Telah Diperbaiki (Klik untuk perbesar)</label>
+                      <img 
+                        src={formatImageUrl(selectedTicket.closingPhoto) || ''} 
+                        referrerPolicy="no-referrer" 
+                        alt="Bukti Perbaikan" 
+                        onClick={() => setSelectedImage(selectedTicket.closingPhoto)} 
+                        className="w-full h-auto max-h-[400px] object-contain bg-slate-50 rounded-lg border border-teal-200 cursor-pointer hover:opacity-95 transition-opacity" 
+                      />
                     </div>
                   )}
-                  <div className="bg-teal-50 p-4 rounded-xl border border-teal-100">
-                     <p className="text-teal-800 font-medium flex items-center gap-2 mb-1">
+                  <div className="bg-teal-50 p-4 rounded-xl border border-teal-100 space-y-2">
+                     <p className="text-teal-800 font-medium flex items-center gap-2">
                        <CheckCircle2 className="w-5 h-5 text-teal-600" />
-                       Diselesaikan Oleh: {selectedTicket.pic}
+                       Diselesaikan Oleh: {selectedTicket.pic || '-'}
                      </p>
-                     <p className="text-teal-600 text-sm">Selesai pada: {(selectedTicket.completionDate ? new Date(selectedTicket.completionDate).toLocaleDateString('id-ID') : '-')}</p>
+                     {selectedTicket.actionTaken && (
+                       <p className="text-teal-900 text-sm">
+                         <span className="font-semibold">Tindakan:</span> {selectedTicket.actionTaken}
+                       </p>
+                     )}
+                     <p className="text-teal-600 text-xs">Selesai pada: {(selectedTicket.completionDate ? new Date(selectedTicket.completionDate).toLocaleString('id-ID') : '-')}</p>
                   </div>
                </div>
             ) : (
@@ -371,6 +402,7 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
         )}
       </div>
       <ImageModal imageUrl={selectedImage} onClose={() => setSelectedImage(null)} />
+      <WhatsAppModal message={waMessageToModal} onClose={() => setWaMessageToModal('')} />
     </div>
   );
 }

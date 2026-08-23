@@ -142,11 +142,14 @@ export const getTickets = async (statusFilter: string) => {
 };
 
 export const closeTicket = async (ticketId: string, picName: string, photoBase64: string, notes: string, devOptions?: any) => {
-  let photoUrl = '';
-  if (photoBase64) {
+  let photoUrl = photoBase64 || '';
+  if (photoBase64 && photoBase64.startsWith('data:')) {
      try {
         const base64Data = photoBase64.split(',')[1] || photoBase64;
-        photoUrl = await uploadPhotoToDrive(base64Data, 'image/jpeg', 'ticket_close.jpg', 'Internal Tickets');
+        const uploaded = await uploadPhotoToDrive(base64Data, 'image/jpeg', `ticket_close_${ticketId}.jpg`, 'Internal Tickets');
+        if (uploaded && uploaded.startsWith('http')) {
+           photoUrl = uploaded;
+        }
      } catch(e) {
         console.error("Gagal upload ke drive", e);
      }
@@ -154,7 +157,13 @@ export const closeTicket = async (ticketId: string, picName: string, photoBase64
   const res = await fetch(`/api/tickets/${ticketId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: 'Closed', actionTaken: notes, pic: picName, closingPhoto: photoUrl })
+    body: JSON.stringify({ 
+      status: 'CLOSED', 
+      actionTaken: notes, 
+      pic: picName, 
+      closingPhoto: photoUrl,
+      completionDate: new Date().toISOString()
+    })
   });
   return await res.json();
 };
