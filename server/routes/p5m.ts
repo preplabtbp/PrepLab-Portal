@@ -476,10 +476,38 @@ async function getPresenterHistory(): Promise<Record<string, number>> {
   }
 }
 
+const SENAM_INITIAL_HISTORY = [
+  { nik: '04D24000057', nama: 'Herwin Predianto' },
+  { nik: 'M0208230715', nama: 'Rusli Rorano' },
+  { nik: 'M0206250732', nama: 'Muhammad Iqbal' },
+  { nik: 'M0412251310', nama: 'Derald Febri Andriano Tjiwili' },
+  { nik: '04D23000035', nama: 'Ahmad Jusma Azhari Annur' },
+  { nik: 'M0209221325', nama: 'Valdi Pratama' },
+  { nik: '02D25000055', nama: 'Muhamad Anugrah Ramadhan' },
+  { nik: 'M0403190701', nama: 'Murti Tamisari Harun' },
+  { nik: 'M0407240439', nama: 'Raldy Chevien Aryando Dareno' },
+  { nik: '02D24000043', nama: 'Muhamad Alvin Febriansyah' },
+  { nik: '02D25000052', nama: 'Ridhan Ahmadurabbi' },
+  { nik: '02D24000045', nama: 'Muhammad Djody Satriani' },
+  { nik: 'M0201220012', nama: 'Taufikir, S.Pi' },
+  { nik: '04D24000068', nama: 'Muhammad Fandy Septiawan' },
+  { nik: 'M0411251243', nama: 'Agung Adi Putra Prasetyo' },
+  { nik: '02D22000023', nama: 'Muhammad Reza Satria' },
+  { nik: '04D26000070', nama: 'Rahmad Azizul Khakim' }
+];
+
 async function getSenamHistory(): Promise<Record<string, number>> {
   try {
     const allSchedules = await db.select().from(p5mSchedules).orderBy(desc(p5mSchedules.id)).limit(15);
     const countMap: Record<string, number> = {};
+
+    // 1. Baseline record senam pagi yang sudah pernah dibawakan
+    SENAM_INITIAL_HISTORY.forEach(p => {
+      if (p.nama) countMap[p.nama.trim()] = (countMap[p.nama.trim()] || 0) + 1;
+      if (p.nik) countMap[p.nik.trim()] = (countMap[p.nik.trim()] || 0) + 1;
+    });
+
+    // 2. Data riwayat dari jadwal tersimpan sebelumnya
     allSchedules.forEach(schRow => {
       if (schRow.scheduleData) {
         const sch = schRow.scheduleData as Record<string, any>;
