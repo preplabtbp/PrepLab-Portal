@@ -192,7 +192,18 @@ function tentukanKelas(jabatan: string): string {
   return 'Other';
 }
 
-function tentukanDivisi(section: string, jabatan: string): string {
+function tentukanDivisi(section: string, jabatan: string, name?: string, nik?: string): string {
+  const n = (name || '').toLowerCase();
+  const k = (nik || '').toLowerCase();
+
+  // ── ATURAN PENGECUALIAN PENEMPATAN JADWAL P5M ──
+  // Murti dan Atha ditempatkan di Laboratory (meskipun jabatan/section awal mungkin Prep)
+  if (n.includes('murti') || k === 'm0403190701') return 'Laboratory';
+  if (n.includes('atha') || k === '04d25000053') return 'Laboratory';
+
+  // Djody ditempatkan di Preparation
+  if (n.includes('djody') || n.includes('jody') || k === '02d24000045') return 'Preparation';
+
   const s = (section || '').toLowerCase();
   const j = (jabatan || '').toLowerCase();
 
@@ -498,7 +509,7 @@ p5mRouter.get("/pool", async (req, res) => {
         pt: empPt || 'TBP',
         section: emp.section || emp.department || '',
         kelas: tentukanKelas(jabatan),
-        divisi: tentukanDivisi(emp.section || emp.department || '', jabatan),
+        divisi: tentukanDivisi(emp.section || emp.department || '', jabatan, nama, emp.nik),
         jadwal: jadwal,
         cutiMingguIni: cutiMingguIni,
         tugasMingguLalu: countLastWeek,
@@ -596,7 +607,7 @@ p5mRouter.post("/randomize", async (req, res) => {
         pt: empPt || 'TBP',
         section: emp.section || emp.department || '',
         kelas: tentukanKelas(jabatan),
-        divisi: tentukanDivisi(emp.section || emp.department || '', jabatan),
+        divisi: tentukanDivisi(emp.section || emp.department || '', jabatan, nama, emp.nik),
         jadwal: jadwal,
         cutiMingguIni: cutiMingguIni,
         tugasMingguIni: 0,
