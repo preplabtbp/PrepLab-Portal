@@ -4,9 +4,10 @@ import path from "path";
 import { Readable } from "stream";
 import { db } from "../../src/db/index.js";
 import { eq, desc, sql, and, like, or } from "drizzle-orm";
-import { employees, roster, p5mMateri, p5mSchedules } from "../../src/db/schema.js";
+import { employees, roster, p5mMateri, p5mSchedules, notifications } from "../../src/db/schema.js";
 import { Client } from "@notionhq/client";
 import { drive } from "../../google-services.js";
+import { sendWebPush } from "../utils.js";
 
 export const p5mRouter = Router();
 
@@ -1523,16 +1524,39 @@ p5mRouter.post("/randomize", async (req, res) => {
 // ============================================================
 p5mRouter.post("/schedules", async (req, res) => {
   try {
-    const { dateStart, dateEnd, scheduleData, config, summary, materiItems, createdBy } = req.body;
+    const { scheduleId, id, dateStart, dateEnd, scheduleData, config, summary, materiItems, createdBy } = req.body;
 
-    const inserted = await db.insert(p5mSchedules).values({
-      dateStart,
-      dateEnd,
-      scheduleData,
-      config,
-      summary,
-      createdBy: createdBy || 'Admin',
-    }).returning();
+    const targetId = scheduleId || id;
+    let savedRecord: any = null;
+    let isUpdate = false;
+
+    if (targetId) {
+      const existing = await db.select().from(p5mSchedules).where(eq(p5mSchedules.id, Number(targetId))).limit(1);
+      if (existing.length > 0) {
+        isUpdate = true;
+        const updated = await db.update(p5mSchedules).set({
+          dateStart: dateStart || existing[0].dateStart,
+          dateEnd: dateEnd || existing[0].dateEnd,
+          scheduleData,
+          config,
+          summary,
+          createdBy: createdBy || existing[0].createdBy,
+        }).where(eq(p5mSchedules.id, Number(targetId))).returning();
+        savedRecord = updated[0];
+      }
+    }
+
+    if (!savedRecord) {
+      const inserted = await db.insert(p5mSchedules).values({
+        dateStart,
+        dateEnd,
+        scheduleData,
+        config,
+        summary,
+        createdBy: createdBy || 'Admin',
+      }).returning();
+      savedRecord = inserted[0];
+    }
 
     // Update lastUsed timestamp for presented topics
     if (Array.isArray(materiItems)) {
@@ -1546,7 +1570,88 @@ p5mRouter.post("/schedules", async (req, res) => {
       }
     }
 
-    res.json({ success: true, data: inserted[0] });
+    // Generate notifications & Web Push for personnel in upcoming / updated slots
+    if (scheduleData && typeof scheduleData === 'object') {
+      const URUTAN_HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+      const nowUtc = new Date();
+      const witTime = new Date(nowUtc.getTime() + (9 * 60 * 60 * 1000));
+      const todayIso = witTime.toISOString().split('T')[0]; // "YYYY-MM-DD"
+
+      const notificationsList: any[] = [];
+
+      for (const [day, dayData] of Object.entries(scheduleData as Record<string, any>)) {
+        if (!dayData) continue;
+
+        // Calculate specific date for this day
+        const dayIdx = URUTAN_HARI.indexOf(day);
+        let assignmentDateIso = '';
+        if (dayIdx >= 0 && dateStart) {
+          const [y, m, d] = dateStart.split('-').map(Number);
+          const assignDateObj = new Date(y, m - 1, d + dayIdx);
+          const aY = assignDateObj.getFullYear();
+          const aM = String(assignDateObj.getMonth() + 1).padStart(2, '0');
+          const aD = String(assignDateObj.getDate()).padStart(2, '0');
+          assignmentDateIso = `${aY}-${aM}-${aD}`;
+        }
+
+        // Only send notification for today or future briefing days (skip days already passed)
+        if (assignmentDateIso && todayIso > assignmentDateIso) {
+          continue;
+        }
+
+        for (const shift of ['pagi', 'malam']) {
+          const sData = (dayData as any)[shift];
+          if (!sData) continue;
+
+          const slots: any[] = [];
+          if ((dayData as any).tipe === 'gabungan') {
+            (sData.gabungan || []).forEach((sl: any) => slots.push(sl));
+          } else {
+            (sData.preparasi || []).forEach((sl: any) => slots.push(sl));
+            (sData.laboratorium || []).forEach((sl: any) => slots.push(sl));
+          }
+
+          for (const slot of slots) {
+            const slotNik = (slot.nik || '').trim();
+            const slotNama = (slot.nama || '').trim();
+            const slotMateri = (slot.materi || '').trim();
+
+            if (slotNik && slotNama && !slotNama.toLowerCase().includes('kosong') && slotMateri) {
+              const shiftLabel = shift === 'pagi' ? 'Pagi (Day Shift)' : 'Malam (Night Shift)';
+              const notifTitle = isUpdate ? "Pembaruan Jadwal & Materi P5M" : "Jadwal P5M Mingguan";
+              const notifMsg = `Halo ${slotNama}, Anda dijadwalkan membawakan materi P5M "${slotMateri}" untuk hari ${day} (${shiftLabel})${assignmentDateIso ? ` tgl ${assignmentDateIso}` : ''}. Silakan tinjau materi & flyer.`;
+
+              notificationsList.push({
+                userId: slotNik,
+                title: notifTitle,
+                message: notifMsg,
+                type: 'info',
+                link: '/p5m'
+              });
+            }
+          }
+        }
+      }
+
+      // Batch insert notifications and trigger Web Push
+      if (notificationsList.length > 0) {
+        try {
+          const insertedNotifs = await db.insert(notifications).values(notificationsList).returning();
+          insertedNotifs.forEach((n: any) => sendWebPush(n));
+        } catch (notifErr) {
+          console.error("Error creating P5M schedule notifications:", notifErr);
+        }
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      isUpdate, 
+      message: isUpdate 
+        ? "Jadwal P5M berhasil diperbarui & disinkronkan ke personil terkait!" 
+        : "Jadwal P5M berhasil dipublikasikan!", 
+      data: savedRecord 
+    });
   } catch (error: any) {
     console.error("Error saving P5M schedule:", error);
     res.status(500).json({ success: false, message: error.message });

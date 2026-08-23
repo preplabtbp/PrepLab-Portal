@@ -514,57 +514,111 @@ router.delete("/api/notes/:id", async (req, res) => {
 router.get("/api/themes/:nik", async (req, res) => {
     try {
       const data = await db.select().from(userThemes).where(eq(userThemes.nik, req.params.nik));
-      const themes = {};
+      const themes: Record<string, any> = {};
+      const customTemplates: Array<{ id: number; name: string; mode: string; colors: any }> = [];
+      
       data.forEach(t => {
-        themes[t.mode] = { themeName: t.themeName, colors: JSON.parse(t.colors) };
-      });
-      res.json({ status: "success", data: themes });
-    } catch (error) {
-      res.status(500).json({ status: "error", message: error.message });
-    }
-  });
-
-router.post("/api/meal-reports", async (req, res) => {
-    try {
-      const result = await db.insert(mealReports).values(req.body).returning();
-      
-      let mealsInfo = "";
-      if (req.body.meals) {
+        let parsedColors = {};
         try {
-           const parsedMeals = JSON.parse(req.body.meals);
-           mealsInfo = parsedMeals.length > 0 ? ` [Makan: ${parsedMeals.join(', ')}]` : '';
-        } catch(e) {}
-      }
+          parsedColors = typeof t.colors === 'string' ? JSON.parse(t.colors) : (t.colors || {});
+        } catch (e) {
+          parsedColors = {};
+        }
 
-      // Also send a notification to the admin/HR about this food report
-      const _n = await db.insert(notifications).values({
-        title: "Pelaporan Status Makan Baru",
-        message: `${req.body.name} (${req.body.status}) untuk tanggal ${req.body.reportDate} | Shift: ${req.body.shift}${mealsInfo}`,
-        type: 'info',
-        role: 'Administration',
-        link: '/adm-dashboard'
-      }).returning(); sendWebPush(_n);
-      
-
-      res.status(201).json({ status: "success", data: result[0] });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ status: "error", message: "Failed to create meal report" });
+        if (t.mode.startsWith('template:') || t.mode === 'custom_template' || t.mode === 'custom_templates') {
+          customTemplates.push({
+            id: t.id,
+            name: t.themeName || 'Kustom Tema',
+            mode: t.mode,
+            colors: parsedColors
+          });
+        } else {
+          themes[t.mode] = { id: t.id, themeName: t.themeName, colors: parsedColors };
+        }
+      });
+      res.json({ status: "success", data: themes, customTemplates });
+    } catch (error: any) {
+      res.status(500).json({ status: "error", message: error.message });
     }
   });
 
 router.post("/api/themes", async (req, res) => {
     try {
-      const { nik, mode, themeName, colors } = req.body;
+      const { nik, mode, themeName, colors, applyToAll } = req.body;
+      if (!nik) {
+        return res.status(400).json({ status: "error", message: "NIK is required" });
+      }
+
+      if (applyToAll) {
+        const modes = ['morning', 'afternoon', 'evening'];
+        for (const m of modes) {
+          const exists = await db.select().from(userThemes).where(and(eq(userThemes.nik, nik), eq(userThemes.mode, m)));
+          if (exists.length > 0) {
+            await db.update(userThemes).set({ themeName: themeName || m, colors: JSON.stringify(colors), updatedAt: new Date() }).where(eq(userThemes.id, exists[0].id));
+          } else {
+            await db.insert(userThemes).values({ nik, mode: m, themeName: themeName || m, colors: JSON.stringify(colors) });
+          }
+        }
+        return res.json({ status: "success", message: "Tema berhasil diterapkan ke semua waktu!" });
+      }
+
       const exists = await db.select().from(userThemes).where(eq(userThemes.nik, nik));
       const match = exists.find(e => e.mode === mode);
       if (match) {
-        await db.update(userThemes).set({ themeName, colors: JSON.stringify(colors) }).where(eq(userThemes.id, match.id));
+        await db.update(userThemes).set({ themeName, colors: JSON.stringify(colors), updatedAt: new Date() }).where(eq(userThemes.id, match.id));
       } else {
         await db.insert(userThemes).values({ nik, mode, themeName, colors: JSON.stringify(colors) });
       }
       res.json({ status: "success" });
-    } catch (error) {
+    } catch (error: any) {
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
+router.post("/api/themes/templates", async (req, res) => {
+    try {
+      const { nik, id, name, colors } = req.body;
+      if (!nik) return res.status(400).json({ status: "error", message: "NIK is required" });
+      
+      if (id) {
+        // Update existing template
+        await db.update(userThemes).set({
+          themeName: name || 'Kustom Template',
+          colors: JSON.stringify(colors),
+          updatedAt: new Date()
+        }).where(and(eq(userThemes.id, id), eq(userThemes.nik, nik)));
+        return res.json({ status: "success", message: "Template berhasil diperbarui!" });
+      } else {
+        // Insert new custom template
+        const templateMode = `template:${Date.now()}`;
+        const result = await db.insert(userThemes).values({
+          nik,
+          mode: templateMode,
+          themeName: name || 'Template Kustom',
+          colors: JSON.stringify(colors)
+        }).returning();
+        return res.json({ status: "success", message: "Template kustom berhasil disimpan!", template: result[0] });
+      }
+    } catch (error: any) {
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
+router.delete("/api/themes/templates/:id", async (req, res) => {
+    try {
+      const { nik } = req.query;
+      const templateId = parseInt(req.params.id);
+      if (!templateId) return res.status(400).json({ status: "error", message: "ID template tidak valid" });
+      
+      let deleteQuery;
+      if (nik) {
+        deleteQuery = and(eq(userThemes.id, templateId), eq(userThemes.nik, String(nik)));
+      } else {
+        deleteQuery = eq(userThemes.id, templateId);
+      }
+      await db.delete(userThemes).where(deleteQuery);
+      res.json({ status: "success", message: "Template berhasil dihapus!" });
+    } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }
   });

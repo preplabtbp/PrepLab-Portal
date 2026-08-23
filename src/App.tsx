@@ -281,8 +281,17 @@ export default function App() {
     syncProfile();
   }, [inspectorNik]);
 
-  const handleThemeUpdated = (mode: string, colors: any) => {
-    setUserThemes((prev: any) => ({ ...prev, [mode]: colors }));
+  const handleThemeUpdated = (mode: string, colors: any, applyToAll?: boolean) => {
+    if (applyToAll) {
+      setUserThemes({
+        morning: colors,
+        afternoon: colors,
+        evening: colors,
+      });
+    } else {
+      setUserThemes((prev: any) => ({ ...prev, [mode]: colors }));
+    }
+    applyThemeToDOM(colors);
   };
 
 

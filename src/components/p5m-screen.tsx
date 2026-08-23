@@ -267,7 +267,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
 
   // Schedule Generated State
+  // Schedule Generated State
   const [scheduleData, setScheduleData] = useState<Record<string, any> | null>(null);
+  const [activeScheduleId, setActiveScheduleId] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -393,6 +395,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       const data = await res.json();
       if (data.success && data.data) {
         setScheduleData(data.data.scheduleData || null);
+        setActiveScheduleId(data.data.id || null);
+        if (data.data.config) setUiConfig(data.data.config);
+        if (data.data.dateStart) setTargetDateStr(data.data.dateStart);
       }
     } catch (err) {
       console.error('Failed to fetch latest schedule:', err);
@@ -402,6 +407,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   // Generate / Randomize Schedule
   const handleRandomize = async () => {
     if (isEditMode) setIsEditMode(false);
+    setActiveScheduleId(null);
     setIsGenerating(true);
     try {
       const res = await fetch('/api/p5m/randomize', {
@@ -454,47 +460,30 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         const sData = dData[shift];
         if (!sData) return;
 
-        if (dData.tipe === 'gabungan') {
-          (sData.gabungan || []).forEach((slot: any) => {
-            if (slot.nama && !slot.nama.includes('KOSONG')) {
-              countMap[slot.nama] = (countMap[slot.nama] || 0) + 1;
-              list.push(slot.nama);
-            }
-          });
-        } else {
-          (sData.preparasi || []).forEach((slot: any) => {
-            if (slot.nama && !slot.nama.includes('KOSONG')) {
-              countMap[slot.nama] = (countMap[slot.nama] || 0) + 1;
-              list.push(slot.nama);
-            }
-          });
-          (sData.laboratorium || []).forEach((slot: any) => {
-            if (slot.nama && !slot.nama.includes('KOSONG')) {
-              countMap[slot.nama] = (countMap[slot.nama] || 0) + 1;
-              list.push(slot.nama);
-            }
-          });
-        }
+        const slots = dData.tipe === 'gabungan' 
+          ? (sData.gabungan || [])
+          : [...(sData.preparasi || []), ...(sData.laboratorium || [])];
+
+        slots.forEach((s: any) => {
+          if (s.nama && !s.nama.includes('KOSONG')) {
+            countMap[s.nama] = (countMap[s.nama] || 0) + 1;
+            if (!list.includes(s.nama)) list.push(s.nama);
+          }
+        });
       });
     });
 
-    const doubleList = Object.entries(countMap).filter(([_, c]) => c >= 2).map(([n]) => n);
-    const scheduledSet = new Set(Object.keys(countMap));
+    const scheduledList = list.sort();
+    const doubleList = Object.keys(countMap).filter(k => countMap[k] >= 2).sort();
+    const totalSlots = Object.values(countMap).reduce((a, b) => a + b, 0);
 
-    // Filter staff/foremen who don't have schedule (excluding pure crew)
-    const noJadwalList = karyawanPool.filter(k => {
-      const j = (k.jabatan || '').toLowerCase();
-      if (j.includes('crew')) return false;
-      return !scheduledSet.has(k.nama);
-    }).map(k => k.nama);
+    // Karyawan pool yang belum dapat jadwal
+    const noJadwalList = karyawanPool
+      .filter(k => !scheduledList.includes(k.nama))
+      .map(k => k.nama)
+      .sort();
 
-    return {
-      totalSlots: list.length,
-      scheduledMap: countMap,
-      scheduledList: list,
-      doubleList,
-      noJadwalList
-    };
+    return { totalSlots, scheduledMap: countMap, scheduledList, doubleList, noJadwalList };
   }, [scheduleData, karyawanPool]);
 
   // Update full person object in slot (nama, nik, karyawanId, kelas, pt)
@@ -610,6 +599,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          scheduleId: activeScheduleId,
           dateStart,
           dateEnd,
           scheduleData,
@@ -627,9 +617,13 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
       const data = await res.json();
       if (data.success) {
-        toast.success('Jadwal P5M berhasil dipublikasikan & disimpan!', {
-          description: 'Histori tanggal materi di database telah diperbarui secara otomatis.'
+        if (data.data?.id) setActiveScheduleId(data.data.id);
+        toast.success(data.isUpdate ? 'Jadwal & materi P5M berhasil diperbarui & disinkronkan!' : 'Jadwal P5M berhasil dipublikasikan & disimpan!', {
+          description: data.isUpdate 
+            ? 'Perubahan materi untuk hari yang belum berlangsung telah disinkronkan ke sistem dan notifikasi telah dikirimkan ke personil terkait.'
+            : 'Histori tanggal materi di database telah diperbarui secara otomatis.'
         });
+        setIsEditMode(false);
         fetchArchiveList();
         fetchMateriList();
       } else {
@@ -917,7 +911,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               </Button>
 
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => setIsEditMode(!isEditMode)}
                 disabled={!scheduleData}
                 className={`text-xs h-9 px-3.5 rounded-xl border transition-all ${
@@ -931,7 +925,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               </Button>
 
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => setShowConfigDrawer(!showConfigDrawer)}
                 className={`text-xs h-9 px-3.5 rounded-xl border transition-all ${
                   showConfigDrawer 
@@ -947,7 +941,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
             <div className="flex items-center gap-2">
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={handleDownloadPNG}
                 disabled={!scheduleData || isExporting}
                 className="bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 text-xs h-9 px-3.5 rounded-xl shadow-sm"
@@ -973,7 +967,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 ) : (
                   <>
                     <Save className="w-4 h-4 mr-1.5" />
-                    <span>Simpan &amp; Publikasikan</span>
+                    <span>{activeScheduleId ? 'Simpan Perubahan Jadwal' : 'Simpan & Publikasikan'}</span>
                   </>
                 )}
               </Button>
@@ -991,7 +985,6 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   </h3>
                 </div>
                 <Button 
-                  size="sm" 
                   variant="ghost" 
                   onClick={() => setUiConfig(buildDefaultConfig())}
                   className="text-xs text-slate-400 hover:text-rose-400 h-7 px-2"
@@ -1051,7 +1044,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 <div className="p-1.5 bg-amber-950/20 border border-amber-800/30 rounded-lg">
                                   <span className="text-[10px] text-amber-500 font-semibold block mb-1">Preparasi (Prep &amp; Maint):</span>
                                   <SlotListEditor 
-                                    slots={dayCfg.pagi?.preparasi || []}
+                                    slots={dayCfg.pagi?.preparasi || []} 
                                     allowedSections={PREPARATION_GROUP_OPTIONS}
                                     onChange={(newSlots) => {
                                       setUiConfig(prev => ({
@@ -1064,7 +1057,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 <div className="p-1.5 bg-teal-950/20 border border-teal-800/30 rounded-lg">
                                   <span className="text-[10px] text-teal-400 font-semibold block mb-1">Laboratorium (Lab, QA, Admin, IC):</span>
                                   <SlotListEditor 
-                                    slots={dayCfg.pagi?.laboratorium || []}
+                                    slots={dayCfg.pagi?.laboratorium || []} 
                                     allowedSections={LABORATORY_GROUP_OPTIONS}
                                     onChange={(newSlots) => {
                                       setUiConfig(prev => ({
@@ -1100,7 +1093,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                   <div className="p-1.5 bg-amber-950/20 border border-amber-800/30 rounded-lg">
                                     <span className="text-[10px] text-amber-500 font-semibold block mb-1">Preparasi (Prep &amp; Maint):</span>
                                     <SlotListEditor 
-                                      slots={dayCfg.malam?.preparasi || []}
+                                      slots={dayCfg.malam?.preparasi || []} 
                                       allowedSections={PREPARATION_GROUP_OPTIONS}
                                       onChange={(newSlots) => {
                                         setUiConfig(prev => ({
@@ -1113,7 +1106,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                   <div className="p-1.5 bg-teal-950/20 border border-teal-800/30 rounded-lg">
                                     <span className="text-[10px] text-teal-400 font-semibold block mb-1">Laboratorium (Lab, QA, Admin, IC):</span>
                                     <SlotListEditor 
-                                      slots={dayCfg.malam?.laboratorium || []}
+                                      slots={dayCfg.malam?.laboratorium || []} 
                                       allowedSections={LABORATORY_GROUP_OPTIONS}
                                       onChange={(newSlots) => {
                                         setUiConfig(prev => ({
@@ -1134,6 +1127,29 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 })}
               </div>
             </Card>
+          )}
+
+          {/* ── EDIT MODE GUIDANCE BANNER ── */}
+          {isEditMode && scheduleData && (
+            <div className="p-3.5 rounded-xl bg-blue-500/15 border border-blue-400/40 text-blue-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-in fade-in">
+              <div className="flex items-start sm:items-center gap-2.5">
+                <Sparkles className="w-5 h-5 text-blue-400 shrink-0 mt-0.5 sm:mt-0" />
+                <div>
+                  <p className="font-bold text-white text-xs">
+                    Mode Edit Manual Aktif
+                  </p>
+                  <p className="text-[11px] text-blue-200/90 leading-relaxed">
+                    Anda dapat mengubah materi / presenter untuk hari esok atau hari berikutnya. Setelah selesai, klik tombol <strong>"Simpan Perubahan Jadwal"</strong> di atas. Perubahan akan disinkronkan ke seluruh sistem dan memicu notifikasi pembaruan ke personil terkait.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsEditMode(false)}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shrink-0 self-start sm:self-auto transition-colors shadow-xs"
+              >
+                Selesai Edit
+              </button>
+            </div>
           )}
 
           {/* ── NOTIFICATION: MATERI RECYCLE WARNINGS ── */}
@@ -1484,7 +1500,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
             <div className="flex items-center gap-2">
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={fetchMateriList}
                 disabled={loadingMateri}
                 className="bg-slate-800 text-amber-400 border-amber-500/30 hover:bg-slate-750 text-xs h-9 px-3 rounded-xl"
@@ -1717,12 +1733,13 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
                     <div className="pt-2 flex items-center gap-2">
                       <Button
-                        size="sm"
                         onClick={() => {
                           setScheduleData(arch.scheduleData);
+                          setActiveScheduleId(arch.id);
                           if (arch.config) setUiConfig(arch.config);
+                          if (arch.dateStart) setTargetDateStr(arch.dateStart);
                           setActiveTab('schedule');
-                          toast.success('Jadwal berhasil dipulihkan ke layar editor!');
+                          toast.success('Jadwal berhasil dimuat ke editor untuk ditinjau / diedit!');
                         }}
                         className="w-full bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-200 text-xs h-8 rounded-lg font-bold border border-slate-700 transition-all"
                       >

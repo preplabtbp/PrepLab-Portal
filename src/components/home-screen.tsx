@@ -199,17 +199,28 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       </div>
 
       {/* Sticky Tabs for Mobile/Desktop */}
-      <div className="sticky top-[56px] sm:top-[70px] z-30 -mx-4 px-4 py-3 sm:mx-0 sm:px-0 bg-[#F4F7F6]/95 backdrop-blur-md sm:bg-transparent sm:backdrop-blur-none sm:py-0 border-b border-slate-200/50 sm:border-none">
+      <div 
+        className="sticky top-[56px] sm:top-[70px] z-30 -mx-4 px-4 py-3 sm:mx-0 sm:px-0 backdrop-blur-md sm:backdrop-blur-none sm:py-0 border-b sm:border-none transition-colors"
+        style={{ 
+          backgroundColor: 'var(--bg-main, #F4F7F6)', 
+          borderColor: 'var(--border-main, #e2e8f0)' 
+        }}
+      >
         <div className="flex overflow-x-auto gap-2 pb-1 sm:pb-0 sm:flex-wrap [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
+              className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all flex-shrink-0 border ${
                 activeTab === tab.id 
-                  ? 'bg-slate-800 text-white shadow-md' 
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  ? 'shadow-md font-bold' 
+                  : 'hover:opacity-90'
               }`}
+              style={{
+                backgroundColor: activeTab === tab.id ? 'var(--primary, #0f172a)' : 'var(--card-bg, #ffffff)',
+                color: activeTab === tab.id ? '#ffffff' : 'var(--text-main, #475569)',
+                borderColor: activeTab === tab.id ? 'var(--primary, #0f172a)' : 'var(--border-main, #e2e8f0)'
+              }}
             >
               {tab.label}
             </button>
@@ -233,7 +244,9 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
                 <div className={`p-2 rounded-lg ${section.bgIcon}`}>
                   {section.icon}
                 </div>
-                <h2 className="text-lg font-bold text-slate-800">{section.title}</h2>
+                <h2 className="text-lg font-bold tracking-tight" style={{ color: 'var(--text-main, #1e293b)' }}>
+                  {section.title}
+                </h2>
               </div>
               
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -325,14 +338,14 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
 
 function ActionCard({ title, desc, icon, color, action, highlight }: any) {
   const colorStyles: Record<string, string> = {
-    teal: 'bg-teal-50 text-teal-600 group-hover:bg-teal-500 group-hover:text-white border-teal-100',
-    blue: 'bg-blue-50 text-blue-600 group-hover:bg-blue-500 group-hover:text-white border-blue-100',
-    amber: 'bg-amber-50 text-amber-600 group-hover:bg-amber-500 group-hover:text-white border-amber-100',
-    rose: 'bg-rose-50 text-rose-600 group-hover:bg-rose-500 group-hover:text-white border-rose-100',
-    purple: 'bg-purple-50 text-purple-600 group-hover:bg-purple-500 group-hover:text-white border-purple-100',
-    slate: 'bg-slate-100 text-slate-600 group-hover:bg-slate-600 group-hover:text-white border-slate-200',
-    orange: 'bg-orange-50 text-orange-600 group-hover:bg-orange-500 group-hover:text-white border-orange-100',
-    indigo: 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-500 group-hover:text-white border-indigo-100',
+    teal: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20 group-hover:bg-teal-500 group-hover:text-white',
+    blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 group-hover:bg-blue-500 group-hover:text-white',
+    amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 group-hover:bg-amber-500 group-hover:text-white',
+    rose: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 group-hover:bg-rose-500 group-hover:text-white',
+    purple: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20 group-hover:bg-purple-500 group-hover:text-white',
+    slate: 'bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/20 group-hover:bg-slate-600 group-hover:text-white',
+    orange: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20 group-hover:bg-orange-500 group-hover:text-white',
+    indigo: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 group-hover:bg-indigo-500 group-hover:text-white',
   };
 
   return (
@@ -340,18 +353,32 @@ function ActionCard({ title, desc, icon, color, action, highlight }: any) {
       whileHover={{ y: -2 }} 
       whileTap={{ scale: 0.98 }} 
       onClick={action}
-      className={`group relative flex flex-col p-4 bg-white border rounded-2xl shadow-sm hover:shadow-md transition-all text-left overflow-hidden ${
-        highlight ? 'border-orange-200 bg-orange-50/50 hover:border-orange-400' : 'border-slate-200 hover:border-slate-300'
+      className={`group relative flex flex-col p-4 border rounded-2xl shadow-xs hover:shadow-md transition-all text-left overflow-hidden ${
+        highlight ? 'ring-1 ring-orange-400' : ''
       }`}
+      style={{ 
+        backgroundColor: 'var(--card-bg, #ffffff)',
+        borderColor: 'var(--border-main, #e2e8f0)',
+      }}
     >
-      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center mb-3 transition-colors duration-300 border ${colorStyles[color]}`}>
+      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center mb-3 transition-colors duration-300 border ${colorStyles[color] || colorStyles.slate}`}>
         {icon}
       </div>
-      <h4 className="font-bold text-slate-800 text-[13px] sm:text-[15px] mb-1 leading-tight pr-2">{title}</h4>
-      <p className="text-[11px] sm:text-[13px] text-slate-500 line-clamp-2">{desc}</p>
+      <h4 
+        className="font-bold text-[13px] sm:text-[15px] mb-1 leading-tight pr-2 truncate w-full"
+        style={{ color: 'var(--text-main, #1e293b)' }}
+      >
+        {title}
+      </h4>
+      <p 
+        className="text-[11px] sm:text-[13px] line-clamp-2"
+        style={{ color: 'var(--text-muted, #64748b)' }}
+      >
+        {desc}
+      </p>
       
       <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
-        <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-400" />
+        <ArrowRight className="w-4 h-4 opacity-50 group-hover:opacity-100" style={{ color: 'var(--primary, #0f172a)' }} />
       </div>
     </motion.button>
   );
