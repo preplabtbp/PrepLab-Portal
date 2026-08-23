@@ -460,6 +460,7 @@ export const p5mMateri = pgTable('p5m_materi', {
   divisi: text('divisi').default('All'), // All, Preparation, Laboratory, Maintenance
   fileUrl: text('file_url'),
   notionId: text('notion_id'),
+  isInternal: boolean('is_internal').default(false),
   lastUsed: timestamp('last_used'),
   createdAt: timestamp('created_at').defaultNow(),
 });

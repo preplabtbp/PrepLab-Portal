@@ -228,6 +228,159 @@ function tentukanDivisi(section: string, jabatan: string, name?: string, nik?: s
 
 const URUTAN_HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 
+function buildDefaultConfig(): Record<string, any> {
+  const slot = (divisi: string, kelas: string, kategori: string, extra?: any) => ({
+    divisi,
+    kelas,
+    kategori,
+    ...(extra || {})
+  });
+
+  const cfg: Record<string, any> = {};
+
+  // SENIN (Gabungan)
+  cfg['Senin'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'Non-Teknis'),
+        slot('Laboratory', 'SPV', 'Teknis'),
+        slot('Administration', 'Admin', 'Teknis')
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'Non-Teknis'),
+        slot('Laboratory', 'SPV', 'Teknis'),
+        slot('All', 'Foreman/Officer', 'Teknis')
+      ]
+    }
+  };
+
+  // SELASA (Split)
+  cfg['Selasa'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'Teknis'),
+        slot('Maintenance', 'Foreman/Officer', 'Teknis')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('IC', 'Admin', 'Teknis')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'Teknis'),
+        slot('Maintenance', 'Foreman/Officer', 'Teknis')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('Laboratory', 'Foreman/Officer', 'Teknis')
+      ]
+    }
+  };
+
+  // RABU (Split)
+  cfg['Rabu'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'Teknis'),
+        slot('Preparation', 'All', 'Teknis')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('Administration', 'Admin', 'Teknis')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'Teknis'),
+        slot('Preparation', 'Foreman/Officer', 'Teknis')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('Laboratory', 'Foreman/Officer', 'Teknis')
+      ]
+    }
+  };
+
+  // KAMIS (Gabungan)
+  cfg['Kamis'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'Teknis'),
+        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('All', 'Foreman/Officer', 'Teknis')
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'Teknis'),
+        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('All', 'Foreman/Officer', 'Teknis')
+      ]
+    }
+  };
+
+  // JUMAT (Gabungan)
+  cfg['Jumat'] = {
+    pagi: {
+      gabungan: [
+        slot('All', 'Foreman/Officer', 'Senam', { isSenam: true }),
+        slot('Preparation', 'SPV', 'Non-Teknis'),
+        slot('Laboratory', 'SPV', 'Non-Teknis')
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('All', 'Foreman/Officer', 'Teknis', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
+        slot('Preparation', 'Foreman/Officer', 'Non-Teknis'),
+        slot('Laboratory', 'Foreman/Officer', 'Non-Teknis')
+      ]
+    }
+  };
+
+  // SABTU (Split)
+  cfg['Sabtu'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'Teknis'),
+        slot('Preparation', 'Foreman/Officer', 'Teknis')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('Quality Assurance', 'Foreman/Officer', 'Teknis')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'Teknis'),
+        slot('Preparation', 'Foreman/Officer', 'Teknis')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('Laboratory', 'Foreman/Officer', 'Teknis')
+      ]
+    }
+  };
+
+  // MINGGU (Gabungan)
+  cfg['Minggu'] = {
+    pagi: {
+      gabungan: [
+        slot('All', 'SPV', 'Teknis'),
+        slot('All', 'SPV', 'Teknis'),
+        slot('All', 'All', 'Teknis')
+      ]
+    },
+    malam: {
+      gabungan: []
+    }
+  };
+
+  return cfg;
+}
+
 function getWeekDates(referenceDateStr?: string) {
   let refDate = new Date();
   if (referenceDateStr) {
@@ -385,17 +538,79 @@ p5mRouter.post("/materi/sync", async (req, res) => {
 
 p5mRouter.post("/materi", async (req, res) => {
   try {
-    const { judul, kategori, subKategori, divisi, fileUrl } = req.body;
-    if (!judul) {
+    const { judul, kategori, subKategori, divisi, fileUrl, isInternal, base64Data, filename } = req.body;
+    if (!judul || !judul.trim()) {
       return res.status(400).json({ success: false, message: "Judul materi wajib diisi" });
     }
 
+    const cleanJudul = judul.trim();
+    let finalFileUrl: string | null = fileUrl || null;
+
+    // If image file (base64) provided, upload to Google Drive & save local copy
+    if (base64Data) {
+      const base64Clean = base64Data.replace(/^data:.*?;base64,/, "");
+      const buffer = Buffer.from(base64Clean, 'base64');
+      const safeId = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+      const localFileName = `p5m_${safeId}.png`;
+      const localPath = path.join(process.cwd(), 'public', 'uploads', 'p5m', localFileName);
+
+      // Save local copy
+      try {
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'p5m');
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        fs.writeFileSync(localPath, buffer);
+      } catch (fErr: any) {
+        console.warn("Local cache write failed:", fErr.message);
+      }
+
+      // Upload to Google Drive folder P5M_Materi_Flyers
+      try {
+        const folderId = '1AH151Lrgklv4Q1Ty0vdEgsPES6VcCKps'; // Folder P5M_Materi_Flyers
+        const stream = new Readable();
+        stream.push(buffer);
+        stream.push(null);
+
+        const driveRes = await drive.files.create({
+          requestBody: {
+            name: filename || `P5M_${cleanJudul.replace(/[^a-zA-Z0-9_-]/g, '_')}.png`,
+            parents: [folderId]
+          },
+          media: {
+            mimeType: 'image/png',
+            body: stream
+          },
+          fields: 'id, webViewLink',
+          supportsAllDrives: true
+        });
+
+        const driveFileId = driveRes.data.id;
+        if (driveFileId) {
+          try {
+            await drive.permissions.create({
+              fileId: driveFileId,
+              requestBody: { role: 'reader', type: 'anyone' },
+              supportsAllDrives: true
+            });
+          } catch (pErr: any) {
+            // Permission inherited
+          }
+          finalFileUrl = `https://drive.google.com/uc?export=view&id=${driveFileId}`;
+        }
+      } catch (dErr: any) {
+        console.warn("Drive upload failed, using local fallback URL:", dErr.message);
+        finalFileUrl = `/uploads/p5m/${localFileName}`;
+      }
+    }
+
     const inserted = await db.insert(p5mMateri).values({
-      judul,
+      judul: cleanJudul,
       kategori: kategori || 'Teknis',
       subKategori: subKategori || 'General',
       divisi: divisi || 'All',
-      fileUrl: fileUrl || null,
+      fileUrl: finalFileUrl,
+      isInternal: Boolean(isInternal),
       lastUsed: null
     }).returning();
 
@@ -409,15 +624,74 @@ p5mRouter.post("/materi", async (req, res) => {
 p5mRouter.put("/materi/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const { judul, kategori, subKategori, divisi, fileUrl } = req.body;
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ success: false, message: "ID materi tidak valid" });
+    }
 
-    const updated = await db.update(p5mMateri).set({
-      judul,
-      kategori,
-      subKategori: subKategori || 'General',
-      divisi: divisi || 'All',
-      fileUrl: fileUrl || undefined
-    }).where(eq(p5mMateri.id, id)).returning();
+    const { judul, kategori, subKategori, divisi, fileUrl, isInternal, base64Data, filename } = req.body;
+    let finalFileUrl: string | undefined = fileUrl;
+
+    if (base64Data) {
+      const base64Clean = base64Data.replace(/^data:.*?;base64,/, "");
+      const buffer = Buffer.from(base64Clean, 'base64');
+      const safeId = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+      const localFileName = `p5m_${safeId}.png`;
+      const localPath = path.join(process.cwd(), 'public', 'uploads', 'p5m', localFileName);
+
+      try {
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'p5m');
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        fs.writeFileSync(localPath, buffer);
+      } catch (fErr: any) {
+        console.warn("Local cache write failed:", fErr.message);
+      }
+
+      try {
+        const folderId = '1AH151Lrgklv4Q1Ty0vdEgsPES6VcCKps';
+        const stream = new Readable();
+        stream.push(buffer);
+        stream.push(null);
+
+        const driveRes = await drive.files.create({
+          requestBody: {
+            name: filename || `P5M_${(judul || 'materi').replace(/[^a-zA-Z0-9_-]/g, '_')}.png`,
+            parents: [folderId]
+          },
+          media: {
+            mimeType: 'image/png',
+            body: stream
+          },
+          fields: 'id, webViewLink',
+          supportsAllDrives: true
+        });
+
+        const driveFileId = driveRes.data.id;
+        if (driveFileId) {
+          try {
+            await drive.permissions.create({
+              fileId: driveFileId,
+              requestBody: { role: 'reader', type: 'anyone' },
+              supportsAllDrives: true
+            });
+          } catch (pErr: any) {}
+          finalFileUrl = `https://drive.google.com/uc?export=view&id=${driveFileId}`;
+        }
+      } catch (dErr: any) {
+        finalFileUrl = `/uploads/p5m/${localFileName}`;
+      }
+    }
+
+    const updatePayload: any = {};
+    if (judul !== undefined) updatePayload.judul = judul.trim();
+    if (kategori !== undefined) updatePayload.kategori = kategori;
+    if (subKategori !== undefined) updatePayload.subKategori = subKategori;
+    if (divisi !== undefined) updatePayload.divisi = divisi;
+    if (finalFileUrl !== undefined) updatePayload.fileUrl = finalFileUrl;
+    if (isInternal !== undefined) updatePayload.isInternal = Boolean(isInternal);
+
+    const updated = await db.update(p5mMateri).set(updatePayload).where(eq(p5mMateri.id, id)).returning();
 
     res.json({ success: true, data: updated[0] });
   } catch (error: any) {
@@ -429,6 +703,9 @@ p5mRouter.put("/materi/:id", async (req, res) => {
 p5mRouter.delete("/materi/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ success: false, message: "ID materi tidak valid" });
+    }
     await db.delete(p5mMateri).where(eq(p5mMateri.id, id));
     res.json({ success: true, message: "Materi berhasil dihapus" });
   } catch (error: any) {
@@ -536,7 +813,8 @@ p5mRouter.get("/pool", async (req, res) => {
 // ============================================================
 p5mRouter.post("/randomize", async (req, res) => {
   try {
-    const { uiConfig, weekDate, userPt: reqUserPt, creatorPt } = req.body;
+    const { uiConfig: inputUiConfig, weekDate, userPt: reqUserPt, creatorPt } = req.body;
+    const uiConfig = (inputUiConfig && Object.keys(inputUiConfig).length > 0) ? inputUiConfig : buildDefaultConfig();
     const userPt = ((creatorPt || reqUserPt || 'TBP') as string).toUpperCase();
     const { dates } = getWeekDates(weekDate);
 
@@ -557,10 +835,8 @@ p5mRouter.post("/randomize", async (req, res) => {
 
     const shiftValid = ['D', 'N', 'LS', 'S', 'NONSHIFT', 'NON-SHIFT'];
 
-    // Filter only valid materi with flyers
-    const poolMateri = materiDb
-      .filter(m => m.fileUrl && m.fileUrl.trim())
-      .map(m => ({ ...m }));
+    // Include all active materi from database
+    const poolMateri = materiDb.map(m => ({ ...m }));
 
     // Prepare qualified Golongan 2 & 3 employee pool
     const poolKaryawan = allEmps.map(emp => {
@@ -736,7 +1012,46 @@ p5mRouter.post("/randomize", async (req, res) => {
     const warnings: string[] = [];
     const exhaustedWarningCategories = new Set<string>();
 
-    function pilihMateri(divisiTarget: string, kategoriTarget: string, materiTetap?: string | null, candidateDivision?: string) {
+    // ── Antrean Materi Internal (Diprioritaskan untuk Hari Sabtu) ──
+    const pendingInternalMaterials = poolMateri.filter(m => m.isInternal && m.lastUsed === null);
+    const assignedInternalIds = new Set<number>();
+
+    function pickInternalForSaturday(kategoriTarget: string, subSessionTipe?: string) {
+      const candidates = pendingInternalMaterials.filter(m => {
+        if (assignedInternalIds.has(m.id)) return false;
+        if (usedMateriIdsInWeek.has(m.id)) return false;
+
+        // Kategori match
+        if (kategoriTarget && kategoriTarget !== 'All') {
+          if ((m.kategori || 'Teknis').toLowerCase() !== kategoriTarget.toLowerCase()) return false;
+        }
+
+        // Subkategori match jika Teknis
+        if ((m.kategori || 'Teknis') === 'Teknis') {
+          const subKat = m.subKategori || 'General';
+          if (subKat === 'General') return true;
+          if (subSessionTipe === 'preparasi') return subKat === 'Preparation';
+          if (subSessionTipe === 'laboratorium') return subKat === 'Laboratory';
+        }
+        return true;
+      });
+
+      if (candidates.length > 0) {
+        const chosen = candidates[0];
+        assignedInternalIds.add(chosen.id);
+        usedMateriIdsInWeek.add(chosen.id);
+        return {
+          judul: chosen.judul,
+          kategori: chosen.kategori,
+          subKategori: chosen.subKategori,
+          id: chosen.id,
+          fileUrl: chosen.fileUrl
+        };
+      }
+      return null;
+    }
+
+    function pilihMateri(divisiTarget: string, kategoriTarget: string, materiTetap?: string | null, candidateDivision?: string, isGabunganSession?: boolean) {
       // Kategori Senam
       if (kategoriTarget === 'Senam' || materiTetap?.toLowerCase().includes('senam')) {
         return {
@@ -764,12 +1079,18 @@ p5mRouter.post("/randomize", async (req, res) => {
             if (kat.toLowerCase() !== kategoriTarget.toLowerCase()) return false;
           }
 
+          // ATURAN P5M GABUNGAN: Materi teknis maupun non-teknis WAJIB materi General / universal
+          // Tidak boleh materi teknis spesifik ke 1 section (Prep/Lab/Maint)
+          if (isGabunganSession) {
+            return subKat === 'General';
+          }
+
           // If Non-Teknis: All non-teknis topics are General and universal for everyone
           if (kat === 'Non-Teknis') {
             return true;
           }
 
-          // If Teknis: Sub-category match
+          // If Teknis: Sub-category match untuk sesi Split
           // 1. Teknis General: available for all
           if (subKat === 'General') return true;
 
@@ -796,7 +1117,7 @@ p5mRouter.post("/randomize", async (req, res) => {
 
       if (matchingPool.length === 0) {
         return {
-          judul: "Briefing Operasional & Keselamatan Kerja Terpadu",
+          judul: isGabunganSession ? "Briefing Operasional & Keselamatan Kerja Terpadu" : "Briefing Teknis Operasional",
           kategori: kategoriTarget || "Teknis",
           subKategori: "General",
           id: null,
@@ -814,7 +1135,7 @@ p5mRouter.post("/randomize", async (req, res) => {
         selected = freshCandidates[Math.floor(Math.random() * freshCandidates.length)];
       } else {
         // Prioritas 2: Pool materi baru telah habis! Daur ulang dari siklus rotasi terlama
-        const categoryKey = `${kategoriTarget || 'Teknis'}${effectiveSection ? ` (${effectiveSection})` : ''}`;
+        const categoryKey = `${kategoriTarget || 'Teknis'}${isGabunganSession ? ' (Gabungan General)' : (effectiveSection ? ` (${effectiveSection})` : '')}`;
         if (!exhaustedWarningCategories.has(categoryKey)) {
           exhaustedWarningCategories.add(categoryKey);
           warnings.push(`Pool materi untuk kategori ${categoryKey} telah habis terpakai semua. Sistem mendaur ulang materi dari siklus rotasi terlama.`);
@@ -859,7 +1180,7 @@ p5mRouter.post("/randomize", async (req, res) => {
       const dayCfg = uiConfig?.[hari] || {};
       const hasilHari: any = { tipe: isGabungan ? 'gabungan' : 'split', pagi: {}, malam: {} };
 
-      // Day Shift
+      // ── Day Shift (Pagi) ──────────────────────────────────
       const sudahDipilihPagi = new Set<string>();
       if (isGabungan) {
         const slots = dayCfg.pagi?.gabungan || [];
@@ -875,7 +1196,13 @@ p5mRouter.post("/randomize", async (req, res) => {
             }
           }
           const isFallback = Boolean((cand as any)?._isFallback);
-          const materiRes = pilihMateri(sl.divisi, sl.kategori, sl.materiTetap, terpilih?.divisi || sl.divisi);
+          
+          // Jika hari Sabtu, cek apakah ada antrean materi internal
+          let materiRes = (hari === 'Sabtu' && !sl.isSenam && sl.kategori !== 'Senam') ? pickInternalForSaturday(sl.kategori) : null;
+          if (!materiRes) {
+            materiRes = pilihMateri(sl.divisi, sl.kategori, sl.materiTetap, terpilih?.divisi || sl.divisi, true);
+          }
+
           return {
             nama: terpilih ? terpilih.nama : 'KOSONG (Tdk ada SDM)',
             nik: terpilih ? terpilih.nik : '',
@@ -909,7 +1236,13 @@ p5mRouter.post("/randomize", async (req, res) => {
             }
           }
           const isFallback = Boolean((cand as any)?._isFallback);
-          const materiRes = pilihMateri(sl.divisi || 'Preparation', sl.kategori, sl.materiTetap, terpilih?.divisi || 'Preparation');
+
+          // Cek materi internal jika hari Sabtu
+          let materiRes = (hari === 'Sabtu' && !sl.isSenam && sl.kategori !== 'Senam') ? pickInternalForSaturday(sl.kategori, 'preparasi') : null;
+          if (!materiRes) {
+            materiRes = pilihMateri(sl.divisi || 'Preparation', sl.kategori, sl.materiTetap, terpilih?.divisi || 'Preparation', false);
+          }
+
           return {
             nama: terpilih ? terpilih.nama : 'KOSONG (Tdk ada SDM)',
             nik: terpilih ? terpilih.nik : '',
@@ -939,7 +1272,13 @@ p5mRouter.post("/randomize", async (req, res) => {
             }
           }
           const isFallback = Boolean((cand as any)?._isFallback);
-          const materiRes = pilihMateri(sl.divisi || 'Laboratory', sl.kategori, sl.materiTetap, terpilih?.divisi || 'Laboratory');
+
+          // Cek materi internal jika hari Sabtu
+          let materiRes = (hari === 'Sabtu' && !sl.isSenam && sl.kategori !== 'Senam') ? pickInternalForSaturday(sl.kategori, 'laboratorium') : null;
+          if (!materiRes) {
+            materiRes = pilihMateri(sl.divisi || 'Laboratory', sl.kategori, sl.materiTetap, terpilih?.divisi || 'Laboratory', false);
+          }
+
           return {
             nama: terpilih ? terpilih.nama : 'KOSONG (Tdk ada SDM)',
             nik: terpilih ? terpilih.nik : '',
@@ -957,12 +1296,15 @@ p5mRouter.post("/randomize", async (req, res) => {
         });
       }
 
-      // Night Shift (except Minggu)
+      // ── Night Shift (Malam) ────────────────────────────────
+      // Logika Sinkronisasi Materi Pagi dan Malam (Supaya materi sama rata)
       if (hari !== 'Minggu') {
         const sudahDipilihMalam = new Set<string>();
         if (isGabungan) {
           const slots = dayCfg.malam?.gabungan || [];
-          hasilHari.malam.gabungan = slots.map((sl: any) => {
+          const morningSlots = hasilHari.pagi.gabungan || [];
+
+          hasilHari.malam.gabungan = slots.map((sl: any, slotIdx: number) => {
             const cand = pilihKandidat(hari, 'malam', sl, sudahDipilihMalam);
             const terpilih = pilihDariKandidat(cand, indexHariIni);
             if (terpilih) {
@@ -971,7 +1313,35 @@ p5mRouter.post("/randomize", async (req, res) => {
               terpilih.hariTerakhirBriefingSesi = indexHariIni;
             }
             const isFallback = Boolean((cand as any)?._isFallback);
-            const materiRes = pilihMateri(sl.divisi, sl.kategori, sl.materiTetap, terpilih?.divisi || sl.divisi);
+
+            // Sinkronkan materi malam dengan materi pagi hari yang sama
+            let materiRes: any = null;
+            if (sl.materiTetap) {
+              materiRes = { judul: sl.materiTetap, kategori: sl.kategori || 'All', subKategori: 'General', id: null, fileUrl: null };
+            } else if (morningSlots[slotIdx] && morningSlots[slotIdx].materi && !morningSlots[slotIdx].isSenam && !morningSlots[slotIdx].isLogbook) {
+              const mSlot = morningSlots[slotIdx];
+              materiRes = {
+                judul: mSlot.materi,
+                kategori: mSlot.kategori,
+                subKategori: mSlot.subKategori,
+                id: mSlot.materiId,
+                fileUrl: mSlot.fileUrl
+              };
+            } else {
+              const matchMorning = morningSlots.find((m: any) => m.kategori === sl.kategori && !m.isSenam && !m.isLogbook);
+              if (matchMorning) {
+                materiRes = {
+                  judul: matchMorning.materi,
+                  kategori: matchMorning.kategori,
+                  subKategori: matchMorning.subKategori,
+                  id: matchMorning.materiId,
+                  fileUrl: matchMorning.fileUrl
+                };
+              } else {
+                materiRes = pilihMateri(sl.divisi, sl.kategori, sl.materiTetap, terpilih?.divisi || sl.divisi, true);
+              }
+            }
+
             return {
               nama: terpilih ? terpilih.nama : 'KOSONG (Tdk ada SDM)',
               nik: terpilih ? terpilih.nik : '',
@@ -991,8 +1361,10 @@ p5mRouter.post("/randomize", async (req, res) => {
         } else {
           const slotsPrep = dayCfg.malam?.preparasi || [];
           const slotsLab = dayCfg.malam?.laboratorium || [];
+          const morningPrep = hasilHari.pagi.preparasi || [];
+          const morningLab = hasilHari.pagi.laboratorium || [];
 
-          hasilHari.malam.preparasi = slotsPrep.map((sl: any) => {
+          hasilHari.malam.preparasi = slotsPrep.map((sl: any, slotIdx: number) => {
             const cand = pilihKandidat(hari, 'malam', sl, sudahDipilihMalam, 'preparasi');
             const terpilih = pilihDariKandidat(cand, indexHariIni);
             if (terpilih) {
@@ -1001,7 +1373,35 @@ p5mRouter.post("/randomize", async (req, res) => {
               terpilih.hariTerakhirBriefingSesi = indexHariIni;
             }
             const isFallback = Boolean((cand as any)?._isFallback);
-            const materiRes = pilihMateri(sl.divisi || 'Preparation', sl.kategori, sl.materiTetap, terpilih?.divisi || 'Preparation');
+
+            // Sinkronkan materi preparasi malam dengan preparasi pagi
+            let materiRes: any = null;
+            if (sl.materiTetap) {
+              materiRes = { judul: sl.materiTetap, kategori: sl.kategori || 'All', subKategori: 'General', id: null, fileUrl: null };
+            } else if (morningPrep[slotIdx] && morningPrep[slotIdx].materi && !morningPrep[slotIdx].isSenam) {
+              const mSlot = morningPrep[slotIdx];
+              materiRes = {
+                judul: mSlot.materi,
+                kategori: mSlot.kategori,
+                subKategori: mSlot.subKategori,
+                id: mSlot.materiId,
+                fileUrl: mSlot.fileUrl
+              };
+            } else {
+              const matchMorning = morningPrep.find((m: any) => m.kategori === sl.kategori && !m.isSenam);
+              if (matchMorning) {
+                materiRes = {
+                  judul: matchMorning.materi,
+                  kategori: matchMorning.kategori,
+                  subKategori: matchMorning.subKategori,
+                  id: matchMorning.materiId,
+                  fileUrl: matchMorning.fileUrl
+                };
+              } else {
+                materiRes = pilihMateri(sl.divisi || 'Preparation', sl.kategori, sl.materiTetap, terpilih?.divisi || 'Preparation', false);
+              }
+            }
+
             return {
               nama: terpilih ? terpilih.nama : 'KOSONG (Tdk ada SDM)',
               nik: terpilih ? terpilih.nik : '',
@@ -1018,7 +1418,7 @@ p5mRouter.post("/randomize", async (req, res) => {
             };
           });
 
-          hasilHari.malam.laboratorium = slotsLab.map((sl: any) => {
+          hasilHari.malam.laboratorium = slotsLab.map((sl: any, slotIdx: number) => {
             const cand = pilihKandidat(hari, 'malam', sl, sudahDipilihMalam, 'laboratorium');
             const terpilih = pilihDariKandidat(cand, indexHariIni);
             if (terpilih) {
@@ -1027,7 +1427,35 @@ p5mRouter.post("/randomize", async (req, res) => {
               terpilih.hariTerakhirBriefingSesi = indexHariIni;
             }
             const isFallback = Boolean((cand as any)?._isFallback);
-            const materiRes = pilihMateri(sl.divisi || 'Laboratory', sl.kategori, sl.materiTetap, terpilih?.divisi || 'Laboratory');
+
+            // Sinkronkan materi lab malam dengan lab pagi
+            let materiRes: any = null;
+            if (sl.materiTetap) {
+              materiRes = { judul: sl.materiTetap, kategori: sl.kategori || 'All', subKategori: 'General', id: null, fileUrl: null };
+            } else if (morningLab[slotIdx] && morningLab[slotIdx].materi && !morningLab[slotIdx].isSenam) {
+              const mSlot = morningLab[slotIdx];
+              materiRes = {
+                judul: mSlot.materi,
+                kategori: mSlot.kategori,
+                subKategori: mSlot.subKategori,
+                id: mSlot.materiId,
+                fileUrl: mSlot.fileUrl
+              };
+            } else {
+              const matchMorning = morningLab.find((m: any) => m.kategori === sl.kategori && !m.isSenam);
+              if (matchMorning) {
+                materiRes = {
+                  judul: matchMorning.materi,
+                  kategori: matchMorning.kategori,
+                  subKategori: matchMorning.subKategori,
+                  id: matchMorning.materiId,
+                  fileUrl: matchMorning.fileUrl
+                };
+              } else {
+                materiRes = pilihMateri(sl.divisi || 'Laboratory', sl.kategori, sl.materiTetap, terpilih?.divisi || 'Laboratory', false);
+              }
+            }
+
             return {
               nama: terpilih ? terpilih.nama : 'KOSONG (Tdk ada SDM)',
               nik: terpilih ? terpilih.nik : '',
@@ -1117,142 +1545,7 @@ p5mRouter.get("/schedules/latest", async (req, res) => {
   }
 });
 
-// ============================================================
-// MATERI MANAGEMENT ENDPOINTS (List, Add, Delete)
-// ============================================================
-p5mRouter.get(["/materi", "/materi-list"], async (req, res) => {
-  try {
-    const search = (req.query.search as string || '').trim().toLowerCase();
-    const kategori = (req.query.kategori as string || '').trim();
-    const divisi = (req.query.divisi as string || '').trim();
 
-    let query = db.select().from(p5mMateri);
-    const conditions = [];
-
-    if (kategori && kategori !== 'All') {
-      conditions.push(eq(p5mMateri.kategori, kategori));
-    }
-    if (divisi && divisi !== 'All') {
-      conditions.push(eq(p5mMateri.divisi, divisi));
-    }
-    if (search) {
-      conditions.push(like(p5mMateri.judul, `%${search}%`));
-    }
-
-    let list;
-    if (conditions.length > 0) {
-      list = await db.select().from(p5mMateri).where(and(...conditions)).orderBy(p5mMateri.judul);
-    } else {
-      list = await db.select().from(p5mMateri).orderBy(p5mMateri.judul);
-    }
-
-    res.json({ success: true, data: list, count: list.length });
-  } catch (error: any) {
-    console.error("Error fetching materi list:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-p5mRouter.post("/materi", async (req, res) => {
-  try {
-    const { judul, kategori, subKategori, divisi, base64Data, filename } = req.body;
-
-    if (!judul || !judul.trim()) {
-      return res.status(400).json({ success: false, message: "Judul materi wajib diisi." });
-    }
-
-    const cleanJudul = judul.trim();
-    let finalFileUrl: string | null = null;
-
-    // 1. If image file (base64) provided, upload to Google Drive & save local copy
-    if (base64Data) {
-      const base64Clean = base64Data.replace(/^data:.*?;base64,/, "");
-      const buffer = Buffer.from(base64Clean, 'base64');
-      const safeId = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
-      const localFileName = `p5m_${safeId}.png`;
-      const localPath = path.join(process.cwd(), 'public', 'uploads', 'p5m', localFileName);
-
-      // Save local copy
-      try {
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'p5m');
-        if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        fs.writeFileSync(localPath, buffer);
-      } catch (fErr: any) {
-        console.warn("Local cache write failed:", fErr.message);
-      }
-
-      // Upload to Google Drive folder P5M_Materi_Flyers
-      try {
-        const folderId = '1AH151Lrgklv4Q1Ty0vdEgsPES6VcCKps'; // Folder P5M_Materi_Flyers
-        const stream = new Readable();
-        stream.push(buffer);
-        stream.push(null);
-
-        const driveRes = await drive.files.create({
-          requestBody: {
-            name: filename || `P5M_${cleanJudul.replace(/[^a-zA-Z0-9_-]/g, '_')}.png`,
-            parents: [folderId]
-          },
-          media: {
-            mimeType: 'image/png',
-            body: stream
-          },
-          fields: 'id, webViewLink',
-          supportsAllDrives: true
-        });
-
-        const driveFileId = driveRes.data.id;
-        if (driveFileId) {
-          try {
-            await drive.permissions.create({
-              fileId: driveFileId,
-              requestBody: { role: 'reader', type: 'anyone' },
-              supportsAllDrives: true
-            });
-          } catch (pErr: any) {
-            // Permission inherited
-          }
-          finalFileUrl = `https://drive.google.com/uc?export=view&id=${driveFileId}`;
-        }
-      } catch (dErr: any) {
-        console.warn("Drive upload failed, using local fallback URL:", dErr.message);
-        finalFileUrl = `/uploads/p5m/${localFileName}`;
-      }
-    }
-
-    // Insert into PostgreSQL Cloud SQL
-    const inserted = await db.insert(p5mMateri).values({
-      judul: cleanJudul,
-      kategori: kategori || 'Teknis',
-      subKategori: subKategori || 'General',
-      divisi: divisi || 'All',
-      fileUrl: finalFileUrl,
-      lastUsed: null
-    }).returning();
-
-    res.json({ success: true, data: inserted[0] });
-  } catch (error: any) {
-    console.error("Error creating P5M materi:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-p5mRouter.delete("/materi/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!id || isNaN(id)) {
-      return res.status(400).json({ success: false, message: "ID materi tidak valid." });
-    }
-
-    await db.delete(p5mMateri).where(eq(p5mMateri.id, id));
-    res.json({ success: true, message: "Materi berhasil dihapus." });
-  } catch (error: any) {
-    console.error("Error deleting P5M materi:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
 
 // ============================================================
 // USER ASSIGNMENT NOTIFICATION (With Past Date Filter)

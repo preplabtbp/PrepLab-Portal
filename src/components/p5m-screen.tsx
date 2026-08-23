@@ -286,6 +286,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const [formKategori, setFormKategori] = useState('Teknis');
   const [formSubKategori, setFormSubKategori] = useState('General');
   const [formDivisi, setFormDivisi] = useState('Preparation');
+  const [formIsInternal, setFormIsInternal] = useState(false);
   const [formImageBase64, setFormImageBase64] = useState<string | null>(null);
   const [formImageFilename, setFormImageFilename] = useState<string>('');
   const [formImagePreview, setFormImagePreview] = useState<string | null>(null);
@@ -684,24 +685,29 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
     setIsSavingMateri(true);
     try {
+      const payload = {
+        judul: formJudul,
+        kategori: formKategori,
+        subKategori: formKategori === 'Non-Teknis' ? 'General' : formSubKategori,
+        divisi: formDivisi,
+        isInternal: formIsInternal,
+        base64Data: formImageBase64,
+        filename: formImageFilename
+      };
+
       if (editingMateri) {
-        const res = await fetch(`/api/p5m/materi`, {
-          method: 'POST',
+        const res = await fetch(`/api/p5m/materi/${editingMateri.id}`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            judul: formJudul,
-            kategori: formKategori,
-            subKategori: formKategori === 'Non-Teknis' ? 'General' : formSubKategori,
-            divisi: formDivisi,
-            base64Data: formImageBase64,
-            filename: formImageFilename
-          })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (data.success) {
-          toast.success('Materi berhasil disimpan!');
+          toast.success('Materi berhasil diperbarui!');
           fetchMateriList();
           setMateriModalOpen(false);
+          setEditingMateri(null);
+          setFormIsInternal(false);
           setFormImageBase64(null);
           setFormImagePreview(null);
           setFormImageFilename('');
@@ -712,20 +718,15 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         const res = await fetch('/api/p5m/materi', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            judul: formJudul,
-            kategori: formKategori,
-            subKategori: formKategori === 'Non-Teknis' ? 'General' : formSubKategori,
-            divisi: formDivisi,
-            base64Data: formImageBase64,
-            filename: formImageFilename
-          })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (data.success) {
           toast.success('Materi baru berhasil ditambahkan!');
           fetchMateriList();
           setMateriModalOpen(false);
+          setEditingMateri(null);
+          setFormIsInternal(false);
           setFormImageBase64(null);
           setFormImagePreview(null);
           setFormImageFilename('');
@@ -1502,6 +1503,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   setFormKategori('Teknis');
                   setFormSubKategori('General');
                   setFormDivisi('Preparation');
+                  setFormIsInternal(false);
                   setFormImageBase64(null);
                   setFormImagePreview(null);
                   setFormImageFilename('');
@@ -1581,7 +1583,14 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       <tr key={item.id} className="hover:bg-slate-750/50 transition-colors">
                         <td className="py-3 px-4 text-center font-mono text-slate-500">{idx + 1}</td>
                         <td className="py-3 px-4 font-semibold text-white">
-                          {item.judul}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span>{item.judul}</span>
+                            {item.isInternal && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                ⭐ Internal (Sabtu)
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
@@ -1635,6 +1644,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 setFormKategori(item.kategori || 'Teknis');
                                 setFormSubKategori(item.subKategori || 'General');
                                 setFormDivisi(item.divisi || 'Preparation');
+                                setFormIsInternal(Boolean(item.isInternal));
                                 setMateriModalOpen(true);
                               }}
                               className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-slate-700 rounded-lg transition-colors"
@@ -1808,6 +1818,26 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   </select>
                 </div>
               )}
+
+              {/* Checkbox Materi Internal (Sabtu) */}
+              <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl p-3">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formIsInternal}
+                    onChange={e => setFormIsInternal(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-slate-700 bg-slate-800 cursor-pointer"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                      <span>⭐ Materi Internal (Jadwalkan di Hari Sabtu Periode Selanjutnya)</span>
+                    </div>
+                    <p className="text-[11px] text-amber-400/80 mt-0.5 leading-relaxed">
+                      Materi ini akan secara otomatis diprioritaskan dan dijadwalkan pada <strong>hari Sabtu</strong> periode penjadwalan P5M berikutnya sesuai kelompoknya (Teknis / Non-Teknis).
+                    </p>
+                  </div>
+                </label>
+              </div>
 
               {/* Upload Flyer / Poster */}
               <div className="space-y-1.5 pt-1">
@@ -2044,12 +2074,17 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
 
   // Filtered materi list
   const filteredMateriList = useMemo(() => {
+    const isGabunganDay = ['Senin', 'Kamis', 'Jumat', 'Minggu'].includes(day);
     return materiList.filter(m => {
+      // Aturan P5M Gabungan: Hanya materi General (universal untuk semua personil)
+      if (isGabunganDay && m.subKategori && m.subKategori !== 'General') {
+        return false;
+      }
       const matchSearch = !mSearch || m.judul?.toLowerCase().includes(mSearch.toLowerCase());
       const matchKat = mKatFilter === 'All' || m.kategori === mKatFilter || (mKatFilter === 'Senam' && m.kategori === 'Senam') || m.subKategori === mKatFilter;
       return matchSearch && matchKat;
     });
-  }, [materiList, mSearch, mKatFilter]);
+  }, [materiList, mSearch, mKatFilter, day]);
 
   const isEmptySDM = !slot.nama || slot.nama.includes('KOSONG');
 
