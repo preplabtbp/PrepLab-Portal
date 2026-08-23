@@ -14,6 +14,8 @@ All notable changes to the PrepLab Portal project will be documented in this fil
     - `GET /api/p5m/materi` & `GET /api/p5m/materi-list`: Fast search & category filtering for briefing materials.
     - `POST /api/p5m/materi`: Uploads base64 flyer to Google Drive and inserts record into Cloud SQL.
     - `DELETE /api/p5m/materi/:id`: Safe removal of obsolete briefing materials.
+  - **Searchable Materi Picker Popover**: Replaced plain text input with an interactive materi selector featuring instant search, division/category filter chips (*Preparasi*, *Laboratorium*, *General*, *Non-Teknis*), and one-click quick actions (*🤸 Senam Bersama*, *📋 Logbook*).
+  - **Accurate Personnel Targeting**: Ensured manual slot person replacement synchronizes `nama`, `nik`, `karyawanId`, and `pt` so briefing notifications are 100% targeted to the newly selected presenter.
   - **Reliable Flyer Image & Download Proxy**:
     - Enhanced `GET /api/p5m/flyer` with streaming and `download=true` support (`Content-Disposition: attachment`), preventing broken links and CORS issues.
 - **Presenter Briefing Notification Modal (`p5m-notification-modal.tsx`)**:
