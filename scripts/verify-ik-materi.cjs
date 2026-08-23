@@ -10,9 +10,15 @@ const pool = new Pool({
 
 async function main() {
   const client = await pool.connect();
-  const res = await client.query("SELECT id, judul, kategori, sub_kategori, divisi, file_url, notion_id FROM p5m_materi WHERE judul LIKE 'IK %' ORDER BY id ASC");
-  console.log('✓ Total IK records in p5m_materi:', res.rows.length);
-  console.table(res.rows);
+  const resIK = await client.query("SELECT id, judul, sub_kategori, divisi FROM p5m_materi WHERE judul LIKE 'IK %' ORDER BY id ASC");
+  const resSOP = await client.query("SELECT id, judul, sub_kategori, divisi FROM p5m_materi WHERE judul LIKE 'SOP %' ORDER BY id ASC");
+  
+  console.log(`\n📚 Total IK Documents: ${resIK.rows.length}`);
+  console.table(resIK.rows);
+
+  console.log(`\n📑 Total SOP Documents: ${resSOP.rows.length}`);
+  console.table(resSOP.rows);
+
   client.release();
   await pool.end();
 }

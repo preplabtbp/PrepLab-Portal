@@ -1605,7 +1605,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                         </td>
                         <td className="py-3 px-4 text-center">
                           {item.fileUrl ? (() => {
-                            const isPdf = item.fileUrl.toLowerCase().includes('.pdf') || (item.judul && item.judul.startsWith('IK '));
+                            const isPdf = item.fileUrl.toLowerCase().includes('.pdf') || (item.judul && (item.judul.startsWith('IK ') || item.judul.startsWith('SOP ')));
                             return (
                               <button
                                 onClick={() => setPreviewImage({ url: item.fileUrl, title: item.judul })}
@@ -1906,11 +1906,12 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         </div>
       )}
 
-      {/* ── MODAL: PREVIEW FLYER / DOKUMEN IK ── */}
+      {/* ── MODAL: PREVIEW FLYER / DOKUMEN IK & SOP ── */}
       {previewImage && (() => {
         const isPdf = previewImage.url?.toLowerCase().includes('.pdf') || 
                       previewImage.title?.toLowerCase().includes('.pdf') || 
-                      previewImage.title?.startsWith('IK ');
+                      previewImage.title?.startsWith('IK ') ||
+                      previewImage.title?.startsWith('SOP ');
         const embedUrl = previewImage.url?.includes('drive.google.com') 
           ? previewImage.url.replace('/uc?export=view&id=', '/file/d/').replace(/\/view.*$/, '/preview')
           : previewImage.url;
@@ -2366,7 +2367,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
         </div>
 
         {slot.fileUrl && (() => {
-          const isPdf = slot.fileUrl.toLowerCase().includes('.pdf') || (slot.materi && slot.materi.startsWith('IK '));
+          const isPdf = slot.fileUrl.toLowerCase().includes('.pdf') || (slot.materi && (slot.materi.startsWith('IK ') || slot.materi.startsWith('SOP ')));
           return (
             <button
               type="button"
@@ -2374,7 +2375,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
               className={`text-[9px] font-bold flex items-center gap-0.5 ml-auto flex-shrink-0 ${
                 isPdf ? 'text-orange-700 hover:text-orange-900' : 'text-amber-700 hover:text-amber-900'
               }`}
-              title={isPdf ? "Lihat Dokumen IK" : "Lihat Flyer Materi"}
+              title={isPdf ? "Lihat Dokumen IK / SOP" : "Lihat Flyer Materi"}
             >
               {isPdf ? <FileText className="w-3 h-3 text-orange-600" /> : <ImageIcon className="w-3 h-3 text-amber-600" />}
             </button>
