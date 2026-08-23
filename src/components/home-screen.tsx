@@ -1,15 +1,17 @@
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Cloud,  
   User, X, Calendar, AlertTriangle, FileText, Utensils, CheckCircle2, 
   ThermometerSun, LineChart, LayoutDashboard, Wrench, CheckSquare, 
   ShieldCheck, Eye, Activity, Folder, Info, Package, History, 
   PlusCircle, Settings, ArrowRight, Clock, Box, ClipboardList, Briefcase, Users,
-  BookOpen  } from 'lucide-react';
+  BookOpen, Sparkles, Edit2, Shuffle } from 'lucide-react';
 import { Button } from './ui';
 import { getKtaUrl } from '../sheets-api';
 import { FoodReportModal } from './food-report-modal';
+import { UsernamePromptModal } from './UsernamePromptModal';
+import { getDailySkenaQuote, SKENA_QUOTES } from '../utils/skena-quotes';
 
 export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: { 
   inspectorName: string, 
@@ -20,7 +22,34 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
   const [showKtaConfirmation, setShowKtaConfirmation] = useState(false);
   const [showFoodReportModal, setShowFoodReportModal] = useState(false);
   const [showGtsIntipModal, setShowGtsIntipModal] = useState(false);
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  
+  const [currentUsername, setCurrentUsername] = useState(() => {
+    try {
+      const profile = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
+      return profile.username || localStorage.getItem('p2h_inspector_username') || '';
+    } catch(e) {
+      return '';
+    }
+  });
+  
+  const [quoteIndex, setQuoteIndex] = useState<number | null>(null);
+
+  const dailyQuote = useMemo(() => {
+    if (quoteIndex !== null) {
+      return SKENA_QUOTES[quoteIndex % SKENA_QUOTES.length];
+    }
+    return getDailySkenaQuote(inspectorNik || inspectorName || 'user');
+  }, [inspectorNik, inspectorName, quoteIndex]);
+
+  // Prompt user to set username if not set yet
+  useEffect(() => {
+    if (inspectorNik && !currentUsername && !sessionStorage.getItem('username_prompted')) {
+      sessionStorage.setItem('username_prompted', 'true');
+      setShowUsernameModal(true);
+    }
+  }, [inspectorNik, currentUsername]);
   
   const userJabatan = localStorage.getItem('p2h_inspector_jabatan') || '';
   let userSection = '';
@@ -177,23 +206,53 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       className="pb-24 px-4 sm:px-6 lg:px-8 w-full h-full max-w-5xl mx-auto space-y-6"
     >
       
-      {/* Compact Hero Section */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 sm:p-8 shadow-lg border border-slate-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Compact Hero Section with Skena Quotes & Username Greeting */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-850 to-slate-800 rounded-2xl p-5 sm:p-7 shadow-lg border border-slate-700/50 flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none transform translate-x-4 -translate-y-4">
           <Activity className="w-40 h-40 sm:w-48 sm:h-48 text-white" />
         </div>
-        <div className="relative z-10">
-          <h1 className="text-2xl sm:text-3xl font-display font-bold text-white mb-1.5">
-            {greeting}, <span className="text-teal-400">{inspectorName?.split(' ')[0] || 'User'}</span>
-          </h1>
-          <p className="text-slate-300 text-sm sm:text-base leading-relaxed max-w-lg">
-            Portal terintegrasi operasional harian, pelaporan, dan administrasi Preparation & Laboratory.
-          </p>
+        
+        <div className="relative z-10 flex-1">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-white tracking-tight">
+              {greeting}, <span className="text-teal-400">{currentUsername || inspectorName?.split(' ')[0] || 'User'}</span>! 👋
+            </h1>
+            <button
+              onClick={() => setShowUsernameModal(true)}
+              title="Ubah Username / Nama Panggilan Anda"
+              className="px-2.5 py-1 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 hover:text-teal-200 transition-all border border-teal-400/30 flex items-center gap-1.5 text-xs font-semibold shadow-sm active:scale-95"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+              <span>{currentUsername ? 'Ubah Panggilan' : 'Setel Username'}</span>
+            </button>
+          </div>
+
+          {/* Daily Skena Motivational Quote */}
+          <div className="mt-2.5 bg-slate-950/50 border border-slate-700/60 rounded-2xl p-3.5 backdrop-blur-md relative group max-w-2xl shadow-inner">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-[11px] font-bold tracking-wider uppercase text-amber-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                Quote Hari Ini • {dailyQuote.vibe}
+              </span>
+              <button
+                onClick={() => setQuoteIndex(prev => (prev === null ? Math.floor(Math.random() * SKENA_QUOTES.length) : prev + 1))}
+                className="opacity-70 hover:opacity-100 px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-all text-xs flex items-center gap-1 border border-white/5"
+                title="Ganti Vibe Quote Skena"
+              >
+                <Shuffle className="w-3 h-3 text-teal-400" />
+                <span className="text-[10px] font-medium hidden sm:inline">Roll Vibe</span>
+              </button>
+            </div>
+            <p className="text-slate-200 text-xs sm:text-sm italic leading-relaxed">
+              "{dailyQuote.quote}"
+            </p>
+          </div>
         </div>
-        <div className="relative z-10 shrink-0 self-start sm:self-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 backdrop-blur-md">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs font-medium text-emerald-50 tracking-wide uppercase">System Online</span>
+
+        <div className="relative z-10 shrink-0 self-start md:self-center">
+          <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 backdrop-blur-md">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs font-bold text-emerald-400 tracking-wider uppercase">Portal Active</span>
           </div>
         </div>
       </div>
@@ -332,6 +391,18 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
           </motion.div>
         </div>
       )}
+
+      {/* Username / Nama Panggilan Setup Modal */}
+      <UsernamePromptModal 
+        isOpen={showUsernameModal}
+        onClose={() => setShowUsernameModal(false)}
+        nik={inspectorNik}
+        currentUsername={currentUsername}
+        fullName={inspectorName}
+        onUsernameUpdated={(newU) => {
+          setCurrentUsername(newU);
+        }}
+      />
     </motion.div>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Activity, Users, Building2, Droplets, Wind, ShieldAlert, BadgeInfo, ChevronDown, ChevronUp, Calendar, PlusCircle, X, Search, Plane, Clock, AlertTriangle, CircleUser } from 'lucide-react';
+import { User, Activity, Users, Building2, Droplets, Wind, ShieldAlert, BadgeInfo, ChevronDown, ChevronUp, Calendar, PlusCircle, X, Search, Plane, Clock, AlertTriangle, CircleUser, UserX } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { getRosterData, addIzin } from '../sheets-api';
 import { Button, Card, Input, Select, Textarea } from './ui';
@@ -46,13 +46,13 @@ export function AdmDashboard() {
     return total > 0 ? ((count / total) * 100).toFixed(2) + '%' : '0.00%';
   };
 
-  const [activeTab, setActiveTab] = useState<'masuk' | 'cuti' | 'izin' | 'alfa' | 'libur'>('masuk');
+  const [activeTab, setActiveTab] = useState<'masuk' | 'cuti' | 'izin' | 'alfa' | 'libur' | 'lainnya'>('masuk');
   const [rawRoster, setRawRoster] = useState<any[]>([]);
   
-  const [staffData, setStaffData] = useState<any>({ hadir: 0, cuti: 0, izin: 0, alfa: 0, sakit: 0, total: 0 });
-  const [nonStaffData, setNonStaffData] = useState<any>({ hadir: 0, cuti: 0, izin: 0, alfa: 0, sakit: 0, total: 0 });
+  const [staffData, setStaffData] = useState<any>({ hadir: 0, cuti: 0, izin: 0, alfa: 0, sakit: 0, libur: 0, total: 0 });
+  const [nonStaffData, setNonStaffData] = useState<any>({ hadir: 0, cuti: 0, izin: 0, alfa: 0, sakit: 0, libur: 0, total: 0 });
   const [data, setData] = useState<any>({
-    totals: { masuk: 0, cuti: 0, izin: 0, alfa: 0 },
+    totals: { masuk: 0, cuti: 0, izin: 0, alfa: 0, libur: 0, lainnya: 0 },
     byShift: {}
   });
   const [expandedPositions, setExpandedPositions] = useState<Set<string>>(new Set());
@@ -109,14 +109,12 @@ export function AdmDashboard() {
     const day = parseInt(parts[2], 10);
     const formattedDate = day + ' ' + parts[1] + ' ' + parts[3].substring(2);
 
-    let totals = { masuk: 0, cuti: 0, izin: 0, alfa: 0, libur: 0 };
+    let totals = { masuk: 0, cuti: 0, izin: 0, alfa: 0, libur: 0, lainnya: 0 };
     let stData = { hadir: 0, cuti: 0, izin: 0, alfa: 0, sakit: 0, libur: 0, total: 0, details: { sakit: [], izin: [], alfa: [], libur: [] } };
     let nstData = { hadir: 0, cuti: 0, izin: 0, alfa: 0, sakit: 0, libur: 0, total: 0, details: { sakit: [], izin: [], alfa: [], libur: [] } };
     
     let filteredEmployees: any[] = [];
 
-    
-    
     const currentUserStr = localStorage.getItem('p2h_inspector_profile');
     const currentUserProfile = currentUserStr ? JSON.parse(currentUserStr) : null;
     const requestorNik = localStorage.getItem('p2h_inspector_nik');
@@ -132,16 +130,33 @@ export function AdmDashboard() {
     }
 
     activeRoster.forEach((emp: any) => {
+      const rawShiftCode = emp.fullSchedule?.[formattedDate];
+      const hasRosterEntry = rawShiftCode !== undefined && rawShiftCode !== null && typeof rawShiftCode === 'string' && rawShiftCode.trim() !== '' && rawShiftCode.trim() !== '-';
 
+      // Jika cell roster kosong pada hari ini -> personil sudah tidak ada lagi (keluar/resign), dipisahkan ke Lain-lain dan TIDAK dimasukkan ke perhitungan rekap pie chart
+      if (!hasRosterEntry) {
+        totals.lainnya++;
+        if (tab === 'lainnya') {
+          filteredEmployees.push({ 
+            ...emp, 
+            currentShift: 'Roster Kosong (Personil sudah keluar)', 
+            formattedDate, 
+            isMasuk: false, 
+            isCuti: false, 
+            isKosong: true 
+          });
+        }
+        return; // Excluded from stData and nstData totals
+      }
 
-      const shiftCode = emp.fullSchedule?.[formattedDate] || '-';
+      const shiftCode = rawShiftCode.trim();
       const upperShift = shiftCode.toUpperCase();
       
       const isCuti = ['TRV', 'TV', 'C', 'CR', 'CE', 'CT', 'CI', 'XP', 'TT'].includes(upperShift) || upperShift.startsWith('CT') || upperShift.startsWith('CE');
       const isIzin = ['I', 'IK', 'SL', 'SS'].includes(upperShift);
       const isAlfa = upperShift === 'A';
       
-      const isAbsentOrOff = ['-', 'DO', 'OFF', 'NA'].includes(upperShift);
+      const isAbsentOrOff = ['DO', 'OFF', 'NA'].includes(upperShift) || upperShift.includes('OFF');
       const isMasuk = !isCuti && !isIzin && !isAlfa && !isAbsentOrOff;
 
       if (isMasuk) totals.masuk++;
@@ -164,7 +179,6 @@ export function AdmDashboard() {
          targetData.details.libur.push(emp);
       }
       if (isIzin && upperShift.includes('S')) {
-
          targetData.sakit++;
          targetData.details.sakit.push(emp);
       } else if (isIzin) {
@@ -176,32 +190,32 @@ export function AdmDashboard() {
          targetData.details.alfa.push(emp);
       }
 
-      
-      if (tab === 'masuk' && isMasuk) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti });
-      if (tab === 'cuti' && isCuti) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti });
-      if (tab === 'izin' && isIzin) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti });
-      if (tab === 'alfa' && isAlfa) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti });
-      if (tab === 'libur' && isAbsentOrOff) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti });
-
+      if (tab === 'masuk' && isMasuk) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti, isKosong: false });
+      if (tab === 'cuti' && isCuti) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti, isKosong: false });
+      if (tab === 'izin' && isIzin) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti, isKosong: false });
+      if (tab === 'alfa' && isAlfa) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti, isKosong: false });
+      if (tab === 'libur' && isAbsentOrOff) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti, isKosong: false });
     });
 
-    
     let byShift: any = {
       'Shift Siang': { total: 0, sections: {} },
       'Shift Malam': { total: 0, sections: {} },
       'Long Shift': { total: 0, sections: {} },
-      'Lainnya (Non-Shift)': { total: 0, sections: {} } 
+      'Lainnya (Non-Shift)': { total: 0, sections: {} },
+      'Lain-lain (Roster Kosong / Keluar)': { total: 0, sections: {} }
     };
 
     filteredEmployees.forEach(emp => {
       let shiftCat = 'Lainnya (Non-Shift)';
-      if (emp.currentShift.toUpperCase() === 'D' || emp.currentShift.toUpperCase() === 'S') shiftCat = 'Shift Siang';
-      if (emp.currentShift.toUpperCase() === 'N') shiftCat = 'Shift Malam';
-      if (emp.currentShift.toUpperCase() === 'LS') shiftCat = 'Long Shift';
-
-      
-      // If we are in cuti, izin, alfa tab, we might just put everyone in Lainnya unless they have a known shift from some logic. But their shift code is 'TRV', 'I', etc.
-      // So they fall into Lainnya naturally. We can label it as "Shift Siang" if we know their normal shift, but we don't.
+      if (emp.isKosong) {
+        shiftCat = 'Lain-lain (Roster Kosong / Keluar)';
+      } else if (emp.currentShift?.toUpperCase() === 'D' || emp.currentShift?.toUpperCase() === 'S') {
+        shiftCat = 'Shift Siang';
+      } else if (emp.currentShift?.toUpperCase() === 'N') {
+        shiftCat = 'Shift Malam';
+      } else if (emp.currentShift?.toUpperCase() === 'LS') {
+        shiftCat = 'Long Shift';
+      }
       
       const pos = emp.jabatan || emp.position || 'Crew';
       let section = emp.department || emp.section || 'Lainnya';
@@ -409,7 +423,7 @@ export function AdmDashboard() {
          </div>
       </div>
       <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
             <button 
               onClick={() => setActiveTab('masuk')}
               className={`text-left p-4 rounded-2xl border transition-all ${activeTab === 'masuk' ? 'bg-[#2A9D8F] border-[#2A9D8F] text-white shadow-md scale-105' : 'bg-white border-slate-200 text-slate-700 hover:border-[#2A9D8F]'}`}
@@ -441,7 +455,6 @@ export function AdmDashboard() {
               <AlertTriangle className={`w-6 h-6 mb-2 ${activeTab === 'alfa' ? 'text-[#333333]' : 'text-[#C6D6EB]'}`} />
               <p className={`text-sm font-medium ${activeTab === 'alfa' ? 'text-[#333333]' : 'text-slate-500'}`}>Alfa</p>
               <h3 className="text-3xl font-black">{data.totals.alfa}</h3>
-            
             </button>
             <button 
               onClick={() => setActiveTab('libur')}
@@ -450,6 +463,15 @@ export function AdmDashboard() {
               <CircleUser className={`w-6 h-6 mb-2 ${activeTab === 'libur' ? 'text-[#333333]' : 'text-[#A8A29E]'}`} />
               <p className={`text-sm font-medium ${activeTab === 'libur' ? 'text-[#333333]' : 'text-slate-500'}`}>Libur</p>
               <h3 className="text-3xl font-black">{data.totals.libur}</h3>
+            </button>
+            <button 
+              onClick={() => setActiveTab('lainnya')}
+              className={`text-left p-4 rounded-2xl border transition-all ${activeTab === 'lainnya' ? 'bg-rose-600 border-rose-600 text-white shadow-md scale-105' : 'bg-white border-slate-200 text-slate-700 hover:border-rose-300'}`}
+            >
+              <UserX className={`w-6 h-6 mb-2 ${activeTab === 'lainnya' ? 'text-white' : 'text-rose-500'}`} />
+              <p className={`text-sm font-medium ${activeTab === 'lainnya' ? 'text-rose-100' : 'text-slate-500'}`}>Lain-lain</p>
+              <h3 className="text-3xl font-black">{data.totals.lainnya}</h3>
+              <p className={`text-[10px] mt-0.5 leading-tight font-medium ${activeTab === 'lainnya' ? 'text-rose-200' : 'text-slate-400'}`}>Roster kosong</p>
             </button>
           </div>
 
@@ -462,7 +484,11 @@ export function AdmDashboard() {
                 <div key={shiftName} className="space-y-4">
                   <div className="flex items-center gap-3 border-b-2 border-slate-200 pb-2">
                     <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                      <Users className={`w-6 h-6 ${shiftName === 'Shift Siang' ? 'text-[#E9930D]' : shiftName === 'Shift Malam' ? 'text-[#2A9D8F]' : 'text-slate-500'}`} /> 
+                      <Users className={`w-6 h-6 ${
+                        shiftName === 'Shift Siang' ? 'text-[#E9930D]' : 
+                        shiftName === 'Shift Malam' ? 'text-[#2A9D8F]' : 
+                        shiftName.includes('Roster Kosong') ? 'text-rose-500' : 'text-slate-500'
+                      }`} /> 
                       {shiftName}
                     </h3>
                     <span className="bg-slate-100 text-slate-700 font-bold px-3 py-1 rounded-full text-sm border border-slate-200">
@@ -518,9 +544,17 @@ export function AdmDashboard() {
                                                   </div>
                                                   
                                                   <div className="flex gap-2 mt-2 flex-wrap">
-                                                    <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] text-slate-600 font-bold border border-slate-200">Status: {emp.currentShift}</span>
-                                                    {emp.isMasuk && emp.nextTrvDate && <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px] text-amber-800 font-bold border border-amber-200">Next Cuti (TRV/TV): {emp.nextTrvDate}</span>}
-                                                    {emp.isCuti && emp.nextWorkDate && <span className="bg-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-800 font-bold border border-indigo-200">Next Kerja: {emp.nextWorkDate}</span>}
+                                                    {emp.isKosong ? (
+                                                      <span className="bg-rose-50 border border-rose-200 text-rose-700 px-2 py-0.5 rounded text-[10px] font-bold">
+                                                        Roster kosong (Personil sudah keluar)
+                                                      </span>
+                                                    ) : (
+                                                      <>
+                                                        <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] text-slate-600 font-bold border border-slate-200">Status: {emp.currentShift}</span>
+                                                        {emp.isMasuk && emp.nextTrvDate && <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px] text-amber-800 font-bold border border-amber-200">Next Cuti (TRV/TV): {emp.nextTrvDate}</span>}
+                                                        {emp.isCuti && emp.nextWorkDate && <span className="bg-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-800 font-bold border border-indigo-200">Next Kerja: {emp.nextWorkDate}</span>}
+                                                      </>
+                                                    )}
                                                   </div>
                                                   {emp.fullKeterangan && emp.fullKeterangan[emp.formattedDate] && (
                                                     <div className="mt-2 text-[11px] text-slate-600 bg-slate-50 p-1.5 rounded border border-slate-200 italic">
@@ -563,9 +597,17 @@ export function AdmDashboard() {
                                           </div>
                                           
                                           <div className="flex gap-2 mt-2 flex-wrap">
-                                            <span className="bg-slate-200 px-2 py-0.5 rounded text-[10px] text-slate-700 font-bold">Status: {emp.currentShift}</span>
-                                            {emp.isMasuk && emp.nextTrvDate && <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px] text-amber-800 font-bold">Next Cuti (TRV/TV): {emp.nextTrvDate}</span>}
-                                            {emp.isCuti && emp.nextWorkDate && <span className="bg-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-800 font-bold">Next Kerja: {emp.nextWorkDate}</span>}
+                                            {emp.isKosong ? (
+                                              <span className="bg-rose-50 border border-rose-200 text-rose-700 px-2 py-0.5 rounded text-[10px] font-bold">
+                                                Roster kosong (Personil sudah keluar)
+                                              </span>
+                                            ) : (
+                                              <>
+                                                <span className="bg-slate-200 px-2 py-0.5 rounded text-[10px] text-slate-700 font-bold">Status: {emp.currentShift}</span>
+                                                {emp.isMasuk && emp.nextTrvDate && <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px] text-amber-800 font-bold">Next Cuti (TRV/TV): {emp.nextTrvDate}</span>}
+                                                {emp.isCuti && emp.nextWorkDate && <span className="bg-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-800 font-bold">Next Kerja: {emp.nextWorkDate}</span>}
+                                              </>
+                                            )}
                                           </div>
                                           {emp.fullKeterangan && emp.fullKeterangan[emp.formattedDate] && (
                                             <div className="mt-2 text-[11px] text-slate-600 bg-white p-1.5 rounded border border-slate-200 italic">

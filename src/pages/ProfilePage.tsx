@@ -4,6 +4,7 @@ import { LogOut, Briefcase, MapPin, Building, Hash, CalendarIcon, Users, UserCir
 import { getRosterData } from '../sheets-api';
 import { motion, useDragControls } from 'motion/react';
 import { toast } from 'sonner';
+import { UsernamePromptModal } from '../components/UsernamePromptModal';
 
 function parseStringDate(str: string | null | undefined) {
   if (!str || str === '-') return null;
@@ -28,6 +29,7 @@ export function ProfilePage({
   onLogout: () => void;
   onBack: () => void;
 }) {
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [profile, setProfile] = useState<any>(() => {
     const saved = localStorage.getItem('p2h_inspector_profile');
     return saved ? JSON.parse(saved) : null;
@@ -475,10 +477,25 @@ export function ProfilePage({
               
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-800">{inspectorName}</h2>
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-800">{inspectorName}</h2>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs font-mono font-semibold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-md border border-teal-200/60 flex items-center gap-1">
+                        @{profile?.username || 'Username belum disetel'}
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={() => setShowUsernameModal(true)} 
+                        className="text-xs text-teal-600 hover:text-teal-700 font-semibold underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Camera className="w-3 h-3 hidden" />
+                        Ubah Panggilan
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 mt-2">
+                <div className="flex flex-wrap items-center gap-2 mt-3">
                   <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md text-xs font-mono font-medium border border-slate-200">
                     NIK: {inspectorNik || '-'}
                   </span>
@@ -578,6 +595,19 @@ export function ProfilePage({
           )}
         </div>
       </motion.div>
+
+      {/* Username Setup / Edit Modal */}
+      <UsernamePromptModal 
+        isOpen={showUsernameModal}
+        onClose={() => setShowUsernameModal(false)}
+        nik={inspectorNik || ''}
+        currentUsername={profile?.username}
+        fullName={inspectorName || ''}
+        onUsernameUpdated={(newU) => {
+          setProfile((p: any) => ({ ...p, username: newU }));
+          window.dispatchEvent(new Event('profile_updated'));
+        }}
+      />
     </>
   );
 }

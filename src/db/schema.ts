@@ -47,6 +47,7 @@ export const employees = pgTable('employees', {
   ktp: text('ktp'),
   sponsor: text('sponsor'),
   email: text('email'),
+  username: text('username'),
   passwordHash: text('password_hash'),
   avatar: text('avatar'),
   firstLoginComplete: boolean('first_login_complete').default(false),

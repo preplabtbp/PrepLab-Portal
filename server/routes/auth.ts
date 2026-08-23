@@ -9,17 +9,19 @@ export const authRouter = Router();
 
 authRouter.post("/check-nik", async (req, res) => {
   try {
-    const { nik } = req.body;
-    if (!nik) return res.json({ status: "error", message: "NIK kosong" });
+    const { nik, identifier } = req.body;
+    const inputVal = (identifier || nik || "").trim();
+    if (!inputVal) return res.json({ status: "error", message: "NIK atau Username tidak boleh kosong" });
     
-    // Normalize NIK to uppercase just in case, but use a case-insensitive search if possible
-    // Since some NIKs might be lowercase in DB, we search both or use SQL LOWER
-    const normalizedNik = nik.trim().toUpperCase();
+    const normalized = inputVal.toUpperCase();
     const employeeList = await db.select().from(employees);
-    const employee = employeeList.find(e => e.nik.toUpperCase() === normalizedNik);
+    const employee = employeeList.find(e => 
+      e.nik.toUpperCase() === normalized || 
+      (e.username && e.username.trim().toUpperCase() === normalized)
+    );
     
     if (!employee) {
-      return res.json({ status: "error", message: `NIK ${nik} tidak ditemukan dalam database.` });
+      return res.json({ status: "error", message: `NIK / Username "${inputVal}" tidak ditemukan dalam database.` });
     }
     
     return res.json({ 
@@ -34,13 +36,19 @@ authRouter.post("/check-nik", async (req, res) => {
 
 authRouter.post("/login", async (req, res) => {
   try {
-    const { nik, password } = req.body;
-    const normalizedNik = nik.trim().toUpperCase();
+    const { nik, identifier, password } = req.body;
+    const inputVal = (identifier || nik || "").trim();
+    if (!inputVal) return res.status(400).json({ status: "error", message: "NIK atau Username tidak boleh kosong" });
+
+    const normalized = inputVal.toUpperCase();
     const employeeList = await db.select().from(employees);
-    const user = employeeList.find(e => e.nik.toUpperCase() === normalizedNik);
+    const user = employeeList.find(e => 
+      e.nik.toUpperCase() === normalized || 
+      (e.username && e.username.trim().toUpperCase() === normalized)
+    );
     
     if (!user) {
-      return res.json({ status: "error", message: "NIK tidak ditemukan" });
+      return res.json({ status: "error", message: "NIK atau Username tidak ditemukan" });
     }
     
     if (!user.firstLoginComplete) {
@@ -54,6 +62,54 @@ authRouter.post("/login", async (req, res) => {
     
     return res.json({ status: "success", requireSetup: false, employee: user });
   } catch(e: any) {
+    res.status(500).json({ status: "error", message: e.message });
+  }
+});
+
+authRouter.post("/update-username", async (req, res) => {
+  try {
+    const { nik, username } = req.body;
+    if (!nik || !username) {
+      return res.status(400).json({ status: "error", message: "NIK dan Username harus diisi" });
+    }
+    const cleanUsername = username.trim();
+    if (cleanUsername.length < 2 || cleanUsername.length > 30) {
+      return res.status(400).json({ status: "error", message: "Username harus 2 - 30 karakter" });
+    }
+    
+    // Allowed characters: alphanumeric, spaces, dot, underscore, dash
+    if (!/^[a-zA-Z0-9_.\- ]+$/.test(cleanUsername)) {
+      return res.status(400).json({ status: "error", message: "Username hanya boleh mengandung huruf, angka, spasi, titik, dash, dan underscore" });
+    }
+
+    const normalizedNik = nik.trim().toUpperCase();
+    const employeeList = await db.select().from(employees);
+    const targetUser = employeeList.find(e => e.nik.toUpperCase() === normalizedNik);
+    if (!targetUser) {
+      return res.status(404).json({ status: "error", message: "Data personil tidak ditemukan" });
+    }
+
+    // Check if username already used by someone else
+    const isTaken = employeeList.some(e => 
+      e.id !== targetUser.id && 
+      e.username && 
+      e.username.trim().toLowerCase() === cleanUsername.toLowerCase()
+    );
+    if (isTaken) {
+      return res.status(400).json({ status: "error", message: `Username "${cleanUsername}" sudah digunakan personil lain. Silakan pilih username lain.` });
+    }
+
+    const updated = await db.update(employees)
+      .set({ username: cleanUsername })
+      .where(eq(employees.id, targetUser.id))
+      .returning();
+
+    return res.json({ 
+      status: "success", 
+      message: "Username berhasil disimpan!", 
+      employee: updated[0] 
+    });
+  } catch (e: any) {
     res.status(500).json({ status: "error", message: e.message });
   }
 });

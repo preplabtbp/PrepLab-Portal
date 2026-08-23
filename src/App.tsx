@@ -393,19 +393,23 @@ export default function App() {
          const res = await fetch('/api/auth/check-nik', {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ nik: inputNik })
+             body: JSON.stringify({ identifier: inputNik, nik: inputNik })
          });
          const data = await res.json();
          if (data.status === 'success') {
              const isCrew = data.employee?.jabatan?.toLowerCase().includes('crew');
+             const validNik = data.employee?.nik || inputNik;
+             const validUsername = data.employee?.username || '';
+             
              if (isCrew) {
                  toast.success("Login otomatis sebagai Crew!");
-                 setInspectorNik(inputNik);
+                 setInspectorNik(validNik);
                  setInspectorName(data.employee.name);
-                 localStorage.setItem('p2h_inspector_nik', inputNik);
+                 localStorage.setItem('p2h_inspector_nik', validNik);
                  localStorage.setItem('p2h_inspector_name', data.employee.name);
                  localStorage.setItem('p2h_inspector_jabatan', data.employee.jabatan || 'Crew');
                  localStorage.setItem('p2h_inspector_profile', JSON.stringify(data.employee));
+                 if (validUsername) localStorage.setItem('p2h_inspector_username', validUsername);
                  setLoginStep('nik');
                  handleNav('quiz');
              } else if (data.firstLoginComplete) {
@@ -415,13 +419,13 @@ export default function App() {
                  toast.info("Ini adalah login pertama Anda. Silakan setup password.");
              }
          } else {
-             toast.error(data.message || 'NIK tidak ditemukan');
+             toast.error(data.message || 'NIK atau Username tidak ditemukan');
          }
       } else if (loginStep === 'forgot') {
          const res = await fetch('/api/auth/reset-password', {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ nik: inputNik, email: forgotEmail, adminReset: false })
+             body: JSON.stringify({ identifier: inputNik, nik: inputNik, email: forgotEmail, adminReset: false })
          });
          const data = await res.json();
          if (data.status === 'success') {
@@ -450,6 +454,7 @@ export default function App() {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
              body: JSON.stringify({ 
+                 identifier: inputNik,
                  nik: inputNik, 
                  password: setupPassword1, 
                  email: setupEmail,
@@ -459,12 +464,15 @@ export default function App() {
          const data = await res.json();
          if (data.status === 'success') {
              toast.success("Setup berhasil!");
-             setInspectorNik(inputNik);
+             const validNik = data.employee?.nik || inputNik;
+             const validUsername = data.employee?.username || '';
+             setInspectorNik(validNik);
              setInspectorName(data.employee.name);
-             localStorage.setItem('p2h_inspector_nik', inputNik);
+             localStorage.setItem('p2h_inspector_nik', validNik);
              localStorage.setItem('p2h_inspector_name', data.employee.name);
              localStorage.setItem('p2h_inspector_jabatan', data.employee.jabatan || 'Crew');
              localStorage.setItem('p2h_inspector_profile', JSON.stringify(data.employee));
+             if (validUsername) localStorage.setItem('p2h_inspector_username', validUsername);
              setLoginStep('nik');
          } else {
              toast.error(data.message);
@@ -474,7 +482,7 @@ export default function App() {
           const res = await fetch('/api/auth/login', {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ nik: inputNik, password: passwordInput })
+             body: JSON.stringify({ identifier: inputNik, nik: inputNik, password: passwordInput })
           });
           const data = await res.json();
           
@@ -484,19 +492,21 @@ export default function App() {
                   toast.info("Ini adalah login pertama Anda. Silakan setup password.");
               } else {
                   const validNik = data.employee.nik;
+                  const validUsername = data.employee.username || '';
                   setInspectorNik(validNik);
                   setInspectorName(data.employee.name);
                   localStorage.setItem('p2h_inspector_nik', validNik);
                   localStorage.setItem('p2h_inspector_name', data.employee.name);
                   localStorage.setItem('p2h_inspector_jabatan', data.employee.jabatan || 'Crew');
                   localStorage.setItem('p2h_inspector_profile', JSON.stringify(data.employee));
+                  if (validUsername) localStorage.setItem('p2h_inspector_username', validUsername);
                   toast.success("Login berhasil");
                   setLoginStep('nik');
                   setPasswordInput('');
               }
           } else {
              const errMsg = data.message || 'Error login';
-             if (errMsg.toLowerCase().includes('password') || errMsg.toLowerCase().includes('nik')) {
+             if (errMsg.toLowerCase().includes('password') || errMsg.toLowerCase().includes('nik') || errMsg.toLowerCase().includes('username')) {
                  toast.error(errMsg);
              } else {
                  toast.error(`${errMsg}. Hubungi tim QA untuk informasi lebih lanjut.`);
@@ -518,8 +528,10 @@ export default function App() {
     setNikInput('');
     localStorage.removeItem('p2h_inspector_name');
     localStorage.removeItem('p2h_inspector_nik');
+    localStorage.removeItem('p2h_inspector_username');
     localStorage.removeItem('p2h_inspector_jabatan');
     localStorage.removeItem('p2h_inspector_profile');
+    sessionStorage.removeItem('username_prompted');
     handleNav('home');
   };
 
@@ -531,45 +543,38 @@ export default function App() {
     );
   }
 
-
-
   // TIER 2: Inspektor Login (Kiosk mode) & Google Login
   if (isGoogleLoading) {
     return <div className="min-h-screen bg-[#F4F7F6] flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-700"></div></div>;
   }
-  if ((!inspectorName) && activeTab !== 'settings') {
+  if (!inspectorNik && !inspectorName) {
     return (
-      <div className="min-h-screen bg-[#F4F7F6] flex flex-col items-center justify-center p-6 relative overflow-hidden">
-        <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-slate-200/50 to-transparent pointer-events-none"></div>
-        
-        <Card className="w-full max-w-sm z-10 space-y-6 !p-8 shadow-xl border border-slate-200">
-          <div className="w-20 h-20 mx-auto bg-slate-800 rounded-2xl p-3 shadow-lg mb-4 flex items-center justify-center">
-            <img src="/logo.png" alt="Prep & Lab Logo" className="w-full h-full object-contain" onError={(e) => {
-              (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="%23ccccccc" /><text x="50" y="55" font-family="sans-serif" font-size="20" text-anchor="middle" fill="%23fff">No Logo</text></svg>'; 
-            }} />
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4 selection:bg-teal-500 selection:text-white">
+        <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8 space-y-6">
+          <div className="flex justify-center">
+            <div className="w-16 h-16 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 shadow-sm">
+              <ClipboardCheck className="w-8 h-8" />
+            </div>
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-semibold font-display tracking-tight text-slate-800">Login Portal</h1>
-            <p className="text-sm text-slate-500 mt-2">Masukkan NIK Karyawan</p>
+            <p className="text-sm text-slate-500 mt-2">Masukkan NIK atau Username</p>
           </div>
           
-          
-
 <form onSubmit={handleNikLogin} className="space-y-4 pt-4 text-left">
     {loginStep === 'nik' && (
-
        <>
         <Input 
-          label="Nomor Induk Karyawan (NIK)" 
-          placeholder="Contoh: 121088..."
+          label="NIK atau Username" 
+          placeholder="Contoh: 02D... atau budi_lab"
           value={nikInput}
           onChange={e => setNikInput(e.target.value)}
           required
           autoFocus
-          className="text-center text-lg font-mono tracking-widest"
+          className="text-center text-base font-semibold"
         />
         <Button type="submit" disabled={isVerifyingNik} className="w-full">
-          {isVerifyingNik ? 'Mengecek NIK...' : 'Lanjut'}
+          {isVerifyingNik ? 'Mengecek Akun...' : 'Lanjut'}
         </Button>
        </>
     )}
@@ -577,8 +582,8 @@ export default function App() {
     {loginStep === 'password' && (
        <>
         <div className="text-center mb-4">
-           <p className="text-sm font-medium text-slate-800">NIK: {nikInput}</p>
-           <button type="button" onClick={() => setLoginStep('nik')} className="text-xs text-teal-600 underline">Ganti NIK</button>
+           <p className="text-sm font-medium text-slate-800">Akun: {nikInput}</p>
+           <button type="button" onClick={() => setLoginStep('nik')} className="text-xs text-teal-600 underline">Ganti Akun</button>
         </div>
         <Input 
           label="Password" 
@@ -664,7 +669,7 @@ export default function App() {
 </form>
 
 
-        </Card>
+        </div>
       </div>
     );
   }
