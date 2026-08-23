@@ -16,6 +16,7 @@ import {
   Eye
 } from 'lucide-react';
 import { Button } from './ui';
+import { getFlyerInfo } from '../lib/p5m-flyer';
 
 interface P5MNotificationModalProps {
   inspectorNik?: string;
@@ -224,44 +225,90 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
         </div>
       </AnimatePresence>
 
-      {/* Optional Flyer Image Modal */}
-      {previewFlyer && (
-        <div 
-          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
-          onClick={() => setPreviewFlyer(null)}
-        >
+      {/* Optional Flyer / Document Modal */}
+      {previewFlyer && (() => {
+        const info = getFlyerInfo(previewFlyer.url, previewFlyer.title);
+
+        return (
           <div 
-            className="max-w-2xl w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl p-4 space-y-3"
-            onClick={e => e.stopPropagation()}
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+            onClick={() => setPreviewFlyer(null)}
           >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <h4 className="text-xs font-bold text-white truncate max-w-md">{previewFlyer.title}</h4>
-              <button 
-                onClick={() => setPreviewFlyer(null)} 
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="max-h-[70vh] overflow-y-auto flex items-center justify-center bg-slate-950 rounded-xl p-2 min-h-[220px]">
-              <img 
-                src={previewFlyer.url} 
-                alt={previewFlyer.title} 
-                className="max-w-full max-h-[65vh] object-contain rounded-lg shadow"
-                loading="eager" 
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <Button
-                onClick={() => window.open(previewFlyer.url, '_blank')}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1"
-              >
-                <Download className="w-3.5 h-3.5" /> Buka Tab Baru
-              </Button>
+            <div 
+              className={`w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl p-4 space-y-3 ${info.isPdf ? 'max-w-4xl max-h-[90vh]' : 'max-w-2xl'}`}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className="flex items-center gap-2 min-w-0 pr-3">
+                  {info.isPdf ? (
+                    <FileText className="w-4 h-4 text-orange-400 shrink-0" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                  )}
+                  <h4 className="text-xs font-bold text-white truncate max-w-md">{previewFlyer.title}</h4>
+                </div>
+                <button 
+                  onClick={() => setPreviewFlyer(null)} 
+                  className="p-1 rounded-lg text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {info.isPdf ? (
+                <div className="bg-slate-950 rounded-xl overflow-hidden flex flex-col items-center justify-center h-[65vh] border border-slate-800 relative">
+                  <iframe 
+                    src={info.embedUrl} 
+                    title={previewFlyer.title}
+                    className="w-full h-full rounded-lg"
+                    allow="autoplay"
+                  />
+                </div>
+              ) : (
+                <div className="max-h-[70vh] overflow-y-auto flex items-center justify-center bg-slate-950 rounded-xl p-2 min-h-[220px]">
+                  <img 
+                    src={info.imageUrl} 
+                    alt={previewFlyer.title} 
+                    onError={(e) => {
+                      if (e.currentTarget.src !== info.streamUrl) {
+                        e.currentTarget.src = info.streamUrl;
+                      }
+                    }}
+                    className="max-w-full max-h-[65vh] object-contain rounded-lg shadow"
+                    loading="eager" 
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800 flex-wrap">
+                <div className="text-[10px] text-slate-400 font-mono">
+                  {info.isPdf ? '📄 Dokumen Prosedur Standar (IK/SOP)' : '🖼️ Flyer Briefing Keselamatan'}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => window.open(info.viewUrl, '_blank')}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-xl border border-slate-700 flex items-center gap-1"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Buka Tab Baru
+                  </Button>
+                  <Button
+                    onClick={handleDownloadFlyer}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 shadow-md shadow-emerald-950"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Unduh
+                  </Button>
+                  <Button
+                    onClick={() => setPreviewFlyer(null)}
+                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-3 py-1.5 rounded-xl"
+                  >
+                    Tutup
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </>
   );
 }

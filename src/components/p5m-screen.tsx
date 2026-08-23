@@ -10,6 +10,7 @@ import {
 import { toPng } from 'html-to-image';
 import { Card, Button, Input } from './ui';
 import { toast } from 'sonner';
+import { getFlyerInfo } from '../lib/p5m-flyer';
 
 // ============================================================
 // KONSTANTA & STRUKTUR DEFAULT
@@ -1938,20 +1939,14 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
       {/* ── MODAL: PREVIEW FLYER / DOKUMEN IK & SOP ── */}
       {previewImage && (() => {
-        const isPdf = previewImage.url?.toLowerCase().includes('.pdf') || 
-                      previewImage.title?.toLowerCase().includes('.pdf') || 
-                      previewImage.title?.startsWith('IK ') ||
-                      previewImage.title?.startsWith('SOP ');
-        const embedUrl = previewImage.url?.includes('drive.google.com') 
-          ? previewImage.url.replace('/uc?export=view&id=', '/file/d/').replace(/\/view.*$/, '/preview')
-          : previewImage.url;
+        const info = getFlyerInfo(previewImage.url, previewImage.title);
 
         return (
           <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-            <div className={`bg-slate-900 border border-slate-700 rounded-2xl w-full p-4 space-y-3 shadow-2xl animate-in zoom-in-95 duration-150 ${isPdf ? 'max-w-4xl max-h-[90vh]' : 'max-w-2xl'}`}>
+            <div className={`bg-slate-900 border border-slate-700 rounded-2xl w-full p-4 space-y-3 shadow-2xl animate-in zoom-in-95 duration-150 ${info.isPdf ? 'max-w-4xl max-h-[90vh]' : 'max-w-2xl'}`}>
               <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                 <div className="flex items-center gap-2 min-w-0 pr-4">
-                  {isPdf ? (
+                  {info.isPdf ? (
                     <FileText className="w-4 h-4 text-orange-400 shrink-0" />
                   ) : (
                     <ImageIcon className="w-4 h-4 text-amber-400 shrink-0" />
@@ -1968,39 +1963,57 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </button>
               </div>
 
-              {isPdf ? (
-                <div className="bg-slate-950 rounded-xl overflow-hidden flex flex-col items-center justify-center h-[65vh] border border-slate-800">
+              {info.isPdf ? (
+                <div className="bg-slate-950 rounded-xl overflow-hidden flex flex-col items-center justify-center h-[65vh] border border-slate-800 relative">
                   <iframe 
-                    src={embedUrl} 
+                    src={info.embedUrl} 
                     title={previewImage.title}
                     className="w-full h-full rounded-lg"
+                    allow="autoplay"
                   />
                 </div>
               ) : (
-                <div className="bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center max-h-[70vh] border border-slate-800">
+                <div className="bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center max-h-[70vh] border border-slate-800 p-2">
                   <img 
-                    src={previewImage.url} 
+                    src={info.imageUrl} 
                     alt={previewImage.title}
-                    className="max-h-[70vh] w-auto object-contain rounded-lg"
+                    onError={(e) => {
+                      // Fallback to backend streaming if thumbnail blocked
+                      if (e.currentTarget.src !== info.streamUrl) {
+                        e.currentTarget.src = info.streamUrl;
+                      }
+                    }}
+                    className="max-h-[65vh] w-auto object-contain rounded-lg shadow"
                   />
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-                <a
-                  href={previewImage.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" /> {isPdf ? 'Buka Dokumen PDF' : 'Buka Gambar Asli'}
-                </a>
-                <Button
-                  onClick={() => setPreviewImage(null)}
-                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-4 rounded-xl"
-                >
-                  Tutup
-                </Button>
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800 flex-wrap">
+                <div className="text-[10px] text-slate-400 font-mono">
+                  {info.isPdf ? '📄 Dokumen Prosedur Standar (IK/SOP)' : '🖼️ Flyer Briefing Keselamatan Kerja'}
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={info.viewUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Buka Tab Baru
+                  </a>
+                  <a
+                    href={info.downloadUrl}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs flex items-center gap-1.5 font-bold shadow-md shadow-emerald-950"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Unduh
+                  </a>
+                  <Button
+                    onClick={() => setPreviewImage(null)}
+                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-4 rounded-xl"
+                  >
+                    Tutup
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

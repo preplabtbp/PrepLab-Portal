@@ -1704,7 +1704,44 @@ p5mRouter.get("/flyer", async (req, res) => {
       }
     }
 
-    // 2. If it's a direct Google Drive URL or external image URL
+    // 2. If it's a Google Drive URL, stream via authenticated Google Drive API
+    const fileIdMatch = targetFileUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/) || 
+                        targetFileUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+                        targetFileUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    const driveFileId = fileIdMatch ? fileIdMatch[1] : null;
+
+    if (driveFileId) {
+      try {
+        const meta = await drive.files.get({
+          fileId: driveFileId,
+          fields: 'id, name, mimeType',
+          supportsAllDrives: true
+        });
+        const mimeType = meta.data.mimeType || 'image/png';
+        const isPdf = mimeType.includes('pdf') || targetJudul.startsWith('IK ') || targetJudul.startsWith('SOP ');
+        const ext = isPdf ? '.pdf' : '.png';
+        const finalFilename = `P5M_${targetJudul.replace(/[^a-zA-Z0-9_-]/g, '_')}${ext}`;
+
+        const driveStream = await drive.files.get({
+          fileId: driveFileId,
+          alt: 'media',
+          supportsAllDrives: true
+        }, { responseType: 'stream' });
+
+        res.setHeader('Content-Type', mimeType);
+        if (isDownload) {
+          res.setHeader('Content-Disposition', `attachment; filename="${finalFilename}"`);
+        } else {
+          res.setHeader('Content-Disposition', `inline; filename="${finalFilename}"`);
+        }
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return driveStream.data.pipe(res);
+      } catch (driveErr: any) {
+        console.warn('Google Drive API stream failed, fallback to direct fetch/redirect:', driveErr.message);
+      }
+    }
+
+    // 3. Fallback: If it's another external URL
     if (targetFileUrl && targetFileUrl.startsWith('http')) {
       try {
         const fetchRes = await fetch(targetFileUrl);
