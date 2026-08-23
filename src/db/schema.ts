@@ -455,10 +455,25 @@ export const easterEggProgress = pgTable('easter_egg_progress', {
 export const p5mMateri = pgTable('p5m_materi', {
   id: serial('id').primaryKey(),
   judul: text('judul').notNull(),
-  kategori: text('kategori').default('Umum'), // Teknis, Non-Teknis, Umum
-  divisi: text('divisi').default('All'), // Preparation, Laboratory, All
+  kategori: text('kategori').notNull().default('Teknis'), // Teknis, Non-Teknis
+  subKategori: text('sub_kategori').notNull().default('General'), // General, Laboratory, Preparation, Maintenance
+  divisi: text('divisi').default('All'), // All, Preparation, Laboratory, Maintenance
   fileUrl: text('file_url'),
+  notionId: text('notion_id'),
   lastUsed: timestamp('last_used'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const p5mSchedules = pgTable('p5m_schedules', {
+  id: serial('id').primaryKey(),
+  weekNumber: integer('week_number'),
+  year: integer('year'),
+  dateStart: text('date_start'),
+  dateEnd: text('date_end'),
+  scheduleData: json('schedule_data'),
+  config: json('config'),
+  summary: json('summary'),
+  createdBy: text('created_by'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

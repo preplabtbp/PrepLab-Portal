@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, Loader2, Calendar, MapPin, Briefcase, Clock, Plane, PlaneTakeoff, Info, Search } from 'lucide-react';
+import { ChevronLeft, Loader2, Calendar, MapPin, Briefcase, Clock, Plane, PlaneTakeoff, Info, Search, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { getRosterData } from '../sheets-api';
 import { Button } from './ui';
 import { PageHeader } from './PageHeader';
-
 
 function safeFormatDate(date: any, options: any) {
   if (!date) return '-';
@@ -32,6 +31,8 @@ export function RosterAdminScreen() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sectionFilter, setSectionFilter] = useState('ALL');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     return d.toISOString().split('T')[0];
@@ -41,6 +42,27 @@ export function RosterAdminScreen() {
     d.setDate(d.getDate() + 7);
     return d.toISOString().split('T')[0];
   });
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    setSyncFeedback(null);
+    try {
+      const res = await fetch('/api/roster/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setSyncFeedback({ type: 'success', message: data.message || 'Sinkronisasi Roster berhasil diperbarui!' });
+        // Refresh data
+        const refreshed = await getRosterData();
+        setRoster(refreshed);
+      } else {
+        setSyncFeedback({ type: 'error', message: data.message || 'Gagal sinkronisasi data dari Google Sheets' });
+      }
+    } catch (e: any) {
+      setSyncFeedback({ type: 'error', message: 'Koneksi gagal: ' + e.message });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
   
     const getHierarchyLevel = (jabatan: string) => {
     if (!jabatan) return 6;
@@ -353,9 +375,43 @@ export function RosterAdminScreen() {
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       <PageHeader 
         title="Informasi Roster & Cuti"
-        description="Kelola data roster dan jadwal cuti tim"
+        description="Kelola data roster dan jadwal cuti tim (Otomatis sinkron setiap jam 17:00 WIT)"
         icon={<Calendar />}
-      />
+      >
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+          <Button
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className="bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-2 rounded-xl text-xs font-bold px-3.5 py-2 shadow-lg shadow-indigo-900/30 transition-all border border-indigo-400/30"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Menyinkronkan...' : 'Sinkron Google Sheets'}
+          </Button>
+        </div>
+      </PageHeader>
+
+      {syncFeedback && (
+        <div className={`p-3.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-all ${
+          syncFeedback.type === 'success'
+            ? 'bg-emerald-950/80 border border-emerald-700/60 text-emerald-300'
+            : 'bg-rose-950/80 border border-rose-700/60 text-rose-300'
+        }`}>
+          <div className="flex items-center gap-2">
+            {syncFeedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            ) : (
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+            )}
+            <span className="font-medium">{syncFeedback.message}</span>
+          </div>
+          <button 
+            onClick={() => setSyncFeedback(null)} 
+            className="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded hover:bg-white/10"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20">

@@ -13,6 +13,7 @@ import { router as notificationsRouter } from "./server/routes/notifications.js"
 import { router as workOrdersRouter } from "./server/routes/workOrders.js";
 import { router as cloudRouter } from "./server/routes/cloud.js";
 import { router as inspectionsRouter } from "./server/routes/inspections.js";
+import { router as ticketsRouter } from "./server/routes/tickets.js";
 import { router as apdRouter } from "./server/routes/apd.js";
 import { router as rosterRouter } from "./server/routes/roster.js";
 import { router as adminRouter } from "./server/routes/admin.js";
@@ -39,6 +40,7 @@ import { eq, desc, or, inArray, isNull, and, gte, lte } from "drizzle-orm";
 import { authRouter } from "./server/routes/auth.js";
 import { debugRouter } from "./server/routes/debug.js";
 import { employeesRouter } from "./server/routes/employees.js";
+import { p5mRouter } from "./server/routes/p5m.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
 
 async function sendWebPush(notifs: any | any[]) {
@@ -264,7 +266,26 @@ const app = express();
   });
 
   // Middleware to parse JSON bodies
-  app.use(express.json({ limit: '50mb' })); app.use(express.urlencoded({ limit: '50mb', extended: true }));
+  app.use(express.json({ limit: '50mb' })); 
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+  // Mount modular routers
+  app.use("/api/auth", authRouter);
+  app.use("/api/debug", debugRouter);
+  app.use("/api/employees", employeesRouter);
+  app.use("/api/p5m", p5mRouter);
+  app.use(miscRouter);
+  app.use(bulletinRouter);
+  app.use(quizRouter);
+  app.use(notificationsRouter);
+  app.use(workOrdersRouter);
+  app.use(cloudRouter);
+  app.use(inspectionsRouter);
+  app.use(ticketsRouter);
+  app.use(apdRouter);
+  app.use(rosterRouter);
+  app.use(adminRouter);
+  app.use(agendaRouter);
 
   // In-memory chat storage as fallback since DB is disconnected
   const chatMessagesMemory: any[] = [];
@@ -422,6 +443,7 @@ app.use("/", notificationsRouter);
 app.use("/", workOrdersRouter);
 app.use("/", cloudRouter);
 app.use("/", inspectionsRouter);
+app.use("/", ticketsRouter);
 app.use("/", apdRouter);
 app.use("/", rosterRouter);
 app.use("/", adminRouter);

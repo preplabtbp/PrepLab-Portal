@@ -168,10 +168,13 @@ export const closeTicket = async (ticketId: string, picName: string, photoBase64
   return await res.json();
 };
 
-export const getGalleryPhotos = async () => {
-  const res = await fetch("/api/gallery");
+export const getGalleryPhotos = async (week?: string, refresh?: boolean) => {
+  const params = new URLSearchParams();
+  if (week) params.append('week', week);
+  if (refresh) params.append('refresh', '1');
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetch(`/api/gallery${query}`);
   return await res.json();
-  
 };
 
 export const submitPenggantianTabung = async (data: any) => {

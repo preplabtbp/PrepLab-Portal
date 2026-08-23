@@ -1,13 +1,16 @@
 import Papa from 'papaparse';
 import { db } from './db/index.js';
 import { employees, roster } from './db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import cron from 'node-cron';
 
-const ROOSTER_STAFF_CSV_URL = "https://docs.google.com/spreadsheets/d/10a2JYxQxEfcMDdl968KUHiC1fVI65vPaWMH7shMv7U0/export?format=csv&gid=0";
-const ROOSTER_CREW_CSV_URL = "https://docs.google.com/spreadsheets/d/10a2JYxQxEfcMDdl968KUHiC1fVI65vPaWMH7shMv7U0/export?format=csv&gid=170063197";
+// Official Database Roster Google Spreadsheet ID: 1iijlFReGxHyMiFAbd0J5-yfs1udWvZo4ydrJJKJBCNo
+const SPREADSHEET_ID = "1iijlFReGxHyMiFAbd0J5-yfs1udWvZo4ydrJJKJBCNo";
 
-// Jika CSV GTS ditaruh di Google Sheets, tambahkan URL exportnya di sini.
+const ROOSTER_STAFF_CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Rooster_Staff`;
+const ROOSTER_CREW_CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Rooster_Crew`;
+
+// Fallback jika CSV GTS ditaruh di Google Sheets
 const ROOSTER_GTS_CSV_URL = "https://drive.usercontent.google.com/download?id=17DPii_qPB8UNcrwMbRJqcMz5-1WHRVdC&export=download";
 
 interface RosterConfig {
@@ -58,7 +61,7 @@ const CONFIGS: RosterConfig[] = [
     colNik: 2,
     colName: 1,
     colJabatan: 3,
-    colJobGrade: -1,
+    colJobGrade: -1, // Crew tidak ada kolom Job Grade
     colSection: 4,
     colGol: 5,
     colShift: 6,
@@ -71,49 +74,40 @@ const CONFIGS: RosterConfig[] = [
     colStatusKontrak: 13,
     dateStartCol: 14,
     dateRowIndex: 0
-  },
-  {
-    type: 'GTS',
-    url: ROOSTER_GTS_CSV_URL, 
-    colNik: 6,
-    colName: 1,
-    colJabatan: 2,
-    colJobGrade: -1,
-    colSection: -1, // -1 menandakan tidak ada kolom khusus, ambil dari merged row
-    colGol: -1,
-    colShift: 4,
-    colPoh: 5,
-    colPt: 7,
-    colStatusMess: 8,
-    colRotation: 9,
-    colTanggalAwalBergabung: 10,
-    colTanggalBergabungTerbaru: 11,
-    colStatusKontrak: 12,
-    dateStartCol: 13,
-    dateRowIndex: 0
   }
 ];
 
-export async function syncRosterData() {
-  console.log("Memulai sinkronisasi Roster otomatis...");
+export async function syncRosterData(): Promise<{ success: boolean; staffCount: number; crewCount: number; totalRosterEntries: number; message: string }> {
+  console.log("Memulai sinkronisasi Roster dari Google Spreadsheet...");
+  let totalStaff = 0;
+  let totalCrew = 0;
+  let totalRoster = 0;
+
   try {
     for (const conf of CONFIGS) {
       if (conf.url) {
-        await fetchAndSync(conf);
+        const res = await fetchAndSync(conf);
+        if (conf.type === 'Staff') totalStaff = res.empCount;
+        if (conf.type === 'Crew') totalCrew = res.empCount;
+        totalRoster += res.rosterCount;
       }
     }
-    console.log("Sinkronisasi Roster selesai.");
-  } catch (err) {
+    const msg = `Sinkronisasi Roster berhasil: ${totalStaff} Staff, ${totalCrew} Crew, ${totalRoster} entri tanggal roster.`;
+    console.log(msg);
+    return { success: true, staffCount: totalStaff, crewCount: totalCrew, totalRosterEntries: totalRoster, message: msg };
+  } catch (err: any) {
     console.error("Gagal sinkronisasi roster:", err);
+    return { success: false, staffCount: 0, crewCount: 0, totalRosterEntries: 0, message: err.message || "Gagal sinkronisasi roster" };
   }
 }
 
 // Fungsi untuk menormalisasi format tanggal "1/01/2026" atau "1 Jan 2026" menjadi "1 Jan 26"
 function normalizeDateStr(d: string): string {
   if (!d) return d;
+  const trimmed = d.trim();
   
-  // Format 1/01/2026
-  let parts = d.split('/');
+  // Format 1/01/2026 or 01/01/2026
+  let parts = trimmed.split('/');
   if (parts.length === 3) {
     const day = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10) - 1;
@@ -124,44 +118,44 @@ function normalizeDateStr(d: string): string {
     return parseInt(p[2], 10) + ' ' + p[1] + ' ' + p[3].substring(2); // "1 Jan 26"
   }
   
-  // Format 1 Jan 2026
-  parts = d.split(' ');
+  // Format 1 Jan 2026 -> 1 Jan 26
+  parts = trimmed.split(' ');
   if (parts.length === 3 && parts[2].length === 4) {
     return parseInt(parts[0], 10) + ' ' + parts[1] + ' ' + parts[2].substring(2);
   }
   
-  return d;
+  return trimmed;
 }
 
-async function fetchAndSync(config: RosterConfig) {
+async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; rosterCount: number }> {
   console.log(`Fetching roster for ${config.type}...`);
   const res = await fetch(config.url);
   if (!res.ok) {
     console.error(`Gagal fetch CSV untuk ${config.type}: ${res.statusText}`);
-    return;
+    return { empCount: 0, rosterCount: 0 };
   }
   const csvText = await res.text();
   
   const parsed = Papa.parse(csvText, { skipEmptyLines: true });
   const rows = parsed.data as string[][];
   
-  if (rows.length < 2) return;
+  if (rows.length < 2) return { empCount: 0, rosterCount: 0 };
   
   const dateHeaders = rows[config.dateRowIndex];
   
-  const allEmpData = [];
-  const allRosterData = [];
+  const allEmpData: any[] = [];
+  const allRosterData: any[] = [];
   
   let currentSection = "";
 
   for (let i = 2; i < rows.length; i++) {
     const row = rows[i];
     
-    const nik = config.colNik !== -1 ? row[config.colNik]?.trim() : "";
+    const rawNik = config.colNik !== -1 ? row[config.colNik] : "";
+    const nik = rawNik ? rawNik.trim() : "";
     
     // Identifikasi baris yang tidak memiliki NIK valid
     if (!nik || nik.length < 3) {
-      // Kemungkinan ini adalah baris section yang di-merge (contoh: "LABORATORY")
       const possibleSection = (row[1] || row[0] || row[2] || "").trim();
       if (possibleSection && possibleSection.length > 2 && !possibleSection.match(/^[0-9]+$/)) {
         currentSection = possibleSection;
@@ -169,35 +163,36 @@ async function fetchAndSync(config: RosterConfig) {
       continue;
     }
 
-    if (!row[config.colName]) continue;
+    const rawName = row[config.colName];
+    if (!rawName || !rawName.trim()) continue;
     
     const empData = {
       nik,
-      name: row[config.colName],
-      jabatan: config.colJabatan !== -1 ? row[config.colJabatan] : '',
-      jobGrade: config.colJobGrade !== -1 ? row[config.colJobGrade] : '',
-      section: config.colSection !== -1 ? row[config.colSection] : currentSection,
-      gol: config.colGol !== -1 ? row[config.colGol] : '',
-      shift: config.colShift !== -1 ? row[config.colShift] : '',
-      poh: config.colPoh !== -1 ? row[config.colPoh] : '',
-      pt: config.colPt !== -1 ? row[config.colPt] : config.type,
-      statusMess: config.colStatusMess !== -1 ? row[config.colStatusMess] : '',
-      rotation: config.colRotation !== -1 ? row[config.colRotation] : '',
-      tanggalAwalBergabung: config.colTanggalAwalBergabung !== -1 ? row[config.colTanggalAwalBergabung] : '',
-      tanggalBergabungTerbaru: config.colTanggalBergabungTerbaru !== -1 ? row[config.colTanggalBergabungTerbaru] : '',
-      statusKontrak: config.colStatusKontrak !== -1 ? row[config.colStatusKontrak] : '',
-      department: config.colSection !== -1 ? row[config.colSection] : currentSection, 
-      position: config.colJabatan !== -1 ? row[config.colJabatan] : '',
+      name: rawName.trim(),
+      jabatan: config.colJabatan !== -1 ? (row[config.colJabatan] || '').trim() : '',
+      jobGrade: config.colJobGrade !== -1 ? (row[config.colJobGrade] || '').trim() : '',
+      section: config.colSection !== -1 ? (row[config.colSection] || '').trim() || currentSection : currentSection,
+      gol: config.colGol !== -1 ? (row[config.colGol] || '').trim() : '',
+      shift: config.colShift !== -1 ? (row[config.colShift] || '').trim() : '',
+      poh: config.colPoh !== -1 ? (row[config.colPoh] || '').trim() : '',
+      pt: config.colPt !== -1 ? (row[config.colPt] || '').trim() || 'TBP' : 'TBP',
+      statusMess: config.colStatusMess !== -1 ? (row[config.colStatusMess] || '').trim() : '',
+      rotation: config.colRotation !== -1 ? (row[config.colRotation] || '').trim() : '',
+      tanggalAwalBergabung: config.colTanggalAwalBergabung !== -1 ? (row[config.colTanggalAwalBergabung] || '').trim() : '',
+      tanggalBergabungTerbaru: config.colTanggalBergabungTerbaru !== -1 ? (row[config.colTanggalBergabungTerbaru] || '').trim() : '',
+      statusKontrak: config.colStatusKontrak !== -1 ? (row[config.colStatusKontrak] || '').trim() : '',
+      department: config.colSection !== -1 ? (row[config.colSection] || '').trim() || currentSection : currentSection, 
+      position: config.colJabatan !== -1 ? (row[config.colJabatan] || '').trim() : '',
     };
     
     allEmpData.push(empData);
     
     for (let c = config.dateStartCol; c < row.length; c++) {
       const rawDateStr = dateHeaders[c]; 
-      if (!rawDateStr) continue;
+      if (!rawDateStr || !rawDateStr.trim()) continue;
       
       const dateStr = normalizeDateStr(rawDateStr);
-      const status = row[c];
+      const status = (row[c] || '').trim();
       
       if (status) {
         allRosterData.push({
@@ -209,8 +204,15 @@ async function fetchAndSync(config: RosterConfig) {
     }
   }
 
-  // Insert/Update employees
+  // Deduplicate employees by NIK
+  const uniqueEmpMap = new Map<string, any>();
   for (const emp of allEmpData) {
+    if (emp.nik) uniqueEmpMap.set(emp.nik, emp);
+  }
+  const uniqueEmps = Array.from(uniqueEmpMap.values());
+
+  // Upsert employees
+  for (const emp of uniqueEmps) {
     await db.insert(employees)
       .values(emp)
       .onConflictDoUpdate({
@@ -219,23 +221,33 @@ async function fetchAndSync(config: RosterConfig) {
       });
   }
 
-  // Delete existing rosters for these NIKs
-  for (const emp of allEmpData) {
-    await db.delete(roster).where(eq(roster.nik, emp.nik));
+  // Fast Bulk Delete existing rosters for these NIKs
+  const allNiks = Array.from(uniqueEmpMap.keys());
+  if (allNiks.length > 0) {
+    const deleteChunkSize = 200;
+    for (let k = 0; k < allNiks.length; k += deleteChunkSize) {
+      const chunkNiks = allNiks.slice(k, k + deleteChunkSize);
+      await db.delete(roster).where(inArray(roster.nik, chunkNiks));
+    }
   }
 
-  // Batch insert new rosters
-  const chunkSize = 1000;
+  // Fast Batch insert new rosters in chunks
+  const chunkSize = 2000;
   for (let j = 0; j < allRosterData.length; j += chunkSize) {
     await db.insert(roster).values(allRosterData.slice(j, j + chunkSize));
   }
+
+  console.log(`Synced ${uniqueEmps.length} employees and ${allRosterData.length} roster entries for ${config.type}.`);
+  return { empCount: uniqueEmps.length, rosterCount: allRosterData.length };
 }
 
 export function initRosterCron() {
-  cron.schedule('0 0 * * *', () => {
+  // Update otomatis setiap jam 5 sore WIT (17:00 WIT)
+  cron.schedule('0 17 * * *', () => {
+    console.log("⏰ Menjalankan sinkronisasi Roster terjadwal jam 17:00 WIT...");
     syncRosterData();
   }, {
     timezone: "Asia/Jayapura"
   });
-  console.log("Cron job untuk sinkronisasi Roster dijadwalkan pada jam 12 malam WIT.");
+  console.log("Cron job untuk sinkronisasi Roster dijadwalkan pada jam 5 sore WIT (17:00 WIT / 08:00 UTC).");
 }

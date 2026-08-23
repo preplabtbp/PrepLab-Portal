@@ -12,6 +12,7 @@ import ThemeModal from './components/ThemeModal';
 import { Palette } from 'lucide-react';
 import { initAuth, googleSignIn } from './google-auth';
 import { WhatsAppModal } from './components/whatsapp-modal';
+import { P5MNotificationModal } from './components/p5m-notification-modal';
 
 
 
@@ -57,6 +58,7 @@ const SapDashboard = lazy(() => import('./components/sap-dashboard').then(m => (
 const AgendaDashboard = lazy(() => import('./components/agenda-dashboard').then(m => ({ default: m.AgendaDashboard })));
 const AdmDashboard = lazy(() => import('./components/adm-dashboard').then(m => ({ default: m.AdmDashboard })));
 const PelanggaranDashboard = lazy(() => import('./components/pelanggaran-dashboard').then(m => ({ default: m.PelanggaranDashboard })));
+const P5MScreen = lazy(() => import('./components/p5m-screen').then(m => ({ default: m.P5MScreen })));
 
 const BulletinBoard = lazy(() => import('./components/bulletin-board').then(m => ({ default: m.BulletinBoard })));
 const UserManualScreen = lazy(() => import('./components/user-manual-screen').then(m => ({ default: m.UserManualScreen })));
@@ -764,6 +766,7 @@ export default function App() {
   <Route path="/bulletin/:pt" element={<BulletinBoard inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
   <Route path="/bulletin" element={<Navigate to={`/bulletin/${userProfile?.pt || 'TBP'}`} replace />} />
   <Route path="/agenda" element={<AgendaDashboard key="agenda" inspectorNik={inspectorNik!} inspectorName={inspectorName!} userDept={userDept || undefined} />} />
+  <Route path="/p5m" element={<P5MScreen onBack={() => handleNav('home')} userProfile={userProfile} />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
   </AnimatePresence>
@@ -884,6 +887,12 @@ export default function App() {
         messageText={globalWaMessage}
         title="Laporan Inspeksi Berhasil"
         description="Kirim laporan ke supervisor via WhatsApp."
+      />
+
+      {/* Global P5M Assignment Notification Modal */}
+      <P5MNotificationModal
+        inspectorNik={inspectorNik}
+        inspectorName={inspectorName}
       />
 
     </div>

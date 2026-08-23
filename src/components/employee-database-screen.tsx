@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, Users, X, Database } from 'lucide-react';
+import { ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, Users, X, Database, RefreshCw } from 'lucide-react';
 import { Card, Input, Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -9,26 +9,48 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const fetchEmployees = async () => {
+    try {
+      const res = await fetch(`/api/employees/hierarchy/${inspectorNik}`);
+      if (!res.ok) throw new Error("Gagal mengambil data karyawan");
+      const data = await res.json();
+      if (data.status === 'success') {
+        setEmployees(data.data || []);
+      } else {
+        throw new Error(data.message || "Gagal mengambil data karyawan");
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchEmployees = async () => {
-      try {
-        const res = await fetch(`/api/employees/hierarchy/${inspectorNik}`);
-        if (!res.ok) throw new Error("Gagal mengambil data karyawan");
-        const data = await res.json();
-        if (data.status === 'success') {
-          setEmployees(data.data || []);
-        } else {
-          throw new Error(data.message || "Gagal mengambil data karyawan");
-        }
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchEmployees();
   }, [inspectorNik]);
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    setSyncFeedback(null);
+    try {
+      const res = await fetch('/api/roster/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setSyncFeedback({ type: 'success', message: data.message || 'Sinkronisasi database berhasil!' });
+        await fetchEmployees();
+      } else {
+        setSyncFeedback({ type: 'error', message: data.message || 'Gagal sinkronisasi data dari Google Sheets' });
+      }
+    } catch (e: any) {
+      setSyncFeedback({ type: 'error', message: 'Koneksi gagal: ' + e.message });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const filteredSearch = useMemo(() => {
     if (!searchTerm) return [];
@@ -151,9 +173,46 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
           )}
         </div>
 
-        {/* Small Search Bar (Animated into header) */}
-        {selectedEmployee && renderSearchBar(true)}
+        <div className="flex items-center gap-2">
+          {!selectedEmployee && (
+            <Button
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              size="sm"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 rounded-xl text-xs font-semibold px-3 py-1.5 shadow-sm transition-all"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Menyinkronkan...' : 'Sinkron Google Sheets'}
+            </Button>
+          )}
+
+          {/* Small Search Bar (Animated into header) */}
+          {selectedEmployee && renderSearchBar(true)}
+        </div>
       </div>
+
+      {syncFeedback && (
+        <div className={`p-3 mx-4 mt-3 rounded-xl text-xs flex items-center justify-between gap-2 shadow-sm ${
+          syncFeedback.type === 'success'
+            ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+            : 'bg-rose-50 border border-rose-200 text-rose-800'
+        }`}>
+          <div className="flex items-center gap-2">
+            {syncFeedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+            )}
+            <span className="font-medium">{syncFeedback.message}</span>
+          </div>
+          <button 
+            onClick={() => setSyncFeedback(null)} 
+            className="text-slate-400 hover:text-slate-600 text-xs px-2 py-0.5"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto">
         {!selectedEmployee ? (

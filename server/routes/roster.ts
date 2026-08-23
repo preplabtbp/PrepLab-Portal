@@ -135,3 +135,19 @@ router.post("/api/roster/izin", async (req, res) => {
       res.status(500).json({ error: "Failed to add izin" });
     }
   });
+
+router.post(["/api/roster/sync", "/api/admin/sync-roster"], async (req, res) => {
+  try {
+    const { syncRosterData } = await import("../../src/syncRoster.js");
+    const result = await syncRosterData();
+    if (result.success) {
+      res.json({ success: true, ...result });
+    } else {
+      res.status(500).json({ success: false, message: result.message });
+    }
+  } catch (error: any) {
+    console.error("Error in roster manual sync:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+

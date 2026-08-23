@@ -93,105 +93,231 @@ router.post("/api/settings", async (req, res) => {
     }
   });
 
+let galleryCache: { data: any[], timestamp: number } = { data: [], timestamp: 0 };
+
 router.get("/api/gallery", async (req, res) => {
+    console.log("[Gallery API] GET /api/gallery hit, refresh:", req.query.refresh);
     try {
+      const now = Date.now();
+      if (galleryCache.data.length > 0 && (now - galleryCache.timestamp) < 180000 && !req.query.refresh) {
+        const allGallery = galleryCache.data;
+        const weeksSet = new Set<string>();
+        allGallery.forEach(p => { if (p.week) weeksSet.add(p.week); });
+        const availableWeeks = Array.from(weeksSet).sort((a, b) => b.localeCompare(a));
+        const defaultWeek = availableWeeks[0] || 'Minggu ke-34 (2026)';
+        const reqWeek = (req.query.week as string) || defaultWeek;
+        const filteredPhotos = reqWeek === 'ALL' ? allGallery : allGallery.filter(p => p.week === reqWeek);
+        return res.json({
+          currentWeek: reqWeek,
+          availableWeeks,
+          totalPhotos: allGallery.length,
+          photos: filteredPhotos
+        });
+      }
+
+      const { parse } = await import('csv-parse/sync');
+      const { getISOWeek, getISOWeekYear } = await import('date-fns');
       const allGallery: any[] = [];
       const seenUrls = new Set<string>();
 
-      // 1. Fetch from local PostgreSQL inspections
-      const localInspections = await db.select().from(inspections).orderBy(desc(inspections.id)).limit(100);
-
-      function getISOWeekNumber(d: Date) {
-        const date = new Date(d.getTime());
-        date.setHours(0, 0, 0, 0);
-        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-        const week1 = new Date(date.getFullYear(), 0, 4);
-        const weekNum = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-        return { year: date.getFullYear(), week: ("0" + weekNum).slice(-2) };
+      function extractWeekFromText(text: string): string | null {
+        if (!text) return null;
+        const match1 = text.match(/W(\d+)[\-_Y\s](\d{2,4})/i);
+        if (match1) {
+          const w = match1[1].padStart(2, '0');
+          let y = match1[2];
+          if (y.length === 2) y = '20' + y;
+          return `Minggu ke-${w} (${y})`;
+        }
+        const match2 = text.match(/W(\d+)/i);
+        if (match2) {
+          const w = match2[1].padStart(2, '0');
+          return `Minggu ke-${w} (2026)`;
+        }
+        return null;
       }
 
-      for (const insp of localInspections) {
-        const dateObj = insp.createdAt ? new Date(insp.createdAt) : new Date();
-        const dateOpts: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Jayapura', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
-        const tglFormatted = dateObj.toLocaleString('id-ID', dateOpts) + ' WIT';
-        const isoWeek = getISOWeekNumber(dateObj);
-        const weekLabel = `W${isoWeek.week}-${isoWeek.year}`;
-
-        let parsedPhoto: any = null;
-        if (insp.photoUrl) {
-          try {
-            parsedPhoto = JSON.parse(insp.photoUrl);
-          } catch(e) {
-            if (insp.photoUrl.startsWith('http') || insp.photoUrl.startsWith('data:')) {
-              parsedPhoto = { fotoProses: insp.photoUrl };
+      function parseCustomDate(dateStr: string): Date {
+        if (!dateStr || dateStr.trim() === '' || dateStr === '-') return new Date();
+        const clean = dateStr.trim().replace(/"/g, '');
+        const parts = clean.split(' ')[0].split(/[\/\-]/);
+        if (parts.length === 3) {
+          let p0 = parseInt(parts[0], 10);
+          let p1 = parseInt(parts[1], 10);
+          let year = parseInt(parts[2], 10);
+          
+          // Case YYYY-MM-DD
+          if (p0 > 1000) {
+            year = p0;
+            const month = p1 - 1;
+            const day = parseInt(parts[2], 10);
+            const d = new Date(year, month, day);
+            if (!isNaN(d.getTime())) return d;
+          }
+          
+          if (year < 100) year = 2000 + year;
+          
+          let month = 0;
+          let day = 1;
+          
+          if (p0 > 12) {
+            day = p0;
+            month = p1 - 1;
+          } else if (p1 > 12) {
+            month = p0 - 1;
+            day = p1;
+          } else {
+            // Both <= 12: In 2026, month cannot exceed August (Month index 7)
+            if (p1 - 1 > 7 && p0 - 1 <= 7) {
+              month = p0 - 1;
+              day = p1;
+            } else if (p0 - 1 > 7 && p1 - 1 <= 7) {
+              month = p1 - 1;
+              day = p0;
+            } else {
+              month = p0 - 1;
+              day = p1;
             }
           }
+          
+          const d = new Date(year, month, day);
+          if (!isNaN(d.getTime())) return d;
+        }
+        const direct = new Date(clean);
+        return isNaN(direct.getTime()) ? new Date() : direct;
+      }
+
+      function getISOWeekLabel(d: Date, fallbackText?: string): string {
+        const fromText = extractWeekFromText(fallbackText || '');
+        if (fromText) return fromText;
+        const weekNum = getISOWeek(d);
+        const weekYear = getISOWeekYear(d);
+        const weekStr = ("0" + weekNum).slice(-2);
+        return `Minggu ke-${weekStr} (${weekYear})`;
+      }
+
+      // 1. Fetch from PostgreSQL tickets (Temuan & Closing)
+      const allFindingTickets = await db.select().from(tickets).where(eq(tickets.source, 'inspeksi')).orderBy(desc(tickets.id));
+      for (const t of allFindingTickets) {
+        const dateObj = t.date ? new Date(t.date) : new Date();
+        const tglFormatted = dateObj.toLocaleDateString('id-ID');
+        let weekLabel = getISOWeekLabel(dateObj, t.ticketId);
+
+        if (t.photoUrl && t.photoUrl !== '-' && !seenUrls.has(t.photoUrl.trim())) {
+          seenUrls.add(t.photoUrl.trim());
+          allGallery.push({
+            url: t.photoUrl.trim(),
+            week: weekLabel,
+            sumber: 'Temuan K3',
+            area: `${t.location || 'Area'} - ${t.description || 'Temuan'}`,
+            inspektor: t.requestorName || '-',
+            tanggal: tglFormatted,
+            ticketId: t.ticketId,
+            timestamp: dateObj.getTime()
+          });
         }
 
-        if (parsedPhoto) {
-          // Process Photo
-          if (parsedPhoto.fotoProses && parsedPhoto.fotoProses !== '-' && !seenUrls.has(parsedPhoto.fotoProses)) {
-            seenUrls.add(parsedPhoto.fotoProses);
-            allGallery.push({
-              tanggal: tglFormatted,
-              week: weekLabel,
-              url: parsedPhoto.fotoProses,
-              inspektor: insp.inspectorName || '-',
-              area: `${insp.type} (${insp.location || 'Area'})`,
-              sumber: insp.type || 'Inspeksi'
-            });
-          }
+        if (t.closingPhoto && t.closingPhoto !== '-' && !seenUrls.has(t.closingPhoto.trim())) {
+          seenUrls.add(t.closingPhoto.trim());
+          allGallery.push({
+            url: t.closingPhoto.trim(),
+            week: weekLabel,
+            sumber: 'Bukti Perbaikan K3',
+            area: `[Selesai] ${t.location || 'Area'} - ${t.actionTaken || t.description || 'Telah Diperbaiki'}`,
+            inspektor: t.pic || t.requestorName || '-',
+            tanggal: t.completionDate ? new Date(t.completionDate).toLocaleDateString('id-ID') : tglFormatted,
+            ticketId: t.ticketId,
+            timestamp: t.completionDate ? new Date(t.completionDate).getTime() : dateObj.getTime()
+          });
+        }
+      }
 
-          // Temuan Photos
-          if (Array.isArray(parsedPhoto.fotoTemuanArray)) {
-            parsedPhoto.fotoTemuanArray.forEach((ft: any, i: number) => {
-              const urlStr = typeof ft === 'string' ? ft : (ft?.base64 || '');
-              if (urlStr && urlStr !== '-' && !seenUrls.has(urlStr)) {
-                seenUrls.add(urlStr);
+      function getSumberCategory(sheetName: string, area: string, defaultSumber: string): string {
+        if (sheetName === 'Log_Umum') {
+          const a = (area || '').toLowerCase();
+          if (a.includes('preparasi') || a.includes('prep')) return 'Inspeksi Prep';
+          if (a.includes('gudang')) return 'Inspeksi Gudang';
+          if (a.includes('maintenance') || a.includes('workshop') || a.includes('carpenter')) return 'Inspeksi Maintenance';
+          if (a.includes('r.') || a.includes('lab') || a.includes('xrf') || a.includes('fusion') || a.includes('press') || a.includes('chiller') || a.includes('office') || a.includes('ruang')) return 'Inspeksi Lab';
+          return 'Inspeksi Umum';
+        }
+        return defaultSumber;
+      }
+
+      // 2. Fetch from Google Sheets for all Form Logs
+      const spreadsheetId = '1vG6iSl8uPHhwtH2tGUlyb0l4IK3r3ZhavtkkdHhEmP0';
+      const sheetConfigs = [
+        { sheet: 'Log_Umum', sumber: 'Inspeksi Umum', photoKeys: ['URL_Foto_Bukti'], areaKey: 'Lokasi_Spesifik', inspKey: 'Nama_Inspektur', dateKey: 'Timestamp', descKey: 'Catatan_Temuan', idKey: 'ID_Inspeksi' },
+        { sheet: 'Log_APD', sumber: 'Kepatuhan APD', photoKeys: ['Foto Inspeksi'], areaKey: 'Bagian', inspKey: 'Nama Inspektor 1', dateKey: 'Tanggal', descKey: 'Kategori_Laporan', idKey: 'Kategori_Laporan' },
+        { sheet: 'Log_P3K', sumber: 'Kotak P3K', photoKeys: ['Foto Proses', 'Foto Temuan 1', 'Foto Temuan 2'], areaKey: 'Judul Form', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Item P3K', idKey: 'Judul File' },
+        { sheet: 'Log_Perkakas', sumber: 'Peralatan & Perkakas', photoKeys: ['Foto_Proses', 'Foto_Temuan_1', 'Foto_Temuan_2'], areaKey: 'Nama Perkakas', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Catatan', idKey: 'Judul Form' },
+        { sheet: 'Log_Tabung', sumber: 'Tabung Gas', photoKeys: ['Foto_Proses', 'Foto_Temuan_1', 'Foto_Temuan_2'], areaKey: 'Judul Form', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Keterangan', idKey: 'Judul Form' },
+        { sheet: 'Log_Sarana', sumber: 'Sarana Unit', photoKeys: ['Foto_Proses', 'Foto_Temuan_1', 'Foto_Temuan_2'], areaKey: 'Unit Sarana', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Catatan', idKey: 'Judul Form' },
+        { sheet: 'Log_Tangga', sumber: 'Tangga Portabel', photoKeys: ['Foto_Proses', 'Foto_Temuan_1', 'Foto_Temuan_2'], areaKey: 'No Registrasi', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Catatan', idKey: 'Nama File' }
+      ];
+
+      await Promise.all(sheetConfigs.map(async (cfg) => {
+        try {
+          const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${cfg.sheet}`;
+          const res = await fetch(url);
+          const text = await res.text();
+          const records = parse(text, { columns: true, skip_empty_lines: true });
+
+          records.forEach((r: any) => {
+            const idText = (cfg.idKey && r[cfg.idKey]) || r['ID_Inspeksi'] || r['Ticket_ID'] || r['Judul File'] || r['Nama File'] || '';
+            const dateStr = r[cfg.dateKey] || r['Tanggal'] || r['Timestamp'] || '';
+            const dObj = parseCustomDate(dateStr);
+            const weekLabel = getISOWeekLabel(dObj, idText);
+            const dateFormatted = dObj.toLocaleDateString('id-ID');
+            const inspector = r[cfg.inspKey] || r['Inspektor'] || r['Nama Inspektur'] || 'Inspector';
+            const rawArea = r[cfg.areaKey] || r['Area'] || r['Lokasi'] || cfg.sumber;
+            const categorySumber = getSumberCategory(cfg.sheet, rawArea, cfg.sumber);
+            const deskripsi = r[cfg.descKey] || r['Deskripsi_Temuan'] || r['Catatan'] || '-';
+
+            cfg.photoKeys.forEach(pk => {
+              const photoUrl = r[pk];
+              if (photoUrl && photoUrl.trim() !== '' && photoUrl !== '-' && !photoUrl.startsWith('GAS_') && !seenUrls.has(photoUrl.trim())) {
+                seenUrls.add(photoUrl.trim());
                 allGallery.push({
-                  tanggal: tglFormatted,
+                  url: photoUrl.trim(),
                   week: weekLabel,
-                  url: urlStr,
-                  inspektor: insp.inspectorName || '-',
-                  area: `Temuan #${i + 1} - ${insp.type} (${insp.location || 'Area'})`,
-                  sumber: 'Temuan'
+                  sumber: categorySumber,
+                  area: `${categorySumber}: ${rawArea}${deskripsi && deskripsi !== '-' ? ` (${deskripsi})` : ''}`,
+                  inspektor: inspector,
+                  tanggal: dateFormatted,
+                  timestamp: dObj.getTime()
                 });
               }
             });
-          }
-        }
-      }
-
-      // 2. Fetch from GAS if available
-      const settingsObj: any = {};
-      const allSettings = await db.select().from(appSettings);
-      allSettings.forEach((s: any) => { settingsObj[s.settingKey] = s.settingValue || ''; });
-      const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
-
-      if (gasUrl) {
-        try {
-          const payload = { action: "getGalleryPhotos" };
-          const gasRes = await fetch(gasUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain' },
-              body: JSON.stringify(payload)
           });
-          const text = await gasRes.text();
-          const json = JSON.parse(text);
-          if (json.success && Array.isArray(json.data)) {
-            json.data.forEach((g: any) => {
-              if (g.url && !seenUrls.has(g.url)) {
-                seenUrls.add(g.url);
-                allGallery.push(g);
-              }
-            });
-          }
-        } catch(e) {}
-      }
+        } catch(e) {
+          console.error(`Gallery error fetching ${cfg.sheet}:`, e);
+        }
+      }));
 
-      res.json(allGallery);
+      // Sort descending by timestamp
+      allGallery.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+      // Cache the full aggregated list
+      galleryCache = { data: allGallery, timestamp: Date.now() };
+
+      // Compute available weeks
+      const weeksSet = new Set<string>();
+      allGallery.forEach(p => { if (p.week) weeksSet.add(p.week); });
+      const availableWeeks = Array.from(weeksSet).sort((a, b) => b.localeCompare(a));
+      const defaultWeek = availableWeeks[0] || 'Minggu ke-34 (2026)';
+      const reqWeek = (req.query.week as string) || defaultWeek;
+
+      const filteredPhotos = reqWeek === 'ALL' ? allGallery : allGallery.filter(p => p.week === reqWeek);
+
+      return res.json({
+        currentWeek: reqWeek,
+        availableWeeks,
+        totalPhotos: allGallery.length,
+        photos: filteredPhotos
+      });
     } catch (error) {
-      console.error(error);
+      console.error("Gallery aggregation error:", error);
       res.status(500).json({ error: "Failed to fetch gallery" });
     }
   });
