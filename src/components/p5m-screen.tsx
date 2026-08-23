@@ -495,7 +495,59 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
     };
   }, [scheduleData, karyawanPool]);
 
-  // Update cell in schedule
+  // Update full person object in slot (nama, nik, karyawanId, kelas, pt)
+  const handleUpdateSlotPerson = (day: string, shift: string, location: string, index: number, person: any) => {
+    setScheduleData(prev => {
+      if (!prev) return prev;
+      const copy = JSON.parse(JSON.stringify(prev));
+      if (!copy[day] || !copy[day][shift]) return prev;
+
+      const targetArray = copy[day].tipe === 'gabungan' 
+        ? copy[day][shift].gabungan 
+        : copy[day][shift][location];
+
+      if (targetArray && targetArray[index]) {
+        targetArray[index].nama = person.nama || '';
+        targetArray[index].nik = person.nik || '';
+        targetArray[index].karyawanId = person.karyawanId || person.id || '';
+        targetArray[index].kelas = person.kelas || '';
+        targetArray[index].pt = person.pt || '';
+      }
+      return copy;
+    });
+  };
+
+  // Update full materi object in slot (materi, kategori, subKategori, fileUrl, materiId, isSenam, isLogbook)
+  const handleUpdateSlotMateri = (day: string, shift: string, location: string, index: number, materiItem: any) => {
+    setScheduleData(prev => {
+      if (!prev) return prev;
+      const copy = JSON.parse(JSON.stringify(prev));
+      if (!copy[day] || !copy[day][shift]) return prev;
+
+      const targetArray = copy[day].tipe === 'gabungan' 
+        ? copy[day][shift].gabungan 
+        : copy[day][shift][location];
+
+      if (targetArray && targetArray[index]) {
+        if (typeof materiItem === 'string') {
+          targetArray[index].materi = materiItem;
+          targetArray[index].isSenam = materiItem.toLowerCase().includes('senam');
+          targetArray[index].isLogbook = materiItem.toLowerCase().includes('logbook');
+        } else {
+          targetArray[index].materi = materiItem.judul || '';
+          targetArray[index].kategori = materiItem.kategori || 'Teknis';
+          targetArray[index].subKategori = materiItem.subKategori || 'General';
+          targetArray[index].fileUrl = materiItem.fileUrl || null;
+          targetArray[index].materiId = materiItem.id || null;
+          targetArray[index].isSenam = materiItem.kategori === 'Senam' || (materiItem.judul || '').toLowerCase().includes('senam');
+          targetArray[index].isLogbook = (materiItem.judul || '').toLowerCase().includes('logbook');
+        }
+      }
+      return copy;
+    });
+  };
+
+  // Update single field in slot
   const handleUpdateSlot = (day: string, shift: string, location: string, index: number, field: string, value: any) => {
     setScheduleData(prev => {
       if (!prev) return prev;
@@ -1252,9 +1304,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                               isDouble={scheduleStats.scheduledMap[slot.nama] >= 2}
                               materiList={materiList}
                               onPreviewImage={(url, title) => setPreviewImage({ url, title })}
-                              onUpdateName={(name) => handleUpdateSlot(day, 'pagi', 'gabungan', sIdx, 'nama', name)}
-                              onUpdateMateri={(materi) => handleUpdateSlot(day, 'pagi', 'gabungan', sIdx, 'materi', materi)}
-                              onUpdateKat={(kat) => handleUpdateSlot(day, 'pagi', 'gabungan', sIdx, 'kategori', kat)}
+                              onUpdatePerson={(person) => handleUpdateSlotPerson(day, 'pagi', 'gabungan', sIdx, person)}
+                              onSelectMateri={(materiItem) => handleUpdateSlotMateri(day, 'pagi', 'gabungan', sIdx, materiItem)}
                             />
                           ))
                         ) : (
@@ -1277,9 +1328,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                   isDouble={scheduleStats.scheduledMap[slot.nama] >= 2}
                                   materiList={materiList}
                                   onPreviewImage={(url, title) => setPreviewImage({ url, title })}
-                                  onUpdateName={(name) => handleUpdateSlot(day, 'pagi', 'preparasi', sIdx, 'nama', name)}
-                                  onUpdateMateri={(materi) => handleUpdateSlot(day, 'pagi', 'preparasi', sIdx, 'materi', materi)}
-                                  onUpdateKat={(kat) => handleUpdateSlot(day, 'pagi', 'preparasi', sIdx, 'kategori', kat)}
+                                  onUpdatePerson={(person) => handleUpdateSlotPerson(day, 'pagi', 'preparasi', sIdx, person)}
+                                  onSelectMateri={(materiItem) => handleUpdateSlotMateri(day, 'pagi', 'preparasi', sIdx, materiItem)}
                                 />
                               ))}
                             </div>
@@ -1302,9 +1352,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                   isDouble={scheduleStats.scheduledMap[slot.nama] >= 2}
                                   materiList={materiList}
                                   onPreviewImage={(url, title) => setPreviewImage({ url, title })}
-                                  onUpdateName={(name) => handleUpdateSlot(day, 'pagi', 'laboratorium', sIdx, 'nama', name)}
-                                  onUpdateMateri={(materi) => handleUpdateSlot(day, 'pagi', 'laboratorium', sIdx, 'materi', materi)}
-                                  onUpdateKat={(kat) => handleUpdateSlot(day, 'pagi', 'laboratorium', sIdx, 'kategori', kat)}
+                                  onUpdatePerson={(person) => handleUpdateSlotPerson(day, 'pagi', 'laboratorium', sIdx, person)}
+                                  onSelectMateri={(materiItem) => handleUpdateSlotMateri(day, 'pagi', 'laboratorium', sIdx, materiItem)}
                                 />
                               ))}
                             </div>
@@ -1344,9 +1393,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                               isDouble={scheduleStats.scheduledMap[slot.nama] >= 2}
                               materiList={materiList}
                               onPreviewImage={(url, title) => setPreviewImage({ url, title })}
-                              onUpdateName={(name) => handleUpdateSlot(day, 'malam', 'gabungan', sIdx, 'nama', name)}
-                              onUpdateMateri={(materi) => handleUpdateSlot(day, 'malam', 'gabungan', sIdx, 'materi', materi)}
-                              onUpdateKat={(kat) => handleUpdateSlot(day, 'malam', 'gabungan', sIdx, 'kategori', kat)}
+                              onUpdatePerson={(person) => handleUpdateSlotPerson(day, 'malam', 'gabungan', sIdx, person)}
+                              onSelectMateri={(materiItem) => handleUpdateSlotMateri(day, 'malam', 'gabungan', sIdx, materiItem)}
                             />
                           ))
                         ) : (
@@ -1369,9 +1417,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                   isDouble={scheduleStats.scheduledMap[slot.nama] >= 2}
                                   materiList={materiList}
                                   onPreviewImage={(url, title) => setPreviewImage({ url, title })}
-                                  onUpdateName={(name) => handleUpdateSlot(day, 'malam', 'preparasi', sIdx, 'nama', name)}
-                                  onUpdateMateri={(materi) => handleUpdateSlot(day, 'malam', 'preparasi', sIdx, 'materi', materi)}
-                                  onUpdateKat={(kat) => handleUpdateSlot(day, 'malam', 'preparasi', sIdx, 'kategori', kat)}
+                                  onUpdatePerson={(person) => handleUpdateSlotPerson(day, 'malam', 'preparasi', sIdx, person)}
+                                  onSelectMateri={(materiItem) => handleUpdateSlotMateri(day, 'malam', 'preparasi', sIdx, materiItem)}
                                 />
                               ))}
                             </div>
@@ -1394,9 +1441,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                   isDouble={scheduleStats.scheduledMap[slot.nama] >= 2}
                                   materiList={materiList}
                                   onPreviewImage={(url, title) => setPreviewImage({ url, title })}
-                                  onUpdateName={(name) => handleUpdateSlot(day, 'malam', 'laboratorium', sIdx, 'nama', name)}
-                                  onUpdateMateri={(materi) => handleUpdateSlot(day, 'malam', 'laboratorium', sIdx, 'materi', materi)}
-                                  onUpdateKat={(kat) => handleUpdateSlot(day, 'malam', 'laboratorium', sIdx, 'kategori', kat)}
+                                  onUpdatePerson={(person) => handleUpdateSlotPerson(day, 'malam', 'laboratorium', sIdx, person)}
+                                  onSelectMateri={(materiItem) => handleUpdateSlotMateri(day, 'malam', 'laboratorium', sIdx, materiItem)}
                                 />
                               ))}
                             </div>
@@ -1913,9 +1959,8 @@ interface PresenterCardProps {
   isDouble: boolean;
   materiList: any[];
   onPreviewImage: (url: string, title: string) => void;
-  onUpdateName: (name: string) => void;
-  onUpdateMateri: (materi: string) => void;
-  onUpdateKat: (kat: string) => void;
+  onUpdatePerson: (person: any) => void;
+  onSelectMateri: (materiItem: any) => void;
 }
 
 const PresenterCard: React.FC<PresenterCardProps> = ({
@@ -1928,11 +1973,15 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
   isDouble,
   materiList,
   onPreviewImage,
-  onUpdateName,
-  onUpdateMateri,
-  onUpdateKat
+  onUpdatePerson,
+  onSelectMateri
 }) => {
   const [selectNameOpen, setSelectNameOpen] = useState(false);
+  const [nameSearch, setNameSearch] = useState('');
+  const [selectMateriOpen, setSelectMateriOpen] = useState(false);
+  const [mSearch, setMSearch] = useState('');
+  const [mKatFilter, setMKatFilter] = useState('All');
+  const [isCustomText, setIsCustomText] = useState(false);
 
   const isSpecial = slot.isSenam || slot.isLogbook || slot.materi?.toLowerCase().includes('senam') || slot.materi?.toLowerCase().includes('logbook');
 
@@ -1947,12 +1996,25 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       if (shift === 'pagi' && (['D', 'LS', 'S', 'NONSHIFT'].includes(jdwl) || jdwl.startsWith('D'))) shiftMatch = true;
       if (shift === 'malam' && (jdwl === 'N' || jdwl.startsWith('N'))) shiftMatch = true;
 
-      if (shiftMatch) el.push(k);
-      else ot.push(k);
+      const matchSearch = !nameSearch || k.nama?.toLowerCase().includes(nameSearch.toLowerCase()) || (k.nik || '').toLowerCase().includes(nameSearch.toLowerCase());
+
+      if (matchSearch) {
+        if (shiftMatch) el.push(k);
+        else ot.push(k);
+      }
     });
 
     return { eligibleCandidates: el, otherCandidates: ot };
-  }, [karyawanPool, day, shift]);
+  }, [karyawanPool, day, shift, nameSearch]);
+
+  // Filtered materi list
+  const filteredMateriList = useMemo(() => {
+    return materiList.filter(m => {
+      const matchSearch = !mSearch || m.judul?.toLowerCase().includes(mSearch.toLowerCase());
+      const matchKat = mKatFilter === 'All' || m.kategori === mKatFilter || (mKatFilter === 'Senam' && m.kategori === 'Senam') || m.subKategori === mKatFilter;
+      return matchSearch && matchKat;
+    });
+  }, [materiList, mSearch, mKatFilter]);
 
   const isEmptySDM = !slot.nama || slot.nama.includes('KOSONG');
 
@@ -1961,7 +2023,6 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
   if (isEmptySDM) {
     cardStyle += ' bg-rose-50 border border-rose-300 text-rose-800';
   } else if (isDouble) {
-    // Thicker 2px outline for 2x briefing matching section theme
     if (zone === 'prep') {
       cardStyle += ' border-2 border-orange-500 shadow-md';
     } else if (zone === 'lab') {
@@ -1972,7 +2033,6 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       cardStyle += ' border-2 border-slate-700 shadow-md';
     }
   } else {
-    // Standard 1px outline for normal 1x briefing
     if (zone === 'prep') {
       cardStyle += ' border border-orange-200 hover:border-orange-400';
     } else if (zone === 'lab') {
@@ -1992,49 +2052,70 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
           <div>
             <button
               type="button"
-              onClick={() => setSelectNameOpen(!selectNameOpen)}
-              className="w-full text-left font-bold text-xs flex items-center justify-between bg-white border border-slate-300 rounded px-1.5 py-0.5 hover:border-amber-500"
+              onClick={() => {
+                setSelectNameOpen(!selectNameOpen);
+                setSelectMateriOpen(false);
+              }}
+              className="w-full text-left font-bold text-xs flex items-center justify-between bg-white border border-slate-300 rounded px-1.5 py-0.5 hover:border-amber-500 shadow-xs"
             >
               <span className="truncate">{slot.nama || '— Pilih SDM —'}</span>
               <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0 ml-1" />
             </button>
 
             {selectNameOpen && (
-              <div className="absolute z-50 left-0 top-full mt-1 w-56 bg-slate-900 border border-slate-700 text-white rounded-xl shadow-2xl p-1.5 space-y-1 max-h-56 overflow-y-auto">
-                <div className="text-[10px] font-bold font-mono text-emerald-400 px-2 py-0.5 border-b border-slate-800">
-                  Tersedia di Shift Ini ({eligibleCandidates.length})
+              <div className="absolute z-50 left-0 top-full mt-1 w-64 bg-slate-900 border border-slate-700 text-white rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+                <input
+                  type="text"
+                  placeholder="Cari personil / NIK..."
+                  value={nameSearch}
+                  onChange={e => setNameSearch(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white outline-none focus:border-amber-500 mb-1"
+                  autoFocus
+                />
+
+                <div className="text-[10px] font-bold font-mono text-emerald-400 px-1 py-0.5 border-b border-slate-800 flex items-center justify-between">
+                  <span>Shift Sesuai ({eligibleCandidates.length})</span>
                 </div>
                 {eligibleCandidates.map(c => (
                   <button
                     key={c.nik || c.nama}
                     type="button"
                     onClick={() => {
-                      onUpdateName(c.nama);
+                      onUpdatePerson(c);
                       setSelectNameOpen(false);
+                      setNameSearch('');
                     }}
-                    className="w-full text-left px-2 py-1 rounded text-[11px] hover:bg-slate-800 flex items-center justify-between"
+                    className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] hover:bg-slate-800 flex items-center justify-between transition-colors ${
+                      slot.nik === c.nik ? 'bg-amber-500/20 text-amber-300 font-bold' : 'text-slate-200'
+                    }`}
                   >
-                    <span className="font-semibold">{c.nama}</span>
-                    <span className="text-[9px] text-slate-400 font-mono">{c.kelas} ({c.pt})</span>
+                    <span className="font-semibold truncate pr-2">{c.nama}</span>
+                    <span className="text-[9px] text-slate-400 font-mono flex-shrink-0">{c.kelas || ''} ({c.pt})</span>
                   </button>
                 ))}
 
-                <div className="text-[10px] font-bold font-mono text-slate-500 px-2 pt-1 border-t border-slate-800">
-                  Personil Lainnya
-                </div>
-                {otherCandidates.slice(0, 15).map(c => (
-                  <button
-                    key={c.nik || c.nama}
-                    type="button"
-                    onClick={() => {
-                      onUpdateName(c.nama);
-                      setSelectNameOpen(false);
-                    }}
-                    className="w-full text-left px-2 py-1 rounded text-[10px] text-slate-400 hover:bg-slate-800"
-                  >
-                    {c.nama} ({c.jadwal?.[day] || 'Off'})
-                  </button>
-                ))}
+                {otherCandidates.length > 0 && (
+                  <>
+                    <div className="text-[10px] font-bold font-mono text-slate-500 px-1 pt-1.5 border-t border-slate-800">
+                      Personil Shift Lain / Off ({otherCandidates.length})
+                    </div>
+                    {otherCandidates.slice(0, 15).map(c => (
+                      <button
+                        key={c.nik || c.nama}
+                        type="button"
+                        onClick={() => {
+                          onUpdatePerson(c);
+                          setSelectNameOpen(false);
+                          setNameSearch('');
+                        }}
+                        className="w-full text-left px-2 py-1 rounded text-[10px] text-slate-400 hover:bg-slate-800 flex items-center justify-between"
+                      >
+                        <span className="truncate pr-2">{c.nama}</span>
+                        <span className="text-[9px] font-mono text-slate-500 flex-shrink-0">({c.jadwal?.[day] || 'Off'})</span>
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -2052,16 +2133,157 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
         )}
       </div>
 
-      {/* Topic Title */}
+      {/* Topic Title (Interactive Materi Picker or Direct Text) */}
       <div className="relative mt-0.5">
         {isEditMode ? (
           <div>
-            <input
-              type="text"
-              value={slot.materi || ''}
-              onChange={e => onUpdateMateri(e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] text-slate-800 outline-none focus:border-amber-500 font-medium"
-            />
+            {isCustomText ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={slot.materi || ''}
+                  onChange={e => onSelectMateri(e.target.value)}
+                  placeholder="Ketik judul materi..."
+                  className="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] text-slate-800 outline-none focus:border-amber-500 font-medium"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsCustomText(false)}
+                  className="px-1 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[9px] font-mono border"
+                  title="Pilih dari database materi"
+                >
+                  List
+                </button>
+              </div>
+            ) : (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectMateriOpen(!selectMateriOpen);
+                    setSelectNameOpen(false);
+                  }}
+                  className="w-full text-left bg-white border border-slate-300 hover:border-amber-500 rounded px-1.5 py-0.5 text-[11px] text-slate-800 font-medium flex items-center justify-between gap-1 shadow-xs"
+                >
+                  <span className="truncate">{slot.materi || '— Pilih Topik Materi —'}</span>
+                  <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                </button>
+
+                {selectMateriOpen && (
+                  <div className="absolute z-50 left-0 top-full mt-1 w-72 bg-slate-900 border border-slate-700 text-white rounded-xl shadow-2xl p-2 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+                    <input
+                      type="text"
+                      placeholder="Cari materi briefing..."
+                      value={mSearch}
+                      onChange={e => setMSearch(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white outline-none focus:border-amber-500"
+                      autoFocus
+                    />
+
+                    {/* Filter Category Tabs */}
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[9px] font-mono scrollbar-none">
+                      {['All', 'Preparation', 'Laboratory', 'General', 'Non-Teknis'].map(kat => (
+                        <button
+                          key={kat}
+                          type="button"
+                          onClick={() => setMKatFilter(kat)}
+                          className={`px-1.5 py-0.5 rounded-md flex-shrink-0 transition-colors ${
+                            mKatFilter === kat
+                              ? 'bg-amber-500 text-slate-950 font-bold'
+                              : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {kat === 'All' ? 'Semua' : kat}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Standard Routine Actions */}
+                    <div className="grid grid-cols-2 gap-1 border-b border-slate-800 pb-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectMateri({ judul: 'Senam Bersama', kategori: 'Senam', subKategori: 'General' });
+                          setSelectMateriOpen(false);
+                        }}
+                        className="px-2 py-1 bg-purple-950/80 hover:bg-purple-900 border border-purple-700/60 text-purple-300 rounded-lg text-[10px] font-bold text-center"
+                      >
+                        🤸 Senam Bersama
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectMateri({ judul: 'Logbook & Evaluasi', kategori: 'Teknis', subKategori: 'General' });
+                          setSelectMateriOpen(false);
+                        }}
+                        className="px-2 py-1 bg-blue-950/80 hover:bg-blue-900 border border-blue-700/60 text-blue-300 rounded-lg text-[10px] font-bold text-center"
+                      >
+                        📋 Logbook
+                      </button>
+                    </div>
+
+                    {/* List Items from Database */}
+                    <div className="space-y-1">
+                      {filteredMateriList.length === 0 ? (
+                        <div className="text-[10px] text-slate-500 py-3 text-center">
+                          Tidak ada materi yang sesuai
+                        </div>
+                      ) : (
+                        filteredMateriList.map(item => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              onSelectMateri(item);
+                              setSelectMateriOpen(false);
+                              setMSearch('');
+                            }}
+                            className={`w-full text-left p-1.5 rounded-lg hover:bg-slate-800 flex flex-col gap-0.5 transition-colors border ${
+                              slot.materi === item.judul
+                                ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
+                                : 'border-transparent text-slate-200'
+                            }`}
+                          >
+                            <span className="font-semibold text-[11px] leading-snug line-clamp-2">
+                              {item.judul}
+                            </span>
+                            <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-400">
+                              <span className={`px-1 rounded ${item.kategori === 'Teknis' ? 'bg-emerald-950 text-emerald-400' : 'bg-indigo-950 text-indigo-400'}`}>
+                                {item.kategori}
+                              </span>
+                              {item.subKategori && item.subKategori !== 'General' && (
+                                <span className="text-slate-400">
+                                  • {item.subKategori}
+                                </span>
+                              )}
+                              {item.fileUrl && (
+                                <span className="text-amber-400 flex items-center gap-0.5 ml-auto">
+                                  <ImageIcon className="w-2.5 h-2.5" /> Flyer
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Switch to custom text */}
+                    <div className="border-t border-slate-800 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCustomText(true);
+                          setSelectMateriOpen(false);
+                        }}
+                        className="w-full text-center py-1 text-[10px] font-semibold text-slate-400 hover:text-amber-400 rounded-lg hover:bg-slate-800 transition-colors"
+                      >
+                        ✍️ Ketik Judul Bebas / Manual
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="mt-0.5">
@@ -2073,38 +2295,51 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       </div>
 
       {/* Badges / Tags */}
-      <div className="flex items-center gap-1 flex-wrap mt-0.5">
-        {slot.kategori && slot.kategori !== 'All' && (
-          <span className={`text-[8px] font-bold font-mono px-1.5 py-0.2 rounded uppercase ${
-            slot.kategori === 'Teknis' 
-              ? 'bg-slate-100 text-slate-700 border border-slate-300/80' 
-              : slot.kategori === 'Senam'
-              ? 'bg-purple-100 text-purple-800 border border-purple-300/60'
-              : 'bg-blue-100 text-blue-800 border border-blue-300/60'
-          }`}>
-            {slot.kategori}
-          </span>
-        )}
-        {slot.subKategori && slot.subKategori !== 'General' && (
-          <span className={`text-[8px] font-bold font-mono px-1.5 py-0.2 rounded ${
-            slot.subKategori === 'Preparation'
-              ? 'bg-orange-100 text-orange-800 border border-orange-300/60'
-              : slot.subKategori === 'Maintenance'
-              ? 'bg-amber-100 text-amber-800 border border-amber-300/60'
-              : 'bg-emerald-100 text-emerald-800 border border-emerald-300/60'
-          }`}>
-            {slot.subKategori}
-          </span>
-        )}
-        {slot.isFallback && (
-          <span className="text-[8px] font-bold font-mono px-1.5 py-0.2 bg-amber-100 text-amber-800 border border-amber-300 rounded">
-            Fallback
-          </span>
-        )}
-        {isSpecial && slot.kategori !== 'Senam' && (
-          <span className="text-[8px] font-bold font-mono px-1.5 py-0.2 bg-purple-100 text-purple-800 border border-purple-300/60 rounded uppercase">
-            {slot.isLogbook ? 'Logbook' : 'Senam'}
-          </span>
+      <div className="flex items-center justify-between gap-1 flex-wrap mt-0.5">
+        <div className="flex items-center gap-1 flex-wrap">
+          {slot.kategori && slot.kategori !== 'All' && (
+            <span className={`text-[8px] font-bold font-mono px-1.5 py-0.2 rounded uppercase ${
+              slot.kategori === 'Teknis' 
+                ? 'bg-slate-100 text-slate-700 border border-slate-300/80' 
+                : slot.kategori === 'Senam'
+                ? 'bg-purple-100 text-purple-800 border border-purple-300/60'
+                : 'bg-blue-100 text-blue-800 border border-blue-300/60'
+            }`}>
+              {slot.kategori}
+            </span>
+          )}
+          {slot.subKategori && slot.subKategori !== 'General' && (
+            <span className={`text-[8px] font-bold font-mono px-1.5 py-0.2 rounded ${
+              slot.subKategori === 'Preparation'
+                ? 'bg-orange-100 text-orange-800 border border-orange-300/60'
+                : slot.subKategori === 'Maintenance'
+                ? 'bg-amber-100 text-amber-800 border border-amber-300/60'
+                : 'bg-emerald-100 text-emerald-800 border border-emerald-300/60'
+            }`}>
+              {slot.subKategori}
+            </span>
+          )}
+          {slot.isFallback && (
+            <span className="text-[8px] font-bold font-mono px-1.5 py-0.2 bg-amber-100 text-amber-800 border border-amber-300 rounded">
+              Fallback
+            </span>
+          )}
+          {isSpecial && slot.kategori !== 'Senam' && (
+            <span className="text-[8px] font-bold font-mono px-1.5 py-0.2 bg-purple-100 text-purple-800 border border-purple-300/60 rounded uppercase">
+              {slot.isLogbook ? 'Logbook' : 'Senam'}
+            </span>
+          )}
+        </div>
+
+        {slot.fileUrl && (
+          <button
+            type="button"
+            onClick={() => onPreviewImage(slot.fileUrl, slot.materi)}
+            className="text-[9px] text-amber-700 hover:text-amber-900 font-bold flex items-center gap-0.5 ml-auto flex-shrink-0"
+            title="Lihat Flyer Materi"
+          >
+            <ImageIcon className="w-3 h-3" />
+          </button>
         )}
       </div>
     </div>

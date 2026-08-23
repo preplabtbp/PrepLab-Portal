@@ -1070,11 +1070,11 @@ p5mRouter.post("/schedules", async (req, res) => {
     // Update lastUsed timestamp for presented topics
     if (Array.isArray(materiItems)) {
       for (const item of materiItems) {
-        if (item.judul && !item.judul.toLowerCase().includes('senam')) {
+        if (item.judul && !item.judul.toLowerCase().includes('senam') && !item.judul.toLowerCase().includes('logbook')) {
           const usedDate = item.isoDate ? new Date(item.isoDate) : new Date();
           await db.update(p5mMateri)
             .set({ lastUsed: usedDate })
-            .where(eq(p5mMateri.judul, item.judul));
+            .where(sql`LOWER(TRIM(${p5mMateri.judul})) = LOWER(TRIM(${item.judul}))`);
         }
       }
     }
@@ -1306,10 +1306,13 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
         }
 
         for (const slot of slotList) {
-          const slotNik = (slot.nik || '').trim().toLowerCase();
-          const slotNama = (slot.nama || '').trim().toLowerCase();
+          let isMatch = false;
+          if (nik && slotNik) {
+            isMatch = slotNik === nik;
+          } else if (name && slotNama) {
+            isMatch = slotNama === name || slotNama.includes(name) || name.includes(slotNama);
+          }
 
-          const isMatch = (nik && slotNik === nik) || (name && (slotNama === name || slotNama.includes(name) || name.includes(slotNama)));
           if (isMatch && !slotNama.includes('kosong')) {
             const hasFlyer = !slot.isSenam && slot.materi && !slot.materi.toLowerCase().includes('senam');
 
