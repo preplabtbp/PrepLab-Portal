@@ -1604,14 +1604,22 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
-                          {item.fileUrl ? (
-                            <button
-                              onClick={() => setPreviewImage({ url: item.fileUrl, title: item.judul })}
-                              className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg text-[10px] font-bold flex items-center gap-1 mx-auto border border-amber-500/30"
-                            >
-                              <ImageIcon className="w-3 h-3" /> Lihat
-                            </button>
-                          ) : (
+                          {item.fileUrl ? (() => {
+                            const isPdf = item.fileUrl.toLowerCase().includes('.pdf') || (item.judul && item.judul.startsWith('IK '));
+                            return (
+                              <button
+                                onClick={() => setPreviewImage({ url: item.fileUrl, title: item.judul })}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 mx-auto border transition-colors ${
+                                  isPdf 
+                                    ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/30' 
+                                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30'
+                                }`}
+                              >
+                                {isPdf ? <FileText className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
+                                <span>{isPdf ? 'Dokumen' : 'Flyer'}</span>
+                              </button>
+                            );
+                          })() : (
                             <span className="text-slate-600 font-mono text-[10px]">—</span>
                           )}
                         </td>
@@ -1898,49 +1906,75 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         </div>
       )}
 
-      {/* ── MODAL: PREVIEW IMAGE FLYER ── */}
-      {previewImage && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-4 space-y-3 shadow-2xl animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <h3 className="font-bold text-sm text-white truncate pr-4">
-                {previewImage.title}
-              </h3>
-              <button 
-                onClick={() => setPreviewImage(null)} 
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* ── MODAL: PREVIEW FLYER / DOKUMEN IK ── */}
+      {previewImage && (() => {
+        const isPdf = previewImage.url?.toLowerCase().includes('.pdf') || 
+                      previewImage.title?.toLowerCase().includes('.pdf') || 
+                      previewImage.title?.startsWith('IK ');
+        const embedUrl = previewImage.url?.includes('drive.google.com') 
+          ? previewImage.url.replace('/uc?export=view&id=', '/file/d/').replace(/\/view.*$/, '/preview')
+          : previewImage.url;
 
-            <div className="bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center max-h-[70vh] border border-slate-800">
-              <img 
-                src={previewImage.url} 
-                alt={previewImage.title}
-                className="max-h-[70vh] w-auto object-contain rounded-lg"
-              />
-            </div>
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+            <div className={`bg-slate-900 border border-slate-700 rounded-2xl w-full p-4 space-y-3 shadow-2xl animate-in zoom-in-95 duration-150 ${isPdf ? 'max-w-4xl max-h-[90vh]' : 'max-w-2xl'}`}>
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className="flex items-center gap-2 min-w-0 pr-4">
+                  {isPdf ? (
+                    <FileText className="w-4 h-4 text-orange-400 shrink-0" />
+                  ) : (
+                    <ImageIcon className="w-4 h-4 text-amber-400 shrink-0" />
+                  )}
+                  <h3 className="font-bold text-sm text-white truncate">
+                    {previewImage.title}
+                  </h3>
+                </div>
+                <button 
+                  onClick={() => setPreviewImage(null)} 
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-              <a
-                href={previewImage.url}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold"
-              >
-                <ExternalLink className="w-3.5 h-3.5" /> Buka Gambar Asli
-              </a>
-              <Button
-                onClick={() => setPreviewImage(null)}
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-4 rounded-xl"
-              >
-                Tutup
-              </Button>
+              {isPdf ? (
+                <div className="bg-slate-950 rounded-xl overflow-hidden flex flex-col items-center justify-center h-[65vh] border border-slate-800">
+                  <iframe 
+                    src={embedUrl} 
+                    title={previewImage.title}
+                    className="w-full h-full rounded-lg"
+                  />
+                </div>
+              ) : (
+                <div className="bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center max-h-[70vh] border border-slate-800">
+                  <img 
+                    src={previewImage.url} 
+                    alt={previewImage.title}
+                    className="max-h-[70vh] w-auto object-contain rounded-lg"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                <a
+                  href={previewImage.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> {isPdf ? 'Buka Dokumen PDF' : 'Buka Gambar Asli'}
+                </a>
+                <Button
+                  onClick={() => setPreviewImage(null)}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-4 rounded-xl"
+                >
+                  Tutup
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );
@@ -2331,16 +2365,21 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
           )}
         </div>
 
-        {slot.fileUrl && (
-          <button
-            type="button"
-            onClick={() => onPreviewImage(slot.fileUrl, slot.materi)}
-            className="text-[9px] text-amber-700 hover:text-amber-900 font-bold flex items-center gap-0.5 ml-auto flex-shrink-0"
-            title="Lihat Flyer Materi"
-          >
-            <ImageIcon className="w-3 h-3" />
-          </button>
-        )}
+        {slot.fileUrl && (() => {
+          const isPdf = slot.fileUrl.toLowerCase().includes('.pdf') || (slot.materi && slot.materi.startsWith('IK '));
+          return (
+            <button
+              type="button"
+              onClick={() => onPreviewImage(slot.fileUrl, slot.materi)}
+              className={`text-[9px] font-bold flex items-center gap-0.5 ml-auto flex-shrink-0 ${
+                isPdf ? 'text-orange-700 hover:text-orange-900' : 'text-amber-700 hover:text-amber-900'
+              }`}
+              title={isPdf ? "Lihat Dokumen IK" : "Lihat Flyer Materi"}
+            >
+              {isPdf ? <FileText className="w-3 h-3 text-orange-600" /> : <ImageIcon className="w-3 h-3 text-amber-600" />}
+            </button>
+          );
+        })()}
       </div>
     </div>
   );
