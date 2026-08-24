@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Input } from './ui';
-import { LogOut, User, Lock, Mail, Settings2, Palette, ShieldAlert, Settings, Bell } from 'lucide-react';
+import { LogOut, User, Lock, Mail, Settings2, Palette, ShieldAlert, Settings, Bell, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAppSettings } from '../sheets-api';
 import { PageHeader } from './PageHeader';
@@ -231,14 +231,28 @@ export function SettingsScreen({ inspectorName, inspectorNik, onLogoutKaryawan, 
               <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted, #64748B)' }}>
                 Sesuaikan tema aplikasi berdasarkan waktu atau gaya kesukaan Anda.
               </p>
-              <Button 
-                onClick={onOpenThemeModal} 
-                className="w-full shadow-xs font-bold flex items-center justify-center gap-2" 
-                style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
-              >
-                 <Palette className="w-4 h-4" />
-                 Pengaturan Tema UI
-              </Button>
+              <div className="space-y-2">
+                <Button 
+                  onClick={onOpenThemeModal} 
+                  className="w-full shadow-xs font-bold flex items-center justify-center gap-2 cursor-pointer" 
+                  style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
+                >
+                   <Palette className="w-4 h-4" />
+                   Pengaturan Tema UI
+                </Button>
+                <button 
+                  onClick={() => window.dispatchEvent(new Event('preplab:show_daily_splash'))} 
+                  className="w-full py-2 px-3 text-xs font-bold rounded-xl border flex items-center justify-center gap-1.5 transition-all opacity-85 hover:opacity-100 cursor-pointer shadow-2xs" 
+                  style={{ 
+                    backgroundColor: 'var(--input-bg, #FFFFFF)', 
+                    borderColor: 'var(--border-main, #E2E8F0)', 
+                    color: 'var(--text-main, #1E293B)' 
+                  }}
+                >
+                   <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                   Putar Animasi Sapaan Harian (Splash)
+                </button>
+              </div>
             </Card>
 
             {inspectorNik === '02D250000' && (

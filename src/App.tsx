@@ -13,6 +13,7 @@ import { Palette } from 'lucide-react';
 import { initAuth, googleSignIn } from './google-auth';
 import { WhatsAppModal } from './components/whatsapp-modal';
 import { P5MNotificationModal } from './components/p5m-notification-modal';
+import { DailySplashScreen } from './components/DailySplashScreen';
 
 
 
@@ -769,6 +770,12 @@ export default function App() {
         )}
         <div className="flex flex-col pb-20 relative min-h-[100dvh]">
           {/* Modals & Portals */}
+          {/* Daily Motivational Splash Screen */}
+          <DailySplashScreen 
+            userName={inspectorName} 
+            userNik={inspectorNik} 
+          />
+
           <ThemeModal 
             show={showGlobalThemeModal} 
             onClose={() => setShowGlobalThemeModal(false)} 
