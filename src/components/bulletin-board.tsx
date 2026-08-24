@@ -276,22 +276,43 @@ export function BulletinBoard({
     return false;
   }, []);
 
-  // Find parent post dynamically if not in user history
+  // Find parent post dynamically only for true subpages
   const findParentPost = useCallback(
     (currentPost: any): any | null => {
       if (!currentPost) return null;
-      const currentTitle = getPostTitle(currentPost).toLowerCase();
+      if (isSectionHubPost(currentPost)) return null;
 
-      // Check if any post mentions current post title in its content
+      const currentTitle = getPostTitle(currentPost).toLowerCase();
+      const currentCategory = (currentPost.category || currentPost.section || "").toLowerCase().trim();
+
+      // 1. Match against known Section Hubs by category or title
+      const sectionHub = posts.find((p) => {
+        if (p.id === currentPost.id) return false;
+        if (!isSectionHubPost(p)) return false;
+        const pTitle = getPostTitle(p).toLowerCase().trim();
+        return (
+          currentCategory === pTitle ||
+          (pTitle.length > 3 && currentTitle.includes(pTitle))
+        );
+      });
+      if (sectionHub) return sectionHub;
+
+      // 2. Check if a parent post explicitly links to this markdown title (e.g. ## Title)
       for (const p of posts) {
         if (p.id === currentPost.id) continue;
-        if (p.content && p.content.toLowerCase().includes(currentTitle)) {
+        if (!isSectionHubPost(p) && !isFolderPost(p)) continue;
+        if (
+          p.content &&
+          (p.content.includes(`## ${getPostTitle(currentPost)}`) ||
+            p.content.includes(`### ${getPostTitle(currentPost)}`) ||
+            p.content.includes(`[${getPostTitle(currentPost)}]`))
+        ) {
           return p;
         }
       }
       return null;
     },
-    [posts]
+    [posts, isSectionHubPost, isFolderPost]
   );
 
   // Compute the breadcrumb trail (Dashboard -> Parent(s) -> Current)
@@ -307,17 +328,19 @@ export function BulletinBoard({
       return trail;
     }
 
-    // Otherwise reconstruct from parent relationships
+    // Direct navigation
+    if (isSectionHubPost(selectedPost)) {
+      return [selectedPost];
+    }
+
+    // Reconstruct parent if subpage
     const trail: any[] = [selectedPost];
-    let parent = findParentPost(selectedPost);
-    let guard = 0;
-    while (parent && guard < 5) {
+    const parent = findParentPost(selectedPost);
+    if (parent && parent.id !== selectedPost.id) {
       trail.unshift(parent);
-      parent = findParentPost(parent);
-      guard++;
     }
     return trail;
-  }, [selectedPost, navHistory, findParentPost]);
+  }, [selectedPost, navHistory, findParentPost, isSectionHubPost]);
 
   // Navigate to specific post and maintain history
   const navigateToPost = (post: any | null) => {
@@ -336,11 +359,13 @@ export function BulletinBoard({
         // Return to earlier history point
         return prev.slice(0, idx + 1);
       }
-      // If navigating from dashboard
+      // If navigating directly from dashboard
       if (!selectedPost) {
-        // Check if this post has a parent in posts
+        if (isSectionHubPost(post)) {
+          return [post];
+        }
         const parent = findParentPost(post);
-        if (parent) {
+        if (parent && parent.id !== post.id) {
           return [parent, post];
         }
         return [post];
@@ -359,15 +384,16 @@ export function BulletinBoard({
       return;
     }
 
-    if (breadcrumbTrail.length > 1) {
-      const previousPost = breadcrumbTrail[breadcrumbTrail.length - 2];
-      // Pop from history
-      setNavHistory((prev) => (prev.length > 1 ? prev.slice(0, -1) : []));
+    if (navHistory.length > 1) {
+      const newHistory = navHistory.slice(0, -1);
+      const previousPost = newHistory[newHistory.length - 1];
+      setNavHistory(newHistory);
       setSelectedPost(previousPost);
     } else {
-      // Go back to dashboard
+      // Go directly back to dashboard
       setNavHistory([]);
       setSelectedPost(null);
+      setIsEditing(false);
     }
   };
 
@@ -1111,7 +1137,7 @@ ${aiMeetingNotes
               />
             </div>
           ) : isSectionHubPost(selectedPost) ? (
-            <div className="space-y-6 max-w-5xl mx-auto">
+            <div className="space-y-6 w-full max-w-none animate-in fade-in duration-200">
               {/* View Mode Contextual Header Bar */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <button
@@ -1137,7 +1163,7 @@ ${aiMeetingNotes
               />
             </div>
           ) : parsedTableData ? (
-            <div className="space-y-6 max-w-6xl mx-auto animate-in fade-in duration-200">
+            <div className="space-y-6 w-full max-w-none animate-in fade-in duration-200">
               {/* View Mode Contextual Header Bar */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <button
@@ -1213,6 +1239,16 @@ ${aiMeetingNotes
                 currentAuthorNik={inspectorNik}
                 currentAuthorName={inspectorName}
                 pt={pt || "TBP"}
+                beforeText={parsedTableData.beforeText}
+                afterText={parsedTableData.afterText}
+                onPostContentUpdate={(newContent: string) => {
+                  setSelectedPost((prev: any) => (prev ? { ...prev, content: newContent } : null));
+                  setPosts((prev) =>
+                    prev.map((p) =>
+                      p.id === selectedPost.id ? { ...p, content: newContent } : p
+                    )
+                  );
+                }}
               />
 
               {/* Content After Table */}
@@ -1225,7 +1261,7 @@ ${aiMeetingNotes
               )}
             </div>
           ) : (
-            <div className="space-y-6 max-w-4xl mx-auto">
+            <div className="space-y-6 w-full max-w-none">
               {/* View Mode Contextual Header Bar */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <button

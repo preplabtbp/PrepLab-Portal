@@ -2,7 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Button } from './ui';
 import { ChevronLeft, BarChart2, Activity, ShieldAlert, CheckCircle2, AlertTriangle, TrendingUp, Filter, Map } from 'lucide-react';
 import { getTickets } from '../sheets-api';
-import { format, isThisISOWeek, isThisMonth, isThisYear, parseISO } from 'date-fns';
+import { format, isThisMonth, isThisYear, parseISO } from 'date-fns';
+import { 
+  getISOWeek, 
+  getISOWeekYear, 
+  isDateInISOWeek, 
+  isThisISOWeek, 
+  isLastISOWeek, 
+  getYearISOWeeksList 
+} from '../utils/iso-week';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -35,6 +43,8 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [filterPeriod, setFilterPeriod] = useState('this_week');
 
+  const isoWeeksList = useMemo(() => getYearISOWeeksList(new Date().getFullYear()), []);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -63,9 +73,18 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
         return true;
       }
       if (isNaN(d.getTime())) return true; 
-      if (filterPeriod === 'this_week') return isThisISOWeek(d);
+      if (filterPeriod === 'this_week' || filterPeriod === 'this_iso_week') return isThisISOWeek(d);
+      if (filterPeriod === 'last_week' || filterPeriod === 'last_iso_week') return isLastISOWeek(d);
+      if (filterPeriod.startsWith('iso_')) {
+        const parts = filterPeriod.split('_');
+        const targetYear = parseInt(parts[1], 10);
+        const targetWeek = parseInt(parts[2], 10);
+        if (!isNaN(targetYear) && !isNaN(targetWeek)) {
+          return isDateInISOWeek(d, targetYear, targetWeek);
+        }
+      }
       if (filterPeriod === 'this_month') return isThisMonth(d);
-      if (filterPeriod === 'ytd') return isThisYear(d);
+      if (filterPeriod === 'ytd' || filterPeriod === 'this_year') return isThisYear(d);
       return true;
     });
   }, [allTickets, filterPeriod]);
@@ -128,11 +147,22 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
           <select 
             value={filterPeriod}
             onChange={(e) => setFilterPeriod(e.target.value)}
-            className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-700 font-medium shadow-sm"
+            className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-700 font-medium shadow-sm cursor-pointer"
           >
-            <option value="this_week">Minggu Ini</option>
-            <option value="this_month">Bulan Ini</option>
-            <option value="ytd">Tahun Ini</option>
+            <optgroup label="⚡ Filter Cepat">
+              <option value="this_week">⚡ Minggu Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
+              <option value="last_week">⏮️ Minggu Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
+              <option value="this_month">🗓️ Bulan Ini</option>
+              <option value="ytd">📆 Tahun Ini</option>
+              <option value="all">📅 Semua Waktu</option>
+            </optgroup>
+            <optgroup label="📋 Pilih Minggu ISO">
+              {isoWeeksList.map(iw => (
+                <option key={iw.value} value={iw.value}>
+                  {iw.label}
+                </option>
+              ))}
+            </optgroup>
           </select>
         </div>
       </header>

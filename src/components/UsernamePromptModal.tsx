@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Sparkles, Key, CheckCircle2, AlertCircle, X, ArrowRight, Shield } from 'lucide-react';
 import { toast } from 'sonner';
+import { AnimatedSunCondition } from './DailyGreetingHero';
 
 interface UsernamePromptModalProps {
   isOpen: boolean;
@@ -182,8 +183,11 @@ export function UsernamePromptModal({
                 <span className="text-[10px] uppercase font-bold tracking-wider text-teal-400">Live Preview Sapaan Beranda</span>
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               </div>
-              <p className="text-sm font-semibold">
-                Selamat Pagi, <span className="text-teal-300 font-bold">{previewName}</span>! 👋
+              <p className="text-sm font-semibold flex items-center gap-1">
+                <span>Selamat Pagi,</span>
+                <span className="text-teal-300 font-bold">{previewName}</span>
+                <span>!</span>
+                <AnimatedSunCondition type="morning" />
               </p>
             </div>
 

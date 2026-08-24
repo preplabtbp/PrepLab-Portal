@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, ArrowRight, Shield, RefreshCw, Sun, Moon, Sunset, Quote, CheckCircle, Zap } from 'lucide-react';
 import { SKENA_QUOTES, SkenaQuote } from '../utils/skena-quotes';
+import { AnimatedSunCondition } from './DailyGreetingHero';
 
 interface DailySplashScreenProps {
   userName?: string;
@@ -30,6 +31,7 @@ export function DailySplashScreen({
     const hour = new Date().getHours();
     if (hour >= 4 && hour < 11) {
       return {
+        type: 'morning' as const,
         greeting: 'Selamat Pagi',
         sub: 'Awali shift dengan energi positif & semangat tinggi!',
         icon: Sun,
@@ -38,6 +40,7 @@ export function DailySplashScreen({
       };
     } else if (hour >= 11 && hour < 15) {
       return {
+        type: 'noon' as const,
         greeting: 'Selamat Siang',
         sub: 'Tetap jaga fokus, hidrasi, dan keselamatan kerja!',
         icon: Sun,
@@ -46,6 +49,7 @@ export function DailySplashScreen({
       };
     } else if (hour >= 15 && hour < 18) {
       return {
+        type: 'evening' as const,
         greeting: 'Selamat Sore',
         sub: 'Tuntaskan tugas harian dengan rapi & aman!',
         icon: Sunset,
@@ -54,6 +58,7 @@ export function DailySplashScreen({
       };
     } else {
       return {
+        type: 'night' as const,
         greeting: 'Selamat Malam',
         sub: 'Patuhi SOP, waspada selalu, dan utamakan keselamatan!',
         icon: Moon,
@@ -273,15 +278,16 @@ export function DailySplashScreen({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
-                className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight"
+                className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight flex items-center justify-center flex-wrap gap-1.5"
               >
-                Halo,{' '}
+                <span>Halo,{' '}</span>
                 <span 
                   className="bg-clip-text text-transparent bg-gradient-to-r from-teal-300 via-emerald-200 to-amber-300 drop-shadow-sm"
                 >
                   {displayName}
                 </span>
-                ! 👋
+                <span>!</span>
+                <AnimatedSunCondition type={greetingInfo.type} size="lg" />
               </motion.h1>
 
               {userSubtitle && (

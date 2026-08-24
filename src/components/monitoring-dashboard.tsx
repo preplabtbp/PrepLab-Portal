@@ -2,7 +2,13 @@ import { toast } from 'sonner';
 import React, { useState } from 'react';
 import { Card, Button, Input, Select } from './ui';
 import { getRekapanPemantauan, buatPdfRekapan } from '../sheets-api';
-import { Loader2, FileDown, CalendarRange, ThermometerSun, Wind } from 'lucide-react';
+import { Loader2, FileDown, CalendarRange, ThermometerSun, Wind, Calendar } from 'lucide-react';
+import { 
+  getISOWeek, 
+  getISOWeekYear, 
+  getISOWeekRange, 
+  getYearISOWeeksList 
+} from '../utils/iso-week';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement,
   LineElement, Title, Tooltip, Legend
@@ -27,6 +33,35 @@ export function MonitoringDashboard({ inspectorNik }: { inspectorNik?: string })
 
   const [tglMulai, setTglMulai] = useState(defStart);
   const [tglAkhir, setTglAkhir] = useState(defEnd);
+  const [selectedIsoWeek, setSelectedIsoWeek] = useState<string>('');
+
+  const isoWeeksList = React.useMemo(() => getYearISOWeeksList(new Date().getFullYear()), []);
+
+  const handleIsoWeekSelect = (val: string) => {
+    setSelectedIsoWeek(val);
+    if (!val) return;
+    if (val === 'this_iso_week') {
+      const now = new Date();
+      const range = getISOWeekRange(now.getFullYear(), getISOWeek(now));
+      setTglMulai(range.start.toISOString().split('T')[0]);
+      setTglAkhir(range.end.toISOString().split('T')[0]);
+    } else if (val === 'last_iso_week') {
+      const now = new Date();
+      const lastWeek = Math.max(1, getISOWeek(now) - 1);
+      const range = getISOWeekRange(now.getFullYear(), lastWeek);
+      setTglMulai(range.start.toISOString().split('T')[0]);
+      setTglAkhir(range.end.toISOString().split('T')[0]);
+    } else if (val.startsWith('iso_')) {
+      const parts = val.split('_');
+      const targetYear = parseInt(parts[1], 10);
+      const targetWeek = parseInt(parts[2], 10);
+      if (!isNaN(targetYear) && !isNaN(targetWeek)) {
+        const range = getISOWeekRange(targetYear, targetWeek);
+        setTglMulai(range.start.toISOString().split('T')[0]);
+        setTglAkhir(range.end.toISOString().split('T')[0]);
+      }
+    }
+  };
 
   const handleFilter = async () => {
     setLoading(true);
@@ -121,10 +156,32 @@ export function MonitoringDashboard({ inspectorNik }: { inspectorNik?: string })
       </div>
 
       <Card className="border-t-4 border-t-cyan-500 space-y-4">
-        <h4 className="font-semibold text-slate-700 flex items-center gap-2 mb-2"><CalendarRange className="w-4 h-4 text-cyan-500" /> Filter Waktu</h4>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
+          <h4 className="font-semibold text-slate-700 flex items-center gap-2">
+            <CalendarRange className="w-4 h-4 text-cyan-500" /> Filter Waktu & Minggu ISO
+          </h4>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-600">Preset Minggu ISO:</span>
+            <select
+              value={selectedIsoWeek}
+              onChange={e => handleIsoWeekSelect(e.target.value)}
+              className="text-xs font-semibold px-2 py-1 rounded-lg border border-slate-200 bg-white text-slate-800 outline-none focus:ring-2 focus:ring-cyan-500/20 cursor-pointer shadow-2xs"
+            >
+              <option value="">-- Pilih Minggu ISO --</option>
+              <option value="this_iso_week">⚡ Minggu Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
+              <option value="last_iso_week">⏮️ Minggu Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
+              <optgroup label="Daftar Minggu ISO">
+                {isoWeeksList.map(iw => (
+                  <option key={iw.value} value={iw.value}>{iw.label}</option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+        </div>
+
         <div className="flex gap-2">
-          <div className="flex-1"><Input type="date" label="Mulai" value={tglMulai} onChange={e => setTglMulai(e.target.value)} /></div>
-          <div className="flex-1"><Input type="date" label="Akhir" value={tglAkhir} onChange={e => setTglAkhir(e.target.value)} /></div>
+          <div className="flex-1"><Input type="date" label="Mulai" value={tglMulai} onChange={e => { setTglMulai(e.target.value); setSelectedIsoWeek(''); }} /></div>
+          <div className="flex-1"><Input type="date" label="Akhir" value={tglAkhir} onChange={e => { setTglAkhir(e.target.value); setSelectedIsoWeek(''); }} /></div>
         </div>
         <Button onClick={handleFilter} disabled={loading} className="w-full bg-cyan-600 hover:bg-cyan-700 font-semibold focus:ring-cyan-500">
           {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Terapkan Filter

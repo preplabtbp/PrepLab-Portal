@@ -1,19 +1,34 @@
 
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, Button, Textarea, Input } from './ui';
-import { Loader2, Wrench, CheckCircle2, Clock, Users, X, PlusCircle , ClipboardList } from 'lucide-react';
+import { Loader2, Wrench, CheckCircle2, Clock, Users, X, PlusCircle, ClipboardList, Filter, Search, Calendar } from 'lucide-react';
 import { ImageModal } from './image-modal';
 import { WhatsAppModal } from './whatsapp-modal';
 import { DevModeAccordion, useDevOptions } from './dev-mode-accordion';
 import { useWorkOrders } from '../features/work-orders/hooks/useWorkOrders';
 import { useWorkOrderResolution } from '../features/work-orders/hooks/useWorkOrderResolution';
 import { PageHeader } from './PageHeader';
+import { 
+  getISOWeek, 
+  getISOWeekYear, 
+  isDateInISOWeek, 
+  isThisISOWeek, 
+  isLastISOWeek, 
+  getYearISOWeeksList 
+} from '../utils/iso-week';
 
 export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: string, inspectorNik: string }) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'wo' | 'ticket'>('wo');
+  const [filterPeriod, setFilterPeriod] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
   const { devOptions, setDevOptions, parsedDevOptions } = useDevOptions(inspectorNik);
+
+  const isoWeeksList = useMemo(() => getYearISOWeeksList(new Date().getFullYear()), []);
 
   const { woData, ticketData, sparepartsList, employees, loading, loadData } = useWorkOrders();
 
@@ -79,14 +94,76 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
     );
   }
 
+  const filterItemsByPeriod = (items: any[]) => {
+    return items.filter(item => {
+      // 1. Period filter
+      if (filterPeriod === 'this_iso_week' || filterPeriod === 'this_week') {
+        if (!item.date || !isThisISOWeek(item.date)) return false;
+      } else if (filterPeriod === 'last_iso_week' || filterPeriod === 'last_week') {
+        if (!item.date || !isLastISOWeek(item.date)) return false;
+      } else if (filterPeriod.startsWith('iso_')) {
+        const parts = filterPeriod.split('_');
+        const targetYear = parseInt(parts[1], 10);
+        const targetWeek = parseInt(parts[2], 10);
+        if (!item.date || isNaN(targetYear) || isNaN(targetWeek) || !isDateInISOWeek(item.date, targetYear, targetWeek)) {
+          return false;
+        }
+      } else if (filterPeriod === 'this_month') {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        if (!item.date || new Date(item.date) < start) return false;
+      } else if (filterPeriod === 'last_30_days') {
+        const past = new Date();
+        past.setDate(past.getDate() - 30);
+        if (!item.date || new Date(item.date) < past) return false;
+      } else if (filterPeriod === 'this_year') {
+        const start = new Date(new Date().getFullYear(), 0, 1);
+        if (!item.date || new Date(item.date) < start) return false;
+      } else if (filterPeriod === 'custom' && customStartDate && customEndDate) {
+        if (!item.date) return false;
+        const s = new Date(customStartDate);
+        const e = new Date(customEndDate);
+        e.setHours(23, 59, 59, 999);
+        const d = new Date(item.date);
+        if (d < s || d > e) return false;
+      }
+
+      // 2. Status filter
+      if (statusFilter !== 'ALL') {
+        const st = (item.status || 'Open').toUpperCase();
+        if (statusFilter === 'OPEN' && st !== 'OPEN') return false;
+        if (statusFilter === 'IN_PROGRESS' && st !== 'IN PROGRESS') return false;
+        if (statusFilter === 'CLOSED' && (st !== 'CLOSED' && st !== 'RESOLVED')) return false;
+      }
+
+      // 3. Search filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const str = [
+          item.woId, item.ticketId, item.equipmentName, item.equipmentCode,
+          item.issueDescription, item.description, item.location, item.pic, item.inspector
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!str.includes(q)) return false;
+      }
+
+      return true;
+    });
+  };
+
   // Sort WOData (Open at top, Closed at bottom, recent first if possible)
-  const sortedWoData = [...woData].reverse().sort((a, b) => {
+  const filteredWoData = filterItemsByPeriod(woData);
+  const sortedWoData = [...filteredWoData].reverse().sort((a, b) => {
      const statusA = isCompleted(a.status) ? 1 : 0;
      const statusB = isCompleted(b.status) ? 1 : 0;
      return statusA - statusB;
   });
 
-  const sortedPermintaanData = [...ticketData].reverse().sort((a, b) => { const statusA = isCompleted(a.status) ? 1 : 0; const statusB = isCompleted(b.status) ? 1 : 0; return statusA - statusB; });
+  const filteredPermintaanData = filterItemsByPeriod(ticketData);
+  const sortedPermintaanData = [...filteredPermintaanData].reverse().sort((a, b) => { 
+    const statusA = isCompleted(a.status) ? 1 : 0; 
+    const statusB = isCompleted(b.status) ? 1 : 0; 
+    return statusA - statusB; 
+  });
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <PageHeader 
@@ -110,15 +187,103 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
           onClick={() => setActiveTab('wo')}
           className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${activeTab === 'wo' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          WO Perbaikan
+          WO Perbaikan ({sortedWoData.length})
         </button>
         <button 
           onClick={() => setActiveTab('ticket')}
           className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${activeTab === 'ticket' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          WO Permintaan
+          WO Permintaan ({sortedPermintaanData.length})
         </button>
       </div>
+
+      {/* FILTER CONTROLS (Minggu ISO, Status, Search) */}
+      <Card className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Filter Minggu ISO / Rentang Waktu */}
+          <div>
+            <label className="text-[11px] font-bold block mb-1 text-slate-700 dark:text-slate-300">
+              Filter Minggu ISO / Waktu
+            </label>
+            <select
+              value={filterPeriod}
+              onChange={e => setFilterPeriod(e.target.value)}
+              className="w-full h-9 text-xs font-semibold px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
+            >
+              <optgroup label="⚡ Filter Cepat & Minggu ISO">
+                <option value="all">📅 Semua Waktu</option>
+                <option value="this_iso_week">⚡ Minggu ISO Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
+                <option value="last_iso_week">⏮️ Minggu ISO Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
+                <option value="this_month">🗓️ Bulan Ini</option>
+                <option value="last_30_days">⏱️ 30 Hari Terakhir</option>
+                <option value="this_year">📆 Tahun Ini ({new Date().getFullYear()})</option>
+                <option value="custom">🎯 Rentang Tanggal Kustom...</option>
+              </optgroup>
+              <optgroup label="📋 Pilih Spesifik Minggu ISO">
+                {isoWeeksList.map(iw => (
+                  <option key={iw.value} value={iw.value}>
+                    {iw.label}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+
+          {/* Filter Status */}
+          <div>
+            <label className="text-[11px] font-bold block mb-1 text-slate-700 dark:text-slate-300">
+              Status WO
+            </label>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="w-full h-9 text-xs font-semibold px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
+            >
+              <option value="ALL">Semua Status</option>
+              <option value="OPEN">🔴 Open / Menunggu Perbaikan</option>
+              <option value="IN_PROGRESS">🟡 In Progress</option>
+              <option value="CLOSED">🟢 Closed / Resolved</option>
+            </select>
+          </div>
+
+          {/* Search Bar */}
+          <div>
+            <label className="text-[11px] font-bold block mb-1 text-slate-700 dark:text-slate-300">
+              Pencarian
+            </label>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Cari WO, alat, kendala..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full h-9 text-xs pl-8 pr-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500/30"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Custom date range picker if custom selected */}
+        {filterPeriod === 'custom' && (
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <span className="text-xs font-semibold text-slate-500">Rentang:</span>
+            <input
+              type="date"
+              value={customStartDate}
+              onChange={e => setCustomStartDate(e.target.value)}
+              className="text-xs px-2 py-1 rounded-lg border bg-white dark:bg-slate-800"
+            />
+            <span className="text-xs text-slate-400">-</span>
+            <input
+              type="date"
+              value={customEndDate}
+              onChange={e => setCustomEndDate(e.target.value)}
+              className="text-xs px-2 py-1 rounded-lg border bg-white dark:bg-slate-800"
+            />
+          </div>
+        )}
+      </Card>
 
 
       <div className="space-y-4 md:grid md:grid-cols-2 md:gap-6 md:space-y-0 lg:grid-cols-3">
@@ -144,8 +309,13 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
                     </span>
                   </div>
                   <h3 className="font-semibold text-slate-800 text-lg">{wo.equipmentName}</h3>
-                  <div className="text-sm text-slate-500 mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                  <div className="text-sm text-slate-500 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
                     <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" /> {new Date(wo.date).toLocaleString('id-ID')}</span>
+                    {wo.date && (
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800" title={`Minggu ISO ${getISOWeek(wo.date)}`}>
+                        W{String(getISOWeek(wo.date)).padStart(2, '0')}
+                      </span>
+                    )}
                     <span><span className="font-medium text-slate-600">ID Alat:</span> {wo.equipmentCode}</span>
                     {wo.location && <span><span className="font-medium text-slate-600">Lokasi:</span> {wo.location.replace(/^(- - |- )\s*/, '')}</span>}
                   </div>
@@ -409,8 +579,13 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
                         )}
                       </div>
                       <h3 className="font-semibold text-slate-800 text-lg leading-tight mt-1">{ticket.category} - {ticket.location}</h3>
-                      <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                      <div className="text-xs text-slate-500 mt-1 flex items-center flex-wrap gap-2">
                         <span><Clock className="w-3.5 h-3.5 inline mr-1 opacity-70"/> {formatTanggal(ticket.date)}</span>
+                        {ticket.date && (
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800" title={`Minggu ISO ${getISOWeek(ticket.date)}`}>
+                            W{String(getISOWeek(ticket.date)).padStart(2, '0')}
+                          </span>
+                        )}
                         <span>• Dilaporkan oleh: {ticket.requestorName}</span>
                       </div>
                     </div>

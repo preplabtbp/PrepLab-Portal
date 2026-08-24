@@ -50,6 +50,7 @@ export const employees = pgTable('employees', {
   username: text('username'),
   passwordHash: text('password_hash'),
   avatar: text('avatar'),
+  cover: text('cover'),
   firstLoginComplete: boolean('first_login_complete').default(false),
   createdAt: timestamp('created_at').defaultNow(),
 });

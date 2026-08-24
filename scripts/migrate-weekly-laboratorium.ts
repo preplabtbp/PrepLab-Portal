@@ -166,16 +166,18 @@ async function migrateWeeklyLaboratorium() {
     console.log(`Total rows retrieved: ${allRows.length}`);
 
     if (allRows.length > 0) {
-      const firstRow: any = allRows[0];
-      const props = firstRow.properties;
-      const rawColumns = Object.keys(props).filter(k => {
-        const lower = k.toLowerCase().trim();
-        if (lower === 'period' || lower === 'periode' || lower === 'number' || lower === 'no') return false;
-        const t = props[k]?.type;
-        return ['title', 'rich_text', 'select', 'multi_select', 'date', 'checkbox', 'number', 'status', 'people', 'url', 'email', 'phone_number'].includes(t);
-      });
-
-      const columns = [...rawColumns, 'Created Time'];
+      const columns = [
+        'number',
+        'Jenis kegiatan',
+        'Keterangan',
+        'PIC',
+        'Priority',
+        'Status',
+        'Created Time',
+        'Kategori',
+        'Activity (routine/non routine)',
+        'period'
+      ];
 
       let tableMd = `### 📊 ${dbTitle}\n\n`;
       tableMd += '| ' + columns.join(' | ') + ' |\n';
@@ -190,97 +192,91 @@ async function migrateWeeklyLaboratorium() {
         console.log(`\n  [Row ${i + 1}/${allRows.length}] "${topicTitle}" (${row.id})`);
 
         // Check comments on this row
-        const rowComments = await notion.comments.list({ block_id: row.id });
-        if (rowComments.results.length > 0) {
-          console.log(`    Processing ${rowComments.results.length} comments...`);
-        }
+        try {
+          const rowComments = await notion.comments.list({ block_id: row.id });
+          for (const c of rowComments.results as any[]) {
+            let author = 'Personil Laboratorium';
+            if (c.created_by?.name) {
+              author = c.created_by.name;
+            } else if (c.created_by?.id) {
+              author = await resolveUserName(c.created_by.id);
+            }
 
-        for (const c of rowComments.results as any[]) {
-          let author = 'Personil Laboratorium';
-          if (c.created_by?.name) {
-            author = c.created_by.name;
-          } else if (c.created_by?.id) {
-            author = await resolveUserName(c.created_by.id);
+            const text = c.rich_text?.map((t: any) => t.plain_text).join('') || '';
+            const commentCreated = new Date(c.created_time);
+
+            await db.execute(sql`
+              INSERT INTO bulletin_comments (
+                post_id, topic_title, section, category, author_name, author_nik, content, file_url, created_at
+              ) VALUES (
+                ${postId}, ${topicTitle}, 'Laboratorium', 'Weekly Laboratorium', ${author}, 'NOTION_MIGRATION', ${text}, NULL, ${commentCreated}
+              )
+            `);
           }
+        } catch(e) {}
 
-          const text = c.rich_text?.map((t: any) => t.plain_text).join('') || '';
-          const commentCreated = new Date(c.created_time);
-
-          await db.execute(sql`
-            INSERT INTO bulletin_comments (
-              post_id, topic_title, section, category, author_name, author_nik, content, file_url, created_at
-            ) VALUES (
-              ${postId}, ${topicTitle}, 'Laboratorium', 'Weekly Laboratorium', ${author}, 'NOTION_MIGRATION', ${text}, NULL, ${commentCreated}
-            )
-          `);
-        }
-
-        // Check block children for attachments & nested text
-        const rowBlocks = await notion.blocks.children.list({ block_id: row.id, page_size: 100 });
-        for (const b of rowBlocks.results as any[]) {
-          if (['image', 'file', 'pdf', 'video'].includes(b.type)) {
-            const fileObj = b[b.type];
-            const fileUrl = fileObj?.file?.url || fileObj?.external?.url;
-            const fileName = fileObj?.name || `${topicTitle}_attachment.png`;
-            if (fileUrl && driveToken) {
+        const getPropVal = (nameAliases: string[], typePreference?: string) => {
+          for (const name of nameAliases) {
+            const matchKey = Object.keys(p).find(k => k.toLowerCase().trim() === name.toLowerCase().trim());
+            if (matchKey && p[matchKey]) {
+              const prop = p[matchKey];
               try {
-                const fRes = await fetch(fileUrl);
-                const buf = Buffer.from(await fRes.arrayBuffer());
-                const uploaded = await uploadToDrive(driveToken, buf, 'image/png', fileName);
-                const gdriveUrl = `https://lh3.googleusercontent.com/d/${uploaded.id}`;
-
-                await db.execute(sql`
-                  INSERT INTO bulletin_comments (
-                    post_id, topic_title, section, category, author_name, author_nik, content, file_url, created_at
-                  ) VALUES (
-                    ${postId}, ${topicTitle}, 'Laboratorium', 'Weekly Laboratorium', 'Lampiran Media', 'NOTION_MIGRATION', ${fileName}, ${gdriveUrl}, ${new Date(row.created_time)}
-                  )
-                `);
-                console.log(`    ✓ Uploaded and attached media: ${fileName} -> ${gdriveUrl}`);
-              } catch (uErr: any) {
-                console.warn(`    ✗ Failed uploading media:`, uErr.message);
+                if (prop.type === 'title') return prop.title?.map((t: any) => t.plain_text).join('') || '-';
+                if (prop.type === 'rich_text') return prop.rich_text?.map((t: any) => t.plain_text).join('') || '-';
+                if (prop.type === 'select') return prop.select?.name || '-';
+                if (prop.type === 'status') return prop.status?.name || '-';
+                if (prop.type === 'multi_select') return prop.multi_select?.map((s: any) => s.name).join(', ') || '-';
+                if (prop.type === 'date') return prop.date?.start ? (prop.date.end ? `${prop.date.start} s/d ${prop.date.end}` : prop.date.start) : '-';
+                if (prop.type === 'checkbox') return prop.checkbox ? '✅ Ya' : '❌ Tidak';
+                if (prop.type === 'number') return String(prop.number ?? '-');
+                if (prop.type === 'url') return prop.url ? `[Link](${prop.url})` : '-';
+                if (prop.type === 'email') return prop.email || '-';
+                if (prop.type === 'phone_number') return prop.phone_number || '-';
+                if (prop.type === 'people') return prop.people?.map((peo: any) => peo.name).join(', ') || '-';
+              } catch (e) {
+                return '-';
               }
             }
-          }
-        }
-
-        // Format row cells
-        const cells = columns.map(col => {
-          if (col === 'Created Time') {
-            if (row.created_time) {
-              const d = new Date(row.created_time);
-              if (!isNaN(d.getTime())) {
-                const y = d.getFullYear();
-                const m = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                const h = String(d.getHours()).padStart(2, '0');
-                const min = String(d.getMinutes()).padStart(2, '0');
-                return `${y}-${m}-${day} ${h}:${min}`;
-              }
-            }
-            return '-';
-          }
-
-          const prop = p[col];
-          if (!prop) return '-';
-          try {
-            if (prop.type === 'title') return prop.title?.map((t: any) => t.plain_text).join('') || '-';
-            if (prop.type === 'rich_text') return prop.rich_text?.map((t: any) => t.plain_text).join('') || '-';
-            if (prop.type === 'select') return prop.select?.name || '-';
-            if (prop.type === 'status') return prop.status?.name || '-';
-            if (prop.type === 'multi_select') return prop.multi_select?.map((s: any) => s.name).join(', ') || '-';
-            if (prop.type === 'date') return prop.date?.start ? (prop.date.end ? `${prop.date.start} s/d ${prop.date.end}` : prop.date.start) : '-';
-            if (prop.type === 'checkbox') return prop.checkbox ? '✅ Ya' : '❌ Tidak';
-            if (prop.type === 'number') return String(prop.number ?? '-');
-            if (prop.type === 'url') return prop.url ? `[Link](${prop.url})` : '-';
-            if (prop.type === 'email') return prop.email || '-';
-            if (prop.type === 'phone_number') return prop.phone_number || '-';
-            if (prop.type === 'people') return prop.people?.map((peo: any) => peo.name).join(', ') || '-';
-          } catch (e) {
-            return '-';
           }
           return '-';
-        });
+        };
+
+        const numVal = String(i + 1);
+        const jenisKegiatanVal = topicTitle;
+        const keteranganVal = getPropVal(['Keterangan', 'Catatan', 'Deskripsi', 'Remarks', 'Content']);
+        const picVal = getPropVal(['PIC', 'Assignee', 'Penanggung Jawab', 'Personil']);
+        const priorityVal = getPropVal(['Priority', 'Prioritas']);
+        const statusVal = getPropVal(['Status']);
+        
+        let createdTimeVal = '-';
+        if (row.created_time) {
+          const d = new Date(row.created_time);
+          if (!isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const h = String(d.getHours()).padStart(2, '0');
+            const min = String(d.getMinutes()).padStart(2, '0');
+            createdTimeVal = `${y}-${m}-${day} ${h}:${min}`;
+          }
+        }
+
+        const kategoriVal = getPropVal(['Kategori', 'Category', 'Dept']) || 'Laboratorium';
+        const activityVal = getPropVal(['Activity (routine/non routine)', 'Aktivitas', 'Activity']);
+        const periodVal = getPropVal(['period', 'Period', 'Periode']);
+
+        const cells = [
+          numVal,
+          jenisKegiatanVal,
+          keteranganVal,
+          picVal,
+          priorityVal,
+          statusVal,
+          createdTimeVal,
+          kategoriVal,
+          activityVal,
+          periodVal
+        ];
 
         tableMd += '| ' + cells.map(c => String(c).replace(/\|/g, '\\|').replace(/\n/g, ' • ').trim()).join(' | ') + ' |\n';
       }

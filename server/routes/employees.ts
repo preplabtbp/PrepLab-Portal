@@ -119,3 +119,20 @@ employeesRouter.post("/avatar", async (req, res) => {
     res.status(500).json({ status: "error", message: "Failed to update avatar" });
   }
 });
+
+employeesRouter.post("/cover", async (req, res) => {
+  try {
+    const { nik, cover } = req.body;
+    if (!nik) {
+      return res.status(400).json({ status: "error", message: "NIK required" });
+    }
+    const result = await db.update(employees)
+      .set({ cover: cover || null })
+      .where(eq(employees.nik, nik))
+      .returning();
+    return res.json({ status: "success", employee: result[0] || null });
+  } catch (error) {
+    console.error("Error updating cover:", error);
+    res.status(500).json({ status: "error", message: "Failed to update cover" });
+  }
+});

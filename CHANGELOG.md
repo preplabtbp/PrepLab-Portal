@@ -1,6 +1,49 @@
 # Changelog - Prep & Lab Portal
 
-All notable changes to the PrepLab Portal project will be documented in this file.
+Semua pembaruan dan perbaikan sistem Prep & Lab Portal dicatat dalam dokumen ini.
+
+---
+
+## [2.6.0] - 2026-08-25
+
+### 🚀 Fitur Baru & Peningkatan Utama
+
+- **Filter Minggu ISO (ISO 8601 Week) di Seluruh Dashboard & Work Order**:
+  - **Dashboard Maintenance WO**: Sekarang pengguna bisa langsung memfilter laporan berdasarkan **Minggu ISO Ini**, **Minggu ISO Lalu**, atau memilih nomor minggu tertentu (**Minggu 01 s/d Minggu 53**) lengkap dengan rentang tanggalnya (Senin – Minggu).
+  - **Daftar Work Order (`WO List`)**: Ditambahkan bilah filter lengkap di bagian atas daftar untuk memfilter WO berdasarkan Minggu ISO, status pengerjaan (Open, In Progress, Closed), serta kolom pencarian cepat.
+  - **SAP & Monitoring Dashboard**: Pilihan rentang waktu kini mendukung standar Minggu ISO untuk mempermudah pelaporan mingguan operasional.
+  - **Tag Minggu pada Data**: Setiap kartu dan baris data WO kini memiliki label badge minggu (contoh: `W34`) agar periode pengerjaan langsung terbaca jelas.
+
+- **Pagination (Bagi Halaman per 20 Data) pada Tabel Rincian WO**:
+  - Tabel rincian Work Order di bagian bawah dashboard maintenance kini dibagi menjadi **20 data per halaman**, sehingga pengguna tidak perlu lagi menggulir (*scroll*) layar terlalu panjang ke bawah.
+  - Dilengkapi tombol navigasi halaman (**Sebelumnya**, **Nomor Halaman**, **Berikutnya**) dan kotak pencarian langsung di atas tabel untuk mencari nomor WO, alat, keluhan, teknisi, maupun status secara instan.
+
+- **Animasi Cuaca & Langit Dinamis (Pengganti Animasi Tangan)**:
+  - Menggantikan animasi tangan melambai lama dengan visual animasi kondisi langit dan matahari tanpa latar belakang kotak (*clean & glowing*), yang berganti otomatis mengikuti waktu saat membuka portal:
+    - **Pagi (04:00 - 10:59)**: Matahari terbit dengan sinar keemasan yang berotasi lembut.
+    - **Siang (11:00 - 14:59)**: Matahari siang cerah dengan efek korona energi berdenyut.
+    - **Sore (15:00 - 17:59)**: Matahari senja yang turun perlahan ke ufuk langit.
+    - **Malam (18:00 - 03:59)**: Bulan sabit ungu malam dengan kilauan bintang.
+
+- **Tampilan Halaman Login & Header Baru (Identitas Resmi Prep & Lab)**:
+  - Tampilan login dirombak total dengan gaya modern bernuansa *dark-mode enterprise* dengan efek pendaran cahaya (*glow effect*) dan badge keamanan resmi.
+  - Logo resmi Prep & Lab kini disematkan di halaman login serta di pojok kiri atas bilah navigasi utama sistem.
+
+- **Panel Diskusi Topik Bulletin & Galeri Lampiran Media**:
+  - Tampilan detail topik di papan Bulletin kini terbuka lebih luas dalam format **2 kolom** dari sisi kanan:
+    - **Kolom Kiri**: Berisi rincian lengkap kegiatan, catatan, target, serta **Galeri Lampiran & Foto**.
+    - **Kolom Kanan**: Ruang diskusi dan pembaruan progres kerja anggota tim.
+  - Pengguna dapat langsung mengunggah foto/dokumen lampiran dengan fitur kompresi otomatis dan pratinjau layar penuh (*fullscreen zoom*).
+
+- **Pilihan PIC & Periode yang Lebih Fleksibel**:
+  - Kolom PIC pada tabel Bulletin kini menyediakan pilihan cepat untuk **All Foreman**, **SPV**, serta pencarian karyawan otomatis via NIK maupun Nama.
+  - Kolom periode kegiatan dilengkapi opsi pilihan waktu baku (*Daily, Weekly, Monthly, 3 Month, 6 Month, Yearly*).
+
+### 🛠 Perbaikan Sistem (Bug Fixes)
+
+- **Perbaikan Alur Navigasi (Breadcrumb)**: Memperbaiki kesalahan tautan yang sebelumnya membuat pengguna tersasar ke halaman lain saat menekan tombol kembali dari ruang Laboratorium.
+- **Tampilan Layar Penuh Section Hub**: Menghapus pembatasan lebar tengah layar agar halaman ruang kerja section tampil penuh (*full-width*) dan leluasa di monitor kerja.
+- **Keamanan Data Baris Teratas**: Memperbaiki validasi penghapusan baris pada tabel agar tidak menghapus kegiatan utama lainnya secara tidak sengaja.
 
 ---
 

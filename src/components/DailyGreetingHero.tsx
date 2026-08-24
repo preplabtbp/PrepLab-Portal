@@ -12,6 +12,134 @@ interface DailyGreetingHeroProps {
   onOpenUsernameModal?: () => void;
 }
 
+interface AnimatedSunConditionProps {
+  type: 'morning' | 'noon' | 'evening' | 'night';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+}
+
+export function AnimatedSunCondition({ type, size = 'md' }: AnimatedSunConditionProps) {
+  const sizeClasses = {
+    sm: 'w-6 h-6',
+    md: 'w-8 h-8 sm:w-9 sm:h-9',
+    lg: 'w-11 h-11 sm:w-12 sm:h-12',
+    xl: 'w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20'
+  };
+
+  const iconSizes = {
+    sm: 'w-5 h-5',
+    md: 'w-7 h-7 sm:w-8 sm:h-8',
+    lg: 'w-10 h-10 sm:w-11 sm:h-11',
+    xl: 'w-13 h-13 sm:w-15 sm:h-15 md:w-18 md:h-18'
+  };
+
+  if (type === 'morning') {
+    return (
+      <span className={`relative inline-flex items-center justify-center align-middle select-none ${sizeClasses[size]} mx-1.5`} title="Matahari Terbit Pagi">
+        {/* Soft Sun Ray Glow Aura (No background container) */}
+        <motion.div 
+          animate={{ scale: [1, 1.3, 1], opacity: [0.35, 0.75, 0.35] }}
+          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute inset-0 bg-amber-400/25 rounded-full blur-md pointer-events-none"
+        />
+        {/* Outer Rotating Sun Rays */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+          className="absolute inset-0 flex items-center justify-center"
+        >
+          <Sun className={`${iconSizes[size]} text-amber-400 opacity-60 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]`} />
+        </motion.div>
+        {/* Core Glowing Sun */}
+        <motion.div 
+          animate={{ scale: [1, 1.1, 1], rotate: [-8, 8, -8] }}
+          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          className="relative z-10 flex items-center justify-center"
+        >
+          <Sun className={`${iconSizes[size]} text-yellow-300 drop-shadow-[0_0_14px_rgba(253,224,71,0.95)]`} />
+        </motion.div>
+      </span>
+    );
+  }
+
+  if (type === 'noon') {
+    return (
+      <span className={`relative inline-flex items-center justify-center align-middle select-none ${sizeClasses[size]} mx-1.5`} title="Matahari Terik Siang">
+        {/* Ambient Flare Aura */}
+        <motion.div 
+          animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.85, 0.3] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute inset-0 bg-amber-500/25 rounded-full blur-lg pointer-events-none"
+        />
+        {/* Counter-rotating solar rays */}
+        <motion.div
+          animate={{ rotate: -360 }}
+          transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
+          className="absolute inset-0 flex items-center justify-center"
+        >
+          <Sun className={`${iconSizes[size]} text-orange-400 opacity-70 drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]`} />
+        </motion.div>
+        {/* Primary Sun */}
+        <motion.div 
+          animate={{ scale: [1, 1.15, 1], rotate: 360 }}
+          transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+          className="relative z-10 flex items-center justify-center"
+        >
+          <Sun className={`${iconSizes[size]} text-amber-300 drop-shadow-[0_0_18px_rgba(251,191,36,0.95)]`} />
+        </motion.div>
+      </span>
+    );
+  }
+
+  if (type === 'evening') {
+    return (
+      <span className={`relative inline-flex items-center justify-center align-middle select-none ${sizeClasses[size]} mx-1.5`} title="Matahari Senja Sore">
+        {/* Sunset Warmth Aura */}
+        <motion.div 
+          animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.75, 0.3] }}
+          transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute inset-0 bg-rose-500/25 rounded-full blur-md pointer-events-none"
+        />
+        {/* Descending Sunset Animation */}
+        <motion.div 
+          animate={{ y: [0, 3, 0], scale: [1, 1.08, 1] }}
+          transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+          className="relative z-10 flex items-center justify-center"
+        >
+          <Sunset className={`${iconSizes[size]} text-orange-400 drop-shadow-[0_0_15px_rgba(251,146,60,0.9)]`} />
+        </motion.div>
+      </span>
+    );
+  }
+
+  // Malam
+  return (
+    <span className={`relative inline-flex items-center justify-center align-middle select-none ${sizeClasses[size]} mx-1.5`} title="Bulan & Bintang Malam">
+      {/* Night Sky Glow */}
+      <motion.div 
+        animate={{ scale: [1, 1.25, 1], opacity: [0.25, 0.6, 0.25] }}
+        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute inset-0 bg-purple-500/20 rounded-full blur-md pointer-events-none"
+      />
+      {/* Floating Crescent Moon */}
+      <motion.div 
+        animate={{ rotate: [-8, 8, -8], y: [0, -3, 0] }}
+        transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+        className="relative z-10 flex items-center justify-center"
+      >
+        <Moon className={`${iconSizes[size]} text-purple-300 fill-purple-400/30 drop-shadow-[0_0_15px_rgba(216,180,254,0.9)]`} />
+      </motion.div>
+      {/* Twinkling Star Accent */}
+      <motion.div 
+        animate={{ scale: [0.5, 1.3, 0.5], opacity: [0.2, 1, 0.2] }}
+        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+        className="absolute -top-1 -right-1 z-20"
+      >
+        <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-300 drop-shadow-[0_0_8px_rgba(252,211,77,0.9)]" />
+      </motion.div>
+    </span>
+  );
+}
+
 export function DailyGreetingHero({
   inspectorName,
   inspectorNik,
@@ -58,44 +186,52 @@ export function DailyGreetingHero({
     return 'Preparation & Laboratory Team';
   }, []);
 
-  // Time of Day Greeting
+  // Time of Day Greeting with Solar / Celestial State
   const greetingInfo = useMemo(() => {
     const hour = new Date().getHours();
     if (hour >= 4 && hour < 11) {
       return {
+        type: 'morning' as const,
         greeting: 'Selamat Pagi',
         sub: 'Awali shift dengan energi positif & fokus tanpa batas',
         icon: Sun,
         themeGradient: 'from-amber-400 via-orange-400 to-yellow-300',
         badgeColor: 'text-amber-300 bg-amber-500/20 border-amber-500/40',
-        glowColor: '#F59E0B'
+        glowColor: '#F59E0B',
+        celestialLabel: 'Matahari Terbit'
       };
     } else if (hour >= 11 && hour < 15) {
       return {
+        type: 'noon' as const,
         greeting: 'Selamat Siang',
         sub: 'Tetap jaga fokus, hidrasi, dan keselamatan operasional',
         icon: Sun,
         themeGradient: 'from-teal-300 via-emerald-300 to-cyan-300',
         badgeColor: 'text-teal-300 bg-teal-500/20 border-teal-500/40',
-        glowColor: '#14B8A6'
+        glowColor: '#14B8A6',
+        celestialLabel: 'Matahari Siang'
       };
     } else if (hour >= 15 && hour < 18) {
       return {
+        type: 'evening' as const,
         greeting: 'Selamat Sore',
         sub: 'Tuntaskan target harian dengan rapi dan selamat',
         icon: Sunset,
         themeGradient: 'from-orange-400 via-rose-400 to-amber-300',
         badgeColor: 'text-orange-300 bg-orange-500/20 border-orange-500/40',
-        glowColor: '#F97316'
+        glowColor: '#F97316',
+        celestialLabel: 'Matahari Senja'
       };
     } else {
       return {
+        type: 'night' as const,
         greeting: 'Selamat Malam',
         sub: 'Patuhi SOP, selalu waspada, dan utamakan keselamatan kerja',
         icon: Moon,
         themeGradient: 'from-indigo-300 via-purple-300 to-pink-300',
         badgeColor: 'text-purple-300 bg-purple-500/20 border-purple-500/40',
-        glowColor: '#8B5CF6'
+        glowColor: '#8B5CF6',
+        celestialLabel: 'Bulan & Bintang'
       };
     }
   }, []);
@@ -312,15 +448,16 @@ export function DailyGreetingHero({
                   initial={{ opacity: 0, scale: 0.85, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   transition={{ duration: 0.7, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                  className="text-4xl sm:text-6xl md:text-7xl font-black text-white tracking-tight leading-none"
+                  className="text-4xl sm:text-6xl md:text-7xl font-black text-white tracking-tight leading-none flex items-center justify-center flex-wrap gap-2"
                 >
-                  Halo,{' '}
+                  <span>Halo,{' '}</span>
                   <span 
                     className={`bg-clip-text text-transparent bg-gradient-to-r ${greetingInfo.themeGradient} drop-shadow-[0_10px_30px_rgba(255,255,255,0.25)]`}
                   >
                     {displayName}
                   </span>
-                  ! 👋
+                  <span>!</span>
+                  <AnimatedSunCondition type={greetingInfo.type} size="xl" />
                 </motion.h1>
 
                 {userSubtitle && (
@@ -439,7 +576,7 @@ export function DailyGreetingHero({
                 {displayName}
               </span>
               <span>!</span>
-              <span className="text-2xl animate-bounce">👋</span>
+              <AnimatedSunCondition type={greetingInfo.type} size="md" />
             </h1>
 
             {onOpenUsernameModal && (

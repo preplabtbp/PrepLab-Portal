@@ -327,21 +327,24 @@ export function SectionHubDashboard({
   const config = getSectionConfig();
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-6 animate-in fade-in duration-300 select-none pb-20">
-      {/* Cover Banner Image */}
-      <div className="w-full h-44 md:h-56 rounded-2xl overflow-hidden shadow-lg border border-[#2a2a2a] relative">
+    <div className="w-full max-w-none space-y-6 animate-in fade-in duration-300 select-none pb-20">
+      {/* Cover Banner Image (Full-Width Canvas) */}
+      <div className="w-full h-48 md:h-64 lg:h-72 rounded-3xl overflow-hidden shadow-2xl border border-[#2a2a2a] relative group bg-[#151515]">
         <img
-          src={post.coverImage || config.bannerUrl}
+          src={post.coverImage && post.coverImage.startsWith('http') ? post.coverImage : config.bannerUrl}
           alt={sectionTitle}
-          className="w-full h-full object-cover object-center brightness-90 hover:scale-105 transition-transform duration-700"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = config.bannerUrl;
+          }}
+          className="w-full h-full object-cover object-center brightness-90 group-hover:scale-105 transition-transform duration-700"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#1b1b1b] via-transparent to-transparent opacity-80" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#1b1b1b] via-black/20 to-transparent opacity-80" />
       </div>
 
       {/* Header Info Area */}
       <div className="space-y-4 px-2">
         {/* Section Emoji / Icon */}
-        <div className="w-14 h-14 rounded-2xl bg-[#242424] border border-[#333] flex items-center justify-center text-3xl shadow-xl -mt-12 relative z-10">
+        <div className="w-16 h-16 rounded-2xl bg-[#242424] border border-[#333] flex items-center justify-center text-3xl shadow-xl -mt-14 relative z-10">
           {config.icon}
         </div>
 

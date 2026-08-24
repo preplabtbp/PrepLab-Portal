@@ -38,7 +38,12 @@ import {
   FileSpreadsheet,
   FileDown,
   Maximize2,
-  FileCheck
+  Minimize2,
+  ZoomIn,
+  ZoomOut,
+  FileCheck,
+  Edit2,
+  Save
 } from 'lucide-react';
 import { Button } from './ui';
 import { toast } from 'sonner';
@@ -98,25 +103,17 @@ export const parseCommentAttachments = (fileUrl?: string | null, fileName?: stri
         });
       }
     }
-  } catch (e) {
-    // fallback
-  }
+  } catch (e) {}
 
-  const name = fileName || 'Attachment';
-  const driveId = extractDriveId(fileUrl);
-  const isImg = 
-    fileUrl.startsWith('data:image/') || 
-    fileUrl.includes('lh3.googleusercontent.com') ||
-    /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(name) ||
-    /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(fileUrl);
-
+  const driveId = extractDriveId({ directUrl: fileUrl });
+  const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(fileName || fileUrl || '') || fileUrl.startsWith('data:image/');
   const directUrl = driveId ? `/api/drive/view/${driveId}` : fileUrl;
   const driveDownloadUrl = driveId ? `/api/drive/download/${driveId}` : fileUrl;
   const driveViewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : fileUrl;
 
   return [{
     id: driveId || undefined,
-    name,
+    name: fileName || 'Attachment',
     url: directUrl,
     directUrl,
     driveViewUrl,
@@ -129,6 +126,87 @@ export interface TableRowData {
   [key: string]: string;
 }
 
+// Canonical Notion Table Column definition in exact order
+export const CANONICAL_NOTION_COLUMNS = [
+  'number',
+  'Jenis kegiatan',
+  'Keterangan',
+  'PIC',
+  'Priority',
+  'Status',
+  'Created Time',
+  'Kategori',
+  'Activity (routine/non routine)',
+  'period'
+] as const;
+
+export const getCellValue = (row: TableRowData, colName: string): string => {
+  if (!row) return '';
+  if (row[colName] !== undefined && row[colName] !== '') return row[colName];
+
+  const targetLower = colName.toLowerCase().trim();
+  for (const key of Object.keys(row)) {
+    const keyLower = key.toLowerCase().trim();
+    if (keyLower === targetLower) return row[key];
+
+    if (targetLower === 'number' && (keyLower === 'no' || keyLower === 'no.' || keyLower === '#' || keyLower === 'index')) {
+      return row[key];
+    }
+    if (targetLower === 'jenis kegiatan' && (keyLower.includes('jenis kegiatan') || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
+      return row[key];
+    }
+    if (targetLower === 'keterangan' && (keyLower.includes('keterangan') || keyLower.includes('catatan') || keyLower.includes('deskripsi') || keyLower.includes('content') || keyLower.includes('rincian'))) {
+      return row[key];
+    }
+    if (targetLower === 'pic' && (keyLower === 'pic' || keyLower.includes('assignee') || keyLower.includes('pj') || keyLower === 'personil')) {
+      return row[key];
+    }
+    if (targetLower === 'priority' && (keyLower.includes('prioritas') || keyLower.includes('priority'))) {
+      return row[key];
+    }
+    if (targetLower === 'status' && keyLower.includes('status')) {
+      return row[key];
+    }
+    if (targetLower === 'created time' && (keyLower.includes('created') || keyLower.includes('tanggal dibuat') || keyLower.includes('waktu dibuat') || keyLower === 'dibuat')) {
+      return row[key];
+    }
+    if (targetLower === 'kategori' && (keyLower.includes('kategori') || keyLower.includes('category') || keyLower === 'dept')) {
+      return row[key];
+    }
+    if (targetLower === 'activity (routine/non routine)' && (keyLower.includes('activity') || keyLower.includes('aktivitas'))) {
+      return row[key];
+    }
+    if (targetLower === 'period' && (keyLower === 'period' || keyLower === 'periode')) {
+      return row[key];
+    }
+  }
+  return row[colName] || '';
+};
+
+export function serializeMarkdownTable(
+  headers: string[], 
+  rows: TableRowData[], 
+  beforeText = '', 
+  afterText = ''
+): string {
+  const cleanHeaders = headers.filter(h => h && h.trim().length > 0);
+  const headerLine = `| ${cleanHeaders.join(' | ')} |`;
+  const separatorLine = `| ${cleanHeaders.map(() => '---').join(' | ')} |`;
+  const rowLines = rows.map(row => {
+    return `| ${cleanHeaders.map(h => {
+      const val = getCellValue(row, h);
+      return String(val || '').replace(/\|/g, '\\|').replace(/\n/g, ' • ').trim();
+    }).join(' | ')} |`;
+  });
+  
+  const tableMarkdown = [headerLine, separatorLine, ...rowLines].join('\n');
+  const parts = [];
+  if (beforeText?.trim()) parts.push(beforeText.trim());
+  parts.push(tableMarkdown);
+  if (afterText?.trim()) parts.push(afterText.trim());
+  return parts.join('\n\n');
+}
+
 interface NotionDatabaseTableProps {
   postId?: number;
   headers: string[];
@@ -138,7 +216,10 @@ interface NotionDatabaseTableProps {
   currentAuthorNik?: string;
   currentAuthorName?: string;
   pt?: string;
-  onAddRow?: (newRow: TableRowData) => void;
+  beforeText?: string;
+  afterText?: string;
+  onPostContentUpdate?: (newContent: string) => void;
+  onRowsChange?: (newRows: TableRowData[]) => void;
 }
 
 export function NotionDatabaseTable({
@@ -150,8 +231,20 @@ export function NotionDatabaseTable({
   currentAuthorNik,
   currentAuthorName,
   pt,
-  onAddRow
+  beforeText = '',
+  afterText = '',
+  onPostContentUpdate,
+  onRowsChange
 }: NotionDatabaseTableProps) {
+  // Local table rows for responsive instant CRUD
+  const [localRows, setLocalRows] = useState<TableRowData[]>(() => rows || []);
+
+  useEffect(() => {
+    if (rows) {
+      setLocalRows(rows);
+    }
+  }, [rows]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
@@ -160,6 +253,31 @@ export function NotionDatabaseTable({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedRow, setSelectedRow] = useState<TableRowData | null>(null);
   const [modalTab, setModalTab] = useState<'details' | 'comments'>('details');
+
+  // Fit to screen / Zoom Mode State
+  const [fitPageMode, setFitPageMode] = useState<boolean>(false);
+  const [zoomPercent, setZoomPercent] = useState<number>(100);
+
+  // Add / Edit Row Modal State
+  const [showRowModal, setShowRowModal] = useState(false);
+  const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
+  const [rowFormData, setRowFormData] = useState<TableRowData>({});
+  const [isSavingRow, setIsSavingRow] = useState(false);
+
+  // Employees List for PIC Dropdown & Search
+  const [employeesList, setEmployeesList] = useState<any[]>([]);
+  const [isPicDropdownOpen, setIsPicDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/employees')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setEmployeesList(data);
+        }
+      })
+      .catch(err => console.error('Failed to load employees for PIC dropdown:', err));
+  }, []);
 
   // Comments / Updates State
   const [allComments, setAllComments] = useState<any[]>([]);
@@ -171,60 +289,90 @@ export function NotionDatabaseTable({
   const [uploadingFile, setUploadingFile] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; driveViewUrl?: string; driveDownloadUrl?: string } | null>(null);
 
-  // Normalize column names to find common properties
-  const validHeaders = useMemo(() => {
-    return headers.map((h) => h.trim()).filter((h) => h.length > 0 && h !== '-');
-  }, [headers]);
-
-  const colKeys = useMemo(() => {
-    return validHeaders.map((h) => ({
-      raw: h,
-      clean: h.trim(),
-      lower: h.trim().toLowerCase()
-    }));
-  }, [validHeaders]);
-
-  // Primary Title column (Topic / Task Name / Subject)
-  // MUST prioritize 'Jenis Kegiatan', 'Nama', 'Task', 'Judul', 'Title', 'Rencana Tindakan'
-  // NEVER use 'Aktivitas' if other meaningful title columns exist!
-  const titleCol = useMemo(() => {
-    const priorityChecks = [
-      (c: { lower: string }) => c.lower === 'jenis kegiatan' || c.lower.includes('jenis kegiatan'),
-      (c: { lower: string }) => c.lower === 'nama' || c.lower === 'name' || c.lower === 'item name' || c.lower.includes('nama barang'),
-      (c: { lower: string }) => c.lower === 'rencana tindakan' || c.lower.includes('tindakan'),
-      (c: { lower: string }) => c.lower === 'task' || c.lower.includes('task') || c.lower === 'judul' || c.lower === 'title',
-      (c: { lower: string }) => c.lower.includes('kegiatan') && !c.lower.includes('jenis'),
-      (c: { lower: string }) => c.lower === 'description' || c.lower === 'deskripsi' || c.lower === 'content',
-      (c: { lower: string }) => c.lower.includes('topic') || c.lower.includes('subjek') || c.lower.includes('subject'),
-      (c: { lower: string }) => c.lower === 'aktivitas' || c.lower.includes('aktivitas')
+  // Construct standardized headers matching exact Notion requested order
+  const displayHeaders = useMemo(() => {
+    // Standard Canonical list
+    const canonical = [
+      'number',
+      'Jenis kegiatan',
+      'Keterangan',
+      'PIC',
+      'Priority',
+      'Status',
+      'Created Time',
+      'Kategori',
+      'Activity (routine/non routine)',
+      'period'
     ];
 
-    for (const check of priorityChecks) {
-      const match = colKeys.find(check);
-      if (match) return match.raw;
+    // Find if there are custom extra headers in existing table not covered by canonical
+    const extraHeaders: string[] = [];
+    headers.forEach(h => {
+      const lower = h.toLowerCase().trim();
+      const isMapped = canonical.some(c => {
+        const cl = c.toLowerCase();
+        if (cl === 'number') return lower === 'number' || lower === 'no' || lower === 'no.' || lower === '#';
+        if (cl === 'jenis kegiatan') return lower.includes('jenis kegiatan') || lower === 'task' || lower === 'judul';
+        if (cl === 'keterangan') return lower.includes('keterangan') || lower.includes('catatan') || lower.includes('deskripsi');
+        if (cl === 'pic') return lower === 'pic' || lower.includes('assignee') || lower.includes('pj');
+        if (cl === 'priority') return lower.includes('prioritas') || lower.includes('priority');
+        if (cl === 'status') return lower.includes('status');
+        if (cl === 'created time') return lower.includes('created') || lower.includes('tanggal dibuat');
+        if (cl === 'kategori') return lower.includes('kategori') || lower.includes('category');
+        if (cl === 'activity (routine/non routine)') return lower.includes('activity') || lower.includes('aktivitas');
+        if (cl === 'period') return lower.includes('period') || lower.includes('periode');
+        return false;
+      });
+      if (!isMapped && h.trim().length > 0 && !extraHeaders.includes(h.trim())) {
+        extraHeaders.push(h.trim());
+      }
+    });
+
+    return [...canonical, ...extraHeaders];
+  }, [headers]);
+
+  // Helper to read row property with fuzzy matching across header aliases
+  const getRowVal = useCallback((row: TableRowData, colName: string): string => {
+    if (!row) return '';
+    if (row[colName] !== undefined) return row[colName];
+
+    const targetLower = colName.toLowerCase().trim();
+    for (const key of Object.keys(row)) {
+      const keyLower = key.toLowerCase().trim();
+      if (keyLower === targetLower) return row[key];
+
+      if (targetLower === 'number' && (keyLower === 'no' || keyLower === 'no.' || keyLower === '#')) {
+        return row[key];
+      }
+      if (targetLower === 'jenis kegiatan' && (keyLower.includes('jenis kegiatan') || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama')) {
+        return row[key];
+      }
+      if (targetLower === 'keterangan' && (keyLower.includes('keterangan') || keyLower.includes('catatan') || keyLower.includes('deskripsi') || keyLower.includes('content') || keyLower.includes('rincian'))) {
+        return row[key];
+      }
+      if (targetLower === 'pic' && (keyLower === 'pic' || keyLower.includes('assignee') || keyLower.includes('pj') || keyLower === 'personil')) {
+        return row[key];
+      }
+      if (targetLower === 'priority' && (keyLower.includes('prioritas') || keyLower.includes('priority'))) {
+        return row[key];
+      }
+      if (targetLower === 'status' && keyLower.includes('status')) {
+        return row[key];
+      }
+      if (targetLower === 'created time' && (keyLower.includes('created') || keyLower.includes('tanggal dibuat') || keyLower.includes('waktu dibuat') || keyLower === 'dibuat')) {
+        return row[key];
+      }
+      if (targetLower === 'kategori' && (keyLower.includes('kategori') || keyLower.includes('category') || keyLower === 'dept')) {
+        return row[key];
+      }
+      if (targetLower === 'activity (routine/non routine)' && (keyLower.includes('activity') || keyLower.includes('aktivitas'))) {
+        return row[key];
+      }
+      if (targetLower === 'period' && (keyLower === 'period' || keyLower === 'periode')) {
+        return row[key];
+      }
     }
-
-    return validHeaders.length > 0 ? validHeaders[validHeaders.length - 1] : '';
-  }, [colKeys, validHeaders]);
-
-  // Distinct Activity column (e.g. Routine / Non Routine)
-  const activityCol = useMemo(() => {
-    const match = colKeys.find((c) => c.lower === 'aktivitas' || c.lower.includes('aktivitas'));
-    return match && match.raw !== titleCol ? match.raw : '';
-  }, [colKeys, titleCol]);
-
-  const statusCol = useMemo(() => colKeys.find((c) => c.lower.includes('status') && c.raw !== titleCol)?.raw || '', [colKeys, titleCol]);
-  const priorityCol = useMemo(() => colKeys.find((c) => (c.lower.includes('prioritas') || c.lower.includes('priority')) && c.raw !== titleCol)?.raw || '', [colKeys, titleCol]);
-  const picCol = useMemo(() => colKeys.find((c) => (c.lower.includes('pic') || c.lower.includes('assignee') || c.lower.includes('pj') || c.lower === 'personil') && c.raw !== titleCol)?.raw || '', [colKeys, titleCol]);
-  const categoryCol = useMemo(() => colKeys.find((c) => (c.lower.includes('kategori') || c.lower.includes('category') || c.lower === 'group' || c.lower === 'dept' || c.lower === 'divisi') && c.raw !== titleCol)?.raw || '', [colKeys, titleCol]);
-  const descCol = useMemo(() => colKeys.find((c) => (c.lower.includes('keterangan') || c.lower.includes('catatan') || c.lower.includes('remark') || c.lower.includes('updates')) && c.raw !== titleCol)?.raw || '', [colKeys, titleCol]);
-  const targetDateCol = useMemo(() => colKeys.find((c) => (c.lower.includes('target') || c.lower.includes('due date') || c.lower.includes('deadline')) && c.raw !== titleCol)?.raw || '', [colKeys, titleCol]);
-  const actualDateCol = useMemo(() => colKeys.find((c) => (c.lower.includes('aktual') || (c.lower.includes('selesai') && !c.lower.includes('target'))) && c.raw !== titleCol)?.raw || '', [colKeys, titleCol]);
-  const createdTimeCol = useMemo(() => colKeys.find((c) => c.lower === 'created time' || c.lower === 'created' || c.lower === 'tanggal dibuat' || c.lower === 'waktu dibuat' || c.lower === 'dibuat' || c.lower.includes('created'))?.raw || '', [colKeys]);
-
-  const isRedundantCol = useCallback((h: string) => {
-    const l = h.toLowerCase().trim();
-    return l === 'period' || l === 'periode' || l === 'number' || l === 'no';
+    return '';
   }, []);
 
   // Fetch comments from backend
@@ -260,11 +408,11 @@ export function NotionDatabaseTable({
     return map;
   }, [allComments]);
 
-  // Active topic comments for modal
+  // Active topic title for comments modal
   const selectedTopicTitle = useMemo(() => {
-    if (!selectedRow || !titleCol) return '';
-    return (selectedRow[titleCol] || '').trim();
-  }, [selectedRow, titleCol]);
+    if (!selectedRow) return '';
+    return (getRowVal(selectedRow, 'Jenis kegiatan') || '').trim();
+  }, [selectedRow, getRowVal]);
 
   const activeTopicComments = useMemo(() => {
     if (!selectedTopicTitle) return [];
@@ -272,26 +420,128 @@ export function NotionDatabaseTable({
     return allComments.filter((c) => (c.topicTitle || '').toLowerCase().trim() === q);
   }, [allComments, selectedTopicTitle]);
 
-  // Auto-open topic from URL search param if present
-  useEffect(() => {
-    if (rows.length === 0 || !titleCol) return;
+  // Save changes to database
+  const saveTableToBackend = async (newRows: TableRowData[]) => {
+    if (!postId) return;
     try {
-      const params = new URLSearchParams(window.location.search);
-      const urlTopic = params.get('topic');
-      if (urlTopic) {
-        const q = urlTopic.toLowerCase().trim();
-        const match = rows.find((r) => (r[titleCol] || '').toLowerCase().trim() === q);
-        if (match) {
-          setSelectedRow(match);
-          setModalTab('comments');
-        }
+      const updatedMarkdown = serializeMarkdownTable(displayHeaders, newRows, beforeText, afterText);
+      const res = await fetch(`/api/bulletin/${postId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: updatedMarkdown })
+      });
+      if (res.ok) {
+        onPostContentUpdate?.(updatedMarkdown);
       }
-    } catch (e) {}
-  }, [rows, titleCol]);
+    } catch (err) {
+      console.error('Failed to persist table markdown to backend:', err);
+    }
+  };
+
+  // Add Row Handler
+  const handleOpenAddModal = () => {
+    const nextNum = String(localRows.length + 1);
+    const now = new Date();
+    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    setRowFormData({
+      number: nextNum,
+      'Jenis kegiatan': '',
+      Keterangan: '',
+      PIC: currentAuthorName || '',
+      Priority: 'Normal',
+      Status: 'Open',
+      'Created Time': createdStr,
+      Kategori: section || 'Laboratorium',
+      'Activity (routine/non routine)': 'Routine',
+      period: 'Weekly'
+    });
+    setEditingRowIndex(null);
+    setShowRowModal(true);
+  };
+
+  // Edit Row Handler
+  const handleOpenEditModal = (row: TableRowData, index: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const data: TableRowData = {};
+    displayHeaders.forEach(h => {
+      data[h] = getRowVal(row, h);
+    });
+    setRowFormData(data);
+    setEditingRowIndex(index);
+    setShowRowModal(true);
+  };
+
+  // Save Row (Create / Edit)
+  const handleSaveRow = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rowFormData['Jenis kegiatan']?.trim()) {
+      toast.error('Wajib mengisi "Jenis kegiatan"');
+      return;
+    }
+
+    setIsSavingRow(true);
+    try {
+      let updatedRows: TableRowData[];
+      if (editingRowIndex === null) {
+        // Adding new row
+        updatedRows = [...localRows, rowFormData];
+        toast.success('Data kegiatan baru berhasil ditambahkan!');
+      } else {
+        // Editing existing row
+        updatedRows = localRows.map((r, i) => i === editingRowIndex ? { ...r, ...rowFormData } : r);
+        toast.success('Perubahan data kegiatan berhasil disimpan!');
+      }
+
+      setLocalRows(updatedRows);
+      onRowsChange?.(updatedRows);
+      await saveTableToBackend(updatedRows);
+      setShowRowModal(false);
+
+      if (selectedRow && editingRowIndex !== null) {
+        setSelectedRow(rowFormData);
+      }
+    } catch (err: any) {
+      toast.error('Gagal menyimpan baris data: ' + err.message);
+    } finally {
+      setIsSavingRow(false);
+    }
+  };
+
+  // Delete Row Handler
+  const handleDeleteRow = async (index: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const targetRow = localRows[index];
+    const taskName = targetRow ? getRowVal(targetRow, 'Jenis kegiatan') : `Baris #${index + 1}`;
+
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus data kegiatan: "${taskName}"?`)) {
+      return;
+    }
+
+    try {
+      const updatedRows = localRows.filter((_, i) => i !== index);
+      // Re-index number column
+      const reindexed = updatedRows.map((r, i) => ({
+        ...r,
+        number: String(i + 1)
+      }));
+
+      setLocalRows(reindexed);
+      onRowsChange?.(reindexed);
+      await saveTableToBackend(reindexed);
+
+      toast.success(`Data kegiatan "${taskName}" berhasil dihapus!`);
+      if (selectedRow === targetRow) {
+        setSelectedRow(null);
+      }
+    } catch (err) {
+      toast.error('Gagal menghapus baris');
+    }
+  };
 
   // Filter and sort rows
   const filteredRows = useMemo(() => {
-    let result = [...rows];
+    let result = [...localRows];
 
     // Filter out completely empty separator or blank rows
     result = result.filter((row) => {
@@ -310,9 +560,9 @@ export function NotionDatabaseTable({
     }
 
     // 2. Status Filter
-    if (statusFilter !== 'ALL' && statusCol) {
+    if (statusFilter !== 'ALL') {
       result = result.filter((row) => {
-        const val = (row[statusCol] || '').toUpperCase().trim();
+        const val = (getRowVal(row, 'Status') || '').toUpperCase().trim();
         if (statusFilter === 'ACTIVE') return !val.includes('CLOSE') && !val.includes('SELESAI') && !val.includes('DONE');
         if (statusFilter === 'ON PROGRESS') return val.includes('PROGRESS') || val.includes('PROSES');
         if (statusFilter === 'CLOSE') return val.includes('CLOSE') || val.includes('SELESAI') || val.includes('DONE');
@@ -323,9 +573,9 @@ export function NotionDatabaseTable({
     }
 
     // 3. Priority Filter
-    if (priorityFilter !== 'ALL' && priorityCol) {
+    if (priorityFilter !== 'ALL') {
       result = result.filter((row) => {
-        const val = (row[priorityCol] || '').toUpperCase().trim();
+        const val = (getRowVal(row, 'Priority') || '').toUpperCase().trim();
         return val.includes(priorityFilter);
       });
     }
@@ -333,8 +583,15 @@ export function NotionDatabaseTable({
     // 4. Sort
     if (sortColumn) {
       result.sort((a, b) => {
-        const rawA = (a[sortColumn] || '').trim();
-        const rawB = (b[sortColumn] || '').trim();
+        const rawA = (getRowVal(a, sortColumn) || '').trim();
+        const rawB = (getRowVal(b, sortColumn) || '').trim();
+
+        // If numeric column (number)
+        if (sortColumn.toLowerCase() === 'number' || sortColumn.toLowerCase() === 'no') {
+          const numA = parseFloat(rawA) || 0;
+          const numB = parseFloat(rawB) || 0;
+          return sortDirection === 'asc' ? numA - numB : numB - numA;
+        }
 
         // If date/time column
         const timeA = Date.parse(rawA);
@@ -352,7 +609,7 @@ export function NotionDatabaseTable({
     }
 
     return result;
-  }, [rows, searchQuery, statusFilter, priorityFilter, sortColumn, sortDirection, statusCol, priorityCol]);
+  }, [localRows, searchQuery, statusFilter, priorityFilter, sortColumn, sortDirection, getRowVal]);
 
   // Statistics calculation
   const stats = useMemo(() => {
@@ -362,9 +619,9 @@ export function NotionDatabaseTable({
     let open = 0;
     let highPriority = 0;
 
-    rows.forEach((r) => {
-      const s = (statusCol ? r[statusCol] || '' : '').toUpperCase();
-      const p = (priorityCol ? r[priorityCol] || '' : '').toUpperCase();
+    localRows.forEach((r) => {
+      const s = (getRowVal(r, 'Status') || '').toUpperCase();
+      const p = (getRowVal(r, 'Priority') || '').toUpperCase();
       const vals = Object.values(r).map((v) => (v || '').trim());
       if (vals.some((v) => v !== '' && v !== '-')) {
         total++;
@@ -377,7 +634,7 @@ export function NotionDatabaseTable({
     });
 
     return { total, onProgress, closed, open, highPriority };
-  }, [rows, statusCol, priorityCol]);
+  }, [localRows, getRowVal]);
 
   const handleSort = (col: string) => {
     if (sortColumn === col) {
@@ -398,8 +655,8 @@ export function NotionDatabaseTable({
     if (!commentText.trim() || !postId || !selectedRow) return;
 
     const topicTitleVal = selectedTopicTitle || 'Topik';
-    const picVal = (picCol && selectedRow[picCol] ? selectedRow[picCol] : '').trim();
-    const activeSection = section || selectedRow[categoryCol] || 'Prep & Lab';
+    const picVal = (getRowVal(selectedRow, 'PIC') || '').trim();
+    const activeSection = section || getRowVal(selectedRow, 'Kategori') || 'Prep & Lab';
 
     try {
       setSubmittingComment(true);
@@ -429,9 +686,17 @@ export function NotionDatabaseTable({
         setCommentText('');
         setStatusUpdateChoice('');
         setSelectedFile(null);
-        // Locally update status if changed
-        if (statusUpdateChoice && statusCol) {
-          selectedRow[statusCol] = statusUpdateChoice;
+        
+        // Update local row status if changed
+        if (statusUpdateChoice) {
+          const rowIndex = localRows.findIndex(r => r === selectedRow);
+          if (rowIndex !== -1) {
+            const updated = [...localRows];
+            updated[rowIndex] = { ...updated[rowIndex], Status: statusUpdateChoice };
+            setLocalRows(updated);
+            setSelectedRow(updated[rowIndex]);
+            await saveTableToBackend(updated);
+          }
         }
         await fetchComments();
       } else {
@@ -458,6 +723,114 @@ export function NotionDatabaseTable({
       }
     } catch (e) {
       toast.error('Gagal menghapus komentar');
+    }
+  };
+
+  const galleryFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
+
+  const handleGalleryFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !postId || !selectedRow) return;
+
+    setIsUploadingGallery(true);
+    toast.loading('Mengompres dan mengunggah lampiran foto...', { id: 'upload-gallery' });
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64Raw = ev.target?.result as string;
+        let finalBase64 = base64Raw;
+
+        // If image, compress with canvas
+        if (file.type.startsWith('image/')) {
+          const img = new Image();
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.src = base64Raw;
+          });
+
+          const canvas = document.createElement('canvas');
+          const maxW = 1600;
+          const maxH = 1200;
+          let w = img.width;
+          let h = img.height;
+
+          if (w > maxW || h > maxH) {
+            if (w > h) {
+              h = Math.round((h * maxW) / w);
+              w = maxW;
+            } else {
+              w = Math.round((w * maxH) / h);
+              h = maxH;
+            }
+          }
+
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            finalBase64 = canvas.toDataURL('image/jpeg', 0.85);
+          }
+        }
+
+        // Upload to /api/upload or Google Drive
+        let uploadedUrl = finalBase64;
+        try {
+          const upRes = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              base64Data: finalBase64,
+              mimeType: file.type || 'image/jpeg',
+              filename: file.name,
+              folderName: 'Bulletin Attachments'
+            })
+          });
+          const upJson = await upRes.json();
+          if (upJson.url) {
+            uploadedUrl = upJson.url;
+          }
+        } catch (uErr) {
+          // Fallback to compressed base64
+        }
+
+        // Post as an attachment comment for this topic
+        const topicTitleVal = selectedTopicTitle || 'Topik';
+        const activeSection = section || getRowVal(selectedRow, 'Kategori') || 'Prep & Lab';
+
+        const cRes = await fetch(`/api/bulletin/${postId}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            postId,
+            content: `📎 Lampiran Foto / Dokumen: ${file.name}`,
+            fileUrl: uploadedUrl,
+            topicTitle: topicTitleVal,
+            topicId: topicTitleVal.toLowerCase().replace(/\s+/g, '-'),
+            section: activeSection,
+            category: getRowVal(selectedRow, 'Kategori') || 'Laboratorium',
+            authorName: currentAuthorName || 'Personil',
+            authorNik: currentAuthorNik || 'NOT_SET'
+          })
+        });
+
+        toast.dismiss('upload-gallery');
+        if (cRes.ok) {
+          toast.success('Foto / lampiran berhasil ditambahkan ke galeri!');
+          await fetchComments();
+        } else {
+          toast.error('Gagal menambahkan lampiran ke topik.');
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      toast.dismiss('upload-gallery');
+      toast.error('Gagal mengunggah foto / file');
+    } finally {
+      setIsUploadingGallery(false);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -546,12 +919,12 @@ export function NotionDatabaseTable({
         <span className="w-4 h-4 rounded-full bg-teal-800 text-teal-200 text-[10px] font-bold flex items-center justify-center">
           {initial}
         </span>
-        <span className="truncate max-w-[100px]">{picStr}</span>
+        <span className="truncate max-w-[110px]">{picStr}</span>
       </div>
     );
   };
 
-  // Helper to format multiline bullet notes
+  // Helper to format multiline notes
   const renderFormattedNotes = (text: string) => {
     if (!text || text === '-' || text === '•') return <span className="text-slate-600 font-mono text-xs">-</span>;
     const cleanText = text.trim();
@@ -581,11 +954,11 @@ export function NotionDatabaseTable({
       toast.error('Tidak ada data untuk diekspor');
       return;
     }
-    const csvHeaders = validHeaders.join(',');
+    const csvHeaders = displayHeaders.join(',');
     const csvRows = filteredRows.map((row) => {
-      return validHeaders
+      return displayHeaders
         .map((h) => {
-          const val = (row[h] || '').replace(/"/g, '""');
+          const val = (getRowVal(row, h) || '').replace(/"/g, '""');
           return `"${val}"`;
         })
         .join(',');
@@ -613,17 +986,65 @@ export function NotionDatabaseTable({
             <h3 className="font-bold text-slate-100 text-sm md:text-base flex items-center gap-2">
               <span>{title || 'Database Table'}</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-mono">
-                {filteredRows.length} items
+                {filteredRows.length} baris
               </span>
             </h3>
             <p className="text-[11px] text-slate-400">
-              Interactive Notion Database Table dengan dukungan komentar per-topik & notifikasi tim.
+              Urutan kolom sinkron Notion: Number • Jenis kegiatan • Keterangan • PIC • Priority • Status • Created Time • Kategori • Activity • Period
             </p>
           </div>
         </div>
 
-        {/* View Switcher & Action Buttons */}
-        <div className="flex items-center gap-2">
+        {/* View Switcher, Add Row Button, Zoom & Action Buttons */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Add Row Button */}
+          <button
+            onClick={handleOpenAddModal}
+            className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Tambah Data Kegiatan</span>
+          </button>
+
+          {/* Fit Page Mode Toggle */}
+          <button
+            onClick={() => setFitPageMode(!fitPageMode)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-xs ${
+              fitPageMode 
+                ? 'bg-teal-600/30 text-teal-300 border-teal-500/70' 
+                : 'bg-[#242424] hover:bg-[#2e2e2e] text-slate-300 border-slate-700'
+            }`}
+            title={fitPageMode ? "Matikan Fit Screen (Mode Scroll Lebar)" : "Aktifkan Fit Screen (Semua Kolom Muat 1 Layar Tanpa Horizontal Scroll)"}
+          >
+            {fitPageMode ? <Minimize2 className="w-3.5 h-3.5 text-teal-400" /> : <Maximize2 className="w-3.5 h-3.5 text-slate-400" />}
+            <span className="hidden sm:inline">{fitPageMode ? "Fit Screen: ON" : "Fit Screen"}</span>
+          </button>
+
+          {/* Zoom Out / In Controls */}
+          <div className="flex items-center bg-[#151515] p-0.5 rounded-xl border border-slate-800 text-xs">
+            <button
+              onClick={() => setZoomPercent((prev) => Math.max(70, prev - 10))}
+              className="p-1 px-1.5 hover:bg-[#282828] text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+              title="Zoom Out (Perkecil Tampilan)"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <span 
+              onClick={() => setZoomPercent(100)}
+              className="px-1.5 font-mono text-[11px] text-teal-400 font-bold min-w-[38px] text-center cursor-pointer hover:underline"
+              title="Klik untuk Reset ke 100%"
+            >
+              {zoomPercent}%
+            </span>
+            <button
+              onClick={() => setZoomPercent((prev) => Math.min(130, prev + 10))}
+              className="p-1 px-1.5 hover:bg-[#282828] text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+              title="Zoom In (Perbesar Tampilan)"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           <div className="flex items-center bg-[#151515] p-1 rounded-xl border border-slate-800">
             <button
               onClick={() => setViewMode('table')}
@@ -689,222 +1110,102 @@ export function NotionDatabaseTable({
 
         {/* Quick Filter Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-          {statusCol && (
-            <>
-              {[
-                { key: 'ALL', label: 'Semua Status', count: stats.total },
-                { key: 'ACTIVE', label: 'Sedang Aktif', count: stats.total - stats.closed },
-                { key: 'ON PROGRESS', label: 'On Progress', count: stats.onProgress },
-                { key: 'OPEN', label: 'Open', count: stats.open },
-                { key: 'CLOSE', label: 'Closed / Selesai', count: stats.closed },
-              ].map((st) => (
-                <button
-                  key={st.key}
-                  onClick={() => setStatusFilter(st.key)}
-                  className={`px-3 py-1 rounded-lg font-semibold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 ${
-                    statusFilter === st.key
-                      ? 'bg-teal-600/30 text-teal-300 border border-teal-500/60 shadow-xs'
-                      : 'bg-[#262626] text-slate-400 hover:text-slate-200 border border-slate-700/60'
-                  }`}
-                >
-                  <span>{st.label}</span>
-                  {st.count !== undefined && st.count > 0 && (
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                      statusFilter === st.key ? 'bg-teal-500/20 text-teal-300' : 'bg-slate-800 text-slate-400'
-                    }`}>
-                      {st.count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </>
-          )}
-
-          {priorityCol && (
-            <select
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              className="px-2.5 py-1 rounded-lg bg-[#262626] border border-slate-700/60 text-slate-300 text-[11px] font-semibold outline-none cursor-pointer"
-            >
-              <option value="ALL">Semua Prioritas</option>
-              <option value="HIGH">🔴 High Priority</option>
-              <option value="NORMAL">🟡 Normal Priority</option>
-              <option value="LOW">🔵 Low Priority</option>
-            </select>
-          )}
-
-          {createdTimeCol && (
+          {[
+            { key: 'ALL', label: 'Semua Status', count: stats.total },
+            { key: 'ACTIVE', label: 'Sedang Aktif', count: stats.total - stats.closed },
+            { key: 'ON PROGRESS', label: 'On Progress', count: stats.onProgress },
+            { key: 'OPEN', label: 'Open', count: stats.open },
+            { key: 'CLOSE', label: 'Closed / Selesai', count: stats.closed },
+          ].map((st) => (
             <button
-              onClick={() => {
-                if (sortColumn === createdTimeCol) {
-                  setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-                } else {
-                  setSortColumn(createdTimeCol);
-                  setSortDirection('desc'); // Default to newest first
-                }
-              }}
-              className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${
-                sortColumn === createdTimeCol
+              key={st.key}
+              onClick={() => setStatusFilter(st.key)}
+              className={`px-3 py-1 rounded-lg font-semibold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 ${
+                statusFilter === st.key
                   ? 'bg-teal-600/30 text-teal-300 border border-teal-500/60 shadow-xs'
                   : 'bg-[#262626] text-slate-400 hover:text-slate-200 border border-slate-700/60'
               }`}
-              title="Urutkan berdasarkan Waktu Dibuat"
             >
-              <Clock className="w-3 h-3 text-teal-400" />
-              <span>
-                Waktu Dibuat {sortColumn === createdTimeCol ? (sortDirection === 'desc' ? '(Terbaru ↓)' : '(Terlama ↑)') : ''}
-              </span>
+              <span>{st.label}</span>
+              {st.count !== undefined && st.count > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                  statusFilter === st.key ? 'bg-teal-500/20 text-teal-300' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {st.count}
+                </span>
+              )}
             </button>
-          )}
+          ))}
+
+          <select
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
+            className="px-2.5 py-1 rounded-lg bg-[#262626] border border-slate-700/60 text-slate-300 text-[11px] font-semibold outline-none cursor-pointer"
+          >
+            <option value="ALL">Semua Prioritas</option>
+            <option value="HIGH">🔴 High Priority</option>
+            <option value="NORMAL">🟡 Normal Priority</option>
+            <option value="LOW">🔵 Low Priority</option>
+          </select>
         </div>
       </div>
 
-      {/* Main View Area */}
+      {/* ========================================================================= */}
+      {/* 1. TABLE VIEW (Exact Notion Column Hierarchy & Zoom / Fit Page)            */}
+      {/* ========================================================================= */}
       {viewMode === 'table' && (
-        <div className="w-full overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-xs border-collapse min-w-[900px]">
-            {/* Table Headers */}
-            <thead className="bg-[#242424] text-slate-300 font-bold border-b border-slate-800 sticky top-0 z-10 select-none">
-              <tr>
-                <th className="w-12 px-3.5 py-3 text-center text-slate-500 font-mono">#</th>
-                
-                {/* Primary Title Column (Jenis Kegiatan / Task Topic) */}
-                {titleCol && (
-                  <th
-                    onClick={() => handleSort(titleCol)}
-                    className="px-4 py-3 font-bold text-slate-100 hover:bg-[#2c2c2c] cursor-pointer transition-colors min-w-[260px]"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <ClipboardList className="w-3.5 h-3.5 text-teal-400" />
-                      <span>{titleCol}</span>
-                      {sortColumn === titleCol ? (
-                        sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 opacity-30" />
-                      )}
-                    </div>
-                  </th>
-                )}
+        <div 
+          className="overflow-x-auto transition-all"
+          style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
+        >
+          <table className={`w-full text-left border-collapse ${
+            fitPageMode ? 'table-fixed text-[11px]' : 'text-xs'
+          }`}>
+            {/* Table Header */}
+            <thead>
+              <tr className="bg-[#242424] border-b border-[#303030] text-slate-300 select-none">
+                {displayHeaders.map((colHeader) => {
+                  const isSorted = sortColumn === colHeader;
+                  const isNum = colHeader.toLowerCase() === 'number' || colHeader.toLowerCase() === 'no';
+                  const colLower = colHeader.toLowerCase();
 
-                {/* Status Column */}
-                {statusCol && (
-                  <th
-                    onClick={() => handleSort(statusCol)}
-                    className="px-4 py-3 font-bold text-slate-200 hover:bg-[#2c2c2c] cursor-pointer transition-colors w-36"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span>Status</span>
-                      {sortColumn === statusCol && (
-                        sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />
-                      )}
-                    </div>
-                  </th>
-                )}
+                  // Column width classes based on fitPageMode
+                  let widthClass = 'whitespace-nowrap px-3 py-2.5';
+                  if (fitPageMode) {
+                    if (isNum) widthClass = 'w-[4%] text-center px-1 py-2';
+                    else if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') widthClass = 'w-[18%] px-2.5 py-2';
+                    else if (colLower.includes('keterangan') || colLower.includes('catatan')) widthClass = 'w-[23%] px-2.5 py-2';
+                    else if (colLower === 'pic' || colLower.includes('assignee')) widthClass = 'w-[11%] px-2 py-2';
+                    else if (colLower.includes('priority')) widthClass = 'w-[7%] px-1.5 py-2';
+                    else if (colLower.includes('status')) widthClass = 'w-[9%] px-1.5 py-2';
+                    else if (colLower.includes('created')) widthClass = 'w-[9%] px-1.5 py-2';
+                    else if (colLower.includes('kategori')) widthClass = 'w-[6%] px-1.5 py-2';
+                    else if (colLower.includes('activity')) widthClass = 'w-[7%] px-1.5 py-2';
+                    else if (colLower.includes('period')) widthClass = 'w-[5%] px-1.5 py-2';
+                    else widthClass = 'w-[6%] px-1.5 py-2';
+                  } else {
+                    if (isNum) widthClass = 'w-16 text-center px-3.5 py-3 whitespace-nowrap';
+                    else if (colLower.includes('jenis kegiatan')) widthClass = 'min-w-[240px] px-3.5 py-3 whitespace-nowrap';
+                    else if (colLower.includes('keterangan')) widthClass = 'min-w-[280px] px-3.5 py-3';
+                    else widthClass = 'px-3.5 py-3 whitespace-nowrap';
+                  }
 
-                {/* Priority Column */}
-                {priorityCol && (
-                  <th
-                    onClick={() => handleSort(priorityCol)}
-                    className="px-3.5 py-3 font-bold text-slate-200 hover:bg-[#2c2c2c] cursor-pointer transition-colors w-28"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span>Prioritas</span>
-                      {sortColumn === priorityCol && (
-                        sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />
-                      )}
-                    </div>
-                  </th>
-                )}
-
-                {/* PIC Column */}
-                {picCol && (
-                  <th className="px-3.5 py-3 font-bold text-slate-200 w-36">
-                    PIC
-                  </th>
-                )}
-
-                {/* Category Column */}
-                {categoryCol && (
-                  <th className="px-3.5 py-3 font-bold text-slate-200 w-32">
-                    Kategori
-                  </th>
-                )}
-
-                {/* Aktivitas Column (e.g. Routine / Non Routine) */}
-                {activityCol && (
-                  <th className="px-3.5 py-3 font-bold text-slate-200 w-28">
-                    Aktivitas
-                  </th>
-                )}
-
-                {/* Target Date Column */}
-                {targetDateCol && (
-                  <th className="px-3.5 py-3 font-bold text-slate-200 w-32">
-                    Target Selesai
-                  </th>
-                )}
-
-                {/* Actual Date Column */}
-                {actualDateCol && (
-                  <th className="px-3.5 py-3 font-bold text-slate-200 w-32">
-                    Aktual Selesai
-                  </th>
-                )}
-
-                {/* Created Time Column */}
-                {createdTimeCol && (
-                  <th
-                    onClick={() => handleSort(createdTimeCol)}
-                    className="px-3.5 py-3 font-bold text-slate-200 hover:bg-[#2c2c2c] cursor-pointer transition-colors w-36 whitespace-nowrap"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Dibuat</span>
-                      {sortColumn === createdTimeCol && (
-                        sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />
-                      )}
-                    </div>
-                  </th>
-                )}
-
-                {/* Description Column */}
-                {descCol && (
-                  <th className="px-4 py-3 font-bold text-slate-200 min-w-[280px]">
-                    Keterangan & Rincian
-                  </th>
-                )}
-
-                {/* Other columns */}
-                {validHeaders
-                  .filter((h) => 
-                    h !== titleCol && 
-                    h !== statusCol && 
-                    h !== priorityCol && 
-                    h !== picCol && 
-                    h !== categoryCol && 
-                    h !== activityCol && 
-                    h !== targetDateCol && 
-                    h !== actualDateCol && 
-                    h !== createdTimeCol && 
-                    h !== descCol &&
-                    !isRedundantCol(h)
-                  )
-                  .map((h) => (
+                  return (
                     <th
-                      key={h}
-                      onClick={() => handleSort(h)}
-                      className="px-3.5 py-3 font-bold text-slate-300 hover:bg-[#2c2c2c] cursor-pointer transition-colors whitespace-nowrap"
+                      key={colHeader}
+                      onClick={() => handleSort(colHeader)}
+                      className={`font-bold hover:bg-[#2c2c2c] cursor-pointer transition-colors ${widthClass}`}
                     >
-                      <div className="flex items-center gap-1.5">
-                        <span>{h}</span>
-                        {sortColumn === h && (
-                          sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />
+                      <div className={`flex items-center gap-1 ${isNum ? 'justify-center' : ''}`}>
+                        <span className="truncate">{colHeader}</span>
+                        {isSorted && (
+                          sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400 shrink-0" /> : <ArrowDown className="w-3 h-3 text-teal-400 shrink-0" />
                         )}
                       </div>
                     </th>
-                  ))}
-
-                <th className="w-20 px-3 py-3 text-center text-slate-400">Aksi</th>
+                  );
+                })}
+                <th className={`text-center text-slate-400 ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'}`}>Aksi</th>
               </tr>
             </thead>
 
@@ -912,13 +1213,14 @@ export function NotionDatabaseTable({
             <tbody className="divide-y divide-slate-800/80 bg-[#1c1c1c]">
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={validHeaders.length + 2} className="py-12 text-center text-slate-500 italic text-xs">
+                  <td colSpan={displayHeaders.length + 1} className="py-12 text-center text-slate-500 italic text-xs">
                     Tidak ada data yang sesuai dengan pencarian atau filter.
                   </td>
                 </tr>
               ) : (
                 filteredRows.map((row, idx) => {
-                  const topicKey = (titleCol && row[titleCol] ? row[titleCol] : '').toLowerCase().trim();
+                  const topicTitle = getRowVal(row, 'Jenis kegiatan') || `Baris ${idx + 1}`;
+                  const topicKey = topicTitle.toLowerCase().trim();
                   const cCount = topicCommentCounts[topicKey] || 0;
 
                   return (
@@ -930,173 +1232,173 @@ export function NotionDatabaseTable({
                       }}
                       className="hover:bg-[#262626] transition-colors cursor-pointer group"
                     >
-                      {/* Index Number */}
-                      <td className="px-3.5 py-3 text-center text-slate-500 font-mono text-[11px]">
-                        {idx + 1}
-                      </td>
+                      {displayHeaders.map((colName) => {
+                        const val = getRowVal(row, colName);
+                        const colLower = colName.toLowerCase();
 
-                      {/* Primary Title (Jenis Kegiatan / Task Topic) */}
-                      {titleCol && (
-                        <td className="px-4 py-3 font-semibold text-slate-100 group-hover:text-teal-300 transition-colors">
-                          <div className="flex items-center gap-2">
-                            <span className="leading-snug block">
-                              {row[titleCol] && row[titleCol] !== '-' ? row[titleCol] : <em className="text-slate-500">Tanpa Judul</em>}
-                            </span>
-                            {cCount > 0 && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-teal-950/80 border border-teal-700/60 text-teal-300 text-[10px] font-bold shadow-xs">
-                                <MessageSquare className="w-2.5 h-2.5" />
-                                {cCount}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      )}
+                        // 1. Number Column
+                        if (colLower === 'number' || colLower === 'no') {
+                          return (
+                            <td key={colName} className={`text-center text-slate-500 font-mono ${
+                              fitPageMode ? 'px-1 py-2 text-[10px]' : 'px-3.5 py-3 text-[11px]'
+                            }`}>
+                              {val || idx + 1}
+                            </td>
+                          );
+                        }
 
-                      {/* Status */}
-                      {statusCol && (
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {renderStatusBadge(row[statusCol])}
-                        </td>
-                      )}
+                        // 2. Jenis kegiatan Column
+                        if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') {
+                          return (
+                            <td key={colName} className={`font-semibold text-slate-100 group-hover:text-teal-300 transition-colors ${
+                              fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-3'
+                            }`}>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`leading-snug block ${fitPageMode ? 'line-clamp-2 break-words text-[11px]' : ''}`}>
+                                  {val && val !== '-' ? val : <em className="text-slate-500">Tanpa Judul</em>}
+                                </span>
+                                {cCount > 0 && (
+                                  <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded-full bg-teal-950/80 border border-teal-700/60 text-teal-300 text-[9px] font-bold shadow-xs shrink-0">
+                                    <MessageSquare className="w-2 h-2" />
+                                    {cCount}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        }
 
-                      {/* Priority */}
-                      {priorityCol && (
-                        <td className="px-3.5 py-3 whitespace-nowrap">
-                          {renderPriorityBadge(row[priorityCol])}
-                        </td>
-                      )}
+                        // 3. Keterangan Column
+                        if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) {
+                          return (
+                            <td key={colName} className={`${
+                              fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-3 max-w-md'
+                            }`}>
+                              <div className={fitPageMode ? 'line-clamp-2 break-words text-[10.5px]' : ''}>
+                                {renderFormattedNotes(val)}
+                              </div>
+                            </td>
+                          );
+                        }
 
-                      {/* PIC */}
-                      {picCol && (
-                        <td className="px-3.5 py-3 whitespace-nowrap">
-                          {renderPicBadge(row[picCol])}
-                        </td>
-                      )}
+                        // 4. PIC Column
+                        if (colLower === 'pic' || colLower.includes('assignee')) {
+                          return (
+                            <td key={colName} className={`${fitPageMode ? 'px-1.5 py-2 overflow-hidden' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                              {renderPicBadge(val)}
+                            </td>
+                          );
+                        }
 
-                      {/* Category */}
-                      {categoryCol && (
-                        <td className="px-3.5 py-3 whitespace-nowrap">
-                          {row[categoryCol] && row[categoryCol] !== '-' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] bg-slate-800 text-slate-300 border border-slate-700">
-                              {row[categoryCol]}
-                            </span>
-                          ) : (
-                            <span className="text-slate-600 font-mono">-</span>
-                          )}
-                        </td>
-                      )}
+                        // 5. Priority Column
+                        if (colLower.includes('priority') || colLower.includes('prioritas')) {
+                          return (
+                            <td key={colName} className={`${fitPageMode ? 'px-1 py-2 overflow-hidden' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                              {renderPriorityBadge(val)}
+                            </td>
+                          );
+                        }
 
-                      {/* Aktivitas (Routine / Non Routine) */}
-                      {activityCol && (
-                        <td className="px-3.5 py-3 whitespace-nowrap">
-                          {row[activityCol] && row[activityCol] !== '-' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800/90 text-slate-300 border border-slate-700/80">
-                              {row[activityCol]}
-                            </span>
-                          ) : (
-                            <span className="text-slate-600 font-mono">-</span>
-                          )}
-                        </td>
-                      )}
+                        // 6. Status Column
+                        if (colLower.includes('status')) {
+                          return (
+                            <td key={colName} className={`${fitPageMode ? 'px-1 py-2 overflow-hidden' : 'px-4 py-3 whitespace-nowrap'}`}>
+                              {renderStatusBadge(val)}
+                            </td>
+                          );
+                        }
 
-                      {/* Target Date */}
-                      {targetDateCol && (
-                        <td className="px-3.5 py-3 whitespace-nowrap font-mono text-xs text-slate-300">
-                          {row[targetDateCol] && row[targetDateCol] !== '-' ? (
-                            <span className="inline-flex items-center gap-1 text-slate-300">
-                              <Calendar className="w-3 h-3 text-slate-500" />
-                              {row[targetDateCol]}
-                            </span>
-                          ) : (
-                            <span className="text-slate-600 font-mono">-</span>
-                          )}
-                        </td>
-                      )}
+                        // 7. Created Time Column
+                        if (colLower.includes('created')) {
+                          return (
+                            <td key={colName} className={`font-mono text-slate-400 ${
+                              fitPageMode ? 'px-1 py-2 text-[10px] truncate' : 'px-3.5 py-3 whitespace-nowrap text-[11px]'
+                            }`}>
+                              {val && val !== '-' ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700 text-slate-300">
+                                  <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">{val}</span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-600 font-mono">-</span>
+                              )}
+                            </td>
+                          );
+                        }
 
-                      {/* Actual Date */}
-                      {actualDateCol && (
-                        <td className="px-3.5 py-3 whitespace-nowrap font-mono text-xs text-slate-300">
-                          {row[actualDateCol] && row[actualDateCol] !== '-' ? (
-                            <span className="inline-flex items-center gap-1 text-emerald-400">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                              {row[actualDateCol]}
-                            </span>
-                          ) : (
-                            <span className="text-slate-600 font-mono">-</span>
-                          )}
-                        </td>
-                      )}
+                        // 8. Kategori Column
+                        if (colLower.includes('kategori') || colLower.includes('category')) {
+                          return (
+                            <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                              {val && val !== '-' ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] bg-slate-800 text-slate-300 border border-slate-700 truncate">
+                                  {val}
+                                </span>
+                              ) : (
+                                <span className="text-slate-600 font-mono">-</span>
+                              )}
+                            </td>
+                          );
+                        }
 
-                      {/* Created Time */}
-                      {createdTimeCol && (
-                        <td className="px-3.5 py-3 whitespace-nowrap font-mono text-[11px] text-slate-400">
-                          {row[createdTimeCol] && row[createdTimeCol] !== '-' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700 text-slate-300">
-                              <Clock className="w-2.5 h-2.5 text-slate-400" />
-                              {row[createdTimeCol]}
-                            </span>
-                          ) : (
-                            <span className="text-slate-600 font-mono">-</span>
-                          )}
-                        </td>
-                      )}
+                        // 9. Activity (routine/non routine) Column
+                        if (colLower.includes('activity') || colLower.includes('aktivitas')) {
+                          return (
+                            <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                              {val && val !== '-' ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-800/90 text-slate-300 border border-slate-700/80 truncate">
+                                  {val}
+                                </span>
+                              ) : (
+                                <span className="text-slate-600 font-mono">-</span>
+                              )}
+                            </td>
+                          );
+                        }
 
-                      {/* Notes / Description */}
-                      {descCol && (
-                        <td className="px-4 py-3 max-w-sm">
-                          {renderFormattedNotes(row[descCol])}
-                        </td>
-                      )}
+                        // 10. Period Column
+                        if (colLower.includes('period') || colLower.includes('periode')) {
+                          return (
+                            <td key={colName} className={`font-mono text-slate-300 ${
+                              fitPageMode ? 'px-1 py-2 text-[10px] truncate' : 'px-3.5 py-3 whitespace-nowrap text-[11px]'
+                            }`}>
+                              {val && val !== '-' ? (
+                                <span className="px-1.5 py-0.5 rounded bg-slate-800/60 border border-slate-700/60 truncate">
+                                  {val}
+                                </span>
+                              ) : (
+                                <span className="text-slate-600 font-mono">-</span>
+                              )}
+                            </td>
+                          );
+                        }
 
-                      {/* Other Columns */}
-                      {validHeaders
-                        .filter((h) => 
-                          h !== titleCol && 
-                          h !== statusCol && 
-                          h !== priorityCol && 
-                          h !== picCol && 
-                          h !== categoryCol && 
-                          h !== activityCol && 
-                          h !== targetDateCol && 
-                          h !== actualDateCol && 
-                          h !== createdTimeCol && 
-                          h !== descCol &&
-                          !isRedundantCol(h)
-                        )
-                        .map((h) => (
-                          <td key={h} className="px-3.5 py-3 text-slate-300 text-xs whitespace-nowrap">
-                            {row[h] && row[h] !== '-' ? row[h] : <span className="text-slate-600 font-mono">-</span>}
+                        // Default custom column
+                        return (
+                          <td key={colName} className={`text-slate-300 whitespace-nowrap ${
+                            fitPageMode ? 'px-1 py-2 text-[10.5px]' : 'px-3.5 py-3 text-xs'
+                          }`}>
+                            {val && val !== '-' ? val : <span className="text-slate-600 font-mono">-</span>}
                           </td>
-                        ))}
+                        );
+                      })}
 
-                      {/* Action Button */}
-                      <td className="px-3 py-3 text-center">
+                      {/* Row Action Buttons */}
+                      <td className={`text-center whitespace-nowrap ${fitPageMode ? 'px-1 py-2' : 'px-3 py-3'}`}>
                         <div className="flex items-center justify-center gap-1">
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedRow(row);
-                              setModalTab('comments');
-                            }}
-                            className={`p-1.5 rounded-lg transition-colors ${
-                              cCount > 0 
-                                ? 'text-teal-300 bg-teal-950/60 hover:bg-teal-900/80 border border-teal-700/50' 
-                                : 'text-slate-500 hover:text-teal-300 hover:bg-slate-800'
-                            }`}
-                            title="Update Progres & Diskusi"
+                            onClick={(e) => handleOpenEditModal(row, localRows.indexOf(row), e)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition-colors"
+                            title="Edit Data Kegiatan Ini"
                           >
-                            <MessageSquare className="w-3.5 h-3.5" />
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedRow(row);
-                              setModalTab('details');
-                            }}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-teal-300 hover:bg-slate-800 transition-colors"
-                            title="Lihat Rincian"
+                            onClick={(e) => handleDeleteRow(localRows.indexOf(row), e)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
+                            title="Hapus Baris Ini"
                           >
-                            <Eye className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -1106,84 +1408,80 @@ export function NotionDatabaseTable({
               )}
             </tbody>
           </table>
+
+          {/* Bottom Table Add Row Shortcut */}
+          <div className="p-3 bg-[#181818] border-t border-[#2d2d2d] flex items-center justify-between">
+            <button
+              onClick={handleOpenAddModal}
+              className="text-xs font-semibold text-slate-400 hover:text-teal-300 flex items-center gap-1.5 py-1 px-2.5 rounded-lg hover:bg-[#252525] transition-all cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Tambah Baris Kegiatan Baru</span>
+            </button>
+            <span className="text-[11px] text-slate-500 font-mono">
+              Total {localRows.length} baris tercatat
+            </span>
+          </div>
         </div>
       )}
 
-      {/* Board / Kanban View */}
+      {/* ========================================================================= */}
+      {/* 2. BOARD VIEW (Kanban by Status)                                          */}
+      {/* ========================================================================= */}
       {viewMode === 'board' && (
-        <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#181818] min-h-[350px]">
-          {['ON PROGRESS', 'OPEN', 'CLOSE'].map((stKey) => {
-            const groupRows = filteredRows.filter((r) => {
-              const s = (statusCol ? r[statusCol] || '' : '').toUpperCase();
-              if (stKey === 'ON PROGRESS') return s.includes('PROGRESS') || s.includes('PROSES');
-              if (stKey === 'CLOSE') return s.includes('CLOSE') || s.includes('SELESAI') || s.includes('DONE');
-              return s.includes('OPEN') || s === '' || s === '-';
+        <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#141414]">
+          {['Open', 'On Progress', 'Close'].map((laneStatus) => {
+            const laneRows = filteredRows.filter((r) => {
+              const s = (getRowVal(r, 'Status') || '').toUpperCase();
+              if (laneStatus === 'Open') return s.includes('OPEN') || s.includes('BARU') || !s;
+              if (laneStatus === 'On Progress') return s.includes('PROGRESS') || s.includes('PROSES') || s.includes('PENDING');
+              if (laneStatus === 'Close') return s.includes('CLOSE') || s.includes('SELESAI') || s.includes('DONE');
+              return false;
             });
 
             return (
-              <div key={stKey} className="bg-[#222] rounded-xl border border-slate-800 p-3 flex flex-col">
-                <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-slate-800 font-bold text-xs">
+              <div key={laneStatus} className="bg-[#1e1e1e] border border-slate-800 rounded-xl p-3 flex flex-col min-h-[350px]">
+                <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-800">
                   <div className="flex items-center gap-2">
-                    {renderStatusBadge(stKey)}
+                    <span className={`w-2.5 h-2.5 rounded-full ${
+                      laneStatus === 'Open' ? 'bg-amber-400' : laneStatus === 'On Progress' ? 'bg-blue-400' : 'bg-emerald-400'
+                    }`} />
+                    <h4 className="font-bold text-xs uppercase tracking-wider text-slate-200">{laneStatus}</h4>
                   </div>
-                  <span className="font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full text-[10px]">
-                    {groupRows.length}
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-[#161616] text-slate-400 font-mono">
+                    {laneRows.length}
                   </span>
                 </div>
 
-                <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[500px] custom-scrollbar">
-                  {groupRows.map((r, i) => {
-                    const topicKey = (titleCol && r[titleCol] ? r[titleCol] : '').toLowerCase().trim();
-                    const cCount = topicCommentCounts[topicKey] || 0;
-
-                    return (
-                      <div
-                        key={i}
-                        onClick={() => {
-                          setSelectedRow(r);
-                          setModalTab('details');
-                        }}
-                        className="p-3.5 bg-[#282828] hover:bg-[#303030] rounded-xl border border-slate-700/80 cursor-pointer transition-all space-y-2 group shadow-sm"
-                      >
-                        <div className="font-bold text-slate-100 group-hover:text-teal-300 text-xs line-clamp-2 leading-snug">
-                          {titleCol && r[titleCol] && r[titleCol] !== '-' ? r[titleCol] : 'Tanpa Judul'}
-                        </div>
-
-                        {/* Sub-tags */}
-                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                          {activityCol && r[activityCol] && r[activityCol] !== '-' && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">
-                              {r[activityCol]}
-                            </span>
-                          )}
-                          {categoryCol && r[categoryCol] && r[categoryCol] !== '-' && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-950/60 text-teal-400 border border-teal-800/40">
-                              {r[categoryCol]}
-                            </span>
-                          )}
-                        </div>
-
-                        {descCol && r[descCol] && r[descCol] !== '-' && (
-                          <p className="text-[11px] text-slate-400 line-clamp-2">
-                            {r[descCol]}
-                          </p>
-                        )}
-
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-700/60 text-[10px]">
-                          {picCol && r[picCol] && r[picCol] !== '-' ? renderPicBadge(r[picCol]) : <span />}
-                          <div className="flex items-center gap-2">
-                            {cCount > 0 && (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-teal-400 font-semibold">
-                                <MessageSquare className="w-3 h-3" />
-                                {cCount}
-                              </span>
-                            )}
-                            {priorityCol && r[priorityCol] && renderPriorityBadge(r[priorityCol])}
-                          </div>
-                        </div>
+                <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[500px]">
+                  {laneRows.map((row, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        setSelectedRow(row);
+                        setModalTab('details');
+                      }}
+                      className="p-3 bg-[#242424] hover:bg-[#2b2b2b] border border-slate-700/60 rounded-xl shadow-sm cursor-pointer transition-all hover:border-teal-500/50 space-y-2 group"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h5 className="font-semibold text-xs text-slate-100 group-hover:text-teal-300 leading-snug">
+                          {getRowVal(row, 'Jenis kegiatan') || 'Tanpa Judul'}
+                        </h5>
+                        {renderPriorityBadge(getRowVal(row, 'Priority'))}
                       </div>
-                    );
-                  })}
+
+                      {getRowVal(row, 'Keterangan') && (
+                        <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+                          {getRowVal(row, 'Keterangan')}
+                        </p>
+                      )}
+
+                      <div className="pt-2 border-t border-slate-700/50 flex items-center justify-between text-[10px] text-slate-400">
+                        {renderPicBadge(getRowVal(row, 'PIC'))}
+                        <span className="font-mono">{getRowVal(row, 'period') || getRowVal(row, 'Created Time')}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             );
@@ -1191,573 +1489,709 @@ export function NotionDatabaseTable({
         </div>
       )}
 
-      {/* List / Card View */}
+      {/* ========================================================================= */}
+      {/* 3. CARDS / LIST VIEW                                                      */}
+      {/* ========================================================================= */}
       {viewMode === 'list' && (
-        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 bg-[#181818]">
-          {filteredRows.map((row, idx) => {
-            const topicKey = (titleCol && row[titleCol] ? row[titleCol] : '').toLowerCase().trim();
-            const cCount = topicCommentCounts[topicKey] || 0;
-
-            return (
-              <div
-                key={idx}
-                onClick={() => {
-                  setSelectedRow(row);
-                  setModalTab('details');
-                }}
-                className="p-4 bg-[#232323] hover:bg-[#2a2a2a] rounded-xl border border-slate-800 hover:border-teal-600/60 cursor-pointer transition-all space-y-2.5 shadow-sm group"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <h4 className="font-bold text-slate-100 group-hover:text-teal-300 text-xs leading-snug">
-                    {titleCol && row[titleCol] && row[titleCol] !== '-' ? row[titleCol] : `Item #${idx + 1}`}
-                  </h4>
-                  {statusCol && renderStatusBadge(row[statusCol])}
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 bg-[#141414]">
+          {filteredRows.map((row, idx) => (
+            <div
+              key={idx}
+              onClick={() => {
+                setSelectedRow(row);
+                setModalTab('details');
+              }}
+              className="p-4 bg-[#1f1f1f] hover:bg-[#252525] border border-slate-800 hover:border-teal-600/60 rounded-2xl shadow-md cursor-pointer transition-all space-y-3 flex flex-col justify-between"
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#161616] text-slate-400 border border-slate-800">
+                    #{getRowVal(row, 'number') || idx + 1}
+                  </span>
+                  {renderStatusBadge(getRowVal(row, 'Status'))}
                 </div>
 
-                {descCol && row[descCol] && row[descCol] !== '-' && (
-                  <div className="text-xs text-slate-400 line-clamp-3">
-                    {renderFormattedNotes(row[descCol])}
-                  </div>
+                <h4 className="font-bold text-sm text-slate-100 leading-snug">
+                  {getRowVal(row, 'Jenis kegiatan') || 'Tanpa Judul'}
+                </h4>
+
+                {getRowVal(row, 'Keterangan') && (
+                  <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                    {getRowVal(row, 'Keterangan')}
+                  </p>
                 )}
-
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800 text-xs">
-                  <div className="flex items-center gap-2">
-                    {picCol && row[picCol] && renderPicBadge(row[picCol])}
-                    {activityCol && row[activityCol] && row[activityCol] !== '-' && (
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">
-                        {row[activityCol]}
-                      </span>
-                    )}
-                    {categoryCol && row[categoryCol] && row[categoryCol] !== '-' && (
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-                        {row[categoryCol]}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {cCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-teal-400 font-semibold">
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        {cCount} update
-                      </span>
-                    )}
-                    {priorityCol && renderPriorityBadge(row[priorityCol])}
-                  </div>
-                </div>
               </div>
-            );
-          })}
+
+              <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                {renderPicBadge(getRowVal(row, 'PIC'))}
+                {renderPriorityBadge(getRowVal(row, 'Priority'))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Row Detail & Comments Modal */}
-      {selectedRow && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#202020] border border-slate-700 w-full max-w-3xl max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
-            {/* Modal Header Bar with Tabs */}
-            <div className="px-5 py-3.5 bg-[#262626] border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-1.5 rounded-lg bg-teal-950/60 border border-teal-600/40 text-teal-400">
-                  <ClipboardList className="w-4 h-4" />
+      {/* ========================================================================= */}
+      {/* 4. MODAL: ADD / EDIT ROW FORM                                             */}
+      {/* ========================================================================= */}
+      {showRowModal && (
+        <div 
+          className="fixed inset-0 z-[150] bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150"
+          onClick={() => setShowRowModal(false)}
+        >
+          <div 
+            className="w-full max-w-xl max-h-[90vh] bg-[#1e1e1e] border border-slate-700 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-4 bg-[#252525] border-b border-slate-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-teal-600/30 border border-teal-500/50 text-teal-300 flex items-center justify-center font-bold">
+                  <Edit2 className="w-4 h-4" />
                 </div>
-                <div className="flex items-center bg-[#181818] p-1 rounded-xl border border-slate-700/80">
-                  <button
-                    onClick={() => setModalTab('details')}
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                      modalTab === 'details' ? 'bg-[#2b2b2b] text-teal-300 shadow-xs' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>Rincian Data</span>
-                  </button>
-                  <button
-                    onClick={() => setModalTab('comments')}
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                      modalTab === 'comments' ? 'bg-[#2b2b2b] text-teal-300 shadow-xs' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    <span>Diskusi & Progres</span>
-                    {activeTopicComments.length > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full bg-teal-600 text-white text-[10px] font-mono">
-                        {activeTopicComments.length}
-                      </span>
-                    )}
-                  </button>
+                <div>
+                  <h3 className="font-bold text-base text-slate-100">
+                    {editingRowIndex === null ? 'Tambah Data Kegiatan Baru' : 'Edit Data Kegiatan'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Struktur kolom sinkron database Weekly Notion
+                  </p>
                 </div>
               </div>
-
-              <button
-                onClick={() => setSelectedRow(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                title="Tutup Modal"
+              <button 
+                onClick={() => setShowRowModal(false)}
+                className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1 custom-scrollbar">
-              {/* Task Title Header */}
-              <div className="bg-[#242424] p-4 rounded-xl border border-slate-800 space-y-2">
-                <span className="text-[10px] font-bold text-teal-400 uppercase tracking-wider block">
-                  Topik / Jenis Kegiatan:
-                </span>
-                <h2 className="text-base md:text-lg font-black text-slate-100 leading-snug">
-                  {selectedTopicTitle || 'Tanpa Judul'}
-                </h2>
+            {/* Modal Form */}
+            <form onSubmit={handleSaveRow} className="p-5 overflow-y-auto space-y-4 flex-1 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* Number */}
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                    Number / No
+                  </label>
+                  <input
+                    type="text"
+                    value={rowFormData['number'] || ''}
+                    onChange={(e) => setRowFormData({ ...rowFormData, number: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none"
+                    placeholder="1"
+                  />
+                </div>
 
-                {/* Badges Bar */}
-                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-700/60">
-                  {statusCol && renderStatusBadge(selectedRow[statusCol])}
-                  {priorityCol && renderPriorityBadge(selectedRow[priorityCol])}
-                  {picCol && renderPicBadge(selectedRow[picCol])}
-                  {activityCol && selectedRow[activityCol] && selectedRow[activityCol] !== '-' && (
-                    <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
-                      {selectedRow[activityCol]}
-                    </span>
-                  )}
-                  {categoryCol && selectedRow[categoryCol] && selectedRow[categoryCol] !== '-' && (
-                    <span className="px-2.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-mono text-xs">
-                      📁 {selectedRow[categoryCol]}
-                    </span>
-                  )}
+                {/* Priority */}
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                    Priority
+                  </label>
+                  <select
+                    value={rowFormData['Priority'] || 'Normal'}
+                    onChange={(e) => setRowFormData({ ...rowFormData, Priority: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none cursor-pointer"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Normal">Normal</option>
+                    <option value="High">High</option>
+                    <option value="Urgent">Urgent</option>
+                  </select>
                 </div>
               </div>
 
-              {/* TAB 1: DETAILS */}
-              {modalTab === 'details' && (
-                <div className="space-y-4 animate-in fade-in duration-150">
-                  {/* Grid of details */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {validHeaders.map((h) => {
-                      if (h === titleCol || h === descCol || isRedundantCol(h)) return null;
-                      const val = selectedRow[h];
-                      return (
-                        <div key={h} className="p-3 rounded-xl bg-[#252525] border border-slate-800 space-y-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                            {h}
+              {/* Jenis kegiatan */}
+              <div>
+                <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                  Jenis Kegiatan *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={rowFormData['Jenis kegiatan'] || ''}
+                  onChange={(e) => setRowFormData({ ...rowFormData, 'Jenis kegiatan': e.target.value })}
+                  className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none font-medium"
+                  placeholder="Contoh: Kalibrasi XRF, Analisis Sampel Harian, dsb..."
+                />
+              </div>
+
+              {/* Keterangan */}
+              <div>
+                <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                  Keterangan & Rincian
+                </label>
+                <textarea
+                  rows={3}
+                  value={rowFormData['Keterangan'] || ''}
+                  onChange={(e) => setRowFormData({ ...rowFormData, Keterangan: e.target.value })}
+                  className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none leading-relaxed"
+                  placeholder="Deskripsi langkah, catatan temuan, atau hasil pekerjaan..."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* PIC Field with Special Role & Searchable Employee Dropdown */}
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-300 font-bold uppercase tracking-wider text-[10px]">
+                      PIC (Penanggung Jawab)
+                    </label>
+                    <span className="text-[9px] text-teal-400 font-mono">Cari Nama / NIK</span>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={rowFormData['PIC'] || ''}
+                      onFocus={() => setIsPicDropdownOpen(true)}
+                      onChange={(e) => {
+                        setRowFormData({ ...rowFormData, PIC: e.target.value });
+                        setIsPicDropdownOpen(true);
+                      }}
+                      className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none text-xs"
+                      placeholder="Ketik NIK, Nama, atau pilih Role..."
+                    />
+                    {rowFormData['PIC'] && (
+                      <button
+                        type="button"
+                        onClick={() => setRowFormData({ ...rowFormData, PIC: '' })}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* PIC Suggestions Dropdown */}
+                  {isPicDropdownOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-10" 
+                        onClick={() => setIsPicDropdownOpen(false)} 
+                      />
+                      <div className="absolute left-0 right-0 top-full mt-1.5 z-20 bg-[#222222] border border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto divide-y divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
+                        {/* Quick Role Picks */}
+                        <div className="p-2 bg-[#1b1b1b]">
+                          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block px-2 pb-1.5">
+                            Role Khusus
                           </span>
-                          <span className="font-semibold text-slate-200 text-xs block">
-                            {val && val !== '-' ? val : <em className="text-slate-600 font-mono">-</em>}
-                          </span>
+                          <div className="grid grid-cols-2 gap-1">
+                            {['All Foreman', 'Foreman Up', 'SPV', 'SPV Up', 'All Supervisor', 'All Personil'].map((role) => (
+                              <button
+                                key={role}
+                                type="button"
+                                onClick={() => {
+                                  setRowFormData({ ...rowFormData, PIC: role });
+                                  setIsPicDropdownOpen(false);
+                                }}
+                                className="px-2 py-1.5 rounded-lg bg-[#2a2a2a] hover:bg-teal-950/80 text-slate-300 hover:text-teal-300 border border-slate-700/60 hover:border-teal-600/50 text-[11px] font-semibold text-left transition-colors flex items-center justify-between cursor-pointer"
+                              >
+                                <span>{role}</span>
+                                <Check className="w-2.5 h-2.5 opacity-40" />
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
 
-                  {/* Description / Notes Box */}
-                  {descCol && selectedRow[descCol] && selectedRow[descCol] !== '-' && (
-                    <div className="space-y-2 pt-2">
-                      <span className="text-xs font-bold text-slate-300 block">
-                        Keterangan & Catatan Rinci:
-                      </span>
-                      <div className="p-4 rounded-xl bg-[#252525] border border-slate-800 text-slate-200 leading-relaxed text-xs whitespace-pre-line font-sans shadow-inner">
-                        {renderFormattedNotes(selectedRow[descCol])}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Quick Action to Comment Tab */}
-                  <div className="pt-2 flex justify-end">
-                    <button
-                      onClick={() => setModalTab('comments')}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#282828] hover:bg-teal-950/80 hover:border-teal-600/70 border border-slate-700 text-teal-300 text-xs font-semibold transition-all cursor-pointer"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      <span>Buka Kolom Diskusi & Update Progres ({activeTopicComments.length})</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 2: COMMENTS & PROGRESS UPDATES */}
-              {modalTab === 'comments' && (
-                <div className="space-y-4 animate-in fade-in duration-150">
-                  {/* System Sync Banner */}
-                  <div className="p-3 rounded-xl bg-teal-950/40 border border-teal-700/50 flex items-start gap-2.5 text-xs text-teal-200">
-                    <Bell className="w-4 h-4 text-teal-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold block">Tersinkronisasi dengan Notifikasi Sistem</span>
-                      <p className="text-[11px] text-teal-300/80 leading-relaxed">
-                        Setiap update progres atau komentar yang diposting di sini akan otomatis mengirimkan notifikasi kepada seluruh personil tim section <strong>{section || selectedRow[categoryCol] || 'terkait'}</strong> dan PIC <strong>{selectedRow[picCol] || 'PIC'}</strong>.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Comments List */}
-                  <div className="space-y-3">
-                    <h4 className="font-bold text-slate-300 text-xs flex items-center justify-between">
-                      <span>Riwayat Update & Diskusi</span>
-                      <span className="font-mono text-slate-500 text-[11px]">
-                        {activeTopicComments.length} entri
-                      </span>
-                    </h4>
-
-                    {commentsLoading ? (
-                      <div className="p-8 text-center text-slate-500 space-y-2">
-                        <Loader2 className="w-5 h-5 animate-spin mx-auto text-teal-400" />
-                        <span className="text-xs">Memuat riwayat update...</span>
-                      </div>
-                    ) : activeTopicComments.length === 0 ? (
-                      <div className="p-8 bg-[#252525] rounded-xl border border-slate-800 text-center text-slate-400 space-y-1">
-                        <MessageSquare className="w-6 h-6 mx-auto text-slate-600 mb-2" />
-                        <span className="font-semibold block text-slate-300">Belum ada update atau komentar</span>
-                        <p className="text-[11px] text-slate-500">
-                          Jadilah yang pertama memberikan update progres, kendala, atau tanggapan untuk topik ini.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {activeTopicComments.map((c) => {
-                          const isMe = c.authorNik === currentAuthorNik;
-                          const attachments = parseCommentAttachments(c.fileUrl, c.fileName);
-                          const imageAttachments = attachments.filter(a => a.isImage);
-                          const docAttachments = attachments.filter(a => !a.isImage);
-
-                          return (
-                            <div
-                              key={c.id}
-                              className="p-3.5 bg-[#252525] hover:bg-[#2a2a2a] rounded-xl border border-slate-800 transition-all space-y-2.5 shadow-sm"
-                            >
-                              <div className="flex items-center justify-between text-xs">
-                                <div className="flex items-center gap-2">
-                                  {c.authorAvatar ? (
-                                    <img
-                                      src={c.authorAvatar}
-                                      alt={c.authorName}
-                                      className="w-6 h-6 rounded-full object-cover border border-teal-500/50"
-                                    />
-                                  ) : (
-                                    <div className="w-6 h-6 rounded-full bg-teal-900 border border-teal-700/60 flex items-center justify-center text-[10px] font-bold text-teal-200">
-                                      {(c.authorName || 'U').charAt(0).toUpperCase()}
-                                    </div>
-                                  )}
-                                  <div>
-                                    <span className="font-bold text-slate-200 block leading-tight">
-                                      {c.authorName || 'Personil'}
+                        {/* Employee Search List */}
+                        <div className="p-1.5">
+                          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block px-2 py-1">
+                            Daftar Karyawan ({employeesList.length})
+                          </span>
+                          {employeesList
+                            .filter((emp) => {
+                              const q = (rowFormData['PIC'] || '').toLowerCase().trim();
+                              if (!q) return true;
+                              return (
+                                (emp.name || '').toLowerCase().includes(q) ||
+                                (emp.nik || '').toLowerCase().includes(q) ||
+                                (emp.jabatan || '').toLowerCase().includes(q) ||
+                                (emp.section || '').toLowerCase().includes(q)
+                              );
+                            })
+                            .slice(0, 15)
+                            .map((emp) => (
+                              <button
+                                key={emp.id || emp.nik}
+                                type="button"
+                                onClick={() => {
+                                  setRowFormData({ ...rowFormData, PIC: emp.name || emp.nik });
+                                  setIsPicDropdownOpen(false);
+                                }}
+                                className="w-full px-2.5 py-2 rounded-xl hover:bg-[#2d2d2d] flex items-center justify-between text-left transition-colors cursor-pointer group"
+                              >
+                                <div className="flex items-center gap-2 overflow-hidden">
+                                  <span className="w-6 h-6 rounded-full bg-teal-900/80 border border-teal-700/60 text-teal-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                    {(emp.name || 'U').charAt(0).toUpperCase()}
+                                  </span>
+                                  <div className="truncate">
+                                    <span className="text-xs font-semibold text-slate-200 group-hover:text-teal-300 block truncate">
+                                      {emp.name}
                                     </span>
-                                    <span className="text-[10px] text-slate-400 font-mono">
-                                      {c.authorJabatan || c.authorSection || c.section || 'Prep & Lab'}
+                                    <span className="text-[10px] text-slate-500 font-mono">
+                                      {emp.nik} • {emp.jabatan || emp.section || 'Personil'}
                                     </span>
                                   </div>
                                 </div>
-
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] text-slate-500 font-mono">
-                                    {c.createdAt ? new Date(c.createdAt).toLocaleString('id-ID', {
-                                      day: 'numeric',
-                                      month: 'short',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    }) : ''}
-                                  </span>
-
-                                  {isMe && (
-                                    <button
-                                      onClick={() => handleDeleteComment(c.id)}
-                                      className="text-slate-600 hover:text-red-400 p-1 transition-colors"
-                                      title="Hapus update"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Status Update Tag if present */}
-                              {c.statusUpdate && (
-                                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-950/70 text-blue-300 border border-blue-700/50 text-[10px] font-bold">
-                                  <Activity className="w-3 h-3 text-blue-400" />
-                                  <span>Update Status: {c.statusUpdate}</span>
-                                </div>
-                              )}
-
-                              {/* Comment Content */}
-                              {c.content && (
-                                <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-line font-sans">
-                                  {c.content}
-                                </p>
-                              )}
-
-                              {/* Attachments Section */}
-                              {attachments.length > 0 && (
-                                <div className="pt-2 border-t border-slate-800/80 space-y-2.5">
-                                  {/* Image Attachments Preview */}
-                                  {imageAttachments.length > 0 && (
-                                    <div className="flex flex-wrap gap-2.5">
-                                      {imageAttachments.map((att, idx) => (
-                                        <div
-                                          key={idx}
-                                          onClick={() => setPreviewImage({
-                                            url: att.directUrl || att.url,
-                                            title: att.name,
-                                            driveViewUrl: att.driveViewUrl,
-                                            driveDownloadUrl: att.driveDownloadUrl
-                                          })}
-                                          className="group/img relative rounded-xl border border-slate-700 bg-black/40 overflow-hidden cursor-pointer hover:border-teal-400 transition-all shadow-md max-w-[260px] w-full"
-                                          title={`Klik untuk memperbesar gambar: ${att.name}`}
-                                        >
-                                          <div className="w-full h-40 bg-slate-900 flex items-center justify-center overflow-hidden">
-                                            <img
-                                              src={att.directUrl || att.url}
-                                              alt={att.name}
-                                              loading="lazy"
-                                              referrerPolicy="no-referrer"
-                                              className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-200"
-                                              onError={(e) => {
-                                                const target = e.target as HTMLImageElement;
-                                                if (att.id && !target.src.includes('googleusercontent.com')) {
-                                                  target.src = `https://lh3.googleusercontent.com/d/${att.id}`;
-                                                } else if (att.id && !target.src.includes('thumbnail')) {
-                                                  target.src = `https://drive.google.com/thumbnail?id=${att.id}&sz=w1000`;
-                                                }
-                                              }}
-                                            />
-                                          </div>
-                                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex flex-col justify-between p-2">
-                                            <div className="flex justify-end">
-                                              <span className="p-1 rounded-md bg-black/60 text-white shadow">
-                                                <Maximize2 className="w-3.5 h-3.5" />
-                                              </span>
-                                            </div>
-                                            <span className="text-[10px] text-white font-medium truncate drop-shadow">
-                                              {att.name}
-                                            </span>
-                                          </div>
-                                          <div className="px-2.5 py-1 bg-slate-900 border-t border-slate-800 flex items-center gap-1.5 text-[10px] text-slate-300">
-                                            <ImageIcon className="w-3 h-3 text-teal-400 shrink-0" />
-                                            <span className="truncate">{att.name}</span>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-
-                                  {/* Document Attachments (Spreadsheets, PDFs, Word, Files) */}
-                                  {docAttachments.length > 0 && (
-                                    <div className="flex flex-wrap gap-2">
-                                      {docAttachments.map((att, idx) => {
-                                        const lowerName = att.name.toLowerCase();
-                                        const isExcel = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
-                                        const isPdf = lowerName.endsWith('.pdf');
-
-                                        return (
-                                          <div
-                                            key={idx}
-                                            className="inline-flex items-center gap-2 px-3 py-2 bg-[#1b1b1b] hover:bg-[#222222] border border-slate-700/90 hover:border-teal-500/60 rounded-xl transition-all shadow-sm max-w-full"
-                                          >
-                                            <div className={`p-1.5 rounded-lg ${isExcel ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-700/50' : isPdf ? 'bg-rose-950/80 text-rose-400 border border-rose-700/50' : 'bg-blue-950/80 text-blue-400 border border-blue-700/50'}`}>
-                                              {isExcel ? <FileSpreadsheet className="w-4 h-4" /> : isPdf ? <FileText className="w-4 h-4" /> : <FileDown className="w-4 h-4" />}
-                                            </div>
-                                            
-                                            <div className="min-w-0 pr-1">
-                                              <span className="text-[11px] font-semibold text-slate-200 block truncate max-w-[220px]" title={att.name}>
-                                                {att.name}
-                                              </span>
-                                              {att.size ? (
-                                                <span className="text-[9px] text-slate-500 font-mono">
-                                                  {(att.size / 1024).toFixed(0)} KB • Google Drive
-                                                </span>
-                                              ) : (
-                                                <span className="text-[9px] text-teal-400/80 font-mono">
-                                                  Google Drive File
-                                                </span>
-                                              )}
-                                            </div>
-
-                                            <div className="flex items-center gap-1 shrink-0 pl-1 border-l border-slate-800">
-                                              {att.driveViewUrl && (
-                                                <a
-                                                  href={att.driveViewUrl}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="p-1 text-slate-400 hover:text-teal-300 hover:bg-slate-800 rounded transition-colors"
-                                                  title="Buka Dokumen di Google Drive"
-                                                >
-                                                  <ExternalLink className="w-3.5 h-3.5" />
-                                                </a>
-                                              )}
-                                              {att.driveDownloadUrl && (
-                                                <a
-                                                  href={att.driveDownloadUrl}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="p-1 text-slate-400 hover:text-teal-300 hover:bg-slate-800 rounded transition-colors"
-                                                  title="Download File"
-                                                >
-                                                  <Download className="w-3.5 h-3.5" />
-                                                </a>
-                                              )}
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                              </button>
+                            ))}
+                        </div>
                       </div>
-                    )}
-                  </div>
+                    </>
+                  )}
+                </div>
 
-                  {/* Add New Comment / Progress Form */}
-                  <form onSubmit={handlePostComment} className="p-4 bg-[#252525] rounded-xl border border-slate-700/80 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-teal-300 flex items-center gap-1.5">
-                        <Send className="w-3.5 h-3.5" />
-                        Tulis Update Progres / Komentar
+                {/* Status */}
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                    Status
+                  </label>
+                  <select
+                    value={rowFormData['Status'] || 'Open'}
+                    onChange={(e) => setRowFormData({ ...rowFormData, Status: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none cursor-pointer text-xs"
+                  >
+                    <option value="Open">Open</option>
+                    <option value="On Progress">On Progress</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Close">Close</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Created Time */}
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                    Created Time
+                  </label>
+                  <input
+                    type="text"
+                    value={rowFormData['Created Time'] || ''}
+                    onChange={(e) => setRowFormData({ ...rowFormData, 'Created Time': e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none font-mono text-[11px]"
+                  />
+                </div>
+
+                {/* Kategori */}
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                    Kategori
+                  </label>
+                  <input
+                    type="text"
+                    value={rowFormData['Kategori'] || ''}
+                    onChange={(e) => setRowFormData({ ...rowFormData, Kategori: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none text-xs"
+                    placeholder="Laboratorium"
+                  />
+                </div>
+
+                {/* Activity (routine/non routine) */}
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                    Activity
+                  </label>
+                  <select
+                    value={rowFormData['Activity (routine/non routine)'] || 'Routine'}
+                    onChange={(e) => setRowFormData({ ...rowFormData, 'Activity (routine/non routine)': e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none cursor-pointer text-xs"
+                  >
+                    <option value="Routine">Routine</option>
+                    <option value="Non-routine">Non-routine</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Period Dropdown */}
+              <div>
+                <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                  Period / Periode
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <select
+                    value={['Daily', 'Weekly', 'Monthly', '3 Month', '6 Month', 'Yearly'].includes(rowFormData['period'] || '') ? rowFormData['period'] : 'custom'}
+                    onChange={(e) => {
+                      if (e.target.value !== 'custom') {
+                        setRowFormData({ ...rowFormData, period: e.target.value });
+                      }
+                    }}
+                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none cursor-pointer text-xs"
+                  >
+                    <option value="Daily">Daily</option>
+                    <option value="Weekly">Weekly</option>
+                    <option value="Monthly">Monthly</option>
+                    <option value="3 Month">3 Month</option>
+                    <option value="6 Month">6 Month</option>
+                    <option value="Yearly">Yearly</option>
+                    <option value="custom">Kustom / Lainnya...</option>
+                  </select>
+
+                  <input
+                    type="text"
+                    value={rowFormData['period'] || ''}
+                    onChange={(e) => setRowFormData({ ...rowFormData, period: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none text-xs"
+                    placeholder="Input periode manual jika kustom..."
+                  />
+                </div>
+              </div>
+
+              {/* Modal Footer Buttons */}
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setShowRowModal(false)}
+                  className="!w-auto text-xs px-4"
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSavingRow}
+                  className="!w-auto text-xs px-5 bg-teal-600 hover:bg-teal-500 text-white font-bold"
+                >
+                  {isSavingRow ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-1.5" />}
+                  <span>{editingRowIndex === null ? 'Simpan Baris Baru' : 'Simpan Perubahan'}</span>
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 5. SLIDE-OVER DRAWER (RIGHT-TO-LEFT): ROW DETAILS & TOPIC DISCUSSION       */}
+      {/* ========================================================================= */}
+      {selectedRow && (
+        <div className="fixed inset-0 z-[120] overflow-hidden">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+            onClick={() => setSelectedRow(null)}
+          />
+
+          {/* Right-to-Left Slide-over Panel (Wide 2-Column Layout) */}
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-4 sm:pl-10">
+            <div 
+              className="w-screen max-w-5xl lg:max-w-6xl xl:max-w-7xl bg-[#1a1a1a] border-l border-slate-800 shadow-[-20px_0_50px_rgba(0,0,0,0.9)] flex flex-col h-full overflow-hidden animate-in slide-in-from-right duration-300 ease-out"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Drawer Sticky Header */}
+              <div className="p-4 sm:p-5 bg-[#222222] border-b border-slate-800 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <span className="text-xs sm:text-sm font-mono px-3 py-1 rounded-xl bg-teal-950/90 text-teal-300 border border-teal-600/50 font-bold shrink-0 shadow-sm">
+                    #{getRowVal(selectedRow, 'number') || '1'}
+                  </span>
+                  <div className="truncate">
+                    <h3 className="font-black text-slate-100 text-base sm:text-xl truncate">
+                      {selectedTopicTitle || 'Detail Kegiatan'}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[11px] text-teal-400/90 font-mono font-semibold">
+                        {getRowVal(selectedRow, 'Kategori') || 'Laboratorium'}
                       </span>
+                      <span className="text-slate-600">•</span>
+                      <span className="text-[11px] text-slate-400 font-mono">
+                        Periode: {getRowVal(selectedRow, 'period') || 'Periodik'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-                      {/* Status Change Selector */}
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-slate-400">Ubah Status:</span>
-                        <select
-                          value={statusUpdateChoice}
-                          onChange={(e) => setStatusUpdateChoice(e.target.value)}
-                          className="bg-[#181818] border border-slate-700 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-200 outline-none cursor-pointer"
-                        >
-                          <option value="">(Status Tetap)</option>
-                          <option value="ON PROGRESS">⚡ ON PROGRESS</option>
-                          <option value="CLOSE">✓ CLOSE</option>
-                          <option value="OPEN">⏳ OPEN</option>
-                          <option value="PENDING">⏸ PENDING</option>
-                        </select>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => handleOpenEditModal(selectedRow, localRows.indexOf(selectedRow))}
+                    className="p-2 px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteRow(localRows.indexOf(selectedRow))}
+                    className="p-2 px-3.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus</span>
+                  </button>
+                  <button
+                    onClick={() => setSelectedRow(null)}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors ml-1 cursor-pointer"
+                    title="Tutup Panel (ESC)"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Drawer Body: Wide 2-Column Responsive Layout */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  
+                  {/* ================================================================= */}
+                  {/* LEFT COLUMN: DETAIL TOPIK & RINCIAN KEGIATAN                      */}
+                  {/* ================================================================= */}
+                  <div className="lg:col-span-5 xl:col-span-5 space-y-5">
+                    
+                    {/* Key Highlights Grid */}
+                    <div className="grid grid-cols-2 gap-2.5 p-4 bg-[#141414] rounded-2xl border border-slate-800 shadow-inner text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1.5">Status</span>
+                        {renderStatusBadge(getRowVal(selectedRow, 'Status'))}
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1.5">Priority</span>
+                        {renderPriorityBadge(getRowVal(selectedRow, 'Priority'))}
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1.5">PIC</span>
+                        {renderPicBadge(getRowVal(selectedRow, 'PIC'))}
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1.5">Activity Type</span>
+                        <span className="font-mono text-slate-300 font-semibold px-2 py-0.5 rounded bg-[#1e1e1e] border border-slate-700 inline-block truncate max-w-full text-[11px]">
+                          {getRowVal(selectedRow, 'Activity (routine/non routine)') || 'Routine'}
+                        </span>
                       </div>
                     </div>
 
-                    <textarea
-                      rows={3}
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      placeholder={`Tulis catatan tindakan, progres pekerjaan, kendala, atau koordinasi...`}
-                      className="w-full bg-[#181818] border border-slate-700/80 rounded-xl p-3 text-xs text-slate-100 placeholder:text-slate-500 outline-none focus:border-teal-500 transition-colors resize-none"
-                    />
+                    {/* Rincian & Keterangan Card */}
+                    <div className="p-4 sm:p-5 bg-[#171717] rounded-2xl border border-slate-800 shadow-sm space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+                        <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
+                          <FileText className="w-4 h-4" />
+                          <span>Rincian & Keterangan Kegiatan</span>
+                        </h4>
+                      </div>
 
-                    {/* Attached file indicator */}
-                    {selectedFile && (
-                      <div className="flex items-center justify-between px-3 py-1.5 bg-teal-950/40 border border-teal-700/50 rounded-lg text-xs text-teal-300">
-                        <div className="flex items-center gap-2 truncate">
-                          <Paperclip className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                          <span className="truncate font-mono text-[11px]">{selectedFile.name}</span>
+                      <div className="text-slate-200 leading-relaxed text-xs sm:text-sm font-sans pt-1">
+                        {renderFormattedNotes(getRowVal(selectedRow, 'Keterangan'))}
+                      </div>
+                    </div>
+
+                    {/* Secondary Metadata Info Cards */}
+                    <div className="grid grid-cols-3 gap-2.5 text-[11px]">
+                      <div className="p-3 bg-[#171717] rounded-xl border border-slate-800">
+                        <span className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">Kategori</span>
+                        <span className="text-slate-300 font-medium truncate block">{getRowVal(selectedRow, 'Kategori') || '-'}</span>
+                      </div>
+                      <div className="p-3 bg-[#171717] rounded-xl border border-slate-800">
+                        <span className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">Period</span>
+                        <span className="text-slate-300 font-medium truncate block">{getRowVal(selectedRow, 'period') || '-'}</span>
+                      </div>
+                      <div className="p-3 bg-[#171717] rounded-xl border border-slate-800">
+                        <span className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">Dibuat</span>
+                        <span className="text-slate-300 font-mono text-[10px] truncate block">{getRowVal(selectedRow, 'Created Time') || '-'}</span>
+                      </div>
+                    </div>
+
+                    {/* 3. GALERI & LAMPIRAN MEDIA TOPIK */}
+                    <div className="p-4 sm:p-5 bg-[#171717] rounded-2xl border border-slate-800 shadow-sm space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+                        <div className="flex items-center gap-2">
+                          <ImageIcon className="w-4 h-4 text-teal-400" />
+                          <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider">
+                            Galeri & Lampiran Media ({activeTopicComments.filter((c: any) => c.fileUrl).length})
+                          </h4>
                         </div>
+                        
+                        <input
+                          type="file"
+                          ref={galleryFileInputRef}
+                          onChange={handleGalleryFileUpload}
+                          accept="image/*,.pdf,.doc,.docx"
+                          className="hidden"
+                        />
                         <button
                           type="button"
-                          onClick={() => setSelectedFile(null)}
-                          className="p-1 hover:text-red-400 transition-colors"
-                          title="Hapus lampiran"
+                          disabled={isUploadingGallery}
+                          onClick={() => galleryFileInputRef.current?.click()}
+                          className="px-2.5 py-1 rounded-lg bg-teal-950/80 hover:bg-teal-900 text-teal-300 border border-teal-600/50 text-[10px] font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          {isUploadingGallery ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                          <span>+ Upload Lampiran / Foto</span>
                         </button>
                       </div>
-                    )}
 
-                    <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                          <span className="w-2 h-2 rounded-full bg-teal-400" />
-                          <span>Sebagai: <strong>{currentAuthorName || 'Personil'}</strong></span>
+                      {/* Gallery Items Grid */}
+                      {activeTopicComments.filter((c: any) => c.fileUrl).length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
+                          {activeTopicComments.filter((c: any) => c.fileUrl).map((media: any, idx: number) => (
+                            <div 
+                              key={media.id || idx}
+                              onClick={() => setPreviewImage({ url: media.fileUrl, title: media.content || 'Lampiran Kegiatan' })}
+                              className="group relative rounded-xl overflow-hidden aspect-video border border-slate-800 hover:border-teal-500/60 bg-[#121212] cursor-pointer shadow-sm transition-all hover:scale-[1.02]"
+                            >
+                              <img 
+                                src={media.fileUrl} 
+                                alt={media.content || 'Lampiran'} 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
+                                <span className="text-[10px] font-bold text-white truncate">{media.content?.replace(/^📎\s*Lampiran Foto \/ Dokumen:\s*/, '') || 'Foto Kegiatan'}</span>
+                                <span className="text-[9px] text-teal-300 font-mono">{media.authorName || 'Personil'}</span>
+                              </div>
+                            </div>
+                          ))}
                         </div>
+                      ) : (
+                        <div 
+                          onClick={() => galleryFileInputRef.current?.click()}
+                          className="py-6 px-4 bg-[#141414] hover:bg-[#181818] rounded-xl border border-dashed border-slate-800 hover:border-teal-600/50 text-center cursor-pointer transition-colors group"
+                        >
+                          <ImageIcon className="w-6 h-6 mx-auto mb-1.5 text-slate-600 group-hover:text-teal-400 transition-colors" />
+                          <p className="text-xs text-slate-400 font-medium group-hover:text-slate-200 transition-colors">
+                            Belum ada foto atau lampiran untuk kegiatan ini
+                          </p>
+                          <p className="text-[10px] text-slate-600 mt-0.5">
+                            Klik di sini untuk mengunggah foto dokumentasi / hasil inspeksi
+                          </p>
+                        </div>
+                      )}
+                    </div>
 
-                        {/* File attachment upload button */}
-                        <label className={`cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${uploadingFile ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-teal-300 border-slate-700'}`}>
-                          {uploadingFile ? (
-                            <>
-                              <Loader2 className="w-3 h-3 animate-spin text-teal-400" />
-                              <span>Mengupload...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Paperclip className="w-3 h-3 text-teal-400" />
-                              <span>Lampirkan File</span>
-                            </>
-                          )}
-                          <input
-                            type="file"
-                            disabled={uploadingFile}
-                            className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              try {
-                                setUploadingFile(true);
-                                toast.loading('Mengupload lampiran ke Google Drive...', { id: 'file-upload' });
-                                const reader = new FileReader();
-                                reader.onload = async (ev) => {
-                                  try {
-                                    const base64 = ev.target?.result as string;
-                                    const base64Data = base64.split(',')[1];
-                                    const url = await uploadPhotoToDrive(base64Data, file.type || 'application/octet-stream', file.name, 'Bulletin Board');
-                                    setSelectedFile({ name: file.name, url });
-                                    toast.success('Lampiran berhasil diupload!', { id: 'file-upload' });
-                                  } catch (err) {
-                                    console.error(err);
-                                    toast.error('Gagal mengupload file ke Google Drive', { id: 'file-upload' });
-                                  } finally {
-                                    setUploadingFile(false);
-                                  }
-                                };
-                                reader.readAsDataURL(file);
-                              } catch (err) {
-                                setUploadingFile(false);
-                                toast.error('Gagal memproses file', { id: 'file-upload' });
-                              }
-                            }}
-                          />
-                        </label>
+                  </div>
+
+                  {/* ================================================================= */}
+                  {/* RIGHT COLUMN: DISKUSI PROGRESS & REALTIME TIMELINE                */}
+                  {/* ================================================================= */}
+                  <div className="lg:col-span-7 xl:col-span-7 space-y-4">
+                    
+                    {/* Header Discussion */}
+                    <div className="flex items-center justify-between px-1">
+                      <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4" />
+                        <span>Diskusi & Riwayat Progres ({activeTopicComments.length})</span>
+                      </h4>
+                      <span className="text-[10px] text-slate-500 font-mono bg-[#141414] px-2 py-0.5 rounded-full border border-slate-800">
+                        ⚡ Realtime Feed
+                      </span>
+                    </div>
+
+                    {/* New Comment & Status Update Form */}
+                    <form onSubmit={handlePostComment} className="p-4 bg-[#171717] border border-slate-800 rounded-2xl space-y-3 shadow-md">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-200 flex items-center gap-1.5 text-xs">
+                          <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+                          <span>Kirim Update Progres / Catatan Baru</span>
+                        </span>
                       </div>
 
-                      <Button
-                        type="submit"
-                        disabled={submittingComment || uploadingFile || !commentText.trim()}
-                        className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-4 py-1.5 rounded-lg flex items-center gap-1.5 disabled:opacity-50"
-                      >
-                        {submittingComment ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Mengirim...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Send className="w-3.5 h-3.5" />
-                            <span>Kirim & Notifikasi</span>
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </form>
-                </div>
-              )}
-            </div>
+                      <textarea
+                        rows={3}
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        placeholder={`Tuliskan update progres, temuan kendala, atau hasil tindakan untuk "${selectedTopicTitle}"...`}
+                        className="w-full p-3 rounded-xl bg-[#202020] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none leading-relaxed text-xs"
+                      />
 
-            {/* Modal Footer */}
-            <div className="px-5 py-3 bg-[#262626] border-t border-slate-800 flex items-center justify-between">
-              <div className="text-[11px] text-slate-400">
-                <span>Section: <strong>{section || selectedRow[categoryCol] || 'Prep & Lab'}</strong></span>
+                      <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400 font-semibold">Ubah Status:</span>
+                          <select
+                            value={statusUpdateChoice}
+                            onChange={(e) => setStatusUpdateChoice(e.target.value)}
+                            className="p-1.5 px-2.5 rounded-lg bg-[#202020] border border-slate-700 text-slate-200 text-xs outline-none cursor-pointer"
+                          >
+                            <option value="">Status Tetap ({getRowVal(selectedRow, 'Status') || 'Open'})</option>
+                            <option value="On Progress">⏩ Ubah ke On Progress</option>
+                            <option value="Close">✅ Ubah ke Closed / Selesai</option>
+                            <option value="Pending">⏳ Ubah ke Pending</option>
+                            <option value="Open">⭕ Ubah ke Open</option>
+                          </select>
+                        </div>
+
+                        <Button
+                          type="submit"
+                          disabled={submittingComment || !commentText.trim()}
+                          className="!w-auto text-xs px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-lg cursor-pointer"
+                        >
+                          {submittingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 mr-1.5" />}
+                          <span>Kirim Update</span>
+                        </Button>
+                      </div>
+                    </form>
+
+                    {/* Activity / Comments Timeline Stream */}
+                    <div className="space-y-3 pt-1">
+                      {commentsLoading ? (
+                        <div className="text-center py-8 text-slate-500">
+                          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-teal-400" />
+                          <p className="text-xs">Memuat riwayat diskusi...</p>
+                        </div>
+                      ) : activeTopicComments.length === 0 ? (
+                        <div className="text-center py-8 px-4 bg-[#151515] rounded-2xl border border-dashed border-slate-800 text-slate-500">
+                          <MessageSquare className="w-6 h-6 mx-auto mb-1.5 opacity-40 text-slate-400" />
+                          <p className="text-xs italic">Belum ada update progres atau catatan diskusi pada kegiatan ini.</p>
+                        </div>
+                      ) : (
+                        activeTopicComments.map((c) => (
+                          <div key={c.id} className="p-3.5 bg-[#171717] border border-slate-800/80 rounded-2xl space-y-2 shadow-sm">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2.5">
+                                <span className="w-7 h-7 rounded-full bg-teal-900/90 border border-teal-700/60 text-teal-300 text-xs font-bold flex items-center justify-center shrink-0">
+                                  {(c.authorName || 'U').charAt(0).toUpperCase()}
+                                </span>
+                                <div>
+                                  <span className="font-bold text-slate-200 text-xs block leading-tight">
+                                    {c.authorName || 'Personil'}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 font-mono">
+                                    {new Date(c.createdAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                                  </span>
+                                </div>
+                              </div>
+                              {c.authorNik === currentAuthorNik && (
+                                <button
+                                  onClick={() => handleDeleteComment(c.id)}
+                                  className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+                                  title="Hapus Catatan Ini"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            
+                            <p className="text-xs text-slate-300 whitespace-pre-line leading-relaxed pl-9">
+                              {c.content}
+                            </p>
+
+                            {/* Media preview if comment has file_url */}
+                            {c.fileUrl && (
+                              <div className="pl-9 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewImage({ url: c.fileUrl, title: c.content || 'Lampiran Media' })}
+                                  className="relative rounded-xl overflow-hidden border border-slate-700 hover:border-teal-500/60 max-w-xs aspect-video block group cursor-pointer"
+                                >
+                                  <img src={c.fileUrl} alt="Lampiran" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                  </div>
+                </div>
               </div>
-              <Button
-                onClick={() => setSelectedRow(null)}
-                className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold"
-              >
-                Tutup
-              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Image Lightbox Preview Modal with Zoom, Pan, Rotate */}
+      {/* Image Preview Modal */}
       {previewImage && (
         <ImageModal
+          isOpen={!!previewImage}
+          onClose={() => setPreviewImage(null)}
           imageUrl={previewImage.url}
           title={previewImage.title}
           driveViewUrl={previewImage.driveViewUrl}
           driveDownloadUrl={previewImage.driveDownloadUrl}
-          onClose={() => setPreviewImage(null)}
         />
       )}
     </div>
