@@ -35,6 +35,9 @@ router.post("/api/upload", async (req, res) => {
       else if (folderName === 'Materi Briefing Internal' || folderName === 'Briefing Internal' || folderName === 'P5M Internal') {
          finalFolderId = process.env.GDRIVE_BRIEFING_INTERNAL_FOLDER_ID || '1850C4AAefTc_lgx7Jlg9fM7SpyGlQn-9';
       }
+      else if (folderName === 'Bulletin Board' || folderName === 'Bulletin' || folderName === 'Bulletin Attachments' || folderName === 'Manajemen Mutu') {
+         finalFolderId = process.env.GDRIVE_BULLETIN_ATTACHMENTS_FOLDER_ID || '1JE6EusixbK7saIzboKNOk9aMiAqEX-zF';
+      }
       else if (folderName) {
          try {
            const query = `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and '${folderId}' in parents and trashed=false`;

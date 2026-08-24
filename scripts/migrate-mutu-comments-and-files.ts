@@ -27,12 +27,11 @@ async function getDriveToken(): Promise<string> {
 }
 
 async function uploadToDrive(driveToken: string, buffer: Buffer, mimeType: string, filename: string): Promise<any> {
+  const targetFolder = process.env.GDRIVE_BULLETIN_ATTACHMENTS_FOLDER_ID || '1JE6EusixbK7saIzboKNOk9aMiAqEX-zF';
   const metadata: any = {
     name: filename,
+    parents: [targetFolder]
   };
-  if (process.env.GOOGLE_DRIVE_FOLDER_ID) {
-    metadata.parents = [process.env.GOOGLE_DRIVE_FOLDER_ID];
-  }
   
   const boundary = '-------314159265358979323846';
   const delimiter = `\r\n--${boundary}\r\n`;
