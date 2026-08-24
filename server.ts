@@ -36,12 +36,34 @@ webpush.setVapidDetails(
   vapidPrivateKey
 );
 import { ticketSchema, workOrderSchema } from "./src/lib/zod.js";
-import { eq, desc, or, inArray, isNull, and, gte, lte } from "drizzle-orm";
+import { eq, desc, or, inArray, isNull, and, gte, lte, sql } from "drizzle-orm";
 import { authRouter } from "./server/routes/auth.js";
 import { debugRouter } from "./server/routes/debug.js";
 import { employeesRouter } from "./server/routes/employees.js";
 import { p5mRouter } from "./server/routes/p5m.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
+
+async function initDbSchema() {
+  try {
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS user_themes (
+      id SERIAL PRIMARY KEY,
+      nik TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      theme_name TEXT,
+      colors TEXT,
+      is_published BOOLEAN DEFAULT false,
+      author_name TEXT,
+      published_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`ALTER TABLE user_themes ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT false;`);
+    await db.execute(sql`ALTER TABLE user_themes ADD COLUMN IF NOT EXISTS author_name TEXT;`);
+    await db.execute(sql`ALTER TABLE user_themes ADD COLUMN IF NOT EXISTS published_at TIMESTAMP;`);
+  } catch (e: any) {
+    console.warn("DB schema init warning:", e.message);
+  }
+}
 
 async function sendWebPush(notifs: any | any[]) {
   try {
@@ -90,6 +112,7 @@ function getUniverse(pt) {
 }
 
 async function startServer() {
+  await initDbSchema();
   
 // --- Google Drive Helper Functions ---
 

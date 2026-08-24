@@ -511,6 +511,51 @@ router.delete("/api/notes/:id", async (req, res) => {
     }
   });
 
+router.get("/api/themes/templates", async (req, res) => {
+  try {
+    const { nik } = req.query;
+    const data = await db.select().from(userThemes).orderBy(desc(userThemes.publishedAt), desc(userThemes.id));
+    
+    const customTemplates: any[] = [];
+    const communityThemes: any[] = [];
+    
+    data.forEach(t => {
+      let parsedColors = {};
+      try {
+        parsedColors = typeof t.colors === 'string' ? JSON.parse(t.colors) : (t.colors || {});
+      } catch (e) {
+        parsedColors = {};
+      }
+
+      const item = {
+        id: t.id,
+        name: t.themeName || 'Tema Kustom',
+        mode: t.mode,
+        nik: t.nik,
+        authorName: t.authorName || t.nik || 'Anggota Lab',
+        isPublished: Boolean(t.isPublished),
+        publishedAt: t.publishedAt,
+        colors: parsedColors
+      };
+
+      if (t.isPublished) {
+        communityThemes.push(item);
+      }
+      
+      if (t.mode.startsWith('template:') || t.mode === 'custom_template' || t.mode === 'custom_templates') {
+        if (!nik || t.nik === String(nik)) {
+          customTemplates.push(item);
+        }
+      }
+    });
+
+    res.json({ status: "success", customTemplates, communityThemes, data: communityThemes });
+  } catch (error: any) {
+    console.warn("Themes templates fetch warning:", error.message);
+    res.json({ status: "success", customTemplates: [], communityThemes: [], data: [] });
+  }
+});
+
 router.get("/api/themes/community", async (req, res) => {
     try {
       const data = await db.select().from(userThemes).where(eq(userThemes.isPublished, true)).orderBy(desc(userThemes.publishedAt), desc(userThemes.id));
@@ -541,7 +586,7 @@ router.get("/api/themes/community", async (req, res) => {
 router.get("/api/themes/:nik", async (req, res) => {
     try {
       const nikParam = req.params.nik;
-      if (!nikParam) {
+      if (!nikParam || nikParam === 'templates') {
         return res.json({ status: "success", data: {}, customTemplates: [], communityThemes: [] });
       }
 
@@ -611,27 +656,17 @@ router.post("/api/themes", async (req, res) => {
         return res.status(400).json({ status: "error", message: "NIK is required" });
       }
 
-      if (applyToAll) {
-        const modes = ['morning', 'afternoon', 'evening'];
-        for (const m of modes) {
-          const exists = await db.select().from(userThemes).where(and(eq(userThemes.nik, nik), eq(userThemes.mode, m)));
-          if (exists.length > 0) {
-            await db.update(userThemes).set({ themeName: themeName || m, colors: JSON.stringify(colors), updatedAt: new Date() }).where(eq(userThemes.id, exists[0].id));
-          } else {
-            await db.insert(userThemes).values({ nik, mode: m, themeName: themeName || m, colors: JSON.stringify(colors) });
-          }
+      // Always apply to morning, afternoon, evening so active theme is persistent across all hours
+      const modes = (applyToAll || applyToAll === undefined) ? ['morning', 'afternoon', 'evening'] : [mode || 'morning'];
+      for (const m of modes) {
+        const exists = await db.select().from(userThemes).where(and(eq(userThemes.nik, nik), eq(userThemes.mode, m)));
+        if (exists.length > 0) {
+          await db.update(userThemes).set({ themeName: themeName || m, colors: JSON.stringify(colors), updatedAt: new Date() }).where(eq(userThemes.id, exists[0].id));
+        } else {
+          await db.insert(userThemes).values({ nik, mode: m, themeName: themeName || m, colors: JSON.stringify(colors) });
         }
-        return res.json({ status: "success", message: "Tema berhasil diterapkan ke semua waktu!" });
       }
-
-      const exists = await db.select().from(userThemes).where(eq(userThemes.nik, nik));
-      const match = exists.find(e => e.mode === mode);
-      if (match) {
-        await db.update(userThemes).set({ themeName, colors: JSON.stringify(colors), updatedAt: new Date() }).where(eq(userThemes.id, match.id));
-      } else {
-        await db.insert(userThemes).values({ nik, mode, themeName, colors: JSON.stringify(colors) });
-      }
-      res.json({ status: "success" });
+      return res.json({ status: "success", message: "Tema berhasil diterapkan dan disimpan!" });
     } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }
@@ -639,7 +674,7 @@ router.post("/api/themes", async (req, res) => {
 
 router.post("/api/themes/templates", async (req, res) => {
     try {
-      const { nik, id, name, colors, isPublished, authorName } = req.body;
+      const { nik, id, name, colors, isPublished, authorName, applyActive } = req.body;
       if (!nik) return res.status(400).json({ status: "error", message: "NIK is required" });
 
       // Resolve author name
@@ -657,6 +692,7 @@ router.post("/api/themes/templates", async (req, res) => {
       }
       if (!resolvedAuthor) resolvedAuthor = nik || 'Anggota Lab';
       
+      let savedTemplate;
       if (id) {
         // Update existing template
         const updateData: any = {
@@ -671,7 +707,6 @@ router.post("/api/themes/templates", async (req, res) => {
         }
 
         await db.update(userThemes).set(updateData).where(and(eq(userThemes.id, id), eq(userThemes.nik, nik)));
-        return res.json({ status: "success", message: "Template berhasil diperbarui!" });
       } else {
         // Insert new custom template
         const templateMode = `template:${Date.now()}`;
@@ -684,9 +719,29 @@ router.post("/api/themes/templates", async (req, res) => {
           authorName: Boolean(isPublished) ? resolvedAuthor : null,
           publishedAt: Boolean(isPublished) ? new Date() : null
         }).returning();
-        return res.json({ status: "success", message: "Template kustom berhasil disimpan!", template: result[0] });
+        savedTemplate = result[0];
       }
+
+      // Also set as active theme across morning, afternoon, evening
+      if (applyActive || applyActive === undefined) {
+        const modes = ['morning', 'afternoon', 'evening'];
+        for (const m of modes) {
+          const exists = await db.select().from(userThemes).where(and(eq(userThemes.nik, nik), eq(userThemes.mode, m)));
+          if (exists.length > 0) {
+            await db.update(userThemes).set({ themeName: name || m, colors: JSON.stringify(colors), updatedAt: new Date() }).where(eq(userThemes.id, exists[0].id));
+          } else {
+            await db.insert(userThemes).values({ nik, mode: m, themeName: name || m, colors: JSON.stringify(colors) });
+          }
+        }
+      }
+
+      return res.json({ 
+        status: "success", 
+        message: isPublished ? "Tema berhasil disimpan dan dipublikasikan ke Komunitas!" : "Template kustom berhasil disimpan!", 
+        template: savedTemplate 
+      });
     } catch (error: any) {
+      console.error("Error saving theme template:", error);
       res.status(500).json({ status: "error", message: error.message });
     }
   });

@@ -274,7 +274,7 @@ export default function ThemeModal({
   const loadCustomTemplates = async () => {
     setFetchingTemplates(true);
     try {
-      const url = inspectorNik ? `/api/themes/${inspectorNik}` : '/api/themes/community';
+      const url = inspectorNik ? `/api/themes/templates?nik=${inspectorNik}` : '/api/themes/templates';
       const res = await fetch(url);
       const json = await res.json();
       if (json.status === 'success') {
@@ -286,7 +286,7 @@ export default function ThemeModal({
         }
         if (Array.isArray(json.communityThemes)) {
           setCommunityThemes(json.communityThemes);
-        } else if (Array.isArray(json.data) && !inspectorNik) {
+        } else if (Array.isArray(json.data)) {
           setCommunityThemes(json.data);
         }
       }
@@ -312,6 +312,40 @@ export default function ThemeModal({
 
   if (!show) return null;
 
+  // Directly apply a theme from presets, community, or custom templates
+  const handleApplyThemeDirectly = async (colors: ThemeColors, themeName: string) => {
+    // 1. Immediately apply to App state and DOM
+    onThemeUpdated(targetMode, colors, true);
+    
+    // 2. Persist in local storage immediately across all modes
+    const nik = inspectorNik || localStorage.getItem('p2h_inspector_nik');
+    const allModes = { morning: colors, afternoon: colors, evening: colors };
+    if (nik) {
+      localStorage.setItem(`preplab_user_themes_${nik}`, JSON.stringify(allModes));
+    }
+    localStorage.setItem('preplab_user_themes_guest', JSON.stringify(allModes));
+    localStorage.setItem('preplab_active_theme_colors', JSON.stringify(colors));
+
+    toast.success(`Tema "${themeName}" aktif diterapkan ke seluruh portal!`);
+
+    // 3. Save to server in background
+    try {
+      await fetch('/api/themes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nik: nik || 'guest',
+          mode: targetMode,
+          themeName: themeName,
+          colors: colors,
+          applyToAll: true
+        })
+      });
+    } catch(e) {
+      console.warn("Background theme save notice:", e);
+    }
+  };
+
   // Apply a preset template to editor
   const handleSelectPreset = (presetKey: string) => {
     const preset = PRESET_THEMES[presetKey];
@@ -320,7 +354,7 @@ export default function ThemeModal({
     setCustomTemplateName(preset.name);
     setEditingTemplateId(null);
     setIsPublishOnSave(false);
-    toast.success(`Preset "${preset.name}" dipilih`);
+    handleApplyThemeDirectly(preset.colors, preset.name);
   };
 
   // Apply custom template to editor
@@ -330,7 +364,7 @@ export default function ThemeModal({
     setEditingTemplateId(tmpl.id || null);
     setIsPublishOnSave(Boolean(tmpl.isPublished));
     if (tmpl.authorName) setAuthorNameInput(tmpl.authorName);
-    toast.success(`Template "${tmpl.name}" dimuat ke Studio`);
+    handleApplyThemeDirectly(tmpl.colors, tmpl.name);
   };
 
   // Save current colors as a NEW or UPDATED Custom Template
@@ -341,7 +375,7 @@ export default function ThemeModal({
     }
 
     setLoading(true);
-    const toastId = toast.loading('Menyimpan template custom...');
+    const toastId = toast.loading('Menyimpan & menerapkan tema...');
     try {
       const payload = {
         nik: inspectorNik || 'guest',
@@ -349,7 +383,8 @@ export default function ThemeModal({
         name: customTemplateName.trim(),
         colors: editingColors,
         isPublished: isPublishOnSave,
-        authorName: authorNameInput.trim() || undefined
+        authorName: authorNameInput.trim() || undefined,
+        applyActive: true
       };
 
       const res = await fetch('/api/themes/templates', {
@@ -360,10 +395,11 @@ export default function ThemeModal({
 
       const json = await res.json();
       if (res.ok && json.status === 'success') {
+        handleApplyThemeDirectly(editingColors, customTemplateName.trim());
         toast.success(
           isPublishOnSave 
-            ? 'Template kustom disimpan & dipublikasikan ke komunitas!' 
-            : (json.message || 'Template kustom berhasil disimpan!'), 
+            ? 'Tema kustom disimpan, diterapkan & dipublikasikan ke Komunitas!' 
+            : (json.message || 'Tema kustom berhasil disimpan & diterapkan!'), 
           { id: toastId }
         );
         await loadCustomTemplates();
@@ -388,7 +424,8 @@ export default function ThemeModal({
       
       setCustomTemplates(updated);
       localStorage.setItem(storageKey, JSON.stringify(updated));
-      toast.success('Template disimpan ke memori lokal!', { id: toastId });
+      handleApplyThemeDirectly(editingColors, customTemplateName.trim());
+      toast.success('Tema disimpan & diterapkan secara lokal!', { id: toastId });
       setActiveTab('templates');
     } finally {
       setLoading(false);
@@ -457,25 +494,8 @@ export default function ThemeModal({
     setLoading(true);
     const toastId = toast.loading('Menerapkan dan menyimpan tema aktif...');
     try {
-      const res = await fetch('/api/themes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nik: inspectorNik || 'guest',
-          mode: targetMode,
-          themeName: customTemplateName || targetMode,
-          colors: editingColors,
-          applyToAll: applyToAllModes
-        })
-      });
-
-      if (res.ok) {
-        toast.success(applyToAllModes ? 'Tema diterapkan ke semua waktu!' : `Tema berhasil diterapkan untuk waktu ${targetMode}!`, { id: toastId });
-        onThemeUpdated(targetMode, editingColors, applyToAllModes);
-        onClose();
-      } else {
-        throw new Error('Gagal menyimpan tema aktif ke server');
-      }
+      await handleApplyThemeDirectly(editingColors, customTemplateName || targetMode);
+      onClose();
     } catch (e: any) {
       toast.info('Tema diterapkan pada sesi browser ini!', { id: toastId });
       onThemeUpdated(targetMode, editingColors, applyToAllModes);
@@ -768,13 +788,13 @@ export default function ThemeModal({
 
                               <div className="flex items-center justify-between pt-2 border-t border-black/5 gap-1.5">
                                 <button
-                                  onClick={() => handleSelectCustomTemplate(tmpl)}
-                                  className="flex-1 py-1 px-2 rounded text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition-transform active:scale-95 cursor-pointer shadow-xs"
+                                  onClick={() => handleApplyThemeDirectly(tmpl.colors, tmpl.name)}
+                                  className="flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold text-white flex items-center justify-center gap-1 transition-transform active:scale-95 cursor-pointer shadow-xs"
                                   style={{ backgroundColor: tmpl.colors['--primary'] }}
-                                  title="Gunakan tema ini"
+                                  title="Pakai tema ini ke seluruh portal"
                                 >
-                                  <Check className="w-3 h-3" />
-                                  Pilih Tema
+                                  <Check className="w-3.5 h-3.5" />
+                                  Pakai Tema
                                 </button>
 
                                 <button
@@ -786,7 +806,7 @@ export default function ThemeModal({
                                     setActiveTab('studio');
                                     toast.success(`Menyalin "${tmpl.name}" ke Studio Anda`);
                                   }}
-                                  className="p-1.5 rounded hover:bg-black/10 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-lg hover:bg-black/10 transition-colors cursor-pointer"
                                   title="Salin & Sesuaikan di Studio"
                                 >
                                   <Copy className="w-3.5 h-3.5 opacity-80" />
@@ -795,7 +815,7 @@ export default function ThemeModal({
                                 {isOwnTheme && (
                                   <button
                                     onClick={() => handleTogglePublish(tmpl)}
-                                    className="p-1.5 rounded hover:bg-amber-500/10 text-amber-600 transition-colors cursor-pointer"
+                                    className="p-1.5 rounded-lg hover:bg-amber-500/10 text-amber-600 transition-colors cursor-pointer"
                                     title="Tarik dari publik"
                                   >
                                     <Globe className="w-3.5 h-3.5" />
@@ -903,18 +923,18 @@ export default function ThemeModal({
 
                               <div className="flex items-center justify-between pt-2 border-t border-black/5 gap-1.5">
                                 <button
-                                  onClick={() => handleSelectCustomTemplate(tmpl)}
-                                  className="flex-1 py-1 px-2 rounded text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition-transform active:scale-95 cursor-pointer shadow-xs"
+                                  onClick={() => handleApplyThemeDirectly(tmpl.colors, tmpl.name)}
+                                  className="flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold text-white flex items-center justify-center gap-1 transition-transform active:scale-95 cursor-pointer shadow-xs"
                                   style={{ backgroundColor: tmpl.colors['--primary'] }}
-                                  title="Pilih tema ini"
+                                  title="Pakai tema ini ke seluruh portal"
                                 >
-                                  <Check className="w-3 h-3" />
-                                  Pilih
+                                  <Check className="w-3.5 h-3.5" />
+                                  Pakai Tema
                                 </button>
 
                                 <button
                                   onClick={() => handleTogglePublish(tmpl)}
-                                  className={`p-1.5 rounded transition-colors cursor-pointer ${
+                                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                                     tmpl.isPublished 
                                       ? 'bg-teal-500/10 text-teal-600 hover:bg-teal-500/20' 
                                       : 'hover:bg-black/10 opacity-70 hover:opacity-100 text-slate-600'
@@ -926,10 +946,13 @@ export default function ThemeModal({
 
                                 <button
                                   onClick={() => {
-                                    handleSelectCustomTemplate(tmpl);
+                                    setEditingColors({ ...tmpl.colors });
+                                    setCustomTemplateName(tmpl.name);
+                                    setEditingTemplateId(tmpl.id || null);
+                                    setIsPublishOnSave(Boolean(tmpl.isPublished));
                                     setActiveTab('studio');
                                   }}
-                                  className="p-1.5 rounded hover:bg-black/10 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-lg hover:bg-black/10 transition-colors cursor-pointer"
                                   title="Edit Warna di Studio"
                                 >
                                   <Edit3 className="w-3.5 h-3.5 opacity-80" />
@@ -944,7 +967,7 @@ export default function ThemeModal({
                                     setActiveTab('studio');
                                     toast.success(`Menduplikasi "${tmpl.name}"`);
                                   }}
-                                  className="p-1.5 rounded hover:bg-black/10 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-lg hover:bg-black/10 transition-colors cursor-pointer"
                                   title="Duplikat Template Ini"
                                 >
                                   <Copy className="w-3.5 h-3.5 opacity-80" />
@@ -952,7 +975,7 @@ export default function ThemeModal({
 
                                 <button
                                   onClick={() => handleDeleteCustomTemplate(tmpl.id)}
-                                  className="p-1.5 rounded hover:bg-rose-500/10 text-rose-600 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-lg hover:bg-rose-500/10 text-rose-600 transition-colors cursor-pointer"
                                   title="Hapus Template"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -1024,13 +1047,17 @@ export default function ThemeModal({
                             </div>
 
                             <div className="flex items-center justify-between pt-2 border-t border-black/5 gap-2">
-                              <span className="text-[10px] opacity-60">Klik untuk memuat</span>
+                              <span className="text-[10px] opacity-60">Klik untuk menerapkan</span>
                               <button
                                 type="button"
-                                className="px-2.5 py-1 rounded text-[11px] font-bold text-white shadow-xs group-hover:scale-105 transition-transform"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleApplyThemeDirectly(preset.colors, preset.name);
+                                }}
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-white shadow-xs group-hover:scale-105 transition-transform cursor-pointer"
                                 style={{ backgroundColor: preset.colors['--primary'] }}
                               >
-                                Pilih Preset
+                                Pakai Preset
                               </button>
                             </div>
                           </div>

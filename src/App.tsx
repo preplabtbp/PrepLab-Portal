@@ -304,13 +304,24 @@ export default function App() {
       const nik = inspectorNik || localStorage.getItem('p2h_inspector_nik');
       const storageKey = nik ? `preplab_user_themes_${nik}` : 'preplab_user_themes_guest';
       const cached = localStorage.getItem(storageKey) || localStorage.getItem('preplab_user_themes_guest');
+      const activeCached = localStorage.getItem('preplab_active_theme_colors');
+      
+      if (activeCached) {
+        try {
+          const parsedActive = JSON.parse(activeCached);
+          if (parsedActive && typeof parsedActive === 'object') {
+            applyThemeToDOM(parsedActive);
+          }
+        } catch(e) {}
+      }
+
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
           setUserThemes(parsed);
           const hour = new Date().getHours();
           const mode = (hour >= 5 && hour < 12) ? 'morning' : (hour >= 12 && hour < 18) ? 'afternoon' : 'evening';
-          if (parsed[mode]) applyThemeToDOM(parsed[mode]);
+          if (!activeCached && parsed[mode]) applyThemeToDOM(parsed[mode]);
         } catch(e) {}
       }
 
