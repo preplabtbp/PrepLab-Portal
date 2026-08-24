@@ -278,7 +278,7 @@ const app = express();
   app.use(bulletinRouter);
   app.use(quizRouter);
   app.use(notificationsRouter);
-  app.use(workOrdersRouter);
+  app.use(workOrdersRouter); // Mount workOrders router with maintenance summary
   app.use(cloudRouter);
   app.use(inspectionsRouter);
   app.use(ticketsRouter);
