@@ -511,11 +511,37 @@ router.delete("/api/notes/:id", async (req, res) => {
     }
   });
 
+router.get("/api/themes/community", async (req, res) => {
+    try {
+      const data = await db.select().from(userThemes).where(eq(userThemes.isPublished, true)).orderBy(desc(userThemes.publishedAt), desc(userThemes.id));
+      const communityThemes = data.map(t => {
+        let parsedColors = {};
+        try {
+          parsedColors = typeof t.colors === 'string' ? JSON.parse(t.colors) : (t.colors || {});
+        } catch (e) {
+          parsedColors = {};
+        }
+        return {
+          id: t.id,
+          name: t.themeName || 'Tema Komunitas',
+          mode: t.mode,
+          nik: t.nik,
+          authorName: t.authorName || t.nik || 'Anggota Lab',
+          publishedAt: t.publishedAt,
+          colors: parsedColors
+        };
+      });
+      res.json({ status: "success", data: communityThemes });
+    } catch (error: any) {
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
 router.get("/api/themes/:nik", async (req, res) => {
     try {
       const data = await db.select().from(userThemes).where(eq(userThemes.nik, req.params.nik));
       const themes: Record<string, any> = {};
-      const customTemplates: Array<{ id: number; name: string; mode: string; colors: any }> = [];
+      const customTemplates: Array<{ id: number; name: string; mode: string; colors: any; isPublished?: boolean; authorName?: string; publishedAt?: any }> = [];
       
       data.forEach(t => {
         let parsedColors = {};
@@ -530,13 +556,37 @@ router.get("/api/themes/:nik", async (req, res) => {
             id: t.id,
             name: t.themeName || 'Kustom Tema',
             mode: t.mode,
+            isPublished: Boolean(t.isPublished),
+            authorName: t.authorName || '',
+            publishedAt: t.publishedAt,
             colors: parsedColors
           });
         } else {
           themes[t.mode] = { id: t.id, themeName: t.themeName, colors: parsedColors };
         }
       });
-      res.json({ status: "success", data: themes, customTemplates });
+
+      // Also fetch community themes
+      const commData = await db.select().from(userThemes).where(eq(userThemes.isPublished, true)).orderBy(desc(userThemes.publishedAt), desc(userThemes.id));
+      const communityThemes = commData.map(t => {
+        let parsedColors = {};
+        try {
+          parsedColors = typeof t.colors === 'string' ? JSON.parse(t.colors) : (t.colors || {});
+        } catch (e) {
+          parsedColors = {};
+        }
+        return {
+          id: t.id,
+          name: t.themeName || 'Tema Komunitas',
+          mode: t.mode,
+          nik: t.nik,
+          authorName: t.authorName || t.nik || 'Anggota Lab',
+          publishedAt: t.publishedAt,
+          colors: parsedColors
+        };
+      });
+
+      res.json({ status: "success", data: themes, customTemplates, communityThemes });
     } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }
@@ -577,16 +627,38 @@ router.post("/api/themes", async (req, res) => {
 
 router.post("/api/themes/templates", async (req, res) => {
     try {
-      const { nik, id, name, colors } = req.body;
+      const { nik, id, name, colors, isPublished, authorName } = req.body;
       if (!nik) return res.status(400).json({ status: "error", message: "NIK is required" });
+
+      // Resolve author name
+      let resolvedAuthor = authorName;
+      if (!resolvedAuthor && nik) {
+        try {
+          const emp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+          if (emp.length > 0 && emp[0].nama) {
+            resolvedAuthor = emp[0].nama;
+          } else {
+            const usr = await db.select().from(users).where(eq(users.nik, nik)).limit(1);
+            if (usr.length > 0) resolvedAuthor = usr[0].username || usr[0].nama;
+          }
+        } catch (e) {}
+      }
+      if (!resolvedAuthor) resolvedAuthor = nik || 'Anggota Lab';
       
       if (id) {
         // Update existing template
-        await db.update(userThemes).set({
+        const updateData: any = {
           themeName: name || 'Kustom Template',
           colors: JSON.stringify(colors),
           updatedAt: new Date()
-        }).where(and(eq(userThemes.id, id), eq(userThemes.nik, nik)));
+        };
+        if (isPublished !== undefined) {
+          updateData.isPublished = Boolean(isPublished);
+          updateData.authorName = resolvedAuthor;
+          if (isPublished) updateData.publishedAt = new Date();
+        }
+
+        await db.update(userThemes).set(updateData).where(and(eq(userThemes.id, id), eq(userThemes.nik, nik)));
         return res.json({ status: "success", message: "Template berhasil diperbarui!" });
       } else {
         // Insert new custom template
@@ -595,10 +667,54 @@ router.post("/api/themes/templates", async (req, res) => {
           nik,
           mode: templateMode,
           themeName: name || 'Template Kustom',
-          colors: JSON.stringify(colors)
+          colors: JSON.stringify(colors),
+          isPublished: Boolean(isPublished),
+          authorName: Boolean(isPublished) ? resolvedAuthor : null,
+          publishedAt: Boolean(isPublished) ? new Date() : null
         }).returning();
         return res.json({ status: "success", message: "Template kustom berhasil disimpan!", template: result[0] });
       }
+    } catch (error: any) {
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
+router.post("/api/themes/templates/:id/publish", async (req, res) => {
+    try {
+      const templateId = parseInt(req.params.id);
+      const { nik, isPublished, authorName } = req.body;
+      if (!templateId) return res.status(400).json({ status: "error", message: "ID template tidak valid" });
+      if (!nik) return res.status(400).json({ status: "error", message: "NIK is required" });
+
+      let resolvedAuthor = authorName;
+      if (!resolvedAuthor && nik) {
+        try {
+          const emp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+          if (emp.length > 0 && emp[0].nama) {
+            resolvedAuthor = emp[0].nama;
+          } else {
+            const usr = await db.select().from(users).where(eq(users.nik, nik)).limit(1);
+            if (usr.length > 0) resolvedAuthor = usr[0].username || usr[0].nama;
+          }
+        } catch (e) {}
+      }
+      if (!resolvedAuthor) resolvedAuthor = nik || 'Anggota Lab';
+
+      const willPublish = isPublished !== undefined ? Boolean(isPublished) : true;
+      const updateData: any = {
+        isPublished: willPublish,
+        authorName: willPublish ? resolvedAuthor : null,
+        publishedAt: willPublish ? new Date() : null,
+        updatedAt: new Date()
+      };
+
+      await db.update(userThemes).set(updateData).where(and(eq(userThemes.id, templateId), eq(userThemes.nik, nik)));
+      res.json({ 
+        status: "success", 
+        message: willPublish 
+          ? `Tema berhasil dipublish ke publik atas nama "${resolvedAuthor}"!` 
+          : "Tema ditarik dari publik (hanya terlihat oleh Anda)." 
+      });
     } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }

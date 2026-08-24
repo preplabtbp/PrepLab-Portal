@@ -3,7 +3,8 @@ import { Button, Input, Select } from './ui';
 import { 
   X, Save, Palette, Plus, Trash2, Edit3, Copy, Check, 
   Sparkles, RefreshCw, Layers, Eye, CheckCircle2, Sun, 
-  Moon, Sunset, SlidersHorizontal, CheckSquare, Square
+  Moon, Sunset, SlidersHorizontal, CheckSquare, Square,
+  Globe, Users, User, Share2, Search, ArrowUpRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -25,6 +26,10 @@ export interface CustomThemeTemplate {
   name: string;
   mode?: string;
   colors: ThemeColors;
+  isPublished?: boolean;
+  authorName?: string;
+  publishedAt?: string | Date;
+  nik?: string;
 }
 
 export const PRESET_THEMES: Record<string, { name: string; desc: string; colors: ThemeColors }> = {
@@ -208,10 +213,17 @@ export default function ThemeModal({
   const [targetMode, setTargetMode] = useState(currentMode || 'morning');
   const [applyToAllModes, setApplyToAllModes] = useState(false);
   
-  // Custom templates state
+  // Custom templates and Community themes state
   const [customTemplates, setCustomTemplates] = useState<CustomThemeTemplate[]>([]);
+  const [communityThemes, setCommunityThemes] = useState<CustomThemeTemplate[]>([]);
+  const [themeFilterCategory, setThemeFilterCategory] = useState<'all' | 'community' | 'mine' | 'presets'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [customTemplateName, setCustomTemplateName] = useState('Tema Kustom Saya');
+  const [isPublishOnSave, setIsPublishOnSave] = useState(false);
+  const [authorNameInput, setAuthorNameInput] = useState('');
+  
   const [loading, setLoading] = useState(false);
   const [fetchingTemplates, setFetchingTemplates] = useState(false);
 
@@ -222,32 +234,33 @@ export default function ThemeModal({
 
   const [editingColors, setEditingColors] = useState<ThemeColors>(defaultColors);
 
-  // Load custom templates for this specific user
+  // Load custom templates & community themes
   const loadCustomTemplates = async () => {
-    if (!inspectorNik) {
-      // Load from local storage fallback
-      const localCached = localStorage.getItem('preplab_guest_custom_themes');
-      if (localCached) {
-        try { setCustomTemplates(JSON.parse(localCached)); } catch(e) {}
-      }
-      return;
-    }
-
     setFetchingTemplates(true);
     try {
-      const res = await fetch(`/api/themes/${inspectorNik}`);
+      const url = inspectorNik ? `/api/themes/${inspectorNik}` : '/api/themes/community';
+      const res = await fetch(url);
       const json = await res.json();
       if (json.status === 'success') {
         if (Array.isArray(json.customTemplates)) {
           setCustomTemplates(json.customTemplates);
-          localStorage.setItem(`preplab_custom_themes_${inspectorNik}`, JSON.stringify(json.customTemplates));
+          if (inspectorNik) {
+            localStorage.setItem(`preplab_custom_themes_${inspectorNik}`, JSON.stringify(json.customTemplates));
+          }
+        }
+        if (Array.isArray(json.communityThemes)) {
+          setCommunityThemes(json.communityThemes);
+        } else if (Array.isArray(json.data) && !inspectorNik) {
+          setCommunityThemes(json.data);
         }
       }
     } catch (e) {
-      console.error("Gagal mengambil template kustom:", e);
-      const localCached = localStorage.getItem(`preplab_custom_themes_${inspectorNik}`);
-      if (localCached) {
-        try { setCustomTemplates(JSON.parse(localCached)); } catch(err) {}
+      console.error("Gagal mengambil template kustom & komunitas:", e);
+      if (inspectorNik) {
+        const localCached = localStorage.getItem(`preplab_custom_themes_${inspectorNik}`);
+        if (localCached) {
+          try { setCustomTemplates(JSON.parse(localCached)); } catch(err) {}
+        }
       }
     } finally {
       setFetchingTemplates(false);
@@ -270,6 +283,7 @@ export default function ThemeModal({
     setEditingColors({ ...preset.colors });
     setCustomTemplateName(preset.name);
     setEditingTemplateId(null);
+    setIsPublishOnSave(false);
     toast.success(`Preset "${preset.name}" dipilih`);
   };
 
@@ -278,7 +292,9 @@ export default function ThemeModal({
     setEditingColors({ ...tmpl.colors });
     setCustomTemplateName(tmpl.name);
     setEditingTemplateId(tmpl.id || null);
-    toast.success(`Template kustom "${tmpl.name}" dimuat`);
+    setIsPublishOnSave(Boolean(tmpl.isPublished));
+    if (tmpl.authorName) setAuthorNameInput(tmpl.authorName);
+    toast.success(`Template "${tmpl.name}" dimuat ke Studio`);
   };
 
   // Save current colors as a NEW or UPDATED Custom Template
@@ -295,7 +311,9 @@ export default function ThemeModal({
         nik: inspectorNik || 'guest',
         id: editingTemplateId || undefined,
         name: customTemplateName.trim(),
-        colors: editingColors
+        colors: editingColors,
+        isPublished: isPublishOnSave,
+        authorName: authorNameInput.trim() || undefined
       };
 
       const res = await fetch('/api/themes/templates', {
@@ -306,7 +324,12 @@ export default function ThemeModal({
 
       const json = await res.json();
       if (res.ok && json.status === 'success') {
-        toast.success(json.message || 'Template kustom berhasil disimpan!', { id: toastId });
+        toast.success(
+          isPublishOnSave 
+            ? 'Template kustom disimpan & dipublikasikan ke komunitas!' 
+            : (json.message || 'Template kustom berhasil disimpan!'), 
+          { id: toastId }
+        );
         await loadCustomTemplates();
         setActiveTab('templates');
       } else {
@@ -317,7 +340,9 @@ export default function ThemeModal({
       const newTmpl: CustomThemeTemplate = {
         id: editingTemplateId || Date.now(),
         name: customTemplateName.trim(),
-        colors: { ...editingColors }
+        colors: { ...editingColors },
+        isPublished: isPublishOnSave,
+        authorName: authorNameInput.trim() || 'Saya'
       };
       
       const storageKey = inspectorNik ? `preplab_custom_themes_${inspectorNik}` : 'preplab_guest_custom_themes';
@@ -334,6 +359,33 @@ export default function ThemeModal({
     }
   };
 
+  // Toggle publish / unpublish status of a personal template
+  const handleTogglePublish = async (tmpl: CustomThemeTemplate) => {
+    if (!tmpl.id) return;
+    const willPublish = !tmpl.isPublished;
+    const toastId = toast.loading(willPublish ? 'Mempublikasikan tema ke komunitas...' : 'Menarik tema dari komunitas...');
+    try {
+      const res = await fetch(`/api/themes/templates/${tmpl.id}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nik: inspectorNik || 'guest',
+          isPublished: willPublish,
+          authorName: authorNameInput.trim() || undefined
+        })
+      });
+      const json = await res.json();
+      if (res.ok && json.status === 'success') {
+        toast.success(json.message || 'Status publikasi berhasil diperbarui!', { id: toastId });
+        await loadCustomTemplates();
+      } else {
+        throw new Error(json.message || 'Gagal mengubah status publikasi');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Gagal mengubah status publikasi', { id: toastId });
+    }
+  };
+
   // Delete a custom template
   const handleDeleteCustomTemplate = async (tmplId?: number) => {
     if (!tmplId) return;
@@ -347,6 +399,7 @@ export default function ThemeModal({
       if (res.ok) {
         toast.success('Template kustom berhasil dihapus!', { id: toastId });
         setCustomTemplates(prev => prev.filter(t => t.id !== tmplId));
+        setCommunityThemes(prev => prev.filter(t => t.id !== tmplId));
         if (editingTemplateId === tmplId) {
           setEditingTemplateId(null);
         }
@@ -356,6 +409,7 @@ export default function ThemeModal({
     } catch (e) {
       // Local fallback
       setCustomTemplates(prev => prev.filter(t => t.id !== tmplId));
+      setCommunityThemes(prev => prev.filter(t => t.id !== tmplId));
       const storageKey = inspectorNik ? `preplab_custom_themes_${inspectorNik}` : 'preplab_guest_custom_themes';
       localStorage.setItem(storageKey, JSON.stringify(customTemplates.filter(t => t.id !== tmplId)));
       toast.success('Template dihapus secara lokal!', { id: toastId });
@@ -465,7 +519,7 @@ export default function ThemeModal({
         >
           <button
             onClick={() => setActiveTab('templates')}
-            className={`pb-2.5 px-3 border-b-2 flex items-center gap-2 transition-all ${
+            className={`pb-2.5 px-3 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
               activeTab === 'templates' 
                 ? 'border-current font-bold' 
                 : 'border-transparent opacity-60 hover:opacity-100'
@@ -473,12 +527,12 @@ export default function ThemeModal({
             style={{ color: activeTab === 'templates' ? editingColors['--primary'] : 'inherit' }}
           >
             <Layers className="w-4 h-4" />
-            Koleksi Template & Preset ({Object.keys(PRESET_THEMES).length + customTemplates.length})
+            Koleksi Tema & Komunitas ({Object.keys(PRESET_THEMES).length + customTemplates.length + communityThemes.length})
           </button>
 
           <button
             onClick={() => setActiveTab('studio')}
-            className={`pb-2.5 px-3 border-b-2 flex items-center gap-2 transition-all ${
+            className={`pb-2.5 px-3 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
               activeTab === 'studio' 
                 ? 'border-current font-bold' 
                 : 'border-transparent opacity-60 hover:opacity-100'
@@ -491,7 +545,7 @@ export default function ThemeModal({
 
           <button
             onClick={() => setActiveTab('preview')}
-            className={`pb-2.5 px-3 border-b-2 flex items-center gap-2 transition-all ${
+            className={`pb-2.5 px-3 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
               activeTab === 'preview' 
                 ? 'border-current font-bold' 
                 : 'border-transparent opacity-60 hover:opacity-100'
@@ -510,193 +564,422 @@ export default function ThemeModal({
           {activeTab === 'templates' && (
             <div className="space-y-6 animate-in fade-in duration-150">
               
-              {/* SECTION A: TEMPLATE KUSTOM PENGGUNA */}
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <div>
-                    <h3 className="text-sm font-bold flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-500" />
-                      Template Kustom Tersimpan Anda
-                    </h3>
-                    <p className="text-xs opacity-75">
-                      Daftar template warna yang disimpan khusus untuk profil Anda ({inspectorNik || 'Guest'}).
-                    </p>
-                  </div>
-                  <Button 
-                    onClick={() => {
-                      setEditingTemplateId(null);
-                      setCustomTemplateName(`Template Baru ${customTemplates.length + 1}`);
-                      setActiveTab('studio');
-                    }}
-                    className="!w-auto h-8 text-xs flex items-center gap-1.5 shadow-sm"
-                    style={{ backgroundColor: editingColors['--primary'], color: '#FFFFFF' }}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Buat Template Baru
-                  </Button>
-                </div>
-
-                {customTemplates.length === 0 ? (
-                  <div 
-                    className="p-6 rounded-xl border border-dashed text-center space-y-2"
-                    style={{ borderColor: editingColors['--border-main'] }}
-                  >
-                    <Palette className="w-8 h-8 mx-auto opacity-40" />
-                    <p className="text-xs font-semibold">Belum ada template kustom yang dibuat.</p>
-                    <p className="text-[11px] opacity-70">
-                      Klik tombol <strong>"Buat Template Baru"</strong> atau sesuaikan warna di tab <strong>"Studio Editor Warna"</strong> lalu simpan!
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    {customTemplates.map(tmpl => {
-                      const isLoadedInEditor = editingTemplateId === tmpl.id;
-                      return (
-                        <div 
-                          key={tmpl.id || tmpl.name}
-                          className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-3 shadow-xs hover:shadow-md ${
-                            isLoadedInEditor ? 'ring-2' : ''
-                          }`}
-                          style={{ 
-                            backgroundColor: tmpl.colors['--card-bg'] || editingColors['--card-bg'],
-                            borderColor: tmpl.colors['--border-main'] || editingColors['--border-main'],
-                            color: tmpl.colors['--text-main'] || editingColors['--text-main'],
-                            outlineColor: tmpl.colors['--primary']
-                          }}
-                        >
-                          <div>
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <h4 className="font-bold text-xs truncate" title={tmpl.name}>
-                                {tmpl.name}
-                              </h4>
-                              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                                Kustom
-                              </span>
-                            </div>
-
-                            {/* Color Bar Preview */}
-                            <div className="flex h-3.5 rounded-md overflow-hidden border border-black/10 shadow-xs mb-2">
-                              <div style={{ backgroundColor: tmpl.colors['--bg-main'], width: '25%' }} title="Latar Utama" />
-                              <div style={{ backgroundColor: tmpl.colors['--card-bg'], width: '25%' }} title="Latar Kartu" />
-                              <div style={{ backgroundColor: tmpl.colors['--primary'], width: '25%' }} title="Primary" />
-                              <div style={{ backgroundColor: tmpl.colors['--accent'], width: '25%' }} title="Accent" />
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between pt-2 border-t border-black/5 gap-1.5">
-                            <button
-                              onClick={() => handleSelectCustomTemplate(tmpl)}
-                              className="flex-1 py-1 px-2 rounded text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition-transform active:scale-95"
-                              style={{ backgroundColor: tmpl.colors['--primary'] }}
-                            >
-                              <Check className="w-3 h-3" />
-                              Pilih
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                handleSelectCustomTemplate(tmpl);
-                                setActiveTab('studio');
-                              }}
-                              className="p-1.5 rounded hover:bg-black/10 transition-colors"
-                              title="Edit Warna di Studio"
-                            >
-                              <Edit3 className="w-3.5 h-3.5 opacity-80" />
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                setEditingColors({ ...tmpl.colors });
-                                setCustomTemplateName(`${tmpl.name} (Salinan)`);
-                                setEditingTemplateId(null);
-                                setActiveTab('studio');
-                                toast.success(`Menduplikasi "${tmpl.name}"`);
-                              }}
-                              className="p-1.5 rounded hover:bg-black/10 transition-colors"
-                              title="Duplikat Template Ini"
-                            >
-                              <Copy className="w-3.5 h-3.5 opacity-80" />
-                            </button>
-
-                            <button
-                              onClick={() => handleDeleteCustomTemplate(tmpl.id)}
-                              className="p-1.5 rounded hover:bg-rose-500/10 text-rose-600 transition-colors"
-                              title="Hapus Template"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* SECTION B: PRESET RESMI PREPLAB */}
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <div>
-                    <h3 className="text-sm font-bold flex items-center gap-2">
-                      <Palette className="w-4 h-4" />
-                      Preset Tema Siap Pakai
-                    </h3>
-                    <p className="text-xs opacity-75">
-                      Kombinasi warna profesional yang dirancang khusus untuk kenyamanan membaca & kerja.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {Object.entries(PRESET_THEMES).map(([key, preset]) => {
+              {/* Category Filter & Search Bar */}
+              <div 
+                className="p-3 rounded-xl border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs"
+                style={{ 
+                  backgroundColor: editingColors['--bg-main'],
+                  borderColor: editingColors['--border-main']
+                }}
+              >
+                {/* Filter Pills */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[
+                    { key: 'all', label: 'Semua Koleksi', icon: Layers, count: Object.keys(PRESET_THEMES).length + customTemplates.length + communityThemes.length },
+                    { key: 'community', label: 'Komunitas & Publik', icon: Globe, count: communityThemes.length },
+                    { key: 'mine', label: 'Kustom Saya', icon: Sparkles, count: customTemplates.length },
+                    { key: 'presets', label: 'Preset Resmi', icon: Palette, count: Object.keys(PRESET_THEMES).length }
+                  ].map(f => {
+                    const Icon = f.icon;
+                    const isActive = themeFilterCategory === f.key;
                     return (
-                      <div 
-                        key={key}
-                        className="p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-3 shadow-xs hover:shadow-md cursor-pointer group"
+                      <button
+                        key={f.key}
+                        onClick={() => setThemeFilterCategory(f.key as any)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                          isActive ? 'shadow-xs font-bold text-white' : 'opacity-70 hover:opacity-100'
+                        }`}
                         style={{ 
-                          backgroundColor: preset.colors['--card-bg'],
-                          borderColor: preset.colors['--border-main'],
-                          color: preset.colors['--text-main']
+                          backgroundColor: isActive ? editingColors['--primary'] : editingColors['--card-bg'],
+                          borderColor: editingColors['--border-main'],
+                          color: isActive ? '#FFFFFF' : editingColors['--text-main']
                         }}
-                        onClick={() => handleSelectPreset(key)}
                       >
-                        <div>
-                          <div className="flex items-start justify-between gap-2 mb-1.5">
-                            <h4 className="font-bold text-xs truncate">
-                              {preset.name}
-                            </h4>
-                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold bg-slate-500/10 opacity-70">
-                              Preset
-                            </span>
-                          </div>
-                          <p className="text-[11px] opacity-70 line-clamp-2 mb-2.5">
-                            {preset.desc}
-                          </p>
-
-                          {/* Color Bar Preview */}
-                          <div className="flex h-3.5 rounded-md overflow-hidden border border-black/10 shadow-xs">
-                            <div style={{ backgroundColor: preset.colors['--bg-main'], width: '25%' }} title="Latar Utama" />
-                            <div style={{ backgroundColor: preset.colors['--card-bg'], width: '25%' }} title="Latar Kartu" />
-                            <div style={{ backgroundColor: preset.colors['--primary'], width: '25%' }} title="Primary" />
-                            <div style={{ backgroundColor: preset.colors['--accent'], width: '25%' }} title="Accent" />
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-2 border-t border-black/5 gap-2">
-                          <span className="text-[10px] opacity-60">Klik untuk memuat</span>
-                          <button
-                            type="button"
-                            className="px-2.5 py-1 rounded text-[11px] font-bold text-white shadow-xs group-hover:scale-105 transition-transform"
-                            style={{ backgroundColor: preset.colors['--primary'] }}
-                          >
-                            Pilih Preset
-                          </button>
-                        </div>
-                      </div>
+                        <Icon className="w-3.5 h-3.5" />
+                        <span>{f.label}</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono bg-black/10">
+                          {f.count}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
+
+                {/* Search Input */}
+                <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 opacity-50" />
+                  <input
+                    type="text"
+                    placeholder="Cari tema / nama pembuat..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full text-xs pl-8 pr-3 py-1.5 rounded-lg border outline-none font-medium"
+                    style={{ 
+                      backgroundColor: editingColors['--input-bg'],
+                      borderColor: editingColors['--border-main'],
+                      color: editingColors['--text-main']
+                    }}
+                  />
+                </div>
               </div>
+
+              {/* SECTION 1: TEMA KOMUNITAS / PUBLIK (DIBUAT OLEH PERSONIL LAIN / USER) */}
+              {(themeFilterCategory === 'all' || themeFilterCategory === 'community') && (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-sm font-bold flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-teal-500" />
+                        Tema Komunitas & Publik (Dibagikan oleh Personil)
+                      </h3>
+                      <p className="text-xs opacity-75">
+                        Koleksi tema custom yang dipublikasikan oleh rekan kerja untuk digunakan bersama.
+                      </p>
+                    </div>
+                  </div>
+
+                  {communityThemes.length === 0 ? (
+                    <div 
+                      className="p-6 rounded-xl border border-dashed text-center space-y-2"
+                      style={{ borderColor: editingColors['--border-main'] }}
+                    >
+                      <Globe className="w-8 h-8 mx-auto opacity-40 text-teal-500" />
+                      <p className="text-xs font-semibold">Belum ada tema yang dipublikasikan ke komunitas.</p>
+                      <p className="text-[11px] opacity-70">
+                        Buat tema custom di tab <strong>Studio</strong> dan centang <strong>"Publikasikan ke Komunitas"</strong> untuk membagikannya!
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {communityThemes
+                        .filter(t => {
+                          if (!searchQuery.trim()) return true;
+                          const q = searchQuery.toLowerCase();
+                          return (t.name || '').toLowerCase().includes(q) || (t.authorName || '').toLowerCase().includes(q);
+                        })
+                        .map(tmpl => {
+                          const isOwnTheme = tmpl.nik === inspectorNik;
+                          return (
+                            <div 
+                              key={`comm-${tmpl.id}`}
+                              className="p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-3 shadow-xs hover:shadow-md"
+                              style={{ 
+                                backgroundColor: tmpl.colors['--card-bg'] || editingColors['--card-bg'],
+                                borderColor: tmpl.colors['--border-main'] || editingColors['--border-main'],
+                                color: tmpl.colors['--text-main'] || editingColors['--text-main']
+                              }}
+                            >
+                              <div>
+                                <div className="flex items-start justify-between gap-2 mb-1.5">
+                                  <h4 className="font-bold text-xs truncate" title={tmpl.name}>
+                                    {tmpl.name}
+                                  </h4>
+                                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 shrink-0 flex items-center gap-1">
+                                    <Globe className="w-2.5 h-2.5" />
+                                    Publik
+                                  </span>
+                                </div>
+
+                                {/* Creator Attribution Badge */}
+                                <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold">
+                                  <div 
+                                    className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs shrink-0"
+                                    style={{ backgroundColor: tmpl.colors['--primary'] || '#2A9D8F' }}
+                                  >
+                                    {(tmpl.authorName || 'U').charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="truncate leading-tight text-[11px]">
+                                      Dibuat oleh: <strong className="font-bold">{tmpl.authorName || 'Personil PrepLab'}</strong>
+                                    </p>
+                                    {tmpl.publishedAt && (
+                                      <p className="text-[9px] opacity-60 font-mono">
+                                        {new Date(tmpl.publishedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Color Bar Preview */}
+                                <div className="flex h-3.5 rounded-md overflow-hidden border border-black/10 shadow-xs mb-1">
+                                  <div style={{ backgroundColor: tmpl.colors['--bg-main'], width: '25%' }} title="Latar Utama" />
+                                  <div style={{ backgroundColor: tmpl.colors['--card-bg'], width: '25%' }} title="Latar Kartu" />
+                                  <div style={{ backgroundColor: tmpl.colors['--primary'], width: '25%' }} title="Primary" />
+                                  <div style={{ backgroundColor: tmpl.colors['--accent'], width: '25%' }} title="Accent" />
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-2 border-t border-black/5 gap-1.5">
+                                <button
+                                  onClick={() => handleSelectCustomTemplate(tmpl)}
+                                  className="flex-1 py-1 px-2 rounded text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition-transform active:scale-95 cursor-pointer shadow-xs"
+                                  style={{ backgroundColor: tmpl.colors['--primary'] }}
+                                  title="Gunakan tema ini"
+                                >
+                                  <Check className="w-3 h-3" />
+                                  Pilih Tema
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    setEditingColors({ ...tmpl.colors });
+                                    setCustomTemplateName(`${tmpl.name} (Salinan)`);
+                                    setEditingTemplateId(null);
+                                    setIsPublishOnSave(false);
+                                    setActiveTab('studio');
+                                    toast.success(`Menyalin "${tmpl.name}" ke Studio Anda`);
+                                  }}
+                                  className="p-1.5 rounded hover:bg-black/10 transition-colors cursor-pointer"
+                                  title="Salin & Sesuaikan di Studio"
+                                >
+                                  <Copy className="w-3.5 h-3.5 opacity-80" />
+                                </button>
+
+                                {isOwnTheme && (
+                                  <button
+                                    onClick={() => handleTogglePublish(tmpl)}
+                                    className="p-1.5 rounded hover:bg-amber-500/10 text-amber-600 transition-colors cursor-pointer"
+                                    title="Tarik dari publik"
+                                  >
+                                    <Globe className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SECTION 2: TEMPLATE KUSTOM PRIBADI */}
+              {(themeFilterCategory === 'all' || themeFilterCategory === 'mine') && (
+                <div className="space-y-3 pt-2">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-sm font-bold flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-amber-500" />
+                        Template Kustom Pribadi Anda
+                      </h3>
+                      <p className="text-xs opacity-75">
+                        Daftar template warna yang disimpan khusus untuk profil Anda ({inspectorNik || 'Guest'}).
+                      </p>
+                    </div>
+                    <Button 
+                      onClick={() => {
+                        setEditingTemplateId(null);
+                        setCustomTemplateName(`Template Baru ${customTemplates.length + 1}`);
+                        setIsPublishOnSave(false);
+                        setActiveTab('studio');
+                      }}
+                      className="!w-auto h-8 text-xs flex items-center gap-1.5 shadow-sm"
+                      style={{ backgroundColor: editingColors['--primary'], color: '#FFFFFF' }}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Buat Template Baru
+                    </Button>
+                  </div>
+
+                  {customTemplates.length === 0 ? (
+                    <div 
+                      className="p-6 rounded-xl border border-dashed text-center space-y-2"
+                      style={{ borderColor: editingColors['--border-main'] }}
+                    >
+                      <Palette className="w-8 h-8 mx-auto opacity-40" />
+                      <p className="text-xs font-semibold">Belum ada template kustom yang dibuat.</p>
+                      <p className="text-[11px] opacity-70">
+                        Klik tombol <strong>"Buat Template Baru"</strong> atau sesuaikan warna di tab <strong>"Studio Editor Warna"</strong> lalu simpan!
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {customTemplates
+                        .filter(t => {
+                          if (!searchQuery.trim()) return true;
+                          const q = searchQuery.toLowerCase();
+                          return (t.name || '').toLowerCase().includes(q);
+                        })
+                        .map(tmpl => {
+                          const isLoadedInEditor = editingTemplateId === tmpl.id;
+                          return (
+                            <div 
+                              key={tmpl.id || tmpl.name}
+                              className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-3 shadow-xs hover:shadow-md ${
+                                isLoadedInEditor ? 'ring-2' : ''
+                              }`}
+                              style={{ 
+                                backgroundColor: tmpl.colors['--card-bg'] || editingColors['--card-bg'],
+                                borderColor: tmpl.colors['--border-main'] || editingColors['--border-main'],
+                                color: tmpl.colors['--text-main'] || editingColors['--text-main'],
+                                outlineColor: tmpl.colors['--primary']
+                              }}
+                            >
+                              <div>
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <h4 className="font-bold text-xs truncate" title={tmpl.name}>
+                                    {tmpl.name}
+                                  </h4>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {tmpl.isPublished ? (
+                                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 flex items-center gap-1">
+                                        <Globe className="w-2.5 h-2.5" />
+                                        Publik
+                                      </span>
+                                    ) : (
+                                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                        Pribadi
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Color Bar Preview */}
+                                <div className="flex h-3.5 rounded-md overflow-hidden border border-black/10 shadow-xs mb-2">
+                                  <div style={{ backgroundColor: tmpl.colors['--bg-main'], width: '25%' }} title="Latar Utama" />
+                                  <div style={{ backgroundColor: tmpl.colors['--card-bg'], width: '25%' }} title="Latar Kartu" />
+                                  <div style={{ backgroundColor: tmpl.colors['--primary'], width: '25%' }} title="Primary" />
+                                  <div style={{ backgroundColor: tmpl.colors['--accent'], width: '25%' }} title="Accent" />
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-2 border-t border-black/5 gap-1.5">
+                                <button
+                                  onClick={() => handleSelectCustomTemplate(tmpl)}
+                                  className="flex-1 py-1 px-2 rounded text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition-transform active:scale-95 cursor-pointer shadow-xs"
+                                  style={{ backgroundColor: tmpl.colors['--primary'] }}
+                                  title="Pilih tema ini"
+                                >
+                                  <Check className="w-3 h-3" />
+                                  Pilih
+                                </button>
+
+                                <button
+                                  onClick={() => handleTogglePublish(tmpl)}
+                                  className={`p-1.5 rounded transition-colors cursor-pointer ${
+                                    tmpl.isPublished 
+                                      ? 'bg-teal-500/10 text-teal-600 hover:bg-teal-500/20' 
+                                      : 'hover:bg-black/10 opacity-70 hover:opacity-100 text-slate-600'
+                                  }`}
+                                  title={tmpl.isPublished ? "Status: Terpublikasi ke Komunitas (Klik untuk tarik)" : "Publikasikan tema ini ke Komunitas"}
+                                >
+                                  <Globe className="w-3.5 h-3.5" />
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    handleSelectCustomTemplate(tmpl);
+                                    setActiveTab('studio');
+                                  }}
+                                  className="p-1.5 rounded hover:bg-black/10 transition-colors cursor-pointer"
+                                  title="Edit Warna di Studio"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5 opacity-80" />
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    setEditingColors({ ...tmpl.colors });
+                                    setCustomTemplateName(`${tmpl.name} (Salinan)`);
+                                    setEditingTemplateId(null);
+                                    setIsPublishOnSave(false);
+                                    setActiveTab('studio');
+                                    toast.success(`Menduplikasi "${tmpl.name}"`);
+                                  }}
+                                  className="p-1.5 rounded hover:bg-black/10 transition-colors cursor-pointer"
+                                  title="Duplikat Template Ini"
+                                >
+                                  <Copy className="w-3.5 h-3.5 opacity-80" />
+                                </button>
+
+                                <button
+                                  onClick={() => handleDeleteCustomTemplate(tmpl.id)}
+                                  className="p-1.5 rounded hover:bg-rose-500/10 text-rose-600 transition-colors cursor-pointer"
+                                  title="Hapus Template"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SECTION 3: PRESET RESMI PREPLAB */}
+              {(themeFilterCategory === 'all' || themeFilterCategory === 'presets') && (
+                <div className="space-y-3 pt-2">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-sm font-bold flex items-center gap-2">
+                        <Palette className="w-4 h-4" />
+                        Preset Tema Siap Pakai
+                      </h3>
+                      <p className="text-xs opacity-75">
+                        Kombinasi warna profesional yang dirancang khusus untuk kenyamanan membaca & kerja.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {Object.entries(PRESET_THEMES)
+                      .filter(([key, preset]) => {
+                        if (!searchQuery.trim()) return true;
+                        const q = searchQuery.toLowerCase();
+                        return preset.name.toLowerCase().includes(q) || preset.desc.toLowerCase().includes(q);
+                      })
+                      .map(([key, preset]) => {
+                        return (
+                          <div 
+                            key={key}
+                            className="p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-3 shadow-xs hover:shadow-md cursor-pointer group"
+                            style={{ 
+                              backgroundColor: preset.colors['--card-bg'],
+                              borderColor: preset.colors['--border-main'],
+                              color: preset.colors['--text-main']
+                            }}
+                            onClick={() => handleSelectPreset(key)}
+                          >
+                            <div>
+                              <div className="flex items-start justify-between gap-2 mb-1.5">
+                                <h4 className="font-bold text-xs truncate">
+                                  {preset.name}
+                                </h4>
+                                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold bg-slate-500/10 opacity-70">
+                                  Preset
+                                </span>
+                              </div>
+                              <p className="text-[11px] opacity-70 line-clamp-2 mb-2.5">
+                                {preset.desc}
+                              </p>
+
+                              {/* Color Bar Preview */}
+                              <div className="flex h-3.5 rounded-md overflow-hidden border border-black/10 shadow-xs">
+                                <div style={{ backgroundColor: preset.colors['--bg-main'], width: '25%' }} title="Latar Utama" />
+                                <div style={{ backgroundColor: preset.colors['--card-bg'], width: '25%' }} title="Latar Kartu" />
+                                <div style={{ backgroundColor: preset.colors['--primary'], width: '25%' }} title="Primary" />
+                                <div style={{ backgroundColor: preset.colors['--accent'], width: '25%' }} title="Accent" />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2 border-t border-black/5 gap-2">
+                              <span className="text-[10px] opacity-60">Klik untuk memuat</span>
+                              <button
+                                type="button"
+                                className="px-2.5 py-1 rounded text-[11px] font-bold text-white shadow-xs group-hover:scale-105 transition-transform"
+                                style={{ backgroundColor: preset.colors['--primary'] }}
+                              >
+                                Pilih Preset
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
 
             </div>
           )}
@@ -706,55 +989,106 @@ export default function ThemeModal({
             <div className="space-y-6 animate-in fade-in duration-150">
               {/* Template Info Card */}
               <div 
-                className="p-4 rounded-xl border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs"
+                className="p-4 rounded-xl border flex flex-col gap-3 shadow-xs"
                 style={{ 
                   backgroundColor: editingColors['--bg-main'],
                   borderColor: editingColors['--border-main']
                 }}
               >
-                <div className="flex-1">
-                  <label className="text-xs font-bold block mb-1">
-                    Nama Template Kustom
-                  </label>
-                  <input
-                    type="text"
-                    value={customTemplateName}
-                    onChange={e => setCustomTemplateName(e.target.value)}
-                    placeholder="Contoh: Tema Favorit Kerja Malam..."
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-lg border outline-none focus:ring-2"
-                    style={{ 
-                      backgroundColor: editingColors['--input-bg'],
-                      borderColor: editingColors['--border-main'],
-                      color: editingColors['--text-main']
-                    }}
-                  />
-                  {editingTemplateId && (
-                    <p className="text-[10px] text-amber-500 font-mono mt-1">
-                      Mode: Memperbarui Template ID #{editingTemplateId}
-                    </p>
-                  )}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <label className="text-xs font-bold block mb-1">
+                      Nama Template Kustom
+                    </label>
+                    <input
+                      type="text"
+                      value={customTemplateName}
+                      onChange={e => setCustomTemplateName(e.target.value)}
+                      placeholder="Contoh: Tema Favorit Kerja Malam..."
+                      className="w-full text-xs font-semibold px-3 py-2 rounded-lg border outline-none focus:ring-2"
+                      style={{ 
+                        backgroundColor: editingColors['--input-bg'],
+                        borderColor: editingColors['--border-main'],
+                        color: editingColors['--text-main']
+                      }}
+                    />
+                    {editingTemplateId && (
+                      <p className="text-[10px] text-amber-500 font-mono mt-1">
+                        Mode: Memperbarui Template ID #{editingTemplateId}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-end gap-2 shrink-0">
+                    <Button
+                      onClick={handleSmartRandomize}
+                      variant="secondary"
+                      className="!w-auto h-9 text-xs flex items-center gap-1.5 cursor-pointer"
+                      style={{ backgroundColor: editingColors['--card-bg'], color: editingColors['--text-main'] }}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      Acak Palet
+                    </Button>
+
+                    <Button
+                      onClick={handleSaveCustomTemplate}
+                      disabled={loading}
+                      className="!w-auto h-9 text-xs flex items-center gap-1.5 shadow-sm text-white font-bold cursor-pointer"
+                      style={{ backgroundColor: editingColors['--primary'] }}
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      {editingTemplateId ? 'Perbarui Template' : (isPublishOnSave ? 'Simpan & Publikasikan' : 'Simpan Template Kustom')}
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="flex items-end gap-2 shrink-0">
-                  <Button
-                    onClick={handleSmartRandomize}
-                    variant="secondary"
-                    className="!w-auto h-9 text-xs flex items-center gap-1.5"
-                    style={{ backgroundColor: editingColors['--card-bg'], color: editingColors['--text-main'] }}
+                {/* Publish to Community Toggle Box */}
+                <div 
+                  className="p-3 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  style={{ 
+                    backgroundColor: editingColors['--card-bg'],
+                    borderColor: editingColors['--border-main']
+                  }}
+                >
+                  <div 
+                    className="flex items-start gap-2.5 cursor-pointer select-none"
+                    onClick={() => setIsPublishOnSave(!isPublishOnSave)}
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                    Acak Palet
-                  </Button>
+                    {isPublishOnSave ? (
+                      <CheckSquare className="w-4 h-4 text-teal-500 mt-0.5 shrink-0" />
+                    ) : (
+                      <Square className="w-4 h-4 opacity-50 mt-0.5 shrink-0" />
+                    )}
+                    <div>
+                      <p className="text-xs font-bold flex items-center gap-1.5">
+                        <Globe className="w-3.5 h-3.5 text-teal-500" />
+                        Publikasikan tema ini ke Komunitas PrepLab
+                      </p>
+                      <p className="text-[11px] opacity-70">
+                        Tema akan muncul di daftar publik dan bisa langsung dipilih oleh seluruh personil lain.
+                      </p>
+                    </div>
+                  </div>
 
-                  <Button
-                    onClick={handleSaveCustomTemplate}
-                    disabled={loading}
-                    className="!w-auto h-9 text-xs flex items-center gap-1.5 shadow-sm text-white font-bold"
-                    style={{ backgroundColor: editingColors['--primary'] }}
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    {editingTemplateId ? 'Perbarui Template' : 'Simpan Template Kustom'}
-                  </Button>
+                  {isPublishOnSave && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label className="text-[11px] font-semibold opacity-80 whitespace-nowrap">
+                        Nama Pembuat (Atribusi):
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Nama atau Panggilan Anda"
+                        value={authorNameInput}
+                        onChange={e => setAuthorNameInput(e.target.value)}
+                        className="text-xs px-2.5 py-1 rounded-md border font-semibold outline-none w-44"
+                        style={{ 
+                          backgroundColor: editingColors['--input-bg'],
+                          borderColor: editingColors['--border-main'],
+                          color: editingColors['--text-main']
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

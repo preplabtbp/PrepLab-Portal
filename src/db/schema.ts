@@ -304,6 +304,9 @@ export const userThemes = pgTable('user_themes', {
   mode: text('mode').notNull(),
   themeName: text('theme_name'),
   colors: text('colors'), // JSON string
+  isPublished: boolean('is_published').default(false),
+  authorName: text('author_name'),
+  publishedAt: timestamp('published_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
