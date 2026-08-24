@@ -57,36 +57,236 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   // Modal Detail WO Preview
   const [selectedWO, setSelectedWO] = useState<any | null>(null);
 
-  // Fetch summary data from backend
+  // Helper to compute maintenance summary on client-side from raw work orders
+  const computeClientSummary = (allWOs: any[], period: string, startCustom?: string, endCustom?: string) => {
+    const normalizeCategory = (cat: string | null | undefined): 'Instrument (L)' | 'Non-Instrument (PL)' => {
+      if (!cat) return 'Non-Instrument (PL)';
+      const c = cat.toLowerCase();
+      if (c.includes('instrument') && !c.includes('non')) return 'Instrument (L)';
+      return 'Non-Instrument (PL)';
+    };
+
+    const parseDowntime = (d: any): number => {
+      if (d === null || d === undefined) return 0;
+      const str = String(d).trim().replace(',', '.');
+      const num = parseFloat(str);
+      return isNaN(num) ? 0 : num;
+    };
+
+    const parseQty = (q: any): number => {
+      if (q === null || q === undefined) return 0;
+      const str = String(q).trim().replace(',', '.');
+      const num = parseFloat(str);
+      return isNaN(num) ? 0 : num;
+    };
+
+    // Filter by period
+    let filtered = [...allWOs];
+    if (period === 'this_month') {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      filtered = filtered.filter(wo => wo.date && new Date(wo.date) >= start);
+    } else if (period === 'last_30_days') {
+      const past = new Date();
+      past.setDate(past.getDate() - 30);
+      filtered = filtered.filter(wo => wo.date && new Date(wo.date) >= past);
+    } else if (period === 'this_year') {
+      const start = new Date(new Date().getFullYear(), 0, 1);
+      filtered = filtered.filter(wo => wo.date && new Date(wo.date) >= start);
+    } else if (period === 'custom' && startCustom && endCustom) {
+      const s = new Date(startCustom);
+      const e = new Date(endCustom);
+      e.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(wo => {
+        if (!wo.date) return false;
+        const d = new Date(wo.date);
+        return d >= s && d <= e;
+      });
+    }
+
+    let totalDowntimeHours = 0;
+    let totalSparepartUnits = 0;
+    const categorySummary: Record<string, { totalDowntime: number; woCount: number; openCount: number; inProgressCount: number; closedCount: number }> = {
+      'Instrument (L)': { totalDowntime: 0, woCount: 0, openCount: 0, inProgressCount: 0, closedCount: 0 },
+      'Non-Instrument (PL)': { totalDowntime: 0, woCount: 0, openCount: 0, inProgressCount: 0, closedCount: 0 }
+    };
+
+    const equipmentMap = new Map<string, any>();
+    const sparepartMap = new Map<string, any>();
+
+    for (const wo of filtered) {
+      const cat = normalizeCategory(wo.category);
+      const dt = parseDowntime(wo.downtimeDuration ?? wo.downtime_duration);
+      const qty = parseQty(wo.sparepartQty ?? wo.sparepart_qty);
+      const status = wo.status || 'Closed';
+      const isClosed = status === 'Closed' || status === 'Resolved';
+      const isInProgress = status === 'In Progress';
+      const isOpen = status === 'Open';
+
+      totalDowntimeHours += dt;
+      totalSparepartUnits += qty;
+
+      if (categorySummary[cat]) {
+        categorySummary[cat].totalDowntime += dt;
+        categorySummary[cat].woCount += 1;
+        if (isClosed) categorySummary[cat].closedCount += 1;
+        if (isInProgress) categorySummary[cat].inProgressCount += 1;
+        if (isOpen) categorySummary[cat].openCount += 1;
+      }
+
+      const eqCode = (wo.equipmentCode ?? wo.equipment_code ?? '').trim() || 'General';
+      const eqName = (wo.equipmentName ?? wo.equipment_name ?? '').trim() || 'Peralatan Lainnya';
+      const eqKey = `${eqCode}___${eqName}`;
+
+      if (!equipmentMap.has(eqKey)) {
+        equipmentMap.set(eqKey, {
+          equipmentCode: eqCode,
+          equipmentName: eqName,
+          category: cat,
+          woCount: 0,
+          totalDowntime: 0,
+          openCount: 0,
+          inProgressCount: 0,
+          closedCount: 0,
+          spareparts: {},
+          mttr: 0
+        });
+      }
+
+      const eqStat = equipmentMap.get(eqKey);
+      eqStat.woCount += 1;
+      eqStat.totalDowntime += dt;
+      if (isClosed) eqStat.closedCount += 1;
+      if (isInProgress) eqStat.inProgressCount += 1;
+      if (isOpen) eqStat.openCount += 1;
+
+      const spName = (wo.sparepartName ?? wo.sparepart_name ?? '').trim();
+      if (spName) {
+        eqStat.spareparts[spName] = (eqStat.spareparts[spName] || 0) + qty;
+
+        if (!sparepartMap.has(spName)) {
+          sparepartMap.set(spName, {
+            sparepartName: spName,
+            totalQty: 0,
+            usedCount: 0,
+            equipments: new Set<string>()
+          });
+        }
+        const spStat = sparepartMap.get(spName);
+        spStat.totalQty += qty;
+        spStat.usedCount += 1;
+        spStat.equipments.add(eqName);
+      }
+    }
+
+    const equipmentList = Array.from(equipmentMap.values()).map(eq => ({
+      ...eq,
+      totalDowntime: Number(eq.totalDowntime.toFixed(1)),
+      mttr: eq.woCount > 0 ? Number((eq.totalDowntime / eq.woCount).toFixed(1)) : 0
+    })).sort((a, b) => b.totalDowntime - a.totalDowntime);
+
+    const sparepartsList = Array.from(sparepartMap.values()).map(sp => ({
+      sparepartName: sp.sparepartName,
+      totalQty: Number(sp.totalQty.toFixed(0)),
+      usedCount: sp.usedCount,
+      equipments: Array.from(sp.equipments)
+    })).sort((a, b) => b.totalQty - a.totalQty);
+
+    const totalWOs = filtered.length;
+    const mttrHours = totalWOs > 0 ? Number((totalDowntimeHours / totalWOs).toFixed(1)) : 0;
+
+    return {
+      status: 'success',
+      summary: {
+        totalWorkOrders: totalWOs,
+        totalDowntimeHours: Number(totalDowntimeHours.toFixed(1)),
+        mttrHours,
+        totalSparepartUnits: Number(totalSparepartUnits.toFixed(0)),
+        totalEquipmentsWithDowntime: equipmentList.length,
+        topDowntimeEquipment: equipmentList[0] || null
+      },
+      categorySummary,
+      equipmentList,
+      sparepartsList,
+      rawWorkOrders: filtered.map(w => ({
+        id: w.id,
+        woId: w.woId || w.wo_id,
+        date: w.date,
+        shift: w.shift,
+        equipmentCode: w.equipmentCode || w.equipment_code,
+        equipmentName: w.equipmentName || w.equipment_name,
+        category: normalizeCategory(w.category),
+        issueDescription: w.issueDescription || w.issue_description,
+        actionTaken: w.actionTaken || w.action_taken,
+        downtimeDuration: parseDowntime(w.downtimeDuration ?? w.downtime_duration),
+        sparepartName: w.sparepartName || w.sparepart_name,
+        sparepartQty: parseQty(w.sparepartQty ?? w.sparepart_qty),
+        technicianPic: w.technicianPic || w.technician_pic,
+        status: w.status || 'Closed',
+        photoUrl: w.photoUrl || w.photo_url,
+        closingPhoto: w.closingPhoto || w.closing_photo,
+        pdfUrl: w.pdfUrl || w.pdf_url
+      }))
+    };
+  };
+
+  // Fetch summary data with dual-fallback strategy
   const fetchMaintenanceData = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      params.append('pt', 'TBP');
+      let summaryResult: any = null;
 
-      if (filterPeriod === 'this_month') {
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        params.append('startDate', start);
-      } else if (filterPeriod === 'last_30_days') {
-        const past = new Date();
-        past.setDate(past.getDate() - 30);
-        params.append('startDate', past.toISOString());
-      } else if (filterPeriod === 'this_year') {
-        const start = new Date(new Date().getFullYear(), 0, 1).toISOString();
-        params.append('startDate', start);
-      } else if (filterPeriod === 'custom' && customStartDate && customEndDate) {
-        params.append('startDate', new Date(customStartDate).toISOString());
-        params.append('endDate', new Date(customEndDate).toISOString());
+      // 1. Try dedicated endpoint first
+      try {
+        const params = new URLSearchParams();
+        params.append('pt', 'TBP');
+
+        if (filterPeriod === 'this_month') {
+          const now = new Date();
+          const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+          params.append('startDate', start);
+        } else if (filterPeriod === 'last_30_days') {
+          const past = new Date();
+          past.setDate(past.getDate() - 30);
+          params.append('startDate', past.toISOString());
+        } else if (filterPeriod === 'this_year') {
+          const start = new Date(new Date().getFullYear(), 0, 1).toISOString();
+          params.append('startDate', start);
+        } else if (filterPeriod === 'custom' && customStartDate && customEndDate) {
+          params.append('startDate', new Date(customStartDate).toISOString());
+          params.append('endDate', new Date(customEndDate).toISOString());
+        }
+
+        const res = await fetch(`/api/work-orders/maintenance-summary?${params.toString()}`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
+          const json = await res.json();
+          if (json.status === 'success') {
+            summaryResult = json;
+          }
+        }
+      } catch (err) {
+        console.warn('Dedicated endpoint unavailable, using direct WO fallback calculation:', err);
       }
 
-      const res = await fetch(`/api/work-orders/maintenance-summary?${params.toString()}`);
-      const json = await res.json();
-      if (json.status === 'success') {
-        setData(json);
-      } else {
-        throw new Error(json.message || 'Gagal memuat ringkasan maintenance');
+      // 2. Resilient fallback to raw /api/work-orders if dedicated endpoint returned HTML or failed
+      if (!summaryResult) {
+        const resRaw = await fetch('/api/work-orders', {
+          headers: { 'Accept': 'application/json' }
+        });
+        const contentType = resRaw.headers.get('content-type') || '';
+        if (resRaw.ok && contentType.includes('application/json')) {
+          const rawJson = await resRaw.json();
+          const allWOs = Array.isArray(rawJson) ? rawJson : [];
+          summaryResult = computeClientSummary(allWOs, filterPeriod, customStartDate, customEndDate);
+        } else {
+          throw new Error('Gagal memuat data work orders dari server');
+        }
       }
+
+      setData(summaryResult);
     } catch (e: any) {
       console.error('Error fetching maintenance summary:', e);
       toast.error('Gagal mengambil data rekapitulasi maintenance');
