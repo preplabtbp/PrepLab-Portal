@@ -59,11 +59,11 @@ const AgendaDashboard = lazy(() => import('./components/agenda-dashboard').then(
 const AdmDashboard = lazy(() => import('./components/adm-dashboard').then(m => ({ default: m.AdmDashboard })));
 const PelanggaranDashboard = lazy(() => import('./components/pelanggaran-dashboard').then(m => ({ default: m.PelanggaranDashboard })));
 const P5MScreen = lazy(() => import('./components/p5m-screen').then(m => ({ default: m.P5MScreen })));
-
 const BulletinBoard = lazy(() => import('./components/bulletin-board').then(m => ({ default: m.BulletinBoard })));
 const UserManualScreen = lazy(() => import('./components/user-manual-screen').then(m => ({ default: m.UserManualScreen })));
 const EmployeeDatabaseScreen = lazy(() => import('./components/employee-database-screen').then(m => ({ default: m.EmployeeDatabaseScreen })));
 const EasterEggGame = lazy(() => import('./components/easter-egg-game').then(m => ({ default: m.EasterEggGame })));
+const WOMaintenanceDashboard = lazy(() => import('./components/wo-maintenance-dashboard').then(m => ({ default: m.WOMaintenanceDashboard })));
 
 export default function App() {
 
@@ -777,6 +777,8 @@ export default function App() {
   <Route path="/sap-dashboard" element={<SapDashboard inspectorNik={inspectorNik!} />} />
   <Route path="/adm-dashboard" element={<AdmDashboard />} />
   <Route path="/pelanggaran-dashboard" element={<PelanggaranDashboard />} />
+  <Route path="/wo-maintenance-dashboard" element={<WOMaintenanceDashboard onBack={() => handleNav('home')} inspectorNik={inspectorNik!} />} />
+  <Route path="/wo-dashboard" element={<WOMaintenanceDashboard onBack={() => handleNav('home')} inspectorNik={inspectorNik!} />} />
   <Route path="/bulletin/:pt" element={<BulletinBoard inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
   <Route path="/bulletin" element={<Navigate to={`/bulletin/${userProfile?.pt || 'TBP'}`} replace />} />
   <Route path="/agenda" element={<AgendaDashboard key="agenda" inspectorNik={inspectorNik!} inspectorName={inspectorName!} userDept={userDept || undefined} />} />

@@ -95,6 +95,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
         ...(isLab ? [{ id: 'pemantauan', title: "Pantau Parameter", desc: "Suhu, kelembapan & gas", icon: <ThermometerSun className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('pemantauan') }] : []),
         ...(isMaintenance ? [{ id: 'wo-list', title: "Daftar Work Order", desc: "Status & riwayat WO", icon: <Wrench className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => onNav('wo-list') }] : []),
         { id: 'create-wo', title: "Buat Work Order", desc: "Form temuan kerusakan", icon: <PlusCircle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => onNav('create-wo') },
+        { id: 'wo-dashboard', title: "Dashboard Maintenance", desc: "Rekap downtime & sparepart", icon: <LineChart className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('wo-maintenance-dashboard') },
       ]
     },
     {
@@ -155,6 +156,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       color: 'indigo' as const,
       bgIcon: 'bg-indigo-100 text-indigo-600',
       items: [
+        { id: 'wo-maintenance-dashboard', title: "WO Maintenance", desc: "Downtime & sparepart", icon: <Wrench className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('wo-maintenance-dashboard') },
         { id: 'adm-dashboard', title: "Administrasi", desc: "Kehadiran personel", icon: <User className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('adm-dashboard') },
         { id: 'pelanggaran-dashboard', title: "Pelanggaran", desc: "SP & Konseling aktif", icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => onNav('pelanggaran-dashboard') },
         { id: 'sap-dashboard', title: "SAP Dashboard", desc: "Inspeksi & Temuan", icon: <LineChart className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('sap-dashboard') },
@@ -185,7 +187,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
         allowedItemIds.push('quiz-admin');
       }
       if (isMaintenance) {
-        allowedItemIds.push('create-wo', 'wo-list');
+        allowedItemIds.push('create-wo', 'wo-list', 'wo-dashboard', 'wo-maintenance-dashboard');
       }
       const allowedItems = s.items.filter(item => allowedItemIds.includes(item.id));
       return { ...s, items: allowedItems };

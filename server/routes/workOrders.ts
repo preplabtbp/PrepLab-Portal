@@ -29,6 +29,196 @@ router.get("/api/equipments", async (req, res) => {
     }
   });
 
+router.get("/api/work-orders/maintenance-summary", async (req, res) => {
+  try {
+    const { pt, category, equipmentCode, startDate, endDate } = req.query;
+    
+    // Fetch all work orders for given PT
+    let allWOs = await db.select().from(workOrders).where(eq(workOrders.pt, (pt as string) || 'TBP'));
+
+    // Apply date filters if present
+    if (startDate) {
+      const sDate = new Date(startDate as string);
+      allWOs = allWOs.filter(wo => wo.date && new Date(wo.date) >= sDate);
+    }
+    if (endDate) {
+      const eDate = new Date(endDate as string);
+      // Include full end of day
+      eDate.setHours(23, 59, 59, 999);
+      allWOs = allWOs.filter(wo => wo.date && new Date(wo.date) <= eDate);
+    }
+
+    // Category mapping & normalization
+    const normalizeCategory = (cat: string | null | undefined): 'Instrument (L)' | 'Non-Instrument (PL)' | 'Other' => {
+      if (!cat) return 'Non-Instrument (PL)';
+      const c = cat.toLowerCase();
+      if (c.includes('instrument') && !c.includes('non')) return 'Instrument (L)';
+      if (c.includes('non-instrument') || c.includes('non instrument') || c.includes('prep')) return 'Non-Instrument (PL)';
+      return 'Non-Instrument (PL)';
+    };
+
+    // Calculate aggregated metrics
+    let totalDowntimeHours = 0;
+    let totalRepairDurationHours = 0;
+    let repairCountWithDuration = 0;
+    let totalSparepartUnits = 0;
+
+    const equipmentMap: Record<string, {
+      equipmentCode: string;
+      equipmentName: string;
+      category: string;
+      woCount: number;
+      totalDowntime: number;
+      openCount: number;
+      inProgressCount: number;
+      closedCount: number;
+      spareparts: Record<string, number>;
+    }> = {};
+
+    const sparepartMap: Record<string, {
+      sparepartName: string;
+      totalQty: number;
+      woCount: number;
+      usedInEquipments: Set<string>;
+    }> = {};
+
+    const categorySummary: Record<string, { totalDowntime: number; woCount: number }> = {
+      'Instrument (L)': { totalDowntime: 0, woCount: 0 },
+      'Non-Instrument (PL)': { totalDowntime: 0, woCount: 0 }
+    };
+
+    allWOs.forEach(wo => {
+      const normCat = normalizeCategory(wo.category);
+      const eqName = wo.equipmentName?.trim() || 'Alat Tanpa Nama';
+      const eqCode = wo.equipmentCode?.trim() || '-';
+      const eqKey = `${eqCode}___${eqName}`;
+
+      // Calculate downtime
+      let dtHours = 0;
+      if (wo.downtimeDuration) {
+        const parsed = parseFloat(String(wo.downtimeDuration).replace(',', '.'));
+        if (!isNaN(parsed) && parsed > 0) {
+          dtHours = parsed;
+        }
+      }
+      // If downtimeDuration is 0 or empty, try calculating from repairStart and repairEnd
+      if (dtHours === 0 && wo.repairStart && wo.repairEnd) {
+        const diffMs = new Date(wo.repairEnd).getTime() - new Date(wo.repairStart).getTime();
+        if (diffMs > 0) {
+          dtHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;
+        }
+      }
+
+      totalDowntimeHours += dtHours;
+      if (dtHours > 0) {
+        totalRepairDurationHours += dtHours;
+        repairCountWithDuration++;
+      }
+
+      // Category breakdown
+      if (categorySummary[normCat]) {
+        categorySummary[normCat].totalDowntime += dtHours;
+        categorySummary[normCat].woCount += 1;
+      }
+
+      // Equipment map
+      if (!equipmentMap[eqKey]) {
+        equipmentMap[eqKey] = {
+          equipmentCode: eqCode,
+          equipmentName: eqName,
+          category: normCat,
+          woCount: 0,
+          totalDowntime: 0,
+          openCount: 0,
+          inProgressCount: 0,
+          closedCount: 0,
+          spareparts: {}
+        };
+      }
+
+      equipmentMap[eqKey].woCount += 1;
+      equipmentMap[eqKey].totalDowntime += dtHours;
+      
+      const st = (wo.status || 'Open').toLowerCase();
+      if (st === 'closed') equipmentMap[eqKey].closedCount += 1;
+      else if (st.includes('progress')) equipmentMap[eqKey].inProgressCount += 1;
+      else equipmentMap[eqKey].openCount += 1;
+
+      // Spareparts processing
+      if (wo.sparepartName && wo.sparepartName.trim()) {
+        const rawNames = wo.sparepartName.split(/[,;\n+]/).map(s => s.trim()).filter(Boolean);
+        const qtyVal = parseFloat(String(wo.sparepartQty || '1').replace(',', '.')) || 1;
+        const perPartQty = rawNames.length > 0 ? (qtyVal / rawNames.length) : qtyVal;
+
+        rawNames.forEach(spName => {
+          const cleanSpName = spName.trim();
+          totalSparepartUnits += perPartQty;
+
+          if (!sparepartMap[cleanSpName]) {
+            sparepartMap[cleanSpName] = {
+              sparepartName: cleanSpName,
+              totalQty: 0,
+              woCount: 0,
+              usedInEquipments: new Set()
+            };
+          }
+          sparepartMap[cleanSpName].totalQty += perPartQty;
+          sparepartMap[cleanSpName].woCount += 1;
+          sparepartMap[cleanSpName].usedInEquipments.add(eqName);
+
+          // Track in equipment
+          equipmentMap[eqKey].spareparts[cleanSpName] = (equipmentMap[eqKey].spareparts[cleanSpName] || 0) + perPartQty;
+        });
+      }
+    });
+
+    const equipmentList = Object.values(equipmentMap).map(eq => ({
+      ...eq,
+      totalDowntime: Math.round(eq.totalDowntime * 10) / 10,
+      mttr: eq.woCount > 0 ? Math.round((eq.totalDowntime / eq.woCount) * 10) / 10 : 0
+    })).sort((a, b) => b.totalDowntime - a.totalDowntime);
+
+    const sparepartsList = Object.values(sparepartMap).map(sp => ({
+      sparepartName: sp.sparepartName,
+      totalQty: Math.round(sp.totalQty * 10) / 10,
+      woCount: sp.woCount,
+      usedInEquipments: Array.from(sp.usedInEquipments)
+    })).sort((a, b) => b.totalQty - a.totalQty);
+
+    const mttrOverall = repairCountWithDuration > 0
+      ? Math.round((totalRepairDurationHours / repairCountWithDuration) * 10) / 10
+      : (allWOs.length > 0 ? Math.round((totalDowntimeHours / allWOs.length) * 10) / 10 : 0);
+
+    res.json({
+      status: "success",
+      summary: {
+        totalWorkOrders: allWOs.length,
+        totalDowntimeHours: Math.round(totalDowntimeHours * 10) / 10,
+        mttrHours: mttrOverall,
+        totalSparepartUnits: Math.round(totalSparepartUnits * 10) / 10,
+        totalEquipmentsWithDowntime: equipmentList.length,
+        topDowntimeEquipment: equipmentList[0] || null
+      },
+      categorySummary: {
+        'Instrument (L)': {
+          totalDowntime: Math.round((categorySummary['Instrument (L)'].totalDowntime) * 10) / 10,
+          woCount: categorySummary['Instrument (L)'].woCount
+        },
+        'Non-Instrument (PL)': {
+          totalDowntime: Math.round((categorySummary['Non-Instrument (PL)'].totalDowntime) * 10) / 10,
+          woCount: categorySummary['Non-Instrument (PL)'].woCount
+        }
+      },
+      equipmentList,
+      sparepartsList,
+      rawWorkOrders: allWOs
+    });
+  } catch (error: any) {
+    console.error("Error generating maintenance summary:", error);
+    res.status(500).json({ error: "Failed to generate maintenance summary", message: error.message });
+  }
+});
+
 router.get("/api/work-orders", async (req, res) => {
     try {
       const { pt } = req.query;
