@@ -8,6 +8,20 @@ Semua pembaruan dan perbaikan sistem Prep & Lab Portal dicatat dalam dokumen ini
 
 ### 🚀 Fitur Baru & Peningkatan Utama
 
+- **Peluncuran Dashboard Pemeliharaan & Work Order (`WO Maintenance Dashboard`)**:
+  - **Pusat Monitoring Alat & Kerusakan Terpadu**: Menggabungkan seluruh data pelaporan kerusakan dan perbaikan alat dari site TBP & GPS dalam satu dashboard eksekutif yang informatif dan real-time.
+  - **Perhitungan Metrik Otomatis**: Menampilkan total durasi downtime (jam), jumlah kasus kerusakan, rasio kerusakan kategori *Instrument (L)* vs *Non-Instrument (PL)*, total konsumsi sparepart, serta tingkat penyelesaian (*closure rate*).
+  - **Grafik Interaktif & Analisis Downtime**: Dilengkapi grafik batang (*bar chart*) 10 alat dengan downtime tertinggi, grafik donat perbandingan kategori, dan daftar peringkat suku cadang (*sparepart*) yang paling sering diganti.
+  - **Filter Canggih Multi-Dimensi**: Pengguna dapat memfilter berdasarkan Kategori Alat, Kode/Nama Alat Spesifik, Rentang Tanggal / Minggu ISO, dan pencarian bebas.
+  - **Modal Rincian Kasus & Bukti Foto**: Klik tombol pratinjau pada setiap baris untuk melihat detail keluhan, tindakan teknisi, foto sebelum/sesudah perbaikan, dan nama pelapor.
+  - **Ekspor Laporan Excel (`.xlsx`)**: Unduh data rekapitulasi pemeliharaan lengkap hanya dengan satu klik untuk keperluan laporan manajemen.
+
+- **Penyelesaian Penuh Migrasi Data Notion ke Database Internal & Google Drive**:
+  - **Kemandirian Sistem 100%**: Berhasil memigrasikan seluruh database kegiatan, notulen, dan dokumen kerja dari Notion (Weekly Laboratorium, Preparasi, Admin, K3LH, IT) ke database internal PostgreSQL Cloud SQL.
+  - **Penyimpanan Berkas & Foto Terpusat**: Seluruh foto dokumentasi, laporan Excel, dan lampiran PDF dari Notion telah dimigrasikan dan disimpan dengan aman di Google Drive terpusat (`1JE6EusixbK7saIzboKNOk9aMiAqEX-zF`).
+  - **Bebas Masalah *Broken Link* & Akses Cepat**: Dilengkapi server proxy media internal sehingga gambar dan dokumen selalu terbuka instan tanpa kendala blokir akses atau link kedaluwarsa.
+  - **Data Historis Utuh**: Semua riwayat komentar, catatan teknisi, lampiran foto loker, serta progres kegiatan masa lalu tetap tersimpan utuh dan dapat diakses dengan cepat di papan Bulletin.
+
 - **Filter Minggu ISO (ISO 8601 Week) di Seluruh Dashboard & Work Order**:
   - **Dashboard Maintenance WO**: Sekarang pengguna bisa langsung memfilter laporan berdasarkan **Minggu ISO Ini**, **Minggu ISO Lalu**, atau memilih nomor minggu tertentu (**Minggu 01 s/d Minggu 53**) lengkap dengan rentang tanggalnya (Senin – Minggu).
   - **Daftar Work Order (`WO List`)**: Ditambahkan bilah filter lengkap di bagian atas daftar untuk memfilter WO berdasarkan Minggu ISO, status pengerjaan (Open, In Progress, Closed), serta kolom pencarian cepat.
