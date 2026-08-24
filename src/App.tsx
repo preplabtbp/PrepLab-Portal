@@ -1263,10 +1263,10 @@ export default function App() {
 
       {/* Global Daily Greeting Splash Screen (10s with Top-Right Skip Button) */}
       <DailySplashScreen
-        userName={inspectorName}
-        userNik={inspectorNik}
-        userJabatan={inspectorJabatan}
-        userSection={userDept}
+        userName={inspectorName || undefined}
+        userNik={inspectorNik || undefined}
+        userJabatan={userProfile?.jabatan || undefined}
+        userSection={userDept || undefined}
       />
 
     </div>
