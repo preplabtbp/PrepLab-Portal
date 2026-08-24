@@ -29,6 +29,12 @@ router.post("/api/upload", async (req, res) => {
       if (folderName === 'Work Orders' || folderName === 'Internal Tickets') {
          finalFolderId = '1V_qxWLDAwcdV6O8Eg723fqMcZSeRIzoe'; // Folder Dokumentasi
       }
+      else if (folderName === 'Materi Briefing External' || folderName === 'Briefing External' || folderName === 'P5M External') {
+         finalFolderId = process.env.GDRIVE_BRIEFING_EXTERNAL_FOLDER_ID || '1a0yxvL7KTPQQK_qhxtl-PpHQNTsqoAUV';
+      }
+      else if (folderName === 'Materi Briefing Internal' || folderName === 'Briefing Internal' || folderName === 'P5M Internal') {
+         finalFolderId = process.env.GDRIVE_BRIEFING_INTERNAL_FOLDER_ID || '1850C4AAefTc_lgx7Jlg9fM7SpyGlQn-9';
+      }
       else if (folderName) {
          try {
            const query = `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and '${folderId}' in parents and trashed=false`;

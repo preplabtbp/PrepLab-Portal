@@ -271,6 +271,34 @@ export function SectionHubDashboard({
       };
     }
 
+    if (sectionTitle.includes('MANAJEMEN MUTU') || sectionTitle.includes('MUTU')) {
+      return {
+        icon: '🚀',
+        bannerUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80',
+        infoTitle: 'INFO',
+        infoItems: [
+          { title: 'Non Routine Manajemen Mutu', icon: '🔹', searchKeywords: ['Non Routine Manajemen Mutu', '585'] },
+          { title: 'Daily Manajemen Mutu', icon: '🔹', searchKeywords: ['Daily Manajemen Mutu', '586'] },
+          { title: 'Weekly Manajemen Mutu', icon: '🔹', searchKeywords: ['Weekly Manajemen Mutu', '587'] },
+          { title: 'Monthly Manajemen Mutu', icon: '🔹', searchKeywords: ['Monthly Manajemen Mutu', '588'] },
+          { title: 'Quarterly Manajemen Mutu', icon: '🔹', searchKeywords: ['Quarterly Manajemen Mutu', '589'] },
+          { title: 'Biannual Manajemen Mutu', icon: '🔹', searchKeywords: ['Biannual Manajemen Mutu', '590'] },
+          { title: 'Yearly Manajemen Mutu', icon: '🔹', searchKeywords: ['Yearly Manajemen Mutu', '591'] },
+          { title: 'Information Manajemen Mutu', icon: '🗂️', searchKeywords: ['Information Manajemen Mutu', '592'] },
+          { title: 'Monthly Report', icon: '📗', searchKeywords: ['Monthly Report', '593'] },
+        ],
+        rulesTitle: 'RULES',
+        rulesItems: [
+          { title: 'Audit ISO 45001', icon: '⏳', searchKeywords: ['Audit ISO 45001', '594'] },
+          { title: 'Audit ISO 14001', icon: '⏳', searchKeywords: ['Audit ISO 14001', '595'] },
+          { title: 'Rules Alat Baru', icon: '⏳', searchKeywords: ['Rules Alat Baru', '596'] },
+          { title: 'Rules Kalibrasi & Uji Riksa', icon: '⏳', searchKeywords: ['Rules Kalibrasi & Uji Riksa', '597'] },
+          { title: 'Rules Perizinan XRF', icon: '⏳', searchKeywords: ['Rules Perizinan XRF', '598'] },
+        ],
+        extraLinks: []
+      };
+    }
+
     // Default configuration for general section hubs
     return {
       icon: '📂',
@@ -397,6 +425,23 @@ export function SectionHubDashboard({
                 <ChevronRight className="w-3.5 h-3.5 text-amber-400/50 group-hover:text-amber-300 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
               </button>
             ))}
+          </div>
+        </div>
+      </div>
+
+      {/* HARITA CORE VALUE Banner (Matches Notion page) */}
+      <div className="rounded-2xl border border-emerald-800/40 bg-gradient-to-r from-emerald-950/40 via-teal-950/30 to-emerald-950/40 p-4 shadow-lg flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-emerald-900/40 border border-emerald-600/40 text-emerald-400 text-base">
+            🌟
+          </div>
+          <div>
+            <h3 className="font-serif italic font-bold text-sm tracking-wider text-emerald-300">
+              HARITA CORE VALUE
+            </h3>
+            <p className="text-xs text-slate-300 font-medium">
+              <strong className="text-emerald-400">H</strong>umble • <strong className="text-emerald-400">A</strong>gile • <strong className="text-emerald-400">R</strong>esilient • <strong className="text-emerald-400">I</strong>ntegrity • <strong className="text-emerald-400">T</strong>ransparency • <strong className="text-emerald-400">A</strong>ccountability
+            </p>
           </div>
         </div>
       </div>

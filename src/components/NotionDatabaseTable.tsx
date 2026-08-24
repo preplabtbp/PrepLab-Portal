@@ -220,6 +220,12 @@ export function NotionDatabaseTable({
   const descCol = useMemo(() => colKeys.find((c) => (c.lower.includes('keterangan') || c.lower.includes('catatan') || c.lower.includes('remark') || c.lower.includes('updates')) && c.raw !== titleCol)?.raw || '', [colKeys, titleCol]);
   const targetDateCol = useMemo(() => colKeys.find((c) => (c.lower.includes('target') || c.lower.includes('due date') || c.lower.includes('deadline')) && c.raw !== titleCol)?.raw || '', [colKeys, titleCol]);
   const actualDateCol = useMemo(() => colKeys.find((c) => (c.lower.includes('aktual') || (c.lower.includes('selesai') && !c.lower.includes('target'))) && c.raw !== titleCol)?.raw || '', [colKeys, titleCol]);
+  const createdTimeCol = useMemo(() => colKeys.find((c) => c.lower === 'created time' || c.lower === 'created' || c.lower === 'tanggal dibuat' || c.lower === 'waktu dibuat' || c.lower === 'dibuat' || c.lower.includes('created'))?.raw || '', [colKeys]);
+
+  const isRedundantCol = useCallback((h: string) => {
+    const l = h.toLowerCase().trim();
+    return l === 'period' || l === 'periode' || l === 'number' || l === 'no';
+  }, []);
 
   // Fetch comments from backend
   const fetchComments = useCallback(async () => {
@@ -327,8 +333,18 @@ export function NotionDatabaseTable({
     // 4. Sort
     if (sortColumn) {
       result.sort((a, b) => {
-        const valA = (a[sortColumn] || '').toLowerCase();
-        const valB = (b[sortColumn] || '').toLowerCase();
+        const rawA = (a[sortColumn] || '').trim();
+        const rawB = (b[sortColumn] || '').trim();
+
+        // If date/time column
+        const timeA = Date.parse(rawA);
+        const timeB = Date.parse(rawB);
+        if (!isNaN(timeA) && !isNaN(timeB)) {
+          return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
+        }
+
+        const valA = rawA.toLowerCase();
+        const valB = rawB.toLowerCase();
         if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
         if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
         return 0;
@@ -716,6 +732,30 @@ export function NotionDatabaseTable({
               <option value="LOW">🔵 Low Priority</option>
             </select>
           )}
+
+          {createdTimeCol && (
+            <button
+              onClick={() => {
+                if (sortColumn === createdTimeCol) {
+                  setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+                } else {
+                  setSortColumn(createdTimeCol);
+                  setSortDirection('desc'); // Default to newest first
+                }
+              }}
+              className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${
+                sortColumn === createdTimeCol
+                  ? 'bg-teal-600/30 text-teal-300 border border-teal-500/60 shadow-xs'
+                  : 'bg-[#262626] text-slate-400 hover:text-slate-200 border border-slate-700/60'
+              }`}
+              title="Urutkan berdasarkan Waktu Dibuat"
+            >
+              <Clock className="w-3 h-3 text-teal-400" />
+              <span>
+                Waktu Dibuat {sortColumn === createdTimeCol ? (sortDirection === 'desc' ? '(Terbaru ↓)' : '(Terlama ↑)') : ''}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -811,6 +851,22 @@ export function NotionDatabaseTable({
                   </th>
                 )}
 
+                {/* Created Time Column */}
+                {createdTimeCol && (
+                  <th
+                    onClick={() => handleSort(createdTimeCol)}
+                    className="px-3.5 py-3 font-bold text-slate-200 hover:bg-[#2c2c2c] cursor-pointer transition-colors w-36 whitespace-nowrap"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Dibuat</span>
+                      {sortColumn === createdTimeCol && (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />
+                      )}
+                    </div>
+                  </th>
+                )}
+
                 {/* Description Column */}
                 {descCol && (
                   <th className="px-4 py-3 font-bold text-slate-200 min-w-[280px]">
@@ -829,7 +885,9 @@ export function NotionDatabaseTable({
                     h !== activityCol && 
                     h !== targetDateCol && 
                     h !== actualDateCol && 
-                    h !== descCol
+                    h !== createdTimeCol && 
+                    h !== descCol &&
+                    !isRedundantCol(h)
                   )
                   .map((h) => (
                     <th
@@ -969,6 +1027,20 @@ export function NotionDatabaseTable({
                         </td>
                       )}
 
+                      {/* Created Time */}
+                      {createdTimeCol && (
+                        <td className="px-3.5 py-3 whitespace-nowrap font-mono text-[11px] text-slate-400">
+                          {row[createdTimeCol] && row[createdTimeCol] !== '-' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700 text-slate-300">
+                              <Clock className="w-2.5 h-2.5 text-slate-400" />
+                              {row[createdTimeCol]}
+                            </span>
+                          ) : (
+                            <span className="text-slate-600 font-mono">-</span>
+                          )}
+                        </td>
+                      )}
+
                       {/* Notes / Description */}
                       {descCol && (
                         <td className="px-4 py-3 max-w-sm">
@@ -987,7 +1059,9 @@ export function NotionDatabaseTable({
                           h !== activityCol && 
                           h !== targetDateCol && 
                           h !== actualDateCol && 
-                          h !== descCol
+                          h !== createdTimeCol && 
+                          h !== descCol &&
+                          !isRedundantCol(h)
                         )
                         .map((h) => (
                           <td key={h} className="px-3.5 py-3 text-slate-300 text-xs whitespace-nowrap">
@@ -1257,7 +1331,7 @@ export function NotionDatabaseTable({
                   {/* Grid of details */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {validHeaders.map((h) => {
-                      if (h === titleCol || h === descCol) return null;
+                      if (h === titleCol || h === descCol || isRedundantCol(h)) return null;
                       const val = selectedRow[h];
                       return (
                         <div key={h} className="p-3 rounded-xl bg-[#252525] border border-slate-800 space-y-1">

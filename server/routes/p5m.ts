@@ -594,9 +594,13 @@ p5mRouter.post("/materi", async (req, res) => {
         console.warn("Local cache write failed:", fErr.message);
       }
 
-      // Upload to Google Drive folder P5M_Materi_Flyers
+      // Upload to Google Drive: External vs Internal Briefing Flyer folder
       try {
-        const folderId = '1AH151Lrgklv4Q1Ty0vdEgsPES6VcCKps'; // Folder P5M_Materi_Flyers
+        const isInternalVal = Boolean(isInternal);
+        const folderId = isInternalVal 
+          ? (process.env.GDRIVE_BRIEFING_INTERNAL_FOLDER_ID || '1850C4AAefTc_lgx7Jlg9fM7SpyGlQn-9')
+          : (process.env.GDRIVE_BRIEFING_EXTERNAL_FOLDER_ID || '1a0yxvL7KTPQQK_qhxtl-PpHQNTsqoAUV');
+
         const stream = new Readable();
         stream.push(buffer);
         stream.push(null);
@@ -625,7 +629,7 @@ p5mRouter.post("/materi", async (req, res) => {
           } catch (pErr: any) {
             // Permission inherited
           }
-          finalFileUrl = `https://drive.google.com/uc?export=view&id=${driveFileId}`;
+          finalFileUrl = `https://lh3.googleusercontent.com/d/${driveFileId}`;
         }
       } catch (dErr: any) {
         console.warn("Drive upload failed, using local fallback URL:", dErr.message);
@@ -678,7 +682,11 @@ p5mRouter.put("/materi/:id", async (req, res) => {
       }
 
       try {
-        const folderId = '1AH151Lrgklv4Q1Ty0vdEgsPES6VcCKps';
+        const isInternalVal = Boolean(isInternal);
+        const folderId = isInternalVal 
+          ? (process.env.GDRIVE_BRIEFING_INTERNAL_FOLDER_ID || '1850C4AAefTc_lgx7Jlg9fM7SpyGlQn-9')
+          : (process.env.GDRIVE_BRIEFING_EXTERNAL_FOLDER_ID || '1a0yxvL7KTPQQK_qhxtl-PpHQNTsqoAUV');
+
         const stream = new Readable();
         stream.push(buffer);
         stream.push(null);
@@ -705,7 +713,7 @@ p5mRouter.put("/materi/:id", async (req, res) => {
               supportsAllDrives: true
             });
           } catch (pErr: any) {}
-          finalFileUrl = `https://drive.google.com/uc?export=view&id=${driveFileId}`;
+          finalFileUrl = `https://lh3.googleusercontent.com/d/${driveFileId}`;
         }
       } catch (dErr: any) {
         finalFileUrl = `/uploads/p5m/${localFileName}`;
