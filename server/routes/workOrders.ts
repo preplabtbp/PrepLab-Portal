@@ -33,8 +33,10 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
   try {
     const { pt, category, equipmentCode, startDate, endDate } = req.query;
     
-    // Fetch all work orders for given PT
-    let allWOs = await db.select().from(workOrders).where(eq(workOrders.pt, (pt as string) || 'TBP'));
+    // Fetch work orders (support ALL or specific PT)
+    let allWOs = (pt && pt !== 'ALL')
+      ? await db.select().from(workOrders).where(eq(workOrders.pt, pt as string))
+      : await db.select().from(workOrders);
 
     // Apply date filters if present
     if (startDate) {

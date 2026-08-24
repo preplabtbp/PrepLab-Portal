@@ -47,6 +47,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   }>({});
 
   // Filter States
+  const [selectedPt, setSelectedPt] = useState<string>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'Instrument (L)' | 'Non-Instrument (PL)'>('ALL');
   const [selectedEquipmentCode, setSelectedEquipmentCode] = useState<string>('ALL');
   const [filterPeriod, setFilterPeriod] = useState<string>('all');
@@ -58,7 +59,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   const [selectedWO, setSelectedWO] = useState<any | null>(null);
 
   // Helper to compute maintenance summary on client-side from raw work orders
-  const computeClientSummary = (allWOs: any[], period: string, startCustom?: string, endCustom?: string) => {
+  const computeClientSummary = (allWOs: any[], ptFilter: string, period: string, startCustom?: string, endCustom?: string) => {
     const normalizeCategory = (cat: string | null | undefined): 'Instrument (L)' | 'Non-Instrument (PL)' => {
       if (!cat) return 'Non-Instrument (PL)';
       const c = cat.toLowerCase();
@@ -80,8 +81,13 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       return isNaN(num) ? 0 : num;
     };
 
-    // Filter by period
+    // Filter by PT
     let filtered = [...allWOs];
+    if (ptFilter && ptFilter !== 'ALL') {
+      filtered = filtered.filter(wo => (wo.pt || 'TBP').toUpperCase() === ptFilter.toUpperCase());
+    }
+
+    // Filter by period
     if (period === 'this_month') {
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -213,6 +219,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
         woId: w.woId || w.wo_id,
         date: w.date,
         shift: w.shift,
+        pt: w.pt || 'TBP',
         equipmentCode: w.equipmentCode || w.equipment_code,
         equipmentName: w.equipmentName || w.equipment_name,
         category: normalizeCategory(w.category),
@@ -239,7 +246,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       // 1. Try dedicated endpoint first
       try {
         const params = new URLSearchParams();
-        params.append('pt', 'TBP');
+        params.append('pt', selectedPt);
 
         if (filterPeriod === 'this_month') {
           const now = new Date();
@@ -280,7 +287,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
         if (resRaw.ok && contentType.includes('application/json')) {
           const rawJson = await resRaw.json();
           const allWOs = Array.isArray(rawJson) ? rawJson : [];
-          summaryResult = computeClientSummary(allWOs, filterPeriod, customStartDate, customEndDate);
+          summaryResult = computeClientSummary(allWOs, selectedPt, filterPeriod, customStartDate, customEndDate);
         } else {
           throw new Error('Gagal memuat data work orders dari server');
         }
@@ -297,7 +304,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
   useEffect(() => {
     fetchMaintenanceData();
-  }, [filterPeriod, customStartDate, customEndDate]);
+  }, [selectedPt, filterPeriod, customStartDate, customEndDate]);
 
   // List of all raw WOs from backend
   const rawWorkOrders = useMemo(() => data.rawWorkOrders || [], [data.rawWorkOrders]);
@@ -609,20 +616,49 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
       {/* FILTER CONTROLS BAR */}
       <Card className="p-4 sm:p-5 border shadow-xs space-y-4">
-        <div className="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-200/80 dark:border-slate-800">
+          <div className="flex items-center gap-2">
             <Filter className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-            Filter & Parameter Rekapitulasi
-          </h3>
-          {(selectedCategory !== 'ALL' || selectedEquipmentCode !== 'ALL' || filterPeriod !== 'all' || searchQuery) && (
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+              Filter & Parameter Rekapitulasi
+            </span>
+          </div>
+
+          {/* PT Switcher Tabs */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+            {[
+              { key: 'ALL', label: 'Semua Site' },
+              { key: 'TBP', label: 'PT TBP (70 WO)' },
+              { key: 'GPS', label: 'PT GPS (9 WO)' }
+            ].map(p => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => {
+                  setSelectedPt(p.key);
+                  setSelectedEquipmentCode('ALL');
+                }}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  selectedPt === p.key
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {(selectedPt !== 'ALL' || selectedCategory !== 'ALL' || selectedEquipmentCode !== 'ALL' || filterPeriod !== 'all' || searchQuery) && (
             <button
               onClick={() => {
+                setSelectedPt('ALL');
                 setSelectedCategory('ALL');
                 setSelectedEquipmentCode('ALL');
                 setFilterPeriod('all');
                 setSearchQuery('');
               }}
-              className="text-[11px] font-semibold text-rose-600 hover:underline cursor-pointer"
+              className="text-[11px] font-semibold text-rose-600 hover:underline cursor-pointer ml-auto"
             >
               Reset Semua Filter
             </button>
@@ -763,8 +799,8 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                   {activeSelectedTool.category}
                 </span>
               </div>
-              <p className="text-xs text-teal-800 dark:text-teal-300 mt-0.5">
-                Alat ini menyumbang total <strong>{activeSelectedTool.downtime} Jam</strong> downtime dari <strong>{activeSelectedTool.woCount} kasus Work Order</strong> (Rata-rata {activeSelectedTool.mttr} Jam/kasus).
+              <p className="text-xs text-teal-800/80 dark:text-teal-300 mt-0.5">
+                Total Downtime: <strong className="font-bold">{activeSelectedTool.downtime} Jam</strong> • {activeSelectedTool.woCount} Work Order • MTTR: {activeSelectedTool.mttr} Jam/kasus
               </p>
             </div>
           </div>
@@ -776,6 +812,19 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
             <X className="w-3.5 h-3.5" />
             Tampilkan Semua Alat
           </button>
+        </div>
+      )}
+
+      {/* INFORMATIVE NOTICE IF ALL WORK ORDERS IN SELECTION ARE CURRENTLY OPEN */}
+      {computedMetrics.openCount > 0 && computedMetrics.closedCount === 0 && (
+        <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 flex items-center gap-3 text-amber-900 dark:text-amber-200 text-xs shadow-xs">
+          <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <div>
+            <p className="font-bold">Informasi Work Order ({selectedPt === 'GPS' ? 'Site PT GPS' : selectedPt === 'ALL' ? 'Semua Site' : `Site ${selectedPt}`}):</p>
+            <p className="text-[11px] text-amber-800 dark:text-amber-300">
+              Terdapat {computedMetrics.openCount} Work Order berstatus <strong>Open (Baru Dibuat / Menunggu Penanganan Teknisi)</strong>. Durasi downtime dan data pemakaian sparepart akan otomatis terisi & terakumulasi saat teknisi menyelesaikan dan menutup (Close) Work Order. Untuk melihat data perbaikan selesai dan grafik jam downtime historis, pilih tab <strong>PT TBP (70 WO)</strong> atau <strong>Semua Site</strong> di atas.
+            </p>
+          </div>
         </div>
       )}
 
