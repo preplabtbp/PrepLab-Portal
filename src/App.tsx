@@ -2,7 +2,7 @@ import { NotificationBell } from "./components/notification-bell";
 import React, { useState, useEffect, Suspense, lazy, useRef, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 
-import { Cloud,  Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical , Building2, LayoutDashboard, MessageCircle  } from 'lucide-react';
+import { Cloud,  Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical , Building2, LayoutDashboard, MessageCircle, Sparkles } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { appendRowsToSheet, getDowntimeRecords,updateDowntimeRepair, getEmployees, loginEmployee, getEquipments, ToolRecord, updateToolPhotoUrl, uploadPhotoToDrive } from './sheets-api';
@@ -13,7 +13,6 @@ import { Palette } from 'lucide-react';
 import { initAuth, googleSignIn } from './google-auth';
 import { WhatsAppModal } from './components/whatsapp-modal';
 import { P5MNotificationModal } from './components/p5m-notification-modal';
-import { DailySplashScreen } from './components/DailySplashScreen';
 
 
 
@@ -770,12 +769,6 @@ export default function App() {
         )}
         <div className="flex flex-col pb-20 relative min-h-[100dvh]">
           {/* Modals & Portals */}
-          {/* Daily Motivational Splash Screen */}
-          <DailySplashScreen 
-            userName={inspectorName} 
-            userNik={inspectorNik} 
-          />
-
           <ThemeModal 
             show={showGlobalThemeModal} 
             onClose={() => setShowGlobalThemeModal(false)} 
@@ -837,6 +830,7 @@ export default function App() {
             Prep & Lab Portal
           </span>
         </div>
+
         <div className="flex items-center gap-3">
           <NotificationBell userNik={inspectorNik || undefined} userName={inspectorName || undefined} />
           <button 

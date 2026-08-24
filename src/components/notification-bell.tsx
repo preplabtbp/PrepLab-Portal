@@ -158,20 +158,9 @@ export function NotificationBell({ userNik, userName }: NotificationBellProps) {
       setShowWoModal(true);
       setIsOpen(false);
     } else if (isWoNotification(notif)) {
-      // If it's a general WO notification, find latest open WO
-      fetch('/api/work-orders')
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.length > 0) {
-            const openWo = data.find((w: any) => w.status !== 'Closed') || data[data.length - 1];
-            if (openWo?.woId) {
-              setSelectedWoId(openWo.woId);
-              setShowWoModal(true);
-              setIsOpen(false);
-            }
-          }
-        })
-        .catch(() => {});
+      setSelectedWoId('LATEST_OPEN_WO');
+      setShowWoModal(true);
+      setIsOpen(false);
     }
   };
 

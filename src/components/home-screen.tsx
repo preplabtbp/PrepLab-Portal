@@ -12,6 +12,7 @@ import { getKtaUrl } from '../sheets-api';
 import { FoodReportModal } from './food-report-modal';
 import { UsernamePromptModal } from './UsernamePromptModal';
 import { getDailySkenaQuote } from '../utils/skena-quotes';
+import { DailyGreetingHero } from './DailyGreetingHero';
 
 export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: { 
   inspectorName: string, 
@@ -204,51 +205,12 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       className="pb-24 px-4 sm:px-6 lg:px-8 w-full h-full max-w-5xl mx-auto space-y-6"
     >
       
-      {/* Compact Hero Section with Skena Quotes & Username Greeting */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-850 to-slate-800 rounded-2xl p-5 sm:p-7 shadow-lg border border-slate-700/50 flex flex-col md:flex-row md:items-center justify-between gap-5">
-        <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none transform translate-x-4 -translate-y-4">
-          <Activity className="w-40 h-40 sm:w-48 sm:h-48 text-white" />
-        </div>
-        
-        <div className="relative z-10 flex-1">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-display font-bold text-white tracking-tight">
-              {greeting}, <span className="text-teal-400">{currentUsername || inspectorName?.split(' ')[0] || 'User'}</span>! 👋
-            </h1>
-            <button
-              onClick={() => setShowUsernameModal(true)}
-              title="Ubah Username / Nama Panggilan Anda"
-              className="px-2.5 py-1 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 hover:text-teal-200 transition-all border border-teal-400/30 flex items-center gap-1.5 text-xs font-semibold shadow-sm active:scale-95"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-              <span>{currentUsername ? 'Ubah Panggilan' : 'Setel Username'}</span>
-            </button>
-          </div>
-
-          {/* Daily Skena Motivational Quote */}
-          <div className="mt-2.5 bg-slate-950/50 border border-slate-700/60 rounded-2xl p-3.5 backdrop-blur-md relative group max-w-2xl shadow-inner">
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-              <span className="text-[11px] font-bold tracking-wider uppercase text-amber-300 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                Quote Hari Ini • {dailyQuote.vibe}
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">
-                {dailyQuote.tag}
-              </span>
-            </div>
-            <p className="text-slate-200 text-xs sm:text-sm italic leading-relaxed">
-              "{dailyQuote.quote}"
-            </p>
-          </div>
-        </div>
-
-        <div className="relative z-10 shrink-0 self-start md:self-center">
-          <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 backdrop-blur-md">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs font-bold text-emerald-400 tracking-wider uppercase">Portal Active</span>
-          </div>
-        </div>
-      </div>
+      {/* Dynamic Daily Greeting Hero with Skena Quotes & Splash Morphing */}
+      <DailyGreetingHero 
+        inspectorName={inspectorName} 
+        inspectorNik={inspectorNik} 
+        onOpenUsernameModal={() => setShowUsernameModal(true)} 
+      />
 
       {/* Sticky Tabs for Mobile/Desktop */}
       <div 

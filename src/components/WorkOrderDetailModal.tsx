@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Button, Input, Textarea } from './ui';
 import { 
   X, Wrench, CheckCircle2, Clock, Users, Camera, Upload, 
@@ -75,29 +76,57 @@ export function WorkOrderDetailModal({
   const fetchWorkOrder = async (id: string) => {
     setLoading(true);
     setError(null);
+    const cleanId = id.trim().replace(/[.,;:!?)]+$/, '');
     try {
-      // First try single WO route
-      const res = await fetch(`/api/work-orders/${encodeURIComponent(id)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setWo(data);
-      } else {
-        // Fallback: fetch list and find
-        const listRes = await fetch('/api/work-orders');
-        if (listRes.ok) {
+      // 1. Fetch full list of work orders safely first
+      const listRes = await fetch('/api/work-orders');
+      if (listRes.ok) {
+        const ct = listRes.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
           const list = await listRes.json();
-          const found = list.find((item: any) => item.woId === id || item.id === Number(id));
-          if (found) {
-            setWo(found);
-          } else {
-            setError(`Work Order [${id}] tidak ditemukan di database.`);
+          if (Array.isArray(list) && list.length > 0) {
+            if (cleanId === 'LATEST_OPEN_WO' || cleanId.toLowerCase() === 'wo' || cleanId.toLowerCase() === 'fwo') {
+              const latest = list.find((item: any) => item.status !== 'Closed') || list[0];
+              if (latest) {
+                setWo(latest);
+                return;
+              }
+            }
+
+            const q = cleanId.toLowerCase();
+            const found = list.find((item: any) => 
+              (item.woId && item.woId.toLowerCase() === q) ||
+              String(item.id) === cleanId ||
+              (item.woId && item.woId.toLowerCase().includes(q)) ||
+              (item.equipmentCode && item.equipmentCode.toLowerCase().includes(q)) ||
+              (item.equipmentName && item.equipmentName.toLowerCase().includes(q))
+            );
+            if (found) {
+              setWo(found);
+              return;
+            }
           }
-        } else {
-          setError('Gagal memuat detail Work Order dari server.');
         }
       }
+
+      // 2. Try single endpoint if not in list
+      if (cleanId !== 'LATEST_OPEN_WO') {
+        const res = await fetch(`/api/work-orders/${encodeURIComponent(cleanId)}`);
+        if (res.ok) {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const data = await res.json();
+            if (data && (data.woId || data.id)) {
+              setWo(data);
+              return;
+            }
+          }
+        }
+      }
+      
+      setError(`Work Order [${cleanId === 'LATEST_OPEN_WO' ? 'Terbaru' : cleanId}] belum tercatat atau telah diselesaikan.`);
     } catch (err: any) {
-      setError(err.message || 'Terjadi kesalahan koneksi saat memuat data.');
+      setError(err.message || 'Terjadi kesalahan saat memuat data Work Order.');
     } finally {
       setLoading(false);
     }
@@ -171,14 +200,14 @@ export function WorkOrderDetailModal({
 
   const isClosed = wo?.status === 'Closed' || wo?.status === 'Resolved';
 
-  return (
+  return createPortal(
     <>
       <div 
-        className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
+        className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-200"
         onClick={onClose}
       >
         <div 
-          className="w-full max-w-2xl max-h-[92vh] rounded-2xl shadow-2xl border flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+          className="w-full max-w-2xl max-h-[90vh] my-auto rounded-3xl shadow-2xl border flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
           style={{
             backgroundColor: 'var(--card-bg, #FFFFFF)',
             borderColor: 'var(--border-main, #E2E8F0)',
@@ -750,6 +779,7 @@ export function WorkOrderDetailModal({
           onClose={() => setWaMessageToModal('')}
         />
       )}
-    </>
+    </>,
+    document.body
   );
 }
