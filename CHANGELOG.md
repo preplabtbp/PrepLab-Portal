@@ -1,6 +1,6 @@
-# Changelog - Prep & Lab Portal
+# Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
-Semua pembaruan dan perbaikan sistem Prep & Lab Portal dicatat dalam dokumen ini.
+Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
 ---
 
@@ -9,38 +9,38 @@ Semua pembaruan dan perbaikan sistem Prep & Lab Portal dicatat dalam dokumen ini
 ### 🚀 Fitur Baru & Peningkatan Utama
 
 - **Peluncuran Dashboard Pemeliharaan & Work Order (`WO Maintenance Dashboard`)**:
-  - **Pusat Monitoring Alat & Kerusakan Terpadu**: Menggabungkan seluruh data pelaporan kerusakan dan perbaikan alat dari site TBP & GPS dalam satu dashboard eksekutif yang informatif dan real-time.
-  - **Perhitungan Metrik Otomatis**: Menampilkan total durasi downtime (jam), jumlah kasus kerusakan, rasio kerusakan kategori *Instrument (L)* vs *Non-Instrument (PL)*, total konsumsi sparepart, serta tingkat penyelesaian (*closure rate*).
-  - **Grafik Interaktif & Analisis Downtime**: Dilengkapi grafik batang (*bar chart*) 10 alat dengan downtime tertinggi, grafik donat perbandingan kategori, dan daftar peringkat suku cadang (*sparepart*) yang paling sering diganti.
-  - **Filter Canggih Multi-Dimensi**: Pengguna dapat memfilter berdasarkan Kategori Alat, Kode/Nama Alat Spesifik, Rentang Tanggal / Minggu ISO, dan pencarian bebas.
-  - **Modal Rincian Kasus & Bukti Foto**: Klik tombol pratinjau pada setiap baris untuk melihat detail keluhan, tindakan teknisi, foto sebelum/sesudah perbaikan, dan nama pelapor.
+  - **Pusat Monitoring Alat Terpadu**: Menggabungkan seluruh data pelaporan kerusakan dan perbaikan alat dari site TBP & GPS dalam satu dashboard eksekutif yang informatif dan *real-time*.
+  - **Perhitungan Metrik Otomatis**: Menampilkan total durasi *downtime* (jam henti alat), jumlah kasus kerusakan, rasio kerusakan kategori *Instrument (L)* vs *Non-Instrument (PL)*, total konsumsi suku cadang (*sparepart*), serta tingkat penyelesaian (*closure rate*).
+  - **Grafik Interaktif & Analisis Downtime**: Dilengkapi grafik batang 10 alat dengan *downtime* tertinggi, grafik donat perbandingan kategori, dan daftar peringkat suku cadang yang paling sering diganti.
+  - **Filter Canggih Multi-Dimensi**: Pengguna dapat memfilter laporan berdasarkan Kategori Alat, Kode/Nama Alat Spesifik, Rentang Tanggal / Minggu ISO, dan pencarian bebas.
+  - **Modal Rincian Kasus & Bukti Foto**: Klik tombol pratinjau pada setiap baris untuk melihat detail keluhan, tindakan teknisi, foto bukti perbaikan, dan nama pelapor.
   - **Ekspor Laporan Excel (`.xlsx`)**: Unduh data rekapitulasi pemeliharaan lengkap hanya dengan satu klik untuk keperluan laporan manajemen.
 
 - **Penyelesaian Penuh Migrasi Data Notion ke Database Internal & Google Drive**:
   - **Kemandirian Sistem 100%**: Berhasil memigrasikan seluruh database kegiatan, notulen, dan dokumen kerja dari Notion (Weekly Laboratorium, Preparasi, Admin, K3LH, IT) ke database internal PostgreSQL Cloud SQL.
   - **Penyimpanan Berkas & Foto Terpusat**: Seluruh foto dokumentasi, laporan Excel, dan lampiran PDF dari Notion telah dimigrasikan dan disimpan dengan aman di Google Drive terpusat (`1JE6EusixbK7saIzboKNOk9aMiAqEX-zF`).
-  - **Bebas Masalah *Broken Link* & Akses Cepat**: Dilengkapi server proxy media internal sehingga gambar dan dokumen selalu terbuka instan tanpa kendala blokir akses atau link kedaluwarsa.
+  - **Bebas Masalah *Broken Link* & Akses Cepat**: Dilengkapi server proxy media internal sehingga gambar dan dokumen selalu terbuka instan tanpa kendala blokir akses atau tautan kedaluwarsa.
   - **Data Historis Utuh**: Semua riwayat komentar, catatan teknisi, lampiran foto loker, serta progres kegiatan masa lalu tetap tersimpan utuh dan dapat diakses dengan cepat di papan Bulletin.
 
 - **Filter Minggu ISO (ISO 8601 Week) di Seluruh Dashboard & Work Order**:
-  - **Dashboard Maintenance WO**: Sekarang pengguna bisa langsung memfilter laporan berdasarkan **Minggu ISO Ini**, **Minggu ISO Lalu**, atau memilih nomor minggu tertentu (**Minggu 01 s/d Minggu 53**) lengkap dengan rentang tanggalnya (Senin – Minggu).
+  - **Dashboard Maintenance WO**: Pengguna kini dapat memfilter laporan langsung berdasarkan **Minggu ISO Ini**, **Minggu ISO Lalu**, atau memilih nomor minggu tertentu (**Minggu 01 s/d Minggu 53**) lengkap dengan rentang tanggalnya (Senin – Minggu).
   - **Daftar Work Order (`WO List`)**: Ditambahkan bilah filter lengkap di bagian atas daftar untuk memfilter WO berdasarkan Minggu ISO, status pengerjaan (Open, In Progress, Closed), serta kolom pencarian cepat.
   - **SAP & Monitoring Dashboard**: Pilihan rentang waktu kini mendukung standar Minggu ISO untuk mempermudah pelaporan mingguan operasional.
-  - **Tag Minggu pada Data**: Setiap kartu dan baris data WO kini memiliki label badge minggu (contoh: `W34`) agar periode pengerjaan langsung terbaca jelas.
+  - **Tag Minggu pada Data**: Setiap kartu dan baris data WO kini memiliki label *badge* minggu (contoh: `W34`) agar periode pengerjaan langsung terbaca jelas.
 
-- **Pagination (Bagi Halaman per 20 Data) pada Tabel Rincian WO**:
+- **Pagination (Bagi Halaman per 20 Data) & Pencarian pada Tabel Rincian WO**:
   - Tabel rincian Work Order di bagian bawah dashboard maintenance kini dibagi menjadi **20 data per halaman**, sehingga pengguna tidak perlu lagi menggulir (*scroll*) layar terlalu panjang ke bawah.
   - Dilengkapi tombol navigasi halaman (**Sebelumnya**, **Nomor Halaman**, **Berikutnya**) dan kotak pencarian langsung di atas tabel untuk mencari nomor WO, alat, keluhan, teknisi, maupun status secara instan.
 
-- **Animasi Cuaca & Langit Dinamis (Pengganti Animasi Tangan)**:
+- **Animasi Cuaca & Langit Dinamis (Pengganti Animasi Tangan Melambai)**:
   - Menggantikan animasi tangan melambai lama dengan visual animasi kondisi langit dan matahari tanpa latar belakang kotak (*clean & glowing*), yang berganti otomatis mengikuti waktu saat membuka portal:
-    - **Pagi (04:00 - 10:59)**: Matahari terbit dengan sinar keemasan yang berotasi lembut.
-    - **Siang (11:00 - 14:59)**: Matahari siang cerah dengan efek korona energi berdenyut.
-    - **Sore (15:00 - 17:59)**: Matahari senja yang turun perlahan ke ufuk langit.
-    - **Malam (18:00 - 03:59)**: Bulan sabit ungu malam dengan kilauan bintang.
+    - 🌅 **Pagi (04:00 - 10:59)**: Matahari terbit dengan sinar keemasan yang berotasi lembut.
+    - ☀️ **Siang (11:00 - 14:59)**: Matahari siang cerah dengan efek korona energi berdenyut.
+    - 🌇 **Sore (15:00 - 17:59)**: Matahari senja yang turun perlahan ke ufuk langit.
+    - 🌙 **Malam (18:00 - 03:59)**: Bulan sabit ungu malam dengan kilauan bintang.
 
 - **Tampilan Halaman Login & Header Baru (Identitas Resmi Prep & Lab)**:
-  - Tampilan login dirombak total dengan gaya modern bernuansa *dark-mode enterprise* dengan efek pendaran cahaya (*glow effect*) dan badge keamanan resmi.
+  - Tampilan login dirombak total dengan gaya modern bernuansa *dark-mode enterprise* dengan efek pendaran cahaya (*glow effect*) dan lencana keamanan resmi.
   - Logo resmi Prep & Lab kini disematkan di halaman login serta di pojok kiri atas bilah navigasi utama sistem.
 
 - **Panel Diskusi Topik Bulletin & Galeri Lampiran Media**:
@@ -63,69 +63,43 @@ Semua pembaruan dan perbaikan sistem Prep & Lab Portal dicatat dalam dokumen ini
 
 ## [2.5.0] - 2026-08-23
 
-### 🚀 Added
-- **P5M & Safety Talk Management Module (`p5m-screen.tsx`)**:
-  - **Materi Management UI/UX**: Added "Bank Data Materi P5M" interface with search, division filters, sub-category tags, and "+ Tambah Materi Baru" modal.
-  - **Direct Flyer Upload**: Supported drag-and-drop / file picker for flyer posters (PNG/JPG up to 10MB) with automatic upload to Google Drive (`P5M_Materi_Flyers`) and metadata storage in PostgreSQL.
-  - **Materi Management Backend Endpoints (`server/routes/p5m.ts`)**:
-    - `GET /api/p5m/materi` & `GET /api/p5m/materi-list`: Fast search & category filtering for briefing materials.
-    - `POST /api/p5m/materi`: Uploads base64 flyer to Google Drive and inserts record into Cloud SQL.
-    - `DELETE /api/p5m/materi/:id`: Safe removal of obsolete briefing materials.
-  - **Searchable Materi Picker Popover**: Replaced plain text input with an interactive materi selector featuring instant search, division/category filter chips (*Preparasi*, *Laboratorium*, *General*, *Non-Teknis*), and one-click quick actions (*🤸 Senam Bersama*, *📋 Logbook*).
-  - **Accurate Personnel Targeting**: Ensured manual slot person replacement synchronizes `nama`, `nik`, `karyawanId`, and `pt` so briefing notifications are 100% targeted to the newly selected presenter.
-  - **Reliable Flyer Image & Download Proxy**:
-    - Enhanced `GET /api/p5m/flyer` with streaming and `download=true` support (`Content-Disposition: attachment`), preventing broken links and CORS issues.
-- **Presenter Briefing Notification Modal (`p5m-notification-modal.tsx`)**:
-  - Automatically alerts assigned personnel when logging into the portal with topic title, date, shift, and one-click flyer viewer/download.
-  - **Past Date Filtering**: Integrated WIT (UTC+9) timezone date checks (`todayIso > assignmentDateIso`) so pop-up notifications will not appear for sessions whose scheduled date has already passed.
+### 🚀 Fitur Baru & Peningkatan Utama
 
-### 🔄 Migrated
-- **P5M Database & Flyer Storage (Notion ➡️ Cloud SQL & Google Drive)**:
-  - Migrated all **88 P5M briefing topics & flyers** completely from Notion to Google Drive (`P5M_Materi_Flyers`, Folder ID: `1AH151Lrgklv4Q1Ty0vdEgsPES6VcCKps`).
-  - Saved full relational metadata in PostgreSQL table `p5m_materi` with Google Drive direct view URLs, eliminating external Notion dependency.
+- **Modul Manajemen P5M & Safety Talk Terpadu (`P5M Management`)**:
+  - **Bank Data Materi P5M**: Halaman khusus untuk mengelola materi briefing harian lengkap dengan pencarian cepat, filter divisi, dan tombol tambah materi baru.
+  - **Upload Flyer Poster Langsung**: Pengguna dapat mengunggah file gambar/poster materi P5M (PNG/JPG hingga 10MB) yang langsung disimpan rapi di Google Drive dan database Cloud SQL.
+  - **Menu Pemilih Materi yang Interaktif**: Mengganti kolom teks biasa dengan pemilih materi modern yang dilengkapi pencarian instan, filter kategori (*Preparasi, Laboratorium, General, Non-Teknis*), dan tombol aksi cepat (*Senam Bersama, Logbook*).
+  - **Penetapan Pemateri yang Akurat**: Pergantian nama pemateri secara manual langsung menyinkronkan data NIK, nama lengkap, dan bagian kerja agar penugasan tepat sasaran.
+  - **Penampil & Pengunduh Poster Flyer Cepat**: Server proxy lokal memastikan poster materi selalu dapat dilihat dan diunduh langsung tanpa kendala akses.
 
-### 🎨 UI & UX Improvements
-- **Schedule Matrix Color Palette & Visual Index**:
-  - Overhauled color tokens for Day Shift (warm yellow-amber/orange) vs. Night Shift (indigo/navy/slate) and Preparation (orange) vs. Laboratory (emerald green) to eliminate ambiguous visual overlaps.
-  - Hardened text clipping boundaries and badge containers in Shift & Zone headers.
-  - Thickened outline marker (`border-2`) with distinct section color accents for personnel assigned to **2× briefing** in a single week.
+- **Notifikasi Pop-up Jadwal Briefing untuk Pemateri**:
+  - Karyawan yang bertugas menjadi pemateri briefing P5M akan otomatis menerima notifikasi pop-up saat login ke portal, lengkap dengan judul materi, tanggal, shift, dan tombol lihat poster.
+  - Notifikasi hanya muncul untuk jadwal hari ini dan masa depan (jadwal yang sudah lewat tidak akan memunculkan pop-up lagi).
 
-### 🧹 Maintenance & Database Cleanup
-- **Schedule Reset (Clean Slate)**:
-  - Cleaned all test scheduling entries from `p5m_schedules` and reset `last_used = NULL` across all 88 materi records in `p5m_materi` to prepare for actual production scheduling.
+- **Penyelarasan Warna Matriks Jadwal P5M**:
+  - Memperbarui skema warna untuk membedakan Shift Siang (kuning/oranye cerah) vs Shift Malam (biru tua/gelap) serta area Preparasi (oranye) vs Laboratorium (hijau zamrud) agar jadwal mudah dibaca dalam sekejap.
+  - Menambahkan penanda garis batas khusus bagi personil yang mendapat penugasan briefing 2 kali dalam satu minggu.
 
 ---
 
 ## [2.4.0] - 2026-08-22
 
-### 🚀 Added
-- **Prep & Lab Bulletin Module**:
-  - Rebranded module from "Prep & Lab Notion" to **"Prep & Lab Bulletin"** across navigation sidebar, breadcrumbs, and page headers.
-  - Integrated bidirectional event synchronization with the Agenda module (excluding personnel birthdays which remain isolated to the Quality Assurance section).
-- **Dynamic Section Hub Dashboard (`SectionHubDashboard.tsx`)**:
-  - Implemented automatic homepage rendering for all section workspaces (`ADMINISTRASI`, `LABORATORIUM`, `PREPARASI`, `IT`, `K3LH / SAFETY`, etc.).
-  - Added interactive navigation cards, child page explorer, and category switchers.
-- **Enhanced Notion Database Table (`NotionDatabaseTable.tsx`)**:
-  - Interactive multi-view component supporting Table View, Kanban Board, and List View.
-  - Live filtering by Status (`OPEN`, `ON PROGRESS`, `CLOSE`, `PENDING`), Priority (`High`, `Medium`, `Low`), and dynamic search query.
-  - Column mapper that prioritizes `Jenis Kegiatan`, `Nama`, `Task`, `Judul`, and `Rencana Tindakan` as primary topic titles.
-- **Topic Discussions & Live Progress Updates**:
-  - Integrated discussion threads for every bulletin topic with personnel avatars, timestamps, and status update badges.
-  - Web push notifications automatically dispatched to section team members when a progress update is submitted.
-- **Direct Google Drive Media & Document Streaming Proxy**:
-  - Added backend proxy endpoints `GET /api/drive/view/:fileId` and `GET /api/drive/download/:fileId` in `server/routes/bulletin.ts`.
-  - Bypasses Google Drive hotlinking and CORS restrictions, ensuring 100% reliable thumbnail loading and instant image viewing.
-  - Integrated fullscreen Image Lightbox Modal with zoom, external Google Drive viewer, and one-click file download.
-  - Added attachment upload support in the comment box with direct Google Drive cloud storage.
+### 🚀 Fitur Baru & Peningkatan Utama
 
-### 🔄 Migrated
-- **Notion Historical Comments & Attachments**:
-  - Migrated 101 historical comments and 182 media attachments (`.jpg`, `.png`, `.xlsx`, `.pdf`) from Notion to Google Drive (`1JE6EusixbK7saIzboKNOk9aMiAqEX-zF`).
-  - Synced comment attachments into PostgreSQL (`bulletin_comments.file_url` & `fileName`).
-  - Restored locker inventory verification image (`gambar.jpg`) under topic *"Pengecekan Loker Lab"*.
+- **Papan Buletin Digital (Prep & Lab Bulletin)**:
+  - Peluncuran modul papan buletin kerja digital terintegrasi untuk menggantikan papan informasi konvensional.
+  - Terhubung langsung dengan agenda kerja tim untuk sinkronisasi kegiatan harian secara otomatis.
 
-### 🛠 Fixed
-- **Multi-Tenancy Post Separation**:
-  - Cleanly isolated TBP and GTS post records in `bulletin_posts` to prevent GTS data from overlapping inside TBP Non Routine Laboratorium.
-- **Direct Image Previews**:
-  - Resolved broken image thumbnail icon caused by Google Drive `lh3.googleusercontent.com` access blocks by routing all media requests through the local authenticated streaming proxy.
+- **Dashboard Ruang Kerja Section (Section Hub)**:
+  - Setiap bagian kerja (*Administrasi, Laboratorium, Preparasi, IT, K3LH/Safety*) kini memiliki beranda ruang kerja interaktifnya masing-masing.
+  - Mempermudah akses dokumen, instruksi kerja, dan pelaporan rutin per divisi.
+
+- **Tampilan Database Fleksibel (Multi-View)**:
+  - Data kegiatan dapat dilihat dalam format Tabel (*Table View*), Papan Alur (*Kanban Board*), maupun Daftar (*List View*).
+  - Dilengkapi filter status (*Open, On Progress, Close, Pending*) dan prioritas kerja (*High, Medium, Low*).
+
+- **Diskusi Interaktif & Pembaruan Progres Tim**:
+  - Setiap kegiatan memiliki ruang diskusi sendiri dengan avatar pengguna, waktu komentar, dan notifikasi pembaruan progres otomatis ke anggota tim.
+
+- **Pratinjau Foto & Dokumen Resolusi Penuh**:
+  - Modal galeri foto layar penuh (*Lightbox*) dengan fitur perbesaran (*zoom*) dan tombol unduh langsung.
