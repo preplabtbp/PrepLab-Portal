@@ -3,7 +3,7 @@ import {
   Wrench, Activity, Clock, Package, Filter, Download, 
   Search, RefreshCw, CheckCircle2, AlertTriangle, ArrowUpRight, 
   ChevronLeft, Eye, Layers, Sparkles, SlidersHorizontal, 
-  Calendar, FileSpreadsheet, X, ShieldAlert, Check, Cpu, Hammer
+  Calendar, FileSpreadsheet, X, ShieldAlert, Check, Cpu, Hammer, BarChart2
 } from 'lucide-react';
 import { Card, Button, Input, Select } from './ui';
 import { Bar, Doughnut } from 'react-chartjs-2';
@@ -688,7 +688,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-bold text-sm flex items-center gap-2">
-                <BarElement className="w-4 h-4 text-teal-600" />
+                <BarChart2 className="w-4 h-4 text-teal-600" />
                 Rekapitulasi Downtime per Alat (Top Breakdown)
               </h3>
               <p className="text-xs text-slate-500">
