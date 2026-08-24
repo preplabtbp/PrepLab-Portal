@@ -3,8 +3,27 @@ import {createRoot} from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App.tsx';
-import { ErrorBoundary } from './components/error-boundary.tsx';;
+import { ErrorBoundary } from './components/error-boundary.tsx';
 import './index.css';
+
+// Auto-recovery for stale dynamic imports / new deployment chunks
+window.addEventListener('vite:preloadError', (event) => {
+  console.warn('[Vite] Preload error encountered, auto-reloading page...', event);
+  window.location.reload();
+});
+
+window.addEventListener('error', (e) => {
+  if (e?.message && /Failed to fetch dynamically imported module/i.test(e.message)) {
+    const key = 'preplab_auto_reload_token';
+    const now = Date.now();
+    const lastReload = parseInt(sessionStorage.getItem(key) || '0', 10);
+    if (now - lastReload > 5000) {
+      sessionStorage.setItem(key, String(now));
+      console.warn('[DynamicImport] Reloading due to outdated bundle chunk...');
+      window.location.reload();
+    }
+  }
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {

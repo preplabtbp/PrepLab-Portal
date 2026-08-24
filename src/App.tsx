@@ -33,38 +33,59 @@ import { DailySplashScreen } from './components/DailySplashScreen';
 
 
 
-const CreateWOScreen = lazy(() => import('./components/create-wo-screen').then(m => ({ default: m.CreateWOScreen })));
-const CreateInternalTicketScreen = lazy(() => import('./components/create-internal-ticket-screen').then(m => ({ default: m.CreateInternalTicketScreen })));
-const WOListScreen = lazy(() => import('./components/wo-list-screen').then(m => ({ default: m.WOListScreen })));
-const TicketScreen = lazy(() => import('./components/ticket-screen').then(m => ({ default: m.TicketScreen })));
-const PemantauanScreen = lazy(() => import('./components/pemantauan-screen').then(m => ({ default: m.PemantauanScreen })));
-const ProfileScreen = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
-const RosterAdminScreen = lazy(() => import('./components/roster-admin-screen').then(m => ({ default: m.RosterAdminScreen })));
-const MonitoringDashboard = lazy(() => import('./components/monitoring-dashboard').then(m => ({ default: m.MonitoringDashboard })));
-const WeeklyInspectionScreen = lazy(() => import('./components/weekly-inspection-screen').then(m => ({ default: m.WeeklyInspectionScreen })));
-const ChatScreen = lazy(() => import('./components/ChatScreen').then(m => ({ default: m.default })));
-const ApdInputScreen = lazy(() => import('./components/apd-input-screen').then(m => ({ default: m.ApdInputScreen })));
-const ApdSettingsScreen = lazy(() => import('./components/apd-settings-screen').then(m => ({ default: m.ApdSettingsScreen })));
-const ApdMonitoringScreen = lazy(() => import('./components/apd-monitoring-screen').then(m => ({ default: m.ApdMonitoringScreen })));
-const InduksiScreen = lazy(() => import('./components/induksi-screen').then(m => ({ default: m.InduksiScreen })));
-const HomeScreen = lazy(() => import('./components/home-screen').then(m => ({ default: m.HomeScreen })));
-const QuizScreen = lazy(() => import('./components/quiz-screen').then(m => ({ default: m.QuizScreen })));
-const QuizAdminScreen = lazy(() => import('./components/quiz-admin-screen').then(m => ({ default: m.QuizAdminScreen })));
-const InspectionScreen = lazy(() => import('./components/inspection-screen').then(m => ({ default: m.InspectionScreen })));
-const DowntimePage = lazy(() => import('./pages/DowntimePage').then(m => ({ default: m.DowntimePage })));
-const SettingsScreen = lazy(() => import('./components/settings-screen').then(m => ({ default: m.SettingsScreen })));
-const PreplabCloudScreen = lazy(() => import('./components/preplab-cloud-screen').then(m => ({ default: m.PreplabCloudScreen })));
-const AdminDashboard = lazy(() => import('./components/admin-dashboard').then(m => ({ default: m.AdminDashboard })));
-const SapDashboard = lazy(() => import('./components/sap-dashboard').then(m => ({ default: m.SapDashboard })));
-const AgendaDashboard = lazy(() => import('./components/agenda-dashboard').then(m => ({ default: m.AgendaDashboard })));
-const AdmDashboard = lazy(() => import('./components/adm-dashboard').then(m => ({ default: m.AdmDashboard })));
-const PelanggaranDashboard = lazy(() => import('./components/pelanggaran-dashboard').then(m => ({ default: m.PelanggaranDashboard })));
-const P5MScreen = lazy(() => import('./components/p5m-screen').then(m => ({ default: m.P5MScreen })));
-const BulletinBoard = lazy(() => import('./components/bulletin-board').then(m => ({ default: m.BulletinBoard })));
-const UserManualScreen = lazy(() => import('./components/user-manual-screen').then(m => ({ default: m.UserManualScreen })));
-const EmployeeDatabaseScreen = lazy(() => import('./components/employee-database-screen').then(m => ({ default: m.EmployeeDatabaseScreen })));
-const EasterEggGame = lazy(() => import('./components/easter-egg-game').then(m => ({ default: m.EasterEggGame })));
-const WOMaintenanceDashboard = lazy(() => import('./components/wo-maintenance-dashboard').then(m => ({ default: m.WOMaintenanceDashboard })));
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T } | any>
+) {
+  return lazy(async () => {
+    try {
+      const module = await factory();
+      return module.default ? module : { default: module };
+    } catch (error: any) {
+      console.warn('[DynamicImport] Chunk fetch failed, attempting auto-recovery...', error);
+      const reloadKey = 'preplab_chunk_reload_count';
+      const count = parseInt(sessionStorage.getItem(reloadKey) || '0', 10);
+      if (count < 2) {
+        sessionStorage.setItem(reloadKey, String(count + 1));
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw error;
+    }
+  });
+}
+
+const CreateWOScreen = lazyWithRetry(() => import('./components/create-wo-screen').then(m => ({ default: m.CreateWOScreen })));
+const CreateInternalTicketScreen = lazyWithRetry(() => import('./components/create-internal-ticket-screen').then(m => ({ default: m.CreateInternalTicketScreen })));
+const WOListScreen = lazyWithRetry(() => import('./components/wo-list-screen').then(m => ({ default: m.WOListScreen })));
+const TicketScreen = lazyWithRetry(() => import('./components/ticket-screen').then(m => ({ default: m.TicketScreen })));
+const PemantauanScreen = lazyWithRetry(() => import('./components/pemantauan-screen').then(m => ({ default: m.PemantauanScreen })));
+const ProfileScreen = lazyWithRetry(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const RosterAdminScreen = lazyWithRetry(() => import('./components/roster-admin-screen').then(m => ({ default: m.RosterAdminScreen })));
+const MonitoringDashboard = lazyWithRetry(() => import('./components/monitoring-dashboard').then(m => ({ default: m.MonitoringDashboard })));
+const WeeklyInspectionScreen = lazyWithRetry(() => import('./components/weekly-inspection-screen').then(m => ({ default: m.WeeklyInspectionScreen })));
+const ChatScreen = lazyWithRetry(() => import('./components/ChatScreen').then(m => ({ default: m.default })));
+const ApdInputScreen = lazyWithRetry(() => import('./components/apd-input-screen').then(m => ({ default: m.ApdInputScreen })));
+const ApdSettingsScreen = lazyWithRetry(() => import('./components/apd-settings-screen').then(m => ({ default: m.ApdSettingsScreen })));
+const ApdMonitoringScreen = lazyWithRetry(() => import('./components/apd-monitoring-screen').then(m => ({ default: m.ApdMonitoringScreen })));
+const InduksiScreen = lazyWithRetry(() => import('./components/induksi-screen').then(m => ({ default: m.InduksiScreen })));
+const HomeScreen = lazyWithRetry(() => import('./components/home-screen').then(m => ({ default: m.HomeScreen })));
+const QuizScreen = lazyWithRetry(() => import('./components/quiz-screen').then(m => ({ default: m.QuizScreen })));
+const QuizAdminScreen = lazyWithRetry(() => import('./components/quiz-admin-screen').then(m => ({ default: m.QuizAdminScreen })));
+const InspectionScreen = lazyWithRetry(() => import('./components/inspection-screen').then(m => ({ default: m.InspectionScreen })));
+const DowntimePage = lazyWithRetry(() => import('./pages/DowntimePage').then(m => ({ default: m.DowntimePage })));
+const SettingsScreen = lazyWithRetry(() => import('./components/settings-screen').then(m => ({ default: m.SettingsScreen })));
+const PreplabCloudScreen = lazyWithRetry(() => import('./components/preplab-cloud-screen').then(m => ({ default: m.PreplabCloudScreen })));
+const AdminDashboard = lazyWithRetry(() => import('./components/admin-dashboard').then(m => ({ default: m.AdminDashboard })));
+const SapDashboard = lazyWithRetry(() => import('./components/sap-dashboard').then(m => ({ default: m.SapDashboard })));
+const AgendaDashboard = lazyWithRetry(() => import('./components/agenda-dashboard').then(m => ({ default: m.AgendaDashboard })));
+const AdmDashboard = lazyWithRetry(() => import('./components/adm-dashboard').then(m => ({ default: m.AdmDashboard })));
+const PelanggaranDashboard = lazyWithRetry(() => import('./components/pelanggaran-dashboard').then(m => ({ default: m.PelanggaranDashboard })));
+const P5MScreen = lazyWithRetry(() => import('./components/p5m-screen').then(m => ({ default: m.P5MScreen })));
+const BulletinBoard = lazyWithRetry(() => import('./components/bulletin-board').then(m => ({ default: m.BulletinBoard })));
+const UserManualScreen = lazyWithRetry(() => import('./components/user-manual-screen').then(m => ({ default: m.UserManualScreen })));
+const EmployeeDatabaseScreen = lazyWithRetry(() => import('./components/employee-database-screen').then(m => ({ default: m.EmployeeDatabaseScreen })));
+const EasterEggGame = lazyWithRetry(() => import('./components/easter-egg-game').then(m => ({ default: m.EasterEggGame })));
+const WOMaintenanceDashboard = lazyWithRetry(() => import('./components/wo-maintenance-dashboard').then(m => ({ default: m.WOMaintenanceDashboard })));
 
 export default function App() {
 

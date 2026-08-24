@@ -202,7 +202,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       animate={{ opacity: 1, y: 0 }} 
       exit={{ opacity: 0, y: -15 }} 
       transition={{ duration: 0.4, ease: "easeOut" }} 
-      className="pb-24 px-4 sm:px-6 lg:px-8 w-full h-full max-w-5xl mx-auto space-y-6"
+      className="pb-24 px-3 sm:px-6 lg:px-8 w-full h-full max-w-7xl mx-auto space-y-7"
     >
       
       {/* Dynamic Daily Greeting Hero with Skena Quotes & Splash Morphing */}
@@ -214,7 +214,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
 
       {/* Sticky Tabs for Mobile/Desktop */}
       <div 
-        className="sticky top-[56px] sm:top-[70px] z-30 -mx-4 px-4 py-3 sm:mx-0 sm:px-0 backdrop-blur-md sm:backdrop-blur-none sm:py-0 border-b sm:border-none transition-colors"
+        className="sticky top-[56px] sm:top-[70px] z-30 -mx-3 px-3 py-3 sm:mx-0 sm:px-0 backdrop-blur-md sm:backdrop-blur-none sm:py-0 border-b sm:border-none transition-colors"
         style={{ 
           backgroundColor: 'var(--bg-main, #F4F7F6)', 
           borderColor: 'var(--border-main, #e2e8f0)' 
@@ -225,7 +225,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all flex-shrink-0 border ${
+              className={`px-4 py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap transition-all flex-shrink-0 border ${
                 activeTab === tab.id 
                   ? 'shadow-md font-bold' 
                   : 'hover:opacity-90'
@@ -242,7 +242,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
         </div>
       </div>
 
-      {/* Grid Content */}
+      {/* Grid Content - Responsive multi-column layout */}
       <div className="space-y-8 pt-2 sm:pt-0 relative z-10">
         <AnimatePresence mode="popLayout">
           {filteredSections.map((section) => (
@@ -254,16 +254,16 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
               transition={{ duration: 0.2 }}
               className="scroll-mt-24"
             >
-              <div className="flex items-center gap-3 mb-4 px-1">
+              <div className="flex items-center gap-3 mb-3.5 px-1">
                 <div className={`p-2 rounded-lg ${section.bgIcon}`}>
                   {section.icon}
                 </div>
-                <h2 className="text-lg font-bold tracking-tight" style={{ color: 'var(--text-main, #1e293b)' }}>
+                <h2 className="text-base sm:text-lg font-bold tracking-tight" style={{ color: 'var(--text-main, #1e293b)' }}>
                   {section.title}
                 </h2>
               </div>
               
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
                 {section.items.map(item => (
                   <ActionCard key={item.id} {...item} />
                 ))}

@@ -299,12 +299,12 @@ export function DailyGreetingHero({
     };
   }, [isExpanded]);
 
-  // Guaranteed Auto-morph transition timer (4.5s total duration)
+  // Auto-morph transition timer (Smooth 10s total duration)
   useEffect(() => {
     if (!isExpanded) return;
 
     const interval = 50;
-    const totalDuration = 4500;
+    const totalDuration = 10000; // 10 Detik
     const step = (interval / totalDuration) * 100;
 
     const timer = setInterval(() => {
@@ -319,6 +319,17 @@ export function DailyGreetingHero({
     }, interval);
 
     return () => clearInterval(timer);
+  }, [isExpanded]);
+
+  // Escape key to skip splash
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isExpanded) {
+        handleCollapse();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isExpanded]);
 
   const handleCollapse = () => {
@@ -390,12 +401,28 @@ export function DailyGreetingHero({
             {/* Cinematic Vignette */}
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.85)_100%)] pointer-events-none" />
 
+            {/* Top-Right Dedicated Skip Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCollapse();
+              }}
+              className="fixed top-4 right-4 sm:top-6 sm:right-6 z-[250] px-4 py-2 rounded-full bg-white/12 hover:bg-white/20 border border-white/20 text-white text-xs font-bold backdrop-blur-xl flex items-center gap-2 transition-all shadow-2xl cursor-pointer group"
+              title="Lewati Animasi Pembuka (Esc)"
+            >
+              <span className="text-white/90 group-hover:text-white tracking-wide">Lewati</span>
+              <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-teal-500/30 text-teal-300 border border-teal-500/40 font-black">
+                {Math.max(0, Math.ceil(((100 - progress) / 100) * 10))}s
+              </span>
+              <span className="text-white/70 group-hover:text-white text-sm leading-none font-bold">✕</span>
+            </button>
+
             {/* Top Branding */}
             <motion.div 
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
-              className="relative z-10 w-full flex items-center justify-between max-w-5xl mx-auto"
+              className="relative z-10 w-full flex items-center justify-between max-w-7xl mx-auto"
             >
               <div className="flex items-center gap-3">
                 <div 
@@ -415,13 +442,13 @@ export function DailyGreetingHero({
                 </div>
               </div>
 
-              <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">
-                Klik layar untuk lewati
+              <div className="hidden sm:block text-[10px] text-white/40 font-mono uppercase tracking-wider pr-24">
+                Klik layar atau tombol Lewati
               </div>
             </motion.div>
 
             {/* Center Dramatic Presentation Stage */}
-            <div className="relative z-10 w-full max-w-4xl mx-auto my-auto flex flex-col items-center text-center space-y-7">
+            <div className="relative z-10 w-full max-w-5xl mx-auto my-auto flex flex-col items-center text-center space-y-7">
               {/* Time Badge */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.8, y: 15 }}
@@ -514,7 +541,7 @@ export function DailyGreetingHero({
             <div className="relative z-10 w-full max-w-4xl mx-auto space-y-2">
               <div className="flex items-center justify-between text-[11px] text-white/40 font-mono">
                 <span>Mentransformasikan ke portal kerja...</span>
-                <span>{Math.max(0, Math.ceil((100 - progress) / 22))}s</span>
+                <span>{Math.max(0, Math.ceil(((100 - progress) / 100) * 10))}s</span>
               </div>
               <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
                 <motion.div
