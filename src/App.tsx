@@ -13,6 +13,7 @@ import { Palette } from 'lucide-react';
 import { initAuth, googleSignIn } from './google-auth';
 import { WhatsAppModal } from './components/whatsapp-modal';
 import { P5MNotificationModal } from './components/p5m-notification-modal';
+import { DailySplashScreen } from './components/DailySplashScreen';
 
 
 
@@ -1258,6 +1259,14 @@ export default function App() {
       <P5MNotificationModal
         inspectorNik={inspectorNik}
         inspectorName={inspectorName}
+      />
+
+      {/* Global Daily Greeting Splash Screen (10s with Top-Right Skip Button) */}
+      <DailySplashScreen
+        userName={inspectorName}
+        userNik={inspectorNik}
+        userJabatan={inspectorJabatan}
+        userSection={userDept}
       />
 
     </div>
