@@ -533,13 +533,19 @@ router.get("/api/themes/community", async (req, res) => {
       });
       res.json({ status: "success", data: communityThemes });
     } catch (error: any) {
-      res.status(500).json({ status: "error", message: error.message });
+      console.warn("Themes community fetch warning:", error.message);
+      res.json({ status: "success", data: [] });
     }
   });
 
 router.get("/api/themes/:nik", async (req, res) => {
     try {
-      const data = await db.select().from(userThemes).where(eq(userThemes.nik, req.params.nik));
+      const nikParam = req.params.nik;
+      if (!nikParam) {
+        return res.json({ status: "success", data: {}, customTemplates: [], communityThemes: [] });
+      }
+
+      const data = await db.select().from(userThemes).where(eq(userThemes.nik, nikParam));
       const themes: Record<string, any> = {};
       const customTemplates: Array<{ id: number; name: string; mode: string; colors: any; isPublished?: boolean; authorName?: string; publishedAt?: any }> = [];
       
@@ -566,29 +572,35 @@ router.get("/api/themes/:nik", async (req, res) => {
         }
       });
 
-      // Also fetch community themes
-      const commData = await db.select().from(userThemes).where(eq(userThemes.isPublished, true)).orderBy(desc(userThemes.publishedAt), desc(userThemes.id));
-      const communityThemes = commData.map(t => {
-        let parsedColors = {};
-        try {
-          parsedColors = typeof t.colors === 'string' ? JSON.parse(t.colors) : (t.colors || {});
-        } catch (e) {
-          parsedColors = {};
-        }
-        return {
-          id: t.id,
-          name: t.themeName || 'Tema Komunitas',
-          mode: t.mode,
-          nik: t.nik,
-          authorName: t.authorName || t.nik || 'Anggota Lab',
-          publishedAt: t.publishedAt,
-          colors: parsedColors
-        };
-      });
+      // Also fetch community themes safely
+      let communityThemes: any[] = [];
+      try {
+        const commData = await db.select().from(userThemes).where(eq(userThemes.isPublished, true)).orderBy(desc(userThemes.publishedAt), desc(userThemes.id));
+        communityThemes = commData.map(t => {
+          let parsedColors = {};
+          try {
+            parsedColors = typeof t.colors === 'string' ? JSON.parse(t.colors) : (t.colors || {});
+          } catch (e) {
+            parsedColors = {};
+          }
+          return {
+            id: t.id,
+            name: t.themeName || 'Tema Komunitas',
+            mode: t.mode,
+            nik: t.nik,
+            authorName: t.authorName || t.nik || 'Anggota Lab',
+            publishedAt: t.publishedAt,
+            colors: parsedColors
+          };
+        });
+      } catch (err: any) {
+        console.warn("Error fetching community themes:", err.message);
+      }
 
       res.json({ status: "success", data: themes, customTemplates, communityThemes });
     } catch (error: any) {
-      res.status(500).json({ status: "error", message: error.message });
+      console.warn("Themes fetch warning:", error.message);
+      res.json({ status: "success", data: {}, customTemplates: [], communityThemes: [] });
     }
   });
 

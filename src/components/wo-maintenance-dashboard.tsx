@@ -231,11 +231,29 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
     };
   };
 
-  // Fetch all work orders directly (zero 404 errors) and compute unified maintenance summary
+  // Fetch all work orders directly and compute unified maintenance summary
   const fetchMaintenanceData = async () => {
     try {
       setLoading(true);
-      const resRaw = await fetch('/api/work-orders', {
+      // 1. Try pre-calculated maintenance summary
+      try {
+        const summaryRes = await fetch('/api/work-orders/maintenance-summary', {
+          headers: { 'Accept': 'application/json' }
+        });
+        if (summaryRes.ok) {
+          const summaryData = await summaryRes.json();
+          if (summaryData && Array.isArray(summaryData.rawWorkOrders) && summaryData.rawWorkOrders.length > 0) {
+            const clientRes = computeClientSummary(summaryData.rawWorkOrders, filterPeriod, customStartDate, customEndDate);
+            setData(clientRes);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Fallback to direct work-orders query:', err);
+      }
+
+      // 2. Direct fetch fallback
+      const resRaw = await fetch('/api/work-orders?pt=ALL', {
         headers: { 'Accept': 'application/json' }
       });
       const contentType = resRaw.headers.get('content-type') || '';
@@ -596,10 +614,10 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
           
           {/* 1. Category Filter */}
           <div>
-            <label className="text-[11px] font-bold block mb-1.5 text-slate-700 dark:text-slate-300">
+            <label className="text-[11px] font-bold block mb-1.5 text-slate-800 dark:text-slate-200">
               Kategori Alat (Klasifikasi)
             </label>
-            <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-700">
               {[
                 { key: 'ALL', label: 'Semua' },
                 { key: 'Instrument (L)', label: 'Instrument' },
@@ -612,10 +630,10 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                     setSelectedCategory(cat.key as any);
                     setSelectedEquipmentCode('ALL'); // Reset specific equipment when category changes
                   }}
-                  className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all truncate cursor-pointer ${
+                  className={`py-2 px-2 rounded-lg text-xs font-bold transition-all truncate cursor-pointer ${
                     selectedCategory === cat.key
-                      ? 'bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      ? 'bg-teal-700 text-white shadow-xs'
+                      : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
                   }`}
                 >
                   {cat.label}
@@ -626,13 +644,13 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
           {/* 2. Specific Equipment Selector */}
           <div>
-            <label className="text-[11px] font-bold block mb-1.5 text-slate-700 dark:text-slate-300">
+            <label className="text-[11px] font-bold block mb-1.5 text-slate-800 dark:text-slate-200">
               Pilih Alat yang Rusak (Detail Filter)
             </label>
             <select
               value={selectedEquipmentCode}
               onChange={e => setSelectedEquipmentCode(e.target.value)}
-              className="w-full h-9.5 text-xs font-semibold px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-teal-500/20"
+              className="w-full h-10 text-xs font-bold px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500/30 shadow-2xs cursor-pointer"
             >
               <option value="ALL">🌟 Semua Alat Terhitung ({availableEquipments.length} Alat)</option>
               {availableEquipments.map((eq: any) => {
@@ -648,13 +666,13 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
           {/* 3. Time Period Filter */}
           <div>
-            <label className="text-[11px] font-bold block mb-1.5 text-slate-700 dark:text-slate-300">
+            <label className="text-[11px] font-bold block mb-1.5 text-slate-800 dark:text-slate-200">
               Rentang Waktu
             </label>
             <select
               value={filterPeriod}
               onChange={e => setFilterPeriod(e.target.value)}
-              className="w-full h-9.5 text-xs font-semibold px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-teal-500/20"
+              className="w-full h-10 text-xs font-bold px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500/30 shadow-2xs cursor-pointer"
             >
               <option value="all">📅 Semua Waktu</option>
               <option value="this_month">📅 Bulan Ini (Mulai Tgl 1)</option>
@@ -666,17 +684,17 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
           {/* 4. Search Filter */}
           <div>
-            <label className="text-[11px] font-bold block mb-1.5 text-slate-700 dark:text-slate-300">
+            <label className="text-[11px] font-bold block mb-1.5 text-slate-800 dark:text-slate-200">
               Pencarian Cepat
             </label>
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 opacity-50" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
               <input
                 type="text"
-                placeholder="Cari WO, PIC, sparepart..."
+                placeholder="Cari No. WO, alat, PIC, sparepart..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full h-9.5 text-xs pl-8 pr-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none font-medium"
+                className="w-full h-10 text-xs pl-8 pr-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none font-semibold focus:ring-2 focus:ring-teal-500/30 shadow-2xs"
               />
             </div>
           </div>
@@ -746,33 +764,33 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         
         {/* Card 1: Total Jam Downtime */}
-        <Card className="p-4 sm:p-5 border shadow-xs relative overflow-hidden bg-gradient-to-br from-white to-slate-50 dark:from-slate-850 dark:to-slate-900">
+        <Card className="p-4 sm:p-5 border border-slate-300 dark:border-slate-700 shadow-xs relative overflow-hidden bg-white dark:bg-slate-900">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               Total Jam Downtime
             </span>
-            <span className="p-2 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400">
+            <span className="p-2 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
               <Clock className="w-4 h-4" />
             </span>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-display font-black text-rose-600 dark:text-rose-400">
+            <span className="text-2xl sm:text-3xl font-display font-black text-rose-700 dark:text-rose-400">
               {computedMetrics.totalDowntime}
             </span>
-            <span className="text-xs font-bold text-slate-500">Jam</span>
+            <span className="text-xs font-extrabold text-slate-700 dark:text-slate-300">Jam</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
+          <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mt-1.5 flex items-center gap-1">
             <span>Dari {computedMetrics.totalWOs} kasus kerusakan tercatat</span>
           </p>
         </Card>
 
         {/* Card 2: Total Work Orders */}
-        <Card className="p-4 sm:p-5 border shadow-xs relative overflow-hidden bg-gradient-to-br from-white to-slate-50 dark:from-slate-850 dark:to-slate-900">
+        <Card className="p-4 sm:p-5 border border-slate-300 dark:border-slate-700 shadow-xs relative overflow-hidden bg-white dark:bg-slate-900">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               Total Work Order
             </span>
-            <span className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+            <span className="p-2 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
               <Layers className="w-4 h-4" />
             </span>
           </div>
@@ -780,19 +798,19 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
             <span className="text-2xl sm:text-3xl font-display font-black text-slate-900 dark:text-white">
               {computedMetrics.totalWOs}
             </span>
-            <span className="text-xs font-bold text-slate-500">WO</span>
+            <span className="text-xs font-extrabold text-slate-700 dark:text-slate-300">WO</span>
           </div>
           <div className="flex items-center gap-2 mt-1.5 text-[10px] font-bold">
-            <span className="text-emerald-600 flex items-center gap-0.5">
+            <span className="text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-0.5">
               <CheckCircle2 className="w-3 h-3" /> {computedMetrics.closedCount} Closed
             </span>
             {computedMetrics.progressCount > 0 && (
-              <span className="text-amber-600 flex items-center gap-0.5">
+              <span className="text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800 flex items-center gap-0.5">
                 <Clock className="w-3 h-3" /> {computedMetrics.progressCount} Progress
               </span>
             )}
             {computedMetrics.openCount > 0 && (
-              <span className="text-rose-600 flex items-center gap-0.5">
+              <span className="text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-800 flex items-center gap-0.5">
                 <AlertTriangle className="w-3 h-3" /> {computedMetrics.openCount} Open
               </span>
             )}
@@ -800,43 +818,43 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
         </Card>
 
         {/* Card 3: MTTR (Mean Time to Repair) */}
-        <Card className="p-4 sm:p-5 border shadow-xs relative overflow-hidden bg-gradient-to-br from-white to-slate-50 dark:from-slate-850 dark:to-slate-900">
+        <Card className="p-4 sm:p-5 border border-slate-300 dark:border-slate-700 shadow-xs relative overflow-hidden bg-white dark:bg-slate-900">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               MTTR (Rata-rata Perbaikan)
             </span>
-            <span className="p-2 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400">
+            <span className="p-2 rounded-xl bg-teal-100 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
               <Activity className="w-4 h-4" />
             </span>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-display font-black text-teal-600 dark:text-teal-400">
+            <span className="text-2xl sm:text-3xl font-display font-black text-teal-700 dark:text-teal-300">
               {computedMetrics.mttr}
             </span>
-            <span className="text-xs font-bold text-slate-500">Jam / Kasus</span>
+            <span className="text-xs font-extrabold text-slate-700 dark:text-slate-300">Jam / Kasus</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-1.5">
+          <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mt-1.5">
             Mean Time To Repair durasi teknisi
           </p>
         </Card>
 
         {/* Card 4: Total Sparepart Diganti */}
-        <Card className="p-4 sm:p-5 border shadow-xs relative overflow-hidden bg-gradient-to-br from-white to-slate-50 dark:from-slate-850 dark:to-slate-900">
+        <Card className="p-4 sm:p-5 border border-slate-300 dark:border-slate-700 shadow-xs relative overflow-hidden bg-white dark:bg-slate-900">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               Total Sparepart Diganti
             </span>
-            <span className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+            <span className="p-2 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
               <Package className="w-4 h-4" />
             </span>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-display font-black text-amber-600 dark:text-amber-400">
+            <span className="text-2xl sm:text-3xl font-display font-black text-amber-700 dark:text-amber-300">
               {computedMetrics.totalSparepartQty}
             </span>
-            <span className="text-xs font-bold text-slate-500">Unit / Pcs</span>
+            <span className="text-xs font-extrabold text-slate-700 dark:text-slate-300">Unit / Pcs</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-1.5">
+          <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mt-1.5">
             Dari {computedMetrics.sortedSpareparts.length} jenis komponen sparepart
           </p>
         </Card>
@@ -847,25 +865,25 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         
         {/* Chart 1: Bar Chart Top 10 Equipment by Downtime */}
-        <Card className="lg:col-span-2 p-5 border shadow-xs">
+        <Card className="lg:col-span-2 p-5 border border-slate-300 dark:border-slate-700 shadow-xs bg-white dark:bg-slate-900">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-bold text-sm flex items-center gap-2">
-                <BarChart2 className="w-4 h-4 text-teal-600" />
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                 Rekapitulasi Downtime per Alat (Top Breakdown)
               </h3>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                 Alat dengan akumulasi downtime perbaikan tertinggi (Jam).
               </p>
             </div>
-            <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600">
+            <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
               {computedMetrics.sortedTools.length} Alat Aktif
             </span>
           </div>
 
           <div className="h-64 sm:h-72">
             {computedMetrics.sortedTools.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-xs text-slate-400">
+              <div className="h-full flex items-center justify-center text-xs font-semibold text-slate-400">
                 Tidak ada data downtime pada filter ini
               </div>
             ) : (
@@ -895,19 +913,19 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
         </Card>
 
         {/* Chart 2: Category Share (Doughnut Chart) */}
-        <Card className="p-5 border shadow-xs flex flex-col justify-between">
+        <Card className="p-5 border border-slate-300 dark:border-slate-700 shadow-xs bg-white dark:bg-slate-900 flex flex-col justify-between">
           <div>
-            <h3 className="font-bold text-sm mb-1 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-teal-600" />
+            <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-teal-600 dark:text-teal-400" />
               Proporsi Downtime Kategori
             </h3>
-            <p className="text-xs text-slate-500 mb-4">
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-4">
               Instrument (Lab) vs Non-Instrument (Prep).
             </p>
 
             <div className="h-44 flex items-center justify-center">
               {computedMetrics.totalDowntime === 0 ? (
-                <div className="text-xs text-slate-400">Belum ada data</div>
+                <div className="text-xs font-semibold text-slate-400">Belum ada data</div>
               ) : (
                 <Doughnut
                   data={categoryDoughnutData}
@@ -924,16 +942,16 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
           </div>
 
           {/* Quick Category Stats */}
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-2 text-center">
-            <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30">
-              <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300 block">Instrument</span>
-              <span className="text-sm font-black text-blue-800 dark:text-blue-200">
+          <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 grid grid-cols-2 gap-2 text-center">
+            <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800">
+              <span className="text-[11px] font-bold text-blue-900 dark:text-blue-300 block">Instrument</span>
+              <span className="text-sm font-black text-blue-950 dark:text-blue-200">
                 {data.categorySummary?.['Instrument (L)']?.totalDowntime || 0} Jam
               </span>
             </div>
-            <div className="p-2 rounded-xl bg-teal-50 dark:bg-teal-950/20 border border-teal-100 dark:border-teal-900/30">
-              <span className="text-[10px] font-bold text-teal-700 dark:text-teal-300 block">Non-Instrument</span>
-              <span className="text-sm font-black text-teal-800 dark:text-teal-200">
+            <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800">
+              <span className="text-[11px] font-bold text-teal-900 dark:text-teal-300 block">Non-Instrument</span>
+              <span className="text-sm font-black text-teal-950 dark:text-teal-200">
                 {data.categorySummary?.['Non-Instrument (PL)']?.totalDowntime || 0} Jam
               </span>
             </div>
@@ -943,49 +961,49 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       </div>
 
       {/* REKAPITULASI PENGGUNAAN SPAREPART ROW */}
-      <Card className="p-5 border shadow-xs">
+      <Card className="p-5 border border-slate-300 dark:border-slate-700 shadow-xs bg-white dark:bg-slate-900">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
           <div>
-            <h3 className="font-bold text-sm flex items-center gap-2">
+            <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <Package className="w-4 h-4 text-amber-500" />
               Rekapitulasi Penggunaan Sparepart untuk Perbaikan WO
             </h3>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
               Daftar komponen dan suku cadang yang digunakan dalam pemulihan unit breakdown.
             </p>
           </div>
-          <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1 rounded-lg border border-amber-200 dark:border-amber-900/40">
+          <span className="text-xs font-bold text-amber-900 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/60 px-3 py-1 rounded-lg border border-amber-300 dark:border-amber-700">
             Total {computedMetrics.sortedSpareparts.length} Komponen Terpakai
           </span>
         </div>
 
         {computedMetrics.sortedSpareparts.length === 0 ? (
-          <div className="p-8 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed">
+          <div className="p-8 text-center text-xs font-semibold text-slate-500 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-300">
             Tidak ada penggunaan sparepart tercatat pada filter ini.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {computedMetrics.sortedSpareparts.slice(0, 9).map((sp, idx) => (
+            {computedMetrics.sortedSpareparts.slice(0, 9).map((sp) => (
               <div 
                 key={sp.name}
-                className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 flex flex-col justify-between gap-2 shadow-2xs"
+                className="p-3.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 flex flex-col justify-between gap-2 shadow-2xs"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">
-                    <h4 className="font-bold text-xs truncate" title={sp.name}>
+                    <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate" title={sp.name}>
                       {sp.name}
                     </h4>
-                    <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                    <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 shrink-0">
                       {sp.qty} Qty
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-1" title={sp.tools.join(', ')}>
-                    Digunakan pada: <strong>{sp.tools.join(', ')}</strong>
+                  <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mt-1 line-clamp-1" title={sp.tools.join(', ')}>
+                    Digunakan pada: <strong className="text-slate-800 dark:text-slate-200">{sp.tools.join(', ')}</strong>
                   </p>
                 </div>
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-400">
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                   <span>Frekuensi: {sp.count} kali perbaikan</span>
-                  <span className="font-semibold text-teal-600">Terpasang</span>
+                  <span className="font-bold text-teal-700 dark:text-teal-300">Terpasang</span>
                 </div>
               </div>
             ))}
@@ -1017,27 +1035,27 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
         </div>
 
         {/* Responsive Table */}
-        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+        <div className="overflow-x-auto rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold border-b border-slate-300 dark:border-slate-700 tracking-wide text-[11px]">
               <tr>
-                <th className="py-3 px-3">No. WO</th>
-                <th className="py-3 px-3">Tanggal & Shift</th>
-                <th className="py-3 px-3">Nama Alat & Kode</th>
-                <th className="py-3 px-3">Kategori</th>
-                <th className="py-3 px-3">Deskripsi Kerusakan</th>
-                <th className="py-3 px-3">Tindakan Perbaikan</th>
-                <th className="py-3 px-3 text-center">Downtime</th>
-                <th className="py-3 px-3">Sparepart Diganti</th>
-                <th className="py-3 px-3">PIC Teknisi</th>
-                <th className="py-3 px-3 text-center">Status</th>
-                <th className="py-3 px-3 text-center">Aksi</th>
+                <th className="py-3 px-3.5 whitespace-nowrap">No. WO</th>
+                <th className="py-3 px-3.5 whitespace-nowrap">Tanggal & Shift</th>
+                <th className="py-3 px-3.5 whitespace-nowrap">Nama Alat & Kode</th>
+                <th className="py-3 px-3.5 whitespace-nowrap">Kategori</th>
+                <th className="py-3 px-3.5">Deskripsi Kerusakan</th>
+                <th className="py-3 px-3.5">Tindakan Perbaikan</th>
+                <th className="py-3 px-3.5 text-center whitespace-nowrap">Downtime</th>
+                <th className="py-3 px-3.5 whitespace-nowrap">Sparepart Diganti</th>
+                <th className="py-3 px-3.5 whitespace-nowrap">PIC Teknisi</th>
+                <th className="py-3 px-3.5 text-center whitespace-nowrap">Status</th>
+                <th className="py-3 px-3.5 text-center whitespace-nowrap">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-slate-900">
               {filteredWorkOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-slate-400">
+                  <td colSpan={11} className="py-10 text-center text-slate-500 dark:text-slate-400 font-medium">
                     Tidak ada Work Order yang sesuai dengan filter yang dipilih.
                   </td>
                 </tr>
@@ -1045,105 +1063,112 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                 filteredWorkOrders.map(wo => {
                   const isInstrument = (wo.category || '').toLowerCase().includes('instrument') && !(wo.category || '').toLowerCase().includes('non');
                   const dtVal = parseFloat(String(wo.downtimeDuration || '0').replace(',', '.')) || 0;
+                  const st = (wo.status || 'Open').toLowerCase();
                   
                   return (
                     <tr 
                       key={wo.id || wo.woId}
-                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
                     >
                       {/* No. WO */}
-                      <td className="py-3 px-3 font-mono font-bold text-teal-600 dark:text-teal-400 whitespace-nowrap">
-                        {wo.woId || '-'}
+                      <td className="py-3.5 px-3.5 font-mono font-bold text-teal-800 dark:text-teal-300 whitespace-nowrap">
+                        <span className="bg-teal-50 dark:bg-teal-950/50 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800">
+                          {wo.woId || '-'}
+                        </span>
                       </td>
 
                       {/* Tanggal & Shift */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <div className="font-semibold">
+                      <td className="py-3.5 px-3.5 whitespace-nowrap">
+                        <div className="font-bold text-slate-900 dark:text-slate-100">
                           {wo.date ? new Date(wo.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
                         </div>
-                        <span className="text-[10px] text-slate-400">
-                          Shift: {wo.shift || '-'}
+                        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                          Shift {wo.shift || '-'}
                         </span>
                       </td>
 
                       {/* Nama Alat & Kode */}
-                      <td className="py-3 px-3">
+                      <td className="py-3.5 px-3.5">
                         <div className="font-bold text-slate-900 dark:text-white line-clamp-1" title={wo.equipmentName}>
                           {wo.equipmentName || '-'}
                         </div>
-                        <span className="text-[10px] font-mono text-slate-500">
-                          {wo.equipmentCode || '-'}
+                        <span className="text-[10px] font-mono font-semibold text-slate-500 dark:text-slate-400">
+                          Kode: {wo.equipmentCode || '-'}
                         </span>
                       </td>
 
                       {/* Kategori */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      <td className="py-3.5 px-3.5 whitespace-nowrap">
+                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-md border ${
                           isInstrument 
-                            ? 'bg-blue-500/10 text-blue-600 border-blue-500/20' 
-                            : 'bg-teal-500/10 text-teal-600 border-teal-500/20'
+                            ? 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/60 dark:text-blue-200 dark:border-blue-700' 
+                            : 'bg-teal-100 text-teal-900 border-teal-300 dark:bg-teal-950/60 dark:text-teal-200 dark:border-teal-700'
                         }`}>
                           {isInstrument ? 'Instrument' : 'Non-Instrument'}
                         </span>
                       </td>
 
                       {/* Deskripsi Kerusakan */}
-                      <td className="py-3 px-3 min-w-[160px] max-w-[220px]">
-                        <p className="line-clamp-2 text-slate-700 dark:text-slate-300" title={wo.issueDescription}>
+                      <td className="py-3.5 px-3.5 min-w-[160px] max-w-[220px]">
+                        <p className="line-clamp-2 text-slate-800 dark:text-slate-200 font-medium" title={wo.issueDescription}>
                           {wo.issueDescription || '-'}
                         </p>
                       </td>
 
                       {/* Tindakan Perbaikan */}
-                      <td className="py-3 px-3 min-w-[160px] max-w-[220px]">
-                        <p className="line-clamp-2 text-slate-600 dark:text-slate-400" title={wo.actionTaken}>
+                      <td className="py-3.5 px-3.5 min-w-[160px] max-w-[220px]">
+                        <p className="line-clamp-2 text-slate-700 dark:text-slate-300 font-medium" title={wo.actionTaken}>
                           {wo.actionTaken || '-'}
                         </p>
                       </td>
 
                       {/* Downtime (Jam) */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <span className="font-black text-rose-600 dark:text-rose-400 font-mono bg-rose-500/10 px-2 py-0.5 rounded-md">
-                          {dtVal} Jam
-                        </span>
+                      <td className="py-3.5 px-3.5 text-center whitespace-nowrap">
+                        {dtVal > 0 ? (
+                          <span className="font-black text-rose-900 dark:text-rose-200 font-mono bg-rose-100 dark:bg-rose-950/70 px-2.5 py-1 rounded-md border border-rose-300 dark:border-rose-800 shadow-2xs">
+                            {dtVal} Jam
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 dark:text-slate-500 font-medium text-[11px]">
+                            0 Jam
+                          </span>
+                        )}
                       </td>
 
                       {/* Sparepart Diganti */}
-                      <td className="py-3 px-3 whitespace-nowrap">
+                      <td className="py-3.5 px-3.5 whitespace-nowrap">
                         {wo.sparepartName ? (
-                          <div className="flex items-center gap-1">
-                            <span className="font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 text-[11px]">
-                              {wo.sparepartName} ({wo.sparepartQty || '1'})
-                            </span>
-                          </div>
+                          <span className="font-bold text-amber-900 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/60 px-2 py-0.5 rounded-md border border-amber-300 dark:border-amber-700 text-[11px]">
+                            {wo.sparepartName} ({wo.sparepartQty || '1'})
+                          </span>
                         ) : (
-                          <span className="text-slate-400">-</span>
+                          <span className="text-slate-400 dark:text-slate-500 font-medium">-</span>
                         )}
                       </td>
 
                       {/* Teknisi PIC */}
-                      <td className="py-3 px-3 whitespace-nowrap font-medium text-slate-700 dark:text-slate-300">
+                      <td className="py-3.5 px-3.5 whitespace-nowrap font-semibold text-slate-900 dark:text-slate-100">
                         {wo.technicianPic || '-'}
                       </td>
 
                       {/* Status */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          (wo.status || '').toLowerCase() === 'closed'
-                            ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                            : (wo.status || '').toLowerCase().includes('progress')
-                            ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
-                            : 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
+                      <td className="py-3.5 px-3.5 text-center whitespace-nowrap">
+                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                          st === 'closed'
+                            ? 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-700'
+                            : st.includes('progress')
+                            ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-700'
+                            : 'bg-rose-100 text-rose-900 border-rose-300 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-700'
                         }`}>
                           {wo.status || 'Open'}
                         </span>
                       </td>
 
                       {/* Aksi / Detail Modal */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <td className="py-3.5 px-3.5 text-center whitespace-nowrap">
                         <button
                           onClick={() => setSelectedWO(wo)}
-                          className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-teal-500 hover:text-white transition-colors cursor-pointer text-slate-600 dark:text-slate-300 shadow-2xs"
+                          className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-teal-600 hover:text-white transition-colors cursor-pointer text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 shadow-2xs"
                           title="Lihat Detail Lengkap & Bukti Foto"
                         >
                           <Eye className="w-3.5 h-3.5" />

@@ -8,12 +8,45 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
     <link rel="manifest" href="/manifest.json" />
     <title>Prep & Lab All in One Portal</title>
+    <script>
+      (function() {
+        try {
+          var nik = localStorage.getItem('p2h_inspector_nik');
+          if (!nik) {
+            var profile = localStorage.getItem('p2h_inspector_profile');
+            if (profile) nik = JSON.parse(profile).nik;
+          }
+          var storageKey = nik ? 'preplab_user_themes_' + nik : 'preplab_user_themes_guest';
+          var cached = localStorage.getItem(storageKey);
+          var activeColors = localStorage.getItem('preplab_active_theme_colors');
+          var colors = null;
+          if (cached) {
+            var parsed = JSON.parse(cached);
+            var hour = new Date().getHours();
+            var mode = (hour >= 5 && hour < 12) ? 'morning' : (hour >= 12 && hour < 18) ? 'afternoon' : 'evening';
+            colors = parsed[mode] || parsed.morning || parsed.afternoon || parsed.evening || parsed;
+          } else if (activeColors) {
+            colors = JSON.parse(activeColors);
+          }
+          if (colors && typeof colors === 'object') {
+            for (var key in colors) {
+              if (key.indexOf('--') === 0 && colors[key]) {
+                document.documentElement.style.setProperty(key, colors[key]);
+              }
+            }
+          }
+        } catch(e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+

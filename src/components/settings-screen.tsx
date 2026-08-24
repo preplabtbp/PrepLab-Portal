@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Input } from './ui';
-import { LogOut, User, Lock, Mail, Settings2, Palette, ShieldAlert , Settings } from 'lucide-react';
+import { LogOut, User, Lock, Mail, Settings2, Palette, ShieldAlert, Settings, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAppSettings } from '../sheets-api';
 import { PageHeader } from './PageHeader';
@@ -41,8 +41,6 @@ export function SettingsScreen({ inspectorName, inspectorNik, onLogoutKaryawan, 
     if (!oldPassword || !newPassword) return toast.error('Isi password lama dan baru');
     toast.loading('Menyimpan...', { id: 'pwd' });
     try {
-       // Since we don't have a specific change password endpoint that checks old password
-       // we can re-use login to check old password, then auth/setup to set new
        const res = await fetch('/api/auth/login', {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
@@ -67,7 +65,6 @@ export function SettingsScreen({ inspectorName, inspectorNik, onLogoutKaryawan, 
     }
   };
 
-  
   const handleSaveWaTarget = async () => {
     toast.loading('Menyimpan...', { id: 'wa' });
     try {
@@ -111,15 +108,21 @@ export function SettingsScreen({ inspectorName, inspectorNik, onLogoutKaryawan, 
 
       {inspectorName && (
         <Card>
-          <div className="flex items-center gap-4 mb-6 pb-6 border-b border-slate-100">
-            <div className="w-14 h-14 rounded-xl flex items-center justify-center font-display font-semibold text-xl shadow-sm" style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
+          <div 
+            className="flex items-center gap-4 mb-6 pb-6 border-b"
+            style={{ borderColor: 'var(--border-main, #E2E8F0)' }}
+          >
+            <div 
+              className="w-14 h-14 rounded-xl flex items-center justify-center font-display font-semibold text-xl shadow-xs" 
+              style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
+            >
                {inspectorName.charAt(0).toUpperCase()}
             </div>
             <div>
-              <div className="font-bold text-lg font-display" style={{ color: 'var(--text-main)' }}>
+              <div className="font-bold text-lg font-display" style={{ color: 'var(--text-main, #1E293B)' }}>
                 {inspectorName}
               </div>
-              <div className="text-xs font-semibold opacity-70" style={{ color: 'var(--text-muted)' }}>
+              <div className="text-xs font-semibold" style={{ color: 'var(--text-muted, #64748B)' }}>
                  NIK: {inspectorNik} | {profile?.jabatan || 'Crew'}
               </div>
             </div>
@@ -131,8 +134,15 @@ export function SettingsScreen({ inspectorName, inspectorNik, onLogoutKaryawan, 
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Card Profil & Keamanan */}
           <Card className="space-y-4">
-            <h3 className="text-base font-bold flex items-center gap-2 pb-3 border-b border-slate-100" style={{ color: 'var(--primary)' }}>
+            <h3 
+              className="text-base font-bold flex items-center gap-2 pb-3 border-b" 
+              style={{ 
+                color: 'var(--primary, #2A9D8F)', 
+                borderColor: 'var(--border-main, #E2E8F0)' 
+              }}
+            >
               <User className="w-5 h-5" />
               Profil & Keamanan
             </h3>
@@ -143,36 +153,55 @@ export function SettingsScreen({ inspectorName, inspectorNik, onLogoutKaryawan, 
                  type="email"
                  value={email}
                  onChange={e => setEmail(e.target.value)}
-                 
                />
                <Input 
                  label="Password Lama" 
                  type="password"
                  value={oldPassword}
                  onChange={e => setOldPassword(e.target.value)}
-                 
                />
                <Input 
                  label="Password Baru" 
                  type="password"
                  value={newPassword}
                  onChange={e => setNewPassword(e.target.value)}
-                 
                />
-               <Button onClick={handleUpdatePassword} className="w-full mt-2" style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>Simpan Perubahan</Button>
+               <Button 
+                 onClick={handleUpdatePassword} 
+                 className="w-full mt-2 font-bold shadow-xs" 
+                 style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
+               >
+                 Simpan Perubahan
+               </Button>
             </div>
           </Card>
           
           <div className="space-y-6">
-            
+            {/* Card Notifikasi & Suara */}
             <Card className="space-y-4">
-              <h3 className="text-base font-bold flex items-center gap-2 pb-3 border-b border-slate-100" style={{ color: 'var(--primary)' }}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-bell"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+              <h3 
+                className="text-base font-bold flex items-center gap-2 pb-3 border-b" 
+                style={{ 
+                  color: 'var(--primary, #2A9D8F)', 
+                  borderColor: 'var(--border-main, #E2E8F0)' 
+                }}
+              >
+                <Bell className="w-5 h-5" />
                 Notifikasi & Suara
               </h3>
-              <p className="text-sm opacity-70">Aktifkan suara peringatan saat ada notifikasi masuk di dalam aplikasi.</p>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">Suara In-App</span>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted, #64748B)' }}>
+                Aktifkan suara peringatan saat ada notifikasi masuk di dalam aplikasi.
+              </p>
+              <div 
+                className="flex items-center justify-between p-3 rounded-xl border"
+                style={{ 
+                  backgroundColor: 'var(--input-bg, #FFFFFF)', 
+                  borderColor: 'var(--border-main, #E2E8F0)' 
+                }}
+              >
+                <span className="text-sm font-semibold" style={{ color: 'var(--text-main, #1E293B)' }}>
+                  Suara In-App
+                </span>
                 <input 
                   type="checkbox" 
                   checked={soundEnabled} 
@@ -181,29 +210,52 @@ export function SettingsScreen({ inspectorName, inspectorNik, onLogoutKaryawan, 
                     localStorage.setItem('p2h_sound_enabled', e.target.checked ? '1' : '0');
                     if (e.target.checked) toast.success('Suara notifikasi diaktifkan');
                   }} 
-                  className="w-5 h-5 accent-slate-900" 
+                  className="w-5 h-5 cursor-pointer rounded" 
+                  style={{ accentColor: 'var(--primary, #2A9D8F)' }}
                 />
               </div>
             </Card>
 
+            {/* Card Preferensi Tampilan */}
             <Card className="space-y-4">
-              <h3 className="text-base font-bold flex items-center gap-2 pb-3 border-b border-slate-100" style={{ color: 'var(--primary)' }}>
+              <h3 
+                className="text-base font-bold flex items-center gap-2 pb-3 border-b" 
+                style={{ 
+                  color: 'var(--primary, #2A9D8F)', 
+                  borderColor: 'var(--border-main, #E2E8F0)' 
+                }}
+              >
                 <Palette className="w-5 h-5" />
                 Preferensi Tampilan
               </h3>
-              <p className="text-sm opacity-70">Sesuaikan tema aplikasi berdasarkan waktu atau gaya kesukaan Anda.</p>
-              <Button onClick={onOpenThemeModal} className="w-full shadow-sm" style={{ backgroundColor: 'var(--accent)', color: 'var(--text-main)' }}>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted, #64748B)' }}>
+                Sesuaikan tema aplikasi berdasarkan waktu atau gaya kesukaan Anda.
+              </p>
+              <Button 
+                onClick={onOpenThemeModal} 
+                className="w-full shadow-xs font-bold flex items-center justify-center gap-2" 
+                style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
+              >
+                 <Palette className="w-4 h-4" />
                  Pengaturan Tema UI
               </Button>
             </Card>
 
             {inspectorNik === '02D250000' && (
-              <Card className="space-y-4 border-l-4 border-rose-500">
-                <h3 className="text-base font-bold flex items-center gap-2 pb-3 border-b border-slate-100 text-rose-600">
+              <Card 
+                className="space-y-4 border-l-4" 
+                style={{ borderLeftColor: '#F43F5E' }}
+              >
+                <h3 
+                  className="text-base font-bold flex items-center gap-2 pb-3 border-b text-rose-600 dark:text-rose-400"
+                  style={{ borderColor: 'var(--border-main, #E2E8F0)' }}
+                >
                   <ShieldAlert className="w-5 h-5" />
                   Developer Admin
                 </h3>
-                <p className="text-xs text-slate-500 mb-2">Reset password akun karyawan (Bypass)</p>
+                <p className="text-xs mb-2" style={{ color: 'var(--text-muted, #64748B)' }}>
+                  Reset password akun karyawan (Bypass)
+                </p>
                 <Input 
                   label="NIK Target" 
                   value={resetNik}
@@ -214,19 +266,33 @@ export function SettingsScreen({ inspectorName, inspectorNik, onLogoutKaryawan, 
                   value={resetNewPass}
                   onChange={e => setResetNewPass(e.target.value)}
                 />
-                <Button variant="danger" onClick={handleAdminReset} className="w-full mt-2">Force Reset Password</Button>
+                <Button variant="danger" onClick={handleAdminReset} className="w-full mt-2 font-bold">
+                  Force Reset Password
+                </Button>
                 
-                <h3 className="text-sm font-bold flex items-center gap-2 pt-4 pb-2 border-b border-slate-100 text-slate-800 mt-4">
+                <h3 
+                  className="text-sm font-bold flex items-center gap-2 pt-4 pb-2 border-b mt-4"
+                  style={{ color: 'var(--text-main, #1E293B)', borderColor: 'var(--border-main, #E2E8F0)' }}
+                >
                   Target Notifikasi WhatsApp
                 </h3>
-                <p className="text-xs text-slate-500 mb-2">Jika diisi, modal kirim WA akan langsung menuju ke nomor/PIC ini. (Format: 62812...)</p>
+                <p className="text-xs mb-2" style={{ color: 'var(--text-muted, #64748B)' }}>
+                  Jika diisi, modal kirim WA akan langsung menuju ke nomor/PIC ini. (Format: 62812...)
+                </p>
                 <div className="flex gap-2">
                    <Input 
                       value={waTarget}
                       onChange={e => setWaTarget(e.target.value)}
                       placeholder="628..."
+                      containerClassName="flex-1 !mb-0"
                    />
-                   <Button onClick={handleSaveWaTarget} className="shrink-0 bg-slate-900 hover:bg-slate-800 text-white">Simpan</Button>
+                   <Button 
+                     onClick={handleSaveWaTarget} 
+                     className="shrink-0 font-bold"
+                     style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
+                   >
+                     Simpan
+                   </Button>
                 </div>
               </Card>
             )}

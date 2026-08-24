@@ -6,12 +6,12 @@ import { Cloud,
   ThermometerSun, LineChart, LayoutDashboard, Wrench, CheckSquare, 
   ShieldCheck, Eye, Activity, Folder, Info, Package, History, 
   PlusCircle, Settings, ArrowRight, Clock, Box, ClipboardList, Briefcase, Users,
-  BookOpen, Sparkles, Edit2, Shuffle } from 'lucide-react';
+  BookOpen, Sparkles, Edit2, ClipboardCheck } from 'lucide-react';
 import { Button } from './ui';
 import { getKtaUrl } from '../sheets-api';
 import { FoodReportModal } from './food-report-modal';
 import { UsernamePromptModal } from './UsernamePromptModal';
-import { getDailySkenaQuote, SKENA_QUOTES } from '../utils/skena-quotes';
+import { getDailySkenaQuote } from '../utils/skena-quotes';
 
 export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: { 
   inspectorName: string, 
@@ -34,14 +34,9 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
     }
   });
   
-  const [quoteIndex, setQuoteIndex] = useState<number | null>(null);
-
   const dailyQuote = useMemo(() => {
-    if (quoteIndex !== null) {
-      return SKENA_QUOTES[quoteIndex % SKENA_QUOTES.length];
-    }
     return getDailySkenaQuote(inspectorNik || inspectorName || 'user');
-  }, [inspectorNik, inspectorName, quoteIndex]);
+  }, [inspectorNik, inspectorName]);
 
   // Prompt user to set username if not set yet
   useEffect(() => {
@@ -108,6 +103,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
         { id: 'weekly-inspection', title: "Inspeksi Mingguan", desc: "Area & kelengkapan", icon: <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('weekly-inspection') },
         { id: 'ticket', title: "Rekapan Temuan Inspeksi", desc: "Laporan temuan unsafe", icon: <Eye className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('ticket') },
         { id: 'kta', title: "KTA / TTA", desc: "Laporan KTA & TTA", icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => setShowKtaConfirmation(true) },
+        { id: 'general-inspection', title: "Submit General Inspection", desc: "Form inspeksi tim safety", icon: <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => window.open('https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform', '_blank', 'noopener,noreferrer') },
       ]
     },
     ...(hasInventoryAccess ? [{
@@ -236,14 +232,9 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 Quote Hari Ini • {dailyQuote.vibe}
               </span>
-              <button
-                onClick={() => setQuoteIndex(prev => (prev === null ? Math.floor(Math.random() * SKENA_QUOTES.length) : prev + 1))}
-                className="opacity-70 hover:opacity-100 px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-all text-xs flex items-center gap-1 border border-white/5"
-                title="Ganti Vibe Quote Skena"
-              >
-                <Shuffle className="w-3 h-3 text-teal-400" />
-                <span className="text-[10px] font-medium hidden sm:inline">Roll Vibe</span>
-              </button>
+              <span className="text-[10px] text-slate-400 font-mono">
+                {dailyQuote.tag}
+              </span>
             </div>
             <p className="text-slate-200 text-xs sm:text-sm italic leading-relaxed">
               "{dailyQuote.quote}"

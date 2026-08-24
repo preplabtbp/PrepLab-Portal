@@ -30,10 +30,10 @@ router.post("/api/apd/settings", async (req, res) => {
 router.get("/api/apd/history", async (req, res) => {
     const { pt } = req.query;
     let query: any = db.select().from(apdHistory);
-    if (pt) {
-      query = query.where(eq(apdHistory.pt, pt as string));
+    if (pt && (pt as string).toUpperCase() === 'GTS') {
+      query = query.where(eq(apdHistory.pt, 'GTS'));
     } else {
-      query = query.where(eq(apdHistory.pt, 'TBP'));
+      query = query.where(or(eq(apdHistory.pt, 'TBP'), eq(apdHistory.pt, 'GPS'), eq(apdHistory.pt, 'TBP_GPS'), isNull(apdHistory.pt)));
     }
     const data = await query;
     res.json(data);
@@ -46,10 +46,10 @@ router.post("/api/apd/history", async (req, res) => {
 router.get("/api/apd/documents", async (req, res) => {
     const { pt } = req.query;
     let query: any = db.select().from(apdDocuments);
-    if (pt) {
-      query = query.where(eq(apdDocuments.pt, pt as string));
+    if (pt && (pt as string).toUpperCase() === 'GTS') {
+      query = query.where(eq(apdDocuments.pt, 'GTS'));
     } else {
-      query = query.where(eq(apdDocuments.pt, 'TBP'));
+      query = query.where(or(eq(apdDocuments.pt, 'TBP'), eq(apdDocuments.pt, 'GPS'), eq(apdDocuments.pt, 'TBP_GPS'), isNull(apdDocuments.pt)));
     }
     const data = await query;
     res.json(data);

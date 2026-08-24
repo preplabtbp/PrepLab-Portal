@@ -203,10 +203,45 @@ export default function App() {
   // Theme state
   const [currentMode, setCurrentMode] = useState('morning');
   const [showGlobalThemeModal, setShowGlobalThemeModal] = useState(false);
-  const [userThemes, setUserThemes] = useState<any>({
-    morning: { '--bg-main': '#FFFFFF', '--primary': '#2A9D8F', '--primary-hover': '#23A3B4', '--accent': '#E9930D', '--card-bg': '#FFFFFF', '--text-main': '#333333', '--text-muted': '#4A4A4A', '--border-main': '#DCE8F8', '--input-bg': '#FFFFFF', '--bubble-color': '#E9930D' },
-    afternoon: { '--bg-main': '#FFFFFF', '--primary': '#2A9D8F', '--primary-hover': '#23A3B4', '--accent': '#E9930D', '--card-bg': '#FFFFFF', '--text-main': '#333333', '--text-muted': '#4A4A4A', '--border-main': '#DCE8F8', '--input-bg': '#FFFFFF', '--bubble-color': '#E9930D' },
-    evening: { '--bg-main': '#0F172A', '--primary': '#2A9D8F', '--primary-hover': '#23A3B4', '--accent': '#E9930D', '--card-bg': '#1E293B', '--text-main': '#F8FAFC', '--text-muted': '#94A3B8', '--border-main': '#334155', '--input-bg': '#0F172A', '--bubble-color': '#E9930D' }
+  const [userThemes, setUserThemes] = useState<any>(() => {
+    try {
+      const savedNik = localStorage.getItem('p2h_inspector_nik');
+      const profile = localStorage.getItem('p2h_inspector_profile');
+      const nik = savedNik || (profile ? JSON.parse(profile).nik : null);
+      const storageKey = nik ? `preplab_user_themes_${nik}` : 'preplab_user_themes_guest';
+      const cached = localStorage.getItem(storageKey) || localStorage.getItem('preplab_user_themes_guest');
+      const activeColorsCached = localStorage.getItem('preplab_active_theme_colors');
+      
+      let baseColors: any = null;
+      if (activeColorsCached) {
+        try { baseColors = JSON.parse(activeColorsCached); } catch(e) {}
+      }
+
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.morning || parsed.afternoon || parsed.evening) {
+          const fallback = parsed.morning || parsed.afternoon || parsed.evening || baseColors;
+          return {
+            morning: parsed.morning || fallback,
+            afternoon: parsed.afternoon || fallback,
+            evening: parsed.evening || fallback
+          };
+        }
+      }
+
+      if (baseColors) {
+        return {
+          morning: baseColors,
+          afternoon: baseColors,
+          evening: baseColors
+        };
+      }
+    } catch(e) {}
+    return {
+      morning: { '--bg-main': '#FFFFFF', '--primary': '#2A9D8F', '--primary-hover': '#23A3B4', '--accent': '#E9930D', '--card-bg': '#FFFFFF', '--text-main': '#333333', '--text-muted': '#4A4A4A', '--border-main': '#DCE8F8', '--input-bg': '#FFFFFF', '--bubble-color': '#E9930D', '--header-bg': '#FFFFFF', '--header-text': '#1E293B', '--footer-selected': '#2A9D8F' },
+      afternoon: { '--bg-main': '#FFFFFF', '--primary': '#2A9D8F', '--primary-hover': '#23A3B4', '--accent': '#E9930D', '--card-bg': '#FFFFFF', '--text-main': '#333333', '--text-muted': '#4A4A4A', '--border-main': '#DCE8F8', '--input-bg': '#FFFFFF', '--bubble-color': '#E9930D', '--header-bg': '#FFFFFF', '--header-text': '#1E293B', '--footer-selected': '#2A9D8F' },
+      evening: { '--bg-main': '#0F172A', '--primary': '#2A9D8F', '--primary-hover': '#23A3B4', '--accent': '#E9930D', '--card-bg': '#1E293B', '--text-main': '#F8FAFC', '--text-muted': '#94A3B8', '--border-main': '#334155', '--input-bg': '#0F172A', '--bubble-color': '#E9930D', '--header-bg': '#1E293B', '--header-text': '#F8FAFC', '--footer-selected': '#2A9D8F' }
+    };
   });
 
   const checkTimeAndSetTheme = () => {
@@ -217,9 +252,38 @@ export default function App() {
   };
 
   const applyThemeToDOM = (colors: any) => {
+    if (!colors || typeof colors !== 'object') return;
     const root = document.documentElement;
     Object.entries(colors).forEach(([key, value]) => {
-      root.style.setProperty(key, value as string);
+      if (typeof key === 'string' && key.startsWith('--') && value) {
+        root.style.setProperty(key, value as string);
+      }
+    });
+  };
+
+  const handleThemeUpdated = (mode: string, colors: any, applyToAll?: boolean) => {
+    setUserThemes((prev: any) => {
+      let updated;
+      if (applyToAll || applyToAll === undefined) {
+        updated = {
+          morning: colors,
+          afternoon: colors,
+          evening: colors
+        };
+      } else {
+        updated = {
+          ...prev,
+          [mode]: colors
+        };
+      }
+      const nik = inspectorNik || localStorage.getItem('p2h_inspector_nik');
+      if (nik) {
+        localStorage.setItem(`preplab_user_themes_${nik}`, JSON.stringify(updated));
+      }
+      localStorage.setItem('preplab_user_themes_guest', JSON.stringify(updated));
+      localStorage.setItem('preplab_active_theme_colors', JSON.stringify(colors));
+      applyThemeToDOM(colors);
+      return updated;
     });
   };
 
@@ -230,23 +294,41 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (userThemes[currentMode]) {
+    if (userThemes && userThemes[currentMode]) {
       applyThemeToDOM(userThemes[currentMode]);
     }
   }, [currentMode, userThemes]);
 
   useEffect(() => {
     const loadThemes = async () => {
-      if (!inspectorNik) return;
+      const nik = inspectorNik || localStorage.getItem('p2h_inspector_nik');
+      const storageKey = nik ? `preplab_user_themes_${nik}` : 'preplab_user_themes_guest';
+      const cached = localStorage.getItem(storageKey) || localStorage.getItem('preplab_user_themes_guest');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setUserThemes(parsed);
+          const hour = new Date().getHours();
+          const mode = (hour >= 5 && hour < 12) ? 'morning' : (hour >= 12 && hour < 18) ? 'afternoon' : 'evening';
+          if (parsed[mode]) applyThemeToDOM(parsed[mode]);
+        } catch(e) {}
+      }
+
+      if (!nik) return;
       try {
-        const res = await fetch(`/api/themes/${inspectorNik}`);
+        const res = await fetch(`/api/themes/${nik}`);
         const json = await res.json();
-        if (json.status === 'success' && Object.keys(json.data).length > 0) {
-          setUserThemes((prev: any) => ({
-            morning: json.data.morning?.colors || prev.morning,
-            afternoon: json.data.afternoon?.colors || prev.afternoon,
-            evening: json.data.evening?.colors || prev.evening,
-          }));
+        if (json.status === 'success' && json.data && Object.keys(json.data).length > 0) {
+          setUserThemes((prev: any) => {
+            const firstAvailable = json.data.morning?.colors || json.data.afternoon?.colors || json.data.evening?.colors;
+            const nextThemes = {
+              morning: json.data.morning?.colors || firstAvailable || prev.morning,
+              afternoon: json.data.afternoon?.colors || firstAvailable || prev.afternoon,
+              evening: json.data.evening?.colors || firstAvailable || prev.evening,
+            };
+            localStorage.setItem(`preplab_user_themes_${nik}`, JSON.stringify(nextThemes));
+            return nextThemes;
+          });
         }
       } catch (err) {
         console.error("Gagal load theme", err);
@@ -254,6 +336,7 @@ export default function App() {
     };
     loadThemes();
   }, [inspectorNik]);
+
 
   useEffect(() => {
     const syncProfile = async () => {
@@ -280,19 +363,6 @@ export default function App() {
     };
     syncProfile();
   }, [inspectorNik]);
-
-  const handleThemeUpdated = (mode: string, colors: any, applyToAll?: boolean) => {
-    if (applyToAll) {
-      setUserThemes({
-        morning: colors,
-        afternoon: colors,
-        evening: colors,
-      });
-    } else {
-      setUserThemes((prev: any) => ({ ...prev, [mode]: colors }));
-    }
-    applyThemeToDOM(colors);
-  };
 
 
   
@@ -709,13 +779,24 @@ export default function App() {
       <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-slate-200/50 to-transparent pointer-events-none"></div>
       
       {/* Header */}
-      <header className={`px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-50 backdrop-blur-md border-b w-full flex justify-center ${isBulletin ? 'bg-[#1e1e1e]/80 border-slate-800' : 'bg-[#F4F7F6]/80 border-slate-200/50'}`}>
+      <header 
+        className={`px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-50 backdrop-blur-md border-b w-full flex justify-center transition-colors ${isBulletin ? 'bg-[#1e1e1e]/80 border-slate-800' : ''}`}
+        style={{
+          backgroundColor: isBulletin ? undefined : 'var(--header-bg, var(--card-bg, #FFFFFF))',
+          borderColor: isBulletin ? undefined : 'var(--border-main, #E2E8F0)'
+        }}
+      >
         <div className="flex justify-between items-center w-full">
         <div className="flex items-center gap-3">
           {activeTab !== 'home' ? (
             <button 
               onClick={() => window.history.back()} 
-              className={`w-8 h-8 rounded-full border flex items-center justify-center shadow-sm active:scale-95 transition-transform ${isBulletin ? 'bg-[#2a2a2a] border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}
+              className={`w-8 h-8 rounded-full border flex items-center justify-center shadow-sm active:scale-95 transition-transform ${isBulletin ? 'bg-[#2a2a2a] border-slate-700 text-slate-300' : 'border-slate-200'}`}
+              style={{
+                backgroundColor: isBulletin ? undefined : 'var(--input-bg, #ffffff)',
+                borderColor: isBulletin ? undefined : 'var(--border-main, #e2e8f0)',
+                color: isBulletin ? undefined : 'var(--text-main, #334155)'
+              }}
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
@@ -729,19 +810,31 @@ export default function App() {
                }} />
             </div>
           )}
-          <span className={`font-semibold font-display tracking-tight text-base whitespace-nowrap ${isBulletin ? 'text-slate-200' : 'text-slate-800'}`}>Prep & Lab Portal</span>
+          <span 
+            className={`font-semibold font-display tracking-tight text-base whitespace-nowrap ${isBulletin ? 'text-slate-200' : ''}`}
+            style={{
+              color: isBulletin ? undefined : 'var(--header-text, var(--text-main, #1e293b))'
+            }}
+          >
+            Prep & Lab Portal
+          </span>
         </div>
         <div className="flex items-center gap-3">
-          <NotificationBell userNik={inspectorNik || undefined} />
+          <NotificationBell userNik={inspectorNik || undefined} userName={inspectorName || undefined} />
           <button 
             onClick={() => setShowProfileScreen(true)}
-            className="w-8 h-8 rounded-full bg-teal-100 overflow-hidden border border-teal-200 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+            className="w-8 h-8 rounded-full overflow-hidden border flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+            style={{
+              backgroundColor: 'var(--input-bg, #e6fffa)',
+              borderColor: 'var(--border-main, #99f6e4)',
+              color: 'var(--primary, #0f766e)'
+            }}
             title="Lihat Profile"
           >
             {headerAvatar ? (
               <img src={headerAvatar} alt={inspectorName || 'Profile'} className="w-full h-full object-cover" />
             ) : (
-              <span className="text-teal-700 font-bold font-display text-xs">{inspectorName ? inspectorName.charAt(0).toUpperCase() : '?'}</span>
+              <span className="font-bold font-display text-xs" style={{ color: 'var(--primary, #0f766e)' }}>{inspectorName ? inspectorName.charAt(0).toUpperCase() : '?'}</span>
             )}
           </button></div></div></header>
 
@@ -807,34 +900,74 @@ export default function App() {
               animate={{ y: "0%", opacity: 1 }}
               exit={{ y: "100%", opacity: 0 }}
               transition={{ type: "spring", damping: 28, stiffness: 350 }}
-              className="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl border border-slate-100" 
+              className="w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl border" 
+              style={{
+                backgroundColor: 'var(--card-bg, #FFFFFF)',
+                borderColor: 'var(--border-main, #E2E8F0)',
+                color: 'var(--text-main, #1E293B)'
+              }}
               onClick={e => e.stopPropagation()}
             >
-              <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto -mt-2 mb-4 sm:hidden" />
+              <div 
+                className="w-10 h-1 rounded-full mx-auto -mt-2 mb-4 sm:hidden"
+                style={{ backgroundColor: 'var(--border-main, #E2E8F0)' }}
+              />
               <div className="flex justify-between items-center mb-6">
-                <h3 className="font-semibold text-lg text-slate-800">Pilih Buletin</h3>
-                <button onClick={() => setShowBulletinMenu(false)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:text-slate-800 transition-colors">
+                <h3 className="font-bold text-lg font-display" style={{ color: 'var(--text-main, #1E293B)' }}>
+                  Pilih Buletin
+                </h3>
+                <button 
+                  onClick={() => setShowBulletinMenu(false)} 
+                  className="p-2 rounded-full border transition-transform active:scale-95 cursor-pointer"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #FFFFFF)',
+                    borderColor: 'var(--border-main, #E2E8F0)',
+                    color: 'var(--text-muted, #64748B)'
+                  }}
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
               <div className="space-y-3">
                 <button 
                   onClick={() => { handleNav('bulletin/TBP'); setShowBulletinMenu(false); }}
-                  className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all ${location.pathname.includes('/bulletin/TBP') ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white hover:border-teal-300 hover:bg-slate-50 text-slate-700'}`}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left shadow-2xs group cursor-pointer"
+                  style={{
+                    backgroundColor: location.pathname.includes('/bulletin/TBP') ? 'var(--input-bg, #FFFFFF)' : 'var(--card-bg, #FFFFFF)',
+                    borderColor: location.pathname.includes('/bulletin/TBP') ? 'var(--primary, #2A9D8F)' : 'var(--border-main, #E2E8F0)',
+                    color: 'var(--text-main, #1E293B)'
+                  }}
                 >
-                  <div className={`p-2 rounded-lg ${location.pathname.includes('/bulletin/TBP') ? 'bg-teal-100 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>
+                  <div 
+                    className="p-2.5 rounded-xl transition-colors shrink-0"
+                    style={{
+                      backgroundColor: 'var(--input-bg, rgba(42,157,143,0.1))',
+                      color: 'var(--primary, #2A9D8F)'
+                    }}
+                  >
                     <Building2 className="w-5 h-5" />
                   </div>
-                  <span className="font-medium text-left flex-1">PT Trimegah Bangun Persada (TBP / GPS)</span>
+                  <span className="font-semibold text-sm flex-1">PT Trimegah Bangun Persada (TBP / GPS)</span>
                 </button>
                 <button 
                   onClick={() => { handleNav('bulletin/GTS'); setShowBulletinMenu(false); }}
-                  className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all ${location.pathname.includes('/bulletin/GTS') ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white hover:border-teal-300 hover:bg-slate-50 text-slate-700'}`}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left shadow-2xs group cursor-pointer"
+                  style={{
+                    backgroundColor: location.pathname.includes('/bulletin/GTS') ? 'var(--input-bg, #FFFFFF)' : 'var(--card-bg, #FFFFFF)',
+                    borderColor: location.pathname.includes('/bulletin/GTS') ? 'var(--primary, #2A9D8F)' : 'var(--border-main, #E2E8F0)',
+                    color: 'var(--text-main, #1E293B)'
+                  }}
                 >
-                  <div className={`p-2 rounded-lg ${location.pathname.includes('/bulletin/GTS') ? 'bg-teal-100 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>
+                  <div 
+                    className="p-2.5 rounded-xl transition-colors shrink-0"
+                    style={{
+                      backgroundColor: 'var(--input-bg, rgba(42,157,143,0.1))',
+                      color: 'var(--primary, #2A9D8F)'
+                    }}
+                  >
                     <Building2 className="w-5 h-5" />
                   </div>
-                  <span className="font-medium text-left flex-1">PT Gane Tambang Sentosa (GTS)</span>
+                  <span className="font-semibold text-sm flex-1">PT Gane Tambang Sentosa (GTS)</span>
                 </button>
               </div>
             </motion.div>
@@ -842,7 +975,13 @@ export default function App() {
         )}
       </AnimatePresence>
       {!isCrewRole && (
-        <nav className="fixed bottom-0 w-full bg-white/90 backdrop-blur-xl border-t border-slate-200 z-40 flex items-center justify-around h-[4.5rem] pb-safe" style={{ backgroundColor: 'var(--bg-main)' }}>
+        <nav 
+          className="fixed bottom-0 w-full backdrop-blur-xl border-t z-40 flex items-center justify-around h-[4.5rem] pb-safe transition-colors" 
+          style={{ 
+            backgroundColor: 'var(--card-bg, var(--bg-main, #FFFFFF))',
+            borderColor: 'var(--border-main, #E2E8F0)'
+          }}
+        >
           <NavItem 
             icon={<Home className="w-5 h-5" />}
             label="Home" 
@@ -918,7 +1057,10 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center justify-center w-16 h-full transition-all ${active ? 'text-teal-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+      className={`flex flex-col items-center justify-center w-16 h-full transition-all ${active ? 'font-semibold' : 'opacity-60 hover:opacity-100'}`}
+      style={{
+        color: active ? 'var(--footer-selected, var(--primary, #2A9D8F))' : 'var(--text-muted, #94A3B8)'
+      }}
     >
       <div className={`${active ? 'scale-110 mb-1' : 'scale-100 mb-1'} transition-transform`}>{icon}</div>
       <span className="text-[10px] whitespace-nowrap">{label}</span>

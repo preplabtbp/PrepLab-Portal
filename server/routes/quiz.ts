@@ -61,10 +61,10 @@ router.get("/api/quiz-scores", async (req, res) => {
     try {
       const { pt } = req.query;
       let query: any = db.select().from(quizScores);
-      if (pt) {
-        query = query.where(eq(quizScores.pt, pt as string));
+      if (pt && (pt as string).toUpperCase() === 'GTS') {
+        query = query.where(eq(quizScores.pt, 'GTS'));
       } else {
-        query = query.where(eq(quizScores.pt, 'TBP'));
+        query = query.where(or(eq(quizScores.pt, 'TBP'), eq(quizScores.pt, 'GPS'), eq(quizScores.pt, 'TBP_GPS'), isNull(quizScores.pt)));
       }
       query = query.orderBy(desc(quizScores.timestamp));
       const scores = await query;

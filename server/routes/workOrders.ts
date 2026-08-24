@@ -33,9 +33,9 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
   try {
     const { pt, category, equipmentCode, startDate, endDate } = req.query;
     
-    // Fetch work orders (support ALL or specific PT)
-    let allWOs = (pt && pt !== 'ALL')
-      ? await db.select().from(workOrders).where(eq(workOrders.pt, pt as string))
+    // Fetch work orders (TBP and GPS are unified as 1 dataset; only GTS is separate)
+    let allWOs = (pt && (pt as string).toUpperCase() === 'GTS')
+      ? await db.select().from(workOrders).where(eq(workOrders.pt, 'GTS'))
       : await db.select().from(workOrders);
 
     // Apply date filters if present
@@ -225,17 +225,29 @@ router.get("/api/work-orders", async (req, res) => {
     try {
       const { pt } = req.query;
       let query: any = db.select().from(workOrders);
-      if (pt) {
-        query = query.where(eq(workOrders.pt, pt as string));
-      } else {
-        // Default to TBP if no pt provided for backward compatibility
-        query = query.where(eq(workOrders.pt, 'TBP'));
+      if (pt && (pt as string).toUpperCase() === 'GTS') {
+        query = query.where(eq(workOrders.pt, 'GTS'));
       }
+      // TBP and GPS are unified as 1 dataset: return all records for TBP, GPS, ALL, or no param
       const data = await query;
       res.json(data);
     } catch (error) {
       console.error("Error fetching work orders:", error);
       res.status(500).json({ error: "Failed to fetch work orders" });
+    }
+  });
+
+router.get("/api/work-orders/:woId", async (req, res) => {
+    try {
+      const { woId } = req.params;
+      const data = await db.select().from(workOrders).where(eq(workOrders.woId, woId)).limit(1);
+      if (data.length === 0) {
+        return res.status(404).json({ error: "Work order not found" });
+      }
+      res.json(data[0]);
+    } catch (error) {
+      console.error("Error fetching work order by ID:", error);
+      res.status(500).json({ error: "Failed to fetch work order" });
     }
   });
 

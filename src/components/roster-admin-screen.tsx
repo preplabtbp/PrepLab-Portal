@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, Loader2, Calendar, MapPin, Briefcase, Clock, Plane, PlaneTakeoff, Info, Search, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { 
+  ChevronLeft, Loader2, Calendar, MapPin, Briefcase, Clock, 
+  Plane, PlaneTakeoff, Info, Search, RefreshCw, CheckCircle2, 
+  AlertCircle, Edit2, Check, X, Filter, Users, ChevronRight, Layers, Sparkles
+} from 'lucide-react';
 import { getRosterData } from '../sheets-api';
 import { Button } from './ui';
 import { PageHeader } from './PageHeader';
+import { toast } from 'sonner';
 
 function safeFormatDate(date: any, options: any) {
   if (!date) return '-';
@@ -25,6 +30,21 @@ function parseStringDate(str: string | null | undefined) {
   return new Date(str);
 }
 
+// Preset Shift Codes for quick Admin editing
+const SHIFT_OPTIONS = [
+  { code: 'D', label: 'D (Day Shift)', desc: 'Shift Pagi / Siang', bg: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30' },
+  { code: 'N', label: 'N (Night Shift)', desc: 'Shift Malam', bg: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30' },
+  { code: 'OFF', label: 'OFF (Libur)', desc: 'Hari Libur Rutin', bg: 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30' },
+  { code: 'TRV', label: 'TRV (Travel On)', desc: 'Perjalanan Masuk', bg: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' },
+  { code: 'TV', label: 'TV (Travel Off)', desc: 'Perjalanan Pulang Cuti', bg: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' },
+  { code: 'CT', label: 'CT (Cuti Tahunan)', desc: 'Cuti Tahunan Karyawan', bg: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30' },
+  { code: 'CI', label: 'CI (Cuti Istimewa)', desc: 'Cuti Istimewa 5 Tahunan', bg: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30' },
+  { code: 'I', label: 'I (Izin / Sakit)', desc: 'Izin Tidak Masuk', bg: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' },
+  { code: 'S', label: 'S (Standby / Sakit)', desc: 'Standby / Libur Shift', bg: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' },
+  { code: 'LS', label: 'LS (Libur Shift)', desc: 'Libur Antar Shift', bg: 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/30' },
+  { code: '-', label: '- (Kosongkan)', desc: 'Hapus Roster', bg: 'bg-transparent text-slate-400 border-slate-300' },
+];
+
 export function RosterAdminScreen() {
   const [roster, setRoster] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,38 +53,28 @@ export function RosterAdminScreen() {
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  
+  // Date Range (default: Today to +14 days for optimal matrix view)
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     return d.toISOString().split('T')[0];
   });
   const [endDate, setEndDate] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() + 7);
+    d.setDate(d.getDate() + 13);
     return d.toISOString().split('T')[0];
   });
 
-  const handleManualSync = async () => {
-    setIsSyncing(true);
-    setSyncFeedback(null);
-    try {
-      const res = await fetch('/api/roster/sync', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setSyncFeedback({ type: 'success', message: data.message || 'Sinkronisasi Roster berhasil diperbarui!' });
-        // Refresh data
-        const refreshed = await getRosterData();
-        setRoster(refreshed);
-      } else {
-        setSyncFeedback({ type: 'error', message: data.message || 'Gagal sinkronisasi data dari Google Sheets' });
-      }
-    } catch (e: any) {
-      setSyncFeedback({ type: 'error', message: 'Koneksi gagal: ' + e.message });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-  
-    const getHierarchyLevel = (jabatan: string) => {
+  // Cell Editing Popover Modal State
+  const [editingCell, setEditingCell] = useState<{
+    empNik: string;
+    empName: string;
+    dateStr: string;
+    displayDate: string;
+    currentShift: string;
+  } | null>(null);
+
+  const getHierarchyLevel = (jabatan: string) => {
     if (!jabatan) return 6;
     const j = jabatan.toLowerCase();
     if (j.includes('manager')) return 1;
@@ -75,26 +85,78 @@ export function RosterAdminScreen() {
     return 6;
   };
 
-  
+  const requestorRole = currentUser?.jabatan || '';
+  const requestorSection = currentUser?.section || '';
+  const requestorNik = currentUser?.nik || localStorage.getItem('p2h_inspector_nik') || '';
+  const requestorPt = currentUser?.pt || '';
+
+  const isSuperAdmin = requestorNik === '02D25000055' || requestorNik === 'preplabadmin';
+  const isAdminOrQA = isSuperAdmin || 
+    requestorSection === 'Administration' || 
+    requestorSection === 'QA' || 
+    requestorRole.toLowerCase().includes('admin') || 
+    requestorRole.toLowerCase().includes('quality assurance');
+
+  const canEditRoster = isSuperAdmin || 
+    requestorSection === 'Administration' || 
+    requestorRole.toLowerCase().includes('admin');
+
+  const levelU = isSuperAdmin ? 0 : getHierarchyLevel(requestorRole);
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    setSyncFeedback(null);
+    try {
+      const res = await fetch('/api/roster/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setSyncFeedback({ type: 'success', message: data.message || 'Sinkronisasi Roster berhasil diperbarui!' });
+        const refreshed: any = await getRosterData();
+        const list = Array.isArray(refreshed) ? refreshed : (refreshed?.roster || []);
+        setRoster(list);
+      } else {
+        setSyncFeedback({ type: 'error', message: data.message || 'Gagal sinkronisasi data dari Google Sheets' });
+      }
+    } catch (e: any) {
+      setSyncFeedback({ type: 'error', message: 'Koneksi gagal: ' + e.message });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const fetchRoster = async () => {
+    setIsLoading(true);
+    try {
+      const savedProfileStr = localStorage.getItem('p2h_inspector_profile');
+      if (savedProfileStr) {
+        try {
+          const prof = JSON.parse(savedProfileStr);
+          setCurrentUser(prof);
+        } catch(e) {}
+      }
+      
+      const res: any = await getRosterData({ requestorNik, requestorRole, requestorSection });
+      const list = Array.isArray(res) ? res : (res?.roster || []);
+      setRoster(list);
+      
+      if (requestorNik && list.length > 0) {
+        const me = list.find((e: any) => e.nik === requestorNik);
+        if (me) setCurrentUser(me);
+      }
+    } catch (err) {
+      console.error("Error fetching roster:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoster();
+  }, []);
+
+  // Filter & Hierarchy Sorting
   const filteredRoster = useMemo(() => {
     let list = roster;
-    
-    let requestorRole = currentUser?.jabatan || '';
-    let requestorSection = currentUser?.section || '';
-    let requestorNik = currentUser?.nik || localStorage.getItem('p2h_inspector_nik') || '';
-    let requestorPt = currentUser?.pt || '';
-    
-    if (!currentUser) {
-       const savedProfileStr = localStorage.getItem('p2h_inspector_profile');
-       if (savedProfileStr) {
-         try {
-           const prof = JSON.parse(savedProfileStr);
-           requestorRole = prof.jabatan || '';
-           requestorSection = prof.section || '';
-           requestorPt = prof.pt || '';
-         } catch(e) {}
-       }
-    }
     
     // Filter by PT
     if (requestorPt === 'GTS') {
@@ -103,286 +165,302 @@ export function RosterAdminScreen() {
       list = list.filter(emp => emp.pt !== 'GTS');
     }
 
-    
-    const isSysAdmin = requestorNik === '02D25000055' || requestorNik === 'preplabadmin';
-    const levelU = isSysAdmin ? 0 : getHierarchyLevel(requestorRole);
-    const hasSectionFilter = isSysAdmin || levelU === 1 || levelU === 2 || requestorSection === 'QA' || requestorSection === 'Administration';
-
     list = list.filter(emp => {
-      // Abaikan karyawan yang tidak memiliki jadwal roster (keterangan kosong / kemungkinan resign)
       const hasSchedule = (emp.fullSchedule && Object.keys(emp.fullSchedule).length > 0) || (emp.schedule && emp.schedule.length > 0);
       if (!hasSchedule) return false;
 
-      if (isSysAdmin) {
+      // Admin & QA can see all personnel (filtered by dropdown section if chosen)
+      if (isAdminOrQA) {
         if (sectionFilter !== 'ALL') return emp.section === sectionFilter;
         return true;
       }
       
-      // If a section filter is active and this user can use it, show everyone in that section
-      if (hasSectionFilter && sectionFilter !== 'ALL') {
-        return emp.section === sectionFilter;
-      }
-      
       const levelE = getHierarchyLevel(emp.jabatan);
-      
-      // Default rules if no filter is applied (or filter is ALL)
-      if (levelU === 1) { // Manager
-        // Manager sees peers (Managers), SPT, SPV
-        return levelE === 1 || levelE === 2 || levelE === 3;
+
+      // Hierarchical Subordinate Filtering for Leaders:
+      if (levelU === 1) { // Manager -> sees all subordinates in department
+        if (sectionFilter !== 'ALL') return emp.section === sectionFilter;
+        return levelE > 1 || emp.nik === requestorNik;
       }
-      if (levelU === 2) { // SPT
-        // SPT sees peers (SPT), SPV in their section
-        return emp.section === requestorSection && (levelE === 2 || levelE === 3);
+      if (levelU === 2) { // Superintendent -> sees SPV, Foreman, Admin, Crew in their section
+        return emp.section === requestorSection && (levelE > 2 || emp.nik === requestorNik);
       }
-      if (levelU === 3) { // SPV
-        // SPV sees peers (SPV), and subordinates (Foreman, Admin, Crew) in their section
-        return emp.section === requestorSection && levelE >= 3;
+      if (levelU === 3) { // SPV -> sees Foreman, Admin, Crew in their section
+        return emp.section === requestorSection && (levelE > 3 || emp.nik === requestorNik);
       }
-      if (levelU === 4) { // Foreman
-        // Foreman sees peers (Foreman), and subordinates (Admin, Crew) in their section
-        return emp.section === requestorSection && levelE >= 4;
+      if (levelU === 4) { // Foreman -> sees Admin, Crew in their section
+        return emp.section === requestorSection && (levelE > 4 || emp.nik === requestorNik);
       }
-      if (levelU === 5) { // Admin
-        // Admin sees only their exact own team (exact same title)
-        return levelE === 5 && emp.jabatan === requestorRole;
+      if (levelU === 5) { // Admin -> sees own section team
+        return emp.section === requestorSection;
       }
-      if (levelU === 6) { // Crew
-        // Crew sees other crew in their section
-        return emp.section === requestorSection && levelE === 6;
+      if (levelU === 6) { // Crew -> sees peers in own section
+        return emp.section === requestorSection;
       }
-      return false;
+      return true;
     });
 
     if (searchQuery.trim()) {
-      const lowerQ = searchQuery.toLowerCase();
-      list = list.filter(r => 
-        r.name.toLowerCase().includes(lowerQ) || 
-        r.nik.toLowerCase().includes(lowerQ) || 
-        (r.jabatan && r.jabatan.toLowerCase().includes(lowerQ))
+      const q = searchQuery.toLowerCase();
+      list = list.filter(emp => 
+        (emp.name && emp.name.toLowerCase().includes(q)) ||
+        (emp.nama && emp.nama.toLowerCase().includes(q)) ||
+        (emp.nik && emp.nik.toLowerCase().includes(q)) ||
+        (emp.jabatan && emp.jabatan.toLowerCase().includes(q)) ||
+        (emp.section && emp.section.toLowerCase().includes(q))
       );
     }
-    
-    // Sort by hierarchy
-    list.sort((a, b) => getHierarchyLevel(a.jabatan) - getHierarchyLevel(b.jabatan));
-    
-    return list;
-  }, [roster, currentUser, searchQuery, sectionFilter]);
 
-  const hasSectionFilter = useMemo(() => {
-    let requestorRole = currentUser?.jabatan || '';
-    let requestorSection = currentUser?.section || '';
-    let requestorNik = currentUser?.nik || localStorage.getItem('p2h_inspector_nik') || '';
-    if (!currentUser) {
-       const savedProfileStr = localStorage.getItem('p2h_inspector_profile');
-       if (savedProfileStr) {
-         try {
-           const prof = JSON.parse(savedProfileStr);
-           requestorRole = prof.jabatan || '';
-           requestorSection = prof.section || '';
-         } catch(e) {}
-       }
-    }
-    const isSysAdmin = requestorNik === '02D25000055' || requestorNik === 'preplabadmin';
-    const levelU = isSysAdmin ? 0 : getHierarchyLevel(requestorRole);
-    return isSysAdmin || levelU === 1 || levelU === 2 || requestorSection === 'QA' || requestorSection === 'Administration';
-  }, [currentUser]);
+    // Sort by Hierarchy Level (Manager -> SPT -> SPV -> Foreman -> Admin -> Crew), then by Section, then by Name
+    return [...list].sort((a, b) => {
+      const rankA = getHierarchyLevel(a.jabatan);
+      const rankB = getHierarchyLevel(b.jabatan);
+      if (rankA !== rankB) return rankA - rankB;
+      const secA = (a.section || '').localeCompare(b.section || '');
+      if (secA !== 0) return secA;
+      return (a.name || a.nama || '').localeCompare(b.name || b.nama || '');
+    });
+  }, [roster, currentUser, sectionFilter, searchQuery, isAdminOrQA, levelU, requestorSection, requestorPt]);
 
-  useEffect(() => {
-    const fetchRoster = async () => {
-      try {
-        const savedProfileStr = localStorage.getItem('p2h_inspector_profile');
-        let requestorRole = '';
-        let requestorSection = '';
-        let requestorNik = localStorage.getItem('p2h_inspector_nik') || '';
-        
-        if (savedProfileStr) {
-          const prof = JSON.parse(savedProfileStr);
-          requestorRole = prof.jabatan || '';
-          requestorSection = prof.section || '';
-        }
+  // Generate Date Column Array
+  const dateColumns = useMemo(() => {
+    const sDate = new Date(startDate);
+    const eDate = new Date(endDate);
+    if (isNaN(sDate.getTime()) || isNaN(eDate.getTime())) return [];
 
-        const data = await getRosterData({ requestorNik, requestorRole, requestorSection });
-        if (data && data.success && data.roster) {
-          setRoster(data.roster);
-          const me = data.roster.find((r: any) => r.nik === requestorNik);
-          if (me) setCurrentUser(me);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchRoster();
-  }, []);
+    const maxDays = 31;
+    const diffDays = Math.floor((eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
+    const effectiveEndDate = diffDays > maxDays ? new Date(sDate.getTime() + maxDays * 24 * 60 * 60 * 1000) : eDate;
 
-  const calculateWorkingTenure = (joinDateStr: string | undefined | null) => {
-    if (!joinDateStr) return '-';
-    const joinDate = new Date(joinDateStr);
-    if (isNaN(joinDate.getTime())) return '-';
+    const list: {
+      rawDate: Date;
+      keyDateStr: string;     // format "24 Aug 26" used in fullSchedule
+      dayName: string;        // "Sen", "Sel", "Rab"
+      dateNumber: string;     // "24 Agu"
+      isToday: boolean;
+      isWeekend: boolean;
+    }[] = [];
+
     const today = new Date();
-    let totalMonths = (today.getFullYear() - joinDate.getFullYear()) * 12 + (today.getMonth() - joinDate.getMonth());
-    if (today.getDate() < joinDate.getDate()) {
-      totalMonths--;
+    today.setHours(0, 0, 0, 0);
+
+    const iter = new Date(sDate);
+    iter.setHours(0, 0, 0, 0);
+
+    const indonesianDays = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+    while (iter <= effectiveEndDate) {
+      const parts = iter.toDateString().split(' '); // e.g. ["Mon", "Aug", "24", "2026"]
+      const day = parseInt(parts[2], 10);
+      const keyDateStr = day + ' ' + parts[1] + ' ' + parts[3].substring(2); // "24 Aug 26"
+
+      const isToday = iter.getTime() === today.getTime();
+      const isWeekend = iter.getDay() === 0 || iter.getDay() === 6;
+
+      list.push({
+        rawDate: new Date(iter),
+        keyDateStr,
+        dayName: indonesianDays[iter.getDay()],
+        dateNumber: `${day} ${iter.toLocaleDateString('id-ID', { month: 'short' })}`,
+        isToday,
+        isWeekend
+      });
+
+      iter.setDate(iter.getDate() + 1);
     }
-    if (totalMonths < 0) return 'Baru bergabung';
-    const y = Math.floor(totalMonths / 12);
-    const m = totalMonths % 12;
-    let res = [];
-    if (y > 0) res.push(y + " thn");
-    if (m > 0) res.push(m + " bln");
-    if (res.length === 0) return 'Kurang dari 1 bln';
-    return res.join(' ');
+
+    return list;
+  }, [startDate, endDate]);
+
+  // Update Roster Cell
+  const handleSaveCell = async (newShift: string) => {
+    if (!editingCell) return;
+    const { empNik, keyDateStr } = editingCell as any;
+
+    // Optimistic UI update
+    setRoster(prev => prev.map(emp => {
+      if (emp.nik === empNik) {
+        const updatedFull = { ...(emp.fullSchedule || {}), [keyDateStr]: newShift };
+        return { ...emp, fullSchedule: updatedFull };
+      }
+      return emp;
+    }));
+
+    setEditingCell(null);
+    toast.success(`Roster ${editingCell.empName} diubah menjadi ${newShift}`);
+
+    try {
+      const res = await fetch('/api/roster/cell', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nik: empNik,
+          date: keyDateStr,
+          status: newShift
+        })
+      });
+      if (!res.ok) {
+        throw new Error('Gagal menyimpan ke server');
+      }
+    } catch (e: any) {
+      toast.error('Gagal update ke server: ' + e.message);
+      fetchRoster(); // Rollback
+    }
+  };
+
+  // Helper for Roster Badge Styling
+  const getShiftBadgeStyle = (code: string | undefined | null) => {
+    if (!code || code === '-') {
+      return 'opacity-40 text-slate-400 font-mono';
+    }
+    const c = code.toUpperCase().trim();
+    if (c === 'D') return 'bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/35 font-black shadow-2xs';
+    if (c === 'N') return 'bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-500/35 font-black shadow-2xs';
+    if (c === 'OFF') return 'bg-slate-500/20 text-slate-600 dark:text-slate-400 border-slate-500/30 font-bold';
+    if (c === 'TRV' || c === 'TV') return 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40 font-black shadow-2xs ring-1 ring-amber-500/30';
+    if (c.startsWith('CT') || c.startsWith('CI') || c === 'C' || c === 'CR') {
+      return 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/40 font-black shadow-2xs ring-1 ring-rose-500/30';
+    }
+    if (c === 'S' || c === 'LS' || c === 'SD') return 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/35 font-bold';
+    if (c === 'I' || c.startsWith('IZIN') || c === 'XP' || c === 'TT') {
+      return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/40 font-bold';
+    }
+    return 'bg-teal-500/20 text-teal-700 dark:text-teal-400 border-teal-500/30 font-bold';
   };
 
   const calculateLeave = (emp: any) => {
     if (!emp) return null;
-    
-    const EXCLUDED_NAMES_FOR_LEAVE = [
-      "Nyong Dokolamo", "Roy Marten Bobrikit", "La Sapiu", "Natanel Tooli", "Khaufi Wirawan Aligora", 
-      "Deni Nugraha Perdiana", "Darno La Bungahari", "Rusli Rorano", "Arsun Lantia", "Mhd. Dahlan Ahmad", 
-      "Karlos Yafet", "Murti Tamisari Harun", "Christian Anggawijaya", "Arthur Paul Marnix Souisa", 
-      "Moch. Siswanto", "Zaenal Abidin", "Sirajuddin", "Madraji", "Janter Jaya Barimbing", 
-      "Sumarlin Muhammad", "La Alwino La Ode Pudu", "La Topo", "Daud Kedafota", "Wahyu Jabir", 
-      "Jarfin Saharudin", "Sukri Koco", "Yulianus Tiku Mangando", "La Ode Dendi", "Saman Dokulamo", 
-      "Sukarman A. Akil, ST", "Muhammad Amran Selang", "Hariyatno La Jaya", "Harji La Ila", 
-      "La Ode Hartanto", "Iran Rumbia", "La Rifan", "Suryadi La Samusu", "Fajrin Muin", 
-      "Rifandi Samsudin", "Ahmad Sudirman", "Ramadan Muhamad", "Dulmihdat Tomayou", 
-      "Ahmad Jusma Azhari Annur", "La Bayu", "Ardila Rusli", "Muslim Wabula", "Aldy Aldersun Puluh", 
-      "Rizal Zaelani", "Herwin Predianto", "Muhammad Fandy Septiawan", "Imran S", "Muhamad Alvin Febriansyah"
-    ];
-
-    let joinDateStr = emp.joinDate; // already mapped in api to tanggalAwalBergabung
-    if (EXCLUDED_NAMES_FOR_LEAVE.includes(emp.name) && emp.permanentDate && emp.permanentDate !== '-') {
-      joinDateStr = emp.permanentDate;
+    let joinDate: Date | null = null;
+    const rawJoin = emp.tgl_masuk_format || emp.tanggalAwalBergabung || emp.joinDate || emp.tgl_masuk;
+    if (rawJoin && rawJoin !== '-') {
+      try {
+        joinDate = new Date(rawJoin);
+        if (isNaN(joinDate.getTime())) joinDate = parseStringDate(rawJoin);
+      } catch (e) {
+        joinDate = parseStringDate(rawJoin);
+      }
     }
 
-    const joinDate = parseStringDate(joinDateStr);
-    const today = new Date();
-    today.setHours(0,0,0,0);
-
-    let ctKuota = 0;
-    let ctUsed = 0;
-    let ciKuota = 0;
-    let ciUsed = 0;
-    let izinUsed = 0;
     let isYear5 = false;
-    let anniversaryDate = new Date();
-
-    if (joinDate) {
-      const currentYear = today.getFullYear();
-      let diffYears = currentYear - joinDate.getFullYear();
-      
-      anniversaryDate = new Date(joinDate);
-      anniversaryDate.setFullYear(currentYear);
-      
-      if (anniversaryDate > today) {
-        anniversaryDate.setFullYear(currentYear - 1);
-        diffYears--;
-      }
-      
-      if (diffYears >= 1) {
-         if (diffYears % 5 === 0 && diffYears > 0) {
-            isYear5 = true;
-            ciKuota = 30;
-         } else {
-            ctKuota = 12;
-         }
-      }
+    if (joinDate && !isNaN(joinDate.getTime())) {
+      const diffMs = new Date().getTime() - joinDate.getTime();
+      const diffYears = diffMs / (1000 * 60 * 60 * 24 * 365.25);
+      if (diffYears >= 5) isYear5 = true;
     }
 
     const sched = emp.fullSchedule || {};
-    Object.keys(sched).forEach(dateStr => {
-      const d = parseStringDate(dateStr);
-      if (d && d >= anniversaryDate && d <= today) {
-         const status = sched[dateStr];
-         if (status) {
-           if (status.startsWith('CT')) {
-             ctUsed++;
-           } else if (status.startsWith('CI')) {
-             ciUsed++;
-           } else if (status === 'I' || /^I\d+$/.test(status)) {
-             izinUsed++;
-           }
-         }
+    let ctUsed = 0;
+    let ciUsed = 0;
+    let izinUsed = 0;
+
+    let futureTrv: string | null = null;
+    let pastTrv: string | null = null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const sortedDatesAsc = Object.keys(sched).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+    sortedDatesAsc.forEach(dateStr => {
+      const code = (sched[dateStr] || '').toUpperCase();
+      const d = new Date(dateStr);
+      
+      if (code === 'CT' || code.startsWith('CT')) ctUsed++;
+      else if (code === 'CI' || code.startsWith('CI')) ciUsed++;
+      else if (code === 'I' || code.startsWith('IZIN') || code === 'CR' || code === 'XP') izinUsed++;
+
+      if (['TRV', 'TV', 'C', 'CR', 'CE', 'CT', 'CI', 'XP', 'TT'].includes(code) || code.startsWith('CT') || code.startsWith('CE')) {
+        if (d >= today && !futureTrv) futureTrv = dateStr;
+        if (d <= today) pastTrv = dateStr;
       }
     });
 
-    let weeksOn = 8;
-    const g = (emp.gol || '').toUpperCase();
-    const jg = (emp.jobGrade || '').toUpperCase();
-    if (jg === 'S2') weeksOn = 10;
-    else if (g === 'I' || g === '1') weeksOn = 10;
-    else if (g === 'IV' || g === '4' || g.includes('IV')) weeksOn = 7;
-    else if (g === 'V' || g === '5' || g.includes('V')) weeksOn = 6;
-    const rosterDays = weeksOn * 7;
+    if (emp.total_cuti_tahunan && !isNaN(parseFloat(emp.total_cuti_tahunan))) ctUsed = parseFloat(emp.total_cuti_tahunan);
+    if (emp.total_izin && !isNaN(parseFloat(emp.total_izin))) izinUsed = parseFloat(emp.total_izin);
 
-    const lastTrv = parseStringDate(emp.lastTrvDate);
-    let estimatedNextLeave = null;
-    if (lastTrv) {
-      estimatedNextLeave = new Date(lastTrv);
-      estimatedNextLeave.setDate(estimatedNextLeave.getDate() + 1 + rosterDays);
-    }
+    let actualCuti: Date | null = null;
+    let planDate: Date | null = null;
 
-    let futureTrv = null;
-    const sortedDates = Object.keys(sched).sort((a,b) => parseStringDate(a)!.getTime() - parseStringDate(b)!.getTime());
-    for (const dateStr of sortedDates) {
-      const d = parseStringDate(dateStr);
-      if (d && d > today && (['TRV', 'TV', 'C', 'CR', 'CE', 'CT', 'CI', 'XP', 'TT'].includes(sched[dateStr]) || (sched[dateStr] && (sched[dateStr].startsWith('CT') || sched[dateStr].startsWith('CE'))))) {
-        futureTrv = d;
-        break;
+    if (emp.nextTrvDate) actualCuti = new Date(emp.nextTrvDate);
+    else if (futureTrv) actualCuti = new Date(futureTrv);
+
+    if (emp.cuti_plan_format && emp.cuti_plan_format !== '-') planDate = new Date(emp.cuti_plan_format);
+
+    if (!actualCuti && !planDate && (emp.lastTrvDate || pastTrv)) {
+      const lTrv = new Date(emp.lastTrvDate || pastTrv!);
+      if (!isNaN(lTrv.getTime())) {
+        actualCuti = new Date(lTrv.getTime() + (70 * 24 * 60 * 60 * 1000));
       }
     }
 
-    let actualCuti = futureTrv || estimatedNextLeave;
-    let difference = 0;
-    if (futureTrv && estimatedNextLeave) {
-      difference = Math.floor((futureTrv.getTime() - estimatedNextLeave.getTime()) / (1000 * 3600 * 24));
-    }
-
     let daysRemaining = 0;
-    if (actualCuti) {
-      daysRemaining = Math.floor((actualCuti.getTime() - today.getTime()) / (1000 * 3600 * 24));
+    let difference = 0;
+
+    if (actualCuti && !isNaN(actualCuti.getTime())) {
+      const target = new Date(actualCuti);
+      target.setHours(0, 0, 0, 0);
+      daysRemaining = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     }
 
-    const totalKuota = isYear5 ? ciKuota : ctKuota;
-    const totalUsed = ctUsed + ciUsed + izinUsed;
+    if (planDate && actualCuti && !isNaN(planDate.getTime()) && !isNaN(actualCuti.getTime())) {
+      difference = Math.round((actualCuti.getTime() - planDate.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    const totalKuota = isYear5 ? 24 : 12;
+    const totalUsed = isYear5 ? ciUsed : ctUsed;
     const remaining = Math.max(0, totalKuota - totalUsed);
 
     return {
-      ctKuota,
-      ctUsed,
-      ciKuota,
-      ciUsed,
-      izinUsed,
       isYear5,
       totalKuota,
       totalUsed,
+      izinUsed,
       remaining,
       actualCuti,
       difference,
       daysRemaining,
-      hasTrv: !!futureTrv,
+      hasTrv: !!futureTrv || !!emp.nextTrvDate,
       joinDate
     };
   };
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  // Quick Date Preset Buttons
+  const setQuickRange = (days: number) => {
+    const s = new Date();
+    const e = new Date();
+    e.setDate(e.getDate() + (days - 1));
+    setStartDate(s.toISOString().split('T')[0]);
+    setEndDate(e.toISOString().split('T')[0]);
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-16">
       <PageHeader 
-        title="Informasi Roster & Cuti"
-        description="Kelola data roster dan jadwal cuti tim (Otomatis sinkron setiap jam 17:00 WIT)"
+        title="Tabel Roster & Jadwal Kerja"
+        description={
+          isAdminOrQA 
+            ? "Pusat Roster Seluruh Departemen (Urutan Hierarki & Sinkronisasi Spreadsheet tiap 17:00 WIT)"
+            : "Matriks Roster Jadwal Kerja Tim & Bawahannya"
+        }
         icon={<Calendar />}
       >
-        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canEditRoster && (
+            <span 
+              className="text-xs font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 shadow-2xs"
+              style={{
+                backgroundColor: 'var(--input-bg)',
+                borderColor: 'var(--border-main)',
+                color: 'var(--primary)'
+              }}
+            >
+              <Edit2 className="w-3.5 h-3.5" /> Mode Editor Aktif
+            </span>
+          )}
           <Button
             onClick={handleManualSync}
             disabled={isSyncing}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-2 rounded-xl text-xs font-bold px-3.5 py-2 shadow-lg shadow-indigo-900/30 transition-all border border-indigo-400/30"
+            className="text-white flex items-center gap-2 rounded-xl text-xs font-bold px-3.5 py-2 shadow-sm transition-all cursor-pointer"
+            style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
             {isSyncing ? 'Menyinkronkan...' : 'Sinkron Google Sheets'}
@@ -391,276 +469,469 @@ export function RosterAdminScreen() {
       </PageHeader>
 
       {syncFeedback && (
-        <div className={`p-3.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-all ${
-          syncFeedback.type === 'success'
-            ? 'bg-emerald-950/80 border border-emerald-700/60 text-emerald-300'
-            : 'bg-rose-950/80 border border-rose-700/60 text-rose-300'
-        }`}>
-          <div className="flex items-center gap-2">
+        <div 
+          className="p-3.5 rounded-xl text-xs flex items-center justify-between gap-2 border shadow-xs animate-in fade-in"
+          style={{
+            backgroundColor: syncFeedback.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(244, 63, 94, 0.1)',
+            borderColor: syncFeedback.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)',
+            color: syncFeedback.type === 'success' ? '#10B981' : '#F43F5E'
+          }}
+        >
+          <div className="flex items-center gap-2 font-semibold">
             {syncFeedback.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
             ) : (
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <AlertCircle className="w-4 h-4 shrink-0" />
             )}
-            <span className="font-medium">{syncFeedback.message}</span>
+            <span>{syncFeedback.message}</span>
           </div>
           <button 
             onClick={() => setSyncFeedback(null)} 
-            className="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded hover:bg-white/10"
+            className="opacity-70 hover:opacity-100 text-xs px-2 py-0.5 rounded cursor-pointer"
           >
             ✕
           </button>
         </div>
       )}
 
+      {/* Control Bar (Filter, Search, Date Range) */}
+      <div 
+        className="p-4 rounded-2xl border shadow-xs space-y-3.5"
+        style={{
+          backgroundColor: 'var(--card-bg, #FFFFFF)',
+          borderColor: 'var(--border-main, #E2E8F0)',
+          color: 'var(--text-main, #1E293B)'
+        }}
+      >
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          {/* Section & Department Filter */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-4 h-4" style={{ color: 'var(--primary)' }} />
+              <span className="text-xs font-bold uppercase tracking-wider opacity-75" style={{ color: 'var(--text-muted)' }}>
+                Filter Section:
+              </span>
+            </div>
+            <select 
+              value={sectionFilter} 
+              onChange={(e) => setSectionFilter(e.target.value)}
+              className="text-xs font-bold py-1.5 px-3 rounded-xl border outline-none cursor-pointer shadow-2xs"
+              style={{
+                backgroundColor: 'var(--input-bg, #FFFFFF)',
+                borderColor: 'var(--border-main, #E2E8F0)',
+                color: 'var(--text-main, #1E293B)'
+              }}
+            >
+              <option value="ALL">Semua Section ({filteredRoster.length} Personil)</option>
+              <option value="Preparation">Preparation</option>
+              <option value="Dry, Preparation">Dry, Preparation</option>
+              <option value="Wet, Preparation">Wet, Preparation</option>
+              <option value="Laboratory">Laboratory</option>
+              <option value="QA">QA / Quality Assurance</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Inventory Control">Inventory Control</option>
+              <option value="Administration">Administration</option>
+            </select>
+          </div>
+
+          {/* Search Input */}
+          <div className="relative flex-1 lg:max-w-xs">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 opacity-50" style={{ color: 'var(--text-muted)' }} />
+            <input 
+              type="text" 
+              placeholder="Cari nama, NIK, jabatan..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-1.5 rounded-xl text-xs border outline-none font-medium transition-all shadow-2xs"
+              style={{
+                backgroundColor: 'var(--input-bg, #FFFFFF)',
+                borderColor: 'var(--border-main, #E2E8F0)',
+                color: 'var(--text-main, #1E293B)'
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Date Presets & Custom Picker */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t" style={{ borderColor: 'var(--border-main)' }}>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold opacity-75" style={{ color: 'var(--text-muted)' }}>Preset Rentang:</span>
+            <button 
+              onClick={() => setQuickRange(7)}
+              className="px-2.5 py-1 text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs"
+              style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)', color: 'var(--text-main)' }}
+            >
+              7 Hari
+            </button>
+            <button 
+              onClick={() => setQuickRange(14)}
+              className="px-2.5 py-1 text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs"
+              style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)', color: 'var(--text-main)' }}
+            >
+              14 Hari
+            </button>
+            <button 
+              onClick={() => setQuickRange(30)}
+              className="px-2.5 py-1 text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs"
+              style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)', color: 'var(--text-main)' }}
+            >
+              30 Hari
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <span className="font-bold opacity-75" style={{ color: 'var(--text-muted)' }}>Tanggal:</span>
+            <input 
+              type="date" 
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="px-2.5 py-1 rounded-lg border text-xs font-bold outline-none shadow-2xs"
+              style={{
+                backgroundColor: 'var(--input-bg)',
+                borderColor: 'var(--border-main)',
+                color: 'var(--text-main)'
+              }}
+            />
+            <span className="opacity-60 font-medium">s/d</span>
+            <input 
+              type="date" 
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              max={new Date(new Date(startDate).getTime() + 31 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+              className="px-2.5 py-1 rounded-lg border text-xs font-bold outline-none shadow-2xs"
+              style={{
+                backgroundColor: 'var(--input-bg)',
+                borderColor: 'var(--border-main)',
+                color: 'var(--text-main)'
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Roster Table Matrix */}
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
-          <p className="text-slate-500 font-medium">Memuat data rooster...</p>
+        <div className="py-24 flex flex-col items-center justify-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--primary)' }} />
+          <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+            Menyusun tabel roster bawahan & personil...
+          </p>
+        </div>
+      ) : filteredRoster.length === 0 ? (
+        <div 
+          className="p-12 rounded-2xl border text-center space-y-2 shadow-xs"
+          style={{
+            backgroundColor: 'var(--card-bg)',
+            borderColor: 'var(--border-main)'
+          }}
+        >
+          <Users className="w-10 h-10 mx-auto opacity-40" style={{ color: 'var(--text-muted)' }} />
+          <h4 className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>
+            Tidak Ada Personil yang Ditampilkan
+          </h4>
+          <p className="text-xs max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
+            {isAdminOrQA 
+              ? "Tidak ada data karyawan yang cocok dengan filter atau kata kunci pencarian."
+              : "Hanya personil bawahan langsung dalam hierarki yang ditampilkan pada modul ini."}
+          </p>
         </div>
       ) : (
-        <div className="space-y-8">
-          
-          {/* Current User Leave Info */}
-          {currentUser && (
-            <section className="space-y-4">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-blue-500" /> Cuti Saya
-              </h2>
-              
-              {(() => {
-                const leaveInfo = calculateLeave(currentUser);
-                if (!leaveInfo) {
-                  return (
-                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
-                      <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
-                        <Loader2 className="w-6 h-6 text-slate-400 animate-spin" />
-                      </div>
-                      <p className="text-slate-600 font-medium">Memuat info cuti...</p>
+        <div 
+          className="rounded-2xl border shadow-lg overflow-hidden flex flex-col"
+          style={{
+            backgroundColor: 'var(--card-bg, #FFFFFF)',
+            borderColor: 'var(--border-main, #E2E8F0)'
+          }}
+        >
+          {/* Table Container with Horizontal Scroll */}
+          <div className="overflow-x-auto overflow-y-auto max-h-[72vh] relative">
+            <table className="w-full text-left border-collapse min-w-[850px]">
+              {/* Table Header */}
+              <thead>
+                <tr 
+                  className="sticky top-0 z-30 border-b select-none"
+                  style={{
+                    backgroundColor: 'var(--bg-main, #F8FAFC)',
+                    borderColor: 'var(--border-main, #E2E8F0)'
+                  }}
+                >
+                  {/* Sticky Column: Nama Personil */}
+                  <th 
+                    className="sticky left-0 z-40 p-3 sm:p-3.5 text-xs font-bold uppercase tracking-wider w-[240px] sm:w-[280px] min-w-[240px] border-r shadow-xs backdrop-blur-md"
+                    style={{
+                      backgroundColor: 'var(--bg-main, #F8FAFC)',
+                      borderColor: 'var(--border-main, #E2E8F0)',
+                      color: 'var(--text-main, #1E293B)'
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Nama Personil & Jabatan</span>
+                      <span className="text-[10px] opacity-60 font-mono">({filteredRoster.length})</span>
                     </div>
-                  );
-                }
-                return (
-                  <div className="flex flex-col gap-4">
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                      <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">
-                         {leaveInfo.isYear5 ? 'Kuota Cuti Istimewa (CI)' : 'Kuota Cuti Tahunan (CT)'}
-                      </p>
-                      <div className="flex justify-between items-end">
-                        <div>
-                          <p className="text-2xl font-black text-slate-800">{leaveInfo.remaining} <span className="text-sm font-semibold text-slate-500">hari</span></p>
-                          <p className="text-xs text-slate-500 mt-0.5">Dari total kuota {leaveInfo.totalKuota} hari</p>
-                        </div>
-                        <div className="text-right">
-                           <p className="text-xs font-semibold text-rose-600">Terpakai: {leaveInfo.totalUsed} hari</p>
-                           {leaveInfo.izinUsed > 0 && <p className="text-[10px] text-orange-500 mt-0.5">Termasuk {leaveInfo.izinUsed} hari Izin</p>}
-                           {leaveInfo.joinDate && <p className="text-[10px] text-slate-400 mt-1">Sejak {safeFormatDate(leaveInfo.joinDate, {day: 'numeric', month: 'short', year: 'numeric'})}</p>}
-                        </div>
-                      </div>
-                    </div>
+                  </th>
 
-                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-2xl shadow-md text-white">
-                      <p className="text-[10px] uppercase font-bold text-blue-200 mb-1">Jadwal Cuti Berikutnya</p>
-                      {leaveInfo.actualCuti ? (
-                         <div>
-                            <p className="text-xl font-bold text-white mb-2">
-                               {safeFormatDate(leaveInfo.actualCuti, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                            </p>
-                            <div className="flex flex-wrap items-center gap-2 mt-2">
-                               <span className="px-2 py-1 bg-white/20 text-white rounded text-xs font-bold shadow-sm backdrop-blur-sm">
-                                  {leaveInfo.daysRemaining >= 0 ? `Sisa ${leaveInfo.daysRemaining} hari lagi` : `Telah lewat ${Math.abs(leaveInfo.daysRemaining)} hari`}
-                               </span>
-                               {leaveInfo.difference !== 0 && (
-                                  <span className={`px-2 py-1 rounded text-xs font-bold shadow-sm ${leaveInfo.difference > 0 ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'}`}>
-                                     {leaveInfo.difference > 0 ? `Mundur ${leaveInfo.difference} hari` : `Maju ${Math.abs(leaveInfo.difference)} hari`}
-                                  </span>
-                               )}
-                            </div>
-                            {!leaveInfo.hasTrv && (
-                               <p className="text-[10px] text-blue-200 mt-3 flex items-center gap-1">
-                                  <Info className="w-3 h-3" /> Berdasarkan perhitungan rotasi jadwal
-                               </p>
-                            )}
-                            {leaveInfo.hasTrv && (
-                               <p className="text-[10px] text-blue-200 mt-3 flex items-center gap-1">
-                                  <Info className="w-3 h-3" /> Telah dijadwalkan oleh admin (Fixed TRV/TV)
-                               </p>
-                            )}
-                         </div>
-                      ) : (
-                         <p className="text-sm text-blue-100 mt-2">Belum ada estimasi jadwal cuti (Riwayat TRV/TV tidak ditemukan)</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-            </section>
-          )}
-
-          {/* Team Roster */}
-          <section className="space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <Briefcase className="w-5 h-5 text-indigo-500 shrink-0" />
-                {hasSectionFilter ? (
-                  <div className="relative">
-                    <select 
-                      value={sectionFilter} 
-                      onChange={(e) => setSectionFilter(e.target.value)}
-                      className="text-lg font-bold text-slate-800 bg-transparent border-none py-0 pl-0 pr-6 focus:outline-none focus:ring-0 cursor-pointer appearance-none hover:text-indigo-600 transition-colors"
+                  {/* Date Columns */}
+                  {dateColumns.map((col, idx) => (
+                    <th 
+                      key={idx}
+                      className={`p-2 text-center text-xs font-bold border-r min-w-[58px] max-w-[68px] ${
+                        col.isToday ? 'ring-2 ring-inset ring-teal-500' : ''
+                      }`}
                       style={{
-                        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23475569' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M5 7l5 5 5-5'/%3e%3c/svg%3e")`,
-                        backgroundPosition: 'right 0 center',
-                        backgroundRepeat: 'no-repeat',
-                        backgroundSize: '1.25rem',
+                        backgroundColor: col.isToday 
+                          ? 'rgba(42, 157, 143, 0.12)' 
+                          : col.isWeekend 
+                          ? 'rgba(0,0,0,0.02)' 
+                          : 'transparent',
+                        borderColor: 'var(--border-main, #E2E8F0)',
+                        color: col.isToday ? 'var(--primary)' : 'var(--text-main)'
                       }}
                     >
-                      <option value="ALL">Tim Anda (Semua)</option>
-                      <option value="Administration">Administration</option>
-                      <option value="Dry, Preparation">Dry, Preparation</option>
-                      <option value="Inventory Control">Inventory Control</option>
-                      <option value="Laboratory">Laboratory</option>
-                      <option value="Maintenance">Maintenance</option>
-                      <option value="Preparation">Preparation</option>
-                      <option value="QA">QA</option>
-                      <option value="Wet, Preparation">Wet, Preparation</option>
-                    </select>
-                  </div>
-                ) : (
-                  <h2 className="text-lg font-bold text-slate-800">
-                    {filteredRoster.length > 1 ? "Tim Anda" : "Data Karyawan"}
-                  </h2>
-                )}
-              </div>
-              <div className="relative flex-1 md:max-w-xs">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input 
-                  type="text" 
-                  placeholder="Cari nama, NIK, atau jabatan..." 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-slate-400" />
-                <span className="text-sm font-semibold text-slate-700">Rentang Jadwal:</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <input 
-                  type="date" 
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <span className="text-slate-400 text-sm">s/d</span>
-                <input 
-                  type="date" 
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  max={new Date(new Date(startDate).getTime() + 31 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              {filteredRoster.length === 0 && (
-                <div className="text-center py-8 text-slate-500">Data karyawan tidak ditemukan.</div>
-              )}
-              {filteredRoster.map((emp, i) => (
-                <div key={i} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 relative overflow-hidden">
-                  <div className="flex justify-between items-start mb-4 relative z-10">
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-lg leading-tight">{emp.name}</h4>
-                      <p className="text-xs text-slate-500 font-mono mt-1">NIK: {emp.nik}</p>
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">{emp.jabatan}</span>
-                        <span className="text-[10px] font-semibold bg-blue-50 text-blue-600 px-2 py-1 rounded-lg">
-                          {emp.jobGrade === 'S2' ? 'S2' : `GOL ${emp.gol || '-'}`}
-                        </span>
-                        <span className="text-[10px] font-semibold bg-amber-50 text-amber-600 px-2 py-1 rounded-lg">
-                          ⏳ {calculateWorkingTenure(emp.joinDate)}
-                        </span>
+                      <div className="text-[10px] uppercase font-bold tracking-tight opacity-75">
+                        {col.dayName}
                       </div>
-                    </div>
-                  </div>
-                  
-                  {(() => {
-                    const l = calculateLeave(emp);
-                    if (l && l.actualCuti) {
-                      return (
-                        <div className="mb-4 bg-emerald-50 border border-emerald-100 rounded-2xl p-3 flex justify-between items-center relative z-10">
-                          <div className="flex items-center gap-2">
-                            <Plane className="w-4 h-4 text-emerald-600" />
-                            <span className="text-xs font-semibold text-emerald-800">Estimasi Cuti</span>
-                          </div>
-                          <span className="text-sm font-bold text-emerald-700">{safeFormatDate(l.actualCuti, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-
-                  <div className="relative z-10">
-                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">Jadwal</p>
-                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                      {(() => {
-                        const sDate = new Date(startDate);
-                        const eDate = new Date(endDate);
-                        if (isNaN(sDate.getTime()) || isNaN(eDate.getTime())) return null;
-                        
-                        const maxDays = 31;
-                        const diffDays = Math.floor((eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
-                        const effectiveEndDate = diffDays > maxDays ? new Date(sDate.getTime() + maxDays * 24 * 60 * 60 * 1000) : eDate;
-                        
-                        const days = [];
-                        const iter = new Date(sDate);
-                        while (iter <= effectiveEndDate) {
-                          const parts = iter.toDateString().split(' '); 
-                          const day = parseInt(parts[2], 10);
-                          const formattedDate = day + ' ' + parts[1] + ' ' + parts[3].substring(2);
-                          
-                          let shiftCode = '-';
-                          if (emp.fullSchedule && emp.fullSchedule[formattedDate]) {
-                            shiftCode = emp.fullSchedule[formattedDate];
-                          } else if (emp.schedule) {
-                            const found = emp.schedule.find(s => s.date === formattedDate);
-                            if (found) shiftCode = found.shiftCode;
-                          }
-                          
-                          days.push({
-                            dayStr: parts[0].substring(0,3),
-                            shiftCode,
-                            dateStr: day + ' ' + parts[1]
-                          });
-                          
-                          iter.setDate(iter.getDate() + 1);
-                        }
-                        
-                        return days.map((s, idx) => {
-                          const isLeave = s.shiftCode.toLowerCase().includes('cuti') || s.shiftCode.toLowerCase().includes('off');
-                          return (
-                            <div key={idx} className={`flex-none w-14 text-center py-2 rounded-xl border shrink-0 ${isLeave ? 'bg-rose-50 border-rose-100 text-rose-600' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                              <div className="text-[10px] uppercase font-bold mb-1 opacity-60">{s.dayStr} <br/> <span className="text-[9px] font-normal">{s.dateStr}</span></div>
-                              <div className="text-xs font-black">{s.shiftCode || '-'}</div>
-                            </div>
-                          )
-                        });
-                      })()}
-                      {(!emp.fullSchedule && (!emp.schedule || emp.schedule.length === 0)) && (
-                        <p className="text-xs text-slate-400">Jadwal tidak tersedia.</p>
+                      <div className="text-xs font-black">
+                        {col.dateNumber}
+                      </div>
+                      {col.isToday && (
+                        <span className="inline-block text-[8px] font-black uppercase px-1 rounded bg-teal-500 text-white mt-0.5">
+                          Hari Ini
+                        </span>
                       )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
 
+              {/* Table Body */}
+              <tbody className="divide-y text-xs" style={{ borderColor: 'var(--border-main)' }}>
+                {filteredRoster.map((emp, rowIdx) => {
+                  const leave = calculateLeave(emp);
+                  const isSelf = emp.nik === requestorNik;
+
+                  return (
+                    <tr 
+                      key={emp.nik || rowIdx}
+                      className="hover:opacity-95 transition-colors group"
+                      style={{
+                        backgroundColor: isSelf ? 'rgba(42, 157, 143, 0.05)' : 'transparent'
+                      }}
+                    >
+                      {/* Sticky Person Info Cell */}
+                      <td 
+                        className="sticky left-0 z-20 p-3 sm:p-3.5 border-r shadow-xs backdrop-blur-md"
+                        style={{
+                          backgroundColor: isSelf ? 'var(--input-bg)' : 'var(--card-bg)',
+                          borderColor: 'var(--border-main)'
+                        }}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-sm truncate" style={{ color: 'var(--text-main)' }}>
+                              {emp.name || emp.nama}
+                            </span>
+                            {isSelf && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-white bg-teal-600">
+                                Anda
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                            <span className="font-mono">{emp.nik}</span>
+                            <span>•</span>
+                            <span className="font-semibold truncate max-w-[140px]">{emp.jabatan}</span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                            {emp.section && (
+                              <span 
+                                className="text-[9px] font-bold px-1.5 py-0.5 rounded border"
+                                style={{
+                                  backgroundColor: 'var(--input-bg)',
+                                  borderColor: 'var(--border-main)',
+                                  color: 'var(--primary)'
+                                }}
+                              >
+                                {emp.section}
+                              </span>
+                            )}
+                            {emp.gol && (
+                              <span 
+                                className="text-[9px] font-bold px-1.5 py-0.5 rounded border opacity-75"
+                                style={{
+                                  backgroundColor: 'var(--input-bg)',
+                                  borderColor: 'var(--border-main)'
+                                }}
+                              >
+                                {emp.gol}
+                              </span>
+                            )}
+                            {leave?.actualCuti && (
+                              <span 
+                                className="text-[9px] font-semibold px-1.5 py-0.5 rounded border text-emerald-600 dark:text-emerald-400"
+                                style={{
+                                  backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                                  borderColor: 'rgba(16, 185, 129, 0.2)'
+                                }}
+                                title={`Estimasi Cuti: ${safeFormatDate(leave.actualCuti, { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                              >
+                                ✈️ {safeFormatDate(leave.actualCuti, { day: 'numeric', month: 'short' })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Date Shift Code Cells */}
+                      {dateColumns.map((col, cIdx) => {
+                        const shiftCode = emp.fullSchedule?.[col.keyDateStr] || '-';
+                        const badgeStyle = getShiftBadgeStyle(shiftCode);
+
+                        return (
+                          <td 
+                            key={cIdx}
+                            onClick={() => {
+                              if (canEditRoster) {
+                                setEditingCell({
+                                  empNik: emp.nik,
+                                  empName: emp.name || emp.nama,
+                                  dateStr: col.keyDateStr,
+                                  displayDate: `${col.dayName}, ${col.dateNumber}`,
+                                  currentShift: shiftCode === '-' ? '' : shiftCode
+                                } as any);
+                              }
+                            }}
+                            className={`p-1.5 text-center border-r transition-all select-none ${
+                              canEditRoster ? 'cursor-pointer hover:scale-105 hover:z-10' : ''
+                            } ${col.isToday ? 'bg-teal-500/5' : ''}`}
+                            style={{
+                              borderColor: 'var(--border-main)'
+                            }}
+                            title={canEditRoster ? `Klik untuk mengedit roster ${emp.name} pada ${col.dateNumber}` : undefined}
+                          >
+                            <div 
+                              className={`w-full py-1.5 px-1 rounded-lg border text-center text-xs transition-transform ${badgeStyle}`}
+                            >
+                              {shiftCode}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Table Legend Footer */}
+          <div 
+            className="p-3.5 border-t flex flex-wrap items-center justify-between gap-3 text-xs shrink-0 select-none"
+            style={{
+              backgroundColor: 'var(--bg-main, #F8FAFC)',
+              borderColor: 'var(--border-main, #E2E8F0)'
+            }}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold opacity-75 mr-1" style={{ color: 'var(--text-muted)' }}>Keterangan:</span>
+              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-blue-500/15 text-blue-600 border-blue-500/30">D = Day Shift</span>
+              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-purple-500/15 text-purple-600 border-purple-500/30">N = Night Shift</span>
+              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-slate-500/15 text-slate-600 border-slate-500/30">OFF = Libur</span>
+              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-amber-500/15 text-amber-600 border-amber-500/30">TRV/TV = Travel Cuti</span>
+              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-rose-500/15 text-rose-600 border-rose-500/30">CT/CI = Cuti</span>
+              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-emerald-500/15 text-emerald-600 border-emerald-500/30">S/LS = Standby/Libur Shift</span>
+            </div>
+
+            <span className="text-[11px] font-semibold opacity-70" style={{ color: 'var(--text-muted)' }}>
+              {canEditRoster ? '💡 Klik pada sel jadwal untuk mengubah kode shift secara langsung.' : 'Tampilan baca roster tim.'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Inline Cell Editor Popover Modal (For Admin & QA) */}
+      {editingCell && (
+        <div 
+          className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setEditingCell(null)}
+        >
+          <div 
+            className="w-full max-w-sm rounded-2xl shadow-2xl border p-5 space-y-4 animate-in zoom-in-95 duration-150"
+            style={{
+              backgroundColor: 'var(--card-bg, #FFFFFF)',
+              borderColor: 'var(--border-main, #E2E8F0)',
+              color: 'var(--text-main, #1E293B)'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-main)' }}>
+              <div>
+                <h3 className="font-bold text-sm font-display" style={{ color: 'var(--text-main)' }}>
+                  Edit Roster Harian
+                </h3>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {editingCell.empName} ({editingCell.displayDate})
+                </p>
+              </div>
+              <button 
+                onClick={() => setEditingCell(null)}
+                className="p-1.5 rounded-full border opacity-70 hover:opacity-100 cursor-pointer"
+                style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)' }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold block" style={{ color: 'var(--text-main)' }}>
+                Pilih Kode Shift / Keterangan:
+              </label>
+              <div className="grid grid-cols-2 gap-1.5 max-h-60 overflow-y-auto pr-1">
+                {SHIFT_OPTIONS.map(opt => (
+                  <button
+                    key={opt.code}
+                    type="button"
+                    onClick={() => handleSaveCell(opt.code)}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      editingCell.currentShift === opt.code ? 'ring-2 ring-teal-500 font-black' : 'hover:opacity-85'
+                    } ${opt.bg}`}
+                  >
+                    <span className="font-black text-xs">{opt.label}</span>
+                    <span className="text-[10px] opacity-75">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Code Input */}
+            <form 
+              onSubmit={e => {
+                e.preventDefault();
+                const form = e.target as any;
+                const customVal = form.customShift.value.trim().toUpperCase();
+                if (customVal) handleSaveCell(customVal);
+              }}
+              className="pt-2 border-t flex gap-2"
+              style={{ borderColor: 'var(--border-main)' }}
+            >
+              <input 
+                name="customShift"
+                type="text"
+                placeholder="Kode kustom (contoh: D2, OFF2...)"
+                defaultValue={editingCell.currentShift}
+                className="flex-1 px-3 py-1.5 rounded-xl border text-xs outline-none font-bold uppercase shadow-2xs"
+                style={{
+                  backgroundColor: 'var(--input-bg)',
+                  borderColor: 'var(--border-main)',
+                  color: 'var(--text-main)'
+                }}
+              />
+              <Button type="submit" className="text-xs px-3 py-1.5 text-white" style={{ backgroundColor: 'var(--primary)' }}>
+                Simpan
+              </Button>
+            </form>
+          </div>
         </div>
       )}
     </div>

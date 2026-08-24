@@ -131,24 +131,64 @@ export const SKENA_QUOTES: SkenaQuote[] = [
     quote: "Akurasi tinggi dimulai dari fokus yang terjaga. Singkirkan distraksi, hadapi tantangan!",
     tag: "Precision",
     vibe: "🎯 Hyper Focus"
+  },
+  {
+    quote: "Jadikan setiap tantangan operasional sebagai panggung untuk membuktikan keahlian terbaikmu.",
+    tag: "Pro Attitude",
+    vibe: "💼 Pro Mindset"
+  },
+  {
+    quote: "Alat boleh canggih, tapi ketelitian manusia yang memegang kendali mutu sesungguhnya.",
+    tag: "Quality Craft",
+    vibe: "🔬 Master Quality"
+  },
+  {
+    quote: "Awali shift dengan bismillah dan niat baik, akhiri dengan rasa syukur dan kebanggaan.",
+    tag: "Daily Grace",
+    vibe: "🤲 Rasa Syukur"
+  },
+  {
+    quote: "Kerja kompak, komunikasi lancar, target harian tercapai tanpa drama.",
+    tag: "Harmoni Kerja",
+    vibe: "🎶 Smooth Workflow"
+  },
+  {
+    quote: "Waktu istirahat gunakan sebaik mungkin. Jaga kesehatan fisik dan mental untuk perjalanan panjang.",
+    tag: "Self Care",
+    vibe: "🌿 Recharge Energy"
   }
 ];
 
-// Hash function deterministik sederhana berdasarkan (userKey + dateKey)
-function hashCode(str: string): number {
-  let hash = 0;
+// Hash function deterministik dengan bit-mixing tinggi agar NIK berdekatan mendapat hasil berbeda
+function hashSeed(str: string): number {
+  let hash = 5381;
   for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0; // Convert to 32bit integer
+    hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
   }
+  // Avalanching bits
+  hash = ((hash >>> 16) ^ hash) * 0x45d9f3b;
+  hash = ((hash >>> 16) ^ hash) * 0x45d9f3b;
+  hash = (hash >>> 16) ^ hash;
   return Math.abs(hash);
 }
 
+/**
+ * Mengambil 1 Quote Skena Harian yang unik per user per hari.
+ * Bersifat deterministik: setiap orang mendapat quote acak berbeda pada hari yang sama,
+ * dan berganti secara otomatis setiap hari baru sesuai tanggal kalender lokal.
+ */
 export function getDailySkenaQuote(userIdentifier: string = 'user', customDate?: string): SkenaQuote {
-  const dateStr = customDate || new Date().toISOString().split('T')[0];
-  const seed = `${userIdentifier.trim().toLowerCase()}_${dateStr}`;
-  const hash = hashCode(seed);
+  let dateStr = customDate;
+  if (!dateStr) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    dateStr = `${year}-${month}-${day}`;
+  }
+
+  const seed = `${(userIdentifier || 'user').trim().toLowerCase()}_daily_quote_${dateStr}`;
+  const hash = hashSeed(seed);
   const index = hash % SKENA_QUOTES.length;
   return SKENA_QUOTES[index];
 }

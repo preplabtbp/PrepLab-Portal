@@ -23,12 +23,18 @@ window.fetch = async (...args) => {
   const profileStr = localStorage.getItem('p2h_inspector_profile');
   let pt = 'TBP';
   if (profileStr) {
-     try { pt = JSON.parse(profileStr).pt || 'TBP'; } catch(e){}
+     try { 
+       const parsedPt = (JSON.parse(profileStr).pt || 'TBP').toUpperCase();
+       // TBP and GPS are treated as 1 single data entity (TBP). Only GTS is separate.
+       pt = parsedPt === 'GTS' ? 'GTS' : 'TBP';
+     } catch(e){}
   }
   
   if (typeof resource === 'string' && resource.startsWith('/api/')) {
      const urlObj = new URL(resource, window.location.origin);
-     urlObj.searchParams.set('pt', pt);
+     if (!urlObj.searchParams.has('pt') && !urlObj.pathname.includes('/maintenance-summary')) {
+        urlObj.searchParams.set('pt', pt);
+     }
      resource = urlObj.pathname + urlObj.search;
      
      if (config && config.body && typeof config.body === 'string') {

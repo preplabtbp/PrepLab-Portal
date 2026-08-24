@@ -430,18 +430,20 @@ export const resolveInternalTicket = async (data: any) => {
   return await res.json();
 };
 
-// Put back dummy Roster functions
-export const getRosterData = async (params: any) => {
+// Put back Roster functions
+export const getRosterData = async (params?: any) => {
   try {
     const res = await fetch('/api/roster');
     if (!res.ok) {
       throw new Error('Failed to fetch roster');
     }
     const data = await res.json();
-    return { success: true, roster: Array.isArray(data) ? data : [] };
+    const list = Array.isArray(data) ? data : (data.roster || []);
+    return Object.assign([...list], { success: true, roster: list });
   } catch(e) {
     console.error(e);
-    return { success: false, roster: [] };
+    const emptyList: any[] = [];
+    return Object.assign(emptyList, { success: false, roster: [] });
   }
 };
 export const loginEmployee = async (nik: string) => { 

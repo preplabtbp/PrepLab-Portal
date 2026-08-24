@@ -21,7 +21,6 @@ const ALL_FOLDERS = [
   { id: '1i92Q6omfqFBXSjQL-gCeoV6mC6ThKpcE', name: 'General Information', section: 'ALL' }
 ];
 
-
 function FileMenu({ file, onMove, onDelete }: { file: any, onMove: () => void, onDelete: () => void }) {
   const [open, setOpen] = useState(false);
   const isFolder = file.mimeType?.includes('folder');
@@ -30,7 +29,8 @@ function FileMenu({ file, onMove, onDelete }: { file: any, onMove: () => void, o
     <div className="relative" onClick={e => e.stopPropagation()}>
       <button 
         onClick={() => setOpen(!open)}
-        className="p-2 text-slate-500 hover:bg-slate-100 rounded-md transition-colors"
+        className="p-2 rounded-md transition-colors opacity-70 hover:opacity-100"
+        style={{ color: 'var(--text-muted, #64748B)' }}
       >
         <MoreVertical className="w-4 h-4" />
       </button>
@@ -38,11 +38,19 @@ function FileMenu({ file, onMove, onDelete }: { file: any, onMove: () => void, o
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-50">
+          <div 
+            className="absolute right-0 top-full mt-1 w-48 rounded-xl shadow-xl border py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
+            style={{ 
+              backgroundColor: 'var(--card-bg, #FFFFFF)', 
+              borderColor: 'var(--border-main, #E2E8F0)',
+              color: 'var(--text-main, #1E293B)' 
+            }}
+          >
             {!isFolder && (
               <button 
                 onClick={() => { setOpen(false); onMove(); }}
-                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                className="w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:opacity-80 transition-opacity"
+                style={{ color: 'var(--text-main, #1E293B)' }}
               >
                 <MoveRight className="w-4 h-4" /> Pindahkan
               </button>
@@ -54,7 +62,8 @@ function FileMenu({ file, onMove, onDelete }: { file: any, onMove: () => void, o
                 target="_blank" 
                 rel="noopener noreferrer"
                 onClick={() => setOpen(false)}
-                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                className="w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:opacity-80 transition-opacity"
+                style={{ color: 'var(--text-main, #1E293B)' }}
               >
                 <Download className="w-4 h-4" /> Download
               </a>
@@ -66,7 +75,8 @@ function FileMenu({ file, onMove, onDelete }: { file: any, onMove: () => void, o
                 target="_blank" 
                 rel="noopener noreferrer"
                 onClick={() => setOpen(false)}
-                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                className="w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:opacity-80 transition-opacity"
+                style={{ color: 'var(--text-main, #1E293B)' }}
               >
                 <ExternalLink className="w-4 h-4" /> Buka di Drive
               </a>
@@ -74,7 +84,7 @@ function FileMenu({ file, onMove, onDelete }: { file: any, onMove: () => void, o
             
             <button 
               onClick={() => { setOpen(false); onDelete(); }}
-              className="w-full text-left px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+              className="w-full text-left px-4 py-2 text-sm text-rose-500 hover:text-rose-600 flex items-center gap-2"
             >
               <Trash2 className="w-4 h-4" /> Hapus
             </button>
@@ -84,7 +94,6 @@ function FileMenu({ file, onMove, onDelete }: { file: any, onMove: () => void, o
     </div>
   );
 }
-
 
 function ScrollingText({ text, className }: { text: string, className?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -134,7 +143,7 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
   const [movingFile, setMovingFile] = useState<any>(null);
   
   const [logs, setLogs] = useState<any[]>([]);
-    const [showLogs, setShowLogs] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
   const [logDateFilter, setLogDateFilter] = useState('');
 
   useEffect(() => {
@@ -142,7 +151,6 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
     fetchLogs();
   }, [userProfile]);
 
-  
   const determineAllowedFolders = () => {
     if (!userProfile) return;
     if (userProfile.pt === 'GTS') {
@@ -156,7 +164,6 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
     }
 
     const jab = (userProfile.jabatan || '').toLowerCase();
-
     const sec = (userProfile.section || '').toLowerCase();
     const div = (userProfile.divisi || '').toLowerCase();
     
@@ -205,29 +212,11 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
     } catch (e) {}
   };
 
-  const addLog = async (action: string, fileName: string, folderName: string) => {
-    try {
-      await fetch('/api/preplab-cloud-logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: inspectorNik,
-          userName: inspectorName,
-          action,
-          fileName,
-          folderName
-        })
-      });
-      fetchLogs();
-    } catch (e) {}
-  };
-
   const openFolder = (folder: any) => {
     setFolderPath(prev => [...prev, folder]);
     fetchFiles(folder.id);
   };
 
-  
   const handleCreateFolder = async () => {
     if (!newFolderName.trim() || !currentFolder) return;
     try {
@@ -320,7 +309,6 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
         
         if (res.ok) {
           toast.success('File berhasil diupload');
-          addLog('Upload', file.name, currentFolder.name);
           fetchFiles(currentFolder.id);
         } else {
           toast.error('Gagal mengupload file');
@@ -346,7 +334,6 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
       });
       if (res.ok) {
         toast.success('File dihapus');
-        addLog('Delete', file.name, currentFolder.name);
         fetchFiles(currentFolder.id);
       } else {
         toast.error('Gagal menghapus');
@@ -368,57 +355,88 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
 
   return (
     <div className="w-full h-full min-h-screen bg-transparent flex flex-col pb-24">
-      <div className="bg-white p-4 flex items-center shadow-sm sticky top-0 z-10">
-        <button onClick={() => {
-          if (showLogs) setShowLogs(false);
-          else if (folderPath.length > 0) {
-            const newPath = [...folderPath];
-            newPath.pop();
-            setFolderPath(newPath);
-            if (newPath.length > 0) {
-              fetchFiles(newPath[newPath.length - 1].id);
-            } else if (allowedFolders.length === 1) {
-              onBack();
+      {/* Top Banner / Breadcrumb Bar */}
+      <div 
+        className="p-4 flex items-center shadow-xs sticky top-0 z-10 border-b backdrop-blur-md transition-colors"
+        style={{ 
+          backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
+          borderColor: 'var(--border-main, #E2E8F0)' 
+        }}
+      >
+        <button 
+          onClick={() => {
+            if (showLogs) setShowLogs(false);
+            else if (folderPath.length > 0) {
+              const newPath = [...folderPath];
+              newPath.pop();
+              setFolderPath(newPath);
+              if (newPath.length > 0) {
+                fetchFiles(newPath[newPath.length - 1].id);
+              } else if (allowedFolders.length === 1) {
+                onBack();
+              }
             }
-          }
-          else onBack();
-        }} className="p-2 mr-3 bg-slate-100 rounded-full text-slate-600">
+            else onBack();
+          }} 
+          className="p-2 mr-3 rounded-full border shadow-xs transition-transform active:scale-95 cursor-pointer"
+          style={{ 
+            backgroundColor: 'var(--input-bg, #FFFFFF)', 
+            borderColor: 'var(--border-main, #E2E8F0)',
+            color: 'var(--text-main, #1E293B)' 
+          }}
+          title="Kembali"
+        >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
-          <h2 className="font-bold text-slate-800 text-lg flex items-center gap-2">
-            <Cloud className="w-5 h-5 text-blue-500" />
+          <h2 
+            className="font-bold text-lg flex items-center gap-2 font-display"
+            style={{ color: 'var(--text-main, #1E293B)' }}
+          >
+            <Cloud className="w-5 h-5" style={{ color: 'var(--primary, #2A9D8F)' }} />
             {showLogs ? 'Log Aktivitas' : currentFolder ? currentFolder.name : 'PrepLab Cloud'}
           </h2>
-          <p className="text-xs text-slate-500 line-clamp-1">
+          <p className="text-xs line-clamp-1" style={{ color: 'var(--text-muted, #64748B)' }}>
             {showLogs ? 'Riwayat upload & hapus file' : currentFolder ? 'Kelola file di cloud' : 'Akses folder section Anda'}
           </p>
         </div>
         {!showLogs && (
-          <button onClick={() => setShowLogs(true)} className="ml-auto p-2 bg-slate-100 text-slate-600 rounded-full">
+          <button 
+            onClick={() => setShowLogs(true)} 
+            className="ml-auto p-2 rounded-full border shadow-xs transition-transform active:scale-95 cursor-pointer"
+            style={{ 
+              backgroundColor: 'var(--input-bg, #FFFFFF)', 
+              borderColor: 'var(--border-main, #E2E8F0)',
+              color: 'var(--text-main, #1E293B)' 
+            }}
+            title="Riwayat Log"
+          >
             <History className="w-5 h-5" />
           </button>
         )}
       </div>
 
       <div className="p-4 flex-1">
-                {showLogs ? (
+        {showLogs ? (
            <div className="space-y-3">
              <div className="mb-4">
                <input
                  type="date"
                  value={logDateFilter}
                  onChange={(e) => setLogDateFilter(e.target.value)}
-                 className="w-full sm:max-w-xs block pl-3 pr-4 py-2 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all outline-none"
+                 className="w-full sm:max-w-xs block pl-3 pr-4 py-2 border rounded-xl text-sm font-semibold transition-all outline-none"
+                 style={{ 
+                   backgroundColor: 'var(--input-bg, #FFFFFF)', 
+                   borderColor: 'var(--border-main, #E2E8F0)',
+                   color: 'var(--text-main, #1E293B)' 
+                 }}
                />
              </div>
              {(() => {
                const filteredLogs = logs.filter(log => {
                  if (!logDateFilter) return true;
-                 // Some timestamp might be string or number, parse safely
                  try {
                    const d = new Date(log.timestamp);
-                   // adjust to local date
                    const year = d.getFullYear();
                    const month = String(d.getMonth() + 1).padStart(2, '0');
                    const day = String(d.getDate()).padStart(2, '0');
@@ -427,20 +445,39 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
                });
                
                if (filteredLogs.length === 0) {
-                 return <div className="text-center p-8 text-slate-500">Belum ada riwayat aktivitas</div>;
+                 return (
+                   <div 
+                     className="text-center p-8 rounded-xl border border-dashed"
+                     style={{ 
+                       backgroundColor: 'var(--card-bg, #FFFFFF)', 
+                       borderColor: 'var(--border-main, #E2E8F0)',
+                       color: 'var(--text-muted, #64748B)' 
+                     }}
+                   >
+                     Belum ada riwayat aktivitas
+                   </div>
+                 );
                }
                
                return filteredLogs.map(log => (
                  <Card key={log.id} className="p-3 flex items-start gap-3">
-                    <div className={`p-2 rounded-lg ${log.action === 'Upload' ? 'bg-emerald-100 text-emerald-600' : log.action === 'Create Folder' ? 'bg-blue-100 text-blue-600' : log.action === 'Move File' ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}>
-                      {log.action === 'Upload' ? <Upload className="w-4 h-4" /> : log.action === 'Create Folder' ? <FolderPlus className="w-4 h-4" /> : log.action === 'Move File' ? <MoveRight className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
+                    <div 
+                      className="p-2 rounded-lg shrink-0 font-bold"
+                      style={{ 
+                        backgroundColor: 'var(--input-bg, rgba(42,157,143,0.1))',
+                        color: 'var(--primary, #2A9D8F)'
+                      }}
+                    >
+                      {log.action === 'Upload' ? <Upload className="w-4 h-4" /> : log.action === 'Create Folder' ? <FolderPlus className="w-4 h-4" /> : log.action === 'Move File' ? <MoveRight className="w-4 h-4" /> : <Trash2 className="w-4 h-4 text-rose-500" />}
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-800">{log.userName}</p>
-                      <p className="text-xs text-slate-500">
-                        {log.action === 'Upload' ? 'Mengupload' : log.action === 'Create Folder' ? 'Membuat folder' : log.action === 'Move File' ? 'Memindahkan' : 'Menghapus'} <span className="font-medium text-slate-700">{log.fileName}</span> {log.action === 'Move File' ? 'ke folder' : 'di folder'} <span className="font-medium">{log.folderName}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold" style={{ color: 'var(--text-main, #1E293B)' }}>{log.userName}</p>
+                      <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted, #64748B)' }}>
+                        {log.action === 'Upload' ? 'Mengupload' : log.action === 'Create Folder' ? 'Membuat folder' : log.action === 'Move File' ? 'Memindahkan' : 'Menghapus'} <span className="font-semibold" style={{ color: 'var(--text-main, #1E293B)' }}>{log.fileName}</span> {log.action === 'Move File' ? 'ke folder' : 'di folder'} <span className="font-semibold" style={{ color: 'var(--text-main, #1E293B)' }}>{log.folderName}</span>
                       </p>
-                      <p className="text-[10px] text-slate-400 mt-1">{new Date(log.timestamp).toLocaleString()}</p>
+                      <p className="text-[10px] opacity-60 font-mono mt-1" style={{ color: 'var(--text-muted, #64748B)' }}>
+                        {new Date(log.timestamp).toLocaleString()}
+                      </p>
                     </div>
                  </Card>
                ));
@@ -451,15 +488,25 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
             {allowedFolders.map(folder => (
               <Card 
                 key={folder.id} 
-                className="p-5 cursor-pointer hover:border-blue-300 hover:shadow-md transition-all flex items-center gap-4"
+                className="p-5 cursor-pointer hover:shadow-md transition-all flex items-center gap-4 group"
                 onClick={() => openFolder(folder)}
               >
-                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
+                <div 
+                  className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform"
+                  style={{ 
+                    backgroundColor: 'var(--input-bg, rgba(42,157,143,0.1))', 
+                    color: 'var(--primary, #2A9D8F)' 
+                  }}
+                >
                   <Folder className="w-6 h-6 fill-current" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-800">{folder.name}</h3>
-                  <p className="text-xs text-slate-500">Folder Section</p>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-bold text-base truncate" style={{ color: 'var(--text-main, #1E293B)' }}>
+                    {folder.name}
+                  </h3>
+                  <p className="text-xs" style={{ color: 'var(--text-muted, #64748B)' }}>
+                    Folder Section
+                  </p>
                 </div>
               </Card>
             ))}
@@ -467,18 +514,30 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
         ) : (
           <div className="space-y-4">
             {allowedFolders.length === 0 ? (
-              <div className="text-center p-8 text-slate-500 bg-white rounded-xl border border-dashed">
-                <Folder className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <div 
+                className="text-center p-8 rounded-xl border border-dashed"
+                style={{ 
+                  backgroundColor: 'var(--card-bg, #FFFFFF)', 
+                  borderColor: 'var(--border-main, #E2E8F0)',
+                  color: 'var(--text-muted, #64748B)' 
+                }}
+              >
+                <Folder className="w-12 h-12 opacity-40 mx-auto mb-3" />
                 <p>Tidak ada folder yang diizinkan untuk section Anda.</p>
               </div>
             ) : (
               <>
                 <div className="flex flex-col sm:flex-row gap-3 mb-4">
                   <div className="relative flex-1">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 opacity-60" style={{ color: 'var(--text-muted, #64748B)' }} />
                     <input 
                       placeholder="Cari file..." 
-                      className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-slate-700 focus:outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 transition-all text-sm shadow-sm"
+                      className="w-full border rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 transition-all text-sm shadow-xs"
+                      style={{ 
+                        backgroundColor: 'var(--input-bg, #FFFFFF)', 
+                        borderColor: 'var(--border-main, #E2E8F0)',
+                        color: 'var(--text-main, #1E293B)' 
+                      }}
                       value={search}
                       onChange={e => setSearch(e.target.value)}
                     />
@@ -494,14 +553,15 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
                     <Button 
                        variant="secondary"
                        onClick={() => setCreatingFolder(true)}
-                       className="gap-2 bg-white flex-1 sm:flex-none justify-center py-2.5 shadow-sm"
+                       className="gap-2 flex-1 sm:flex-none justify-center py-2.5 shadow-xs font-semibold"
                     >
                       <FolderPlus className="w-4 h-4" />
                       <span>Folder Baru</span>
                     </Button>
                     <Button 
                        onClick={() => document.getElementById('cloud-upload')?.click()}
-                       className="gap-2 bg-blue-600 hover:bg-blue-700 flex-1 sm:flex-none justify-center py-2.5 shadow-sm text-white"
+                       className="gap-2 flex-1 sm:flex-none justify-center py-2.5 shadow-xs text-white font-bold"
+                       style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
                        disabled={uploading}
                     >
                       {uploading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Upload className="w-4 h-4" />}
@@ -512,54 +572,80 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
 
                 {loading ? (
                   <div className="flex justify-center p-12">
-                    <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+                    <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--primary, #2A9D8F)', borderTopColor: 'transparent' }} />
                   </div>
                 ) : files.length === 0 ? (
-                  <div className="text-center p-12 text-slate-500 bg-white rounded-xl border border-dashed">
-                    <File className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                    <p>Folder masih kosong</p>
-                    <p className="text-xs mt-1">Upload file untuk menambahkan</p>
+                  <div 
+                    className="text-center p-12 rounded-xl border border-dashed"
+                    style={{ 
+                      backgroundColor: 'var(--card-bg, #FFFFFF)', 
+                      borderColor: 'var(--border-main, #E2E8F0)',
+                      color: 'var(--text-muted, #64748B)' 
+                    }}
+                  >
+                    <File className="w-12 h-12 opacity-40 mx-auto mb-3" />
+                    <p className="font-semibold">Folder masih kosong</p>
+                    <p className="text-xs mt-1 opacity-75">Upload file untuk menambahkan</p>
                   </div>
                 ) : filteredFiles.length === 0 ? (
-                   <div className="text-center p-8 text-slate-500 bg-white rounded-xl">
+                   <div 
+                     className="text-center p-8 rounded-xl border"
+                     style={{ 
+                       backgroundColor: 'var(--card-bg, #FFFFFF)', 
+                       borderColor: 'var(--border-main, #E2E8F0)',
+                       color: 'var(--text-muted, #64748B)' 
+                     }}
+                   >
                       Pencarian tidak menemukan hasil
                    </div>
                 ) : (
-                  <div className="bg-white rounded-xl border border-slate-200 overflow-visible">
-                    {filteredFiles.map((file, i) => (
-                      <div key={file.id} 
-  className={`p-4 flex items-center gap-3 first:rounded-t-xl last:rounded-b-xl ${i !== filteredFiles.length - 1 ? 'border-b border-slate-100' : ''} cursor-pointer hover:bg-slate-50`}
-  onClick={(e) => {
-    if (file.mimeType && file.mimeType.includes('folder')) {
-      openFolder(file);
-    } else {
-      const now = Date.now();
-      const lastClick = Number(e.currentTarget.getAttribute('data-last-click') || 0);
-      if (now - lastClick < 400) {
-        if (file.webViewLink) window.open(file.webViewLink, '_blank');
-      }
-      e.currentTarget.setAttribute('data-last-click', now.toString());
-    }
-  }}
->
-                        <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center shrink-0">
+                  <div 
+                    className="rounded-xl border overflow-visible shadow-xs divide-y"
+                    style={{ 
+                      backgroundColor: 'var(--card-bg, #FFFFFF)', 
+                      borderColor: 'var(--border-main, #E2E8F0)' 
+                    }}
+                  >
+                    {filteredFiles.map((file) => (
+                      <div 
+                        key={file.id} 
+                        className="p-4 flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+                        style={{ borderColor: 'var(--border-main, #E2E8F0)' }}
+                        onClick={(e) => {
+                          if (file.mimeType && file.mimeType.includes('folder')) {
+                            openFolder(file);
+                          } else {
+                            const now = Date.now();
+                            const lastClick = Number(e.currentTarget.getAttribute('data-last-click') || 0);
+                            if (now - lastClick < 400) {
+                              if (file.webViewLink) window.open(file.webViewLink, '_blank');
+                            }
+                            e.currentTarget.setAttribute('data-last-click', now.toString());
+                          }
+                        }}
+                      >
+                        <div 
+                          className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                          style={{ 
+                            backgroundColor: 'var(--input-bg, rgba(42,157,143,0.1))',
+                            color: file.mimeType?.includes('folder') ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #64748B)'
+                          }}
+                        >
                           {file.mimeType && file.mimeType.includes('folder') ? (
-                            <Folder className="w-5 h-5 text-blue-500 fill-current" />
+                            <Folder className="w-5 h-5 fill-current" />
                           ) : (
-                            <File className="w-5 h-5 text-slate-400" />
+                            <File className="w-5 h-5" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <ScrollingText text={file.name} className="text-sm font-medium text-slate-800" />
-                          <p className="text-xs text-slate-500">
+                          <ScrollingText text={file.name} className="text-sm font-semibold" />
+                          <p className="text-xs" style={{ color: 'var(--text-muted, #64748B)' }}>
                             {new Date(file.createdTime).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})} 
                             {file.size && ` • ${formatSize(file.size)}`}
                           </p>
                         </div>
                         
                         <FileMenu file={file} onMove={() => setMovingFile(file)} onDelete={() => handleDelete(file)} />
-
-
                       </div>
                     ))}
                   </div>
@@ -569,10 +655,18 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
           </div>
         )}
       
+      {/* Modal Buat Folder Baru */}
       {creatingFolder && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-sm w-full p-5 shadow-xl">
-            <h3 className="font-bold text-lg mb-4">Buat Folder Baru</h3>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div 
+            className="rounded-2xl max-w-sm w-full p-5 shadow-2xl border"
+            style={{ 
+              backgroundColor: 'var(--card-bg, #FFFFFF)', 
+              borderColor: 'var(--border-main, #E2E8F0)',
+              color: 'var(--text-main, #1E293B)' 
+            }}
+          >
+            <h3 className="font-bold text-lg mb-4 font-display">Buat Folder Baru</h3>
             <Input 
               placeholder="Nama folder..." 
               value={newFolderName}
@@ -581,40 +675,64 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
             />
             <div className="flex gap-2 justify-end mt-6">
               <Button variant="secondary" onClick={() => setCreatingFolder(false)}>Batal</Button>
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleCreateFolder}>Buat</Button>
+              <Button 
+                className="text-white font-bold" 
+                style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
+                onClick={handleCreateFolder}
+              >
+                Buat
+              </Button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Modal Pindahkan File */}
       {movingFile && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl max-h-[80vh] flex flex-col">
-            <h3 className="font-bold text-lg mb-2">Pindahkan File</h3>
-            <p className="text-sm text-slate-500 mb-4 truncate">Pilih lokasi baru untuk <b>{movingFile.name}</b></p>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div 
+            className="rounded-2xl max-w-md w-full p-5 shadow-2xl border max-h-[80vh] flex flex-col"
+            style={{ 
+              backgroundColor: 'var(--card-bg, #FFFFFF)', 
+              borderColor: 'var(--border-main, #E2E8F0)',
+              color: 'var(--text-main, #1E293B)' 
+            }}
+          >
+            <h3 className="font-bold text-lg mb-1 font-display">Pindahkan File</h3>
+            <p className="text-xs mb-4 truncate" style={{ color: 'var(--text-muted, #64748B)' }}>
+              Pilih lokasi baru untuk <b>{movingFile.name}</b>
+            </p>
             
-            <div className="flex-1 overflow-y-auto min-h-[200px] border rounded-lg p-2 space-y-1">
+            <div 
+              className="flex-1 overflow-y-auto min-h-[200px] border rounded-xl p-2 space-y-1"
+              style={{ 
+                backgroundColor: 'var(--input-bg, #FFFFFF)', 
+                borderColor: 'var(--border-main, #E2E8F0)' 
+              }}
+            >
               {folderPath.length > 1 && (
                 <div 
-                  className="p-3 hover:bg-slate-50 rounded-lg flex items-center gap-3 cursor-pointer"
+                  className="p-3 rounded-lg flex items-center gap-3 cursor-pointer hover:opacity-80"
                   onClick={() => handleMoveFile(movingFile.id, folderPath[folderPath.length - 2].id)}
                 >
-                  <ArrowLeft className="w-5 h-5 text-slate-400" />
-                  <span className="font-medium text-slate-700">Kembali ke folder sebelumnya</span>
+                  <ArrowLeft className="w-5 h-5" style={{ color: 'var(--text-muted, #64748B)' }} />
+                  <span className="font-medium text-sm">Kembali ke folder sebelumnya</span>
                 </div>
               )}
               {files.filter(f => f.mimeType?.includes('folder') && f.id !== movingFile.id).map(folder => (
                 <div 
                   key={folder.id}
-                  className="p-3 hover:bg-slate-50 rounded-lg flex items-center gap-3 cursor-pointer"
+                  className="p-3 rounded-lg flex items-center gap-3 cursor-pointer hover:opacity-80"
                   onClick={() => handleMoveFile(movingFile.id, folder.id)}
                 >
-                  <Folder className="w-5 h-5 text-blue-500 fill-current" />
-                  <span className="font-medium text-slate-700">{folder.name}</span>
+                  <Folder className="w-5 h-5 fill-current" style={{ color: 'var(--primary, #2A9D8F)' }} />
+                  <span className="font-medium text-sm">{folder.name}</span>
                 </div>
               ))}
               {files.filter(f => f.mimeType?.includes('folder') && f.id !== movingFile.id).length === 0 && folderPath.length <= 1 && (
-                <div className="text-center p-4 text-slate-400 text-sm">Tidak ada folder tujuan yang tersedia di sini.</div>
+                <div className="text-center p-4 text-xs" style={{ color: 'var(--text-muted, #64748B)' }}>
+                  Tidak ada folder tujuan yang tersedia di sini.
+                </div>
               )}
             </div>
             
@@ -624,7 +742,7 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
           </div>
         </div>
       )}
-          </div>
+      </div>
     </div>
   );
 }

@@ -269,6 +269,12 @@ const app = express();
   app.use(express.json({ limit: '50mb' })); 
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+  // Static files in public directory (including favicon, logo, etc.)
+  app.use(express.static(path.join(process.cwd(), "public")));
+  app.get("/favicon.ico", (req, res) => {
+    res.sendFile(path.join(process.cwd(), "public", "favicon.ico"));
+  });
+
   // Mount modular routers
   app.use("/api/auth", authRouter);
   app.use("/api/debug", debugRouter);

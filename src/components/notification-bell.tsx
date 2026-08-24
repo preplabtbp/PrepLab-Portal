@@ -1,17 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, X, BellRing } from 'lucide-react';
+import { Bell, Check, X, BellRing, Wrench, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { subscribeUserToPush } from '../push-notifications';
+import { WorkOrderDetailModal } from './WorkOrderDetailModal';
 
-export function NotificationBell({ userNik }: { userNik?: string }) {
+interface NotificationBellProps {
+  userNik?: string;
+  userName?: string;
+}
+
+export function NotificationBell({ userNik, userName }: NotificationBellProps) {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeTab, setActiveTab] = useState('Semua');
   const dropdownRef = useRef<HTMLDivElement>(null);
   
-  const isDev = userNik === '02D25000055' || userNik === 'preplabadmin';
+  // WO Detail Modal states
+  const [selectedWoId, setSelectedWoId] = useState<string | null>(null);
+  const [showWoModal, setShowWoModal] = useState(false);
 
+  const isDev = userNik === '02D25000055' || userNik === 'preplabadmin';
   const [pushStatus, setPushStatus] = useState<string>('default');
 
   useEffect(() => {
@@ -33,7 +42,6 @@ export function NotificationBell({ userNik }: { userNik?: string }) {
       }
     }
   };
-
 
   const fetchNotifications = async () => {
     if (!userNik) return;
@@ -80,18 +88,15 @@ export function NotificationBell({ userNik }: { userNik?: string }) {
 
   const markAsRead = async (id: number) => {
     try {
-      // Simpan di local storage
       const readIds = JSON.parse(localStorage.getItem(`notif_read_ids_${userNik}`) || '[]');
       if (!readIds.includes(id)) {
         readIds.push(id);
         localStorage.setItem(`notif_read_ids_${userNik}`, JSON.stringify(readIds));
       }
       
-      // Update UI langsung
       setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: true } : n));
       setUnreadCount(Math.max(0, unreadCount - 1));
       
-      // Hit API di background
       fetch(`/api/notifications/${id}/read`, { method: 'PUT' }).catch(console.error);
     } catch (err) {
       console.error(err);
@@ -101,21 +106,72 @@ export function NotificationBell({ userNik }: { userNik?: string }) {
   const markAllAsRead = async () => {
     if (!userNik) return;
     try {
-      // Cari timestamp paling baru dari notifikasi yang ada untuk mencegah bug zona waktu/jam lokal
       const maxTime = notifications.length > 0 
         ? Math.max(...notifications.map(n => n.createdAt ? new Date(n.createdAt).getTime() : 0))
         : Date.now();
       
-      // Simpan timestamp di local storage
       localStorage.setItem(`notif_read_all_${userNik}`, maxTime.toString());
-      // Update UI langsung
       setNotifications(notifications.map(n => ({ ...n, isRead: true })));
       setUnreadCount(0);
       
-      // Hit API di background (opsional, untuk notif personal)
       fetch(`/api/notifications/read-all?userId=${userNik}`, { method: 'PUT' }).catch(console.error);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Helper to extract WO ID from notification
+  const extractWoId = (notif: any): string | null => {
+    const str = `${notif.title || ''} ${notif.message || ''} ${notif.link || ''}`;
+    const match = str.match(/FWO-[\w-]+/) || str.match(/WO-[\w-]+/);
+    if (match) return match[0];
+    
+    if (notif.link && notif.link.includes('/wo-')) {
+      const parts = notif.link.split('/');
+      return parts[parts.length - 1];
+    }
+    return null;
+  };
+
+  const isWoNotification = (notif: any): boolean => {
+    const title = (notif.title || '').toLowerCase();
+    const message = (notif.message || '').toLowerCase();
+    const role = (notif.role || '').toLowerCase();
+    return (
+      title.includes('work order') || 
+      title.includes('wo ') || 
+      message.includes('buat wo') || 
+      message.includes('fwo-') ||
+      role === 'maintenance' ||
+      !!extractWoId(notif)
+    );
+  };
+
+  const handleNotificationClick = (notif: any) => {
+    if (!notif.isRead) {
+      markAsRead(notif.id);
+    }
+
+    const woId = extractWoId(notif);
+    if (woId) {
+      setSelectedWoId(woId);
+      setShowWoModal(true);
+      setIsOpen(false);
+    } else if (isWoNotification(notif)) {
+      // If it's a general WO notification, find latest open WO
+      fetch('/api/work-orders')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.length > 0) {
+            const openWo = data.find((w: any) => w.status !== 'Closed') || data[data.length - 1];
+            if (openWo?.woId) {
+              setSelectedWoId(openWo.woId);
+              setShowWoModal(true);
+              setIsOpen(false);
+            }
+          }
+        })
+        .catch(() => {});
     }
   };
 
@@ -132,86 +188,207 @@ export function NotificationBell({ userNik }: { userNik?: string }) {
   });
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm text-slate-600 active:scale-95 transition-transform relative"
-      >
-        <Bell className="w-4 h-4" />
-        {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
-        )}
-      </button>
-      
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-50 flex flex-col max-h-[450px]">
-          <div className="p-3 border-b border-slate-100 flex flex-col gap-2 bg-slate-50">
-            <div className="flex justify-between items-center">
-              <h3 className="font-semibold text-slate-800 text-sm">Notifications</h3>
-              {unreadCount > 0 && (
-                <button 
-                  onClick={markAllAsRead}
-                  className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-                >
-                  <Check className="w-3 h-3" /> Mark all read
-                </button>
+    <>
+      <div className="relative" ref={dropdownRef}>
+        <button 
+          onClick={() => setIsOpen(!isOpen)}
+          className="w-8 h-8 rounded-full border flex items-center justify-center shadow-xs active:scale-95 transition-transform relative cursor-pointer"
+          style={{
+            backgroundColor: 'var(--input-bg, #FFFFFF)',
+            borderColor: 'var(--border-main, #E2E8F0)',
+            color: 'var(--text-main, #1E293B)'
+          }}
+          title="Notifikasi"
+        >
+          <Bell className="w-4 h-4" />
+          {unreadCount > 0 && (
+            <span 
+              className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-xs ring-2 ring-white"
+              style={{ backgroundColor: 'var(--bubble-color, #EF4444)' }}
+            >
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
+        
+        {isOpen && (
+          <div 
+            className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl shadow-2xl border overflow-hidden z-50 flex flex-col max-h-[500px] animate-in fade-in zoom-in-95 duration-150"
+            style={{
+              backgroundColor: 'var(--card-bg, #FFFFFF)',
+              borderColor: 'var(--border-main, #E2E8F0)',
+              color: 'var(--text-main, #1E293B)'
+            }}
+          >
+            {/* Header Dropdown */}
+            <div 
+              className="p-3.5 border-b flex flex-col gap-2 select-none"
+              style={{
+                backgroundColor: 'var(--bg-main, #F8FAFC)',
+                borderColor: 'var(--border-main, #E2E8F0)'
+              }}
+            >
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <BellRing className="w-4 h-4 text-teal-500" />
+                  <h3 className="font-bold text-sm font-display" style={{ color: 'var(--text-main)' }}>
+                    Notifikasi Portal
+                  </h3>
+                </div>
+                {unreadCount > 0 && (
+                  <button 
+                    onClick={markAllAsRead}
+                    className="text-xs font-semibold hover:opacity-80 flex items-center gap-1 cursor-pointer"
+                    style={{ color: 'var(--primary, #2A9D8F)' }}
+                  >
+                    <Check className="w-3.5 h-3.5" /> Tandai semua dibaca
+                  </button>
+                )}
+              </div>
+
+              {isDev && (
+                <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
+                  {['Semua', 'Maintenance', 'Laboratory', 'Preparation', 'QA', 'Inventory Control', 'Administration', 'Sistem'].map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`px-2.5 py-0.5 whitespace-nowrap text-[10px] font-bold rounded-full transition-colors cursor-pointer border ${
+                        activeTab === tab 
+                          ? 'text-white' 
+                          : 'opacity-70 hover:opacity-100'
+                      }`}
+                      style={{
+                        backgroundColor: activeTab === tab ? 'var(--primary)' : 'var(--input-bg)',
+                        borderColor: 'var(--border-main)',
+                        color: activeTab === tab ? '#FFFFFF' : 'var(--text-main)'
+                      }}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-            {isDev && (
-              <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
-                {['Semua', 'Laboratory', 'Preparation', 'QA', 'Inventory Control', 'Maintenance', 'Administration', 'Sistem'].map(tab => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-2 py-1 whitespace-nowrap text-[10px] font-medium rounded-full transition-colors ${activeTab === tab ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          
+            
             {pushStatus !== 'granted' && (
-              <div className="mx-2 mb-2 p-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between">
-                <span className="text-xs text-blue-800">Aktifkan Notifikasi Push</span>
-                <button onClick={handleSubscribe} className="px-2 py-1 bg-blue-600 text-white text-[10px] rounded hover:bg-blue-700">
+              <div 
+                className="mx-3 my-2 p-2.5 rounded-xl border flex items-center justify-between shadow-2xs"
+                style={{
+                  backgroundColor: 'var(--input-bg)',
+                  borderColor: 'var(--border-main)'
+                }}
+              >
+                <span className="text-xs font-semibold" style={{ color: 'var(--text-main)' }}>
+                  Aktifkan Notifikasi Push
+                </span>
+                <button 
+                  onClick={handleSubscribe} 
+                  className="px-2.5 py-1 text-white text-[10px] font-bold rounded-lg cursor-pointer"
+                  style={{ backgroundColor: 'var(--primary)' }}
+                >
                   Aktifkan
                 </button>
               </div>
             )}
-            <div className="overflow-y-auto flex-1 p-2 space-y-1">
-            {filteredNotifs.length === 0 ? (
-              <div className="text-center py-6 text-slate-500 text-sm">
-                No notifications yet
-              </div>
-            ) : (
-              filteredNotifs.map((notif) => (
-                <div 
-                  key={notif.id} 
-                  className={`p-3 rounded-lg text-sm relative ${notif.isRead ? 'bg-white opacity-70' : 'bg-blue-50/50'}`}
-                  onClick={() => {
-                    if (!notif.isRead) markAsRead(notif.id);
-                  }}
-                >
-                  {!notif.isRead && (
-                    <div className="absolute top-4 right-3 w-2 h-2 rounded-full bg-blue-500"></div>
-                  )}
-                  <h4 className="font-medium text-slate-800 pr-4">{notif.title}</h4>
-                  <p className="text-slate-600 text-xs mt-0.5 line-clamp-2">{notif.message}</p>
-                  <p className="text-slate-400 text-[10px] mt-1 flex justify-between">
-                    <span>{notif.createdAt ? format(new Date(notif.createdAt), 'dd MMM HH:mm') : 'Just now'}</span>
-                    {isDev && notif.role && <span className="uppercase text-[9px] font-semibold text-slate-500 bg-slate-100 px-1.5 rounded">{notif.role}</span>}
-                  </p>
+
+            {/* List Notifications */}
+            <div className="overflow-y-auto flex-1 p-2 space-y-1.5">
+              {filteredNotifs.length === 0 ? (
+                <div className="text-center py-8 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                  Belum ada notifikasi
                 </div>
-              ))
-            )}
+              ) : (
+                filteredNotifs.map((notif) => {
+                  const isWO = isWoNotification(notif);
+                  return (
+                    <div 
+                      key={notif.id} 
+                      className={`p-3 rounded-xl text-xs relative cursor-pointer border transition-all hover:scale-[1.01] ${
+                        notif.isRead ? 'opacity-70' : 'shadow-xs font-medium'
+                      }`}
+                      style={{
+                        backgroundColor: notif.isRead ? 'var(--card-bg)' : 'var(--input-bg)',
+                        borderColor: 'var(--border-main)'
+                      }}
+                      onClick={() => handleNotificationClick(notif)}
+                    >
+                      {!notif.isRead && (
+                        <div 
+                          className="absolute top-3.5 right-3 w-2 h-2 rounded-full"
+                          style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
+                        />
+                      )}
+                      
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        {isWO && (
+                          <span 
+                            className="p-1 rounded-md text-[10px] font-bold inline-flex items-center gap-1 shadow-2xs"
+                            style={{ 
+                              backgroundColor: 'rgba(42, 157, 143, 0.15)',
+                              color: 'var(--primary, #2A9D8F)' 
+                            }}
+                          >
+                            <Wrench className="w-3 h-3" /> WO
+                          </span>
+                        )}
+                        <h4 className="font-bold text-xs truncate pr-3" style={{ color: 'var(--text-main)' }}>
+                          {notif.title}
+                        </h4>
+                      </div>
+
+                      <p className="text-xs leading-relaxed line-clamp-2" style={{ color: 'var(--text-muted)' }}>
+                        {notif.message}
+                      </p>
+
+                      {isWO && (
+                        <div 
+                          className="mt-2 pt-1.5 border-t flex items-center justify-between text-[11px] font-bold"
+                          style={{ borderColor: 'var(--border-main)', color: 'var(--primary, #2A9D8F)' }}
+                        >
+                          <span className="flex items-center gap-1">
+                            <Wrench className="w-3 h-3" /> Buka Detail & Selesaikan WO
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </div>
+                      )}
+
+                      <div className="text-[10px] opacity-60 font-mono mt-1.5 flex justify-between items-center" style={{ color: 'var(--text-muted)' }}>
+                        <span>{notif.createdAt ? format(new Date(notif.createdAt), 'dd MMM HH:mm') : 'Baru saja'}</span>
+                        {notif.role && (
+                          <span 
+                            className="uppercase text-[9px] font-bold px-1.5 py-0.5 rounded border"
+                            style={{ 
+                              backgroundColor: 'var(--input-bg)',
+                              borderColor: 'var(--border-main)'
+                            }}
+                          >
+                            {notif.role}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+
+      {/* WORK ORDER DETAIL & RESOLUTION MODAL */}
+      <WorkOrderDetailModal 
+        woId={selectedWoId}
+        isOpen={showWoModal}
+        onClose={() => {
+          setShowWoModal(false);
+          setSelectedWoId(null);
+        }}
+        inspectorName={userName}
+        inspectorNik={userNik}
+        onResolved={() => {
+          fetchNotifications();
+        }}
+      />
+    </>
   );
 }

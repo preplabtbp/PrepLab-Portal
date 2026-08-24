@@ -113,6 +113,34 @@ router.get("/api/roster", async (req, res) => {
     }
   });
 
+router.post("/api/roster/cell", async (req, res) => {
+  try {
+    const { nik, date, status } = req.body;
+    if (!nik || !date) {
+      return res.status(400).json({ error: "nik and date are required" });
+    }
+
+    let properDate = date;
+    if (date.includes('-')) {
+      const parts = new Date(date).toDateString().split(' ');
+      const day = parseInt(parts[2], 10);
+      properDate = day + ' ' + parts[1] + ' ' + parts[3].substring(2);
+    }
+
+    const existing = await db.select().from(roster).where(and(eq(roster.nik, nik), eq(roster.date, properDate))).limit(1);
+    
+    if (existing.length > 0) {
+      await db.update(roster).set({ status: status || '-' }).where(eq(roster.id, existing[0].id));
+    } else {
+      await db.insert(roster).values({ nik: nik, date: properDate, status: status || '-' });
+    }
+    res.json({ success: true, nik, date: properDate, status });
+  } catch (e: any) {
+    console.error("Error updating roster cell:", e);
+    res.status(500).json({ error: "Failed to update roster cell" });
+  }
+});
+
 router.post("/api/roster/izin", async (req, res) => {
     try {
       const { nik, date, type } = req.body;
