@@ -179,18 +179,13 @@ export function SectionHubDashboard({
           { title: 'Quarterly Preparasi', icon: '📑', searchKeywords: ['Quarterly Preparasi', '469'] },
           { title: 'Biannual Preparasi', icon: '📑', searchKeywords: ['Biannual Preparasi', '468'] },
           { title: 'Yearly Preparasi', icon: '📑', searchKeywords: ['Yearly Preparasi', '467'] },
-          { title: 'Routine Preparasi', icon: '⚙️', searchKeywords: ['Routine Preparasi', '429'] },
+          { title: 'Archived', icon: '📂', searchKeywords: ['Archived', '634'] },
+          { title: 'Information Preparasi', icon: '📄', searchKeywords: ['Information Preparasi', '444'] },
         ],
         rulesTitle: 'RULES',
         rulesItems: [
-          { title: 'Information Preparasi', icon: '📄', searchKeywords: ['Information Preparasi', '444'] },
-          { title: 'Penimbangan Increment Sampel', icon: '⚖️', searchKeywords: ['Penimbangan Increment', '12'] },
-          { title: 'Update PIC Kotak P3K Basah', icon: '🩹', searchKeywords: ['Kotak P3K Preparasi Basah', '13'] },
-          { title: 'Update PIC Kotak P3K Kering', icon: '🩹', searchKeywords: ['Kotak P3K Preparasi Kering', '14'] },
-          { title: 'Update Spill Kit Preparasi', icon: '🧰', searchKeywords: ['spill kit Preparasi', '15'] },
-          { title: 'Monitoring Eye Wash (IUP)', icon: '👁️', searchKeywords: ['Eye Wash (Preparasi Basah IUP)', '17'] },
-          { title: 'Monitoring Eye Wash (Logpond)', icon: '👁️', searchKeywords: ['Eye Wash (Preparasi Basah LOGPOND)', '31'] },
-          { title: 'Pembagian Tugas Piket', icon: '📋', searchKeywords: ['Pembagian tugas piket Preparasi', '20'] },
+          { title: 'Pengangkutan Remainder', icon: '🚜', searchKeywords: ['PENGANGKUTAN REMAINDER', '632'] },
+          { title: 'Pengerjaan Batuan/Boulder (LIM/SAP/BLEND)', icon: '🪨', searchKeywords: ['PENGERJAAN BATUAN', 'Boulder', '633'] },
         ],
         extraLinks: []
       };
