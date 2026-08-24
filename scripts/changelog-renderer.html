@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrepLab Portal - Catatan Pembaruan Sistem (Changelog)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #0B0F19;
+      color: #E2E8F0;
+      padding: 40px 24px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .document-container {
+      width: 100%;
+      max-width: 900px;
+      background: #111827;
+      border: 1px solid #1F2937;
+      border-radius: 24px;
+      padding: 48px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      position: relative;
+      overflow: hidden;
+    }
+    .ambient-glow {
+      position: absolute;
+      top: -120px;
+      right: -120px;
+      width: 350px;
+      height: 350px;
+      background: radial-gradient(circle, rgba(13, 148, 136, 0.25) 0%, rgba(13, 148, 136, 0) 70%);
+      pointer-events: none;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #1F2937;
+      padding-bottom: 28px;
+      margin-bottom: 36px;
+    }
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .brand-logo {
+      width: 54px;
+      height: 54px;
+      border-radius: 14px;
+      background: #042F2E;
+      border: 1px solid #0D9488;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 6px;
+    }
+    .brand-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .brand-text h1 {
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      color: #F8FAFC;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-text p {
+      font-size: 12px;
+      color: #94A3B8;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .portal-badge {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      color: #14B8A6;
+      background: rgba(20, 184, 166, 0.12);
+      border: 1px solid rgba(20, 184, 166, 0.3);
+      padding: 6px 14px;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .portal-badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10B981;
+      box-shadow: 0 0 8px #10B981;
+    }
+    .version-block {
+      margin-bottom: 40px;
+    }
+    .version-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1E293B;
+      border: 1px solid #334155;
+      padding: 12px 20px;
+      border-radius: 14px;
+      margin-bottom: 24px;
+    }
+    .version-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #F1F5F9;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .version-tag {
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      background: #0D9488;
+      color: #FFFFFF;
+      padding: 2px 10px;
+      border-radius: 6px;
+      font-weight: 700;
+    }
+    .version-date {
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94A3B8;
+      font-weight: 600;
+    }
+    .feature-group {
+      margin-bottom: 28px;
+    }
+    .group-title {
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #38BDF8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .group-title.bugfix {
+      color: #F59E0B;
+    }
+    .feature-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .feature-card {
+      background: #161F30;
+      border: 1px solid #1E293B;
+      border-radius: 14px;
+      padding: 18px 20px;
+      transition: all 0.2s ease;
+    }
+    .feature-head {
+      font-size: 14px;
+      font-weight: 700;
+      color: #F8FAFC;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .feature-icon {
+      font-size: 16px;
+    }
+    .sub-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-left: 24px;
+    }
+    .sub-list li {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #CBD5E1;
+      position: relative;
+    }
+    .sub-list li::before {
+      content: "•";
+      color: #14B8A6;
+      font-weight: bold;
+      position: absolute;
+      left: -14px;
+      top: 0;
+    }
+    .sub-list li strong {
+      color: #F1F5F9;
+      font-weight: 700;
+    }
+    .pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      padding: 1px 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      color: #38BDF8;
+    }
+    .footer {
+      border-top: 1px solid #1F2937;
+      padding-top: 24px;
+      margin-top: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #64748B;
+      font-size: 11px;
+    }
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .footer-right {
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="document-container">
+    <div class="ambient-glow"></div>
+
+    <!-- Header Section -->
+    <div class="header">
+      <div class="brand-section">
+        <div class="brand-logo">
+          <img src="../public/logo.png" alt="PrepLab Logo" onerror="this.src='../public/preplab-logo.png'">
+        </div>
+        <div class="brand-text">
+          <h1>PREPLAB PORTAL</h1>
+          <p>HARITA NICKEL • TBP & GPS DIVISION</p>
+        </div>
+      </div>
+      <div class="portal-badge">
+        CATATAN PEMBARUAN SISTEM
+      </div>
+    </div>
+
+    <!-- VERSION 2.6.0 -->
+    <div class="version-block">
+      <div class="version-header">
+        <div class="version-title">
+          <span>Rilis Pembaruan</span>
+          <span class="version-tag">v2.6.0</span>
+        </div>
+        <div class="version-date">25 AGUSTUS 2026</div>
+      </div>
+
+      <!-- Feature Group -->
+      <div class="feature-group">
+        <div class="group-title">
+          <span>🚀 FITUR BARU & PENINGKATAN UTAMA</span>
+        </div>
+
+        <div class="feature-list">
+          
+          <!-- Item 1: WO Maintenance Dashboard -->
+          <div class="feature-card">
+            <div class="feature-head">
+              <span class="feature-icon">🛠️</span>
+              <span>Dashboard Pemeliharaan & Work Order (WO Maintenance Dashboard)</span>
+            </div>
+            <ul class="sub-list">
+              <li><strong>Pusat Monitoring Alat Terpadu:</strong> Menggabungkan seluruh data pelaporan kerusakan dan perbaikan alat dari site TBP & GPS dalam satu dashboard eksekutif real-time.</li>
+              <li><strong>Perhitungan Metrik Otomatis:</strong> Menampilkan total durasi downtime (jam henti alat), frekuensi kerusakan, konsumsi sparepart, dan rasio perbaikan kategori <span class="pill">Instrument (L)</span> vs <span class="pill">Non-Instrument (PL)</span>.</li>
+              <li><strong>Grafik Interaktif & Analisis Downtime:</strong> Dilengkapi grafik batang 10 alat dengan downtime tertinggi, grafik donat rasio kerusakan, dan daftar ranking sparepart yang paling sering diganti.</li>
+              <li><strong>Modal Rincian Kasus & Bukti Foto:</strong> Pratinjau detail keluhan, tindakan perbaikan teknisi, foto bukti, dan nama pelapor langsung dari tabel.</li>
+              <li><strong>Ekspor Laporan Excel:</strong> Unduh data rekapitulasi pemeliharaan lengkap format <span class="pill">.xlsx</span> dalam satu klik.</li>
+            </ul>
+          </div>
+
+          <!-- Item 2: Notion Data Migration -->
+          <div class="feature-card">
+            <div class="feature-head">
+              <span class="feature-icon">🔄</span>
+              <span>Penyelesaian Penuh Migrasi Data Notion ke Database Internal & Google Drive</span>
+            </div>
+            <ul class="sub-list">
+              <li><strong>Kemandirian Sistem 100%:</strong> Seluruh database kegiatan, notulen, dan dokumen kerja dari Notion (Weekly Laboratorium, Preparasi, Admin, K3LH, IT) telah dimigrasikan penuh ke database PostgreSQL internal.</li>
+              <li><strong>Penyimpanan Berkas Terpusat:</strong> Seluruh foto dokumentasi, laporan Excel, dan lampiran PDF tersimpan aman di Google Drive terpusat.</li>
+              <li><strong>Bebas Masalah Broken Link:</strong> Dilengkapi server proxy media internal sehingga gambar dan dokumen selalu terbuka cepat tanpa tautan kedaluwarsa.</li>
+              <li><strong>Data Historis Utuh:</strong> Semua riwayat diskusi, komentar teknisi, dan lampiran berkas masa lalu tetap tersimpan utuh di papan Bulletin.</li>
+            </ul>
+          </div>
+
+          <!-- Item 3: ISO Week Filter -->
+          <div class="feature-card">
+            <div class="feature-head">
+              <span class="feature-icon">📅</span>
+              <span>Filter Minggu ISO (ISO 8601 Week) di Seluruh Dashboard & Modul WO</span>
+            </div>
+            <ul class="sub-list">
+              <li><strong>Pilihan Cepat & Fleksibel:</strong> Pengguna dapat memfilter laporan langsung berdasarkan <strong>Minggu ISO Ini</strong>, <strong>Minggu ISO Lalu</strong>, atau nomor minggu spesifik (<span class="pill">W01 - W53</span>) lengkap dengan rentang tanggalnya (Senin – Minggu).</li>
+              <li><strong>Bilah Filter Lengkap di Daftar WO:</strong> Ditambahkan filter Minggu ISO, status pengerjaan (Open, In Progress, Closed), dan kolom pencarian cepat di modul Daftar Work Order.</li>
+              <li><strong>Label Badge Minggu:</strong> Setiap kartu dan baris data WO kini memiliki penanda badge minggu (contoh: <span class="pill">W34</span>) agar periode pengerjaan langsung terbaca.</li>
+            </ul>
+          </div>
+
+          <!-- Item 4: Pagination -->
+          <div class="feature-card">
+            <div class="feature-head">
+              <span class="feature-icon">📋</span>
+              <span>Pagination (Bagi Halaman per 20 Data) & Pencarian pada Tabel Rincian WO</span>
+            </div>
+            <ul class="sub-list">
+              <li><strong>Tampilan Bersih & Cepat:</strong> Tabel detail Work Order dibatasi menjadi <strong>20 baris per halaman</strong> sehingga tidak perlu lagi scroll panjang ke bawah.</li>
+              <li><strong>Navigasi & Pencarian Lengkap:</strong> Tombol Sebelumnya, Nomor Halaman, Berikutnya, dan kotak pencarian langsung di atas tabel untuk mencari No. WO, alat, keluhan, teknisi, maupun status secara instan.</li>
+            </ul>
+          </div>
+
+          <!-- Item 5: Dynamic Sun Animation -->
+          <div class="feature-card">
+            <div class="feature-head">
+              <span class="feature-icon">☀️</span>
+              <span>Animasi Cuaca & Langit Dinamis (Pengganti Animasi Tangan Melambai)</span>
+            </div>
+            <ul class="sub-list">
+              <li><strong>Visual Pagi (04:00 - 10:59):</strong> Matahari terbit dengan sinar keemasan berotasi lembut.</li>
+              <li><strong>Visual Siang (11:00 - 14:59):</strong> Matahari siang cerah dengan efek korona energi berdenyut.</li>
+              <li><strong>Visual Sore (15:00 - 17:59):</strong> Matahari senja yang turun perlahan ke ufuk langit.</li>
+              <li><strong>Visual Malam (18:00 - 03:59):</strong> Bulan sabit ungu malam dengan kilauan bintang.</li>
+              <li><strong>Desain Murni:</strong> Tampil bersih tanpa kotak latar belakang (*background-free*) dan proporsional dengan kanvas teks.</li>
+            </ul>
+          </div>
+
+          <!-- Item 6: Branding & Bulletin Updates -->
+          <div class="feature-card">
+            <div class="feature-head">
+              <span class="feature-icon">🎨</span>
+              <span>Tampilan Login Baru, Header Branding & Drawer Diskusi 2 Kolom</span>
+            </div>
+            <ul class="sub-list">
+              <li><strong>Login & Header Baru:</strong> Tampilan login modern *dark-mode enterprise* dengan logo resmi Prep & Lab di login dan pojok kiri navigasi atas.</li>
+              <li><strong>Drawer Diskusi 2 Kolom:</strong> Tampilan detail topik terbuka lebar dengan kolom rincian/galeri foto di kiri dan ruang diskusi tim di kanan.</li>
+              <li><strong>Kustomisasi PIC & Periode:</strong> Pilihan cepat All Foreman, SPV, pencarian NIK/Nama, dan pilihan periode baku (Daily, Weekly, Monthly, dll).</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Bug Fixes Group -->
+      <div class="feature-group">
+        <div class="group-title bugfix">
+          <span>🛠️ PERBAIKAN SISTEM (BUG FIXES)</span>
+        </div>
+
+        <div class="feature-list">
+          <div class="feature-card">
+            <ul class="sub-list">
+              <li><strong>Perbaikan Navigasi Breadcrumb:</strong> Memperbaiki alur navigasi agar klik ruang kerja Laboratorium langsung menuju workspace yang tepat tanpa tersasar.</li>
+              <li><strong>Tampilan Layar Penuh Section Hub:</strong> Menghapus pembatasan lebar agar halaman section tampil penuh (*full-width*) dan leluasa.</li>
+              <li><strong>Keamanan Baris Tabel:</strong> Memperbaiki validasi hapus baris agar tidak menghapus kegiatan utama lainnya secara tidak sengaja.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-left">
+        <span>🔒 PrepLab Enterprise Portal</span>
+        <span>•</span>
+        <span>Harita Nickel • Precision in Every Element</span>
+      </div>
+      <div class="footer-right">
+        Dokumen Resmi Rilis • v2.6.0
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>
