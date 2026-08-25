@@ -113,8 +113,6 @@ export default function QuotesPoolModal({
     }
   }, [quotesList]);
 
-  if (!show) return null;
-
   // Toggle Like on Quote
   const handleToggleLike = async (quoteItem: CommunityQuoteItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -249,6 +247,8 @@ export default function QuotesPoolModal({
         return (new Date(b.createdAt || 0).getTime()) - (new Date(a.createdAt || 0).getTime());
       });
   }, [quotesList, selectedCategory, searchQuery, sortBy]);
+
+  if (!show) return null;
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-150">
