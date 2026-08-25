@@ -37,7 +37,14 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     setIsSyncing(true);
     setSyncFeedback(null);
     try {
-      const res = await fetch('/api/roster/sync', { method: 'POST' });
+      const res = await fetch('/api/roster/sync', { 
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-nik': inspectorNik
+        },
+        body: JSON.stringify({ editorNik: inspectorNik })
+      });
       const data = await res.json();
       if (data.success) {
         setSyncFeedback({ type: 'success', message: data.message || 'Sinkronisasi database berhasil!' });

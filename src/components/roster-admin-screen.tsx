@@ -49,6 +49,7 @@ export function RosterAdminScreen() {
   const [roster, setRoster] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [developerList, setDeveloperList] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -74,6 +75,17 @@ export function RosterAdminScreen() {
     currentShift: string;
   } | null>(null);
 
+  useEffect(() => {
+    fetch('/api/developers')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setDeveloperList(data.map((d: any) => d.nik));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const getHierarchyLevel = (jabatan: string) => {
     if (!jabatan) return 6;
     const j = jabatan.toLowerCase();
@@ -86,28 +98,46 @@ export function RosterAdminScreen() {
   };
 
   const requestorRole = currentUser?.jabatan || '';
-  const requestorSection = currentUser?.section || '';
+  const requestorSection = currentUser?.section || currentUser?.department || '';
   const requestorNik = currentUser?.nik || localStorage.getItem('p2h_inspector_nik') || '';
   const requestorPt = currentUser?.pt || '';
 
   const isSuperAdmin = requestorNik === '02D25000055' || requestorNik === 'preplabadmin';
-  const isAdminOrQA = isSuperAdmin || 
-    requestorSection === 'Administration' || 
-    requestorSection === 'QA' || 
-    requestorRole.toLowerCase().includes('admin') || 
-    requestorRole.toLowerCase().includes('quality assurance');
+  const isDeveloper = isSuperAdmin || requestorNik === 'preplabadmin' || developerList.includes(requestorNik);
 
-  const canEditRoster = isSuperAdmin || 
-    requestorSection === 'Administration' || 
-    requestorRole.toLowerCase().includes('admin');
+  const isAdministration = 
+    requestorSection.toLowerCase() === 'administration' || 
+    requestorSection.toLowerCase() === 'administrasi' || 
+    requestorRole.toLowerCase().includes('admin') || 
+    requestorRole.toLowerCase().includes('administrasi');
+
+  const isAdminOrQA = isDeveloper || isAdministration || 
+    requestorSection.toLowerCase() === 'qa' || 
+    requestorSection.toLowerCase().includes('quality assurance') ||
+    requestorRole.toLowerCase().includes('quality assurance') ||
+    requestorRole.toLowerCase().includes('qa');
+
+  // STRICT RULE: Only Administration Team & Developers can edit roster
+  const canEditRoster = isDeveloper || isAdministration;
 
   const levelU = isSuperAdmin ? 0 : getHierarchyLevel(requestorRole);
 
   const handleManualSync = async () => {
+    if (!canEditRoster) {
+      toast.error('Akses ditolak: Hanya Tim Administrasi dan Developer yang dapat menyinkronkan roster.');
+      return;
+    }
     setIsSyncing(true);
     setSyncFeedback(null);
     try {
-      const res = await fetch('/api/roster/sync', { method: 'POST' });
+      const res = await fetch('/api/roster/sync', { 
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-nik': requestorNik
+        },
+        body: JSON.stringify({ editorNik: requestorNik })
+      });
       const data = await res.json();
       if (data.success) {
         setSyncFeedback({ type: 'success', message: data.message || 'Sinkronisasi Roster berhasil diperbarui!' });
@@ -274,6 +304,10 @@ export function RosterAdminScreen() {
 
   // Update Roster Cell
   const handleSaveCell = async (newShift: string) => {
+    if (!canEditRoster) {
+      toast.error('Akses ditolak: Hanya Tim Administrasi dan Developer yang dapat mengubah roster.');
+      return;
+    }
     if (!editingCell) return;
     const { empNik, keyDateStr } = editingCell as any;
 
@@ -292,15 +326,20 @@ export function RosterAdminScreen() {
     try {
       const res = await fetch('/api/roster/cell', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-nik': requestorNik
+        },
         body: JSON.stringify({
           nik: empNik,
           date: keyDateStr,
-          status: newShift
+          status: newShift,
+          editorNik: requestorNik
         })
       });
       if (!res.ok) {
-        throw new Error('Gagal menyimpan ke server');
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Gagal menyimpan ke server');
       }
     } catch (e: any) {
       toast.error('Gagal update ke server: ' + e.message);
@@ -444,27 +483,35 @@ export function RosterAdminScreen() {
         icon={<Calendar />}
       >
         <div className="flex flex-wrap items-center gap-2">
-          {canEditRoster && (
+          {canEditRoster ? (
             <span 
-              className="text-xs font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 shadow-2xs"
+              className="text-xs font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 shadow-2xs bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+            >
+              <Edit2 className="w-3.5 h-3.5" /> Editor Roster (Admin & Dev)
+            </span>
+          ) : (
+            <span 
+              className="text-xs font-medium px-3 py-1.5 rounded-xl border flex items-center gap-1.5 shadow-2xs opacity-80"
               style={{
                 backgroundColor: 'var(--input-bg)',
                 borderColor: 'var(--border-main)',
-                color: 'var(--primary)'
+                color: 'var(--text-muted)'
               }}
             >
-              <Edit2 className="w-3.5 h-3.5" /> Mode Editor Aktif
+              <Info className="w-3.5 h-3.5 text-slate-400" /> Mode Baca Roster
             </span>
           )}
-          <Button
-            onClick={handleManualSync}
-            disabled={isSyncing}
-            className="text-white flex items-center gap-2 rounded-xl text-xs font-bold px-3.5 py-2 shadow-sm transition-all cursor-pointer"
-            style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-            {isSyncing ? 'Menyinkronkan...' : 'Sinkron Google Sheets'}
-          </Button>
+          {canEditRoster && (
+            <Button
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className="text-white flex items-center gap-2 rounded-xl text-xs font-bold px-3.5 py-2 shadow-sm transition-all cursor-pointer"
+              style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Menyinkronkan...' : 'Sinkron Google Sheets'}
+            </Button>
+          )}
         </div>
       </PageHeader>
 
@@ -800,15 +847,19 @@ export function RosterAdminScreen() {
                                   displayDate: `${col.dayName}, ${col.dateNumber}`,
                                   currentShift: shiftCode === '-' ? '' : shiftCode
                                 } as any);
+                              } else {
+                                toast.info("Akses Khusus Administrasi & Developer", {
+                                  description: "Fitur pengeditan jadwal roster hanya dapat diakses oleh Tim Administrasi dan Developer."
+                                });
                               }
                             }}
                             className={`p-1.5 text-center border-r transition-all select-none ${
-                              canEditRoster ? 'cursor-pointer hover:scale-105 hover:z-10' : ''
+                              canEditRoster ? 'cursor-pointer hover:scale-105 hover:z-10' : 'cursor-default'
                             } ${col.isToday ? 'bg-teal-500/5' : ''}`}
                             style={{
                               borderColor: 'var(--border-main)'
                             }}
-                            title={canEditRoster ? `Klik untuk mengedit roster ${emp.name} pada ${col.dateNumber}` : undefined}
+                            title={canEditRoster ? `Klik untuk mengedit roster ${emp.name || emp.nama} pada ${col.dateNumber}` : `Roster ${emp.name || emp.nama} (${shiftCode})`}
                           >
                             <div 
                               className={`w-full py-1.5 px-1 rounded-lg border text-center text-xs transition-transform ${badgeStyle}`}

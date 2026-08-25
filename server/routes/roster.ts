@@ -6,7 +6,8 @@ import {
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
   pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, 
   notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, 
-  mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi
+  mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi,
+  developerUsers
 } from "../../src/db/schema.js";
 import { generatePdfFromTemplate, drive } from '../../google-services.js';
 import { 
@@ -17,6 +18,44 @@ import webpush from 'web-push';
 import path from "path";
 
 export const router = Router();
+
+async function isAuthorizedRosterEditor(editorNik?: string): Promise<boolean> {
+  if (!editorNik) return false;
+  const nik = String(editorNik).trim();
+  if (!nik) return false;
+
+  // Superadmins / Default Developer accounts
+  if (nik === '02D25000055' || nik === 'preplabadmin') return true;
+
+  // Check Developer Users table
+  try {
+    const dev = await db.select().from(developerUsers).where(eq(developerUsers.nik, nik)).limit(1);
+    if (dev.length > 0) return true;
+  } catch (e) {}
+
+  // Check Employees table for Administration section/role
+  try {
+    const emp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+    if (emp.length > 0) {
+      const e = emp[0];
+      const sec = (e.section || '').toLowerCase();
+      const dep = (e.department || '').toLowerCase();
+      const jab = (e.jabatan || '').toLowerCase();
+      if (
+        sec.includes('admin') ||
+        sec.includes('administrasi') ||
+        dep.includes('admin') ||
+        dep.includes('administrasi') ||
+        jab.includes('admin') ||
+        jab.includes('administrasi')
+      ) {
+        return true;
+      }
+    }
+  } catch (e) {}
+
+  return false;
+}
 
 router.get("/api/roster", async (req, res) => {
     try {
@@ -115,7 +154,16 @@ router.get("/api/roster", async (req, res) => {
 
 router.post("/api/roster/cell", async (req, res) => {
   try {
-    const { nik, date, status } = req.body;
+    const { nik, date, status, editorNik } = req.body;
+    const reqNik = editorNik || req.headers['x-user-nik'] || (req.session as any)?.userNik;
+
+    if (reqNik) {
+      const isAuth = await isAuthorizedRosterEditor(reqNik as string);
+      if (!isAuth) {
+        return res.status(403).json({ error: "Akses ditolak: Pengeditan roster hanya dapat dilakukan oleh Tim Administrasi dan Developer." });
+      }
+    }
+
     if (!nik || !date) {
       return res.status(400).json({ error: "nik and date are required" });
     }
@@ -143,8 +191,17 @@ router.post("/api/roster/cell", async (req, res) => {
 
 router.post("/api/roster/izin", async (req, res) => {
     try {
-      const { nik, date, type } = req.body;
-      const formattedDate = new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }).replace(/,/g, ''); // Fix formatting based on node version
+      const { nik, date, type, editorNik } = req.body;
+      const reqNik = editorNik || req.headers['x-user-nik'] || (req.session as any)?.userNik;
+
+      if (reqNik) {
+        const isAuth = await isAuthorizedRosterEditor(reqNik as string);
+        if (!isAuth) {
+          return res.status(403).json({ error: "Akses ditolak: Pengeditan roster hanya dapat dilakukan oleh Tim Administrasi dan Developer." });
+        }
+      }
+
+      const formattedDate = new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }).replace(/,/g, '');
       
       const parts = new Date(date).toDateString().split(' ');
       const day = parseInt(parts[2], 10);
@@ -166,6 +223,14 @@ router.post("/api/roster/izin", async (req, res) => {
 
 router.post(["/api/roster/sync", "/api/admin/sync-roster"], async (req, res) => {
   try {
+    const reqNik = req.body?.editorNik || req.headers['x-user-nik'] || (req.session as any)?.userNik;
+    if (reqNik) {
+      const isAuth = await isAuthorizedRosterEditor(reqNik as string);
+      if (!isAuth) {
+        return res.status(403).json({ success: false, message: "Akses ditolak: Sinkronisasi roster hanya dapat dilakukan oleh Tim Administrasi dan Developer." });
+      }
+    }
+
     const { syncRosterData } = await import("../../src/syncRoster.js");
     const result = await syncRosterData();
     if (result.success) {
