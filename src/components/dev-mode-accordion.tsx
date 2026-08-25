@@ -20,7 +20,7 @@ interface DevModeAccordionProps {
 }
 
 export function DevModeAccordion({ inspectorNik, devOptions, setDevOptions }: DevModeAccordionProps) {
-  const isDevUser = inspectorNik === '02D25000055' || inspectorNik === 'preplabadmin';
+  const isDevUser = inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin';
   const [isOpen, setIsOpen] = useState(false);
 
   if (!isDevUser) return null;
@@ -114,7 +114,7 @@ export function DevModeAccordion({ inspectorNik, devOptions, setDevOptions }: De
 }
 
 export function useDevOptions(inspectorNik: string | null) {
-  const isDevUser = inspectorNik === '02D25000055' || inspectorNik === 'preplabadmin';
+  const isDevUser = inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin';
   const [devOptions, setDevOptions] = useState({
     db: true,
     pdf: true,

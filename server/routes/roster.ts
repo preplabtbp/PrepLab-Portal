@@ -25,7 +25,7 @@ async function isAuthorizedRosterEditor(editorNik?: string): Promise<boolean> {
   if (!nik) return false;
 
   // Superadmins / Default Developer accounts
-  if (nik === '02D25000055' || nik === 'preplabadmin') return true;
+  if (nik === '02D25000055' || nik === '02D24000043' || nik === 'preplabadmin') return true;
 
   // Check Developer Users table
   try {
@@ -57,100 +57,145 @@ async function isAuthorizedRosterEditor(editorNik?: string): Promise<boolean> {
   return false;
 }
 
-router.get("/api/roster", async (req, res) => {
-    try {
-      const allEmps = await db.select().from(employees);
-      const allRoster = await db.select().from(roster);
-      
-      const rosterByNik = {};
-      for (const r of allRoster) {
-        if (!rosterByNik[r.nik]) rosterByNik[r.nik] = {};
-        rosterByNik[r.nik][r.date] = r.status;
-      }
-      
-      const todayDate = new Date();
-      todayDate.setHours(0,0,0,0);
-      
-      const result = allEmps.map(emp => {
-        const sched = rosterByNik[emp.nik] || {};
-        
-        
-        let lastTrvDate = null;
-        let nextTrvDate = null;
-        let nextWorkDate = null;
+let cachedRosterResult: any[] | null = null;
+let lastCacheTime = 0;
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache
 
-        const datesAsc = Object.keys(sched).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
-        const sortedDates = [...datesAsc].reverse();
+export function invalidateRosterCache() {
+  cachedRosterResult = null;
+  lastCacheTime = 0;
+}
 
-        for (const date of sortedDates) {
-          if (new Date(date) <= todayDate && (['TRV', 'TV', 'C', 'CR', 'CE', 'CT', 'CI', 'XP', 'TT'].includes(sched[date]) || (sched[date] && (sched[date].startsWith('CT') || sched[date].startsWith('CE'))))) {
-            lastTrvDate = date;
-            break;
-          }
-        }
-        
-        for (const date of datesAsc) {
-          if (new Date(date) >= todayDate) {
-            if (!nextTrvDate && (['TRV', 'TV', 'C', 'CR', 'CE', 'CT', 'CI', 'XP', 'TT'].includes(sched[date]) || (sched[date] && (sched[date].startsWith('CT') || sched[date].startsWith('CE'))))) {
-              nextTrvDate = date;
-            }
-            if (!nextWorkDate && (sched[date] === 'D' || sched[date] === 'N' || sched[date] === 'LS' || sched[date] === 'S')) {
-              nextWorkDate = date;
-            }
-          }
-        }
+async function computeRosterData() {
+  const allEmps = await db.select().from(employees);
+  const allRoster = await db.select({
+    nik: roster.nik,
+    date: roster.date,
+    status: roster.status
+  }).from(roster);
 
-        
-        // Generate next 7 days schedule
-        const next7Days = [];
-        const iterDate = new Date();
-        for (let i = 0; i < 7; i++) {
-          const dStr = iterDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }); // e.g. "18 Jul 26" format depends, but our csv has "1 Jan 26"
-          
-          // Let's use a function to format matching CSV date format: D MMM YY
-          const parts = iterDate.toDateString().split(' '); // Thu Jul 18 2026 -> ["Thu", "Jul", "18", "2026"]
-          const day = parseInt(parts[2], 10);
-          const formattedDate = day + ' ' + parts[1] + ' ' + parts[3].substring(2); // "18 Jul 26"
-          
-          const shiftCode = sched[formattedDate] || '-';
-          next7Days.push({
-            day: parts[0],
-            date: formattedDate,
-            shiftCode: shiftCode
-          });
-          iterDate.setDate(iterDate.getDate() + 1);
-        }
-        
-        return {
-          nik: emp.nik,
-          name: emp.name,
-          jabatan: emp.jabatan,
-          department: emp.department || emp.section,
-          section: emp.section,
-          gol: emp.gol,
-          jobGrade: emp.jobGrade,
-          shift: emp.shift,
-          poh: emp.poh,
-          pt: emp.pt,
-          statusMess: emp.statusMess,
-          rotation: emp.rotation,
-          joinDate: emp.tanggalAwalBergabung,
-          permanentDate: emp.tanggalBergabungTerbaru,
-          statusKontrak: emp.statusKontrak,
-          lastTrvDate: lastTrvDate,
-          nextTrvDate: nextTrvDate,
-          nextWorkDate: nextWorkDate,
-          schedule: next7Days,
-          fullSchedule: sched
-        };
-      });
-      
-      res.json(result);
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: "Failed to fetch roster" });
+  const rosterByNik: Record<string, Record<string, string>> = {};
+  for (const r of allRoster) {
+    if (!r.nik || !r.date) continue;
+    if (!rosterByNik[r.nik]) rosterByNik[r.nik] = {};
+    rosterByNik[r.nik][r.date] = r.status || '-';
+  }
+
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+  const todayTimestamp = todayDate.getTime();
+
+  // Fast date timestamp cache to eliminate repeated Date parsing
+  const dateTimestampMap = new Map<string, number>();
+  function getDateTs(dStr: string): number {
+    let ts = dateTimestampMap.get(dStr);
+    if (ts === undefined) {
+      ts = new Date(dStr).getTime();
+      dateTimestampMap.set(dStr, ts);
     }
+    return ts;
+  }
+
+  // Pre-generate next 7 days template once
+  const next7DaysTemplate: Array<{ day: string; date: string }> = [];
+  const iterDate = new Date();
+  for (let i = 0; i < 7; i++) {
+    const parts = iterDate.toDateString().split(' ');
+    const day = parseInt(parts[2], 10);
+    const formattedDate = `${day} ${parts[1]} ${parts[3].substring(2)}`;
+    next7DaysTemplate.push({
+      day: parts[0],
+      date: formattedDate
+    });
+    iterDate.setDate(iterDate.getDate() + 1);
+  }
+
+  const trvCodes = new Set(['TRV', 'TV', 'C', 'CR', 'CE', 'CT', 'CI', 'XP', 'TT']);
+  function isTrvStatus(status?: string): boolean {
+    if (!status) return false;
+    return trvCodes.has(status) || status.startsWith('CT') || status.startsWith('CE');
+  }
+
+  const workCodes = new Set(['D', 'N', 'LS', 'S']);
+
+  const result = allEmps.map(emp => {
+    const sched = rosterByNik[emp.nik] || {};
+
+    let lastTrvDate: string | null = null;
+    let nextTrvDate: string | null = null;
+    let nextWorkDate: string | null = null;
+
+    const datesAsc = Object.keys(sched).sort((a, b) => getDateTs(a) - getDateTs(b));
+
+    // Search backwards for last TRV/Leave before or on today
+    for (let i = datesAsc.length - 1; i >= 0; i--) {
+      const date = datesAsc[i];
+      if (getDateTs(date) <= todayTimestamp && isTrvStatus(sched[date])) {
+        lastTrvDate = date;
+        break;
+      }
+    }
+
+    // Search forwards for next TRV/Leave and next Work date
+    for (let i = 0; i < datesAsc.length; i++) {
+      const date = datesAsc[i];
+      if (getDateTs(date) >= todayTimestamp) {
+        if (!nextTrvDate && isTrvStatus(sched[date])) {
+          nextTrvDate = date;
+        }
+        if (!nextWorkDate && workCodes.has(sched[date])) {
+          nextWorkDate = date;
+        }
+        if (nextTrvDate && nextWorkDate) break;
+      }
+    }
+
+    const next7Days = next7DaysTemplate.map(t => ({
+      day: t.day,
+      date: t.date,
+      shiftCode: sched[t.date] || '-'
+    }));
+
+    return {
+      nik: emp.nik,
+      name: emp.name,
+      jabatan: emp.jabatan,
+      department: emp.department || emp.section,
+      section: emp.section,
+      gol: emp.gol,
+      jobGrade: emp.jobGrade,
+      shift: emp.shift,
+      poh: emp.poh,
+      pt: emp.pt,
+      statusMess: emp.statusMess,
+      rotation: emp.rotation,
+      joinDate: emp.tanggalAwalBergabung,
+      permanentDate: emp.tanggalBergabungTerbaru,
+      statusKontrak: emp.statusKontrak,
+      lastTrvDate,
+      nextTrvDate,
+      nextWorkDate,
+      schedule: next7Days,
+      fullSchedule: sched
+    };
   });
+
+  return result;
+}
+
+router.get("/api/roster", async (req, res) => {
+  try {
+    const isForceRefresh = req.query.refresh === 'true' || req.query.refresh === '1';
+    if (!cachedRosterResult || isForceRefresh || (Date.now() - lastCacheTime > CACHE_TTL_MS)) {
+      cachedRosterResult = await computeRosterData();
+      lastCacheTime = Date.now();
+    }
+    res.json(cachedRosterResult);
+  } catch (e) {
+    console.error("Error fetching roster:", e);
+    res.status(500).json({ error: "Failed to fetch roster" });
+  }
+});
 
 router.post("/api/roster/cell", async (req, res) => {
   try {
@@ -182,6 +227,7 @@ router.post("/api/roster/cell", async (req, res) => {
     } else {
       await db.insert(roster).values({ nik: nik, date: properDate, status: status || '-' });
     }
+    invalidateRosterCache();
     res.json({ success: true, nik, date: properDate, status });
   } catch (e: any) {
     console.error("Error updating roster cell:", e);
@@ -214,6 +260,7 @@ router.post("/api/roster/izin", async (req, res) => {
       } else {
         await db.insert(roster).values({ nik: nik, date: properDate, status: type });
       }
+      invalidateRosterCache();
       res.json({ success: true });
     } catch (e) {
       console.error(e);
@@ -234,6 +281,7 @@ router.post(["/api/roster/sync", "/api/admin/sync-roster"], async (req, res) => 
     const { syncRosterData } = await import("../../src/syncRoster.js");
     const result = await syncRosterData();
     if (result.success) {
+      invalidateRosterCache();
       res.json({ success: true, ...result });
     } else {
       res.status(500).json({ success: false, message: result.message });
@@ -243,4 +291,15 @@ router.post(["/api/roster/sync", "/api/admin/sync-roster"], async (req, res) => 
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// Pre-warm cache asynchronously on server start
+setTimeout(() => {
+  computeRosterData().then(res => {
+    cachedRosterResult = res;
+    lastCacheTime = Date.now();
+    console.log(`⚡ Roster cache pre-warmed successfully (${res.length} employees)`);
+  }).catch(e => {
+    console.warn("Roster cache pre-warm warning:", e.message);
+  });
+}, 1000);
 

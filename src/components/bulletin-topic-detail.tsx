@@ -425,7 +425,8 @@ export function BulletinTopicDetail({
                      const canDelete = Boolean(
                        isOwn || 
                        inspectorNik === 'preplabadmin' || 
-                       inspectorNik === '02D25000055'
+                       inspectorNik === '02D25000055' ||
+                       inspectorNik === '02D24000043'
                      );
                      
                      return (

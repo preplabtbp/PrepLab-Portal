@@ -1249,7 +1249,7 @@ export default function App() {
             active={activeTab === 'settings'} 
             onClick={() => handleNav('settings')} 
           />
-          {(inspectorNik === '02D25000055' || inspectorNik === 'preplabadmin') && (
+          {(inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin') && (
             <NavItem 
               icon={<Settings className="w-5 h-5" />} 
               label="Developer" 

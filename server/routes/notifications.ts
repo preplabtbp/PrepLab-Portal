@@ -24,7 +24,7 @@ router.get("/api/notifications", async (req, res) => {
       const userId = req.query.userId as string;
       if (userId) {
         // Quick check if the user is an admin
-        const isDeveloper = userId === '02D25000055' || userId === 'preplabadmin';
+        const isDeveloper = userId === '02D25000055' || userId === '02D24000043' || userId === 'preplabadmin';
         
         if (isDeveloper) {
           // Developer gets their own notifications, plus all role-based and global notifications (userId IS NULL)

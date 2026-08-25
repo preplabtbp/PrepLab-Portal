@@ -20,7 +20,7 @@ export function NotificationBell({ userNik, userName }: NotificationBellProps) {
   const [selectedWoId, setSelectedWoId] = useState<string | null>(null);
   const [showWoModal, setShowWoModal] = useState(false);
 
-  const isDev = userNik === '02D25000055' || userNik === 'preplabadmin';
+  const isDev = userNik === '02D25000055' || userNik === '02D24000043' || userNik === 'preplabadmin';
   const [pushStatus, setPushStatus] = useState<string>('default');
 
   useEffect(() => {

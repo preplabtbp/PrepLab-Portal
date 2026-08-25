@@ -3,7 +3,7 @@ import {
   Calendar, Clock, Shuffle, Edit3, Download, Save, Plus, Trash2, 
   RotateCcw, Check, AlertCircle, AlertTriangle, ChevronDown, ChevronRight, 
   BookOpen, History, Users, Sparkles, Filter, Search, X, Layers,
-  ChevronLeft, ArrowRight, Shield, Award, CheckCircle2, FileText,
+  ChevronLeft, ArrowRight, ArrowLeft, Shield, ShieldAlert, Award, CheckCircle2, FileText,
   Briefcase, Loader2, Star, Eye, RefreshCw, Image as ImageIcon, ExternalLink,
   Building2
 } from 'lucide-react';
@@ -321,7 +321,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const currentName = String(userProfile?.nama || userProfile?.name || localStorage.getItem('p2h_inspector_name') || '').trim();
 
   const isDeveloper = useMemo(() => {
-    if (currentNik === '02D25000055' || currentNik === 'preplabadmin') return true;
+    if (currentNik === '02D25000055' || currentNik === '02D24000043' || currentNik === 'preplabadmin') return true;
     return developerList.some(d => d.nik === currentNik);
   }, [currentNik, developerList]);
 
@@ -881,6 +881,34 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
     if (s && m) return `${s} – ${m}`;
     return 'Minggu Berjalan';
   }, [datesMeta]);
+
+  // STRICT ACCESS CONTROL: Only QA Team and Developers can access P5M Menu
+  if (!isQATeam && !isDeveloper) {
+    return (
+      <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-4 max-w-md mx-auto animate-in fade-in duration-300">
+        <div className="w-20 h-20 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-6 shadow-xl shadow-amber-500/5">
+          <ShieldAlert className="w-10 h-10 text-amber-400" />
+        </div>
+        <h2 className="text-2xl font-black tracking-tight text-white mb-2 font-display">
+          Akses Terbatas
+        </h2>
+        <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+          Menu dan Builder <strong className="text-amber-300">P5M Schedule</strong> hanya dapat diakses oleh <strong className="text-white">Tim QA (Quality Assurance)</strong> dan <strong className="text-teal-400">Developer</strong>.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            if (onBack) onBack();
+            else window.location.href = '/';
+          }}
+          className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm border border-slate-700 transition-all flex items-center gap-2 shadow-lg cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Kembali ke Beranda</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 pb-20 pt-4 px-3 sm:px-6 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300">

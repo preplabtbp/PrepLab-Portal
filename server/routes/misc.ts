@@ -20,6 +20,19 @@ import path from "path";
 
 export const router = Router();
 
+router.get('/api/developers', async (req, res) => {
+  try {
+    const devs = await db.select().from(developerUsers);
+    res.json(devs);
+  } catch (err) {
+    console.error("Error fetching developers:", err);
+    res.json([
+      { nik: '02D25000055', name: 'Muhamad Anugrah Ramadhan' },
+      { nik: '02D24000043', name: 'Muhamad Alvin Febriansyah' }
+    ]);
+  }
+});
+
 router.get('/api/chat/:room', async (req, res) => {
     console.log("Chat route hit for room", req.params.room);
     try {
@@ -892,7 +905,7 @@ router.delete("/api/quotes/:id", async (req, res) => {
     if (!quoteId) return res.status(400).json({ status: "error", message: "ID quote tidak valid" });
 
     let deleteQuery;
-    if (nik && nik !== '02D25000055' && nik !== 'preplabadmin') {
+    if (nik && nik !== '02D25000055' && nik !== '02D24000043' && nik !== 'preplabadmin') {
       deleteQuery = and(eq(communityQuotes.id, quoteId), eq(communityQuotes.authorNik, String(nik)));
     } else {
       deleteQuery = eq(communityQuotes.id, quoteId);

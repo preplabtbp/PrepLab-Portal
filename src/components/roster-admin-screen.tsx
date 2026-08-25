@@ -46,8 +46,20 @@ const SHIFT_OPTIONS = [
 ];
 
 export function RosterAdminScreen() {
-  const [roster, setRoster] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [roster, setRoster] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('preplab_roster_cache');
+      if (cached) return JSON.parse(cached);
+    } catch(e) {}
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('preplab_roster_cache');
+      if (cached) return false;
+    } catch(e) {}
+    return true;
+  });
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [developerList, setDeveloperList] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,7 +114,7 @@ export function RosterAdminScreen() {
   const requestorNik = currentUser?.nik || localStorage.getItem('p2h_inspector_nik') || '';
   const requestorPt = currentUser?.pt || '';
 
-  const isSuperAdmin = requestorNik === '02D25000055' || requestorNik === 'preplabadmin';
+  const isSuperAdmin = requestorNik === '02D25000055' || requestorNik === '02D24000043' || requestorNik === 'preplabadmin';
   const isDeveloper = isSuperAdmin || requestorNik === 'preplabadmin' || developerList.includes(requestorNik);
 
   const isAdministration = 
@@ -167,7 +179,12 @@ export function RosterAdminScreen() {
       
       const res: any = await getRosterData({ requestorNik, requestorRole, requestorSection });
       const list = Array.isArray(res) ? res : (res?.roster || []);
-      setRoster(list);
+      if (list.length > 0) {
+        setRoster(list);
+        try {
+          sessionStorage.setItem('preplab_roster_cache', JSON.stringify(list));
+        } catch(e) {}
+      }
       
       if (requestorNik && list.length > 0) {
         const me = list.find((e: any) => e.nik === requestorNik);

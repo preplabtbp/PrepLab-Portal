@@ -60,7 +60,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
     fetch('/api/developers').then(res => res.json()).then(data => setDeveloperList(data.map((d: any) => d.nik))).catch(() => {});
   }, []);
 
-  const isSuperAdmin = inspectorNik === '02D25000055';
+  const isSuperAdmin = inspectorNik === '02D25000055' || inspectorNik === '02D24000043';
   const isDeveloper = isSuperAdmin || inspectorNik === 'preplabadmin' || developerList.includes(inspectorNik);
 
   const isLab = userSection.toLowerCase().includes('laboratory') || isDeveloper;
@@ -140,7 +140,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       items: [
         { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('induksi') },
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('employee-database') },
-        { id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('p5m') },
+        ...(isQA ? [{ id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('p5m') }] : []),
         { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('agenda') },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('roster-admin') },
         { id: 'food-report', title: "Lapor Makan", desc: "Status konsumsi", icon: <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'orange', action: () => setShowFoodReportModal(true), highlight: true },
