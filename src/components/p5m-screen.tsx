@@ -302,6 +302,119 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const [archiveList, setArchiveList] = useState<any[]>([]);
   const [loadingArchive, setLoadingArchive] = useState(false);
 
+  // Developer & QA Team Role Verification
+  const [developerList, setDeveloperList] = useState<any[]>([]);
+  const [showFullSchedulePreview, setShowFullSchedulePreview] = useState<boolean>(true);
+
+  useEffect(() => {
+    fetch('/api/developers')
+      .then(res => res.json())
+      .then(json => {
+        if (json.status === 'success' && Array.isArray(json.data)) {
+          setDeveloperList(json.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const currentNik = userProfile?.nik || localStorage.getItem('p2h_inspector_nik') || '';
+  const currentName = String(userProfile?.nama || userProfile?.name || localStorage.getItem('p2h_inspector_name') || '').trim();
+
+  const isDeveloper = useMemo(() => {
+    if (currentNik === '02D25000055' || currentNik === 'preplabadmin') return true;
+    return developerList.some(d => d.nik === currentNik);
+  }, [currentNik, developerList]);
+
+  const isQATeam = useMemo(() => {
+    if (isDeveloper) return true;
+    const section = String(userProfile?.section || '').toLowerCase();
+    const dept = String(userProfile?.department || '').toLowerCase();
+    const jabatan = String(userProfile?.jabatan || '').toLowerCase();
+    const role = String(userProfile?.role || '').toLowerCase();
+    
+    return (
+      section.includes('qa') ||
+      section.includes('quality') ||
+      dept.includes('qa') ||
+      dept.includes('quality') ||
+      jabatan.includes('qa') ||
+      jabatan.includes('quality assurance') ||
+      role.includes('qa')
+    );
+  }, [userProfile, isDeveloper]);
+
+  // Compute Current User's Personal P5M Assignments for the selected schedule
+  const myAssignments = useMemo(() => {
+    if (!scheduleData) return [];
+    const lowerName = currentName.toLowerCase();
+
+    const assignments: Array<{
+      day: string;
+      dateFormatted?: string;
+      shift: 'pagi' | 'malam';
+      shiftLabel: string;
+      location: string;
+      locationLabel: string;
+      materi: string;
+      kategori: string;
+      subKategori?: string;
+      fileUrl?: string;
+      isSenam?: boolean;
+      isLogbook?: boolean;
+    }> = [];
+
+    DAYS.forEach(day => {
+      const dData = scheduleData[day];
+      if (!dData) return;
+
+      ['pagi', 'malam'].forEach(shift => {
+        const sData = dData[shift];
+        if (!sData) return;
+
+        const checkAndAdd = (slot: any, locKey: string, locLabel: string) => {
+          if (!slot || !slot.nama || slot.nama.includes('KOSONG')) return;
+          const slotNik = String(slot.nik || '').trim();
+          const slotName = String(slot.nama || '').trim().toLowerCase();
+
+          const isMatch = (currentNik && slotNik === currentNik) ||
+            (lowerName && (slotName === lowerName || slotName.includes(lowerName) || lowerName.includes(slotName)));
+
+          if (isMatch) {
+            assignments.push({
+              day,
+              dateFormatted: datesMeta[day]?.display || day,
+              shift: shift as 'pagi' | 'malam',
+              shiftLabel: shift === 'pagi' ? 'Day Shift (Pagi)' : 'Night Shift (Malam)',
+              location: locKey,
+              locationLabel: locLabel,
+              materi: slot.materi || 'Materi Briefing P5M',
+              kategori: slot.kategori || 'Teknis',
+              subKategori: slot.subKategori || 'General',
+              fileUrl: slot.fileUrl || null,
+              isSenam: Boolean(slot.isSenam),
+              isLogbook: Boolean(slot.isLogbook)
+            });
+          }
+        };
+
+        if (dData.tipe === 'gabungan') {
+          (sData.gabungan || []).forEach((slot: any) => {
+            checkAndAdd(slot, 'gabungan', 'Ruang Gabungan');
+          });
+        } else {
+          (sData.preparasi || []).forEach((slot: any) => {
+            checkAndAdd(slot, 'preparasi', 'Preparasi (Prep & Maintenance)');
+          });
+          (sData.laboratorium || []).forEach((slot: any) => {
+            checkAndAdd(slot, 'laboratorium', 'Laboratorium (Lab, QA, IC, Admin)');
+          });
+        }
+      });
+    });
+
+    return assignments;
+  }, [scheduleData, currentNik, currentName, datesMeta]);
+
   // Warnings / Notifications State
   const [materiWarnings, setMateriWarnings] = useState<string[]>([]);
 
@@ -775,20 +888,34 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       {/* ── TOP HEADER & CONTROLS ── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 sm:p-5 shadow-xl backdrop-blur-md">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 flex items-center justify-center font-bold text-xl shadow-lg shadow-amber-500/20 flex-shrink-0">
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xl shadow-lg flex-shrink-0 ${
+            isQATeam
+              ? 'bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 shadow-amber-500/20'
+              : 'bg-gradient-to-tr from-teal-500 to-emerald-400 text-slate-950 shadow-teal-500/20'
+          }`}>
             <Calendar className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white font-display">
-                P5M Schedule Builder
+                {isQATeam ? 'P5M Schedule Builder' : 'Jadwal P5M PrepLab'}
               </h1>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                v2.6 Enterprise
-              </span>
+              {isQATeam ? (
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30 flex items-center gap-1 font-mono">
+                  <Sparkles className="w-3 h-3" />
+                  Tim QA (Builder)
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 flex items-center gap-1 font-mono">
+                  <Users className="w-3 h-3" />
+                  Mode Personil
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Sistem Otomasi Briefing Awal Shift — Preparation &amp; Laboratory Plant
+              {isQATeam 
+                ? 'Sistem Otomasi Briefing Awal Shift — Preparation & Laboratory Plant'
+                : 'Jadwal Penugasan Saya & Materi Briefing P5M Mingguan'}
             </p>
           </div>
         </div>
@@ -855,20 +982,22 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               }`}
             >
               <Calendar className="w-3.5 h-3.5" />
-              <span>Jadwal</span>
+              <span>{isQATeam ? 'Jadwal' : 'Jadwal Saya'}</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab('materi')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                activeTab === 'materi'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Bank Materi ({materiList.length})</span>
-            </button>
+            {isQATeam && (
+              <button
+                onClick={() => setActiveTab('materi')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  activeTab === 'materi'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Bank Materi ({materiList.length})</span>
+              </button>
+            )}
 
             <button
               onClick={() => setActiveTab('archive')}
@@ -885,94 +1014,220 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         </div>
       </div>
 
-      {/* ── TAB 1: SCHEDULE BUILDER & VIEWER ── */}
-      {activeTab === 'schedule' && (
+      {/* ── NON-QA VIEW: JADWAL SAYA & DOWNLOAD KESELURUHAN JADWAL ── */}
+      {!isQATeam && activeTab === 'schedule' && (
         <div className="space-y-6">
-          
-          {/* Action Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-800/60 border border-slate-700/60 p-3 rounded-2xl">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button 
-                onClick={handleRandomize} 
-                disabled={isGenerating}
-                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs h-9 px-4 rounded-xl shadow-lg shadow-amber-500/20"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                    <span>Mengacak Jadwal...</span>
-                  </>
-                ) : (
-                  <>
-                    <Shuffle className="w-4 h-4 mr-1.5" />
-                    <span>Acak Otomatis (PT {selectedPt})</span>
-                  </>
-                )}
-              </Button>
-
-              <Button
-                variant="secondary"
-                onClick={() => setIsEditMode(!isEditMode)}
-                disabled={!scheduleData}
-                className={`text-xs h-9 px-3.5 rounded-xl border transition-all ${
-                  isEditMode 
-                    ? 'bg-blue-600/20 text-blue-300 border-blue-500/50 shadow-md ring-1 ring-blue-500/30' 
-                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-                }`}
-              >
-                <Edit3 className="w-4 h-4 mr-1.5 text-blue-400" />
-                <span>{isEditMode ? 'Selesai Edit Manual' : 'Edit Manual'}</span>
-              </Button>
-
-              <Button
-                variant="secondary"
-                onClick={() => setShowConfigDrawer(!showConfigDrawer)}
-                className={`text-xs h-9 px-3.5 rounded-xl border transition-all ${
-                  showConfigDrawer 
-                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/40' 
-                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-                }`}
-              >
-                <Layers className="w-4 h-4 mr-1.5 text-amber-400" />
-                <span>Konfigurasi Slot Hari</span>
-                <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${showConfigDrawer ? 'rotate-180' : ''}`} />
-              </Button>
+          {/* Action Toolbar for Non-QA */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-800/80 border border-slate-700/80 p-4 rounded-2xl shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400 shrink-0">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-white">
+                  Jadwal P5M Minggu Ini • PT {selectedPt}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Periode: <strong className="text-teal-300">{weekRangeDisplay}</strong>
+                </p>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
-                variant="secondary"
                 onClick={handleDownloadPNG}
                 disabled={!scheduleData || isExporting}
-                className="bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 text-xs h-9 px-3.5 rounded-xl shadow-sm"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-10 px-4 rounded-xl shadow-lg shadow-emerald-600/20 flex items-center gap-2 flex-1 sm:flex-initial"
               >
                 {isExporting ? (
-                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin text-amber-400" />
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
                 ) : (
-                  <Download className="w-4 h-4 mr-1.5 text-emerald-400" />
+                  <Download className="w-4 h-4 text-white" />
                 )}
-                <span>Unduh Gambar PNG</span>
+                <span>Unduh Keseluruhan Jadwal (PNG)</span>
               </Button>
 
               <Button
-                onClick={handleSaveSchedule}
-                disabled={!scheduleData || isSaving}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-lg shadow-emerald-600/20"
+                variant="secondary"
+                onClick={() => setShowFullSchedulePreview(!showFullSchedulePreview)}
+                className="bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 text-xs h-10 px-3.5 rounded-xl"
               >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                    <span>Menyimpan...</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-1.5" />
-                    <span>{activeScheduleId ? 'Simpan Perubahan Jadwal' : 'Simpan & Publikasikan'}</span>
-                  </>
-                )}
+                <Eye className="w-4 h-4 mr-1.5 text-blue-400" />
+                <span>{showFullSchedulePreview ? 'Sembunyikan Tabel Lengkap' : 'Lihat Tabel Lengkap'}</span>
               </Button>
             </div>
           </div>
+
+          {/* Personal Assignments Card Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                <Award className="w-4 h-4 text-amber-400" />
+                Penugasan P5M Saya
+                <span className="text-xs font-mono font-normal opacity-70">({currentName || 'Rekan Kerja'})</span>
+              </h2>
+            </div>
+
+            {myAssignments.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {myAssignments.map((ass, idx) => (
+                  <div
+                    key={`my-ass-${idx}`}
+                    className="p-5 sm:p-6 rounded-2xl border bg-gradient-to-br from-slate-800/90 to-slate-900/90 border-teal-500/40 shadow-xl space-y-4 relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
+                    
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 rounded-xl text-xs font-bold bg-amber-500 text-slate-950 font-mono shadow-xs">
+                          {ass.day}, {ass.dateFormatted}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-xl text-[11px] font-semibold bg-slate-700/80 text-slate-200 border border-slate-600">
+                          {ass.shiftLabel}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30 font-bold">
+                        {ass.kategori}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-teal-400" />
+                        Lokasi: {ass.locationLabel}
+                      </p>
+                      <h3 className="text-base sm:text-lg font-bold text-white leading-snug">
+                        "{ass.materi}"
+                      </h3>
+                    </div>
+
+                    {/* Action button: Flyer / Materi download */}
+                    <div className="pt-3 border-t border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <a
+                        href={`/api/p5m/flyer?download=true&title=${encodeURIComponent(ass.materi)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>Unduh Materi / Flyer Briefing</span>
+                      </a>
+
+                      <span className="text-[11px] text-slate-400 italic text-center sm:text-right">
+                        Durasi Presentasi: 5–7 Menit
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 sm:p-10 rounded-2xl border border-slate-700/70 bg-slate-800/40 text-center space-y-3">
+                <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto" />
+                <h3 className="text-base font-bold text-slate-200">
+                  Tidak Ada Jadwal Bertugas Minggu Ini
+                </h3>
+                <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                  Halo <strong>{currentName || 'Rekan Kerja'}</strong>, Anda tidak memiliki penugasan untuk membawakan materi P5M pada minggu periode <strong>{weekRangeDisplay}</strong> (PT {selectedPt}).
+                  <br />
+                  Silakan tetap hadir dan mendengarkan materi dari rekan presenter yang bertugas!
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB 1: QA SCHEDULE BUILDER & TIM TABLE ── */}
+      {activeTab === 'schedule' && (isQATeam || showFullSchedulePreview) && (
+        <div className="space-y-6">
+          
+          {/* Action Toolbar for QA Builder */}
+          {isQATeam && (
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-800/60 border border-slate-700/60 p-3 rounded-2xl">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button 
+                  onClick={handleRandomize} 
+                  disabled={isGenerating}
+                  className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs h-9 px-4 rounded-xl shadow-lg shadow-amber-500/20"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                      <span>Mengacak Jadwal...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Shuffle className="w-4 h-4 mr-1.5" />
+                      <span>Acak Otomatis (PT {selectedPt})</span>
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  onClick={() => setIsEditMode(!isEditMode)}
+                  disabled={!scheduleData}
+                  className={`text-xs h-9 px-3.5 rounded-xl border transition-all ${
+                    isEditMode 
+                      ? 'bg-blue-600/20 text-blue-300 border-blue-500/50 shadow-md ring-1 ring-blue-500/30' 
+                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                  }`}
+                >
+                  <Edit3 className="w-4 h-4 mr-1.5 text-blue-400" />
+                  <span>{isEditMode ? 'Selesai Edit Manual' : 'Edit Manual'}</span>
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowConfigDrawer(!showConfigDrawer)}
+                  className={`text-xs h-9 px-3.5 rounded-xl border transition-all ${
+                    showConfigDrawer 
+                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/40' 
+                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                  }`}
+                >
+                  <Layers className="w-4 h-4 mr-1.5 text-amber-400" />
+                  <span>Konfigurasi Slot Hari</span>
+                  <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${showConfigDrawer ? 'rotate-180' : ''}`} />
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={handleDownloadPNG}
+                  disabled={!scheduleData || isExporting}
+                  className="bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 text-xs h-9 px-3.5 rounded-xl shadow-sm"
+                >
+                  {isExporting ? (
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin text-amber-400" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-1.5 text-emerald-400" />
+                  )}
+                  <span>Unduh Gambar PNG</span>
+                </Button>
+
+                <Button
+                  onClick={handleSaveSchedule}
+                  disabled={!scheduleData || isSaving}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-lg shadow-emerald-600/20"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-1.5" />
+                      <span>{activeScheduleId ? 'Simpan Perubahan Jadwal' : 'Simpan & Publikasikan'}</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* ── DRAWER: SLOT CONFIGURATION ── */}
           {showConfigDrawer && (
@@ -1129,8 +1384,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
             </Card>
           )}
 
-          {/* ── EDIT MODE GUIDANCE BANNER ── */}
-          {isEditMode && scheduleData && (
+          {/* ── EDIT MODE GUIDANCE BANNER (QA ONLY) ── */}
+          {isQATeam && isEditMode && scheduleData && (
             <div className="p-3.5 rounded-xl bg-blue-500/15 border border-blue-400/40 text-blue-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-in fade-in">
               <div className="flex items-start sm:items-center gap-2.5">
                 <Sparkles className="w-5 h-5 text-blue-400 shrink-0 mt-0.5 sm:mt-0" />
@@ -1152,8 +1407,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
             </div>
           )}
 
-          {/* ── NOTIFICATION: MATERI RECYCLE WARNINGS ── */}
-          {materiWarnings.length > 0 && (
+          {/* ── NOTIFICATION: MATERI RECYCLE WARNINGS (QA ONLY) ── */}
+          {isQATeam && materiWarnings.length > 0 && (
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 space-y-2 animate-in fade-in">
               <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
                 <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
@@ -1169,8 +1424,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
             </div>
           )}
 
-          {/* ── SUMMARY BANNER ── */}
-          {scheduleData && (
+          {/* ── SUMMARY BANNER (QA ONLY) ── */}
+          {isQATeam && scheduleData && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div className="bg-slate-800/70 border border-slate-700/80 rounded-xl p-3.5 flex flex-col justify-between">
                 <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
@@ -1227,16 +1482,28 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
           {!scheduleData ? (
             <Card className="bg-slate-800/40 border-slate-700/60 p-12 text-center rounded-2xl flex flex-col items-center justify-center space-y-3">
               <Calendar className="w-12 h-12 text-slate-600 animate-pulse" />
-              <h3 className="text-base font-bold text-slate-200">Jadwal P5M Belum Dibuat</h3>
+              <h3 className="text-base font-bold text-slate-200">
+                {isQATeam ? 'Jadwal P5M Belum Dibuat' : 'Jadwal P5M Belum Tersedia'}
+              </h3>
               <p className="text-xs text-slate-400 max-w-md">
-                Klik tombol <strong>Acak Otomatis (PT {selectedPt})</strong> di atas untuk menyusun jadwal mingguan cerdas berbasis algoritma constraint &amp; database materi Notion.
+                {isQATeam ? (
+                  <>
+                    Klik tombol <strong>Acak Otomatis (PT {selectedPt})</strong> di atas untuk menyusun jadwal mingguan cerdas berbasis algoritma constraint &amp; database materi Notion.
+                  </>
+                ) : (
+                  <>
+                    Jadwal P5M untuk periode minggu ini (PT {selectedPt}) belum dipublikasikan oleh Koordinator QA. Silakan hubungi tim QA atau cek kembali beberapa saat lagi.
+                  </>
+                )}
               </p>
-              <Button 
-                onClick={handleRandomize} 
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs mt-2 rounded-xl shadow-lg"
-              >
-                <Shuffle className="w-3.5 h-3.5 mr-1.5" /> Susun Jadwal Sekarang
-              </Button>
+              {isQATeam && (
+                <Button 
+                  onClick={handleRandomize} 
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs mt-2 rounded-xl shadow-lg"
+                >
+                  <Shuffle className="w-3.5 h-3.5 mr-1.5" /> Susun Jadwal Sekarang
+                </Button>
+              )}
             </Card>
           ) : (
             <div className="bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200" ref={captureRef}>
