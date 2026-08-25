@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Sparkles, Shield, RefreshCw, Sun, Moon, Sunset, 
+  Sparkles, Shield, RefreshCw, Sun, Moon, Sunset, Sunrise,
   Quote, Edit2, Zap, Activity, Heart, Plus, Users, MessageSquare
 } from 'lucide-react';
 import { getDailySkenaQuote, SkenaQuote, SKENA_QUOTES } from '../utils/skena-quotes';
@@ -34,105 +34,108 @@ export function AnimatedSunCondition({ type, size = 'md' }: AnimatedSunCondition
     xl: 'w-13 h-13 sm:w-15 sm:h-15 md:w-18 md:h-18'
   };
 
+  // 1. PAGI (Morning: 04:00 - 10:59) -> Sunrise with rising dawn animation & horizon rays
   if (type === 'morning') {
     return (
-      <span className={`relative inline-flex items-center justify-center align-middle select-none ${sizeClasses[size]} mx-1.5`} title="Matahari Terbit Pagi">
-        {/* Soft Sun Ray Glow Aura (No background container) */}
+      <span className={`relative inline-flex items-center justify-center align-middle select-none ${sizeClasses[size]} mx-1.5`} title="Matahari Terbit (Pagi)">
+        {/* Soft Golden Dawn Aura */}
         <motion.div 
-          animate={{ scale: [1, 1.3, 1], opacity: [0.35, 0.75, 0.35] }}
+          animate={{ scale: [1, 1.35, 1], opacity: [0.35, 0.8, 0.35] }}
           transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute inset-0 bg-amber-400/25 rounded-full blur-md pointer-events-none"
+          className="absolute inset-0 bg-amber-400/30 rounded-full blur-md pointer-events-none"
         />
-        {/* Outer Rotating Sun Rays */}
+        {/* Rising Dawn Sun Icon */}
         <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-          className="absolute inset-0 flex items-center justify-center"
-        >
-          <Sun className={`${iconSizes[size]} text-amber-400 opacity-60 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]`} />
-        </motion.div>
-        {/* Core Glowing Sun */}
-        <motion.div 
-          animate={{ scale: [1, 1.1, 1], rotate: [-8, 8, -8] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          animate={{ y: [1.5, -2, 1.5], scale: [0.96, 1.04, 0.96] }}
+          transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
           className="relative z-10 flex items-center justify-center"
         >
-          <Sun className={`${iconSizes[size]} text-yellow-300 drop-shadow-[0_0_14px_rgba(253,224,71,0.95)]`} />
+          <Sunrise className={`${iconSizes[size]} text-amber-300 drop-shadow-[0_0_12px_rgba(252,211,77,0.95)]`} />
+        </motion.div>
+        {/* Morning Twinkle Accent */}
+        <motion.div 
+          animate={{ scale: [0.5, 1.2, 0.5], opacity: [0.2, 0.9, 0.2] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.3 }}
+          className="absolute -top-1 -right-1 z-20"
+        >
+          <Sparkles className="w-3 h-3 text-yellow-200 drop-shadow-[0_0_6px_rgba(254,240,138,0.9)]" />
         </motion.div>
       </span>
     );
   }
 
+  // 2. SIANG (Noon: 11:00 - 14:59) -> High Zenith Sun (Overhead Full Sun with Rotating Corona Spikes)
   if (type === 'noon') {
     return (
-      <span className={`relative inline-flex items-center justify-center align-middle select-none ${sizeClasses[size]} mx-1.5`} title="Matahari Terik Siang">
-        {/* Ambient Flare Aura */}
+      <span className={`relative inline-flex items-center justify-center align-middle select-none ${sizeClasses[size]} mx-1.5`} title="Matahari Terik (Siang)">
+        {/* Intense Solar Flare Aura */}
         <motion.div 
-          animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.85, 0.3] }}
+          animate={{ scale: [1, 1.45, 1], opacity: [0.4, 0.85, 0.4] }}
           transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute inset-0 bg-amber-500/25 rounded-full blur-lg pointer-events-none"
+          className="absolute inset-0 bg-yellow-400/30 rounded-full blur-lg pointer-events-none"
         />
-        {/* Counter-rotating solar rays */}
+        {/* Outer Counter-Rotating Sunbeams */}
         <motion.div
           animate={{ rotate: -360 }}
-          transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
+          transition={{ duration: 16, repeat: Infinity, ease: "linear" }}
           className="absolute inset-0 flex items-center justify-center"
         >
-          <Sun className={`${iconSizes[size]} text-orange-400 opacity-70 drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]`} />
+          <Sun className={`${iconSizes[size]} text-orange-400 opacity-60 drop-shadow-[0_0_10px_rgba(251,146,60,0.8)]`} />
         </motion.div>
-        {/* Primary Sun */}
+        {/* Core Blazing Overhead Sun */}
         <motion.div 
-          animate={{ scale: [1, 1.15, 1], rotate: 360 }}
-          transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+          animate={{ rotate: 360, scale: [1, 1.12, 1] }}
+          transition={{ rotate: { duration: 24, repeat: Infinity, ease: "linear" }, scale: { duration: 2.5, repeat: Infinity, ease: "easeInOut" } }}
           className="relative z-10 flex items-center justify-center"
         >
-          <Sun className={`${iconSizes[size]} text-amber-300 drop-shadow-[0_0_18px_rgba(251,191,36,0.95)]`} />
+          <Sun className={`${iconSizes[size]} text-yellow-300 drop-shadow-[0_0_16px_rgba(253,224,71,1)]`} />
         </motion.div>
       </span>
     );
   }
 
+  // 3. SORE (Evening: 15:00 - 17:59) -> Sunset into Horizon
   if (type === 'evening') {
     return (
-      <span className={`relative inline-flex items-center justify-center align-middle select-none ${sizeClasses[size]} mx-1.5`} title="Matahari Senja Sore">
-        {/* Sunset Warmth Aura */}
+      <span className={`relative inline-flex items-center justify-center align-middle select-none ${sizeClasses[size]} mx-1.5`} title="Matahari Senja (Sore)">
+        {/* Twilight Warmth Aura */}
         <motion.div 
-          animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.75, 0.3] }}
+          animate={{ scale: [1, 1.3, 1], opacity: [0.35, 0.8, 0.35] }}
           transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute inset-0 bg-rose-500/25 rounded-full blur-md pointer-events-none"
+          className="absolute inset-0 bg-rose-500/30 rounded-full blur-md pointer-events-none"
         />
         {/* Descending Sunset Animation */}
         <motion.div 
-          animate={{ y: [0, 3, 0], scale: [1, 1.08, 1] }}
+          animate={{ y: [-1, 2, -1], scale: [1, 1.06, 1] }}
           transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
           className="relative z-10 flex items-center justify-center"
         >
-          <Sunset className={`${iconSizes[size]} text-orange-400 drop-shadow-[0_0_15px_rgba(251,146,60,0.9)]`} />
+          <Sunset className={`${iconSizes[size]} text-orange-400 drop-shadow-[0_0_15px_rgba(251,146,60,0.95)]`} />
         </motion.div>
       </span>
     );
   }
 
-  // Malam
+  // 4. MALAM (Night: 18:00 - 03:59) -> Crescent Moon & Stars
   return (
-    <span className={`relative inline-flex items-center justify-center align-middle select-none ${sizeClasses[size]} mx-1.5`} title="Bulan & Bintang Malam">
+    <span className={`relative inline-flex items-center justify-center align-middle select-none ${sizeClasses[size]} mx-1.5`} title="Bulan & Bintang (Malam)">
       {/* Night Sky Glow */}
       <motion.div 
-        animate={{ scale: [1, 1.25, 1], opacity: [0.25, 0.6, 0.25] }}
+        animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.7, 0.3] }}
         transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute inset-0 bg-purple-500/20 rounded-full blur-md pointer-events-none"
+        className="absolute inset-0 bg-purple-500/25 rounded-full blur-md pointer-events-none"
       />
       {/* Floating Crescent Moon */}
       <motion.div 
-        animate={{ rotate: [-8, 8, -8], y: [0, -3, 0] }}
+        animate={{ rotate: [-8, 8, -8], y: [0, -2, 0] }}
         transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
         className="relative z-10 flex items-center justify-center"
       >
-        <Moon className={`${iconSizes[size]} text-purple-300 fill-purple-400/30 drop-shadow-[0_0_15px_rgba(216,180,254,0.9)]`} />
+        <Moon className={`${iconSizes[size]} text-purple-200 fill-purple-300/30 drop-shadow-[0_0_15px_rgba(216,180,254,0.95)]`} />
       </motion.div>
       {/* Twinkling Star Accent */}
       <motion.div 
-        animate={{ scale: [0.5, 1.3, 0.5], opacity: [0.2, 1, 0.2] }}
+        animate={{ scale: [0.5, 1.3, 0.5], opacity: [0.3, 1, 0.3] }}
         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
         className="absolute -top-1 -right-1 z-20"
       >
@@ -295,7 +298,7 @@ export function DailyGreetingHero({
         type: 'morning' as const,
         greeting: 'Selamat Pagi',
         sub: 'Awali shift dengan energi positif & fokus tanpa batas',
-        icon: Sun,
+        icon: Sunrise,
         themeGradient: 'from-amber-400 via-orange-400 to-yellow-300',
         badgeColor: 'text-amber-300 bg-amber-500/20 border-amber-500/40',
         glowColor: '#F59E0B',
@@ -307,10 +310,10 @@ export function DailyGreetingHero({
         greeting: 'Selamat Siang',
         sub: 'Tetap jaga fokus, hidrasi, dan keselamatan operasional',
         icon: Sun,
-        themeGradient: 'from-teal-300 via-emerald-300 to-cyan-300',
-        badgeColor: 'text-teal-300 bg-teal-500/20 border-teal-500/40',
-        glowColor: '#14B8A6',
-        celestialLabel: 'Matahari Siang'
+        themeGradient: 'from-yellow-300 via-amber-400 to-orange-400',
+        badgeColor: 'text-amber-300 bg-amber-500/20 border-amber-500/40',
+        glowColor: '#EAB308',
+        celestialLabel: 'Matahari Terik'
       };
     } else if (hour >= 15 && hour < 18) {
       return {
