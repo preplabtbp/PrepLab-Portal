@@ -29,6 +29,7 @@ interface QuotesPoolModalProps {
   show: boolean;
   onClose: () => void;
   selectedQuote?: CommunityQuoteItem | null;
+  initialTab?: 'details' | 'explore' | 'create';
   onSelectAsDailyQuote?: (quote: CommunityQuoteItem) => void;
   inspectorNik?: string | null;
   inspectorName?: string | null;
@@ -38,6 +39,7 @@ export default function QuotesPoolModal({
   show,
   onClose,
   selectedQuote,
+  initialTab,
   onSelectAsDailyQuote,
   inspectorNik,
   inspectorName
@@ -92,12 +94,16 @@ export default function QuotesPoolModal({
       loadQuotes();
       if (selectedQuote) {
         setActiveDetailQuote(selectedQuote);
+      }
+      if (initialTab) {
+        setActiveTab(initialTab);
+      } else if (selectedQuote) {
         setActiveTab('details');
       } else {
         setActiveTab('explore');
       }
     }
-  }, [show, selectedQuote]);
+  }, [show, selectedQuote, initialTab]);
 
   // Keep activeDetailQuote synchronized with quotesList updates
   useEffect(() => {

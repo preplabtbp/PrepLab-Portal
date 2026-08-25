@@ -154,6 +154,7 @@ export function DailyGreetingHero({
 
   // Quotes Pool & Modal State
   const [showQuotesPoolModal, setShowQuotesPoolModal] = useState(false);
+  const [quotesModalTab, setQuotesModalTab] = useState<'details' | 'explore' | 'create'>('details');
   const [communityQuotesList, setCommunityQuotesList] = useState<CommunityQuoteItem[]>([]);
   const [selectedPoolQuote, setSelectedPoolQuote] = useState<CommunityQuoteItem | null>(null);
 
@@ -709,63 +710,105 @@ export function DailyGreetingHero({
           {/* Skena Motivational Quote Box */}
           <motion.div 
             layoutId="daily-skena-quote-card"
-            onClick={() => setShowQuotesPoolModal(true)}
-            className="rounded-2xl p-4 border relative group max-w-2xl shadow-inner transition-all hover:border-teal-500/60 cursor-pointer"
+            onClick={() => {
+              setQuotesModalTab('details');
+              setShowQuotesPoolModal(true);
+            }}
+            className="rounded-2xl p-4 sm:p-4.5 border relative group max-w-2xl shadow-md transition-all hover:border-teal-500/60 cursor-pointer"
             style={{
               backgroundColor: 'var(--input-bg, rgba(0,0,0,0.2))',
               borderColor: 'var(--border-main, rgba(255,255,255,0.1))'
             }}
           >
-            <div className="flex items-center justify-between gap-2 mb-2">
+            {/* Header Row of Quote Box */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
               <span className="text-[11px] font-bold tracking-wider uppercase flex items-center gap-1.5 text-amber-400">
                 <Sparkles className="w-3.5 h-3.5" />
                 Quote Hari Ini • {activeQuote.category || 'Motivasi & Skena'}
               </span>
               
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Dedicated Tambah Quote Button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setQuotesModalTab('create');
+                    setShowQuotesPoolModal(true);
+                  }}
+                  className="px-2.5 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-all active:scale-95 cursor-pointer shadow-xs"
+                  title="Tambah quote / pesan motivasi Anda ke pool komunitas"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tambah Quote</span>
+                </button>
+
                 {/* Like Button on Quote */}
                 <button
                   type="button"
                   onClick={handleToggleLikeActiveQuote}
-                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1.5 border transition-all active:scale-95 cursor-pointer shadow-xs ${
                     (activeQuote.likedBy || []).includes(inspectorNik || '')
-                      ? 'bg-rose-500/20 border-rose-500/40 text-rose-400'
-                      : 'bg-black/10 hover:bg-rose-500/10 hover:text-rose-400 border-black/10 opacity-75 hover:opacity-100'
+                      ? 'bg-rose-500/20 border-rose-500/50 text-rose-400 ring-1 ring-rose-500/30'
+                      : 'bg-black/10 hover:bg-rose-500/15 hover:text-rose-400 border-slate-700/50 text-slate-300'
                   }`}
                   title={`${activeQuote.likesCount || 0} personil menyukai quote ini. Klik untuk like.`}
                 >
-                  <Heart className={`w-3 h-3 ${((activeQuote.likedBy || []).includes(inspectorNik || '')) ? 'fill-rose-500 text-rose-500' : ''}`} />
+                  <Heart className={`w-3.5 h-3.5 ${((activeQuote.likedBy || []).includes(inspectorNik || '')) ? 'fill-rose-500 text-rose-500' : ''}`} />
                   <span>{activeQuote.likesCount || 0}</span>
                 </button>
 
+                {/* Randomize / Next Quote */}
                 <button
                   type="button"
                   onClick={handleCycleQuote}
-                  className="opacity-60 hover:opacity-100 p-1 rounded-md hover:bg-black/10 transition-all cursor-pointer"
+                  className="p-1.5 rounded-xl hover:bg-black/20 text-slate-400 hover:text-slate-200 transition-all cursor-pointer border border-transparent hover:border-slate-700/50"
                   title="Ganti quote acak lainnya dari pool"
                 >
-                  <RefreshCw className="w-3 h-3" />
+                  <RefreshCw className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
 
-            <p className="text-xs sm:text-sm italic leading-relaxed font-medium mb-2.5" style={{ color: 'var(--text-main)' }}>
+            {/* Quote Body Text */}
+            <p className="text-xs sm:text-sm italic leading-relaxed font-medium mb-3" style={{ color: 'var(--text-main)' }}>
               "{activeQuote.quote}"
             </p>
 
             {/* Creator Attribution & Pool Explorer Link */}
-            <div className="flex items-center justify-between pt-2 border-t border-black/10 dark:border-white/10 text-[11px]">
-              <div className="flex items-center gap-1.5 opacity-75">
-                <span className="font-semibold">Oleh:</span>
+            <div className="flex flex-wrap items-center justify-between pt-2.5 border-t border-black/10 dark:border-white/10 text-[11px] gap-2">
+              <div className="flex items-center gap-1.5 opacity-80">
+                <span className="font-semibold text-slate-400">Oleh:</span>
                 <strong className="font-bold text-teal-400">{activeQuote.authorName || 'Personil PrepLab'}</strong>
-                {activeQuote.authorRole && <span className="opacity-60 hidden sm:inline">({activeQuote.authorRole})</span>}
+                {activeQuote.authorRole && <span className="text-slate-400 hidden sm:inline">({activeQuote.authorRole})</span>}
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-semibold text-teal-400 opacity-80 group-hover:opacity-100 flex items-center gap-1">
-                  <Users className="w-3 h-3" />
-                  Lihat Likers & Pool Quotes ({communityQuotesList.length}) →
-                </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setQuotesModalTab('details');
+                    setShowQuotesPoolModal(true);
+                  }}
+                  className="text-[11px] font-semibold text-teal-400 hover:text-teal-300 flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Detail &amp; Likers ({activeQuote.likesCount || 0})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setQuotesModalTab('explore');
+                    setShowQuotesPoolModal(true);
+                  }}
+                  className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Jelajahi Pool ({communityQuotesList.length}) →</span>
+                </button>
               </div>
             </div>
           </motion.div>
@@ -787,7 +830,10 @@ export function DailyGreetingHero({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowQuotesPoolModal(true)}
+              onClick={() => {
+                setQuotesModalTab('explore');
+                setShowQuotesPoolModal(true);
+              }}
               className="px-2.5 py-1 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
               style={{
                 backgroundColor: 'var(--input-bg)',
@@ -822,6 +868,7 @@ export function DailyGreetingHero({
         show={showQuotesPoolModal}
         onClose={() => setShowQuotesPoolModal(false)}
         selectedQuote={activeQuote}
+        initialTab={quotesModalTab}
         onSelectAsDailyQuote={(q) => {
           setSelectedPoolQuote(q);
         }}
