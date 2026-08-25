@@ -5,7 +5,7 @@ import {
   Sparkles, RefreshCw, Layers, Eye, CheckCircle2, Sun, 
   Moon, Sunset, SlidersHorizontal, CheckSquare, Square,
   Globe, Users, User, Share2, Search, ArrowUpRight,
-  ChevronDown, ChevronUp, Maximize2, Minimize2
+  ChevronDown, ChevronUp, Maximize2, Minimize2, Heart
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -34,6 +34,9 @@ export interface CustomThemeTemplate {
   authorName?: string;
   publishedAt?: string | Date;
   nik?: string;
+  likesCount?: number;
+  likedBy?: string[];
+  likedByUsers?: any[];
 }
 
 export const PRESET_THEMES: Record<string, { name: string; desc: string; colors: ThemeColors }> = {
@@ -313,11 +316,30 @@ export default function ThemeModal({
   if (!show) return null;
 
   // Directly apply a theme from presets, community, or custom templates
-  const handleApplyThemeDirectly = async (colors: ThemeColors, themeName: string) => {
-    // 1. Immediately apply to App state and DOM
+  const handleApplyThemeDirectly = async (rawColors: any, themeName: string) => {
+    let colors = rawColors;
+    if (typeof colors === 'string') {
+      try { colors = JSON.parse(colors); } catch(e) {}
+    }
+    if (!colors || typeof colors !== 'object') {
+      toast.error('Format warna tema tidak valid');
+      return;
+    }
+
+    setEditingColors(colors);
+
+    // 1. Immediately apply to DOM
+    const root = document.documentElement;
+    Object.entries(colors).forEach(([key, value]) => {
+      if (typeof key === 'string' && key.startsWith('--') && value) {
+        root.style.setProperty(key, value as string);
+      }
+    });
+
+    // 2. Immediately apply to App state
     onThemeUpdated(targetMode, colors, true);
     
-    // 2. Persist in local storage immediately across all modes
+    // 3. Persist in local storage immediately across all modes
     const nik = inspectorNik || localStorage.getItem('p2h_inspector_nik');
     const allModes = { morning: colors, afternoon: colors, evening: colors };
     if (nik) {
@@ -326,9 +348,9 @@ export default function ThemeModal({
     localStorage.setItem('preplab_user_themes_guest', JSON.stringify(allModes));
     localStorage.setItem('preplab_active_theme_colors', JSON.stringify(colors));
 
-    toast.success(`Tema "${themeName}" aktif diterapkan ke seluruh portal!`);
+    toast.success(`Tema "${themeName}" aktif diterapkan ke seluruh portal! 🎉`);
 
-    // 3. Save to server in background
+    // 4. Save to server in background
     try {
       await fetch('/api/themes', {
         method: 'POST',
@@ -343,6 +365,47 @@ export default function ThemeModal({
       });
     } catch(e) {
       console.warn("Background theme save notice:", e);
+    }
+  };
+
+  // Toggle Like on Community Theme
+  const handleToggleThemeLike = async (theme: CustomThemeTemplate, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!theme.id) return;
+    const nik = inspectorNik || localStorage.getItem('p2h_inspector_nik') || 'guest';
+    const profileStr = localStorage.getItem('p2h_inspector_profile');
+    let name = 'Personil PrepLab';
+    let role = 'Staff';
+    if (profileStr) {
+      try {
+        const p = JSON.parse(profileStr);
+        name = p.name || p.nama || name;
+        role = p.jabatan || role;
+      } catch (err) {}
+    }
+
+    const wasLiked = (theme.likedBy || []).includes(nik);
+    const newLikesCount = wasLiked ? Math.max(0, (theme.likesCount || 1) - 1) : (theme.likesCount || 0) + 1;
+    const newLikedBy = wasLiked ? (theme.likedBy || []).filter(n => n !== nik) : [...(theme.likedBy || []), nik];
+
+    // Optimistic UI update
+    setCommunityThemes(prev => prev.map(t => t.id === theme.id ? { ...t, likesCount: newLikesCount, likedBy: newLikedBy } : t));
+
+    try {
+      const res = await fetch(`/api/themes/${theme.id}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nik, name, role })
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setCommunityThemes(prev => prev.map(t => t.id === theme.id ? { ...t, likesCount: data.likesCount, likedBy: data.likedBy } : t));
+        toast.success(data.message || (data.isLiked ? 'Menyukai tema!' : 'Batal menyukai tema.'));
+      }
+    } catch (err) {
+      // Rollback
+      setCommunityThemes(prev => prev.map(t => t.id === theme.id ? theme : t));
+      toast.error('Gagal memperbarui like tema');
     }
   };
 
@@ -750,10 +813,25 @@ export default function ThemeModal({
                                   <h4 className="font-bold text-xs truncate" title={tmpl.name}>
                                     {tmpl.name}
                                   </h4>
-                                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 shrink-0 flex items-center gap-1">
-                                    <Globe className="w-2.5 h-2.5" />
-                                    Publik
-                                  </span>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleToggleThemeLike(tmpl, e)}
+                                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 border transition-all cursor-pointer ${
+                                        (tmpl.likedBy || []).includes(inspectorNik || '')
+                                          ? 'bg-rose-500/20 border-rose-500/40 text-rose-500'
+                                          : 'bg-black/5 hover:bg-rose-500/10 hover:text-rose-500 border-black/10 opacity-80 hover:opacity-100'
+                                      }`}
+                                      title={`${tmpl.likesCount || 0} orang menyukai tema ini. Klik untuk menyukai.`}
+                                    >
+                                      <Heart className={`w-3 h-3 ${((tmpl.likedBy || []).includes(inspectorNik || '')) ? 'fill-rose-500 text-rose-500' : ''}`} />
+                                      <span>{tmpl.likesCount || 0}</span>
+                                    </button>
+                                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 shrink-0 flex items-center gap-1">
+                                      <Globe className="w-2.5 h-2.5" />
+                                      Publik
+                                    </span>
+                                  </div>
                                 </div>
 
                                 {/* Creator Attribution Badge */}

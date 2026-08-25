@@ -7,7 +7,8 @@ import {
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
   pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, 
   notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, 
-  mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi
+  mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi,
+  developerUsers, communityQuotes
 } from "../../src/db/schema.js";
 import { generatePdfFromTemplate, drive } from '../../google-services.js';
 import { 
@@ -527,6 +528,13 @@ router.get("/api/themes/templates", async (req, res) => {
         parsedColors = {};
       }
 
+      let likedByUsers: any[] = [];
+      try {
+        likedByUsers = typeof t.likedByUsers === 'string' ? JSON.parse(t.likedByUsers) : (t.likedByUsers || []);
+      } catch (e) {
+        likedByUsers = [];
+      }
+
       const item = {
         id: t.id,
         name: t.themeName || 'Tema Kustom',
@@ -535,6 +543,9 @@ router.get("/api/themes/templates", async (req, res) => {
         authorName: t.authorName || t.nik || 'Anggota Lab',
         isPublished: Boolean(t.isPublished),
         publishedAt: t.publishedAt,
+        likesCount: t.likesCount || (t.likedBy ? t.likedBy.length : 0),
+        likedBy: t.likedBy || [],
+        likedByUsers,
         colors: parsedColors
       };
 
@@ -558,7 +569,7 @@ router.get("/api/themes/templates", async (req, res) => {
 
 router.get("/api/themes/community", async (req, res) => {
     try {
-      const data = await db.select().from(userThemes).where(eq(userThemes.isPublished, true)).orderBy(desc(userThemes.publishedAt), desc(userThemes.id));
+      const data = await db.select().from(userThemes).where(eq(userThemes.isPublished, true)).orderBy(desc(userThemes.likesCount), desc(userThemes.publishedAt), desc(userThemes.id));
       const communityThemes = data.map(t => {
         let parsedColors = {};
         try {
@@ -566,6 +577,14 @@ router.get("/api/themes/community", async (req, res) => {
         } catch (e) {
           parsedColors = {};
         }
+
+        let likedByUsers: any[] = [];
+        try {
+          likedByUsers = typeof t.likedByUsers === 'string' ? JSON.parse(t.likedByUsers) : (t.likedByUsers || []);
+        } catch (e) {
+          likedByUsers = [];
+        }
+
         return {
           id: t.id,
           name: t.themeName || 'Tema Komunitas',
@@ -573,6 +592,9 @@ router.get("/api/themes/community", async (req, res) => {
           nik: t.nik,
           authorName: t.authorName || t.nik || 'Anggota Lab',
           publishedAt: t.publishedAt,
+          likesCount: t.likesCount || (t.likedBy ? t.likedBy.length : 0),
+          likedBy: t.likedBy || [],
+          likedByUsers,
           colors: parsedColors
         };
       });
@@ -583,6 +605,70 @@ router.get("/api/themes/community", async (req, res) => {
     }
   });
 
+router.post(["/api/themes/:id/like", "/api/themes/templates/:id/like"], async (req, res) => {
+  try {
+    const templateId = parseInt(req.params.id);
+    const { nik, name, role } = req.body;
+    if (!templateId) return res.status(400).json({ status: "error", message: "ID template tidak valid" });
+    if (!nik) return res.status(400).json({ status: "error", message: "NIK is required" });
+
+    const found = await db.select().from(userThemes).where(eq(userThemes.id, templateId)).limit(1);
+    if (found.length === 0) {
+      return res.status(404).json({ status: "error", message: "Tema tidak ditemukan" });
+    }
+
+    const theme = found[0];
+    let likedBy: string[] = Array.isArray(theme.likedBy) ? [...theme.likedBy] : [];
+    let likedByUsers: any[] = [];
+    try {
+      likedByUsers = typeof theme.likedByUsers === 'string' ? JSON.parse(theme.likedByUsers) : (theme.likedByUsers || []);
+    } catch (e) {
+      likedByUsers = [];
+    }
+
+    const alreadyLiked = likedBy.includes(nik);
+    let isLiked = false;
+
+    if (alreadyLiked) {
+      // Unlike
+      likedBy = likedBy.filter(n => n !== nik);
+      likedByUsers = likedByUsers.filter((u: any) => u.nik !== nik);
+      isLiked = false;
+    } else {
+      // Like
+      likedBy.push(nik);
+      likedByUsers.push({
+        nik,
+        name: name || nik,
+        role: role || 'Personil',
+        likedAt: new Date().toISOString()
+      });
+      isLiked = true;
+    }
+
+    const likesCount = likedBy.length;
+
+    await db.update(userThemes).set({
+      likesCount,
+      likedBy,
+      likedByUsers: JSON.stringify(likedByUsers),
+      updatedAt: new Date()
+    }).where(eq(userThemes.id, templateId));
+
+    res.json({
+      status: "success",
+      likesCount,
+      likedBy,
+      likedByUsers,
+      isLiked,
+      message: isLiked ? "Menyukai tema!" : "Batal menyukai tema."
+    });
+  } catch (error: any) {
+    console.error("Error toggling theme like:", error);
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
 router.get("/api/themes/:nik", async (req, res) => {
     try {
       const nikParam = req.params.nik;
@@ -592,7 +678,7 @@ router.get("/api/themes/:nik", async (req, res) => {
 
       const data = await db.select().from(userThemes).where(eq(userThemes.nik, nikParam));
       const themes: Record<string, any> = {};
-      const customTemplates: Array<{ id: number; name: string; mode: string; colors: any; isPublished?: boolean; authorName?: string; publishedAt?: any }> = [];
+      const customTemplates: Array<{ id: number; name: string; mode: string; colors: any; isPublished?: boolean; authorName?: string; publishedAt?: any; likesCount?: number; likedBy?: string[] }> = [];
       
       data.forEach(t => {
         let parsedColors = {};
@@ -610,6 +696,8 @@ router.get("/api/themes/:nik", async (req, res) => {
             isPublished: Boolean(t.isPublished),
             authorName: t.authorName || '',
             publishedAt: t.publishedAt,
+            likesCount: t.likesCount || 0,
+            likedBy: t.likedBy || [],
             colors: parsedColors
           });
         } else {
@@ -620,7 +708,7 @@ router.get("/api/themes/:nik", async (req, res) => {
       // Also fetch community themes safely
       let communityThemes: any[] = [];
       try {
-        const commData = await db.select().from(userThemes).where(eq(userThemes.isPublished, true)).orderBy(desc(userThemes.publishedAt), desc(userThemes.id));
+        const commData = await db.select().from(userThemes).where(eq(userThemes.isPublished, true)).orderBy(desc(userThemes.likesCount), desc(userThemes.publishedAt), desc(userThemes.id));
         communityThemes = commData.map(t => {
           let parsedColors = {};
           try {
@@ -635,6 +723,8 @@ router.get("/api/themes/:nik", async (req, res) => {
             nik: t.nik,
             authorName: t.authorName || t.nik || 'Anggota Lab',
             publishedAt: t.publishedAt,
+            likesCount: t.likesCount || 0,
+            likedBy: t.likedBy || [],
             colors: parsedColors
           };
         });
@@ -648,6 +738,173 @@ router.get("/api/themes/:nik", async (req, res) => {
       res.json({ status: "success", data: {}, customTemplates: [], communityThemes: [] });
     }
   });
+
+// --- COMMUNITY QUOTES POOL ENDPOINTS ---
+
+router.get("/api/quotes", async (req, res) => {
+  try {
+    const data = await db.select().from(communityQuotes).orderBy(desc(communityQuotes.likesCount), desc(communityQuotes.id));
+
+    const quotes = data.map(q => {
+      let likedByUsers: any[] = [];
+      try {
+        likedByUsers = typeof q.likedByUsers === 'string' ? JSON.parse(q.likedByUsers) : (q.likedByUsers || []);
+      } catch (e) {
+        likedByUsers = [];
+      }
+      return {
+        id: q.id,
+        quote: q.quote,
+        authorNik: q.authorNik,
+        authorName: q.authorName,
+        authorRole: q.authorRole,
+        authorSection: q.authorSection,
+        category: q.category,
+        likesCount: q.likesCount || (q.likedBy ? q.likedBy.length : 0),
+        likedBy: q.likedBy || [],
+        likedByUsers,
+        createdAt: q.createdAt
+      };
+    });
+
+    res.json({ status: "success", data: quotes });
+  } catch (error: any) {
+    console.error("Error fetching quotes:", error);
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+router.post("/api/quotes", async (req, res) => {
+  try {
+    const { quote, authorNik, authorName, authorRole, authorSection, category } = req.body;
+    if (!quote || !quote.trim()) {
+      return res.status(400).json({ status: "error", message: "Isi quote tidak boleh kosong" });
+    }
+    if (!authorNik) {
+      return res.status(400).json({ status: "error", message: "NIK pembuat quote wajib diisi" });
+    }
+
+    let resolvedName = authorName;
+    let resolvedRole = authorRole;
+    let resolvedSection = authorSection;
+
+    if (!resolvedName || !resolvedRole) {
+      try {
+        const emp = await db.select().from(employees).where(eq(employees.nik, authorNik)).limit(1);
+        if (emp.length > 0) {
+          if (!resolvedName) resolvedName = emp[0].nama || emp[0].name;
+          if (!resolvedRole) resolvedRole = emp[0].jabatan;
+          if (!resolvedSection) resolvedSection = emp[0].section || emp[0].department;
+        }
+      } catch (e) {}
+    }
+
+    const inserted = await db.insert(communityQuotes).values({
+      quote: quote.trim(),
+      authorNik: authorNik.trim(),
+      authorName: resolvedName || 'Personil PrepLab',
+      authorRole: resolvedRole || 'Staff',
+      authorSection: resolvedSection || 'Prep & Lab',
+      category: category || 'Motivasi & Skena',
+      likesCount: 0,
+      likedBy: [],
+      likedByUsers: '[]',
+      isApproved: true
+    }).returning();
+
+    res.json({ 
+      status: "success", 
+      message: "Quote berhasil ditambahkan ke pool quotes bersama!", 
+      data: inserted[0] 
+    });
+  } catch (error: any) {
+    console.error("Error creating quote:", error);
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+router.post("/api/quotes/:id/like", async (req, res) => {
+  try {
+    const quoteId = parseInt(req.params.id);
+    const { nik, name, role } = req.body;
+    if (!quoteId) return res.status(400).json({ status: "error", message: "ID quote tidak valid" });
+    if (!nik) return res.status(400).json({ status: "error", message: "NIK is required" });
+
+    const found = await db.select().from(communityQuotes).where(eq(communityQuotes.id, quoteId)).limit(1);
+    if (found.length === 0) {
+      return res.status(404).json({ status: "error", message: "Quote tidak ditemukan" });
+    }
+
+    const q = found[0];
+    let likedBy: string[] = Array.isArray(q.likedBy) ? [...q.likedBy] : [];
+    let likedByUsers: any[] = [];
+    try {
+      likedByUsers = typeof q.likedByUsers === 'string' ? JSON.parse(q.likedByUsers) : (q.likedByUsers || []);
+    } catch (e) {
+      likedByUsers = [];
+    }
+
+    const alreadyLiked = likedBy.includes(nik);
+    let isLiked = false;
+
+    if (alreadyLiked) {
+      likedBy = likedBy.filter(n => n !== nik);
+      likedByUsers = likedByUsers.filter((u: any) => u.nik !== nik);
+      isLiked = false;
+    } else {
+      likedBy.push(nik);
+      likedByUsers.push({
+        nik,
+        name: name || nik,
+        role: role || 'Personil',
+        likedAt: new Date().toISOString()
+      });
+      isLiked = true;
+    }
+
+    const likesCount = likedBy.length;
+
+    await db.update(communityQuotes).set({
+      likesCount,
+      likedBy,
+      likedByUsers: JSON.stringify(likedByUsers),
+      updatedAt: new Date()
+    }).where(eq(communityQuotes.id, quoteId));
+
+    res.json({
+      status: "success",
+      likesCount,
+      likedBy,
+      likedByUsers,
+      isLiked,
+      message: isLiked ? "Menyukai quote!" : "Batal menyukai quote."
+    });
+  } catch (error: any) {
+    console.error("Error toggling quote like:", error);
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+router.delete("/api/quotes/:id", async (req, res) => {
+  try {
+    const quoteId = parseInt(req.params.id);
+    const { nik } = req.query;
+    if (!quoteId) return res.status(400).json({ status: "error", message: "ID quote tidak valid" });
+
+    let deleteQuery;
+    if (nik && nik !== '02D25000055' && nik !== 'preplabadmin') {
+      deleteQuery = and(eq(communityQuotes.id, quoteId), eq(communityQuotes.authorNik, String(nik)));
+    } else {
+      deleteQuery = eq(communityQuotes.id, quoteId);
+    }
+
+    await db.delete(communityQuotes).where(deleteQuery);
+    res.json({ status: "success", message: "Quote berhasil dihapus dari pool." });
+  } catch (error: any) {
+    console.error("Error deleting quote:", error);
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
 
 router.post("/api/themes", async (req, res) => {
     try {

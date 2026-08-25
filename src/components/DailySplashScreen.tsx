@@ -101,12 +101,29 @@ export function DailySplashScreen({
     return 'Preparation & Laboratory Team';
   }, [userJabatan, userSection]);
 
+  const [communityQuotes, setCommunityQuotes] = useState<any[]>([]);
+
+  // Fetch community quotes
+  useEffect(() => {
+    fetch('/api/quotes')
+      .then(res => res.json())
+      .then(json => {
+        if (json.status === 'success' && Array.isArray(json.data) && json.data.length > 0) {
+          setCommunityQuotes(json.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const activeQuoteList = communityQuotes.length > 0 ? communityQuotes : SKENA_QUOTES;
+  const currentQuote = activeQuoteList[quoteIndex % activeQuoteList.length] || SKENA_QUOTES[0];
+
   // Pick deterministic daily quote based on date hash
   useEffect(() => {
     const today = new Date();
     const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
-    setQuoteIndex(dayOfYear % SKENA_QUOTES.length);
-  }, []);
+    setQuoteIndex(dayOfYear % (activeQuoteList.length || 1));
+  }, [activeQuoteList.length]);
 
   // Daily check logic: Show once per day unless forceShow
   useEffect(() => {
@@ -175,11 +192,10 @@ export function DailySplashScreen({
 
   const handleNextQuote = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setQuoteIndex(prev => (prev + 1) % SKENA_QUOTES.length);
+    setQuoteIndex(prev => (prev + 1) % (activeQuoteList.length || 1));
     setProgress(0); // Reset timer on interaction
   };
 
-  const currentQuote: SkenaQuote = SKENA_QUOTES[quoteIndex] || SKENA_QUOTES[0];
   const GreetingIcon = greetingInfo.icon;
   const secondsLeft = Math.max(0, Math.ceil(((100 - progress) / 100) * (TOTAL_DURATION_MS / 1000)));
 
@@ -356,14 +372,18 @@ export function DailySplashScreen({
                 <div className="flex items-center gap-1.5">
                   <Quote className="w-4 h-4 text-amber-400 opacity-90" />
                   <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
-                    {currentQuote.tag || 'Daily Motivation'}
+                    {currentQuote.category || currentQuote.tag || 'Motivasi & Skena'}
                   </span>
                 </div>
-                {currentQuote.vibe && (
+                {currentQuote.authorName ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-teal-300 font-medium border border-white/10">
+                    Oleh: {currentQuote.authorName}
+                  </span>
+                ) : currentQuote.vibe ? (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/80 font-medium border border-white/10">
                     {currentQuote.vibe}
                   </span>
-                )}
+                ) : null}
               </div>
 
               <p className="text-sm sm:text-base font-medium text-white/95 leading-relaxed italic">

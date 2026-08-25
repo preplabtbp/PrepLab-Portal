@@ -308,6 +308,26 @@ export const userThemes = pgTable('user_themes', {
   isPublished: boolean('is_published').default(false),
   authorName: text('author_name'),
   publishedAt: timestamp('published_at'),
+  likesCount: integer('likes_count').default(0),
+  likedBy: text('liked_by').array(),
+  likedByUsers: text('liked_by_users'), // JSON array [{ nik, name, role }]
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// --- Community Quotes Pool ---
+export const communityQuotes = pgTable('community_quotes', {
+  id: serial('id').primaryKey(),
+  quote: text('quote').notNull(),
+  authorNik: text('author_nik').notNull(),
+  authorName: text('author_name').notNull(),
+  authorRole: text('author_role'),
+  authorSection: text('author_section'),
+  category: text('category').default('Motivasi & Skena'),
+  likesCount: integer('likes_count').default(0),
+  likedBy: text('liked_by').array(),
+  likedByUsers: text('liked_by_users'), // JSON array [{ nik, name, role }]
+  isApproved: boolean('is_approved').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

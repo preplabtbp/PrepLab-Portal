@@ -2,9 +2,11 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, Shield, RefreshCw, Sun, Moon, Sunset, 
-  Quote, Edit2, Zap, Activity
+  Quote, Edit2, Zap, Activity, Heart, Plus, Users, MessageSquare
 } from 'lucide-react';
 import { getDailySkenaQuote, SkenaQuote, SKENA_QUOTES } from '../utils/skena-quotes';
+import QuotesPoolModal, { CommunityQuoteItem } from './QuotesPoolModal';
+import { toast } from 'sonner';
 
 interface DailyGreetingHeroProps {
   inspectorName?: string | null;
@@ -150,6 +152,104 @@ export function DailyGreetingHero({
   const [stage, setStage] = useState<1 | 2 | 3>(1);
   const [progress, setProgress] = useState(0);
 
+  // Quotes Pool & Modal State
+  const [showQuotesPoolModal, setShowQuotesPoolModal] = useState(false);
+  const [communityQuotesList, setCommunityQuotesList] = useState<CommunityQuoteItem[]>([]);
+  const [selectedPoolQuote, setSelectedPoolQuote] = useState<CommunityQuoteItem | null>(null);
+
+  // Fetch Community Quotes
+  const loadCommunityQuotes = async () => {
+    try {
+      const res = await fetch('/api/quotes');
+      const json = await res.json();
+      if (json.status === 'success' && Array.isArray(json.data) && json.data.length > 0) {
+        setCommunityQuotesList(json.data);
+      }
+    } catch (e) {
+      console.warn("Gagal memuat quotes hero:", e);
+    }
+  };
+
+  useEffect(() => {
+    loadCommunityQuotes();
+  }, []);
+
+  // Base deterministic Daily Quote from Pool or Skena fallback
+  const activeQuote: CommunityQuoteItem = useMemo(() => {
+    if (selectedPoolQuote) return selectedPoolQuote;
+
+    const list: CommunityQuoteItem[] = communityQuotesList.length > 0 
+      ? communityQuotesList 
+      : SKENA_QUOTES.map((q, idx) => ({
+          id: idx + 1,
+          quote: q.quote,
+          authorNik: '00000000000',
+          authorName: 'Personil PrepLab',
+          authorRole: q.vibe || 'Staff',
+          authorSection: 'Prep & Lab',
+          category: q.tag || 'Motivasi & Skena',
+          likesCount: 0,
+          likedBy: [],
+          likedByUsers: []
+        }));
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    const seed = `${(inspectorNik || currentUsername || 'user').trim().toLowerCase()}_daily_quote_${dateStr}`;
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+      hash |= 0;
+    }
+    const baseIndex = Math.abs(hash) % list.length;
+    const activeIdx = (baseIndex + quoteIndexOffset + list.length) % list.length;
+    return list[activeIdx] || list[0];
+  }, [selectedPoolQuote, communityQuotesList, inspectorNik, currentUsername, quoteIndexOffset]);
+
+  const handleCycleQuote = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedPoolQuote(null);
+    setQuoteIndexOffset(prev => prev + 1);
+  };
+
+  const handleToggleLikeActiveQuote = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!activeQuote.id) return;
+    const currentNik = inspectorNik || localStorage.getItem('p2h_inspector_nik') || 'general';
+    const profileStr = localStorage.getItem('p2h_inspector_profile');
+    let name = 'Personil PrepLab';
+    let role = 'Staff';
+    if (profileStr) {
+      try {
+        const p = JSON.parse(profileStr);
+        name = p.name || p.nama || name;
+        role = p.jabatan || role;
+      } catch (err) {}
+    }
+
+    const wasLiked = (activeQuote.likedBy || []).includes(currentNik);
+    const newLikesCount = wasLiked ? Math.max(0, (activeQuote.likesCount || 1) - 1) : (activeQuote.likesCount || 0) + 1;
+    const newLikedBy = wasLiked ? (activeQuote.likedBy || []).filter(n => n !== currentNik) : [...(activeQuote.likedBy || []), currentNik];
+
+    setCommunityQuotesList(prev => prev.map(q => q.id === activeQuote.id ? { ...q, likesCount: newLikesCount, likedBy: newLikedBy } : q));
+    if (selectedPoolQuote && selectedPoolQuote.id === activeQuote.id) {
+      setSelectedPoolQuote(prev => prev ? { ...prev, likesCount: newLikesCount, likedBy: newLikedBy } : prev);
+    }
+
+    try {
+      const res = await fetch(`/api/quotes/${activeQuote.id}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nik: currentNik, name, role })
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        toast.success(data.message || (data.isLiked ? 'Menyukai quote!' : 'Batal menyukai quote.'));
+      }
+    } catch (err) {
+      loadCommunityQuotes();
+    }
+  };
+
   // User Profile and Nickname state
   const [currentUsername, setCurrentUsername] = useState(() => {
     try {
@@ -235,19 +335,6 @@ export function DailyGreetingHero({
       };
     }
   }, []);
-
-  // Base deterministic Daily Skena Quote for today
-  const baseDailyQuote = useMemo(() => {
-    return getDailySkenaQuote(inspectorNik || currentUsername || inspectorName || 'user');
-  }, [inspectorNik, currentUsername, inspectorName]);
-
-  // Active Quote (supports cycling)
-  const activeQuote: SkenaQuote = useMemo(() => {
-    if (quoteIndexOffset === 0) return baseDailyQuote;
-    const baseIndex = SKENA_QUOTES.findIndex(q => q.quote === baseDailyQuote.quote);
-    const newIdx = (baseIndex + quoteIndexOffset + SKENA_QUOTES.length) % SKENA_QUOTES.length;
-    return SKENA_QUOTES[newIdx] || baseDailyQuote;
-  }, [baseDailyQuote, quoteIndexOffset]);
 
   // Check Daily Splash condition on mount (Only if username has been registered!)
   useEffect(() => {
@@ -337,11 +424,6 @@ export function DailyGreetingHero({
     const todayStr = new Date().toISOString().split('T')[0];
     const nikKey = inspectorNik || localStorage.getItem('p2h_inspector_nik') || 'general';
     localStorage.setItem(`preplab_daily_splash_${nikKey}`, todayStr);
-  };
-
-  const handleCycleQuote = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setQuoteIndexOffset(prev => prev + 1);
   };
 
   const GreetingIcon = greetingInfo.icon;
@@ -627,35 +709,65 @@ export function DailyGreetingHero({
           {/* Skena Motivational Quote Box */}
           <motion.div 
             layoutId="daily-skena-quote-card"
-            className="rounded-2xl p-4 border relative group max-w-2xl shadow-inner transition-colors"
+            onClick={() => setShowQuotesPoolModal(true)}
+            className="rounded-2xl p-4 border relative group max-w-2xl shadow-inner transition-all hover:border-teal-500/60 cursor-pointer"
             style={{
               backgroundColor: 'var(--input-bg, rgba(0,0,0,0.2))',
               borderColor: 'var(--border-main, rgba(255,255,255,0.1))'
             }}
           >
-            <div className="flex items-center justify-between gap-2 mb-1.5">
+            <div className="flex items-center justify-between gap-2 mb-2">
               <span className="text-[11px] font-bold tracking-wider uppercase flex items-center gap-1.5 text-amber-400">
                 <Sparkles className="w-3.5 h-3.5" />
-                Quote Hari Ini • {activeQuote.vibe}
+                Quote Hari Ini • {activeQuote.category || 'Motivasi & Skena'}
               </span>
+              
               <div className="flex items-center gap-2">
-                <span className="text-[10px] opacity-60 font-mono">
-                  {activeQuote.tag}
-                </span>
+                {/* Like Button on Quote */}
+                <button
+                  type="button"
+                  onClick={handleToggleLikeActiveQuote}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all cursor-pointer ${
+                    (activeQuote.likedBy || []).includes(inspectorNik || '')
+                      ? 'bg-rose-500/20 border-rose-500/40 text-rose-400'
+                      : 'bg-black/10 hover:bg-rose-500/10 hover:text-rose-400 border-black/10 opacity-75 hover:opacity-100'
+                  }`}
+                  title={`${activeQuote.likesCount || 0} personil menyukai quote ini. Klik untuk like.`}
+                >
+                  <Heart className={`w-3 h-3 ${((activeQuote.likedBy || []).includes(inspectorNik || '')) ? 'fill-rose-500 text-rose-500' : ''}`} />
+                  <span>{activeQuote.likesCount || 0}</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleCycleQuote}
-                  className="opacity-60 hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer"
-                  title="Ganti quote acak lainnya"
+                  className="opacity-60 hover:opacity-100 p-1 rounded-md hover:bg-black/10 transition-all cursor-pointer"
+                  title="Ganti quote acak lainnya dari pool"
                 >
                   <RefreshCw className="w-3 h-3" />
                 </button>
               </div>
             </div>
 
-            <p className="text-xs sm:text-sm italic leading-relaxed font-medium" style={{ color: 'var(--text-main)' }}>
+            <p className="text-xs sm:text-sm italic leading-relaxed font-medium mb-2.5" style={{ color: 'var(--text-main)' }}>
               "{activeQuote.quote}"
             </p>
+
+            {/* Creator Attribution & Pool Explorer Link */}
+            <div className="flex items-center justify-between pt-2 border-t border-black/10 dark:border-white/10 text-[11px]">
+              <div className="flex items-center gap-1.5 opacity-75">
+                <span className="font-semibold">Oleh:</span>
+                <strong className="font-bold text-teal-400">{activeQuote.authorName || 'Personil PrepLab'}</strong>
+                {activeQuote.authorRole && <span className="opacity-60 hidden sm:inline">({activeQuote.authorRole})</span>}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-semibold text-teal-400 opacity-80 group-hover:opacity-100 flex items-center gap-1">
+                  <Users className="w-3 h-3" />
+                  Lihat Likers & Pool Quotes ({communityQuotesList.length}) →
+                </span>
+              </div>
+            </div>
           </motion.div>
         </div>
 
@@ -672,18 +784,50 @@ export function DailyGreetingHero({
             <span className="text-xs font-black tracking-wider uppercase">Portal Active</span>
           </div>
 
-          <button
-            type="button"
-            onClick={startCinematicSplash}
-            className="text-[11px] font-semibold flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
-            style={{ color: 'var(--text-muted)' }}
-            title="Tampilkan Animasi Layar Penuh"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Putar Animasi Layar Penuh</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowQuotesPoolModal(true)}
+              className="px-2.5 py-1 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
+              style={{
+                backgroundColor: 'var(--input-bg)',
+                borderColor: 'var(--border-main)',
+                color: 'var(--primary)'
+              }}
+              title="Buka Pool Quotes & Tambah Kata Mutiara Anda"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Pool Quotes</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={startCinematicSplash}
+              className="p-1.5 rounded-xl text-[11px] font-semibold flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity cursor-pointer border"
+              style={{
+                backgroundColor: 'var(--input-bg)',
+                borderColor: 'var(--border-main)',
+                color: 'var(--text-muted)'
+              }}
+              title="Putar Animasi Sapaan Layar Penuh"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            </button>
+          </div>
         </div>
       </motion.div>
+
+      {/* Community Quotes Pool Dialog Modal */}
+      <QuotesPoolModal
+        show={showQuotesPoolModal}
+        onClose={() => setShowQuotesPoolModal(false)}
+        selectedQuote={activeQuote}
+        onSelectAsDailyQuote={(q) => {
+          setSelectedPoolQuote(q);
+        }}
+        inspectorNik={inspectorNik}
+        inspectorName={inspectorName}
+      />
     </>
   );
 }

@@ -274,9 +274,14 @@ export default function App() {
   };
 
   const applyThemeToDOM = (colors: any) => {
-    if (!colors || typeof colors !== 'object') return;
+    if (!colors) return;
+    let actualColors = colors;
+    if (typeof actualColors === 'string') {
+      try { actualColors = JSON.parse(actualColors); } catch(e) {}
+    }
+    if (!actualColors || typeof actualColors !== 'object') return;
     const root = document.documentElement;
-    Object.entries(colors).forEach(([key, value]) => {
+    Object.entries(actualColors).forEach(([key, value]) => {
       if (typeof key === 'string' && key.startsWith('--') && value) {
         root.style.setProperty(key, value as string);
       }
