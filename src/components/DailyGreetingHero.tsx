@@ -155,6 +155,42 @@ export function DailyGreetingHero({
   const [stage, setStage] = useState<1 | 2 | 3>(1);
   const [progress, setProgress] = useState(0);
 
+  // User Profile and Nickname state (Declared first before quotes/display hooks)
+  const [currentUsername, setCurrentUsername] = useState(() => {
+    try {
+      const profile = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
+      return profile.username || localStorage.getItem('p2h_inspector_username') || '';
+    } catch (e) {
+      return '';
+    }
+  });
+
+  const displayName = useMemo(() => {
+    if (currentUsername) return currentUsername;
+    if (inspectorName && inspectorName !== 'Guest' && inspectorName !== 'Inspector') {
+      return inspectorName.split(' ')[0];
+    }
+    try {
+      const savedProfile = localStorage.getItem('p2h_inspector_profile');
+      if (savedProfile) {
+        const p = JSON.parse(savedProfile);
+        if (p.nama || p.name) return (p.nama || p.name).split(' ')[0];
+      }
+    } catch (e) {}
+    return 'Rekan Kerja';
+  }, [currentUsername, inspectorName]);
+
+  const userSubtitle = useMemo(() => {
+    try {
+      const savedProfile = localStorage.getItem('p2h_inspector_profile');
+      if (savedProfile) {
+        const p = JSON.parse(savedProfile);
+        return [p.jabatan, p.section || p.pt].filter(Boolean).join(' • ');
+      }
+    } catch (e) {}
+    return 'Preparation & Laboratory Team';
+  }, []);
+
   // Quotes Pool & Modal State
   const [showQuotesPoolModal, setShowQuotesPoolModal] = useState(false);
   const [quotesModalTab, setQuotesModalTab] = useState<'details' | 'explore' | 'create'>('details');
@@ -253,42 +289,6 @@ export function DailyGreetingHero({
       loadCommunityQuotes();
     }
   };
-
-  // User Profile and Nickname state
-  const [currentUsername, setCurrentUsername] = useState(() => {
-    try {
-      const profile = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
-      return profile.username || localStorage.getItem('p2h_inspector_username') || '';
-    } catch (e) {
-      return '';
-    }
-  });
-
-  const displayName = useMemo(() => {
-    if (currentUsername) return currentUsername;
-    if (inspectorName && inspectorName !== 'Guest' && inspectorName !== 'Inspector') {
-      return inspectorName.split(' ')[0];
-    }
-    try {
-      const savedProfile = localStorage.getItem('p2h_inspector_profile');
-      if (savedProfile) {
-        const p = JSON.parse(savedProfile);
-        if (p.nama || p.name) return (p.nama || p.name).split(' ')[0];
-      }
-    } catch (e) {}
-    return 'Rekan Kerja';
-  }, [currentUsername, inspectorName]);
-
-  const userSubtitle = useMemo(() => {
-    try {
-      const savedProfile = localStorage.getItem('p2h_inspector_profile');
-      if (savedProfile) {
-        const p = JSON.parse(savedProfile);
-        return [p.jabatan, p.section || p.pt].filter(Boolean).join(' • ');
-      }
-    } catch (e) {}
-    return 'Preparation & Laboratory Team';
-  }, []);
 
   // Time of Day Greeting with Solar / Celestial State
   const greetingInfo = useMemo(() => {
