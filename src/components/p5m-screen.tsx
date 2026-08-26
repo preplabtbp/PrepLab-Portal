@@ -274,6 +274,15 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedDayFilter, setSelectedDayFilter] = useState<string>('ALL');
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const handleScrollTable = (direction: 'left' | 'right') => {
+    if (scrollContainerRef.current) {
+      const amount = direction === 'left' ? -320 : 320;
+      scrollContainerRef.current.scrollBy({ left: amount, behavior: 'smooth' });
+    }
+  };
 
   // Materi Database State
   const [materiList, setMateriList] = useState<any[]>([]);
@@ -1534,8 +1543,77 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               )}
             </Card>
           ) : (
-            <div className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x">
-              <div className="min-w-[950px] bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200" ref={captureRef}>
+            <div className="space-y-3">
+              {/* Day Filter & Scroll Control Bar for Mobile */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-slate-800/90 border border-slate-700/80 p-2.5 sm:p-3 rounded-2xl shadow-md backdrop-blur-md">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 sm:pb-0 scroll-smooth">
+                  <button
+                    onClick={() => {
+                      setSelectedDayFilter('ALL');
+                      if (scrollContainerRef.current) {
+                        scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                      selectedDayFilter === 'ALL'
+                        ? 'bg-amber-500 text-slate-950 shadow-md'
+                        : 'bg-slate-700/70 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    🗓️ Semua (Tabel 7 Hari)
+                  </button>
+                  {DAYS.map(day => (
+                    <button
+                      key={`filter-${day}`}
+                      onClick={() => {
+                        setSelectedDayFilter(day);
+                        const dayIndex = DAYS.indexOf(day);
+                        if (scrollContainerRef.current) {
+                          scrollContainerRef.current.scrollTo({ left: dayIndex * 135, behavior: 'smooth' });
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                        selectedDayFilter === day
+                          ? 'bg-amber-500 text-slate-950 shadow-md'
+                          : 'bg-slate-700/70 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-700">
+                  <span className="text-[11px] text-amber-300 font-mono font-semibold flex items-center gap-1">
+                    👈 Geser / Navigasi Tabel 👉
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleScrollTable('left')}
+                      className="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95 border border-slate-600 shadow-sm"
+                      title="Scroll Kiri"
+                    >
+                      <ChevronLeft className="w-4 h-4 text-amber-400" />
+                      <span className="hidden sm:inline">Kiri</span>
+                    </button>
+                    <button
+                      onClick={() => handleScrollTable('right')}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-md"
+                      title="Scroll Kanan (Kamis, Jumat, Sabtu, Minggu)"
+                    >
+                      <span>Lihat Kamis - Minggu</span>
+                      <ChevronRight className="w-4 h-4 text-slate-950" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* P5M Schedule Board Container */}
+              <div 
+                ref={scrollContainerRef}
+                className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x scroll-smooth"
+              >
+                <div className="min-w-[950px] bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200" ref={captureRef}>
               
               {/* Header Title Bar */}
               <div className="bg-slate-900 text-white px-6 py-4 flex flex-col sm:flex-row items-center justify-between border-b-2 border-amber-500 gap-2">
@@ -1774,12 +1852,12 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 <span>Dokumen Resmi Sistem Portal Prep &amp; Lab Harita Nickel</span>
                 <span>Diperbarui pada: {new Date().toLocaleString('id-ID')}</span>
               </div>
-              </div>
             </div>
-          )}
-
+          </div>
         </div>
       )}
+    </div>
+  )}
 
       {/* ── TAB 2: BANK MATERI P5M ── */}
       {activeTab === 'materi' && (
