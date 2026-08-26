@@ -285,7 +285,8 @@ export function SettingsScreen({
               <button
                 type="button"
                 onClick={() => onNav ? onNav('feedback-support') : (window.location.pathname = '/feedback-support')}
-                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] hover:opacity-90"
+                style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
               >
                 <MessageSquarePlus className="w-4 h-4" />
                 <span>Beri Masukan / Laporkan Bug</span>
