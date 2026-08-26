@@ -33,12 +33,12 @@ function parseStringDate(str: string | null | undefined) {
 // Preset Shift Codes for quick Admin editing
 const SHIFT_OPTIONS = [
   { code: 'D', label: 'D (Day Shift)', desc: 'Shift Pagi / Siang', bg: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30' },
-  { code: 'N', label: 'N (Night Shift)', desc: 'Shift Malam', bg: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30' },
+  { code: 'N', label: 'N (Night Shift)', desc: 'Shift Malam', bg: 'bg-sky-500/20 text-sky-600 dark:text-sky-300 border-sky-500/35' },
   { code: 'OFF', label: 'OFF (Libur)', desc: 'Hari Libur Rutin', bg: 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30' },
   { code: 'TRV', label: 'TRV (Travel On)', desc: 'Perjalanan Masuk', bg: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' },
   { code: 'TV', label: 'TV (Travel Off)', desc: 'Perjalanan Pulang Cuti', bg: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' },
-  { code: 'CT', label: 'CT (Cuti Tahunan)', desc: 'Cuti Tahunan Karyawan', bg: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30' },
-  { code: 'CI', label: 'CI (Cuti Istimewa)', desc: 'Cuti Istimewa 5 Tahunan', bg: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30' },
+  { code: 'CT', label: 'CT (Cuti Tahunan)', desc: 'Cuti Tahunan Karyawan', bg: 'bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/35' },
+  { code: 'CI', label: 'CI (Cuti Istimewa)', desc: 'Cuti Istimewa 5 Tahunan', bg: 'bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/35' },
   { code: 'I', label: 'I (Izin / Sakit)', desc: 'Izin Tidak Masuk', bg: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' },
   { code: 'S', label: 'S (Sakit)', desc: 'Izin Sakit Karyawan', bg: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' },
   { code: 'LS', label: 'LS (Longshift)', desc: 'Shift Kerja Tambahan (Longshift)', bg: 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/30' },
@@ -326,12 +326,18 @@ export function RosterAdminScreen() {
       return;
     }
     if (!editingCell) return;
-    const { empNik, keyDateStr } = editingCell as any;
+    const { empNik, keyDateStr, dateStr } = editingCell as any;
+    const targetDate = keyDateStr || dateStr;
+
+    if (!empNik || !targetDate) {
+      toast.error('Gagal update: NIK atau tanggal tidak valid');
+      return;
+    }
 
     // Optimistic UI update
     setRoster(prev => prev.map(emp => {
       if (emp.nik === empNik) {
-        const updatedFull = { ...(emp.fullSchedule || {}), [keyDateStr]: newShift };
+        const updatedFull = { ...(emp.fullSchedule || {}), [targetDate]: newShift };
         return { ...emp, fullSchedule: updatedFull };
       }
       return emp;
@@ -349,7 +355,7 @@ export function RosterAdminScreen() {
         },
         body: JSON.stringify({
           nik: empNik,
-          date: keyDateStr,
+          date: targetDate,
           status: newShift,
           editorNik: requestorNik
         })
@@ -371,11 +377,11 @@ export function RosterAdminScreen() {
     }
     const c = code.toUpperCase().trim();
     if (c === 'D') return 'bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/35 font-black shadow-2xs';
-    if (c === 'N') return 'bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-500/35 font-black shadow-2xs';
+    if (c === 'N') return 'bg-sky-500/25 text-sky-700 dark:text-sky-300 border-sky-500/40 font-black shadow-2xs';
     if (c === 'OFF') return 'bg-slate-500/20 text-slate-600 dark:text-slate-400 border-slate-500/30 font-bold';
     if (c === 'TRV' || c === 'TV') return 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40 font-black shadow-2xs ring-1 ring-amber-500/30';
     if (c.startsWith('CT') || c.startsWith('CI') || c === 'C' || c === 'CR') {
-      return 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/40 font-black shadow-2xs ring-1 ring-rose-500/30';
+      return 'bg-purple-500/25 text-purple-700 dark:text-purple-300 border-purple-500/45 font-black shadow-2xs ring-1 ring-purple-500/30';
     }
     if (c === 'S' || c === 'LS' || c === 'SD') return 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/35 font-bold';
     if (c === 'I' || c.startsWith('IZIN') || c === 'XP' || c === 'TT') {
@@ -860,6 +866,7 @@ export function RosterAdminScreen() {
                                 setEditingCell({
                                   empNik: emp.nik,
                                   empName: emp.name || emp.nama,
+                                  keyDateStr: col.keyDateStr,
                                   dateStr: col.keyDateStr,
                                   displayDate: `${col.dayName}, ${col.dateNumber}`,
                                   currentShift: shiftCode === '-' ? '' : shiftCode
@@ -904,10 +911,10 @@ export function RosterAdminScreen() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold opacity-75 mr-1" style={{ color: 'var(--text-muted)' }}>Keterangan:</span>
               <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-blue-500/15 text-blue-600 border-blue-500/30">D = Day Shift</span>
-              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-purple-500/15 text-purple-600 border-purple-500/30">N = Night Shift</span>
+              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-sky-500/20 text-sky-600 border-sky-500/30">N = Night Shift</span>
               <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-slate-500/15 text-slate-600 border-slate-500/30">OFF = Libur</span>
               <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-amber-500/15 text-amber-600 border-amber-500/30">TRV/TV = Travel Cuti</span>
-              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-rose-500/15 text-rose-600 border-rose-500/30">CT/CI = Cuti</span>
+              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-purple-500/20 text-purple-600 border-purple-500/30">C/CT/CI = Cuti</span>
               <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-emerald-500/15 text-emerald-600 border-emerald-500/30">S = Sakit</span>
               <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-teal-500/15 text-teal-600 border-teal-500/30">LS = Longshift</span>
             </div>
