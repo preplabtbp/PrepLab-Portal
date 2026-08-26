@@ -864,57 +864,32 @@ export function ProfilePage({
                   ) : cutiInfo ? (
                     <>
                       {/* Box Kuota Cuti (Google Sheets Sync CutiTahunan) */}
-                      <div 
-                        className="p-4 rounded-xl border space-y-3"
-                        style={{
-                          backgroundColor: 'var(--input-bg, #F8FAFC)',
-                          borderColor: 'var(--border-main, #E2E8F0)'
-                        }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <p className="text-[10px] uppercase font-bold tracking-wider flex items-center gap-1.5" style={{ color: 'var(--primary, #2A9D8F)' }}>
+                      <div className="p-4 rounded-xl border space-y-3 bg-teal-500/10 dark:bg-teal-500/15 border-teal-500/30">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] uppercase font-black tracking-wider text-teal-700 dark:text-teal-300 flex items-center gap-1.5">
                             <Plane className="w-3.5 h-3.5" />
                             Sisa CT & Jatuh Tempo Cuti Tahunan
                           </p>
-                          <span 
-                            className="text-[9px] font-bold px-2 py-0.5 rounded-full border shadow-2xs"
-                            style={{
-                              backgroundColor: 'var(--card-bg, #FFFFFF)',
-                              borderColor: 'var(--border-main, #E2E8F0)',
-                              color: 'var(--primary, #2A9D8F)'
-                            }}
-                          >
+                          <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-800 dark:text-teal-200 border border-teal-500/30 shrink-0">
                             Database Roster Sync
                           </span>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2.5 pt-0.5">
-                          <div 
-                            className="p-3 rounded-lg border shadow-2xs"
-                            style={{
-                              backgroundColor: 'var(--card-bg, #FFFFFF)',
-                              borderColor: 'var(--border-main, #E2E8F0)'
-                            }}
-                          >
-                            <span className="text-[10px] font-bold uppercase block" style={{ color: 'var(--text-muted, #64748B)' }}>
+                          <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
+                            <span className="text-[10px] font-black uppercase tracking-wider block text-slate-600 dark:text-slate-300 mb-1">
                               Sisa Cuti Tahunan (CT)
                             </span>
-                            <p className="text-xl sm:text-2xl font-black font-display mt-0.5" style={{ color: 'var(--primary, #2A9D8F)' }}>
-                              {profile?.sisaCt || myRosterData?.sisa_ct || myRosterData?.sisaCt || '8'} <span className="text-xs font-semibold opacity-70" style={{ color: 'var(--text-muted, #64748B)' }}>hari</span>
+                            <p className="text-xl sm:text-2xl font-black font-display text-teal-600 dark:text-teal-400">
+                              {profile?.sisaCt || myRosterData?.sisa_ct || myRosterData?.sisaCt || '0'} <span className="text-xs font-bold text-slate-500 dark:text-slate-400">hari</span>
                             </p>
                           </div>
 
-                          <div 
-                            className="p-3 rounded-lg border shadow-2xs"
-                            style={{
-                              backgroundColor: 'var(--card-bg, #FFFFFF)',
-                              borderColor: 'var(--border-main, #E2E8F0)'
-                            }}
-                          >
-                            <span className="text-[10px] font-bold uppercase block" style={{ color: 'var(--text-muted, #64748B)' }}>
+                          <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
+                            <span className="text-[10px] font-black uppercase tracking-wider block text-slate-600 dark:text-slate-300 mb-1">
                               Jatuh Tempo CT
                             </span>
-                            <p className="text-sm sm:text-base font-bold mt-1" style={{ color: 'var(--text-main, #1E293B)' }}>
+                            <p className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
                               {profile?.jatuhTempoCt || myRosterData?.jatuh_tempo_ct || myRosterData?.jatuhTempoCt || '-'}
                             </p>
                           </div>
