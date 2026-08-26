@@ -304,48 +304,6 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
     isDraggingRef.current = false;
   };
 
-  // Non-passive Touch Drag Listener to bypass browser tilt clipping and enable 100% smooth horizontal swipe in Chrome DevTools & mobile
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    let startX = 0;
-    let scrollStartLeft = 0;
-    let isTouching = false;
-
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      isTouching = true;
-      startX = e.touches[0].clientX;
-      scrollStartLeft = container.scrollLeft;
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (!isTouching) return;
-      const currentX = e.touches[0].clientX;
-      const diffX = startX - currentX;
-
-      if (e.cancelable) e.preventDefault();
-      container.scrollLeft = scrollStartLeft + diffX;
-    };
-
-    const onTouchEnd = () => {
-      isTouching = false;
-    };
-
-    container.addEventListener('touchstart', onTouchStart, { passive: false });
-    container.addEventListener('touchmove', onTouchMove, { passive: false });
-    container.addEventListener('touchend', onTouchEnd);
-    container.addEventListener('touchcancel', onTouchEnd);
-
-    return () => {
-      container.removeEventListener('touchstart', onTouchStart);
-      container.removeEventListener('touchmove', onTouchMove);
-      container.removeEventListener('touchend', onTouchEnd);
-      container.removeEventListener('touchcancel', onTouchEnd);
-    };
-  }, [scheduleData, selectedDayFilter]);
-
   const handleScrollTable = (direction: 'left' | 'right') => {
     if (scrollContainerRef.current) {
       const amount = direction === 'left' ? -420 : 420;
@@ -1658,24 +1616,6 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       {day}
                     </button>
                   ))}
-                </div>
-                
-                {/* Arrow Scroll Buttons for Mobile/Mouse */}
-                <div className="flex items-center gap-1.5 shrink-0 ml-auto pt-1 sm:pt-0">
-                  <button
-                    onClick={() => handleScrollTable('left')}
-                    className="p-1.5 rounded-xl bg-slate-700/80 hover:bg-slate-600 text-amber-400 text-xs font-bold flex items-center justify-center cursor-pointer transition-all active:scale-95 border border-slate-600 shadow-sm"
-                    title="Geser Kiri"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleScrollTable('right')}
-                    className="p-1.5 rounded-xl bg-slate-700/80 hover:bg-slate-600 text-amber-400 text-xs font-bold flex items-center justify-center cursor-pointer transition-all active:scale-95 border border-slate-600 shadow-sm"
-                    title="Geser Kanan"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
 
