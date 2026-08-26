@@ -324,19 +324,21 @@ router.post("/api/inspections/universal", async (req, res) => {
           waMessageText += `\n*DAFTAR TEMUAN*: Nihil\n`;
       }
 
-      if (pdfUrl && pdfUrl !== 'GAS_GENERATED' && pdfUrl !== '-') {
-          waMessageText += `\n*Dokumen Laporan TBP*:\n${pdfUrl}\n`;
-      } else {
-          waMessageText += `\n*Dokumen Laporan TBP*:\n(Tautan PDF akan dikirim menyusul / diproses sistem)\n`;
-      }
+      const reqHost = req.headers['x-forwarded-host'] || req.headers.host;
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
+      const baseUrl = reqHost ? `${protocol}://${reqHost}` : 'https://preplab-portal-staging-1034501170626.asia-southeast2.run.app';
+
+      const finalPdfUrl = (pdfUrl && pdfUrl.startsWith('http')) 
+          ? pdfUrl 
+          : `${baseUrl}/api/inspections/${result[0].id}/pdf`;
+
+      waMessageText += `\n*Dokumen Laporan TBP*:\n${finalPdfUrl}\n`;
       
-      if (linkPdf2 && linkPdf2 !== 'GAS_GENERATED' && linkPdf2 !== '-') {
+      if (linkPdf2 && linkPdf2.startsWith('http')) {
           waMessageText += `\n*Dokumen Laporan GPS*:\n${linkPdf2}\n`;
-      } else {
-          waMessageText += `\n*Dokumen Laporan GPS*:\n(Tautan PDF akan dikirim menyusul / diproses sistem)\n`;
       }
       
-      res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl, waMessageText });
+      res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl: finalPdfUrl, waMessageText });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: "Failed to save universal inspection: " + (error.message || String(error)) });
@@ -561,24 +563,102 @@ router.post("/api/inspections", async (req, res) => {
           }
       }
 
-      if (pdfUrl && pdfUrl !== 'GAS_GENERATED' && pdfUrl !== '-') {
-          waMessageText += `\n*Dokumen Laporan TBP*:\n${pdfUrl}\n`;
-      } else {
-          waMessageText += `\n*Dokumen Laporan TBP*:\n(Tautan PDF akan dikirim menyusul / diproses sistem)\n`;
-      }
+      const reqHost = req.headers['x-forwarded-host'] || req.headers.host;
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
+      const baseUrl = reqHost ? `${protocol}://${reqHost}` : 'https://preplab-portal-staging-1034501170626.asia-southeast2.run.app';
+
+      const finalPdfUrl = (pdfUrl && pdfUrl.startsWith('http')) 
+          ? pdfUrl 
+          : `${baseUrl}/api/inspections/${result[0].id}/pdf`;
+
+      waMessageText += `\n*Dokumen Laporan TBP*:\n${finalPdfUrl}\n`;
       
-      if (linkPdf2 && linkPdf2 !== 'GAS_GENERATED' && linkPdf2 !== '-') {
+      if (linkPdf2 && linkPdf2.startsWith('http')) {
           waMessageText += `\n*Dokumen Laporan GPS*:\n${linkPdf2}\n`;
-      } else {
-          waMessageText += `\n*Dokumen Laporan GPS*:\n(Tautan PDF akan dikirim menyusul / diproses sistem)\n`;
       }
 
-      res.status(201).json({ ...result[0], pdfUrl, waMessageText });
+      res.status(201).json({ ...result[0], pdfUrl: finalPdfUrl, waMessageText });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: "Failed to save inspection" });
     }
   });
+
+router.get("/api/inspections/:id/pdf", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).send("ID tidak valid");
+
+    const recordList = await db.select().from(inspections).where(eq(inspections.id, id));
+    if (recordList.length === 0) return res.status(404).send("Laporan inspeksi tidak ditemukan");
+
+    const record = recordList[0];
+    if (record.pdfUrl && record.pdfUrl.startsWith('http')) {
+      return res.redirect(record.pdfUrl);
+    }
+
+    const settingsObj: any = {};
+    const allSettings = await db.select().from(appSettings);
+    allSettings.forEach((s: any) => { settingsObj[s.settingKey] = s.settingValue || ''; });
+    const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
+
+    if (gasUrl && record.dataF) {
+      try {
+        let parsedDataF = {};
+        try { parsedDataF = JSON.parse(record.dataF as string); } catch(e) {}
+        let parsedSignature: any = { ttd1: "", ttd2: "", ttd3: "" };
+        let parsedPhoto: any = { fotoProses: "", fotoTemuanArray: [] };
+        if (record.signature) { try { parsedSignature = JSON.parse(record.signature); } catch(e) {} }
+        if (record.photoUrl) { try { parsedPhoto = JSON.parse(record.photoUrl); } catch(e) {} }
+
+        const gasRes = await fetch(gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            action: record.type === 'Kepatuhan APD' ? 'submitInspeksi' : 'submitInspeksiUniversal',
+            finalData: parsedDataF,
+            dataF: parsedDataF,
+            ttd1: parsedSignature.ttd1 || '',
+            ttd2: parsedSignature.ttd2 || '',
+            ttd3: parsedSignature.ttd3 || '',
+            fotoProses: parsedPhoto.fotoProses || '',
+            fotoTemuanArray: parsedPhoto.fotoTemuanArray || []
+          })
+        });
+
+        const gasText = await gasRes.text();
+        let newPdfUrl = '';
+        try {
+          const gasJson = JSON.parse(gasText);
+          const pd = gasJson.data || {};
+          newPdfUrl = pd.pdfUrl || pd.linkPdf1 || pd.linkPdf || pd.fileUrl || '';
+          if (!newPdfUrl) {
+            let urls: string[] = [];
+            function deepFind(o: any) {
+              if (typeof o === 'string' && o.startsWith('http')) urls.push(o);
+              else if (typeof o === 'object' && o !== null) {
+                for (let k in o) deepFind(o[k]);
+              }
+            }
+            deepFind(pd);
+            if (urls.length > 0) newPdfUrl = urls[0];
+          }
+        } catch(e) {}
+
+        if (newPdfUrl && newPdfUrl.startsWith('http')) {
+          await db.update(inspections).set({ pdfUrl: newPdfUrl }).where(eq(inspections.id, id));
+          return res.redirect(newPdfUrl);
+        }
+      } catch(e) {
+        console.error("Auto-PDF redirect error:", e);
+      }
+    }
+
+    return res.status(404).send("Dokumen PDF sedang diproses oleh sistem Google Drive. Silakan coba klik kembali dalam beberapa saat.");
+  } catch (err: any) {
+    res.status(500).send("Error: " + err.message);
+  }
+});
 
 router.post("/api/admin/inspections/:id/regenerate-pdf", async (req, res) => {
     try {
