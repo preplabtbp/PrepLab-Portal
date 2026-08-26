@@ -56,12 +56,13 @@ router.get("/api/bulletin/search", async (req, res) => {
       const pt = req.query.pt as string || 'TBP';
       
       // Get all posts for department
-      let allPosts = await db.select().from(bulletinPosts).where(eq(bulletinPosts.pt, pt));
+      let conditions = [eq(bulletinPosts.pt, pt)];
       if (department) {
-         allPosts = allPosts.filter(p => p.department === department);
+        conditions.push(eq(bulletinPosts.department, String(department)));
       }
-      
-      const allComments = await db.select().from(bulletinComments);
+      const allPosts = await db.select().from(bulletinPosts).where(and(...conditions));
+      const postIds = allPosts.map(p => p.id);
+      const allComments = postIds.length > 0 ? await db.select().from(bulletinComments).where(inArray(bulletinComments.postId, postIds)) : [];
       
       const matchedPosts = [];
       

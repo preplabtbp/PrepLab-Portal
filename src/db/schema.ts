@@ -1,5 +1,4 @@
-import { relations } from 'drizzle-orm';
-import { integer, pgTable, serial, text, timestamp, boolean, date, json } from 'drizzle-orm/pg-core';
+import { integer, pgTable, serial, text, timestamp, boolean, date, json, index } from 'drizzle-orm/pg-core';
 
 // Define the 'users' table (Linked to Firebase Auth)
 export const users = pgTable('users', {
@@ -201,7 +200,10 @@ export const roster = pgTable('roster', {
   date: text('date'), // YYYY-MM-DD
   status: text('status'), // DS, NS, OFF, CT, etc
   keterangan: text('keterangan'),
-});
+}, (t) => [
+  index('idx_roster_nik_date').on(t.nik, t.date),
+  index('idx_roster_date').on(t.date),
+]);
 
 // --- Inspeksi ---
 export const inspections = pgTable('inspections', {
@@ -361,7 +363,9 @@ export const notifications = pgTable('notifications', {
   isRead: boolean('is_read').default(false),
   link: text('link'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (t) => [
+  index('idx_notifications_user_id').on(t.userId),
+]);
 
 export const bulletinComments = pgTable('bulletin_comments', {
   universe: text('universe').default('TBP_GPS'),
@@ -378,7 +382,9 @@ export const bulletinComments = pgTable('bulletin_comments', {
   fileUrl: text('file_url'),
   fileName: text('file_name'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (t) => [
+  index('idx_bulletin_comments_post_id').on(t.postId),
+]);
 
 export const uploadedFiles = pgTable('uploaded_files', {
   universe: text('universe').default('TBP_GPS'),

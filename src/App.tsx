@@ -85,6 +85,7 @@ const UserManualScreen = lazyWithRetry(() => import('./components/user-manual-sc
 const EmployeeDatabaseScreen = lazyWithRetry(() => import('./components/employee-database-screen').then(m => ({ default: m.EmployeeDatabaseScreen })));
 const WOMaintenanceDashboard = lazyWithRetry(() => import('./components/wo-maintenance-dashboard').then(m => ({ default: m.WOMaintenanceDashboard })));
 const FeedbackSupportScreen = lazyWithRetry(() => import('./components/feedback-support-screen').then(m => ({ default: m.FeedbackSupportScreen })));
+const EasterEggGame = lazyWithRetry(() => import('./components/easter-egg-game').then(m => ({ default: m.EasterEggGame })));
 
 export default function App() {
 
