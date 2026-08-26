@@ -1672,7 +1672,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       <span className="w-2.5 h-2.5 rounded bg-orange-500 inline-block shadow-sm"></span> Preparasi
                     </span>
                     <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
-                      <span className="w-2.5 h-2.5 rounded bg-emerald-600 inline-block shadow-sm"></span> Laboratorium
+                      <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block shadow-sm"></span> Laboratorium
+                    </span>
+                    <span className="flex items-center gap-1.5 text-amber-400 font-bold">
+                      <span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block shadow-sm"></span> Gabungan
                     </span>
                   </div>
                 </div>
@@ -1693,10 +1696,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       <div className="bg-slate-100 p-2.5 text-center border-b border-slate-200" style={{ borderTop: `3px solid ${DAY_COLORS[day]}` }}>
                         <div className="font-black text-slate-900 text-sm">{day}</div>
                         <div className="text-[11px] font-mono text-slate-600 font-semibold">{dateInfo?.display || '-'}</div>
-                        <span className={`inline-block text-[9px] uppercase font-mono font-bold px-2 py-0.5 rounded-full mt-1 ${
-                          isG ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                        <span className={`inline-block text-[9px] uppercase font-mono font-black px-2 py-0.5 rounded-full mt-1 ${
+                          isG ? 'bg-amber-400 text-slate-950 border border-amber-500 shadow-xs' : 'bg-emerald-600 text-white shadow-xs'
                         }`}>
-                          {isG ? 'Gabungan' : 'Split'}
+                          {isG ? 'GABUNGAN' : 'SPLIT'}
                         </span>
                       </div>
 
@@ -1708,22 +1711,28 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                         </div>
 
                         {isG ? (
-                          (scheduleData[day]?.pagi?.gabungan || []).map((slot: any, sIdx: number) => (
-                            <PresenterCard 
-                              key={sIdx}
-                              slot={slot}
-                              isEditMode={isEditMode}
-                              karyawanPool={karyawanPool}
-                              day={day}
-                              shift="pagi"
-                              zone="day"
-                              isDouble={scheduleStats.scheduledMap[slot.nama] >= 2}
-                              materiList={materiList}
-                              onPreviewImage={(url, title) => setPreviewImage({ url, title })}
-                              onUpdatePerson={(person) => handleUpdateSlotPerson(day, 'pagi', 'gabungan', sIdx, person)}
-                              onSelectMateri={(materiItem) => handleUpdateSlotMateri(day, 'pagi', 'gabungan', sIdx, materiItem)}
-                            />
-                          ))
+                          <div className="bg-amber-50/40 rounded-xl p-1.5 border-2 border-amber-300 space-y-1.5 shadow-sm">
+                            <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-amber-900 px-1 mb-1">
+                              <span className="w-2 h-2 rounded bg-amber-500 inline-block shadow-sm"></span>
+                              Gabungan (All Team)
+                            </div>
+                            {(scheduleData[day]?.pagi?.gabungan || []).map((slot: any, sIdx: number) => (
+                              <PresenterCard 
+                                key={sIdx}
+                                slot={slot}
+                                isEditMode={isEditMode}
+                                karyawanPool={karyawanPool}
+                                day={day}
+                                shift="pagi"
+                                zone="day"
+                                isDouble={scheduleStats.scheduledMap[slot.nama] >= 2}
+                                materiList={materiList}
+                                onPreviewImage={(url, title) => setPreviewImage({ url, title })}
+                                onUpdatePerson={(person) => handleUpdateSlotPerson(day, 'pagi', 'gabungan', sIdx, person)}
+                                onSelectMateri={(materiItem) => handleUpdateSlotMateri(day, 'pagi', 'gabungan', sIdx, materiItem)}
+                              />
+                            ))}
+                          </div>
                         ) : (
                           <div className="space-y-1.5">
                             {/* Prep */}
@@ -1797,22 +1806,28 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                             — Libur Night Shift —
                           </div>
                         ) : isG ? (
-                          (scheduleData[day]?.malam?.gabungan || []).map((slot: any, sIdx: number) => (
-                            <PresenterCard 
-                              key={sIdx}
-                              slot={slot}
-                              isEditMode={isEditMode}
-                              karyawanPool={karyawanPool}
-                              day={day}
-                              shift="malam"
-                              zone="night"
-                              isDouble={scheduleStats.scheduledMap[slot.nama] >= 2}
-                              materiList={materiList}
-                              onPreviewImage={(url, title) => setPreviewImage({ url, title })}
-                              onUpdatePerson={(person) => handleUpdateSlotPerson(day, 'malam', 'gabungan', sIdx, person)}
-                              onSelectMateri={(materiItem) => handleUpdateSlotMateri(day, 'malam', 'gabungan', sIdx, materiItem)}
-                            />
-                          ))
+                          <div className="bg-amber-50/40 rounded-xl p-1.5 border-2 border-amber-300 space-y-1.5 shadow-sm">
+                            <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-amber-900 px-1 mb-1">
+                              <span className="w-2 h-2 rounded bg-amber-500 inline-block shadow-sm"></span>
+                              Gabungan (All Team)
+                            </div>
+                            {(scheduleData[day]?.malam?.gabungan || []).map((slot: any, sIdx: number) => (
+                              <PresenterCard 
+                                key={sIdx}
+                                slot={slot}
+                                isEditMode={isEditMode}
+                                karyawanPool={karyawanPool}
+                                day={day}
+                                shift="malam"
+                                zone="night"
+                                isDouble={scheduleStats.scheduledMap[slot.nama] >= 2}
+                                materiList={materiList}
+                                onPreviewImage={(url, title) => setPreviewImage({ url, title })}
+                                onUpdatePerson={(person) => handleUpdateSlotPerson(day, 'malam', 'gabungan', sIdx, person)}
+                                onSelectMateri={(materiItem) => handleUpdateSlotMateri(day, 'malam', 'gabungan', sIdx, materiItem)}
+                              />
+                            ))}
+                          </div>
                         ) : (
                           <div className="space-y-1.5">
                             {/* Prep */}
@@ -2811,10 +2826,12 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
           {slot.subKategori && slot.subKategori !== 'General' && (
             <span className={`text-[8px] font-bold font-mono px-1.5 py-0.2 rounded ${
               slot.subKategori === 'Preparation'
-                ? 'bg-orange-100 text-orange-800 border border-orange-300/60'
+                ? 'bg-orange-100 text-orange-800 border border-orange-300 font-bold'
+                : slot.subKategori === 'Laboratory'
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold'
                 : slot.subKategori === 'Maintenance'
-                ? 'bg-amber-100 text-amber-800 border border-amber-300/60'
-                : 'bg-emerald-100 text-emerald-800 border border-emerald-300/60'
+                ? 'bg-amber-100 text-amber-800 border border-amber-300 font-bold'
+                : 'bg-slate-100 text-slate-800 border border-slate-300 font-bold'
             }`}>
               {slot.subKategori}
             </span>
