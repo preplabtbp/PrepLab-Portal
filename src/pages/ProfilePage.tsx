@@ -9,6 +9,7 @@ import { getRosterData } from '../sheets-api';
 import { motion, useDragControls } from 'motion/react';
 import { toast } from 'sonner';
 import { UsernamePromptModal } from '../components/UsernamePromptModal';
+import { PixelAvatarModal } from '../components/PixelAvatarModal';
 
 export const PRESET_PROFILE_COVERS = [
   {
@@ -98,6 +99,7 @@ export function ProfilePage({
 
   const [isUploading, setIsUploading] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [isPixelAvatarOpen, setIsPixelAvatarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -729,6 +731,15 @@ export function ProfilePage({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button 
+                    type="button"
+                    onClick={() => setIsPixelAvatarOpen(true)}
+                    className="rounded-xl flex items-center gap-2 px-3.5 sm:px-4 shadow-sm h-9 sm:h-10 text-xs sm:text-sm font-bold border transition-all active:scale-95 cursor-pointer bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-300 border-amber-500/40"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+                    <span>Pixel Avatar Studio</span>
+                  </button>
+
                   <Button 
                     onClick={onLogout} 
                     variant="danger" 
@@ -1162,6 +1173,14 @@ export function ProfilePage({
           </div>
         </div>
       )}
+
+      <PixelAvatarModal
+        isOpen={isPixelAvatarOpen}
+        onClose={() => setIsPixelAvatarOpen(false)}
+        onSave={(newAvatarDataUrl) => setAvatar(newAvatarDataUrl)}
+        currentNik={inspectorNik}
+        currentName={inspectorName}
+      />
     </>
   );
 }
