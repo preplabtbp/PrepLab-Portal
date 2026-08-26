@@ -864,32 +864,57 @@ export function ProfilePage({
                   ) : cutiInfo ? (
                     <>
                       {/* Box Kuota Cuti (Google Sheets Sync CutiTahunan) */}
-                      <div className="p-4 rounded-xl border space-y-3 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 shadow-xs">
+                      <div 
+                        className="p-4 rounded-xl border space-y-3"
+                        style={{
+                          backgroundColor: 'var(--input-bg, #F8FAFC)',
+                          borderColor: 'var(--border-main, #E2E8F0)'
+                        }}
+                      >
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-[11px] uppercase font-black tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                            <Plane className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                          <p className="text-[10px] sm:text-[11px] uppercase font-extrabold tracking-wider flex items-center gap-1.5" style={{ color: 'var(--primary, #2A9D8F)' }}>
+                            <Plane className="w-3.5 h-3.5" />
                             Sisa CT & Jatuh Tempo Cuti Tahunan
                           </p>
-                          <span className="text-[9px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-600 text-white dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-500/30 shrink-0 shadow-2xs">
+                          <span 
+                            className="text-[9px] font-extrabold px-2.5 py-0.5 rounded-full border shrink-0 shadow-2xs"
+                            style={{
+                              backgroundColor: 'var(--card-bg, #FFFFFF)',
+                              borderColor: 'var(--border-main, #E2E8F0)',
+                              color: 'var(--primary, #2A9D8F)'
+                            }}
+                          >
                             Database Roster Sync
                           </span>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2.5 pt-0.5">
-                          <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/50 shadow-sm">
-                            <span className="text-[10px] font-extrabold uppercase tracking-wider block text-slate-700 dark:text-slate-200 mb-1">
+                          <div 
+                            className="p-3.5 rounded-xl border shadow-2xs"
+                            style={{
+                              backgroundColor: 'var(--card-bg, #FFFFFF)',
+                              borderColor: 'var(--border-main, #E2E8F0)'
+                            }}
+                          >
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-muted, #64748B)' }}>
                               Sisa Cuti Tahunan (CT)
                             </span>
-                            <p className="text-xl sm:text-2xl font-black font-display text-emerald-700 dark:text-emerald-400">
-                              {profile?.sisaCt || myRosterData?.sisa_ct || myRosterData?.sisaCt || '0'} <span className="text-xs font-bold text-slate-600 dark:text-slate-400">hari</span>
+                            <p className="text-xl sm:text-2xl font-black font-display" style={{ color: 'var(--primary, #2A9D8F)' }}>
+                              {profile?.sisaCt || myRosterData?.sisa_ct || myRosterData?.sisaCt || '0'} <span className="text-xs font-bold" style={{ color: 'var(--text-muted, #64748B)' }}>hari</span>
                             </p>
                           </div>
 
-                          <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/50 shadow-sm">
-                            <span className="text-[10px] font-extrabold uppercase tracking-wider block text-slate-700 dark:text-slate-200 mb-1">
+                          <div 
+                            className="p-3.5 rounded-xl border shadow-2xs"
+                            style={{
+                              backgroundColor: 'var(--card-bg, #FFFFFF)',
+                              borderColor: 'var(--border-main, #E2E8F0)'
+                            }}
+                          >
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-muted, #64748B)' }}>
                               Jatuh Tempo CT
                             </span>
-                            <p className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                            <p className="text-sm sm:text-base font-black" style={{ color: 'var(--text-main, #1E293B)' }}>
                               {profile?.jatuhTempoCt || myRosterData?.jatuh_tempo_ct || myRosterData?.jatuhTempoCt || '-'}
                             </p>
                           </div>
