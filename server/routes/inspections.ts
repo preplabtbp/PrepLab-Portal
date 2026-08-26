@@ -124,13 +124,20 @@ router.post("/api/inspections/universal", async (req, res) => {
           }
       }
 
+      let storedPdfVal = null;
+      if (pdfUrl && linkPdf2 && pdfUrl !== linkPdf2 && pdfUrl.startsWith('http') && linkPdf2.startsWith('http')) {
+          storedPdfVal = JSON.stringify({ tbp: pdfUrl, gps: linkPdf2 });
+      } else if (pdfUrl && pdfUrl.startsWith('http')) {
+          storedPdfVal = pdfUrl;
+      }
+
       const result = await db.insert(inspections as any).values({
         type: finalData?.judulForm || 'Mingguan',
         inspectorName: finalData?.insp1 || 'Unknown',
         location: finalData?.lokasiUmum || 'Area',
         notes: finalData?.catatanUmum || '',
         dataF: JSON.stringify(finalData),
-        pdfUrl: pdfUrl,
+        pdfUrl: storedPdfVal,
         pt: req.body.pt || 'TBP',
         signature: JSON.stringify({ ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3 }),
         photoUrl: JSON.stringify({ fotoTemuanArray: finalFotoTemuanArray, fotoProses: finalFotoProses })
@@ -448,7 +455,12 @@ router.post("/api/inspections", async (req, res) => {
           }
       }
 
-      const dbPdfUrl = (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) ? pdfUrl : null;
+      let dbPdfUrl = null;
+      if (pdfUrl && linkPdf2 && pdfUrl !== linkPdf2 && pdfUrl.startsWith('http') && linkPdf2.startsWith('http')) {
+          dbPdfUrl = JSON.stringify({ tbp: pdfUrl, gps: linkPdf2 });
+      } else if (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) {
+          dbPdfUrl = pdfUrl;
+      }
 
       const result = await db.insert(inspections as any).values({
           type: 'Kepatuhan APD',
@@ -616,108 +628,14 @@ router.get("/api/inspections/:id/pdf", async (req, res) => {
       } catch(e) {}
     }
 
-    // Deduplication lock: If GAS request is already running for this inspection ID, wait for it
-    const lockKey = `pdf_${id}`;
-    if (pdfGenerationLocks.has(lockKey)) {
-      console.log(`[PDF Guard] PDF generation already running for inspection #${id}. Waiting...`);
-      for (let i = 0; i < 20; i++) {
-        await new Promise(r => setTimeout(r, 500));
-        if (!pdfGenerationLocks.has(lockKey)) {
-          const updated = await db.select().from(inspections).where(eq(inspections.id, id));
-          const uRec = updated[0];
-          if (uRec?.pdfUrl) {
-            if (uRec.pdfUrl.startsWith('http') && !uRec.pdfUrl.includes('/api/inspections/')) {
-              return res.redirect(uRec.pdfUrl);
-            } else if (uRec.pdfUrl.startsWith('{')) {
-              try {
-                const p = JSON.parse(uRec.pdfUrl);
-                const tgt = isGpsReq ? (p.gps || p.tbp) : p.tbp;
-                if (tgt && tgt.startsWith('http')) return res.redirect(tgt);
-              } catch(e) {}
-            }
-          }
-          break;
-        }
-      }
-    }
-
-    pdfGenerationLocks.add(lockKey);
-
-    try {
-      const settingsObj: any = {};
-      const allSettings = await db.select().from(appSettings);
-      allSettings.forEach((s: any) => { settingsObj[s.settingKey] = s.settingValue || ''; });
-      const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
-
-      if (gasUrl && record.dataF) {
-        let parsedDataF: any = [];
-        try { parsedDataF = JSON.parse(record.dataF as string); } catch(e) {}
-        let parsedSignature: any = { ttd1: "", ttd2: "", ttd3: "" };
-        let parsedPhoto: any = { fotoProses: "", fotoTemuanArray: [] };
-        if (record.signature) { try { parsedSignature = JSON.parse(record.signature); } catch(e) {} }
-        if (record.photoUrl) { try { parsedPhoto = JSON.parse(record.photoUrl); } catch(e) {} }
-
-        const cleanDataF = Array.isArray(parsedDataF) ? parsedDataF.map((row: any[]) => {
-          return Array.isArray(row) ? row.map((cell: any) => (typeof cell === 'string' && cell.length > 30000 ? '-' : cell)) : row;
-        }) : parsedDataF;
-
-        const gasRes = await fetch(gasUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({
-            action: record.type === 'Kepatuhan APD' ? 'submitInspeksi' : 'submitInspeksiUniversal',
-            finalData: cleanDataF,
-            dataF: cleanDataF,
-            devOptions: { isDev: true, db: true, pdf: true, verboseLog: true },
-            ttd1: parsedSignature.ttd1 || '',
-            ttd2: parsedSignature.ttd2 || '',
-            ttd3: parsedSignature.ttd3 || '',
-            fotoProses: parsedPhoto.fotoProses || '',
-            fotoTemuanArray: parsedPhoto.fotoTemuanArray || []
-          })
-        });
-
-        const gasText = await gasRes.text();
-        let newPdfUrl = '';
-        let newGpsUrl = '';
-        try {
-          const gasJson = JSON.parse(gasText);
-          const pd = gasJson.data || {};
-          newPdfUrl = pd.pdfUrl || pd.linkPdf1 || pd.linkPdf || pd.fileUrl || '';
-          newGpsUrl = pd.linkPdf2 || pd.pdfUrl2 || pd.gpsUrl || pd.linkGps || '';
-
-          if (!newPdfUrl) {
-            let urls: string[] = [];
-            function deepFind(o: any) {
-              if (typeof o === 'string' && o.startsWith('http') && !o.includes('/api/inspections/')) urls.push(o);
-              else if (typeof o === 'object' && o !== null) {
-                for (let k in o) deepFind(o[k]);
-              }
-            }
-            deepFind(pd);
-            if (urls.length > 0) newPdfUrl = urls[0];
-            if (urls.length > 1) newGpsUrl = urls[1];
-          }
-        } catch(e) {}
-
-        const targetUrl = isGpsReq ? (newGpsUrl || newPdfUrl) : newPdfUrl;
-
-        if (targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/inspections/')) {
-          const storeVal = (newPdfUrl && newGpsUrl && newPdfUrl !== newGpsUrl)
-            ? JSON.stringify({ tbp: newPdfUrl, gps: newGpsUrl })
-            : (newPdfUrl || targetUrl);
-
-          await db.update(inspections).set({ pdfUrl: storeVal }).where(eq(inspections.id, id));
-          return res.redirect(targetUrl);
-        }
-      }
-    } catch(e) {
-      console.error("Auto-PDF redirect error:", e);
-    } finally {
-      pdfGenerationLocks.delete(lockKey);
-    }
-
-    return res.status(404).send("<div style='font-family:sans-serif;padding:2rem;text-align:center;'><h2>⏳ Dokumen PDF Sedang Diproses oleh Google Drive</h2><p>Silakan segarkan/refresh halaman ini dalam beberapa detik lagi.</p></div>");
+    return res.status(200).send(`
+      <div style="font-family:system-ui,sans-serif;padding:3rem 1.5rem;text-align:center;max-width:500px;margin:50px auto;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,0.05);">
+        <div style="font-size:3rem;margin-bottom:1rem;">⏳</div>
+        <h2 style="color:#0f172a;margin-bottom:0.5rem;font-size:20px;">Dokumen PDF Sedang Diproses</h2>
+        <p style="color:#64748b;font-size:14px;line-height:1.5;">Dokumen laporan inspeksi sedang diproses oleh Google Drive. Silakan muat ulang halaman ini dalam beberapa saat.</p>
+        <button onclick="location.reload()" style="margin-top:1.5rem;padding:0.6rem 1.4rem;background:#0d9488;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px;">Segarkan Halaman</button>
+      </div>
+    `);
   } catch (err: any) {
     res.status(500).send("Error: " + err.message);
   }
