@@ -276,10 +276,32 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const [isExporting, setIsExporting] = useState(false);
   const [selectedDayFilter, setSelectedDayFilter] = useState<string>('ALL');
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const scrollLeftRef = useRef(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrollContainerRef.current) return;
+    isDraggingRef.current = true;
+    startXRef.current = e.pageX - scrollContainerRef.current.offsetLeft;
+    scrollLeftRef.current = scrollContainerRef.current.scrollLeft;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingRef.current || !scrollContainerRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollContainerRef.current.offsetLeft;
+    const walk = (x - startXRef.current) * 2;
+    scrollContainerRef.current.scrollLeft = scrollLeftRef.current - walk;
+  };
+
+  const handleMouseUp = () => {
+    isDraggingRef.current = false;
+  };
 
   const handleScrollTable = (direction: 'left' | 'right') => {
     if (scrollContainerRef.current) {
-      const amount = direction === 'left' ? -320 : 320;
+      const amount = direction === 'left' ? -380 : 380;
       scrollContainerRef.current.scrollBy({ left: amount, behavior: 'smooth' });
     }
   };
@@ -1611,9 +1633,18 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               {/* P5M Schedule Board Container */}
               <div 
                 ref={scrollContainerRef}
-                className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x scroll-smooth"
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x select-none cursor-grab active:cursor-grabbing"
               >
-                <div className="min-w-[950px] bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200" ref={captureRef}>
+                <div 
+                  className={`bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200 transition-all ${
+                    selectedDayFilter === 'ALL' ? 'min-w-[980px]' : 'w-full min-w-0'
+                  }`} 
+                  ref={captureRef}
+                >
               
               {/* Header Title Bar */}
               <div className="bg-slate-900 text-white px-6 py-4 flex flex-col sm:flex-row items-center justify-between border-b-2 border-amber-500 gap-2">
@@ -1656,14 +1687,16 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </div>
               </div>
 
-              {/* Grid 7 Columns (Senin .. Minggu) */}
-              <div className="grid grid-cols-7 divide-x divide-slate-200 border-b border-slate-200 text-xs">
-                {DAYS.map(day => {
+              {/* Grid Columns (1 column if single day filter selected, 7 columns if ALL selected) */}
+              <div className={`grid divide-x divide-slate-200 border-b border-slate-200 text-xs ${
+                selectedDayFilter === 'ALL' ? 'grid-cols-7' : 'grid-cols-1 w-full'
+              }`}>
+                {(selectedDayFilter === 'ALL' ? DAYS : [selectedDayFilter]).map(day => {
                   const isG = HARI_GABUNGAN.has(day);
                   const dateInfo = datesMeta[day];
 
                   return (
-                    <div key={day} className="flex flex-col min-w-[130px]">
+                    <div key={day} className={`flex flex-col ${selectedDayFilter === 'ALL' ? 'min-w-[135px]' : 'w-full'}`}>
                       
                       {/* Column Header */}
                       <div className="bg-slate-100 p-2.5 text-center border-b border-slate-200" style={{ borderTop: `3px solid ${DAY_COLORS[day]}` }}>
