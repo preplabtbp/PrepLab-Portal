@@ -33,7 +33,7 @@ function parseStringDate(str: string | null | undefined) {
 // Preset Shift Codes for quick Admin editing
 const SHIFT_OPTIONS = [
   { code: 'D', label: 'D (Day Shift)', desc: 'Shift Pagi / Siang', bg: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30' },
-  { code: 'N', label: 'N (Night Shift)', desc: 'Shift Malam', bg: 'bg-sky-500/20 text-sky-600 dark:text-sky-300 border-sky-500/35' },
+  { code: 'N', label: 'N (Night Shift)', desc: 'Shift Malam', bg: 'bg-blue-900 text-white border-blue-800' },
   { code: 'OFF', label: 'OFF (Libur)', desc: 'Hari Libur Rutin', bg: 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30' },
   { code: 'TRV', label: 'TRV (Travel On)', desc: 'Perjalanan Masuk', bg: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' },
   { code: 'TV', label: 'TV (Travel Off)', desc: 'Perjalanan Pulang Cuti', bg: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' },
@@ -377,7 +377,7 @@ export function RosterAdminScreen() {
     }
     const c = code.toUpperCase().trim();
     if (c === 'D') return 'bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/35 font-black shadow-2xs';
-    if (c === 'N') return 'bg-sky-500/25 text-sky-700 dark:text-sky-300 border-sky-500/40 font-black shadow-2xs';
+    if (c === 'N') return 'bg-blue-900 text-white border-blue-800 font-black shadow-2xs';
     if (c === 'OFF') return 'bg-slate-500/20 text-slate-600 dark:text-slate-400 border-slate-500/30 font-bold';
     if (c === 'TRV' || c === 'TV') return 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40 font-black shadow-2xs ring-1 ring-amber-500/30';
     if (c.startsWith('CT') || c.startsWith('CI') || c === 'C' || c === 'CR') {
@@ -911,7 +911,7 @@ export function RosterAdminScreen() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold opacity-75 mr-1" style={{ color: 'var(--text-muted)' }}>Keterangan:</span>
               <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-blue-500/15 text-blue-600 border-blue-500/30">D = Day Shift</span>
-              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-sky-500/20 text-sky-600 border-sky-500/30">N = Night Shift</span>
+              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-blue-900 text-white border-blue-800">N = Night Shift</span>
               <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-slate-500/15 text-slate-600 border-slate-500/30">OFF = Libur</span>
               <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-amber-500/15 text-amber-600 border-amber-500/30">TRV/TV = Travel Cuti</span>
               <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-purple-500/20 text-purple-600 border-purple-500/30">C/CT/CI = Cuti</span>
