@@ -40,8 +40,8 @@ const SHIFT_OPTIONS = [
   { code: 'CT', label: 'CT (Cuti Tahunan)', desc: 'Cuti Tahunan Karyawan', bg: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30' },
   { code: 'CI', label: 'CI (Cuti Istimewa)', desc: 'Cuti Istimewa 5 Tahunan', bg: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30' },
   { code: 'I', label: 'I (Izin / Sakit)', desc: 'Izin Tidak Masuk', bg: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' },
-  { code: 'S', label: 'S (Standby / Sakit)', desc: 'Standby / Libur Shift', bg: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' },
-  { code: 'LS', label: 'LS (Libur Shift)', desc: 'Libur Antar Shift', bg: 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/30' },
+  { code: 'S', label: 'S (Sakit)', desc: 'Izin Sakit Karyawan', bg: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' },
+  { code: 'LS', label: 'LS (Longshift)', desc: 'Shift Kerja Tambahan (Longshift)', bg: 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/30' },
   { code: '-', label: '- (Kosongkan)', desc: 'Hapus Roster', bg: 'bg-transparent text-slate-400 border-slate-300' },
 ];
 
@@ -908,7 +908,8 @@ export function RosterAdminScreen() {
               <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-slate-500/15 text-slate-600 border-slate-500/30">OFF = Libur</span>
               <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-amber-500/15 text-amber-600 border-amber-500/30">TRV/TV = Travel Cuti</span>
               <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-rose-500/15 text-rose-600 border-rose-500/30">CT/CI = Cuti</span>
-              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-emerald-500/15 text-emerald-600 border-emerald-500/30">S/LS = Standby/Libur Shift</span>
+              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-emerald-500/15 text-emerald-600 border-emerald-500/30">S = Sakit</span>
+              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-teal-500/15 text-teal-600 border-teal-500/30">LS = Longshift</span>
             </div>
 
             <span className="text-[11px] font-semibold opacity-70" style={{ color: 'var(--text-muted)' }}>

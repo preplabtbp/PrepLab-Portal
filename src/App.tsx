@@ -196,6 +196,24 @@ export default function App() {
     return null;
   }, [inspectorNik, userProfile, syncTick]);
 
+  const [developerList, setDeveloperList] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/developers')
+      .then(res => res.json())
+      .then(json => {
+        if (json.status === 'success' && Array.isArray(json.data)) {
+          setDeveloperList(json.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const isDeveloper = React.useMemo(() => {
+    if (inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin') return true;
+    return developerList.some(d => d.nik === inspectorNik);
+  }, [inspectorNik, developerList]);
+
   const isCrewRole = React.useMemo(() => {
     return userProfile?.jabatan?.toLowerCase().includes('crew') || false;
   }, [userProfile]);
@@ -1258,7 +1276,7 @@ export default function App() {
             active={activeTab === 'settings'} 
             onClick={() => handleNav('settings')} 
           />
-          {(inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin') && (
+          {isDeveloper && (
             <NavItem 
               icon={<Settings className="w-5 h-5" />} 
               label="Developer" 

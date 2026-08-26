@@ -684,7 +684,10 @@ export function DailyGreetingHero({
             <h1 className="text-2xl sm:text-3xl font-display font-black tracking-tight flex items-center gap-1.5">
               <span>{greetingInfo.greeting},</span>
               <span 
-                className={`bg-clip-text text-transparent bg-gradient-to-r ${greetingInfo.themeGradient} drop-shadow-xs`}
+                className="drop-shadow-xs transition-colors"
+                style={{
+                  color: 'var(--username-color, var(--accent, #E9930D))'
+                }}
               >
                 {displayName}
               </span>

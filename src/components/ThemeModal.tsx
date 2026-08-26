@@ -23,6 +23,7 @@ export interface ThemeColors {
   '--header-bg'?: string;
   '--header-text'?: string;
   '--footer-selected'?: string;
+  '--username-color'?: string;
 }
 
 export interface CustomThemeTemplate {
@@ -56,7 +57,8 @@ export const PRESET_THEMES: Record<string, { name: string; desc: string; colors:
       '--bubble-color': '#E9930D',
       '--header-bg': '#FFFFFF',
       '--header-text': '#1E293B',
-      '--footer-selected': '#2A9D8F'
+      '--footer-selected': '#2A9D8F',
+      '--username-color': '#E9930D'
     }
   },
   midnight_oled: {
@@ -75,7 +77,8 @@ export const PRESET_THEMES: Record<string, { name: string; desc: string; colors:
       '--bubble-color': '#06B6D4',
       '--header-bg': '#131D31',
       '--header-text': '#F8FAFC',
-      '--footer-selected': '#06B6D4'
+      '--footer-selected': '#06B6D4',
+      '--username-color': '#38BDF8'
     }
   },
   sunset_horizon: {
@@ -94,7 +97,8 @@ export const PRESET_THEMES: Record<string, { name: string; desc: string; colors:
       '--bubble-color': '#F97316',
       '--header-bg': '#FFFFFF',
       '--header-text': '#292524',
-      '--footer-selected': '#EA580C'
+      '--footer-selected': '#EA580C',
+      '--username-color': '#EA580C'
     }
   },
   deep_ocean: {
@@ -113,7 +117,8 @@ export const PRESET_THEMES: Record<string, { name: string; desc: string; colors:
       '--bubble-color': '#0EA5E9',
       '--header-bg': '#FFFFFF',
       '--header-text': '#0F172A',
-      '--footer-selected': '#0284C7'
+      '--footer-selected': '#0284C7',
+      '--username-color': '#0284C7'
     }
   },
   cyberpunk_neon: {
@@ -132,7 +137,8 @@ export const PRESET_THEMES: Record<string, { name: string; desc: string; colors:
       '--bubble-color': '#10B981',
       '--header-bg': '#12121A',
       '--header-text': '#F1F5F9',
-      '--footer-selected': '#10B981'
+      '--footer-selected': '#10B981',
+      '--username-color': '#10B981'
     }
   },
   rose_gold: {
@@ -151,7 +157,8 @@ export const PRESET_THEMES: Record<string, { name: string; desc: string; colors:
       '--bubble-color': '#F43F5E',
       '--header-bg': '#FFFFFF',
       '--header-text': '#4C0519',
-      '--footer-selected': '#E11D48'
+      '--footer-selected': '#E11D48',
+      '--username-color': '#E11D48'
     }
   },
   forest_moss: {
@@ -170,7 +177,8 @@ export const PRESET_THEMES: Record<string, { name: string; desc: string; colors:
       '--bubble-color': '#10B981',
       '--header-bg': '#FFFFFF',
       '--header-text': '#064E3B',
-      '--footer-selected': '#059669'
+      '--footer-selected': '#059669',
+      '--username-color': '#059669'
     }
   },
   cozy_latte: {
@@ -189,7 +197,8 @@ export const PRESET_THEMES: Record<string, { name: string; desc: string; colors:
       '--bubble-color': '#B45309',
       '--header-bg': '#FFFFFF',
       '--header-text': '#292524',
-      '--footer-selected': '#78350F'
+      '--footer-selected': '#78350F',
+      '--username-color': '#D97706'
     }
   },
   monochrome_slate: {
@@ -208,7 +217,8 @@ export const PRESET_THEMES: Record<string, { name: string; desc: string; colors:
       '--bubble-color': '#334155',
       '--header-bg': '#FFFFFF',
       '--header-text': '#0F172A',
-      '--footer-selected': '#0F172A'
+      '--footer-selected': '#0F172A',
+      '--username-color': '#0F172A'
     }
   }
 };
@@ -227,6 +237,7 @@ const COLOR_DEFINITIONS: Array<{ key: keyof ThemeColors; label: string; group: s
   { key: '--bubble-color', label: 'Warna Bubble & Badge', group: 'Warna Brand & Aksi', desc: 'Indikator notifikasi, bubble chat, dan tag status' },
 
   { key: '--text-main', label: 'Teks Utama', group: 'Tipografi & Teks', desc: 'Warna teks judul dan konten penting' },
+  { key: '--username-color', label: 'Warna Font Username / Panggilan', group: 'Tipografi & Teks', desc: 'Warna teks nama panggilan Anda (contoh: Selamat Pagi, Alvin!)' },
   { key: '--header-text', label: 'Teks Header "Prep & Lab Portal"', group: 'Tipografi & Teks', desc: 'Warna tulisan judul Prep & Lab Portal pada header atas' },
   { key: '--text-muted', label: 'Teks Redup (Muted)', group: 'Tipografi & Teks', desc: 'Warna label bantuan, tanggal, dan teks sekunder' }
 ];
