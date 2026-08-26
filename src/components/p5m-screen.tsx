@@ -283,40 +283,73 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const startXRef = useRef(0);
   const scrollLeftRef = useRef(0);
 
-  const touchStartXRef = useRef(0);
-  const touchScrollLeftRef = useRef(0);
-
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!scrollContainerRef.current) return;
     isDraggingRef.current = true;
-    startXRef.current = e.pageX - scrollContainerRef.current.offsetLeft;
+    startXRef.current = e.clientX;
     scrollLeftRef.current = scrollContainerRef.current.scrollLeft;
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDraggingRef.current || !scrollContainerRef.current) return;
     e.preventDefault();
-    const x = e.pageX - scrollContainerRef.current.offsetLeft;
-    const walk = (x - startXRef.current) * 2;
-    scrollContainerRef.current.scrollLeft = scrollLeftRef.current - walk;
+    const x = e.clientX;
+    const walk = (startXRef.current - x) * 1.5;
+    scrollContainerRef.current.scrollLeft = scrollLeftRef.current + walk;
   };
 
   const handleMouseUp = () => {
     isDraggingRef.current = false;
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (!scrollContainerRef.current) return;
-    touchStartXRef.current = e.touches[0].clientX;
-    touchScrollLeftRef.current = scrollContainerRef.current.scrollLeft;
-  };
+  // Non-passive Touch Drag Listener to bypass browser tilt clipping and enable 100% smooth horizontal swipe in Chrome DevTools & mobile
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!scrollContainerRef.current) return;
-    const currentX = e.touches[0].clientX;
-    const diffX = (touchStartXRef.current - currentX) * 1.5;
-    scrollContainerRef.current.scrollLeft = touchScrollLeftRef.current + diffX;
-  };
+    let startX = 0;
+    let startY = 0;
+    let scrollStartLeft = 0;
+    let isTouching = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      isTouching = true;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      scrollStartLeft = container.scrollLeft;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isTouching) return;
+      const currentX = e.touches[0].clientX;
+      const currentY = e.touches[0].clientY;
+      const diffX = startX - currentX;
+      const diffY = startY - currentY;
+
+      // If swipe gesture is primarily horizontal, prevent page tilt and update scrollLeft
+      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 3) {
+        if (e.cancelable) e.preventDefault();
+        container.scrollLeft = scrollStartLeft + diffX;
+      }
+    };
+
+    const onTouchEnd = () => {
+      isTouching = false;
+    };
+
+    container.addEventListener('touchstart', onTouchStart, { passive: false });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd);
+    container.addEventListener('touchcancel', onTouchEnd);
+
+    return () => {
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
+      container.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [scheduleData, selectedDayFilter]);
 
   const handleScrollTable = (direction: 'left' | 'right') => {
     if (scrollContainerRef.current) {
