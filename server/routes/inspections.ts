@@ -373,9 +373,14 @@ router.post("/api/inspections", async (req, res) => {
       if (gasUrl) {
           try {
               console.log("Forwarding APD to GAS Web App...");
+              // Clean dataF so cells never exceed 30,000 chars (prevents Google Sheets 50,000 cell limit error)
+              const cleanDataF = Array.isArray(dataF) ? dataF.map((row: any[]) => {
+                  return Array.isArray(row) ? row.map((cell: any) => (typeof cell === 'string' && cell.length > 30000 ? '-' : cell)) : row;
+              }) : dataF;
+
               const payloadToGas = {
                   action: "submitInspeksi",
-                  dataF: dataF,
+                  dataF: cleanDataF,
                   devOptions: { isDev: true, db: true, pdf: true, verboseLog: true },
                   ttd1, ttd2, ttd3, fotoProses
               };
@@ -401,19 +406,19 @@ router.post("/api/inspections", async (req, res) => {
                      if (parsedData.urlTTD3 && parsedData.urlTTD3 !== '-') finalTtd3 = parsedData.urlTTD3;
                      if (parsedData.urlFP && parsedData.urlFP !== '-') finalFotoProses = parsedData.urlFP;
 
-                     if (parsedData.pdfUrl && parsedData.pdfUrl !== '-') pdfUrl = parsedData.pdfUrl;
-                     else if (parsedData.linkPdf1 && parsedData.linkPdf1 !== '-') pdfUrl = parsedData.linkPdf1;
-                     else if (parsedData.linkPdf && parsedData.linkPdf !== '-') pdfUrl = parsedData.linkPdf;
-                     else if (parsedData.fileUrl && parsedData.fileUrl !== '-') pdfUrl = parsedData.fileUrl;
+                     if (parsedData.pdfUrl && parsedData.pdfUrl !== '-' && parsedData.pdfUrl.startsWith('http')) pdfUrl = parsedData.pdfUrl;
+                     else if (parsedData.linkPdf1 && parsedData.linkPdf1 !== '-' && parsedData.linkPdf1.startsWith('http')) pdfUrl = parsedData.linkPdf1;
+                     else if (parsedData.linkPdf && parsedData.linkPdf !== '-' && parsedData.linkPdf.startsWith('http')) pdfUrl = parsedData.linkPdf;
+                     else if (parsedData.fileUrl && parsedData.fileUrl !== '-' && parsedData.fileUrl.startsWith('http')) pdfUrl = parsedData.fileUrl;
                      
-                     if (parsedData.linkPdf2 && parsedData.linkPdf2 !== '-') linkPdf2 = parsedData.linkPdf2;
-                     else if (parsedData.pdfUrl2 && parsedData.pdfUrl2 !== '-') linkPdf2 = parsedData.pdfUrl2;
-                     else if (parsedData.gpsUrl && parsedData.gpsUrl !== '-') linkPdf2 = parsedData.gpsUrl;
-                     else if (parsedData.linkGps && parsedData.linkGps !== '-') linkPdf2 = parsedData.linkGps;
+                     if (parsedData.linkPdf2 && parsedData.linkPdf2 !== '-' && parsedData.linkPdf2.startsWith('http')) linkPdf2 = parsedData.linkPdf2;
+                     else if (parsedData.pdfUrl2 && parsedData.pdfUrl2 !== '-' && parsedData.pdfUrl2.startsWith('http')) linkPdf2 = parsedData.pdfUrl2;
+                     else if (parsedData.gpsUrl && parsedData.gpsUrl !== '-' && parsedData.gpsUrl.startsWith('http')) linkPdf2 = parsedData.gpsUrl;
+                     else if (parsedData.linkGps && parsedData.linkGps !== '-' && parsedData.linkGps.startsWith('http')) linkPdf2 = parsedData.linkGps;
                      
                      // Fallback grab any HTTP URLs from parsedData
-                     let urlsFound = [];
-                     function deepFindUrls(obj, arr) {
+                     let urlsFound: string[] = [];
+                     function deepFindUrls(obj: any, arr: string[]) {
                          if (typeof obj === 'string') {
                              const matches = obj.match(/https?:\/\/[^\s"',]+/g);
                              if (matches) {
@@ -426,17 +431,13 @@ router.post("/api/inspections", async (req, res) => {
                          }
                      }
                      deepFindUrls(parsedData, urlsFound);
-                     let uniqueUrls = [...new Set(urlsFound)].filter(u => u !== pdfUrl && u !== linkPdf2);
+                     let uniqueUrls = [...new Set(urlsFound)].filter(u => u !== pdfUrl && u !== linkPdf2 && !u.includes('/api/inspections/'));
                      
                      if (!pdfUrl && uniqueUrls.length > 0) {
-                         pdfUrl = uniqueUrls.shift();
+                         pdfUrl = uniqueUrls.shift() || null;
                      }
                      if (!linkPdf2 && uniqueUrls.length > 0) {
-                         linkPdf2 = uniqueUrls.shift();
-                     }
-                     
-                     if (!pdfUrl && parsedData.logDetails) {
-                        pdfUrl = "GAS_GENERATED";
+                         linkPdf2 = uniqueUrls.shift() || null;
                      }
                   }
               } catch(e) {}
@@ -446,12 +447,14 @@ router.post("/api/inspections", async (req, res) => {
           }
       }
 
+      const dbPdfUrl = (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) ? pdfUrl : null;
+
       const result = await db.insert(inspections as any).values({
           type: 'Kepatuhan APD',
           inspectorName: (dataF && dataF.length > 0 && dataF[0][16]) || 'Unknown',
           location: (dataF && dataF.length > 0 && dataF[0][2]) || 'Area',
           dataF: JSON.stringify(dataF),
-          pdfUrl: pdfUrl,
+          pdfUrl: dbPdfUrl,
           pt: req.body.pt || 'TBP',
           signature: JSON.stringify({ ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3 }),
           photoUrl: JSON.stringify({ fotoProses: finalFotoProses, fotoTemuanArray: finalFotoTemuanArray })
@@ -546,7 +549,7 @@ router.post("/api/inspections", async (req, res) => {
                               priority: 'Medium',
                               pt: req.body.pt || 'TBP',
                               photoUrl: finalFotoProses || null,
-                              documentLink: (pdfUrl && pdfUrl !== 'GAS_GENERATED' && pdfUrl !== '-') ? pdfUrl : null,
+                              documentLink: dbPdfUrl,
                               date: new Date()
                           };
                       });
@@ -567,17 +570,18 @@ router.post("/api/inspections", async (req, res) => {
       const protocol = req.headers['x-forwarded-proto'] || 'https';
       const baseUrl = reqHost ? `${protocol}://${reqHost}` : 'https://preplab-portal-staging-1034501170626.asia-southeast2.run.app';
 
-      const finalPdfUrl = (pdfUrl && pdfUrl.startsWith('http')) 
+      const finalPdfUrl = (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) 
           ? pdfUrl 
-          : `${baseUrl}/api/inspections/${result[0].id}/pdf`;
+          : `${baseUrl}/api/inspections/${result[0].id}/pdf?pt=tbp`;
+
+      const finalGpsPdfUrl = (linkPdf2 && linkPdf2.startsWith('http') && !linkPdf2.includes('/api/inspections/')) 
+          ? linkPdf2 
+          : `${baseUrl}/api/inspections/${result[0].id}/pdf?pt=gps`;
 
       waMessageText += `\n*Dokumen Laporan TBP*:\n${finalPdfUrl}\n`;
-      
-      if (linkPdf2 && linkPdf2.startsWith('http')) {
-          waMessageText += `\n*Dokumen Laporan GPS*:\n${linkPdf2}\n`;
-      }
+      waMessageText += `\n*Dokumen Laporan GPS*:\n${finalGpsPdfUrl}\n`;
 
-      res.status(201).json({ ...result[0], pdfUrl: finalPdfUrl, waMessageText });
+      res.status(201).json({ ...result[0], pdfUrl: finalPdfUrl, linkPdf2: finalGpsPdfUrl, waMessageText });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: "Failed to save inspection" });
@@ -593,7 +597,9 @@ router.get("/api/inspections/:id/pdf", async (req, res) => {
     if (recordList.length === 0) return res.status(404).send("Laporan inspeksi tidak ditemukan");
 
     const record = recordList[0];
-    if (record.pdfUrl && record.pdfUrl.startsWith('http')) {
+    const isGpsReq = req.query.pt === 'gps';
+
+    if (record.pdfUrl && record.pdfUrl.startsWith('http') && !record.pdfUrl.includes('/api/inspections/')) {
       return res.redirect(record.pdfUrl);
     }
 
@@ -604,20 +610,25 @@ router.get("/api/inspections/:id/pdf", async (req, res) => {
 
     if (gasUrl && record.dataF) {
       try {
-        let parsedDataF = {};
+        let parsedDataF: any = [];
         try { parsedDataF = JSON.parse(record.dataF as string); } catch(e) {}
         let parsedSignature: any = { ttd1: "", ttd2: "", ttd3: "" };
         let parsedPhoto: any = { fotoProses: "", fotoTemuanArray: [] };
         if (record.signature) { try { parsedSignature = JSON.parse(record.signature); } catch(e) {} }
         if (record.photoUrl) { try { parsedPhoto = JSON.parse(record.photoUrl); } catch(e) {} }
 
+        const cleanDataF = Array.isArray(parsedDataF) ? parsedDataF.map((row: any[]) => {
+          return Array.isArray(row) ? row.map((cell: any) => (typeof cell === 'string' && cell.length > 30000 ? '-' : cell)) : row;
+        }) : parsedDataF;
+
         const gasRes = await fetch(gasUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify({
             action: record.type === 'Kepatuhan APD' ? 'submitInspeksi' : 'submitInspeksiUniversal',
-            finalData: parsedDataF,
-            dataF: parsedDataF,
+            finalData: cleanDataF,
+            dataF: cleanDataF,
+            devOptions: { isDev: true, db: true, pdf: true, verboseLog: true },
             ttd1: parsedSignature.ttd1 || '',
             ttd2: parsedSignature.ttd2 || '',
             ttd3: parsedSignature.ttd3 || '',
@@ -628,33 +639,39 @@ router.get("/api/inspections/:id/pdf", async (req, res) => {
 
         const gasText = await gasRes.text();
         let newPdfUrl = '';
+        let newGpsUrl = '';
         try {
           const gasJson = JSON.parse(gasText);
           const pd = gasJson.data || {};
           newPdfUrl = pd.pdfUrl || pd.linkPdf1 || pd.linkPdf || pd.fileUrl || '';
+          newGpsUrl = pd.linkPdf2 || pd.pdfUrl2 || pd.gpsUrl || pd.linkGps || '';
+
           if (!newPdfUrl) {
             let urls: string[] = [];
             function deepFind(o: any) {
-              if (typeof o === 'string' && o.startsWith('http')) urls.push(o);
+              if (typeof o === 'string' && o.startsWith('http') && !o.includes('/api/inspections/')) urls.push(o);
               else if (typeof o === 'object' && o !== null) {
                 for (let k in o) deepFind(o[k]);
               }
             }
             deepFind(pd);
             if (urls.length > 0) newPdfUrl = urls[0];
+            if (urls.length > 1) newGpsUrl = urls[1];
           }
         } catch(e) {}
 
-        if (newPdfUrl && newPdfUrl.startsWith('http')) {
+        const targetUrl = isGpsReq ? (newGpsUrl || newPdfUrl) : newPdfUrl;
+
+        if (targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/inspections/')) {
           await db.update(inspections).set({ pdfUrl: newPdfUrl }).where(eq(inspections.id, id));
-          return res.redirect(newPdfUrl);
+          return res.redirect(targetUrl);
         }
       } catch(e) {
         console.error("Auto-PDF redirect error:", e);
       }
     }
 
-    return res.status(404).send("Dokumen PDF sedang diproses oleh sistem Google Drive. Silakan coba klik kembali dalam beberapa saat.");
+    return res.status(404).send("<div style='font-family:sans-serif;padding:2rem;text-align:center;'><h2>⏳ Dokumen PDF Sedang Diproses oleh Google Drive</h2><p>Silakan segarkan/refresh halaman ini dalam beberapa detik lagi.</p></div>");
   } catch (err: any) {
     res.status(500).send("Error: " + err.message);
   }
