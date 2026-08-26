@@ -47,6 +47,7 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit }: { for
     let list = [];
     if (waktuKerja) {
       list = employees.filter(e => {
+        if (e.pt === 'GTS') return false; // Strictly exclude GTS employees for TBP & GPS inspections
         const norm = (v: string) => (v || "").toString().trim().toLowerCase();
         const daftarLab = ["laboratory", "qa", "inventory control", "administration"];
         

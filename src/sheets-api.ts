@@ -13,7 +13,8 @@ export const getEmployees = async () => {
         jabatan: d.jabatan || d.position,
         divisi: d.section || d.department,
         grup: d.shift || '',
-        nik: d.nik
+        nik: d.nik,
+        pt: d.pt || 'TBP'
       })).filter((e: any) => e.nama);
     } catch (e) {
       console.error(e); return [];

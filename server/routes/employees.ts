@@ -7,7 +7,18 @@ export const employeesRouter = Router();
 
 employeesRouter.get("/", async (req, res) => {
   try {
-    const data = await db.select().from(employees);
+    const { pt, all } = req.query;
+    let data = await db.select().from(employees);
+
+    if (all !== 'true') {
+      if (pt === 'GTS') {
+        data = data.filter(e => e.pt === 'GTS');
+      } else {
+        // TBP & GPS -> Strictly exclude GTS employees
+        data = data.filter(e => e.pt !== 'GTS');
+      }
+    }
+
     res.json(data);
   } catch (error) {
     console.error("Error fetching employees:", error);
