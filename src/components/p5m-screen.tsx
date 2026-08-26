@@ -966,10 +966,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 pb-20 pt-4 px-3 sm:px-6 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300">
+    <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] pb-20 pt-4 px-3 sm:px-6 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300 transition-colors">
       
       {/* ── TOP HEADER & CONTROLS ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 sm:p-5 shadow-xl backdrop-blur-md">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl p-4 sm:p-5 shadow-xl backdrop-blur-md text-[var(--text-main)]">
         <div className="flex items-center gap-3.5">
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xl shadow-lg flex-shrink-0 ${
             isQATeam
@@ -980,22 +980,22 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white font-display">
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[var(--text-main)] font-display">
                 {isQATeam ? 'P5M Schedule Builder' : 'Jadwal P5M PrepLab'}
               </h1>
               {isQATeam ? (
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30 flex items-center gap-1 font-mono">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-teal-500/15 text-teal-600 dark:text-teal-300 border border-teal-500/30 flex items-center gap-1 font-mono">
                   <Sparkles className="w-3 h-3" />
                   Tim QA (Builder)
                 </span>
               ) : (
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 flex items-center gap-1 font-mono">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-500/30 flex items-center gap-1 font-mono">
                   <Users className="w-3 h-3" />
                   Mode Personil
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
               {isQATeam 
                 ? 'Sistem Otomasi Briefing Awal Shift — Preparation & Laboratory Plant'
                 : 'Jadwal Penugasan Saya & Materi Briefing P5M Mingguan'}
@@ -1007,7 +1007,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         <div className="flex items-center gap-2.5 flex-wrap">
           
           {/* PT Switcher (TBP/GPS vs GTS) */}
-          <div className="flex items-center bg-slate-900/90 border border-slate-700 p-0.5 rounded-xl">
+          <div className="flex items-center bg-[var(--input-bg)] border border-[var(--border-main)] p-0.5 rounded-xl">
             <button
               onClick={() => {
                 setSelectedPt('TBP');
@@ -1016,7 +1016,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                 selectedPt === 'TBP' || selectedPt === 'GPS'
                   ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
               }`}
             >
               PT TBP / GPS
@@ -1029,20 +1029,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                 selectedPt === 'GTS'
                   ? 'bg-teal-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
               }`}
             >
               PT GTS
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-300 shadow-inner">
-            <Users className="w-3.5 h-3.5 text-teal-400" />
+          <div className="flex items-center gap-1.5 bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-main)] shadow-inner">
+            <Users className="w-3.5 h-3.5 text-teal-500" />
             <span className="font-semibold">{karyawanPool.length}</span>
-            <span className="text-slate-400 text-[11px]">Personil ({selectedPt === 'GTS' ? 'GTS' : 'TBP/GPS'})</span>
+            <span className="text-[var(--text-muted)] text-[11px]">Personil ({selectedPt === 'GTS' ? 'GTS' : 'TBP/GPS'})</span>
           </div>
 
-          <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-700 rounded-xl px-2 py-1 shadow-inner">
+          <div className="flex items-center gap-1 bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl px-2 py-1 shadow-inner">
             <input 
               type="date"
               value={targetDateStr}
@@ -1050,18 +1050,18 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 setTargetDateStr(e.target.value);
                 fetchPoolAndDates(e.target.value, selectedPt);
               }}
-              className="bg-transparent text-xs text-slate-200 outline-none cursor-pointer font-mono"
+              className="bg-transparent text-xs text-[var(--text-main)] outline-none cursor-pointer font-mono"
             />
           </div>
 
           {/* Navigation Tab Switcher */}
-          <div className="flex items-center bg-slate-900/90 border border-slate-700 p-1 rounded-xl gap-1">
+          <div className="flex items-center bg-[var(--input-bg)] border border-[var(--border-main)] p-1 rounded-xl gap-1">
             <button
               onClick={() => setActiveTab('schedule')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 activeTab === 'schedule'
                   ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-main)]'
               }`}
             >
               <Calendar className="w-3.5 h-3.5" />
@@ -1074,7 +1074,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                   activeTab === 'materi'
                     ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-main)]'
                 }`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
@@ -1087,7 +1087,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 activeTab === 'archive'
                   ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-main)]'
               }`}
             >
               <History className="w-3.5 h-3.5" />
@@ -1227,7 +1227,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
           
           {/* Action Toolbar for QA Builder */}
           {isQATeam && (
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-800/60 border border-slate-700/60 p-3 rounded-2xl">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--card-bg)] border border-[var(--border-main)] p-3 rounded-2xl shadow-md text-[var(--text-main)]">
               <div className="flex items-center gap-2 flex-wrap">
                 <Button 
                   onClick={handleRandomize} 
@@ -1253,11 +1253,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   disabled={!scheduleData}
                   className={`text-xs h-9 px-3.5 rounded-xl border transition-all ${
                     isEditMode 
-                      ? 'bg-blue-600/20 text-blue-300 border-blue-500/50 shadow-md ring-1 ring-blue-500/30' 
-                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                      ? 'bg-blue-600/20 text-blue-600 dark:text-blue-300 border-blue-500/50 shadow-md ring-1 ring-blue-500/30' 
+                      : 'bg-[var(--input-bg)] text-[var(--text-main)] border-[var(--border-main)] hover:bg-[var(--bg-main)]'
                   }`}
                 >
-                  <Edit3 className="w-4 h-4 mr-1.5 text-blue-400" />
+                  <Edit3 className="w-4 h-4 mr-1.5 text-blue-500" />
                   <span>{isEditMode ? 'Selesai Edit Manual' : 'Edit Manual'}</span>
                 </Button>
 
@@ -1266,11 +1266,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   onClick={() => setShowConfigDrawer(!showConfigDrawer)}
                   className={`text-xs h-9 px-3.5 rounded-xl border transition-all ${
                     showConfigDrawer 
-                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/40' 
-                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/40' 
+                      : 'bg-[var(--input-bg)] text-[var(--text-main)] border-[var(--border-main)] hover:bg-[var(--bg-main)]'
                   }`}
                 >
-                  <Layers className="w-4 h-4 mr-1.5 text-amber-400" />
+                  <Layers className="w-4 h-4 mr-1.5 text-amber-500" />
                   <span>Konfigurasi Slot Hari</span>
                   <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${showConfigDrawer ? 'rotate-180' : ''}`} />
                 </Button>
@@ -1281,12 +1281,12 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   variant="secondary"
                   onClick={handleDownloadPNG}
                   disabled={!scheduleData || isExporting}
-                  className="bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 text-xs h-9 px-3.5 rounded-xl shadow-sm"
+                  className="bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] hover:bg-[var(--bg-main)] text-xs h-9 px-3.5 rounded-xl shadow-sm"
                 >
                   {isExporting ? (
-                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin text-amber-400" />
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin text-amber-500" />
                   ) : (
-                    <Download className="w-4 h-4 mr-1.5 text-emerald-400" />
+                    <Download className="w-4 h-4 mr-1.5 text-emerald-500" />
                   )}
                   <span>Unduh Gambar PNG</span>
                 </Button>
@@ -1510,29 +1510,29 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
           {/* ── SUMMARY BANNER (QA ONLY) ── */}
           {isQATeam && scheduleData && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div className="bg-slate-800/70 border border-slate-700/80 rounded-xl p-3.5 flex flex-col justify-between">
-                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                  <span className="font-semibold uppercase tracking-wider text-[10px] text-slate-400">Total Sesi Briefing</span>
-                  <Award className="w-4 h-4 text-amber-400" />
+              <div className="bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] rounded-xl p-3.5 flex flex-col justify-between shadow-sm">
+                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] mb-1">
+                  <span className="font-semibold uppercase tracking-wider text-[10px]">Total Sesi Briefing</span>
+                  <Award className="w-4 h-4 text-amber-500" />
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-white">{scheduleStats.totalSlots}</span>
-                  <span className="text-xs text-slate-400">Slot Presentasi (PT {selectedPt})</span>
+                  <span className="text-2xl font-black text-[var(--text-main)]">{scheduleStats.totalSlots}</span>
+                  <span className="text-xs text-[var(--text-muted)]">Slot Presentasi (PT {selectedPt})</span>
                 </div>
               </div>
 
-              <div className="bg-slate-800/70 border border-slate-700/80 rounded-xl p-3.5">
-                <div className="flex items-center justify-between text-xs text-amber-400 mb-1.5">
+              <div className="bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] rounded-xl p-3.5 shadow-sm">
+                <div className="flex items-center justify-between text-xs text-amber-500 mb-1.5">
                   <span className="font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
                     <Star className="w-3.5 h-3.5" /> Personil Dapat 2× Jadwal ({scheduleStats.doubleList.length})
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto pr-1">
                   {scheduleStats.doubleList.length === 0 ? (
-                    <span className="text-[11px] text-slate-500 italic">Tidak ada penugasan ganda</span>
+                    <span className="text-[11px] text-[var(--text-muted)] italic">Tidak ada penugasan ganda</span>
                   ) : (
                     scheduleStats.doubleList.map(name => (
-                      <span key={name} className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-300 rounded text-[10px] font-medium">
+                      <span key={name} className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-300 rounded text-[10px] font-medium">
                         {name}
                       </span>
                     ))
@@ -1540,18 +1540,18 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </div>
               </div>
 
-              <div className="bg-slate-800/70 border border-slate-700/80 rounded-xl p-3.5 sm:col-span-2 lg:col-span-1">
-                <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
-                  <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400 flex items-center gap-1">
-                    <AlertCircle className="w-3.5 h-3.5 text-blue-400" /> Belum Terjadwal ({scheduleStats.noJadwalList.length})
+              <div className="bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] rounded-xl p-3.5 sm:col-span-2 lg:col-span-1 shadow-sm">
+                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] mb-1.5">
+                  <span className="font-bold uppercase tracking-wider text-[10px] text-[var(--text-muted)] flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-blue-500" /> Belum Terjadwal ({scheduleStats.noJadwalList.length})
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto pr-1">
                   {scheduleStats.noJadwalList.length === 0 ? (
-                    <span className="text-[11px] text-emerald-400 font-medium">Semua personil staff/foreman terjadwal</span>
+                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Semua personil staff/foreman terjadwal</span>
                   ) : (
                     scheduleStats.noJadwalList.map(name => (
-                      <span key={name} className="px-2 py-0.5 bg-slate-700/60 border border-slate-600 text-slate-300 rounded text-[10px]">
+                      <span key={name} className="px-2 py-0.5 bg-[var(--input-bg)] border border-[var(--border-main)] text-[var(--text-main)] rounded text-[10px]">
                         {name}
                       </span>
                     ))
@@ -1591,14 +1591,14 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
           ) : (
             <div className="space-y-3">
               {/* Day Filter & Scroll Control Bar for Mobile */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-slate-800/90 border border-slate-700/80 p-2.5 sm:p-3 rounded-2xl shadow-md backdrop-blur-md">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] p-2.5 sm:p-3 rounded-2xl shadow-md backdrop-blur-md">
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 sm:pb-0 scroll-smooth">
                   <button
                     onClick={() => scrollToDay('ALL')}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
                       selectedDayFilter === 'ALL'
                         ? 'bg-amber-500 text-slate-950 shadow-md'
-                        : 'bg-slate-700/70 text-slate-300 hover:bg-slate-700'
+                        : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)] hover:bg-[var(--bg-main)]'
                     }`}
                   >
                     🗓️ Semua (Tabel 7 Hari)
@@ -1610,7 +1610,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
                         selectedDayFilter === day
                           ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-300'
-                          : 'bg-slate-700/70 text-slate-300 hover:bg-slate-700'
+                          : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)] hover:bg-[var(--bg-main)]'
                       }`}
                     >
                       {day}
