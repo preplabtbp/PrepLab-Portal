@@ -825,10 +825,16 @@ router.post("/api/quotes", async (req, res) => {
       isApproved: true
     }).returning();
 
+    const formattedQuote = {
+      ...inserted[0],
+      likedBy: [],
+      likedByUsers: []
+    };
+
     res.json({ 
       status: "success", 
       message: "Quote berhasil ditambahkan ke pool quotes bersama!", 
-      data: inserted[0] 
+      data: formattedQuote 
     });
   } catch (error: any) {
     console.error("Error creating quote:", error);

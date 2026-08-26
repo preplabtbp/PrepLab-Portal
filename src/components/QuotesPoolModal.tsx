@@ -25,6 +25,17 @@ export interface CommunityQuoteItem {
   createdAt?: string | Date;
 }
 
+export function getSafeLikedByUsers(val: any): Array<{ nik: string; name: string; role?: string }> {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string' && val.trim().length > 0) {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+    } catch(e) {}
+  }
+  return [];
+}
+
 export function isAiQuote(q?: { authorNik?: string; authorName?: string } | null): boolean {
   if (!q) return false;
   const nik = String(q.authorNik || '').trim();
@@ -100,7 +111,12 @@ export default function QuotesPoolModal({
       const res = await fetch('/api/quotes');
       const json = await res.json();
       if (json.status === 'success' && Array.isArray(json.data)) {
-        setQuotesList(json.data);
+        const sanitized = json.data.map((q: any) => ({
+          ...q,
+          likedByUsers: getSafeLikedByUsers(q.likedByUsers),
+          likedBy: Array.isArray(q.likedBy) ? q.likedBy : []
+        }));
+        setQuotesList(sanitized);
       }
     } catch (err) {
       console.warn("Gagal memuat pool quotes:", err);
@@ -113,7 +129,10 @@ export default function QuotesPoolModal({
     if (show) {
       loadQuotes();
       if (selectedQuote) {
-        setActiveDetailQuote(selectedQuote);
+        setActiveDetailQuote({
+          ...selectedQuote,
+          likedByUsers: getSafeLikedByUsers(selectedQuote.likedByUsers)
+        });
       }
       if (initialTab) {
         setActiveTab(initialTab);
@@ -138,14 +157,15 @@ export default function QuotesPoolModal({
     if (e) e.stopPropagation();
     if (!quoteItem.id) return;
 
+    const currentLikers = getSafeLikedByUsers(quoteItem.likedByUsers);
     const wasLiked = (quoteItem.likedBy || []).includes(currentNik);
     const newLikesCount = wasLiked ? Math.max(0, (quoteItem.likesCount || 1) - 1) : (quoteItem.likesCount || 0) + 1;
     const newLikedBy = wasLiked 
       ? (quoteItem.likedBy || []).filter(n => n !== currentNik) 
       : [...(quoteItem.likedBy || []), currentNik];
     const newLikedByUsers = wasLiked
-      ? (quoteItem.likedByUsers || []).filter(u => u.nik !== currentNik)
-      : [...(quoteItem.likedByUsers || []), { nik: currentNik, name: currentAuthorName, role: currentRole }];
+      ? currentLikers.filter(u => u.nik !== currentNik)
+      : [...currentLikers, { nik: currentNik, name: currentAuthorName, role: currentRole }];
 
     const updatedObj = {
       ...quoteItem,
@@ -210,7 +230,12 @@ export default function QuotesPoolModal({
         setNewQuoteText('');
         await loadQuotes();
         if (data.data) {
-          setActiveDetailQuote(data.data);
+          const safeQuote = {
+            ...data.data,
+            likedByUsers: getSafeLikedByUsers(data.data.likedByUsers),
+            likedBy: Array.isArray(data.data.likedBy) ? data.data.likedBy : []
+          };
+          setActiveDetailQuote(safeQuote);
           setActiveTab('details');
         } else {
           setActiveTab('explore');
@@ -495,7 +520,7 @@ export default function QuotesPoolModal({
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <h3 className="text-sm font-bold flex items-center gap-2">
                     <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
-                    <span>Personil Yang Menyukai ({activeDetailQuote.likesCount || (activeDetailQuote.likedByUsers?.length || 0)})</span>
+                    <span>Personil Yang Menyukai ({activeDetailQuote.likesCount || (getSafeLikedByUsers(activeDetailQuote.likedByUsers).length)})</span>
                   </h3>
                   {isDeveloper && (
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
@@ -505,57 +530,62 @@ export default function QuotesPoolModal({
                   )}
                 </div>
 
-                {(!activeDetailQuote.likedByUsers || activeDetailQuote.likedByUsers.length === 0) ? (
-                  <div 
-                    className="p-6 rounded-2xl border border-dashed text-center space-y-2"
-                    style={{ borderColor: 'var(--border-main)' }}
-                  >
-                    <Heart className="w-7 h-7 mx-auto opacity-30 text-rose-400" />
-                    <p className="text-xs font-medium opacity-70">
-                      Belum ada personil yang menyukai quote ini. Jadilah yang pertama memberikan like!
-                    </p>
-                    <button
-                      type="button"
-                      onClick={(e) => handleToggleLike(activeDetailQuote, e)}
-                      className="px-4 py-2 rounded-xl text-xs font-bold text-rose-400 border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 transition-all cursor-pointer"
-                    >
-                      Beri Like Sekarang ❤️
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                    {activeDetailQuote.likedByUsers.map((user, idx) => (
+                {(() => {
+                  const safeLikers = getSafeLikedByUsers(activeDetailQuote.likedByUsers);
+                  if (safeLikers.length === 0) {
+                    return (
                       <div 
-                        key={`liker-${idx}`}
-                        className="p-3 rounded-2xl border flex items-center gap-3 shadow-xs hover:border-teal-500/40 transition-all"
-                        style={{
-                          backgroundColor: 'var(--input-bg)',
-                          borderColor: 'var(--border-main)'
-                        }}
+                        className="p-6 rounded-2xl border border-dashed text-center space-y-2"
+                        style={{ borderColor: 'var(--border-main)' }}
                       >
-                        <div 
-                          className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-2xs"
-                          style={{ backgroundColor: 'var(--primary)' }}
+                        <Heart className="w-7 h-7 mx-auto opacity-30 text-rose-400" />
+                        <p className="text-xs font-medium opacity-70">
+                          Belum ada personil yang menyukai quote ini. Jadilah yang pertama memberikan like!
+                        </p>
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleLike(activeDetailQuote, e)}
+                          className="px-4 py-2 rounded-xl text-xs font-bold text-rose-400 border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 transition-all cursor-pointer"
                         >
-                          {(user.name || 'U').charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-bold text-xs truncate flex items-center gap-1.5">
-                            <span>{user.name || 'Personil'}</span>
-                          </p>
-                          <p className="text-[10px] opacity-65 truncate">{user.role || 'Staff'}</p>
-                          {user.nik && (
-                            <p className="text-[9px] font-mono opacity-50 truncate">
-                              NIK: {user.nik}
-                              {user.likedAt && ` • ${new Date(user.likedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`}
-                            </p>
-                          )}
-                        </div>
-                        <Heart className="w-4 h-4 text-rose-500 fill-rose-500 shrink-0" />
+                          Beri Like Sekarang ❤️
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    );
+                  }
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                      {safeLikers.map((user, idx) => (
+                        <div 
+                          key={`liker-${idx}`}
+                          className="p-3 rounded-2xl border flex items-center gap-3 shadow-xs hover:border-teal-500/40 transition-all"
+                          style={{
+                            backgroundColor: 'var(--input-bg)',
+                            borderColor: 'var(--border-main)'
+                          }}
+                        >
+                          <div 
+                            className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-2xs"
+                            style={{ backgroundColor: 'var(--primary)' }}
+                          >
+                            {(user.name || 'U').charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-xs truncate flex items-center gap-1.5">
+                              <span>{user.name || 'Personil'}</span>
+                            </p>
+                            <p className="text-[10px] opacity-65 truncate">{user.role || 'Staff'}</p>
+                            {user.nik && (
+                              <p className="text-[9px] font-mono opacity-50 truncate">
+                                NIK: {user.nik}
+                              </p>
+                            )}
+                          </div>
+                          <Heart className="w-4 h-4 text-rose-500 fill-rose-500 shrink-0" />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -711,15 +741,19 @@ export default function QuotesPoolModal({
                           </p>
 
                           {/* Likers Preview Strip on Card */}
-                          {q.likedByUsers && q.likedByUsers.length > 0 && (
-                            <div className="flex items-center gap-1.5 text-[10px] opacity-80 pt-1">
-                              <Heart className="w-3 h-3 text-rose-500 fill-rose-500 shrink-0" />
-                              <span className="truncate">
-                                Disukai oleh: <strong className="font-semibold">{q.likedByUsers[0].name}</strong>
-                                {q.likedByUsers.length > 1 && ` & ${q.likedByUsers.length - 1} lainnya`}
-                              </span>
-                            </div>
-                          )}
+                          {(() => {
+                            const likerUsers = getSafeLikedByUsers(q.likedByUsers);
+                            if (likerUsers.length === 0) return null;
+                            return (
+                              <div className="flex items-center gap-1.5 text-[10px] opacity-80 pt-1">
+                                <Heart className="w-3 h-3 text-rose-500 fill-rose-500 shrink-0" />
+                                <span className="truncate">
+                                  Disukai oleh: <strong className="font-semibold">{likerUsers[0]?.name || 'Personil'}</strong>
+                                  {likerUsers.length > 1 && ` & ${likerUsers.length - 1} lainnya`}
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {(() => {
