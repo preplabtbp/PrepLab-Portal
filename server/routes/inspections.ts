@@ -328,17 +328,18 @@ router.post("/api/inspections/universal", async (req, res) => {
       const protocol = req.headers['x-forwarded-proto'] || 'https';
       const baseUrl = reqHost ? `${protocol}://${reqHost}` : 'https://preplab-portal-staging-1034501170626.asia-southeast2.run.app';
 
-      const finalPdfUrl = (pdfUrl && pdfUrl.startsWith('http')) 
+      const finalPdfUrl = (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) 
           ? pdfUrl 
-          : `${baseUrl}/api/inspections/${result[0].id}/pdf`;
+          : `${baseUrl}/api/inspections/${result[0].id}/pdf?pt=tbp`;
+
+      const finalGpsPdfUrl = (linkPdf2 && linkPdf2.startsWith('http') && !linkPdf2.includes('/api/inspections/')) 
+          ? linkPdf2 
+          : `${baseUrl}/api/inspections/${result[0].id}/pdf?pt=gps`;
 
       waMessageText += `\n*Dokumen Laporan TBP*:\n${finalPdfUrl}\n`;
+      waMessageText += `\n*Dokumen Laporan GPS*:\n${finalGpsPdfUrl}\n`;
       
-      if (linkPdf2 && linkPdf2.startsWith('http')) {
-          waMessageText += `\n*Dokumen Laporan GPS*:\n${linkPdf2}\n`;
-      }
-      
-      res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl: finalPdfUrl, waMessageText });
+      res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl: finalPdfUrl, linkPdf2: finalGpsPdfUrl, waMessageText });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: "Failed to save universal inspection: " + (error.message || String(error)) });
