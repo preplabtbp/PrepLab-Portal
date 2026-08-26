@@ -275,6 +275,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [selectedDayFilter, setSelectedDayFilter] = useState<string>('ALL');
+  const [viewModeMobile, setViewModeMobile] = useState<'card' | 'table'>('card');
+  const [activeDayMobile, setActiveDayMobile] = useState<string>('Kamis');
+
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const isDraggingRef = useRef(false);
   const startXRef = useRef(0);
@@ -317,26 +320,28 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
   const handleScrollTable = (direction: 'left' | 'right') => {
     if (scrollContainerRef.current) {
-      const amount = direction === 'left' ? -380 : 380;
+      const amount = direction === 'left' ? -420 : 420;
       scrollContainerRef.current.scrollBy({ left: amount, behavior: 'smooth' });
     }
   };
 
   const scrollToDay = (dayName: string) => {
-    setSelectedDayFilter(dayName);
-    setTimeout(() => {
-      if (dayName === 'ALL') {
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-        }
-      } else {
+    if (dayName === 'ALL') {
+      setSelectedDayFilter('ALL');
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+      }
+    } else {
+      setSelectedDayFilter(dayName);
+      setActiveDayMobile(dayName);
+      setTimeout(() => {
         const el = document.getElementById(`p5m-col-${dayName}`);
         if (el && scrollContainerRef.current) {
-          const targetLeft = el.offsetLeft - 12;
+          const targetLeft = Math.max(0, el.offsetLeft - 8);
           scrollContainerRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' });
         }
-      }
-    }, 50);
+      }, 50);
+    }
   };
 
   // Materi Database State
@@ -1682,11 +1687,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   onMouseLeave={handleMouseUp}
                   onTouchStart={handleTouchStart}
                   onTouchMove={handleTouchMove}
-                  className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x cursor-grab active:cursor-grabbing scroll-smooth"
+                  className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x cursor-grab active:cursor-grabbing"
                 >
                   <div 
                     className={`bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200 transition-all ${
-                      selectedDayFilter === 'ALL' ? 'min-w-[980px]' : 'w-full min-w-0'
+                      selectedDayFilter === 'ALL' ? 'min-w-[1050px]' : 'w-full min-w-0'
                     }`} 
                     ref={captureRef}
                   >
