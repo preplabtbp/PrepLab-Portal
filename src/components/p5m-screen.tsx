@@ -280,6 +280,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const startXRef = useRef(0);
   const scrollLeftRef = useRef(0);
 
+  const touchStartXRef = useRef(0);
+  const touchScrollLeftRef = useRef(0);
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!scrollContainerRef.current) return;
     isDraggingRef.current = true;
@@ -297,6 +300,19 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
   const handleMouseUp = () => {
     isDraggingRef.current = false;
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!scrollContainerRef.current) return;
+    touchStartXRef.current = e.touches[0].clientX;
+    touchScrollLeftRef.current = scrollContainerRef.current.scrollLeft;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!scrollContainerRef.current) return;
+    const currentX = e.touches[0].clientX;
+    const diffX = (touchStartXRef.current - currentX) * 1.5;
+    scrollContainerRef.current.scrollLeft = touchScrollLeftRef.current + diffX;
   };
 
   const handleScrollTable = (direction: 'left' | 'right') => {
@@ -1637,20 +1653,43 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               </div>
 
               {/* P5M Schedule Board Container */}
-              <div 
-                ref={scrollContainerRef}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x select-none cursor-grab active:cursor-grabbing"
-              >
+              <div className="relative group">
+                {/* Floating Navigation Arrows for Mobile & Mouse */}
+                {selectedDayFilter === 'ALL' && (
+                  <>
+                    <button 
+                      onClick={() => handleScrollTable('left')}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-slate-900/90 text-amber-400 border border-amber-500/40 shadow-2xl flex items-center justify-center cursor-pointer active:scale-90 transition-transform backdrop-blur-md"
+                      title="Scroll Kiri"
+                    >
+                      <ChevronLeft className="w-6 h-6" />
+                    </button>
+                    <button 
+                      onClick={() => handleScrollTable('right')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-slate-900/90 text-amber-400 border border-amber-500/40 shadow-2xl flex items-center justify-center cursor-pointer active:scale-90 transition-transform backdrop-blur-md"
+                      title="Scroll Kanan (Kamis - Minggu)"
+                    >
+                      <ChevronRight className="w-6 h-6" />
+                    </button>
+                  </>
+                )}
+
                 <div 
-                  className={`bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200 transition-all ${
-                    selectedDayFilter === 'ALL' ? 'min-w-[980px]' : 'w-full min-w-0'
-                  }`} 
-                  ref={captureRef}
+                  ref={scrollContainerRef}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x cursor-grab active:cursor-grabbing scroll-smooth"
                 >
+                  <div 
+                    className={`bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200 transition-all ${
+                      selectedDayFilter === 'ALL' ? 'min-w-[980px]' : 'w-full min-w-0'
+                    }`} 
+                    ref={captureRef}
+                  >
               
               {/* Header Title Bar */}
               <div className="bg-slate-900 text-white px-6 py-4 flex flex-col sm:flex-row items-center justify-between border-b-2 border-amber-500 gap-2">
@@ -1894,9 +1933,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
             </div>
           </div>
         </div>
-      )}
-    </div>
-  )}
+      </div>
+    )}
+  </div>
+)}
 
       {/* ── TAB 2: BANK MATERI P5M ── */}
       {activeTab === 'materi' && (
