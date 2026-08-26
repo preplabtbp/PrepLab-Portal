@@ -589,28 +589,67 @@ router.post("/api/inspections", async (req, res) => {
     }
   });
 
+const pdfGenerationLocks = new Set<string>();
+
 router.get("/api/inspections/:id/pdf", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).send("ID tidak valid");
 
+    const isGpsReq = req.query.pt === 'gps';
+
     const recordList = await db.select().from(inspections).where(eq(inspections.id, id));
     if (recordList.length === 0) return res.status(404).send("Laporan inspeksi tidak ditemukan");
 
     const record = recordList[0];
-    const isGpsReq = req.query.pt === 'gps';
 
+    // If PDF URL is already saved in DB, redirect directly WITHOUT invoking GAS!
     if (record.pdfUrl && record.pdfUrl.startsWith('http') && !record.pdfUrl.includes('/api/inspections/')) {
       return res.redirect(record.pdfUrl);
+    } else if (record.pdfUrl && record.pdfUrl.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(record.pdfUrl);
+        const target = isGpsReq ? (parsed.gps || parsed.tbp || parsed.pdfUrl) : (parsed.tbp || parsed.pdfUrl);
+        if (target && target.startsWith('http') && !target.includes('/api/inspections/')) {
+          return res.redirect(target);
+        }
+      } catch(e) {}
     }
 
-    const settingsObj: any = {};
-    const allSettings = await db.select().from(appSettings);
-    allSettings.forEach((s: any) => { settingsObj[s.settingKey] = s.settingValue || ''; });
-    const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
+    // Deduplication lock: If GAS request is already running for this inspection ID, wait for it
+    const lockKey = `pdf_${id}`;
+    if (pdfGenerationLocks.has(lockKey)) {
+      console.log(`[PDF Guard] PDF generation already running for inspection #${id}. Waiting...`);
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 500));
+        if (!pdfGenerationLocks.has(lockKey)) {
+          const updated = await db.select().from(inspections).where(eq(inspections.id, id));
+          const uRec = updated[0];
+          if (uRec?.pdfUrl) {
+            if (uRec.pdfUrl.startsWith('http') && !uRec.pdfUrl.includes('/api/inspections/')) {
+              return res.redirect(uRec.pdfUrl);
+            } else if (uRec.pdfUrl.startsWith('{')) {
+              try {
+                const p = JSON.parse(uRec.pdfUrl);
+                const tgt = isGpsReq ? (p.gps || p.tbp) : p.tbp;
+                if (tgt && tgt.startsWith('http')) return res.redirect(tgt);
+              } catch(e) {}
+            }
+          }
+          break;
+        }
+      }
+    }
 
-    if (gasUrl && record.dataF) {
-      try {
+    pdfGenerationLocks.add(lockKey);
+
+    try {
+      const settingsObj: any = {};
+      const allSettings = await db.select().from(appSettings);
+      allSettings.forEach((s: any) => { settingsObj[s.settingKey] = s.settingValue || ''; });
+      const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
+
+      if (gasUrl && record.dataF) {
         let parsedDataF: any = [];
         try { parsedDataF = JSON.parse(record.dataF as string); } catch(e) {}
         let parsedSignature: any = { ttd1: "", ttd2: "", ttd3: "" };
@@ -664,12 +703,18 @@ router.get("/api/inspections/:id/pdf", async (req, res) => {
         const targetUrl = isGpsReq ? (newGpsUrl || newPdfUrl) : newPdfUrl;
 
         if (targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/inspections/')) {
-          await db.update(inspections).set({ pdfUrl: newPdfUrl }).where(eq(inspections.id, id));
+          const storeVal = (newPdfUrl && newGpsUrl && newPdfUrl !== newGpsUrl)
+            ? JSON.stringify({ tbp: newPdfUrl, gps: newGpsUrl })
+            : (newPdfUrl || targetUrl);
+
+          await db.update(inspections).set({ pdfUrl: storeVal }).where(eq(inspections.id, id));
           return res.redirect(targetUrl);
         }
-      } catch(e) {
-        console.error("Auto-PDF redirect error:", e);
       }
+    } catch(e) {
+      console.error("Auto-PDF redirect error:", e);
+    } finally {
+      pdfGenerationLocks.delete(lockKey);
     }
 
     return res.status(404).send("<div style='font-family:sans-serif;padding:2rem;text-align:center;'><h2>⏳ Dokumen PDF Sedang Diproses oleh Google Drive</h2><p>Silakan segarkan/refresh halaman ini dalam beberapa detik lagi.</p></div>");
