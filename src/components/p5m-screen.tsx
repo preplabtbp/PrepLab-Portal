@@ -1724,7 +1724,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 karyawanPool={karyawanPool}
                                 day={day}
                                 shift="pagi"
-                                zone="day"
+                                zone="gabungan"
                                 isDouble={scheduleStats.scheduledMap[slot.nama] >= 2}
                                 materiList={materiList}
                                 onPreviewImage={(url, title) => setPreviewImage({ url, title })}
@@ -1819,7 +1819,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 karyawanPool={karyawanPool}
                                 day={day}
                                 shift="malam"
-                                zone="night"
+                                zone="gabungan"
                                 isDouble={scheduleStats.scheduledMap[slot.nama] >= 2}
                                 materiList={materiList}
                                 onPreviewImage={(url, title) => setPreviewImage({ url, title })}
@@ -2534,28 +2534,28 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
   const isEmptySDM = !slot.nama || slot.nama.includes('KOSONG');
 
   // Determine card base theme based on session / zone
-  let cardStyle = 'bg-white text-slate-900 shadow-sm';
+  let cardStyle = 'bg-white text-slate-900 shadow-xs';
   if (isEmptySDM) {
-    cardStyle += ' bg-rose-50 border border-rose-300 text-rose-800';
+    cardStyle += ' bg-rose-50 border-2 border-rose-300 text-rose-800';
   } else if (isDouble) {
     if (zone === 'prep') {
-      cardStyle += ' border-2 border-orange-500 shadow-md';
+      cardStyle += ' border-2 border-orange-500 shadow-md ring-2 ring-orange-200';
     } else if (zone === 'lab') {
-      cardStyle += ' border-2 border-emerald-600 shadow-md';
-    } else if (zone === 'night') {
-      cardStyle += ' border-2 border-indigo-500 shadow-md';
+      cardStyle += ' border-2 border-emerald-600 shadow-md ring-2 ring-emerald-200';
+    } else if (zone === 'gabungan' || zone === 'day') {
+      cardStyle += ' border-2 border-amber-500 shadow-md ring-2 ring-amber-200';
     } else {
-      cardStyle += ' border-2 border-slate-700 shadow-md';
+      cardStyle += ' border-2 border-indigo-500 shadow-md ring-2 ring-indigo-200';
     }
   } else {
     if (zone === 'prep') {
-      cardStyle += ' border border-orange-200 hover:border-orange-400';
+      cardStyle += ' border-2 border-orange-300 hover:border-orange-500 bg-white';
     } else if (zone === 'lab') {
-      cardStyle += ' border border-emerald-200 hover:border-emerald-400';
-    } else if (zone === 'night') {
-      cardStyle += ' border border-indigo-200/90 hover:border-indigo-300';
+      cardStyle += ' border-2 border-emerald-300 hover:border-emerald-500 bg-white';
+    } else if (zone === 'gabungan' || zone === 'day') {
+      cardStyle += ' border-2 border-amber-300 hover:border-amber-500 bg-white';
     } else {
-      cardStyle += ' border border-slate-200 hover:border-slate-300';
+      cardStyle += ' border-2 border-indigo-300 hover:border-indigo-500 bg-white';
     }
   }
 
