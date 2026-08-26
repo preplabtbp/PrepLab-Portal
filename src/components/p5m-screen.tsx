@@ -306,6 +306,23 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
     }
   };
 
+  const scrollToDay = (dayName: string) => {
+    setSelectedDayFilter(dayName);
+    setTimeout(() => {
+      if (dayName === 'ALL') {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+        }
+      } else {
+        const el = document.getElementById(`p5m-col-${dayName}`);
+        if (el && scrollContainerRef.current) {
+          const targetLeft = el.offsetLeft - 12;
+          scrollContainerRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' });
+        }
+      }
+    }, 50);
+  };
+
   // Materi Database State
   const [materiList, setMateriList] = useState<any[]>([]);
   const [loadingMateri, setLoadingMateri] = useState(false);
@@ -1570,12 +1587,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-slate-800/90 border border-slate-700/80 p-2.5 sm:p-3 rounded-2xl shadow-md backdrop-blur-md">
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 sm:pb-0 scroll-smooth">
                   <button
-                    onClick={() => {
-                      setSelectedDayFilter('ALL');
-                      if (scrollContainerRef.current) {
-                        scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-                      }
-                    }}
+                    onClick={() => scrollToDay('ALL')}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
                       selectedDayFilter === 'ALL'
                         ? 'bg-amber-500 text-slate-950 shadow-md'
@@ -1587,16 +1599,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   {DAYS.map(day => (
                     <button
                       key={`filter-${day}`}
-                      onClick={() => {
-                        setSelectedDayFilter(day);
-                        const dayIndex = DAYS.indexOf(day);
-                        if (scrollContainerRef.current) {
-                          scrollContainerRef.current.scrollTo({ left: dayIndex * 135, behavior: 'smooth' });
-                        }
-                      }}
+                      onClick={() => scrollToDay(day)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
                         selectedDayFilter === day
-                          ? 'bg-amber-500 text-slate-950 shadow-md'
+                          ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-300'
                           : 'bg-slate-700/70 text-slate-300 hover:bg-slate-700'
                       }`}
                     >
@@ -1619,7 +1625,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       <span className="hidden sm:inline">Kiri</span>
                     </button>
                     <button
-                      onClick={() => handleScrollTable('right')}
+                      onClick={() => scrollToDay('Kamis')}
                       className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-md"
                       title="Scroll Kanan (Kamis, Jumat, Sabtu, Minggu)"
                     >
@@ -1696,7 +1702,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   const dateInfo = datesMeta[day];
 
                   return (
-                    <div key={day} className={`flex flex-col ${selectedDayFilter === 'ALL' ? 'min-w-[135px]' : 'w-full'}`}>
+                    <div id={`p5m-col-${day}`} key={day} className={`flex flex-col ${selectedDayFilter === 'ALL' ? 'min-w-[135px]' : 'w-full'}`}>
                       
                       {/* Column Header */}
                       <div className="bg-slate-100 p-2.5 text-center border-b border-slate-200" style={{ borderTop: `3px solid ${DAY_COLORS[day]}` }}>
