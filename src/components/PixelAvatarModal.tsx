@@ -150,22 +150,36 @@ export const PixelAvatarModal: React.FC<PixelAvatarModalProps> = ({
       ctx.fillRect(x * p, y * p, w * p, h * p);
     };
 
-    // 2. Head Base (Skin Tone)
+    const hCol = hairColor.hex;
+    const hShad = hairColor.shadow;
+
+    // 2. Base Hijab / Back Hair (if hijab or long hair)
+    if (hairStyle.id === 'hijab') {
+      rect(5, 2, 14, 5, hCol);
+      rect(4, 4, 16, 13, hCol);
+      rect(5, 15, 14, 3, hShad);
+    } else if (hairStyle.id === 'long' || hairStyle.id === 'curly' || hairStyle.id === 'afro') {
+      rect(4, 3, 16, 12, hShad);
+    }
+
+    // 3. Head Base (Skin Tone)
     rect(7, 5, 10, 11, skin.skin);
     rect(6, 6, 12, 9, skin.skin);
     rect(8, 16, 8, 2, skin.skinShadow); // Neck / Jaw Shadow
 
-    // Ears
-    rect(5, 9, 2, 4, skin.skin);
-    rect(17, 9, 2, 4, skin.skin);
-    rect(5, 10, 1, 2, skin.skinShadow);
-    rect(18, 10, 1, 2, skin.skinShadow);
+    // Ears (unless covered by hijab/helmet/earmuff)
+    if (hairStyle.id !== 'hijab' && hairStyle.id !== 'helmet' && accessory.id !== 'ear_muff') {
+      rect(5, 9, 2, 4, skin.skin);
+      rect(17, 9, 2, 4, skin.skin);
+      rect(5, 10, 1, 2, skin.skinShadow);
+      rect(18, 10, 1, 2, skin.skinShadow);
+    }
 
     // Cheeks / Blush
-    rect(7, 12, 2, 1, 'rgba(244, 63, 94, 0.3)');
-    rect(15, 12, 2, 1, 'rgba(244, 63, 94, 0.3)');
+    rect(7, 12, 2, 1, 'rgba(244, 63, 94, 0.35)');
+    rect(15, 12, 2, 1, 'rgba(244, 63, 94, 0.35)');
 
-    // 3. Outfit / Clothing (Torso & Shoulders)
+    // 4. Outfit / Clothing (Torso & Shoulders)
     const oBase = outfit.base;
     const oStripe = outfit.stripe;
     const oCollar = outfit.collar;
@@ -193,7 +207,59 @@ export const PixelAvatarModal: React.FC<PixelAvatarModalProps> = ({
       rect(11, 17, 2, 7, oStripe); // Red Tie
     }
 
-    // 4. Eyes & Expression
+    // 5. Hair Style & Headgear (Front / Bangs Layer)
+    if (hairStyle.id === 'spiky') {
+      rect(6, 3, 12, 3, hCol);
+      rect(7, 2, 10, 2, hCol);
+      rect(5, 4, 14, 2, hCol);
+      rect(7, 1, 3, 2, hCol);
+      rect(11, 1, 3, 2, hCol);
+      rect(5, 5, 2, 3, hShad);
+      rect(17, 5, 2, 3, hShad);
+    } else if (hairStyle.id === 'side') {
+      rect(6, 3, 12, 3, hCol);
+      rect(5, 4, 14, 2, hCol);
+      rect(5, 5, 3, 3, hShad);
+      rect(16, 5, 3, 3, hShad);
+    } else if (hairStyle.id === 'curly') {
+      rect(5, 2, 14, 4, hCol);
+      rect(4, 4, 16, 3, hCol);
+      rect(4, 5, 3, 5, hShad);
+      rect(17, 5, 3, 5, hShad);
+    } else if (hairStyle.id === 'long') {
+      rect(6, 2, 12, 4, hCol);
+      rect(4, 4, 16, 3, hCol);
+      rect(4, 6, 3, 8, hShad);
+      rect(17, 6, 3, 8, hShad);
+    } else if (hairStyle.id === 'hijab') {
+      // Syari Hijab Inner Framing around Face Cutout
+      rect(5, 2, 14, 3, hCol);
+      rect(4, 4, 3, 11, hCol);
+      rect(17, 4, 3, 11, hCol);
+      rect(5, 14, 14, 3, hShad);
+    } else if (hairStyle.id === 'helmet') {
+      // Helm Safety K3 Kuning / White
+      rect(5, 2, 14, 4, '#FACC15'); // Yellow Safety Helmet
+      rect(4, 5, 16, 2, '#EAB308'); // Helmet visor brim
+      rect(9, 3, 6, 2, '#F8FAFC'); // Front PrepLab Cross Badge
+      rect(11, 3, 2, 2, '#16A34A');
+    } else if (hairStyle.id === 'cap') {
+      // Baseball / Work Cap
+      rect(5, 2, 14, 4, '#1E3A8A');
+      rect(4, 5, 16, 1, '#172554');
+      rect(14, 5, 6, 1, '#172554'); // Cap visor
+      rect(11, 3, 2, 2, '#F97316');
+    } else if (hairStyle.id === 'afro') {
+      rect(4, 1, 16, 6, hCol);
+      rect(3, 2, 18, 4, hCol);
+      rect(3, 4, 3, 5, hShad);
+      rect(18, 4, 3, 5, hShad);
+    } else if (hairStyle.id === 'bald') {
+      // Short hair trim
+      rect(7, 4, 10, 2, hShad);
+    }
+
+    // 6. Eyes & Expression (ALWAYS ON TOP OF SKIN & HIJAB/HAIR BASE)
     const eyeCol = '#0F172A';
     if (eyeStyle.id === 'normal') {
       rect(8, 9, 2, 2, eyeCol);
@@ -236,62 +302,7 @@ export const PixelAvatarModal: React.FC<PixelAvatarModalProps> = ({
     // Mouth / Smile
     rect(11, 13, 2, 1, '#8D5524');
 
-    // 5. Hair Style & Headgear
-    const hCol = hairColor.hex;
-    const hShad = hairColor.shadow;
-
-    if (hairStyle.id === 'spiky') {
-      rect(6, 3, 12, 3, hCol);
-      rect(7, 2, 10, 2, hCol);
-      rect(5, 4, 14, 2, hCol);
-      rect(7, 1, 3, 2, hCol);
-      rect(11, 1, 3, 2, hCol);
-      rect(5, 5, 2, 4, hShad);
-      rect(17, 5, 2, 4, hShad);
-    } else if (hairStyle.id === 'side') {
-      rect(6, 3, 12, 4, hCol);
-      rect(5, 4, 14, 2, hCol);
-      rect(5, 5, 3, 5, hShad);
-      rect(16, 5, 3, 4, hShad);
-    } else if (hairStyle.id === 'curly') {
-      rect(5, 2, 14, 5, hCol);
-      rect(4, 4, 16, 4, hCol);
-      rect(4, 5, 3, 7, hShad);
-      rect(17, 5, 3, 7, hShad);
-    } else if (hairStyle.id === 'long') {
-      rect(6, 2, 12, 5, hCol);
-      rect(4, 4, 16, 4, hCol);
-      rect(4, 6, 3, 10, hShad);
-      rect(17, 6, 3, 10, hShad);
-    } else if (hairStyle.id === 'hijab') {
-      // Syari Hijab Overlay
-      rect(5, 2, 14, 5, hCol);
-      rect(4, 4, 16, 12, hCol);
-      rect(6, 5, 12, 10, skin.skin); // Face cutout
-      rect(5, 14, 14, 4, hShad);
-    } else if (hairStyle.id === 'helmet') {
-      // Helm Safety K3 Kuning / White
-      rect(5, 2, 14, 4, '#FACC15'); // Yellow Safety Helmet
-      rect(4, 5, 16, 2, '#EAB308'); // Helmet visor brim
-      rect(9, 3, 6, 2, '#F8FAFC'); // Front PrepLab Cross Badge
-      rect(11, 3, 2, 2, '#16A34A');
-    } else if (hairStyle.id === 'cap') {
-      // Baseball / Work Cap
-      rect(5, 2, 14, 4, '#1E3A8A');
-      rect(4, 5, 16, 1, '#172554');
-      rect(14, 5, 6, 1, '#172554'); // Cap visor
-      rect(11, 3, 2, 2, '#F97316');
-    } else if (hairStyle.id === 'afro') {
-      rect(4, 1, 16, 7, hCol);
-      rect(3, 2, 18, 5, hCol);
-      rect(3, 4, 3, 7, hShad);
-      rect(18, 4, 3, 7, hShad);
-    } else if (hairStyle.id === 'bald') {
-      // Short hair trim
-      rect(7, 4, 10, 2, hShad);
-    }
-
-    // 6. Accessories Overlay
+    // 7. Accessories Overlay
     if (accessory.id === 'lanyard') {
       // Red Lanyard with PrepLab Badge
       rect(9, 17, 1, 7, '#EF4444');
