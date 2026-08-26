@@ -77,7 +77,77 @@ const CONFIGS: RosterConfig[] = [
   }
 ];
 
-export async function syncRosterData(): Promise<{ success: boolean; staffCount: number; crewCount: number; totalRosterEntries: number; message: string }> {
+const CUTI_TAHUNAN_CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=CutiTahunan`;
+
+export async function syncCutiTahunan(): Promise<{ updatedCount: number; message: string }> {
+  console.log("Memulai sinkronisasi Cuti Tahunan dari Google Spreadsheet...");
+  try {
+    const res = await fetch(CUTI_TAHUNAN_CSV_URL);
+    if (!res.ok) {
+      return { updatedCount: 0, message: `Gagal fetch CSV CutiTahunan: ${res.statusText}` };
+    }
+    const csvText = await res.text();
+    const parsed = Papa.parse(csvText, { skipEmptyLines: true });
+    const rows = parsed.data as string[][];
+
+    if (rows.length < 2) return { updatedCount: 0, message: "Sheet CutiTahunan kosong" };
+
+    const headers = rows[0].map(h => (h || '').trim().toLowerCase().replace(/\s+/g, ' '));
+    let nikCol = headers.findIndex(h => h.includes('nik'));
+    let nameCol = headers.findIndex(h => h.includes('employee name') || h.includes('nama'));
+    let jatuhTempoCol = headers.findIndex(h => h.includes('jatuh tempo'));
+    let sisaCtCol = headers.findIndex(h => h.includes('sisa'));
+
+    if (nikCol === -1) nikCol = 2;
+    if (nameCol === -1) nameCol = 1;
+    if (jatuhTempoCol === -1) jatuhTempoCol = 6;
+    if (sisaCtCol === -1) sisaCtCol = 7;
+
+    const allEmp = await db.select({ id: employees.id, nik: employees.nik, name: employees.name }).from(employees);
+    const empByNik = new Map<string, number>();
+    const empByName = new Map<string, number>();
+    allEmp.forEach(e => {
+      if (e.nik) empByNik.set(e.nik.trim(), e.id);
+      if (e.name) empByName.set(e.name.trim().toLowerCase(), e.id);
+    });
+
+    const updatePromises: Promise<any>[] = [];
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const nik = (row[nikCol] || '').trim();
+      const name = (row[nameCol] || '').trim();
+      const jatuhTempo = (row[jatuhTempoCol] || '').trim();
+      const sisaCt = (row[sisaCtCol] || '').trim();
+
+      if (!nik && !name) continue;
+
+      let targetId = empByNik.get(nik);
+      if (!targetId && name) {
+        targetId = empByName.get(name.toLowerCase());
+      }
+
+      if (targetId) {
+        updatePromises.push(
+          db.update(employees)
+            .set({ sisaCt, jatuhTempoCt: jatuhTempo })
+            .where(eq(employees.id, targetId))
+        );
+      }
+    }
+
+    await Promise.all(updatePromises);
+    const updatedCount = updatePromises.length;
+
+    console.log(`Berhasil sinkronisasi Cuti Tahunan untuk ${updatedCount} karyawan.`);
+    return { updatedCount, message: `Berhasil sinkronisasi Cuti Tahunan untuk ${updatedCount} karyawan.` };
+  } catch (err: any) {
+    console.error("Gagal sinkronisasi Cuti Tahunan:", err);
+    return { updatedCount: 0, message: err.message || "Gagal sinkronisasi Cuti Tahunan" };
+  }
+}
+
+export async function syncRosterData(): Promise<{ success: boolean; staffCount: number; crewCount: number; totalRosterEntries: number; cutiCount?: number; message: string }> {
   console.log("Memulai sinkronisasi Roster dari Google Spreadsheet...");
   let totalStaff = 0;
   let totalCrew = 0;
@@ -92,9 +162,11 @@ export async function syncRosterData(): Promise<{ success: boolean; staffCount: 
         totalRoster += res.rosterCount;
       }
     }
-    const msg = `Sinkronisasi Roster berhasil: ${totalStaff} Staff, ${totalCrew} Crew, ${totalRoster} entri tanggal roster.`;
+    const cutiRes = await syncCutiTahunan();
+
+    const msg = `Sinkronisasi Roster berhasil: ${totalStaff} Staff, ${totalCrew} Crew, ${totalRoster} entri tanggal roster, ${cutiRes.updatedCount} Cuti Tahunan.`;
     console.log(msg);
-    return { success: true, staffCount: totalStaff, crewCount: totalCrew, totalRosterEntries: totalRoster, message: msg };
+    return { success: true, staffCount: totalStaff, crewCount: totalCrew, totalRosterEntries: totalRoster, cutiCount: cutiRes.updatedCount, message: msg };
   } catch (err: any) {
     console.error("Gagal sinkronisasi roster:", err);
     return { success: false, staffCount: 0, crewCount: 0, totalRosterEntries: 0, message: err.message || "Gagal sinkronisasi roster" };

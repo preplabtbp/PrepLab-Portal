@@ -391,6 +391,14 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       <p className="text-purple-100 text-xs uppercase tracking-wider mb-1">Status Kontrak</p>
                       <p className="font-bold">{selectedEmployee.statusKontrak || '-'}</p>
                     </div>
+                    <div className="bg-gradient-to-br from-teal-600 to-teal-700 rounded-xl p-4 text-white shadow-md">
+                      <p className="text-teal-100 text-xs uppercase tracking-wider mb-1">Sisa Cuti (CT)</p>
+                      <p className="font-bold text-lg">{selectedEmployee.sisaCt || '-'}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl p-4 text-white shadow-md">
+                      <p className="text-emerald-100 text-xs uppercase tracking-wider mb-1">Jatuh Tempo CT</p>
+                      <p className="font-bold">{selectedEmployee.jatuhTempoCt || '-'}</p>
+                    </div>
                     <div className="col-span-2 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl p-4 text-white shadow-md flex justify-between items-center">
                       <div>
                         <p className="text-slate-300 text-xs uppercase tracking-wider mb-1">Tanggal Permanen</p>
