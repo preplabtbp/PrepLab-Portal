@@ -288,6 +288,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
     isDraggingRef.current = true;
     startXRef.current = e.clientX;
     scrollLeftRef.current = scrollContainerRef.current.scrollLeft;
+    // Prevent native text-selection drag from interrupting mouse dragging
+    e.preventDefault();
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -308,7 +310,6 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
     if (!container) return;
 
     let startX = 0;
-    let startY = 0;
     let scrollStartLeft = 0;
     let isTouching = false;
 
@@ -316,22 +317,16 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       if (e.touches.length !== 1) return;
       isTouching = true;
       startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
       scrollStartLeft = container.scrollLeft;
     };
 
     const onTouchMove = (e: TouchEvent) => {
       if (!isTouching) return;
       const currentX = e.touches[0].clientX;
-      const currentY = e.touches[0].clientY;
       const diffX = startX - currentX;
-      const diffY = startY - currentY;
 
-      // If swipe gesture is primarily horizontal, prevent page tilt and update scrollLeft
-      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 3) {
-        if (e.cancelable) e.preventDefault();
-        container.scrollLeft = scrollStartLeft + diffX;
-      }
+      if (e.cancelable) e.preventDefault();
+      container.scrollLeft = scrollStartLeft + diffX;
     };
 
     const onTouchEnd = () => {
@@ -1664,6 +1659,24 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     </button>
                   ))}
                 </div>
+                
+                {/* Arrow Scroll Buttons for Mobile/Mouse */}
+                <div className="flex items-center gap-1.5 shrink-0 ml-auto pt-1 sm:pt-0">
+                  <button
+                    onClick={() => handleScrollTable('left')}
+                    className="p-1.5 rounded-xl bg-slate-700/80 hover:bg-slate-600 text-amber-400 text-xs font-bold flex items-center justify-center cursor-pointer transition-all active:scale-95 border border-slate-600 shadow-sm"
+                    title="Geser Kiri"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleScrollTable('right')}
+                    className="p-1.5 rounded-xl bg-slate-700/80 hover:bg-slate-600 text-amber-400 text-xs font-bold flex items-center justify-center cursor-pointer transition-all active:scale-95 border border-slate-600 shadow-sm"
+                    title="Geser Kanan"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               {/* P5M Schedule Board Container */}
@@ -1675,7 +1688,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
-                  className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x cursor-grab active:cursor-grabbing"
+                  className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x cursor-grab active:cursor-grabbing select-none"
                 >
                   <div 
                     className={`bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200 transition-all ${
