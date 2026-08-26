@@ -1664,53 +1664,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     </button>
                   ))}
                 </div>
-
-                <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-700">
-                  <span className="text-[11px] text-amber-300 font-mono font-semibold flex items-center gap-1">
-                    👈 Geser / Navigasi Tabel 👉
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => handleScrollTable('left')}
-                      className="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95 border border-slate-600 shadow-sm"
-                      title="Scroll Kiri"
-                    >
-                      <ChevronLeft className="w-4 h-4 text-amber-400" />
-                      <span className="hidden sm:inline">Kiri</span>
-                    </button>
-                    <button
-                      onClick={() => scrollToDay('Kamis')}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-md"
-                      title="Scroll Kanan (Kamis, Jumat, Sabtu, Minggu)"
-                    >
-                      <span>Lihat Kamis - Minggu</span>
-                      <ChevronRight className="w-4 h-4 text-slate-950" />
-                    </button>
-                  </div>
-                </div>
               </div>
 
               {/* P5M Schedule Board Container */}
-              <div className="relative group">
-                {/* Floating Navigation Arrows for Mobile & Mouse */}
-                {selectedDayFilter === 'ALL' && (
-                  <>
-                    <button 
-                      onClick={() => handleScrollTable('left')}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-slate-900/90 text-amber-400 border border-amber-500/40 shadow-2xl flex items-center justify-center cursor-pointer active:scale-90 transition-transform backdrop-blur-md"
-                      title="Scroll Kiri"
-                    >
-                      <ChevronLeft className="w-6 h-6" />
-                    </button>
-                    <button 
-                      onClick={() => handleScrollTable('right')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-slate-900/90 text-amber-400 border border-amber-500/40 shadow-2xl flex items-center justify-center cursor-pointer active:scale-90 transition-transform backdrop-blur-md"
-                      title="Scroll Kanan (Kamis - Minggu)"
-                    >
-                      <ChevronRight className="w-6 h-6" />
-                    </button>
-                  </>
-                )}
+              <div className="relative">
 
                 <div 
                   ref={scrollContainerRef}
