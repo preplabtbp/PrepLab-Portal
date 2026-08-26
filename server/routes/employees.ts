@@ -11,11 +11,21 @@ employeesRouter.get("/", async (req, res) => {
     let data = await db.select().from(employees);
 
     if (all !== 'true') {
-      if (pt === 'GTS') {
-        data = data.filter(e => e.pt === 'GTS');
+      const isGtsReq = (pt || '').toString().trim().toUpperCase() === 'GTS';
+      if (isGtsReq) {
+        data = data.filter(e => {
+          const ptStr = (e.pt || '').toString().trim().toUpperCase();
+          const nikStr = (e.nik || '').toString().trim().toUpperCase();
+          return ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
+        });
       } else {
-        // TBP & GPS -> Strictly exclude GTS employees
-        data = data.filter(e => e.pt !== 'GTS');
+        // TBP & GPS -> Strictly exclude GTS employees (check pt AND NIK prefix 03/M03)
+        data = data.filter(e => {
+          const ptStr = (e.pt || '').toString().trim().toUpperCase();
+          const nikStr = (e.nik || '').toString().trim().toUpperCase();
+          const isGts = ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
+          return !isGts;
+        });
       }
     }
 

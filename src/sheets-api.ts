@@ -8,6 +8,13 @@ export const getEmployees = async () => {
       const res = await fetch('/api/employees');
       const data = await res.json();
       if (!Array.isArray(data)) return [];
+      
+      const profileStr = typeof localStorage !== 'undefined' ? localStorage.getItem('p2h_inspector_profile') : null;
+      let userPt = 'TBP';
+      if (profileStr) {
+        try { userPt = (JSON.parse(profileStr).pt || 'TBP').toUpperCase(); } catch(e){}
+      }
+
       return data.map((d: any) => ({
         nama: d.name,
         jabatan: d.jabatan || d.position,
@@ -15,7 +22,14 @@ export const getEmployees = async () => {
         grup: d.shift || '',
         nik: d.nik,
         pt: d.pt || 'TBP'
-      })).filter((e: any) => e.nama);
+      })).filter((e: any) => {
+        if (!e.nama) return false;
+        const ptStr = (e.pt || '').toString().trim().toUpperCase();
+        const nikStr = (e.nik || '').toString().trim().toUpperCase();
+        const isGts = ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
+        if (userPt !== 'GTS' && isGts) return false;
+        return true;
+      });
     } catch (e) {
       console.error(e); return [];
     }

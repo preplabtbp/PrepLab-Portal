@@ -47,7 +47,10 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit }: { for
     let list = [];
     if (waktuKerja) {
       list = employees.filter(e => {
-        if (e.pt === 'GTS') return false; // Strictly exclude GTS employees for TBP & GPS inspections
+        const ptStr = (e.pt || '').toString().trim().toUpperCase();
+        const nikStr = (e.nik || '').toString().trim().toUpperCase();
+        const isGts = ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
+        if (isGts) return false; // Strictly exclude GTS employees for TBP & GPS inspections
         const norm = (v: string) => (v || "").toString().trim().toLowerCase();
         const daftarLab = ["laboratory", "qa", "inventory control", "administration"];
         
