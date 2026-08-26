@@ -425,6 +425,18 @@ export default function QuotesPoolModal({
                         <span>Pakai Hari Ini</span>
                       </button>
                     )}
+
+                    {activeDetailQuote.authorNik === currentNik && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteQuote(activeDetailQuote.id, e)}
+                        className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 border border-rose-500/40 bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 transition-all active:scale-95 cursor-pointer shadow-sm"
+                        title="Hapus quote dari pool"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus Quote Saya</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -685,7 +697,7 @@ export default function QuotesPoolModal({
                                 <button
                                   type="button"
                                   onClick={(e) => handleDeleteQuote(q.id, e)}
-                                  className="p-1 rounded-lg hover:bg-rose-500/20 text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
+                                  className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all cursor-pointer opacity-85 hover:opacity-100 active:scale-95"
                                   title="Hapus quote saya"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />

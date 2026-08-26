@@ -904,14 +904,21 @@ router.delete("/api/quotes/:id", async (req, res) => {
     const { nik } = req.query;
     if (!quoteId) return res.status(400).json({ status: "error", message: "ID quote tidak valid" });
 
-    let deleteQuery;
-    if (nik && nik !== '02D25000055' && nik !== '02D24000043' && nik !== 'preplabadmin') {
-      deleteQuery = and(eq(communityQuotes.id, quoteId), eq(communityQuotes.authorNik, String(nik)));
-    } else {
-      deleteQuery = eq(communityQuotes.id, quoteId);
+    const existing = await db.select().from(communityQuotes).where(eq(communityQuotes.id, quoteId));
+    if (existing.length === 0) {
+      return res.status(404).json({ status: "error", message: "Quote tidak ditemukan" });
     }
 
-    await db.delete(communityQuotes).where(deleteQuery);
+    const targetQuote = existing[0];
+    const devRows = await db.select().from(developerUsers);
+    const devNiks = devRows.map(d => d.nik);
+    const isAuthor = String(nik) === String(targetQuote.authorNik);
+
+    if (!isAuthor) {
+      return res.status(403).json({ status: "error", message: "Anda hanya dapat menghapus quote buatan Anda sendiri." });
+    }
+
+    await db.delete(communityQuotes).where(eq(communityQuotes.id, quoteId));
     res.json({ status: "success", message: "Quote berhasil dihapus dari pool." });
   } catch (error: any) {
     console.error("Error deleting quote:", error);
