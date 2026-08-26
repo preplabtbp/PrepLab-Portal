@@ -324,22 +324,22 @@ router.post("/api/inspections/universal", async (req, res) => {
           waMessageText += `\n*DAFTAR TEMUAN*: Nihil\n`;
       }
 
-      const reqHost = req.headers['x-forwarded-host'] || req.headers.host;
-      const protocol = req.headers['x-forwarded-proto'] || 'https';
-      const baseUrl = reqHost ? `${protocol}://${reqHost}` : 'https://preplab-portal-staging-1034501170626.asia-southeast2.run.app';
+      const driveTbpUrl = (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) ? pdfUrl : null;
+      const driveGpsUrl = (linkPdf2 && linkPdf2.startsWith('http') && !linkPdf2.includes('/api/inspections/')) ? linkPdf2 : null;
 
-      const finalPdfUrl = (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) 
-          ? pdfUrl 
-          : `${baseUrl}/api/inspections/${result[0].id}/pdf?pt=tbp`;
+      if (driveTbpUrl) {
+        waMessageText += `\n*Dokumen Laporan TBP*:\n${driveTbpUrl}\n`;
+      } else {
+        waMessageText += `\n*Dokumen Laporan TBP*:\n(Tautan Google Drive sedang diproses / dibuat)\n`;
+      }
 
-      const finalGpsPdfUrl = (linkPdf2 && linkPdf2.startsWith('http') && !linkPdf2.includes('/api/inspections/')) 
-          ? linkPdf2 
-          : `${baseUrl}/api/inspections/${result[0].id}/pdf?pt=gps`;
-
-      waMessageText += `\n*Dokumen Laporan TBP*:\n${finalPdfUrl}\n`;
-      waMessageText += `\n*Dokumen Laporan GPS*:\n${finalGpsPdfUrl}\n`;
+      if (driveGpsUrl) {
+        waMessageText += `\n*Dokumen Laporan GPS*:\n${driveGpsUrl}\n`;
+      } else {
+        waMessageText += `\n*Dokumen Laporan GPS*:\n(Tautan Google Drive sedang diproses / dibuat)\n`;
+      }
       
-      res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl: finalPdfUrl, linkPdf2: finalGpsPdfUrl, waMessageText });
+      res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl: driveTbpUrl, linkPdf2: driveGpsUrl, waMessageText });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: "Failed to save universal inspection: " + (error.message || String(error)) });
@@ -567,22 +567,22 @@ router.post("/api/inspections", async (req, res) => {
           }
       }
 
-      const reqHost = req.headers['x-forwarded-host'] || req.headers.host;
-      const protocol = req.headers['x-forwarded-proto'] || 'https';
-      const baseUrl = reqHost ? `${protocol}://${reqHost}` : 'https://preplab-portal-staging-1034501170626.asia-southeast2.run.app';
+      const driveTbpUrl = (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) ? pdfUrl : null;
+      const driveGpsUrl = (linkPdf2 && linkPdf2.startsWith('http') && !linkPdf2.includes('/api/inspections/')) ? linkPdf2 : null;
 
-      const finalPdfUrl = (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) 
-          ? pdfUrl 
-          : `${baseUrl}/api/inspections/${result[0].id}/pdf?pt=tbp`;
+      if (driveTbpUrl) {
+        waMessageText += `\n*Dokumen Laporan TBP*:\n${driveTbpUrl}\n`;
+      } else {
+        waMessageText += `\n*Dokumen Laporan TBP*:\n(Tautan Google Drive sedang diproses / dibuat)\n`;
+      }
 
-      const finalGpsPdfUrl = (linkPdf2 && linkPdf2.startsWith('http') && !linkPdf2.includes('/api/inspections/')) 
-          ? linkPdf2 
-          : `${baseUrl}/api/inspections/${result[0].id}/pdf?pt=gps`;
+      if (driveGpsUrl) {
+        waMessageText += `\n*Dokumen Laporan GPS*:\n${driveGpsUrl}\n`;
+      } else {
+        waMessageText += `\n*Dokumen Laporan GPS*:\n(Tautan Google Drive sedang diproses / dibuat)\n`;
+      }
 
-      waMessageText += `\n*Dokumen Laporan TBP*:\n${finalPdfUrl}\n`;
-      waMessageText += `\n*Dokumen Laporan GPS*:\n${finalGpsPdfUrl}\n`;
-
-      res.status(201).json({ ...result[0], pdfUrl: finalPdfUrl, linkPdf2: finalGpsPdfUrl, waMessageText });
+      res.status(201).json({ ...result[0], pdfUrl: driveTbpUrl, linkPdf2: driveGpsUrl, waMessageText });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: "Failed to save inspection" });
