@@ -18,6 +18,7 @@ import { router as apdRouter } from "./server/routes/apd.js";
 import { router as rosterRouter } from "./server/routes/roster.js";
 import { router as adminRouter } from "./server/routes/admin.js";
 import { router as agendaRouter } from "./server/routes/agenda.js";
+import { router as feedbackRouter } from "./server/routes/feedback.js";
 import webpush from 'web-push';
 import { generatePdfFromTemplate, drive } from './google-services.js';
 import path from "path";
@@ -316,6 +317,7 @@ const app = express();
   app.use(rosterRouter);
   app.use(adminRouter);
   app.use(agendaRouter);
+  app.use(feedbackRouter);
 
   // In-memory chat storage as fallback since DB is disconnected
   const chatMessagesMemory: any[] = [];

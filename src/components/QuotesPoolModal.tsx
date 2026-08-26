@@ -60,6 +60,18 @@ export default function QuotesPoolModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'likes' | 'newest'>('likes');
+  const [developerList, setDeveloperList] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch('/api/developers')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setDeveloperList(data.map((d: any) => d.nik));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // New Quote Form State
   const [newQuoteText, setNewQuoteText] = useState('');
@@ -79,6 +91,7 @@ export default function QuotesPoolModal({
   const currentAuthorName = profile.name || profile.nama || inspectorName || localStorage.getItem('p2h_inspector_username') || 'Personil PrepLab';
   const currentRole = profile.jabatan || 'Staff';
   const currentSection = profile.section || profile.department || 'Prep & Lab';
+  const isDeveloper = currentNik === '02D25000055' || currentNik === '02D24000043' || currentNik === 'preplabadmin' || developerList.includes(currentNik);
 
   // Load Quotes from server
   const loadQuotes = async () => {
@@ -467,11 +480,17 @@ export default function QuotesPoolModal({
 
               {/* Likers List Section */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <h3 className="text-sm font-bold flex items-center gap-2">
                     <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
-                    Personil Yang Menyukai ({activeDetailQuote.likesCount || 0})
+                    <span>Personil Yang Menyukai ({activeDetailQuote.likesCount || (activeDetailQuote.likedByUsers?.length || 0)})</span>
                   </h3>
+                  {isDeveloper && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-300" />
+                      Developer Audit View
+                    </span>
+                  )}
                 </div>
 
                 {(!activeDetailQuote.likedByUsers || activeDetailQuote.likedByUsers.length === 0) ? (
@@ -496,23 +515,31 @@ export default function QuotesPoolModal({
                     {activeDetailQuote.likedByUsers.map((user, idx) => (
                       <div 
                         key={`liker-${idx}`}
-                        className="p-3 rounded-2xl border flex items-center gap-2.5 shadow-2xs"
+                        className="p-3 rounded-2xl border flex items-center gap-3 shadow-xs hover:border-teal-500/40 transition-all"
                         style={{
                           backgroundColor: 'var(--input-bg)',
                           borderColor: 'var(--border-main)'
                         }}
                       >
                         <div 
-                          className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0"
+                          className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-2xs"
                           style={{ backgroundColor: 'var(--primary)' }}
                         >
                           {(user.name || 'U').charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="font-bold text-xs truncate">{user.name || 'Personil'}</p>
+                          <p className="font-bold text-xs truncate flex items-center gap-1.5">
+                            <span>{user.name || 'Personil'}</span>
+                          </p>
                           <p className="text-[10px] opacity-65 truncate">{user.role || 'Staff'}</p>
+                          {user.nik && (
+                            <p className="text-[9px] font-mono opacity-50 truncate">
+                              NIK: {user.nik}
+                              {user.likedAt && ` • ${new Date(user.likedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`}
+                            </p>
+                          )}
                         </div>
-                        <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500 shrink-0" />
+                        <Heart className="w-4 h-4 text-rose-500 fill-rose-500 shrink-0" />
                       </div>
                     ))}
                   </div>
@@ -670,6 +697,17 @@ export default function QuotesPoolModal({
                           <p className="text-sm font-medium italic leading-relaxed text-current line-clamp-3">
                             "{q.quote}"
                           </p>
+
+                          {/* Likers Preview Strip on Card */}
+                          {q.likedByUsers && q.likedByUsers.length > 0 && (
+                            <div className="flex items-center gap-1.5 text-[10px] opacity-80 pt-1">
+                              <Heart className="w-3 h-3 text-rose-500 fill-rose-500 shrink-0" />
+                              <span className="truncate">
+                                Disukai oleh: <strong className="font-semibold">{q.likedByUsers[0].name}</strong>
+                                {q.likedByUsers.length > 1 && ` & ${q.likedByUsers.length - 1} lainnya`}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         {(() => {

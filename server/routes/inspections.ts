@@ -245,15 +245,31 @@ router.post("/api/inspections/universal", async (req, res) => {
                   });
               });
           } else if (finalData.tipe === "P3K" && Array.isArray(finalData.payload)) {
-              finalData.payload.filter((item: any) => item.ketersediaan === 'Kosong' || (item.keterangan && item.keterangan !== '-')).forEach((item: any) => {
+              const p3kFindings = finalData.payload.filter((item: any) => 
+                  item.ketersediaan === 'Kosong' || 
+                  (item.keterangan && item.keterangan !== '-' && item.keterangan.trim() !== '')
+              );
+              
+              if (p3kFindings.length > 0) {
+                  const itemsList = p3kFindings.map((item: any) => {
+                      const ket = (item.keterangan && item.keterangan !== '-' && item.keterangan.trim() !== '') 
+                          ? ` (${item.keterangan.trim()})` 
+                          : '';
+                      const stok = item.ketersediaan === 'Kosong' ? 'Stok Kosong' : (item.ketersediaan || 'Stok Kosong');
+                      return `${item.item}: ${stok}${ket}`;
+                  }).join(', ');
+
+                  const formTitle = finalData.judulForm || 'Kotak P3K';
+                  const lokasi = (finalData.lokasiUmum && finalData.lokasiUmum !== '-') ? ` (${finalData.lokasiUmum})` : '';
+
                   allTemuan.push({
-                      temuan: `Kotak P3K (${item.item}): Stok ${item.ketersediaan || 'Kosong'}, ${item.keterangan || ''}`.trim(),
+                      temuan: `${formTitle}${lokasi}: ${itemsList}`,
                       risiko: 'Keterlambatan Pertolongan Pertama Medis',
-                      pengendalian: 'Restok & Pembaruan Item P3K',
+                      pengendalian: 'Restok & Pembaruan Item P3K Sesuai Standar',
                       status: 'OPEN',
                       foto: finalFotoProses
                   });
-              });
+              }
           }
       }
 

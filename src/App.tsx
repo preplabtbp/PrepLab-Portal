@@ -83,8 +83,8 @@ const P5MScreen = lazyWithRetry(() => import('./components/p5m-screen').then(m =
 const BulletinBoard = lazyWithRetry(() => import('./components/bulletin-board').then(m => ({ default: m.BulletinBoard })));
 const UserManualScreen = lazyWithRetry(() => import('./components/user-manual-screen').then(m => ({ default: m.UserManualScreen })));
 const EmployeeDatabaseScreen = lazyWithRetry(() => import('./components/employee-database-screen').then(m => ({ default: m.EmployeeDatabaseScreen })));
-const EasterEggGame = lazyWithRetry(() => import('./components/easter-egg-game').then(m => ({ default: m.EasterEggGame })));
 const WOMaintenanceDashboard = lazyWithRetry(() => import('./components/wo-maintenance-dashboard').then(m => ({ default: m.WOMaintenanceDashboard })));
+const FeedbackSupportScreen = lazyWithRetry(() => import('./components/feedback-support-screen').then(m => ({ default: m.FeedbackSupportScreen })));
 
 export default function App() {
 
@@ -404,8 +404,16 @@ export default function App() {
 
   
   const handleNav = (tab: string) => {
-    if (tab === 'home') navigate('/');
-    else navigate('/' + tab);
+    if (tab === 'home' || tab === '' || tab === '/') navigate('/');
+    else navigate('/' + tab.replace(/^\//, ''));
+  };
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      navigate('/');
+    }
   };
 
 
@@ -1016,7 +1024,7 @@ export default function App() {
         <div className="flex items-center gap-3">
           {activeTab !== 'home' && (
             <button 
-              onClick={() => window.history.back()} 
+              onClick={handleBack} 
               className={`w-8 h-8 rounded-full border flex items-center justify-center shadow-sm active:scale-95 transition-transform ${isBulletin ? 'bg-[#2a2a2a] border-slate-700 text-slate-300' : 'border-slate-200'}`}
               style={{
                 backgroundColor: isBulletin ? undefined : 'var(--input-bg, #ffffff)',
@@ -1101,7 +1109,7 @@ export default function App() {
   <Route path="/manual" element={<UserManualScreen onBack={() => handleNav('home')} />} />
   <Route path="/employee-database" element={<EmployeeDatabaseScreen inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
   <Route path="/roster-admin" element={<RosterAdminScreen />} />
-  <Route path="/settings" element={<SettingsScreen inspectorName={inspectorName} inspectorNik={inspectorNik} onLogoutKaryawan={handleLogoutKaryawan} onOpenThemeModal={() => setShowGlobalThemeModal(true)} />} />
+  <Route path="/settings" element={<SettingsScreen inspectorName={inspectorName} inspectorNik={inspectorNik} onLogoutKaryawan={handleLogoutKaryawan} onOpenThemeModal={() => setShowGlobalThemeModal(true)} onNav={handleNav} />} />
   <Route path="/admin-dashboard" element={<AdminDashboard inspectorNik={inspectorNik!} />} />
   <Route path="/sap-dashboard" element={<SapDashboard inspectorNik={inspectorNik!} />} />
   <Route path="/adm-dashboard" element={<AdmDashboard />} />
@@ -1112,6 +1120,7 @@ export default function App() {
   <Route path="/bulletin" element={<Navigate to={`/bulletin/${userProfile?.pt || 'TBP'}`} replace />} />
   <Route path="/agenda" element={<AgendaDashboard key="agenda" inspectorNik={inspectorNik!} inspectorName={inspectorName!} userDept={userDept || undefined} />} />
   <Route path="/p5m" element={<P5MScreen onBack={() => handleNav('home')} userProfile={userProfile} />} />
+  <Route path="/feedback-support" element={<FeedbackSupportScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
   </AnimatePresence>

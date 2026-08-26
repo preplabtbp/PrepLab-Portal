@@ -525,3 +525,24 @@ export const developerUsers = pgTable('developer_users', {
   name: text('name'),
   addedAt: timestamp('added_at').defaultNow(),
 });
+
+// Define 'app_feedbacks' table (Feedback & Bug Reports)
+export const appFeedbacks = pgTable('app_feedbacks', {
+  id: serial('id').primaryKey(),
+  type: text('type').notNull().default('bug'), // 'bug', 'suggestion', 'improvement', 'question'
+  category: text('category'), // 'Sistem & Error', 'UI / Tampilan', 'Fitur Baru', 'Kecepatan / Loading', 'Lainnya'
+  module: text('module'), // 'Roster & Cuti', 'Inspeksi & P2H', 'P5M', 'Work Order', 'Sistem APD', 'Quotes Motivasi', 'Cloud & Drive', 'Umum'
+  priority: text('priority').notNull().default('medium'), // 'low', 'medium', 'high', 'critical'
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  screenshotUrl: text('screenshot_url'),
+  authorNik: text('author_nik').notNull(),
+  authorName: text('author_name').notNull(),
+  authorRole: text('author_role'),
+  authorSection: text('author_section'),
+  status: text('status').notNull().default('PENDING'), // 'PENDING', 'IN_PROGRESS', 'RESOLVED', 'REJECTED'
+  developerNotes: text('developer_notes'),
+  resolvedAt: timestamp('resolved_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+

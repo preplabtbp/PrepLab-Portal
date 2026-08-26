@@ -5,7 +5,7 @@ import {
   apdHistory, apdDocuments, roster, inspections, pemantauan, 
   questions, privateNotes, userThemes, bulletinComments, uploadedFiles, 
   appSettings, pelanggaran, mealReports, quizQuestions, preplabCloudLogs, 
-  quizScores, induksi, chatMessages, equipments, downtime, users
+  quizScores, induksi, chatMessages, equipments, downtime, users, developerUsers, appFeedbacks
 } from "../src/db/schema.js";
 import { eq, inArray } from "drizzle-orm";
 import webpush from 'web-push';
@@ -179,6 +179,8 @@ export const getTableObj = (name: string) => {
     case "quizScores": return quizScores;
     case "induksi": return induksi;
     case "chatMessages": return chatMessages;
+    case "developerUsers": return developerUsers;
+    case "appFeedbacks": return appFeedbacks;
     default: return null;
   }
 };

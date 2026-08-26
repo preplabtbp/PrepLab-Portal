@@ -42,13 +42,6 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
   const [employeesData, setEmployeesData] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch('/api/admin/tables/employees').then(res => res.json()).then(data => {
-       if(Array.isArray(data)) setEmployeesData(data);
-    }).catch(e => console.error(e));
-  }, []);
-
-
-  useEffect(() => {
     const mod = visibleModules.find(m => m.id === activeModule);
     if (mod && mod.tables.length > 0) {
       setSelectedTable(mod.tables[0]);
@@ -65,13 +58,17 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
     }
   }, [selectedTable]);
 
-  const fetchData = async () => {
+  const fetchData = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/tables/${selectedTable}`);
+      const url = `/api/admin/tables/${selectedTable}${forceRefresh ? '?refresh=1' : ''}`;
+      const res = await fetch(url);
       const json = await res.json();
-      setData(Array.isArray(json) ? json : []);
-      // Invalidate all queries so other components get the latest data (e.g. equipments, downtime-records, etc)
+      const rows = Array.isArray(json) ? json : [];
+      setData(rows);
+      if (selectedTable === 'employees') {
+        setEmployeesData(rows);
+      }
       queryClient.invalidateQueries();
     } catch (e) {
       console.error(e);
@@ -568,7 +565,7 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
               <Button variant="danger" onClick={handleDeleteAll} className="px-3" disabled={loading}>
                 <Trash2 className="w-4 h-4 mr-1" /> Hapus Semua
               </Button>
-              <Button variant="secondary" onClick={fetchData} className="px-3" disabled={loading}>
+              <Button variant="secondary" onClick={() => fetchData(true)} className="px-3" disabled={loading} title="Refresh Data">
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               <Button onClick={() => { setIsAdding(true); setEditForm({}); setEditingId(null); }} className="px-3">
@@ -677,7 +674,17 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
                     </td>
                   </tr>
                 ))}
-                {filteredAndSortedData.length === 0 && !isAdding && (
+                {loading ? (
+                  <tr>
+                    <td colSpan={columns.length + 1 || 2} className="px-4 py-16 text-center text-slate-500">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <RefreshCw className="w-8 h-8 text-teal-600 animate-spin" />
+                        <p className="text-sm font-semibold text-slate-700">Memuat data tabel <span className="text-teal-700 capitalize font-bold">{selectedTable}</span>...</p>
+                        <p className="text-xs text-slate-400">Harap tunggu sebentar...</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredAndSortedData.length === 0 && !isAdding ? (
                   <tr>
                     <td colSpan={columns.length + 1 || 2} className="px-4 py-12 text-center text-slate-500">
                       <div className="flex flex-col items-center justify-center gap-2">
@@ -686,7 +693,7 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
                       </div>
                     </td>
                   </tr>
-                )}
+                ) : null}
               </tbody>
             </table>
           </div>

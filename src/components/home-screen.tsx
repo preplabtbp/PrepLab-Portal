@@ -6,7 +6,7 @@ import { Cloud,
   ThermometerSun, LineChart, LayoutDashboard, Wrench, CheckSquare, 
   ShieldCheck, Eye, Activity, Folder, Info, Package, History, 
   PlusCircle, Settings, ArrowRight, Clock, Box, ClipboardList, Briefcase, Users,
-  BookOpen, Sparkles, Edit2, ClipboardCheck } from 'lucide-react';
+  BookOpen, Sparkles, Edit2, ClipboardCheck, MessageSquarePlus } from 'lucide-react';
 import { Button } from './ui';
 import { getKtaUrl } from '../sheets-api';
 import { FoodReportModal } from './food-report-modal';

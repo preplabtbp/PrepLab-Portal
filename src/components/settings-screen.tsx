@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Input } from './ui';
-import { LogOut, User, Lock, Mail, Settings2, Palette, ShieldAlert, Settings, Bell, Sparkles } from 'lucide-react';
+import { LogOut, User, Lock, Mail, Settings2, Palette, ShieldAlert, Settings, Bell, Sparkles, MessageSquarePlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAppSettings } from '../sheets-api';
 import { PageHeader } from './PageHeader';
 
-export function SettingsScreen({ inspectorName, inspectorNik, onLogoutKaryawan, onOpenThemeModal }: { inspectorName: string | null, inspectorNik: string | null, onLogoutKaryawan: () => void, onOpenThemeModal: () => void }) {
+export function SettingsScreen({ 
+  inspectorName, 
+  inspectorNik, 
+  onLogoutKaryawan, 
+  onOpenThemeModal,
+  onNav 
+}: { 
+  inspectorName: string | null; 
+  inspectorNik: string | null; 
+  onLogoutKaryawan: () => void; 
+  onOpenThemeModal: () => void;
+  onNav?: (tab: string) => void;
+}) {
   const [profile, setProfile] = useState<any>(null);
   
   const [email, setEmail] = useState('');
@@ -253,6 +265,31 @@ export function SettingsScreen({ inspectorName, inspectorNik, onLogoutKaryawan, 
                    Putar Animasi Sapaan Harian (Splash)
                 </button>
               </div>
+            </Card>
+
+            {/* Card Bantuan & Laporan Bug */}
+            <Card className="space-y-3">
+              <h3 
+                className="text-base font-bold flex items-center gap-2 pb-2 border-b" 
+                style={{ 
+                  color: 'var(--primary, #2A9D8F)', 
+                  borderColor: 'var(--border-main, #E2E8F0)' 
+                }}
+              >
+                <MessageSquarePlus className="w-5 h-5 text-rose-500" />
+                Bantuan & Masukan Sistem
+              </h3>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted, #64748B)' }}>
+                Menemukan kendala teknis, tombol error, atau punya ide pengembangan fitur baru? Laporkan langsung ke tim Developer.
+              </p>
+              <button
+                type="button"
+                onClick={() => onNav ? onNav('feedback-support') : (window.location.pathname = '/feedback-support')}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+              >
+                <MessageSquarePlus className="w-4 h-4" />
+                <span>Beri Masukan / Laporkan Bug</span>
+              </button>
             </Card>
 
             {inspectorNik === '02D250000' && (
