@@ -1534,7 +1534,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               )}
             </Card>
           ) : (
-            <div className="bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200" ref={captureRef}>
+            <div className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x">
+              <div className="min-w-[950px] bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200" ref={captureRef}>
               
               {/* Header Title Bar */}
               <div className="bg-slate-900 text-white px-6 py-4 flex flex-col sm:flex-row items-center justify-between border-b-2 border-amber-500 gap-2">
@@ -1772,6 +1773,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               <div className="bg-slate-50 px-6 py-2.5 flex items-center justify-between text-[10px] text-slate-500 font-mono">
                 <span>Dokumen Resmi Sistem Portal Prep &amp; Lab Harita Nickel</span>
                 <span>Diperbarui pada: {new Date().toLocaleString('id-ID')}</span>
+              </div>
               </div>
             </div>
           )}
