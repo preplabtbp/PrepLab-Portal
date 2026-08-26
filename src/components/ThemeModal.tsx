@@ -327,11 +327,7 @@ export default function ThemeModal({
   if (!show) return null;
 
   // Directly apply a theme from presets, community, or custom templates
-  const handleApplyThemeDirectly = async (rawColors: any, themeName: string) => {
-    let colors = rawColors;
-    if (typeof colors === 'string') {
-      try { colors = JSON.parse(colors); } catch(e) {}
-    }
+  const handleApplyThemeDirectly = async (colors: Record<string, string>, themeName: string = 'Kustom', existingToastId?: string) => {
     if (!colors || typeof colors !== 'object') {
       toast.error('Format warna tema tidak valid');
       return;
@@ -359,7 +355,11 @@ export default function ThemeModal({
     localStorage.setItem('preplab_user_themes_guest', JSON.stringify(allModes));
     localStorage.setItem('preplab_active_theme_colors', JSON.stringify(colors));
 
-    toast.success(`Tema "${themeName}" aktif diterapkan ke seluruh portal! 🎉`);
+    if (existingToastId) {
+      toast.success(`Tema "${themeName}" aktif diterapkan ke seluruh portal! 🎉`, { id: existingToastId });
+    } else {
+      toast.success(`Tema "${themeName}" aktif diterapkan ke seluruh portal! 🎉`);
+    }
 
     // 4. Save to server in background
     try {
@@ -568,7 +568,7 @@ export default function ThemeModal({
     setLoading(true);
     const toastId = toast.loading('Menerapkan dan menyimpan tema aktif...');
     try {
-      await handleApplyThemeDirectly(editingColors, customTemplateName || targetMode);
+      await handleApplyThemeDirectly(editingColors, customTemplateName || targetMode, toastId);
       onClose();
     } catch (e: any) {
       toast.info('Tema diterapkan pada sesi browser ini!', { id: toastId });
