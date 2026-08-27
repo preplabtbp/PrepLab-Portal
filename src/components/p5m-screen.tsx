@@ -283,25 +283,33 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const startXRef = useRef(0);
   const scrollLeftRef = useRef(0);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     if (!scrollContainerRef.current) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('select') || target.closest('input')) return;
+
     isDraggingRef.current = true;
     startXRef.current = e.clientX;
     scrollLeftRef.current = scrollContainerRef.current.scrollLeft;
-    // Prevent native text-selection drag from interrupting mouse dragging
-    e.preventDefault();
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (err) {}
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDraggingRef.current || !scrollContainerRef.current) return;
-    e.preventDefault();
     const x = e.clientX;
     const walk = (startXRef.current - x) * 1.5;
     scrollContainerRef.current.scrollLeft = scrollLeftRef.current + walk;
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (err) {}
   };
 
   const handleScrollTable = (direction: 'left' | 'right') => {
@@ -1620,11 +1628,12 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
                 <div 
                   ref={scrollContainerRef}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
                   className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x cursor-grab active:cursor-grabbing select-none"
+                  style={{ touchAction: 'pan-x pan-y' }}
                 >
                   <div 
                     className={`bg-[var(--card-bg)] text-[var(--text-main)] rounded-2xl overflow-hidden shadow-xl border border-[var(--border-main)] transition-all ${
