@@ -525,27 +525,47 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
             <Card className="p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] text-center">
               <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase">Total Wajib</p>
-              <h3 className="text-lg font-black text-[var(--text-main)]">{rekapSummary.total}</h3>
+              {loadingRekap ? (
+                <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-[var(--primary)]" /></div>
+              ) : (
+                <h3 className="text-lg font-black text-[var(--text-main)]">{rekapSummary.total}</h3>
+              )}
             </Card>
 
             <Card className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 text-center">
               <p className="text-[10px] text-emerald-600 dark:text-emerald-300 font-bold uppercase">Sudah Inspeksi</p>
-              <h3 className="text-lg font-black text-emerald-600 dark:text-emerald-400">{rekapSummary.sudah}</h3>
+              {loadingRekap ? (
+                <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-emerald-500" /></div>
+              ) : (
+                <h3 className="text-lg font-black text-emerald-600 dark:text-emerald-400">{rekapSummary.sudah}</h3>
+              )}
             </Card>
 
             <Card className="p-2.5 bg-amber-500/10 border border-amber-500/30 text-center">
               <p className="text-[10px] text-amber-600 dark:text-amber-300 font-bold uppercase">Belum Inspeksi</p>
-              <h3 className="text-lg font-black text-amber-600 dark:text-amber-400">{rekapSummary.belum}</h3>
+              {loadingRekap ? (
+                <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-amber-500" /></div>
+              ) : (
+                <h3 className="text-lg font-black text-amber-600 dark:text-amber-400">{rekapSummary.belum}</h3>
+              )}
             </Card>
 
             <Card className="p-2.5 bg-purple-500/10 border border-purple-500/30 text-center">
               <p className="text-[10px] text-purple-600 dark:text-purple-300 font-bold uppercase">Sedang Cuti</p>
-              <h3 className="text-lg font-black text-purple-600 dark:text-purple-400">{rekapSummary.cutiCount || 0}</h3>
+              {loadingRekap ? (
+                <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-purple-500" /></div>
+              ) : (
+                <h3 className="text-lg font-black text-purple-600 dark:text-purple-400">{rekapSummary.cutiCount || 0}</h3>
+              )}
             </Card>
 
             <Card className="p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-center col-span-2 sm:col-span-1">
               <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase">% {selectedWeek}</p>
-              <h3 className="text-lg font-black text-[var(--primary)]">{rekapSummary.percentage}%</h3>
+              {loadingRekap ? (
+                <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-[var(--primary)]" /></div>
+              ) : (
+                <h3 className="text-lg font-black text-[var(--primary)]">{rekapSummary.percentage}%</h3>
+              )}
             </Card>
           </div>
 
