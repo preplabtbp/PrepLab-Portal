@@ -971,11 +971,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       {/* ── TOP HEADER & CONTROLS ── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl p-4 sm:p-5 shadow-xl backdrop-blur-md text-[var(--text-main)]">
         <div className="flex items-center gap-3.5">
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xl shadow-lg flex-shrink-0 ${
-            isQATeam
-              ? 'bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 shadow-amber-500/20'
-              : 'bg-gradient-to-tr from-teal-500 to-emerald-400 text-slate-950 shadow-teal-500/20'
-          }`}>
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xl shadow-lg flex-shrink-0 bg-[var(--primary)] text-white shadow-md">
             <Calendar className="w-6 h-6" />
           </div>
           <div>
@@ -1015,7 +1011,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               }}
               className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                 selectedPt === 'TBP' || selectedPt === 'GPS'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  ? 'bg-[var(--primary)] text-white shadow-md'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
               }`}
             >
@@ -1028,7 +1024,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               }}
               className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                 selectedPt === 'GTS'
-                  ? 'bg-teal-500 text-slate-950 shadow-md'
+                  ? 'bg-[var(--primary)] text-white shadow-md'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
               }`}
             >
@@ -1060,7 +1056,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               onClick={() => setActiveTab('schedule')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 activeTab === 'schedule'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                  ? 'bg-[var(--primary)] text-white shadow-md font-bold'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-main)]'
               }`}
             >
@@ -1073,7 +1069,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 onClick={() => setActiveTab('materi')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                   activeTab === 'materi'
-                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    ? 'bg-[var(--primary)] text-white shadow-md font-bold'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-main)]'
                 }`}
               >
@@ -1086,7 +1082,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               onClick={() => setActiveTab('archive')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 activeTab === 'archive'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                  ? 'bg-[var(--primary)] text-white shadow-md font-bold'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-main)]'
               }`}
             >
@@ -1232,7 +1228,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 <Button 
                   onClick={handleRandomize} 
                   disabled={isGenerating}
-                  className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs h-9 px-4 rounded-xl shadow-lg shadow-amber-500/20"
+                  className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold text-xs h-9 px-4 rounded-xl shadow-lg"
                 >
                   {isGenerating ? (
                     <>
@@ -1266,11 +1262,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   onClick={() => setShowConfigDrawer(!showConfigDrawer)}
                   className={`text-xs h-9 px-3.5 rounded-xl border transition-all ${
                     showConfigDrawer 
-                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/40' 
+                      ? 'bg-[var(--primary)]/15 text-[var(--primary)] border-[var(--primary)]/40 font-bold' 
                       : 'bg-[var(--input-bg)] text-[var(--text-main)] border-[var(--border-main)] hover:bg-[var(--bg-main)]'
                   }`}
                 >
-                  <Layers className="w-4 h-4 mr-1.5 text-amber-500" />
+                  <Layers className="w-4 h-4 mr-1.5 text-[var(--primary)]" />
                   <span>Konfigurasi Slot Hari</span>
                   <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${showConfigDrawer ? 'rotate-180' : ''}`} />
                 </Button>
@@ -1597,7 +1593,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     onClick={() => scrollToDay('ALL')}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
                       selectedDayFilter === 'ALL'
-                        ? 'bg-amber-500 text-slate-950 shadow-md'
+                        ? 'bg-[var(--primary)] text-white shadow-md'
                         : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)] hover:bg-[var(--bg-main)]'
                     }`}
                   >
@@ -1609,7 +1605,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       onClick={() => scrollToDay(day)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
                         selectedDayFilter === day
-                          ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-300'
+                          ? 'bg-[var(--primary)] text-white shadow-md'
                           : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)] hover:bg-[var(--bg-main)]'
                       }`}
                     >
@@ -1638,13 +1634,13 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   >
               
               {/* Header Title Bar */}
-              <div className="bg-[var(--card-bg)] text-[var(--text-main)] px-6 py-4 flex flex-col sm:flex-row items-center justify-between border-b-2 border-amber-500 gap-2 shadow-xs">
+              <div className="bg-[var(--card-bg)] text-[var(--text-main)] px-6 py-4 flex flex-col sm:flex-row items-center justify-between border-b-2 border-[var(--primary)] gap-2 shadow-xs">
                 <div className="flex items-center gap-3 text-center sm:text-left">
-                  <div className="w-9 h-9 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-black text-sm">
+                  <div className="w-9 h-9 rounded-lg bg-[var(--primary)] text-white flex items-center justify-center font-black text-sm">
                     P5M
                   </div>
                   <div>
-                    <h2 className="font-bold text-sm tracking-wider uppercase font-mono text-amber-600 dark:text-amber-400">
+                    <h2 className="font-bold text-sm tracking-wider uppercase font-mono text-[var(--primary)]">
                       Jadwal P5M (Pembicaraan 5 Menit) — Preparation &amp; Laboratory
                     </h2>
                     <p className="text-xs text-[var(--text-muted)] font-mono">
