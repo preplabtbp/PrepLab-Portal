@@ -7,7 +7,7 @@ import { InspectorSignatures, SignatureData } from '../InspectorSignatures';
 
 const APD_ITEMS = ['Seragam', 'Helm', 'Sepatu', 'Masker', 'Ear Plug', 'Kacamata'];
 
-export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit }: { formId: string, inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void }) {
+export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit, autoFillAllYa }: { formId: string, inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number }) {
   const [employees, setEmployees] = useState<any[]>([]);
   const [manualEmployees, setManualEmployees] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,6 +90,25 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit }: { for
     setTabelData(initialData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredEmployees, manualEmployees]);
+
+  useEffect(() => {
+    if (autoFillAllYa && autoFillAllYa > 0) {
+      const newTabelData: Record<string, any> = {};
+      [...filteredEmployees, ...manualEmployees].forEach(e => {
+        const key = e.nama || e.nik;
+        if (key) {
+          newTabelData[key] = {
+            nama: e.nama,
+            jabatan: e.jabatan,
+            kehadiran: 'Hadir',
+            apd: [false, false, false, false, false, false],
+            ket: ''
+          };
+        }
+      });
+      setTabelData(newTabelData);
+    }
+  }, [autoFillAllYa, filteredEmployees, manualEmployees]);
 
   const handleRowChange = (nama: string, field: string, value: any) => {
     setTabelData(prev => ({

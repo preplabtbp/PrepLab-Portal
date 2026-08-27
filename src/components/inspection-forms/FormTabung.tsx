@@ -1,16 +1,29 @@
 import { toast } from 'sonner';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { uploadPhotoToDrive } from '../../sheets-api';
 import { Card, Button, Input } from '../ui';
 import { Camera, AlertCircle, FileText } from 'lucide-react';
 import { InspectorSignatures, SignatureData } from '../InspectorSignatures';
 
-export function FormTabung({ data, inspectorName, inspectorNik, onSubmit }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void }) {
+export function FormTabung({ data, inspectorName, inspectorNik, onSubmit, autoFillAllYa }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number }) {
   const [regTabung, setRegTabung] = useState('');
   const [nikInsp, setNikInsp] = useState(inspectorNik);
   const [namaAtasan, setNamaAtasan] = useState('');
   const [catatan, setCatatan] = useState('');
   const [answers, setAnswers] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
+      const allAnswers: Record<string, any> = {};
+      data.forEach(q => {
+        const id = q.id_pertanyaan || q.idPertanyaan || q.id;
+        if (id) {
+          allAnswers[id] = { status: 'YA', ket: '' };
+        }
+      });
+      setAnswers(allAnswers);
+    }
+  }, [autoFillAllYa, data]);
   const [signatureData, setSignatureData] = useState<SignatureData | null>(null);
   
   const [fotoBukti, setFotoBukti] = useState<string>('');

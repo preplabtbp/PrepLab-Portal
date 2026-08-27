@@ -1,14 +1,27 @@
 import { toast } from 'sonner';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { uploadPhotoToDrive } from '../../sheets-api';
 import { Card, Button, Input, Select } from '../ui';
 import { ChevronDown, PlusCircle, Trash2, Camera, ShieldAlert } from 'lucide-react';
 import { InspectorSignatures, SignatureData } from '../InspectorSignatures';
 import { TemuanItem, TemuanSection } from './TemuanSection';
 
-export function FormUmum({ data, inspectorName, inspectorNik, onSubmit }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void }) {
+export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFillAllYa }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number }) {
   const [subArea, setSubArea] = useState('');
   const [answers, setAnswers] = useState<Record<string, { jawaban: string, ket: string }>>({});
+
+  useEffect(() => {
+    if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
+      const allAnswers: Record<string, { jawaban: string, ket: string }> = {};
+      data.forEach(q => {
+        const id = q.id_pertanyaan || q.idPertanyaan || q.id;
+        if (id) {
+          allAnswers[id] = { jawaban: 'YA', ket: '' };
+        }
+      });
+      setAnswers(allAnswers);
+    }
+  }, [autoFillAllYa, data]);
   const [temuan, setTemuan] = useState<TemuanItem[]>([]);
   
   const [fotoBukti, setFotoBukti] = useState<string | null>(null);

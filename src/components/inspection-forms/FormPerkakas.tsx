@@ -1,12 +1,25 @@
 import { toast } from 'sonner';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { uploadPhotoToDrive } from '../../sheets-api';
 import { Card, Button, Input } from '../ui';
 import { Camera, MapPin, Tag, Barcode, Wrench } from 'lucide-react';
 import { InspectorSignatures, SignatureData } from '../InspectorSignatures';
 
-export function FormPerkakas({ data, inspectorName, inspectorNik, onSubmit }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void }) {
+export function FormPerkakas({ data, inspectorName, inspectorNik, onSubmit, autoFillAllYa }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number }) {
   const [answers, setAnswers] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
+      const allAnswers: Record<string, any> = {};
+      data.forEach(q => {
+        const id = q.id_pertanyaan || q.idPertanyaan || q.id;
+        if (id) {
+          allAnswers[id] = { kondisi: 'BAIK', ket: '' };
+        }
+      });
+      setAnswers(allAnswers);
+    }
+  }, [autoFillAllYa, data]);
   const [fotoBukti, setFotoBukti] = useState<string>('');
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [signatureData, setSignatureData] = useState<SignatureData | null>(null);

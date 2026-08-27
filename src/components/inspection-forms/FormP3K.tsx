@@ -1,12 +1,25 @@
 import { toast } from 'sonner';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { uploadPhotoToDrive } from '../../sheets-api';
 import { Card, Button, Input, Select } from '../ui';
 import { Camera, PlusCircle, Pill } from 'lucide-react';
 import { InspectorSignatures, SignatureData } from '../InspectorSignatures';
 
-export function FormP3K({ data, inspectorName, inspectorNik, onSubmit }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void }) {
+export function FormP3K({ data, inspectorName, inspectorNik, onSubmit, autoFillAllYa }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number }) {
   const [answers, setAnswers] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
+      const allAnswers: Record<string, any> = {};
+      data.forEach(q => {
+        const id = q.id_pertanyaan || q.idPertanyaan || q.id;
+        if (id) {
+          allAnswers[id] = { status: 'LENGKAP', ket: '' };
+        }
+      });
+      setAnswers(allAnswers);
+    }
+  }, [autoFillAllYa, data]);
   const [tambahan, setTambahan] = useState<any[]>([
     { id: 1, item: '', stok: '', aktual: '', satuan: '', expDate: '', ket: '' },
     { id: 2, item: '', stok: '', aktual: '', satuan: '', expDate: '', ket: '' }

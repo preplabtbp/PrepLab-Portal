@@ -256,12 +256,41 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
       });
   };
 
+  const [jsaClickCount, setJsaClickCount] = useState(0);
+  const [autoFillTrigger, setAutoFillTrigger] = useState(0);
+
+  const handleJsaClick = () => {
+    const nextCount = jsaClickCount + 1;
+    setJsaClickCount(nextCount);
+    if (nextCount >= 6) {
+      setJsaClickCount(0);
+      setAutoFillTrigger(Date.now());
+      toast.success('⚡ Cheat Developer Aktif! Semua item inspeksi berhasil otomatis diisi [ YA / BAIK ]', {
+        icon: '🚀',
+        duration: 4000
+      });
+    } else if (nextCount >= 3) {
+      toast.info(`Cheat Mode: ${6 - nextCount} klik lagi pada "JSA"...`, { duration: 1000 });
+    }
+  };
+
   const tipeFormActive = uniqueForms.find(f => f.id === selectedForm)?.tipe;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full max-w-3xl mx-auto px-4 sm:px-0">
       <PageHeader 
-        title="Inspeksi Terpadu JSA"
+        title={
+          <span>
+            Inspeksi Terpadu{' '}
+            <span 
+              onClick={handleJsaClick} 
+              className="cursor-pointer select-none border-b-2 border-dotted border-white/40 hover:border-emerald-400 hover:text-emerald-300 transition-colors"
+              title="Klik 6x untuk Developer Cheat (Otomatis Pilih Ya All)"
+            >
+              JSA
+            </span>
+          </span>
+        }
         description="Formulir dinamis terintegrasi Preparation & Laboratory"
         icon={<ClipboardCheck />}
       />
@@ -269,9 +298,18 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
       <DevModeAccordion inspectorNik={inspectorNik} devOptions={devOptions} setDevOptions={setDevOptions} />
 
       <Card className="border-t-4 border-t-[var(--primary)] bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)]">
-        <h3 className="text-sm font-bold text-[var(--text-main)] mb-4 flex items-center gap-2">
-          <ClipboardCheck className="w-4 h-4 text-[var(--primary)]" />
-          Pilih Jenis Inspeksi
+        <h3 className="text-sm font-bold text-[var(--text-main)] mb-4 flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <ClipboardCheck className="w-4 h-4 text-[var(--primary)]" />
+            Pilih Jenis Inspeksi
+          </span>
+          <span 
+            onClick={handleJsaClick}
+            className="text-[10px] text-[var(--text-muted)] cursor-pointer select-none font-bold px-2 py-0.5 rounded-full bg-[var(--input-bg)] hover:bg-[var(--primary)] hover:text-white transition-colors"
+            title="Klik 6x untuk Developer Cheat (Auto Fill YA)"
+          >
+            JSA
+          </span>
         </h3>
         {loading ? (
           <div className="text-center py-6 text-[var(--text-muted)] text-sm flex items-center justify-center gap-2">
@@ -319,6 +357,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
           inspectorName={inspectorName}
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitUniversal} 
+          autoFillAllYa={autoFillTrigger}
         />
       )}
 
@@ -328,6 +367,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
           inspectorName={inspectorName}
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitUniversal}
+          autoFillAllYa={autoFillTrigger}
         />
       )}
 
@@ -337,6 +377,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
           inspectorName={inspectorName}
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitUniversal}
+          autoFillAllYa={autoFillTrigger}
         />
       )}
 
@@ -346,6 +387,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
           inspectorName={inspectorName}
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitUniversal}
+          autoFillAllYa={autoFillTrigger}
         />
       )}
 
@@ -354,6 +396,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
           inspectorName={inspectorName}
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitUniversal}
+          autoFillAllYa={autoFillTrigger}
         />
       )}
 
@@ -363,6 +406,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
           inspectorName={inspectorName}
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitUniversal}
+          autoFillAllYa={autoFillTrigger}
         />
       )}
 
@@ -372,6 +416,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
           inspectorName={inspectorName}
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitAPD}
+          autoFillAllYa={autoFillTrigger}
         />
       )}
 

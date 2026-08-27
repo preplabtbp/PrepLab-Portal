@@ -1,14 +1,20 @@
 import { toast } from 'sonner';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { uploadPhotoToDrive } from '../../sheets-api';
 import { Card, Button, Input, Select } from '../ui';
 import { Camera, Layers, AlertCircle } from 'lucide-react';
 import { InspectorSignatures, SignatureData } from '../InspectorSignatures';
 
-export function FormTangga({ data, inspectorName, inspectorNik, onSubmit }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void }) {
+export function FormTangga({ data, inspectorName, inspectorNik, onSubmit, autoFillAllYa }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number }) {
   const [pilihan, setPilihan] = useState('');
   const [catatan, setCatatan] = useState('');
   const [checks, setChecks] = useState<number[]>(Array(11).fill(4)); // default all 4
+
+  useEffect(() => {
+    if (autoFillAllYa && autoFillAllYa > 0) {
+      setChecks(Array(11).fill(4));
+    }
+  }, [autoFillAllYa]);
 
   const [fotoBukti, setFotoBukti] = useState<string>('');
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);

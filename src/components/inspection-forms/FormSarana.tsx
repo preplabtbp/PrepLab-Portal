@@ -18,7 +18,7 @@ const ITEMS = [
   { id: 'Banb', label: 'Ban Belakang' }
 ];
 
-export function FormSarana({ inspectorName, inspectorNik, onSubmit }: { inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void }) {
+export function FormSarana({ inspectorName, inspectorNik, onSubmit, autoFillAllYa }: { inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number }) {
   const [signatureData, setSignatureData] = useState<SignatureData | null>(null);
   const [uploadingUnitId, setUploadingUnitId] = useState<number | null>(null);
   const [units, setUnits] = useState<any[]>([
@@ -30,6 +30,15 @@ export function FormSarana({ inspectorName, inspectorNik, onSubmit }: { inspecto
       checks: ITEMS.reduce((acc, curr) => ({ ...acc, [curr.id]: '✔' }), {}) 
     }
   ]);
+
+  React.useEffect(() => {
+    if (autoFillAllYa && autoFillAllYa > 0) {
+      setUnits(prev => prev.map(u => ({
+        ...u,
+        checks: ITEMS.reduce((acc, curr) => ({ ...acc, [curr.id]: '✔' }), {})
+      })));
+    }
+  }, [autoFillAllYa]);
 
   const handleAddUnit = () => {
     if (units.length >= 3) {
