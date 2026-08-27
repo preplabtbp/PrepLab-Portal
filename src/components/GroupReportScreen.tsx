@@ -442,26 +442,42 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           </div>
 
           {/* Quick Action Input Bar */}
-          <div className={`bg-[var(--card-bg)] border border-[var(--border-main)] p-2.5 sm:p-3 shrink-0 ${isFloating ? 'rounded-b-3xl rounded-t-none border-x-0 border-b-0' : 'rounded-3xl shadow-xl'}`}>
+          <div className={`bg-[var(--card-bg)] border-t border-[var(--border-main)] p-2.5 sm:p-3 shrink-0 ${isFloating ? 'rounded-b-3xl' : 'rounded-3xl shadow-xl border'}`}>
             <form onSubmit={handlePostReport} className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Input
-                  placeholder="Judul (cth: W35)..."
-                  value={pdfTitleInput}
-                  onChange={e => setPdfTitleInput(e.target.value)}
-                  className="bg-[var(--input-bg)] border-[var(--border-main)] text-[var(--text-main)] text-xs h-9 rounded-xl w-1/4"
-                />
-                <Input
-                  placeholder="URL Link PDF..."
-                  value={pdfUrlInput}
-                  onChange={e => setPdfUrlInput(e.target.value)}
-                  className="bg-[var(--input-bg)] border-[var(--border-main)] text-[var(--text-main)] text-xs h-9 rounded-xl flex-1 font-mono"
-                />
-              </div>
+              {/* Optional PDF Link input drawer if expanded or if link exists */}
+              {(showAttachModal || pdfUrlInput.trim()) && (
+                <div className="flex flex-col sm:flex-row gap-1.5 p-2 rounded-xl bg-[var(--input-bg)] border border-[var(--border-main)] animate-in fade-in duration-200">
+                  <Input
+                    placeholder="Judul Laporan (cth: HAZARD REPORT W35)..."
+                    value={pdfTitleInput}
+                    onChange={e => setPdfTitleInput(e.target.value)}
+                    className="bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)] text-xs h-8 rounded-lg flex-1 font-bold"
+                  />
+                  <Input
+                    placeholder="Link Google Drive PDF..."
+                    value={pdfUrlInput}
+                    onChange={e => setPdfUrlInput(e.target.value)}
+                    className="bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)] text-xs h-8 rounded-lg flex-1 font-mono"
+                  />
+                </div>
+              )}
 
               <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowAttachModal(!showAttachModal)}
+                  className={`p-2 rounded-xl border text-xs font-bold flex items-center justify-center transition-colors ${
+                    showAttachModal || pdfUrlInput.trim()
+                      ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-xs'
+                      : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:text-[var(--text-main)]'
+                  }`}
+                  title="Lampirkan Link PDF"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
+
                 <Input
-                  placeholder="Ketik catatan / rangkuman hasil inspeksi..."
+                  placeholder="Ketik catatan / rangkuman hasil inspeksi di sini..."
                   value={textInput}
                   onChange={e => setTextInput(e.target.value)}
                   className="flex-1 bg-[var(--input-bg)] border-[var(--border-main)] text-[var(--text-main)] placeholder:text-[var(--text-muted)] text-xs rounded-xl h-9"
