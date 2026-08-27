@@ -85,12 +85,12 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       title: 'Operasional & Maintenance',
       icon: <Activity className="w-5 h-5" />,
       color: 'teal' as const,
-      bgIcon: 'bg-teal-100 text-teal-600',
+      bgIcon: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20',
       items: [
         { id: 'inspect', title: "Inspeksi Harian", desc: "Checklist P2H harian", icon: <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('inspect') },
         ...(isLab ? [{ id: 'pemantauan', title: "Pantau Parameter", desc: "Suhu, kelembapan & gas", icon: <ThermometerSun className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('pemantauan') }] : []),
-        ...(isMaintenance ? [{ id: 'wo-list', title: "Daftar Work Order", desc: "Status & riwayat WO", icon: <Wrench className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => onNav('wo-list') }] : []),
-        { id: 'create-wo', title: "Buat Work Order", desc: "Form temuan kerusakan", icon: <PlusCircle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => onNav('create-wo') },
+        ...(isMaintenance ? [{ id: 'wo-list', title: "Daftar Work Order", desc: "Status & riwayat WO", icon: <Wrench className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('wo-list') }] : []),
+        { id: 'create-wo', title: "Buat Work Order", desc: "Form temuan kerusakan", icon: <PlusCircle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('create-wo') },
         { id: 'wo-dashboard', title: "Dashboard Maintenance", desc: "Rekap downtime & sparepart", icon: <LineChart className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('wo-maintenance-dashboard') },
       ]
     },
@@ -99,12 +99,12 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       title: 'Observasi & Pelaporan',
       icon: <ShieldCheck className="w-5 h-5" />,
       color: 'amber' as const,
-      bgIcon: 'bg-amber-100 text-amber-600',
+      bgIcon: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20',
       items: [
         { id: 'weekly-inspection', title: "Inspeksi Mingguan", desc: "Area & kelengkapan", icon: <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('weekly-inspection') },
         { id: 'ticket', title: "Rekapan Temuan Inspeksi", desc: "Laporan temuan unsafe", icon: <Eye className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('ticket') },
-        { id: 'kta', title: "KTA / TTA", desc: "Laporan KTA & TTA", icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => setShowKtaConfirmation(true) },
-        { id: 'general-inspection', title: "Submit General Inspection", desc: "Form inspeksi tim safety", icon: <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => window.open('https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform', '_blank', 'noopener,noreferrer') },
+        { id: 'kta', title: "KTA / TTA", desc: "Laporan KTA & TTA", icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => setShowKtaConfirmation(true) },
+        { id: 'general-inspection', title: "Submit General Inspection", desc: "Form inspeksi tim safety", icon: <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => window.open('https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform', '_blank', 'noopener,noreferrer') },
       ]
     },
     ...(hasInventoryAccess ? [{
@@ -112,7 +112,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       title: 'Inventory Control (APD)',
       icon: <Package className="w-5 h-5" />,
       color: 'purple' as const,
-      bgIcon: 'bg-purple-100 text-purple-600',
+      bgIcon: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20',
       items: [
         { id: 'apd-input', title: "Distribusi APD", desc: "Riwayat & input", icon: <Box className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'purple', action: () => onNav('apd-input') },
         { id: 'apd-monitoring', title: "Monitoring Dokumen", desc: "Status tanda tangan", icon: <FileText className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'purple', action: () => onNav('apd-monitoring') },
@@ -124,42 +124,42 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       title: 'Pelatihan & Edukasi',
       icon: <BookOpen className="w-5 h-5" />,
       color: 'blue' as const,
-      bgIcon: 'bg-blue-100 text-blue-600',
+      bgIcon: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20',
       items: [
         { id: 'quiz', title: "Quiz Safety & SOP", desc: "Uji pemahaman prosedur", icon: <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => onNav('quiz') },
         { id: 'manual', title: "Buku Panduan", desc: "User Manual Sistem", icon: <Info className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => onNav('manual') },
-        ...(isQA ? [{ id: 'quiz-admin', title: "Manajemen Quiz", desc: "Tambah, Edit & Hapus Soal", icon: <Settings className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('quiz-admin') }] : []),
+        ...(isQA ? [{ id: 'quiz-admin', title: "Manajemen Quiz", desc: "Tambah, Edit & Hapus Soal", icon: <Settings className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => onNav('quiz-admin') }] : []),
       ]
     },
     {
       id: 'admin',
       title: 'Administrasi & HR',
       icon: <Briefcase className="w-5 h-5" />,
-      color: 'slate' as const,
-      bgIcon: 'bg-slate-200 text-slate-700',
+      color: 'indigo' as const,
+      bgIcon: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20',
       items: [
-        { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('induksi') },
-        { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('employee-database') },
-        ...(isQA ? [{ id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('p5m') }] : []),
-        { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('agenda') },
-        { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('roster-admin') },
-        { id: 'food-report', title: "Lapor Makan", desc: "Status konsumsi", icon: <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'orange', action: () => setShowFoodReportModal(true), highlight: true },
+        { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('induksi') },
+        { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('employee-database') },
+        ...(isQA ? [{ id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('p5m') }] : []),
+        { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('agenda') },
+        { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('roster-admin') },
+        { id: 'food-report', title: "Lapor Makan", desc: "Status konsumsi", icon: <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => setShowFoodReportModal(true) },
       ]
     },
     {
       id: 'dashboard',
       title: 'Dashboards',
       icon: <LayoutDashboard className="w-5 h-5" />,
-      color: 'indigo' as const,
-      bgIcon: 'bg-indigo-100 text-indigo-600',
+      color: 'rose' as const,
+      bgIcon: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20',
       items: [
-        { id: 'wo-maintenance-dashboard', title: "WO Maintenance", desc: "Downtime & sparepart", icon: <Wrench className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('wo-maintenance-dashboard') },
-        { id: 'adm-dashboard', title: "Administrasi", desc: "Kehadiran personel", icon: <User className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('adm-dashboard') },
+        { id: 'wo-maintenance-dashboard', title: "WO Maintenance", desc: "Downtime & sparepart", icon: <Wrench className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => onNav('wo-maintenance-dashboard') },
+        { id: 'adm-dashboard', title: "Administrasi", desc: "Kehadiran personel", icon: <User className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => onNav('adm-dashboard') },
         { id: 'pelanggaran-dashboard', title: "Pelanggaran", desc: "SP & Konseling aktif", icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => onNav('pelanggaran-dashboard') },
-        { id: 'sap-dashboard', title: "SAP Dashboard", desc: "Inspeksi & Temuan", icon: <LineChart className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('sap-dashboard') },
-        { id: 'monitoring', title: "Pemantauan", desc: "Suhu, Kelembapan, Gas", icon: <Activity className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('monitoring') },
+        { id: 'sap-dashboard', title: "SAP Dashboard", desc: "Inspeksi & Temuan", icon: <LineChart className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => onNav('sap-dashboard') },
+        { id: 'monitoring', title: "Pemantauan", desc: "Suhu, Kelembapan, Gas", icon: <Activity className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => onNav('monitoring') },
         ...(isDeveloper ? [
-          { id: 'admin-dashboard', title: "Developer", desc: "Manajemen Database", icon: <Settings className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'slate', action: () => onNav('admin-dashboard') }
+          { id: 'admin-dashboard', title: "Developer", desc: "Manajemen Database", icon: <Settings className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => onNav('admin-dashboard') }
         ] : [])
       ]
     }
