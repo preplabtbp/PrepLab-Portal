@@ -129,15 +129,15 @@ export function FormP3K({ data, inspectorName, inspectorNik, onSubmit }: { data:
       {data.map((q, idx) => {
         const ans = answers[q.item] || {};
         return (
-          <Card key={idx} className="border-l-4 border-l-blue-500 p-4 space-y-4">
+          <Card key={idx} className="border-l-4 border-l-blue-500 p-4 space-y-4 bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)]">
             <div>
-              <h6 className="font-semibold text-slate-800 text-sm mb-1">{idx + 1}. {q.item}</h6>
-              <p className="text-xs text-slate-500">Standar: {q.info1 || '-'}</p>
+              <h6 className="font-bold text-[var(--text-main)] text-sm mb-1">{idx + 1}. {q.item}</h6>
+              <p className="text-xs text-[var(--text-muted)]">Standar: {q.info1 || '-'}</p>
             </div>
             
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">Stok</label>
+                <label className="text-xs font-bold text-[var(--text-muted)] block mb-1">Stok</label>
                 <Select value={ans.stok || ''} onChange={e => handleAnswer(q.item, 'stok', e.target.value)}>
                   <option value="">Pilih</option>
                   <option value="Ada">Ada</option>

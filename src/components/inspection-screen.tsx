@@ -263,13 +263,13 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
       ) : (
         <>
           <div className="flex items-center gap-2 mb-2">
-            <button onClick={() => setActiveCategory(null)} className="p-2 -ml-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600">
+            <button onClick={() => setActiveCategory(null)} className="p-2 -ml-2 hover:bg-[var(--input-bg)] rounded-lg transition-colors text-[var(--text-muted)] hover:text-[var(--text-main)]">
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <h3 className="text-sm font-semibold text-slate-600 tracking-wide uppercase">{activeCategory}</h3>
+            <h3 className="text-sm font-bold text-[var(--text-main)] tracking-wide uppercase">{activeCategory}</h3>
           </div>
 
-          <div className="w-full bg-slate-200 rounded-full h-1.5 mb-2">
+          <div className="w-full bg-[var(--input-bg)] rounded-full h-1.5 mb-2">
             <div className="bg-teal-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
           </div>
 
@@ -283,7 +283,7 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
               }, {} as Record<string, ToolRecord[]>)
             ).map(([categoryName, tools]) => (
               <div key={categoryName} className="space-y-3">
-                <h4 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2 px-1">{categoryName}</h4>
+                <h4 className="text-sm font-bold text-[var(--text-main)] border-b border-[var(--border-main)] pb-2 px-1">{categoryName}</h4>
                 {tools.map((tool, tIdx) => {
                   const s = statuses[tool.id];
                   const isChecklist = categoryName === 'Alat & Instrument';
@@ -292,22 +292,22 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
                     const isGood = s?.condition === 'Good';
                     const isIssue = s?.condition === 'Minor Issue' || s?.condition === 'Breakdown';
                     return (
-                      <div key={`${tool.id}-${tIdx}`} className="flex flex-col p-4 bg-white border border-slate-200 rounded-2xl shadow-sm transition-all hover:border-slate-300 gap-4">
+                      <div key={`${tool.id}-${tIdx}`} className="flex flex-col p-4 bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl shadow-sm transition-all hover:border-slate-300 gap-4 text-[var(--text-main)]">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div className="flex-1 cursor-pointer" onClick={() => handleOpenInfo(tool.id)}>
                             <div className="flex items-center gap-2">
-                              <span className="font-medium text-slate-700">
+                              <span className="font-bold text-[var(--text-main)]">
                                 {tool.name}
                                 {tool.location && (
-                                  <span className="text-slate-400 font-normal text-xs ml-2">
+                                  <span className="text-[var(--text-muted)] font-normal text-xs ml-2">
                                     • {tool.location}
                                   </span>
                                 )}
                               </span>
-                              <ChevronRight className="w-4 h-4 text-slate-300" />
+                              <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
                             </div>
                             {isIssue && (
-                              <div className="text-xs text-rose-500 mt-1.5 font-medium bg-rose-50 inline-block px-2 py-0.5 rounded">
+                              <div className="text-xs text-rose-500 dark:text-rose-400 mt-1.5 font-bold bg-rose-50 dark:bg-rose-950/60 inline-block px-2 py-0.5 rounded">
                                 {s.condition}: {s.notes.substring(0, 30)}{s.notes.length > 30 ? '...' : ''}
                               </div>
                             )}
@@ -315,31 +315,31 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
                           <div className="flex gap-2 shrink-0">
                             <button 
                               onClick={() => handleSetGood(tool.id)}
-                              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isGood ? 'bg-teal-500 text-white shadow-md' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+                              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isGood ? 'bg-teal-500 text-white shadow-md' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:bg-[var(--bg-main)]'}`}
                             >
                               <Check className="w-6 h-6" />
                             </button>
                             <button 
                               onClick={() => handleOpenIssue(tool.id)}
-                              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isIssue ? 'bg-rose-500 text-white shadow-md' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+                              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${isIssue ? 'bg-rose-500 text-white shadow-md' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:bg-[var(--bg-main)]'}`}
                             >
                               <Wrench className="w-5 h-5" />
                             </button>
                           </div>
                         </div>
                         {isGood && (
-                          <div className="pt-3 mt-1 border-t border-slate-100 animate-in slide-in-from-top-2 fade-in">
-                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Pengecekan Rutin (P2H)</p>
+                          <div className="pt-3 mt-1 border-t border-[var(--border-main)] animate-in slide-in-from-top-2 fade-in">
+                            <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wide mb-3">Pengecekan Rutin (P2H)</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               {['Body Dalam Bersih', 'Body Luar Bersih', 'Kondisi Alat Aman', 'Electrical Aman'].map(item => (
-                                <label key={item} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
+                                <label key={item} className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border-main)] cursor-pointer hover:bg-[var(--input-bg)] transition-colors bg-[var(--card-bg)]">
                                   <input 
                                     type="checkbox" 
-                                    className="w-5 h-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 bg-white"
+                                    className="w-5 h-5 rounded border-[var(--border-main)] text-teal-600 focus:ring-teal-500 bg-[var(--input-bg)]"
                                     checked={(s.goodChecklist || []).includes(item)}
                                     onChange={() => toggleGoodChecklist(tool.id, item)}
                                   />
-                                  <span className="text-sm font-medium text-slate-700">{item}</span>
+                                  <span className="text-sm font-bold text-[var(--text-main)]">{item}</span>
                                 </label>
                               ))}
                             </div>
@@ -349,18 +349,18 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
                     );
                   } else {
                     return (
-                      <div key={`${tool.id}-${tIdx}`} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl shadow-sm transition-all hover:border-slate-300 gap-4">
+                      <div key={`${tool.id}-${tIdx}`} className="flex items-center justify-between p-4 bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl shadow-sm transition-all hover:border-slate-300 gap-4 text-[var(--text-main)]">
                         <div className="flex-1 cursor-pointer" onClick={() => handleOpenInfo(tool.id)}>
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-slate-700">
+                            <span className="font-bold text-[var(--text-main)]">
                               {tool.name}
                               {tool.location && (
-                                <span className="text-slate-400 font-normal text-xs ml-2">
+                                <span className="text-[var(--text-muted)] font-normal text-xs ml-2">
                                   • {tool.location}
                                 </span>
                               )}
                             </span>
-                            <ChevronRight className="w-4 h-4 text-slate-300" />
+                            <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
                           </div>
                         </div>
                         <div className="w-32 shrink-0">
@@ -368,7 +368,7 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
                             type="number"
                             min="0"
                             placeholder="Jumlah"
-                            className="text-center font-semibold"
+                            className="text-center font-bold bg-[var(--input-bg)] border-[var(--border-main)] text-[var(--text-main)]"
                             value={s?.condition?.replace('Jumlah: ', '') || ''}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -402,12 +402,12 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
 
       {/* ISSUE MODAL */}
       {issueModalOpen && selectedToolId && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 fade-in duration-300 max-h-[90vh] overflow-y-auto">
-            <h3 className="font-display font-semibold text-xl text-slate-800 mb-1">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 fade-in duration-300 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-display font-bold text-xl text-[var(--text-main)] mb-1">
               Catatan Kerusakan
             </h3>
-            <p className="text-sm text-slate-500 mb-6 font-medium">{currentTool?.name}</p>
+            <p className="text-sm text-[var(--text-muted)] mb-6 font-medium">{currentTool?.name}</p>
             
             <div className="space-y-5">
               <div className="bg-rose-50 border border-rose-200 text-rose-700 py-3 text-center rounded-xl font-semibold tracking-wide shadow-sm">

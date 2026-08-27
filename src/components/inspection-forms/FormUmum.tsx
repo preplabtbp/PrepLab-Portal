@@ -141,7 +141,7 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit }: { data
   return (
     <div className="space-y-6">
       <Card className="border-l-4 border-l-blue-500">
-        <label className="text-sm font-semibold text-slate-700 mb-2 block">Pilih Lokasi Spesifik <span className="text-rose-500">*</span></label>
+        <label className="text-sm font-bold text-[var(--text-main)] mb-2 block">Pilih Lokasi Spesifik <span className="text-rose-500">*</span></label>
         <Select value={subArea} onChange={e => setSubArea(e.target.value)} className="w-full">
           <option value="">-- Pilih Lokasi / Sub-Area --</option>
           {subAreas.map(area => (
@@ -158,34 +158,34 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit }: { data
             const relevantQuestions = questions.filter(isQuestionRelevant);
             if (relevantQuestions.length === 0) return null;
             return (
-              <Card key={kategori} className="overflow-hidden p-0 border border-slate-200">
-                <div className="bg-slate-50 px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-800">{kategori}</h3>
-                  <span className="text-xs font-medium text-rose-600 bg-rose-100 px-2 py-1 rounded-full">{relevantQuestions.length} Item</span>
+              <Card key={kategori} className="overflow-hidden p-0 border border-[var(--border-main)]">
+                <div className="bg-[var(--input-bg)] px-4 py-3 border-b border-[var(--border-main)] flex items-center justify-between">
+                  <h3 className="font-bold text-[var(--text-main)]">{kategori}</h3>
+                  <span className="text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-950/60 px-2.5 py-1 rounded-full">{relevantQuestions.length} Item</span>
                 </div>
                 <div className="p-4 space-y-5">
                   {relevantQuestions.map((q, idx) => {
                     const ans = answers[q.item];
                     return (
-                      <div key={idx} className="pb-4 border-b border-slate-100 last:border-0 last:pb-0">
-                        <p className="text-sm font-medium text-slate-800 mb-3">{q.item}</p>
+                      <div key={idx} className="pb-4 border-b border-[var(--border-main)] last:border-0 last:pb-0">
+                        <p className="text-sm sm:text-base font-bold text-[var(--text-main)] mb-3 leading-relaxed">{q.item}</p>
                         
                         <div className="flex gap-2 mb-3">
                           <button
                             onClick={() => handleAnswer(q.item, 'YA')}
-                            className={`flex-1 py-2 text-sm font-bold rounded-lg border ${ans?.jawaban === 'YA' ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : 'bg-white text-emerald-600 border-emerald-200 hover:bg-emerald-50'} transition-all`}
+                            className={`flex-1 py-2 text-sm font-bold rounded-lg border ${ans?.jawaban === 'YA' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-[var(--card-bg)] text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'} transition-all`}
                           >
                             YA
                           </button>
                           <button
                             onClick={() => handleAnswer(q.item, 'TIDAK')}
-                            className={`flex-1 py-2 text-sm font-bold rounded-lg border ${ans?.jawaban === 'TIDAK' ? 'bg-rose-500 text-white border-rose-600 shadow-sm' : 'bg-white text-rose-600 border-rose-200 hover:bg-rose-50'} transition-all`}
+                            className={`flex-1 py-2 text-sm font-bold rounded-lg border ${ans?.jawaban === 'TIDAK' ? 'bg-rose-600 text-white border-rose-600 shadow-sm' : 'bg-[var(--card-bg)] text-rose-600 dark:text-rose-400 border-rose-300 dark:border-rose-700/60 hover:bg-rose-50 dark:hover:bg-rose-950/30'} transition-all`}
                           >
                             TDK
                           </button>
                           <button
                             onClick={() => handleAnswer(q.item, 'N/A')}
-                            className={`flex-1 py-2 text-sm font-bold rounded-lg border ${ans?.jawaban === 'N/A' ? 'bg-slate-500 text-white border-slate-600 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'} transition-all`}
+                            className={`flex-1 py-2 text-sm font-bold rounded-lg border ${ans?.jawaban === 'N/A' ? 'bg-slate-600 text-white border-slate-600 shadow-sm' : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:bg-[var(--input-bg)]'} transition-all`}
                           >
                             N/A
                           </button>
@@ -195,7 +195,7 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit }: { data
                           placeholder="Keterangan / Detail temuan (Opsional)..."
                           value={ans?.ket || ''}
                           onChange={(e) => handleKeterangan(q.item, e.target.value)}
-                          className="bg-slate-50 border-slate-200 text-sm"
+                          className="bg-[var(--input-bg)] border-[var(--border-main)] text-[var(--text-main)] placeholder:text-[var(--text-muted)] text-sm"
                         />
                       </div>
                     );
@@ -208,11 +208,12 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit }: { data
           <TemuanSection temuan={temuan} setTemuan={setTemuan} />
           
           <Card>
-            <label className="text-sm font-semibold text-slate-700 mb-2 block">Catatan Tambahan (Bila Ada)</label>
+            <label className="text-sm font-bold text-[var(--text-main)] mb-2 block">Catatan Tambahan (Bila Ada)</label>
             <Input 
               value={catatan}
               onChange={e => setCatatan(e.target.value)}
               placeholder="Tulis ringkasan atau catatan keseluruhan..."
+              className="bg-[var(--input-bg)] border-[var(--border-main)] text-[var(--text-main)] placeholder:text-[var(--text-muted)]"
             />
           </Card>
           

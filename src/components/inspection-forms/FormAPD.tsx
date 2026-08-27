@@ -238,38 +238,38 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit }: { for
                 // Let's implement a clean custom accordion relying on pure CSS or HTML native details/summary for best performance on long lists.
                 
                 return (
-                  <details key={emp.nama} className={`group bg-white rounded-xl shadow-sm border ${hasWarning ? 'border-amber-300' : 'border-slate-200'} overflow-hidden`}>
-                    <summary className={`p-3 pr-4 flex justify-between items-center cursor-pointer list-none select-none ${hasWarning ? 'bg-amber-50/30' : ''}`}>
+                  <details key={emp.nama} className={`group bg-[var(--card-bg)] text-[var(--text-main)] rounded-xl shadow-sm border ${hasWarning ? 'border-amber-300 dark:border-amber-700' : 'border-[var(--border-main)]'} overflow-hidden`}>
+                    <summary className={`p-3 pr-4 flex justify-between items-center cursor-pointer list-none select-none ${hasWarning ? 'bg-amber-500/10' : ''}`}>
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${hasWarning ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${hasWarning ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
                           {empIdx + 1}
                         </div>
                         <div>
-                          <h4 className="font-bold text-slate-800 text-sm leading-tight">{emp.nama}</h4>
+                          <h4 className="font-bold text-[var(--text-main)] text-sm leading-tight">{emp.nama}</h4>
                           <div className="flex gap-2 mt-1 xl:mt-0.5">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAbsent ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-700'}`}>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAbsent ? 'bg-[var(--input-bg)] text-[var(--text-muted)]' : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'}`}>
                               {row.kehadiran}
                             </span>
                             {hasApdIssue && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300">
                                 ❌ APD Bermasalah
                               </span>
                             )}
                           </div>
                         </div>
                       </div>
-                      <div className="text-slate-400 group-open:rotate-180 transition-transform">
+                      <div className="text-[var(--text-muted)] group-open:rotate-180 transition-transform">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                       </div>
                     </summary>
 
-                    <div className="p-4 bg-slate-50 border-t border-slate-100 space-y-4">
+                    <div className="p-4 bg-[var(--input-bg)] border-t border-[var(--border-main)] space-y-4">
                       <div>
-                        <label className="text-xs font-semibold text-slate-600 block mb-1">Kehadiran</label>
+                        <label className="text-xs font-bold text-[var(--text-main)] block mb-1">Kehadiran</label>
                         <Select 
                           value={row.kehadiran} 
                           onChange={e => handleRowChange(emp.nama, 'kehadiran', e.target.value)}
-                          className="w-full text-sm mb-0"
+                          className="w-full text-sm mb-0 bg-[var(--card-bg)] text-[var(--text-main)] border-[var(--border-main)]"
                         >
                           <option value="Hadir">Hadir</option>
                           <option value="Pindah ke shift lain">Pindah ke shift lain</option>
@@ -282,14 +282,14 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit }: { for
                       </div>
 
                       {!isAbsent && (
-                        <div className="bg-white p-3 rounded-lg border border-slate-200">
-                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2 text-center">
+                        <div className="bg-[var(--card-bg)] p-3 rounded-lg border border-[var(--border-main)]">
+                          <label className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-2 text-center">
                             Kondisi APD (Pilih ❌ jika Bermasalah)
                           </label>
                           <div className="grid grid-cols-2 gap-2">
                             {APD_ITEMS.map((item, idx) => (
-                              <div key={item} className="bg-slate-50 px-2 py-1.5 rounded-md border border-slate-100 flex items-center justify-between">
-                                <span className="text-[11px] font-semibold text-slate-700">{item}</span>
+                              <div key={item} className="bg-[var(--input-bg)] px-2 py-1.5 rounded-md border border-[var(--border-main)] flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-[var(--text-main)]">{item}</span>
                                 <div className="flex gap-1">
                                   <button
                                     onClick={() => handleApdChange(emp.nama, idx, false)}

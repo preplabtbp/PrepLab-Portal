@@ -187,19 +187,19 @@ export function FormTabung({ data, inspectorName, inspectorNik, onSubmit }: { da
         const isTdk = ans.jawaban === 'TIDAK';
 
         return (
-          <Card key={idx} className="border-l-4 border-l-sky-500 p-4 space-y-4">
-            <h6 className="font-semibold text-slate-800 text-sm">{idx + 1}. {q.item}</h6>
+          <Card key={idx} className="border-l-4 border-l-sky-500 p-4 space-y-4 bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)]">
+            <h6 className="font-bold text-[var(--text-main)] text-sm">{idx + 1}. {q.item}</h6>
             
             <div className="flex gap-2">
               <button
                 onClick={() => handleAnswer(q.item, 'jawaban', 'YA')}
-                className={`flex-1 py-2 text-sm font-bold rounded-lg border ${ans.jawaban === 'YA' ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : 'bg-white text-emerald-600 border-emerald-200 hover:bg-emerald-50'} transition-all`}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg border ${ans.jawaban === 'YA' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-[var(--card-bg)] text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'} transition-all`}
               >
                 YA
               </button>
               <button
                 onClick={() => handleAnswer(q.item, 'jawaban', 'TIDAK')}
-                className={`flex-1 py-2 text-sm font-bold rounded-lg border ${isTdk ? 'bg-rose-500 text-white border-rose-600 shadow-sm' : 'bg-white text-rose-600 border-rose-200 hover:bg-rose-50'} transition-all`}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg border ${isTdk ? 'bg-rose-600 text-white border-rose-600 shadow-sm' : 'bg-[var(--card-bg)] text-rose-600 dark:text-rose-400 border-rose-300 dark:border-rose-700/60 hover:bg-rose-50 dark:hover:bg-rose-950/30'} transition-all`}
               >
                 TIDAK
               </button>

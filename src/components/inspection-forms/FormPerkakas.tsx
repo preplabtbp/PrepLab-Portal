@@ -108,22 +108,22 @@ export function FormPerkakas({ data, inspectorName, inspectorNik, onSubmit }: { 
         const maxP = q.info4 || "4";
         const ans = answers[q.item] || {};
         return (
-          <Card key={idx} className="border-l-4 border-l-amber-500 p-4 space-y-4">
-            <h6 className="font-semibold text-slate-800 text-sm">{idx + 1}. {q.item}</h6>
+          <Card key={idx} className="border-l-4 border-l-amber-500 p-4 space-y-4 bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)]">
+            <h6 className="font-bold text-[var(--text-main)] text-sm">{idx + 1}. {q.item}</h6>
             
             <div className="flex flex-wrap gap-2 text-[11px] font-medium">
-              <span className="flex items-center gap-1 bg-slate-100 border border-slate-200 text-slate-600 px-2 py-1 rounded-md">
+              <span className="flex items-center gap-1 bg-[var(--input-bg)] border border-[var(--border-main)] text-[var(--text-muted)] px-2 py-1 rounded-md">
                 <Tag className="w-3 h-3" /> {q.info1 || '-'}
               </span>
-              <span className="flex items-center gap-1 bg-slate-100 border border-slate-200 text-slate-600 px-2 py-1 rounded-md">
+              <span className="flex items-center gap-1 bg-[var(--input-bg)] border border-[var(--border-main)] text-[var(--text-muted)] px-2 py-1 rounded-md">
                 <Barcode className="w-3 h-3" /> {q.info2 || '-'}
               </span>
-              <span className="flex items-center gap-1 bg-slate-100 border border-slate-200 text-slate-600 px-2 py-1 rounded-md">
+              <span className="flex items-center gap-1 bg-[var(--input-bg)] border border-[var(--border-main)] text-[var(--text-muted)] px-2 py-1 rounded-md">
                 <MapPin className="w-3 h-3" /> {q.info3 || '-'}
               </span>
             </div>
 
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 flex flex-col md:flex-row gap-3">
+            <div className="bg-[var(--input-bg)] p-3 rounded-lg border border-[var(--border-main)] flex flex-col md:flex-row gap-3">
               <div className="flex-1">
                 <label className="text-xs font-semibold text-primary block mb-1">Point Aktual</label>
                 <div className="flex bg-white rounded-lg overflow-hidden border border-primary/20">

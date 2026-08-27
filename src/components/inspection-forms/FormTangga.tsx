@@ -176,18 +176,18 @@ export function FormTangga({ data, inspectorName, inspectorNik, onSubmit }: { da
 
       {pilihan && (
         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-          <Card className="bg-slate-50 border border-slate-200 p-0 overflow-hidden">
-            <div className="bg-white px-5 py-4 border-b border-slate-200">
-              <h3 className="font-bold text-primary flex items-center gap-2">
+          <Card className="bg-[var(--card-bg)] border border-[var(--border-main)] p-0 overflow-hidden text-[var(--text-main)]">
+            <div className="bg-[var(--input-bg)] px-5 py-4 border-b border-[var(--border-main)]">
+              <h3 className="font-bold text-[var(--primary)] flex items-center gap-2">
                 <Layers className="w-5 h-5" /> Formulir Pengecekan
               </h3>
-              <p className="text-xs text-slate-500 mt-1">Isi Nilai Aktual 1-4. Nilai kurang dari 4 wajib mengisi catatan.</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Isi Nilai Aktual 1-4. Nilai kurang dari 4 wajib mengisi catatan.</p>
             </div>
             
             <div className="p-5 space-y-4">
               {listPertanyaan.map((pert, idx) => (
-                <div key={idx} className="flex justify-between items-center gap-4 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                  <label className="text-xs font-semibold text-slate-700 flex-1 leading-relaxed">
+                <div key={idx} className="flex justify-between items-center gap-4 bg-[var(--input-bg)] p-3 rounded-xl border border-[var(--border-main)] shadow-sm">
+                  <label className="text-xs font-bold text-[var(--text-main)] flex-1 leading-relaxed">
                     {idx + 1}. {pert}
                   </label>
                   <div className="w-24 shrink-0">

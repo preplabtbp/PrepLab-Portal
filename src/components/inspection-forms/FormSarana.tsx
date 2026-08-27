@@ -188,15 +188,15 @@ export function FormSarana({ inspectorName, inspectorNik, onSubmit }: { inspecto
             />
           </div>
 
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <label className="text-xs font-semibold text-slate-700 block mb-3 bg-white p-2 rounded-lg border border-slate-100 text-center uppercase tracking-wider">
+          <div className="bg-[var(--input-bg)] p-4 rounded-xl border border-[var(--border-main)]">
+            <label className="text-xs font-bold text-[var(--text-main)] block mb-3 bg-[var(--card-bg)] p-2 rounded-lg border border-[var(--border-main)] text-center uppercase tracking-wider">
               Kondisi Komponen (Pilih ❌ jika Rusak)
             </label>
             
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               {ITEMS.map(item => (
-                <div key={item.id} className="bg-white p-2 rounded-lg border border-slate-100 shadow-sm flex flex-col justify-between">
-                  <label className="text-[11px] font-semibold text-slate-600 mb-2 truncate text-center" title={item.label}>
+                <div key={item.id} className="bg-[var(--card-bg)] p-2 rounded-lg border border-[var(--border-main)] shadow-sm flex flex-col justify-between">
+                  <label className="text-[11px] font-bold text-[var(--text-main)] mb-2 truncate text-center" title={item.label}>
                     {item.label}
                   </label>
                   <div className="flex gap-1 justify-center">
