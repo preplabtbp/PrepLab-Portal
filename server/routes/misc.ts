@@ -210,7 +210,7 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         return false;
       }
       if (
-        s === 'C' || s === 'CUTI' || s === 'UL' || s === 'DL' || s === 'CR' || s === 'SL' || s === 'IA' || s === 'IK' ||
+        s === 'C' || s === 'CUTI' || s === 'UL' || s === 'DL' || s === 'CR' || s === 'SL' || s === 'IA' || s === 'IK' || s === 'XP' ||
         s.startsWith('CT') || s.startsWith('CE') || s.startsWith('CI') || s.startsWith('CS') || s.startsWith('TRV')
       ) {
         return true;
@@ -266,8 +266,8 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         const weekEntries = empRosters.filter(r => targetWeekDates.includes((r.date || '').trim()));
         if (weekEntries.length > 0) {
           const cutiDays = weekEntries.filter(r => isExplicitCutiCode(r.status));
-          // Only mark Cuti if ALL days in this week are Cuti codes
-          if (cutiDays.length === weekEntries.length) {
+          // If employee has ANY cuti day during this week, mark as Cuti!
+          if (cutiDays.length > 0) {
             onCutiSet.add(cleanNik);
           }
         }
