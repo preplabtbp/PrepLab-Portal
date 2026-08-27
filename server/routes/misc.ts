@@ -218,12 +218,32 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       return false;
     };
 
+    const getDateStringsForWeek = (weekTag: string): string[] => {
+      let startDay = 0, endDay = 0, monthName = 'Aug';
+      if (weekTag === 'W34') { startDay = 18; endDay = 24; monthName = 'Aug'; }
+      else if (weekTag === 'W35') { startDay = 25; endDay = 31; monthName = 'Aug'; }
+      else if (weekTag === 'W36') { startDay = 1; endDay = 7; monthName = 'Sep'; }
+      else if (weekTag === 'W37') { startDay = 8; endDay = 14; monthName = 'Sep'; }
+
+      if (startDay > 0) {
+        const list: string[] = [];
+        for (let d = startDay; d <= endDay; d++) {
+          list.push(`${d} ${monthName} 26`);
+          list.push(`${d.toString().padStart(2, '0')} ${monthName} 26`);
+        }
+        return list;
+      }
+      return [];
+    };
+
+    const targetWeekDates = getDateStringsForWeek(selectedWeek);
+
     allEmployees.forEach(emp => {
       if (!emp.nik) return;
       
       const cleanNik = emp.nik.trim();
 
-      // Check manual override first
+      // 1. Check manual override first
       if (manualCutiOverridesMap.has(cleanNik)) {
         if (manualCutiOverridesMap.get(cleanNik) === true) {
           onCutiSet.add(cleanNik);
@@ -231,20 +251,25 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         return;
       }
 
+      // 2. Check employee profile status explicitly marked as CUTI
       const sm = (emp.statusMess || '').toString().trim().toUpperCase();
       const sk = (emp.statusKaryawan || '').toString().trim().toUpperCase();
-      const rot = (emp.rotation || '').toString().trim().toUpperCase();
       
-      if (sm === 'CUTI' || sk === 'CUTI' || rot === 'CUTI' || isExplicitCutiCode(sm) || isExplicitCutiCode(sk)) {
+      if (sm === 'CUTI' || sk === 'CUTI') {
         onCutiSet.add(cleanNik);
         return;
       }
 
+      // 3. Check roster ONLY for target dates in selectedWeek
       const empRosters = rosterMap.get(cleanNik);
-      if (empRosters && empRosters.length > 0) {
-        const hasCutiStatus = empRosters.some(r => isExplicitCutiCode(r.status));
-        if (hasCutiStatus) {
-          onCutiSet.add(cleanNik);
+      if (empRosters && empRosters.length > 0 && targetWeekDates.length > 0) {
+        const weekEntries = empRosters.filter(r => targetWeekDates.includes((r.date || '').trim()));
+        if (weekEntries.length > 0) {
+          const cutiDays = weekEntries.filter(r => isExplicitCutiCode(r.status));
+          // Only mark Cuti if ALL days in this week are Cuti codes
+          if (cutiDays.length === weekEntries.length) {
+            onCutiSet.add(cleanNik);
+          }
         }
       }
     });
