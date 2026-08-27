@@ -259,12 +259,11 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
   const [jsaClickCount, setJsaClickCount] = useState(0);
   const [autoFillTrigger, setAutoFillTrigger] = useState(0);
 
-  const handleJsaClickDirect = () => {
+  const handleJsaClickDirect = (showToast = false) => {
     setAutoFillTrigger(Date.now());
-    toast.success('⚡ Cheat Developer Aktif! Semua item inspeksi berhasil otomatis diisi [ YA / BAIK ]', {
-      icon: '🚀',
-      duration: 4000
-    });
+    if (showToast) {
+      toast.success('⚡ Auto-Fill YA Aktif!');
+    }
   };
 
   const handleJsaClick = (e?: React.MouseEvent) => {
@@ -274,9 +273,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
     
     if (nextCount >= 6) {
       setJsaClickCount(0);
-      handleJsaClickDirect();
-    } else {
-      toast.info(`Cheat Mode: ${nextCount}/6 klik pada "JSA" (${6 - nextCount} klik lagi)`, { duration: 1500 });
+      handleJsaClickDirect(false); // Silent activation - zero toasts!
     }
   };
 
