@@ -17,9 +17,10 @@ interface DevModeAccordionProps {
   inspectorNik: string | null;
   devOptions: DevModeOptions;
   setDevOptions: React.Dispatch<React.SetStateAction<DevModeOptions>>;
+  onTriggerAutoFill?: () => void;
 }
 
-export function DevModeAccordion({ inspectorNik, devOptions, setDevOptions }: DevModeAccordionProps) {
+export function DevModeAccordion({ inspectorNik, devOptions, setDevOptions, onTriggerAutoFill }: DevModeAccordionProps) {
   const isDevUser = inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin';
   const [isOpen, setIsOpen] = useState(false);
 
@@ -70,6 +71,19 @@ export function DevModeAccordion({ inspectorNik, devOptions, setDevOptions }: De
              </label>
           </div>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+             <button 
+                type="button"
+                className="md:col-span-2 w-full font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg flex justify-center items-center py-2.5 transition-colors text-xs shadow-xs"
+                onClick={() => {
+                  if (onTriggerAutoFill) {
+                    onTriggerAutoFill();
+                  } else {
+                    toast.info('Pilih jenis inspeksi terlebih dahulu!');
+                  }
+                }}
+             >
+                ⚡ Cheat Developer: Otomatis Pilih [ YA / BAIK ] Semua Pertanyaan
+             </button>
              <button 
                 className="w-full font-bold text-yellow-600 border border-yellow-500/50 hover:bg-yellow-100/50 rounded flex justify-center items-center py-2 transition-colors text-xs"
                 onClick={async () => {

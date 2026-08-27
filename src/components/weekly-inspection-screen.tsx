@@ -259,18 +259,24 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
   const [jsaClickCount, setJsaClickCount] = useState(0);
   const [autoFillTrigger, setAutoFillTrigger] = useState(0);
 
-  const handleJsaClick = () => {
+  const handleJsaClickDirect = () => {
+    setAutoFillTrigger(Date.now());
+    toast.success('⚡ Cheat Developer Aktif! Semua item inspeksi berhasil otomatis diisi [ YA / BAIK ]', {
+      icon: '🚀',
+      duration: 4000
+    });
+  };
+
+  const handleJsaClick = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     const nextCount = jsaClickCount + 1;
     setJsaClickCount(nextCount);
+    
     if (nextCount >= 6) {
       setJsaClickCount(0);
-      setAutoFillTrigger(Date.now());
-      toast.success('⚡ Cheat Developer Aktif! Semua item inspeksi berhasil otomatis diisi [ YA / BAIK ]', {
-        icon: '🚀',
-        duration: 4000
-      });
-    } else if (nextCount >= 3) {
-      toast.info(`Cheat Mode: ${6 - nextCount} klik lagi pada "JSA"...`, { duration: 1000 });
+      handleJsaClickDirect();
+    } else {
+      toast.info(`Cheat Mode: ${nextCount}/6 klik pada "JSA" (${6 - nextCount} klik lagi)`, { duration: 1500 });
     }
   };
 
@@ -280,14 +286,14 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full max-w-3xl mx-auto px-4 sm:px-0">
       <PageHeader 
         title={
-          <span>
+          <span className="select-none">
             Inspeksi Terpadu{' '}
             <span 
               onClick={handleJsaClick} 
-              className="cursor-pointer select-none border-b-2 border-dotted border-white/40 hover:border-emerald-400 hover:text-emerald-300 transition-colors"
+              className="inline-block cursor-pointer select-none border-b-2 border-dashed border-emerald-400 text-emerald-300 px-1.5 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-800/80 transition-colors shadow-xs"
               title="Klik 6x untuk Developer Cheat (Otomatis Pilih Ya All)"
             >
-              JSA
+              JSA ⚡
             </span>
           </span>
         }
@@ -295,7 +301,12 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
         icon={<ClipboardCheck />}
       />
 
-      <DevModeAccordion inspectorNik={inspectorNik} devOptions={devOptions} setDevOptions={setDevOptions} />
+      <DevModeAccordion 
+        inspectorNik={inspectorNik} 
+        devOptions={devOptions} 
+        setDevOptions={setDevOptions} 
+        onTriggerAutoFill={handleJsaClickDirect}
+      />
 
       <Card className="border-t-4 border-t-[var(--primary)] bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)]">
         <h3 className="text-sm font-bold text-[var(--text-main)] mb-4 flex items-center justify-between">
