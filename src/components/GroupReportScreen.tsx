@@ -393,11 +393,11 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
 
                             {msg.pdfUrl && msg.pdfUrl !== '#' && (
                               <a
-                                href={msg.pdfUrl}
+                                href={getPdfEmbedUrl(msg.pdfUrl)}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="p-1 px-2 rounded-lg bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] text-[10px] font-bold flex items-center justify-center gap-1 hover:bg-[var(--bg-main)] transition-colors"
-                                title="Buka di Tab Baru"
+                                title="Buka di Tab Baru (Viewer)"
                               >
                                 <ExternalLink className="w-3 h-3" />
                               </a>
@@ -698,11 +698,11 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
 
               <div className="flex items-center gap-1.5 shrink-0">
                 <a
-                  href={pdfModal.url}
+                  href={getPdfEmbedUrl(pdfModal.url)}
                   target="_blank"
                   rel="noreferrer"
                   className="h-8 px-2.5 rounded-xl bg-[var(--input-bg)] hover:bg-[var(--bg-main)] text-[var(--text-main)] border border-[var(--border-main)] text-[11px] font-bold flex items-center gap-1 transition-colors"
-                  title="Buka di Tab Baru"
+                  title="Buka di Tab Baru (Viewer)"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Tab Baru</span>

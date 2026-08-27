@@ -150,19 +150,30 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
     toast.promise(promise, {
       loading: 'Mengirim laporan inspeksi ke server...',
       success: (data) => {
-        if (data?.pdfUrl && data.pdfUrl !== 'GAS_GENERATED' && data.pdfUrl !== '-') {
+        let pdfUrl = data?.pdfUrl;
+        if (pdfUrl && pdfUrl !== 'GAS_GENERATED' && pdfUrl !== '-') {
+          const fileIdMatch = pdfUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || pdfUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+          const previewUrl = fileIdMatch && fileIdMatch[1] 
+            ? `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`
+            : (pdfUrl.startsWith('http') ? `https://docs.google.com/gview?url=${encodeURIComponent(pdfUrl)}&embedded=true` : pdfUrl);
+
           return (
-            <div className="flex flex-col gap-2">
-              <p className="font-semibold">Laporan berhasil dikirim ke server!</p>
-              <a href={data.pdfUrl} target="_blank" rel="noreferrer" className="text-blue-500 underline text-sm font-medium hover:text-blue-600">
-                Download Report PDF
+            <div className="flex flex-col gap-1 text-xs font-semibold">
+              <p>Laporan berhasil dikirim ke server!</p>
+              <a 
+                href={previewUrl} 
+                target="_blank" 
+                rel="noreferrer" 
+                className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1 mt-0.5"
+              >
+                <Eye className="w-3.5 h-3.5" /> Buka Viewer PDF
               </a>
             </div>
           );
         }
-        return 'Laporan berhasil dikirim ke server!';
+        return 'Laporan inspeksi berhasil tersimpan!';
       },
-      error: (err) => 'Terjadi kesalahan saat mengirim: ' + err.message
+      error: (err) => `Gagal menyimpan: ${err.message || err}`
     });
   };
 
