@@ -9,22 +9,6 @@ import { TemuanItem, TemuanSection } from './TemuanSection';
 export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFillAllYa }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number }) {
   const [subArea, setSubArea] = useState('');
   const [answers, setAnswers] = useState<Record<string, { jawaban: string, ket: string }>>({});
-
-  useEffect(() => {
-    if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
-      if (!subArea && subAreas && subAreas.length > 0) {
-        setSubArea(subAreas[0]);
-      }
-      const allAnswers: Record<string, { jawaban: string, ket: string }> = {};
-      data.forEach(q => {
-        const key = q.item || q.id_pertanyaan || q.idPertanyaan || q.id;
-        if (key) {
-          allAnswers[key] = { jawaban: 'YA', ket: '' };
-        }
-      });
-      setAnswers(allAnswers);
-    }
-  }, [autoFillAllYa, data, subArea, subAreas]);
   const [temuan, setTemuan] = useState<TemuanItem[]>([]);
   
   const [fotoBukti, setFotoBukti] = useState<string | null>(null);
@@ -41,6 +25,22 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFill
     });
     return Array.from(areas).filter(Boolean).sort();
   }, [data]);
+
+  useEffect(() => {
+    if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
+      if (!subArea && subAreas && subAreas.length > 0) {
+        setSubArea(subAreas[0]);
+      }
+      const allAnswers: Record<string, { jawaban: string, ket: string }> = {};
+      data.forEach(q => {
+        const key = q.item || q.id_pertanyaan || q.idPertanyaan || q.id;
+        if (key) {
+          allAnswers[key] = { jawaban: 'YA', ket: '' };
+        }
+      });
+      setAnswers(allAnswers);
+    }
+  }, [autoFillAllYa, data, subArea, subAreas]);
 
   const isQuestionRelevant = (q: any) => {
     if (!subArea) return true; // Show all if none selected, or maybe return false? But UI hides questions if !subArea anyway.
