@@ -172,8 +172,47 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
   try {
     const selectedWeek = (req.query.week as string) || getISOWeekTag();
     const allEmployees = await db.select().from(employees);
+    const allRoster = await db.select().from(roster);
 
-    // Filter employees: ONLY GOL II KE ATAS (Exclude Gol I, Exclude GTS, Exclude System Admin accounts)
+    // Build Cuti Set for employees on leave based on Roster & Employee profile
+    const onCutiSet = new Set<string>();
+    
+    const rosterMap = new Map<string, any[]>();
+    allRoster.forEach(r => {
+      if (r.nik) {
+        if (!rosterMap.has(r.nik)) rosterMap.set(r.nik, []);
+        rosterMap.get(r.nik)!.push(r);
+      }
+    });
+
+    const isWorkStatus = (st?: string) => {
+      if (!st) return false;
+      const s = st.trim().toUpperCase();
+      return s === 'D' || s === 'N' || s === 'NS' || s === '1' || s === '2' || s === '3' || s === 'WORK' || s === 'P';
+    };
+
+    allEmployees.forEach(emp => {
+      if (!emp.nik) return;
+      
+      const sm = (emp.statusMess || '').toString().trim().toUpperCase();
+      const sk = (emp.statusKaryawan || '').toString().trim().toUpperCase();
+      const rot = (emp.rotation || '').toString().trim().toUpperCase();
+      
+      if (sm === 'CUTI' || sk === 'CUTI' || rot === 'CUTI' || rot === 'OFF') {
+        onCutiSet.add(emp.nik);
+        return;
+      }
+
+      const empRosters = rosterMap.get(emp.nik);
+      if (empRosters && empRosters.length > 0) {
+        const workDays = empRosters.filter(r => isWorkStatus(r.status));
+        if (workDays.length === 0) {
+          onCutiSet.add(emp.nik);
+        }
+      }
+    });
+
+    // Filter employees: ONLY GOL II KE ATAS (Exclude Gol I, Exclude GTS, Exclude System Admin, Exclude Cuti)
     const targetEmployees = allEmployees.filter(emp => {
       // 1. Exclude System/Admin accounts
       const nikLower = (emp.nik || '').toString().trim().toLowerCase();
@@ -190,7 +229,12 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         return false;
       }
 
-      // 3. Exclude Gol I (Keep Gol II ke atas)
+      // 3. Exclude Employees currently ON CUTI / LEAVE
+      if (onCutiSet.has(emp.nik)) {
+        return false;
+      }
+
+      // 4. Exclude Gol I (Keep Gol II ke atas)
       if (!emp.gol) {
         const jg = (emp.jobGrade || '').trim().toUpperCase();
         if (jg && jg.length > 0) return true;
