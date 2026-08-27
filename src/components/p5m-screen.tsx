@@ -1631,23 +1631,23 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x cursor-grab active:cursor-grabbing select-none"
                 >
                   <div 
-                    className={`bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200 transition-all ${
+                    className={`bg-[var(--card-bg)] text-[var(--text-main)] rounded-2xl overflow-hidden shadow-xl border border-[var(--border-main)] transition-all ${
                       selectedDayFilter === 'ALL' ? 'min-w-[1050px]' : 'w-full min-w-0'
                     }`} 
                     ref={captureRef}
                   >
               
               {/* Header Title Bar */}
-              <div className="bg-slate-900 text-white px-6 py-4 flex flex-col sm:flex-row items-center justify-between border-b-2 border-amber-500 gap-2">
+              <div className="bg-[var(--card-bg)] text-[var(--text-main)] px-6 py-4 flex flex-col sm:flex-row items-center justify-between border-b-2 border-amber-500 gap-2 shadow-xs">
                 <div className="flex items-center gap-3 text-center sm:text-left">
                   <div className="w-9 h-9 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-black text-sm">
                     P5M
                   </div>
                   <div>
-                    <h2 className="font-bold text-sm tracking-wider uppercase font-mono text-amber-400">
+                    <h2 className="font-bold text-sm tracking-wider uppercase font-mono text-amber-600 dark:text-amber-400">
                       Jadwal P5M (Pembicaraan 5 Menit) — Preparation &amp; Laboratory
                     </h2>
-                    <p className="text-xs text-slate-300 font-mono">
+                    <p className="text-xs text-[var(--text-muted)] font-mono">
                       Plant: PT {selectedPt === 'GTS' ? 'GTS' : 'TBP / GPS'} • Periode: {weekRangeDisplay}
                     </p>
                   </div>
@@ -1655,26 +1655,26 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
                 <div className="flex flex-wrap items-center gap-3.5 text-[11px] font-mono">
                   {/* Shift Categories */}
-                  <div className="flex items-center gap-2.5 pr-3 border-r border-slate-700">
-                    <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Shift:</span>
-                    <span className="flex items-center gap-1.5 text-amber-300 font-bold">
+                  <div className="flex items-center gap-2.5 pr-3 border-r border-[var(--border-main)]">
+                    <span className="text-[var(--text-muted)] text-[10px] uppercase font-bold tracking-wider">Shift:</span>
+                    <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-300 font-bold">
                       <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm inline-block"></span> ☀️ Day
                     </span>
-                    <span className="flex items-center gap-1.5 text-indigo-300 font-bold">
+                    <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-300 font-bold">
                       <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 shadow-sm inline-block"></span> 🌙 Night
                     </span>
                   </div>
 
                   {/* Section Categories */}
                   <div className="flex items-center gap-2.5">
-                    <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Section:</span>
-                    <span className="flex items-center gap-1.5 text-orange-400 font-bold">
+                    <span className="text-[var(--text-muted)] text-[10px] uppercase font-bold tracking-wider">Section:</span>
+                    <span className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400 font-bold">
                       <span className="w-2.5 h-2.5 rounded bg-orange-500 inline-block shadow-sm"></span> Preparasi
                     </span>
-                    <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                    <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
                       <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block shadow-sm"></span> Laboratorium
                     </span>
-                    <span className="flex items-center gap-1.5 text-amber-400 font-bold">
+                    <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold">
                       <span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block shadow-sm"></span> Gabungan
                     </span>
                   </div>
@@ -1682,7 +1682,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               </div>
 
               {/* Grid Columns (1 column if single day filter selected, 7 columns if ALL selected) */}
-              <div className={`grid divide-x divide-slate-200 border-b border-slate-200 text-xs ${
+              <div className={`grid divide-x divide-[var(--border-main)] border-b border-[var(--border-main)] text-xs ${
                 selectedDayFilter === 'ALL' ? 'grid-cols-7' : 'grid-cols-1 w-full'
               }`}>
                 {(selectedDayFilter === 'ALL' ? DAYS : [selectedDayFilter]).map(day => {
@@ -1693,9 +1693,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     <div id={`p5m-col-${day}`} key={day} className={`flex flex-col ${selectedDayFilter === 'ALL' ? 'min-w-[135px]' : 'w-full'}`}>
                       
                       {/* Column Header */}
-                      <div className="bg-slate-100 p-2.5 text-center border-b border-slate-200" style={{ borderTop: `3px solid ${DAY_COLORS[day]}` }}>
-                        <div className="font-black text-slate-900 text-sm">{day}</div>
-                        <div className="text-[11px] font-mono text-slate-600 font-semibold">{dateInfo?.display || '-'}</div>
+                      <div className="bg-[var(--input-bg)] p-2.5 text-center border-b border-[var(--border-main)]" style={{ borderTop: `3px solid ${DAY_COLORS[day]}` }}>
+                        <div className="font-black text-[var(--text-main)] text-sm">{day}</div>
+                        <div className="text-[11px] font-mono text-[var(--text-muted)] font-semibold">{dateInfo?.display || '-'}</div>
                         <span className={`inline-block text-[9px] uppercase font-mono font-black px-2 py-0.5 rounded-full mt-1 ${
                           isG ? 'bg-amber-400 text-slate-950 border border-amber-500 shadow-xs' : 'bg-emerald-600 text-white shadow-xs'
                         }`}>
@@ -1704,8 +1704,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       </div>
 
                       {/* ☀️ Day Shift Section */}
-                      <div className="bg-slate-50/50 p-1.5 border-b-2 border-slate-200 flex-1 space-y-1.5 min-h-[160px]">
-                        <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber-700 px-1 pt-0.5 flex items-center gap-1.5">
+                      <div className="bg-[var(--card-bg)] p-1.5 border-b-2 border-[var(--border-main)] flex-1 space-y-1.5 min-h-[160px]">
+                        <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 px-1 pt-0.5 flex items-center gap-1.5">
                           <span className="w-2 h-2 rounded-full bg-amber-400 inline-block shadow-sm"></span>
                           <span>☀️ Day Shift</span>
                         </div>
@@ -1795,14 +1795,14 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       </div>
 
                       {/* 🌙 Night Shift Section */}
-                      <div className="bg-indigo-950/[0.03] p-1.5 flex-1 space-y-1.5 min-h-[160px]">
-                        <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-indigo-700 px-1 pt-0.5 flex items-center gap-1.5">
+                      <div className="bg-[var(--bg-main)]/40 p-1.5 flex-1 space-y-1.5 min-h-[160px]">
+                        <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 px-1 pt-0.5 flex items-center gap-1.5">
                           <span className="w-2 h-2 rounded-full bg-indigo-400 inline-block shadow-sm"></span>
                           <span>🌙 Night Shift</span>
                         </div>
 
                         {day === 'Minggu' ? (
-                          <div className="p-3 text-center text-[10px] text-slate-400 font-mono italic">
+                          <div className="p-3 text-center text-[10px] text-[var(--text-muted)] font-mono italic">
                             — Libur Night Shift —
                           </div>
                         ) : isG ? (
@@ -1887,7 +1887,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               </div>
 
               {/* Bottom Footer Stamp */}
-              <div className="bg-slate-50 px-6 py-2.5 flex items-center justify-between text-[10px] text-slate-500 font-mono">
+              <div className="bg-[var(--input-bg)] px-6 py-2.5 flex items-center justify-between text-[10px] text-[var(--text-muted)] font-mono border-t border-[var(--border-main)]">
                 <span>Dokumen Resmi Sistem Portal Prep &amp; Lab Harita Nickel</span>
                 <span>Diperbarui pada: {new Date().toLocaleString('id-ID')}</span>
               </div>
