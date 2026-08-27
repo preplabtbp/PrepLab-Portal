@@ -501,15 +501,24 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
         icon={<Database />}
       >
         {selectedTable && (
-          <div className="relative w-full md:w-64 mt-2 sm:mt-0">
+          <div className="relative w-full md:w-72 mt-2 sm:mt-0">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
             <input 
               type="text" 
-              placeholder="Cari data..." 
+              placeholder={`Cari data ${selectedTable}...`} 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white/10 text-white border border-white/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-white/30 backdrop-blur-md placeholder-slate-300 transition-all"
+              className="w-full pl-9 pr-8 py-2 bg-white/10 text-white border border-white/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-white/40 backdrop-blur-md placeholder-slate-300 transition-all shadow-xs"
             />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-white"
+                title="Hapus Pencarian"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         )}
       </PageHeader>
@@ -548,16 +557,38 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
             <option key={emp.nik} value={emp.nik}>{emp.name}</option>
           ))}
         </datalist>
-        <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50/50">
-            <div className="flex items-center gap-3">
-              <h3 className="font-semibold text-slate-800 capitalize flex items-center gap-2">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 p-3.5 sm:p-4 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex items-center gap-2 shrink-0">
+              <h3 className="font-bold text-slate-800 capitalize flex items-center gap-1.5 text-sm sm:text-base">
                 Tabel {selectedTable}
               </h3>
-              <span className="bg-slate-200 text-slate-600 text-xs py-0.5 px-2 rounded-full font-medium">
-                {filteredAndSortedData.length} records
+              <span className="bg-slate-200 text-slate-700 text-xs py-0.5 px-2.5 rounded-full font-bold font-mono">
+                {searchTerm ? `${filteredAndSortedData.length}/${data.length}` : `${data.length}`} records
               </span>
             </div>
-            <div className="flex gap-2">
+
+            {/* Prominent Search Bar directly above table */}
+            <div className="relative flex-1 max-w-md w-full">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder={`Cari di tabel ${selectedTable} (nama, NIK, jabatan, lokasi, dll)...`}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 bg-white text-slate-800 border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-xs placeholder:text-slate-400 transition-all"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  title="Hapus Kata Kunci"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap shrink-0 w-full md:w-auto justify-end">
               <input type="file" className="hidden" accept=".xlsx, .xls, .csv" ref={fileInputRef} onChange={handleFileUpload} />
               <Button variant="secondary" onClick={() => setShowImportModal(true)} className="px-3" disabled={loading}>
                 <Upload className="w-4 h-4 mr-1" /> Import Excel
