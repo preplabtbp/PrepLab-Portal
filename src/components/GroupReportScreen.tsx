@@ -36,6 +36,19 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   const [searchRekap, setSearchRekap] = useState('');
   const [rekapFilterStatus, setRekapFilterStatus] = useState<'ALL' | 'SUDAH' | 'BELUM'>('ALL');
 
+  // Interactive PDF Viewer Modal State
+  const [pdfModal, setPdfModal] = useState<{
+    isOpen: boolean;
+    url: string;
+    title: string;
+    senderName?: string;
+  }>({
+    isOpen: false,
+    url: '',
+    title: '',
+    senderName: ''
+  });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto detect developer status by NIK pattern if not passed
@@ -75,6 +88,39 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     } finally {
       setLoadingRekap(false);
     }
+  };
+
+  const openPdfModal = (url: string, title: string, senderName?: string) => {
+    if (!url || url === '#') {
+      toast.error('Tautan dokumen PDF belum tersedia.');
+      return;
+    }
+    setPdfModal({
+      isOpen: true,
+      url,
+      title: title || 'Dokumen Laporan Inspeksi',
+      senderName
+    });
+  };
+
+  const closePdfModal = () => {
+    setPdfModal({ isOpen: false, url: '', title: '', senderName: '' });
+  };
+
+  const getPdfEmbedUrl = (rawUrl: string) => {
+    if (!rawUrl) return '';
+    
+    // Extract file ID from google drive URLs
+    const fileIdMatch = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (fileIdMatch && fileIdMatch[1]) {
+      return `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`;
+    }
+
+    if (rawUrl.startsWith('http')) {
+      return `https://docs.google.com/viewer?url=${encodeURIComponent(rawUrl)}&embedded=true`;
+    }
+
+    return rawUrl;
   };
 
   const handlePostReport = async (e?: React.FormEvent) => {
@@ -338,22 +384,23 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                           )}
 
                           <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--border-main)]">
-                            {msg.pdfUrl && msg.pdfUrl !== '#' ? (
+                            <button
+                              onClick={() => openPdfModal(msg.pdfUrl, msg.pdfTitle, msg.senderName)}
+                              className="flex-1 py-1 px-2.5 rounded-lg bg-[var(--primary)] text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-xs hover:opacity-90 transition-opacity"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> Pratinjau PDF
+                            </button>
+
+                            {msg.pdfUrl && msg.pdfUrl !== '#' && (
                               <a
                                 href={msg.pdfUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="flex-1 py-1 px-2.5 rounded-lg bg-[var(--primary)] text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-xs hover:opacity-90 transition-opacity"
+                                className="p-1 px-2 rounded-lg bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] text-[10px] font-bold flex items-center justify-center gap-1 hover:bg-[var(--bg-main)] transition-colors"
+                                title="Buka di Tab Baru"
                               >
-                                <Eye className="w-3 h-3" /> Buka PDF
+                                <ExternalLink className="w-3 h-3" />
                               </a>
-                            ) : (
-                              <button
-                                onClick={() => toast.info('Buka hasil dokumen inspeksi di modal PDF')}
-                                className="flex-1 py-1 px-2.5 rounded-lg bg-[var(--primary)] text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-xs"
-                              >
-                                <Eye className="w-3 h-3" /> Buka PDF
-                              </button>
                             )}
 
                             <button
@@ -585,16 +632,27 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                       </div>
                     </div>
 
-                    <div className="shrink-0">
+                    <div className="shrink-0 flex items-center gap-1">
                       {isDone ? (
-                        <a
-                          href={emp.pdfUrl || '#'}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold flex items-center gap-1 shadow-xs"
-                        >
-                          <Eye className="w-3 h-3" /> PDF
-                        </a>
+                        <>
+                          <button
+                            onClick={() => openPdfModal(emp.pdfUrl, `Laporan Inspeksi - ${emp.name}`, emp.name)}
+                            className="px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold flex items-center gap-1 shadow-xs hover:bg-emerald-700 transition-colors"
+                          >
+                            <Eye className="w-3 h-3" /> PDF
+                          </button>
+                          {emp.pdfUrl && emp.pdfUrl !== '#' && (
+                            <a
+                              href={emp.pdfUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1 rounded-lg bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] text-[10px] font-bold flex items-center justify-center transition-colors"
+                              title="Buka di Tab Baru"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </>
                       ) : (
                         <button
                           onClick={() => {
@@ -611,6 +669,64 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                 );
               })
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── INTERACTIVE PDF VIEWER MODAL ── */}
+      {pdfModal.isOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-[var(--card-bg)] border border-[var(--border-main)] rounded-3xl w-full max-w-4xl h-[92vh] flex flex-col overflow-hidden shadow-2xl relative">
+            
+            {/* Modal Header */}
+            <div className="p-3 sm:p-4 border-b border-[var(--border-main)] flex items-center justify-between gap-2 shrink-0 bg-[var(--card-bg)]">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-rose-500/15 text-rose-500 border border-rose-500/30 flex items-center justify-center font-bold shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-xs sm:text-sm text-[var(--text-main)] truncate uppercase font-mono">
+                    {pdfModal.title}
+                  </h3>
+                  {pdfModal.senderName && (
+                    <p className="text-[10px] text-[var(--text-muted)] truncate">
+                      Inspektor: {pdfModal.senderName}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <a
+                  href={pdfModal.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="h-8 px-2.5 rounded-xl bg-[var(--input-bg)] hover:bg-[var(--bg-main)] text-[var(--text-main)] border border-[var(--border-main)] text-[11px] font-bold flex items-center gap-1 transition-colors"
+                  title="Buka di Tab Baru"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Tab Baru</span>
+                </a>
+
+                <button
+                  onClick={closePdfModal}
+                  className="w-8 h-8 rounded-xl bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 flex items-center justify-center transition-colors font-bold shrink-0"
+                  title="Tutup Pratinjau PDF"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body / Embedded Iframe Viewer */}
+            <div className="flex-1 bg-slate-900 relative min-h-0 w-full">
+              <iframe
+                src={getPdfEmbedUrl(pdfModal.url)}
+                className="w-full h-full border-0 rounded-b-3xl"
+                title="PDF Viewer"
+                allow="autoplay"
+              />
+            </div>
           </div>
         </div>
       )}
