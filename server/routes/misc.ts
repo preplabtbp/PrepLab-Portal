@@ -183,10 +183,10 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         return false;
       }
 
-      // 2. Exclude GTS Employees (pt === GTS or NIK starts with M / 03 / M03 / M04)
+      // 2. Exclude GTS Employees ONLY (pt === GTS or NIK starts with 03 / M03). KEEP M04 / M0 (TBP & GPS)!
       const ptUpper = (emp.pt || '').toString().trim().toUpperCase();
       const nikUpper = (emp.nik || '').toString().trim().toUpperCase();
-      if (ptUpper === 'GTS' || nikUpper.startsWith('M') || nikUpper.startsWith('03') || nikUpper.startsWith('M03') || nikUpper.startsWith('M04')) {
+      if (ptUpper === 'GTS' || nikUpper.startsWith('03') || nikUpper.startsWith('M03')) {
         return false;
       }
 
