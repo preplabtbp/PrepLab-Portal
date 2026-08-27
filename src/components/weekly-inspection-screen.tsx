@@ -286,18 +286,18 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full max-w-3xl mx-auto px-4 sm:px-0">
       <PageHeader 
         title={
-          <div className="select-none flex items-center gap-2 flex-wrap">
-            <span>Inspeksi Terpadu JSA</span>
-            <button 
-              type="button"
+          <span className="select-none">
+            Inspeksi Terpadu{' '}
+            <span 
+              onMouseDown={(e) => e.preventDefault()}
               onClick={handleJsaClick} 
-              className="inline-flex items-center gap-1.5 cursor-pointer select-none px-2.5 py-1 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/40 hover:border-emerald-400 hover:scale-105 active:scale-95 transition-all shadow-sm group"
-              title="Klik 6x pada Ikon Inspeksi ini untuk Developer Cheat (Auto-Fill YA Semua)"
+              className="cursor-pointer select-none font-bold text-white hover:text-emerald-300 transition-colors"
+              style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+              title="Formulir Terpadu JSA"
             >
-              <ClipboardCheck className="w-4 h-4 text-emerald-400 group-hover:rotate-12 transition-transform" />
-              <span className="text-xs font-bold font-mono">CHEAT ⚡</span>
-            </button>
-          </div>
+              JSA
+            </span>
+          </span>
         }
         description="Formulir dinamis terintegrasi Preparation & Laboratory"
         icon={<ClipboardCheck />}
