@@ -12,16 +12,19 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFill
 
   useEffect(() => {
     if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
+      if (!subArea && subAreas && subAreas.length > 0) {
+        setSubArea(subAreas[0]);
+      }
       const allAnswers: Record<string, { jawaban: string, ket: string }> = {};
       data.forEach(q => {
-        const id = q.id_pertanyaan || q.idPertanyaan || q.id;
-        if (id) {
-          allAnswers[id] = { jawaban: 'YA', ket: '' };
+        const key = q.item || q.id_pertanyaan || q.idPertanyaan || q.id;
+        if (key) {
+          allAnswers[key] = { jawaban: 'YA', ket: '' };
         }
       });
       setAnswers(allAnswers);
     }
-  }, [autoFillAllYa, data]);
+  }, [autoFillAllYa, data, subArea, subAreas]);
   const [temuan, setTemuan] = useState<TemuanItem[]>([]);
   
   const [fotoBukti, setFotoBukti] = useState<string | null>(null);

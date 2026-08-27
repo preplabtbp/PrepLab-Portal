@@ -12,9 +12,9 @@ export function FormP3K({ data, inspectorName, inspectorNik, onSubmit, autoFillA
     if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
       const allAnswers: Record<string, any> = {};
       data.forEach(q => {
-        const id = q.id_pertanyaan || q.idPertanyaan || q.id;
-        if (id) {
-          allAnswers[id] = { status: 'LENGKAP', ket: '' };
+        const key = q.item || q.id_pertanyaan || q.idPertanyaan || q.id;
+        if (key) {
+          allAnswers[key] = { status: 'LENGKAP', ket: '' };
         }
       });
       setAnswers(allAnswers);

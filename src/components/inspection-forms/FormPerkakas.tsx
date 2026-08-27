@@ -12,9 +12,10 @@ export function FormPerkakas({ data, inspectorName, inspectorNik, onSubmit, auto
     if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
       const allAnswers: Record<string, any> = {};
       data.forEach(q => {
-        const id = q.id_pertanyaan || q.idPertanyaan || q.id;
-        if (id) {
-          allAnswers[id] = { kondisi: 'BAIK', ket: '' };
+        const key = q.item || q.id_pertanyaan || q.idPertanyaan || q.id;
+        const maxP = q.info4 || "4";
+        if (key) {
+          allAnswers[key] = { aktual: maxP, ket: '' };
         }
       });
       setAnswers(allAnswers);

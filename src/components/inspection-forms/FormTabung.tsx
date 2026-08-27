@@ -16,9 +16,9 @@ export function FormTabung({ data, inspectorName, inspectorNik, onSubmit, autoFi
     if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
       const allAnswers: Record<string, any> = {};
       data.forEach(q => {
-        const id = q.id_pertanyaan || q.idPertanyaan || q.id;
-        if (id) {
-          allAnswers[id] = { status: 'YA', ket: '' };
+        const key = q.item || q.id_pertanyaan || q.idPertanyaan || q.id;
+        if (key) {
+          allAnswers[key] = { jawaban: 'YA', ket: '' };
         }
       });
       setAnswers(allAnswers);
