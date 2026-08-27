@@ -168,6 +168,23 @@ router.post('/api/group-reports/reset', async (req, res) => {
   }
 });
 
+export const manualCutiOverridesMap = new Map<string, boolean>();
+
+router.post('/api/rekap-inspeksi/override-cuti', async (req, res) => {
+  try {
+    const { nik, isCuti } = req.body;
+    if (!nik) return res.status(400).json({ error: 'NIK wajib diisi!' });
+    
+    manualCutiOverridesMap.set(String(nik).trim(), !!isCuti);
+    res.json({ 
+      success: true, 
+      message: `Status personil NIK ${nik} berhasil diubah ke ${isCuti ? 'Cuti' : 'Aktif (Wajib Inspeksi)'}!` 
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/api/rekap-inspeksi', async (req, res) => {
   try {
     const selectedWeek = (req.query.week as string) || getISOWeekTag();
@@ -185,29 +202,49 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       }
     });
 
-    const isWorkStatus = (st?: string) => {
+    const isExplicitCutiCode = (st?: string) => {
       if (!st) return false;
       const s = st.trim().toUpperCase();
-      return s === 'D' || s === 'N' || s === 'NS' || s === '1' || s === '2' || s === '3' || s === 'WORK' || s === 'P';
+      // OFF, LS, OS, D, N, NS, WORK, P are NOT Cuti! OFF remains INCLUDED!
+      if (s === 'OFF' || s === 'LS' || s === 'OS' || s === 'D' || s === 'N' || s === 'NS' || s === 'WORK' || s === 'P') {
+        return false;
+      }
+      if (
+        s === 'C' || s === 'CUTI' || s === 'UL' || s === 'DL' || s === 'CR' || s === 'SL' || s === 'IA' || s === 'IK' ||
+        s.startsWith('CT') || s.startsWith('CE') || s.startsWith('CI') || s.startsWith('CS') || s.startsWith('TRV')
+      ) {
+        return true;
+      }
+      return false;
     };
 
     allEmployees.forEach(emp => {
       if (!emp.nik) return;
       
+      const cleanNik = emp.nik.trim();
+
+      // Check manual override first
+      if (manualCutiOverridesMap.has(cleanNik)) {
+        if (manualCutiOverridesMap.get(cleanNik) === true) {
+          onCutiSet.add(cleanNik);
+        }
+        return;
+      }
+
       const sm = (emp.statusMess || '').toString().trim().toUpperCase();
       const sk = (emp.statusKaryawan || '').toString().trim().toUpperCase();
       const rot = (emp.rotation || '').toString().trim().toUpperCase();
       
-      if (sm === 'CUTI' || sk === 'CUTI' || rot === 'CUTI' || rot === 'OFF') {
-        onCutiSet.add(emp.nik);
+      if (sm === 'CUTI' || sk === 'CUTI' || rot === 'CUTI' || isExplicitCutiCode(sm) || isExplicitCutiCode(sk)) {
+        onCutiSet.add(cleanNik);
         return;
       }
 
-      const empRosters = rosterMap.get(emp.nik);
+      const empRosters = rosterMap.get(cleanNik);
       if (empRosters && empRosters.length > 0) {
-        const workDays = empRosters.filter(r => isWorkStatus(r.status));
-        if (workDays.length === 0) {
-          onCutiSet.add(emp.nik);
+        const hasCutiStatus = empRosters.some(r => isExplicitCutiCode(r.status));
+        if (hasCutiStatus) {
+          onCutiSet.add(cleanNik);
         }
       }
     });
@@ -298,6 +335,7 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         jabatan: emp.jabatan || emp.position || 'Personil',
         shift: emp.shift || 'Nonshift',
         status: isDone ? 'SUDAH' : 'BELUM',
+        isCuti: false,
         completedAt: isDone ? info.timestamp : null,
         pdfUrl: isDone ? info.pdfUrl : null,
         pdfTitle: isDone ? info.pdfTitle : null,
@@ -305,14 +343,44 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       };
     });
 
+    // Build Cuti list
+    const cutiEmployees = allEmployees.filter(emp => {
+      const cleanNik = (emp.nik || '').trim();
+      if (!cleanNik) return false;
+      const nikLower = cleanNik.toLowerCase();
+      if (nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || nikLower.includes('admin')) return false;
+      const ptUpper = (emp.pt || '').toString().trim().toUpperCase();
+      if (ptUpper === 'GTS' || cleanNik.toUpperCase().startsWith('03') || cleanNik.toUpperCase().startsWith('M03')) return false;
+      
+      return onCutiSet.has(cleanNik);
+    });
+
+    const cutiList = cutiEmployees.map(emp => ({
+      nik: emp.nik,
+      name: emp.name,
+      gol: emp.gol || 'II',
+      jobGrade: emp.jobGrade || '-',
+      section: emp.section || 'General',
+      pt: emp.pt || 'TBP',
+      jabatan: emp.jabatan || emp.position || 'Personil',
+      shift: emp.shift || 'Nonshift',
+      status: 'CUTI',
+      isCuti: true,
+      completedAt: null,
+      pdfUrl: null,
+      pdfTitle: null,
+      week: selectedWeek
+    }));
+
     const total = rekapList.length;
     const sudah = rekapList.filter(r => r.status === 'SUDAH').length;
     const belum = total - sudah;
     const percentage = total > 0 ? Math.round((sudah / total) * 100) : 0;
 
     res.json({
-      summary: { total, sudah, belum, percentage, selectedWeek },
-      rekapList
+      summary: { total, sudah, belum, percentage, selectedWeek, cutiCount: cutiList.length },
+      rekapList,
+      cutiList
     });
   } catch (err: any) {
     console.error('Error fetching rekap:', err);

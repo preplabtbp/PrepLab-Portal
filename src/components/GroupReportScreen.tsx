@@ -30,11 +30,12 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
 
   // Rekap State & Week Filter
   const [selectedWeek, setSelectedWeek] = useState<string>('W35');
-  const [rekapSummary, setRekapSummary] = useState<{ total: number; sudah: number; belum: number; percentage: number; selectedWeek?: string }>({ total: 0, sudah: 0, belum: 0, percentage: 0 });
+  const [rekapSummary, setRekapSummary] = useState<{ total: number; sudah: number; belum: number; percentage: number; cutiCount?: number; selectedWeek?: string }>({ total: 0, sudah: 0, belum: 0, percentage: 0, cutiCount: 0 });
   const [rekapList, setRekapList] = useState<any[]>([]);
+  const [cutiList, setCutiList] = useState<any[]>([]);
   const [loadingRekap, setLoadingRekap] = useState(false);
   const [searchRekap, setSearchRekap] = useState('');
-  const [rekapFilterStatus, setRekapFilterStatus] = useState<'ALL' | 'SUDAH' | 'BELUM'>('ALL');
+  const [rekapFilterStatus, setRekapFilterStatus] = useState<'ALL' | 'SUDAH' | 'BELUM' | 'CUTI'>('ALL');
 
   // Interactive PDF Viewer Modal State
   const [pdfModal, setPdfModal] = useState<{
@@ -52,7 +53,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto detect developer status by NIK pattern if not passed
-  const isDevUser = isDeveloper || inspectorNik.startsWith('02D24') || inspectorNik === '02D24000043';
+  const isDevUser = isDeveloper || inspectorNik.startsWith('02D24') || inspectorNik === '02D24000043' || inspectorNik === '02D25000055' || inspectorNik === 'preplabadmin';
 
   useEffect(() => {
     fetchGroupFeed();
@@ -80,13 +81,33 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
       const res = await fetch(`/api/rekap-inspeksi?week=${week}`);
       if (res.ok) {
         const data = await res.json();
-        setRekapSummary(data.summary || { total: 0, sudah: 0, belum: 0, percentage: 0 });
+        setRekapSummary(data.summary || { total: 0, sudah: 0, belum: 0, percentage: 0, cutiCount: 0 });
         setRekapList(data.rekapList || []);
+        setCutiList(data.cutiList || []);
       }
     } catch (err) {
       console.error('Error fetching rekap data:', err);
     } finally {
       setLoadingRekap(false);
+    }
+  };
+
+  const handleToggleCuti = async (empNik: string, currentIsCuti: boolean) => {
+    try {
+      const res = await fetch('/api/rekap-inspeksi/override-cuti', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nik: empNik, isCuti: !currentIsCuti })
+      });
+      if (res.ok) {
+        toast.success(`Status personil ${empNik} berhasil diubah ke ${!currentIsCuti ? 'Cuti' : 'Aktif (Wajib Inspeksi)'}!`);
+        fetchRekapData(selectedWeek);
+      } else {
+        const errData = await res.json();
+        toast.error(errData.error || 'Gagal mengubah status Cuti');
+      }
+    } catch (err: any) {
+      toast.error('Gagal mengubah status: ' + err.message);
     }
   };
 
@@ -201,9 +222,15 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     }
   };
 
-  const filteredRekap = rekapList.filter(emp => {
+  const sourceList = rekapFilterStatus === 'CUTI' 
+    ? cutiList 
+    : (rekapFilterStatus === 'ALL' ? [...rekapList, ...cutiList] : rekapList);
+
+  const filteredRekap = sourceList.filter(emp => {
     const matchSearch = emp.name.toLowerCase().includes(searchRekap.toLowerCase()) || emp.nik.toLowerCase().includes(searchRekap.toLowerCase());
-    const matchStatus = rekapFilterStatus === 'ALL' ? true : emp.status === rekapFilterStatus;
+    const matchStatus = rekapFilterStatus === 'ALL' 
+      ? true 
+      : (rekapFilterStatus === 'CUTI' ? emp.isCuti : emp.status === rekapFilterStatus);
     return matchSearch && matchStatus;
   });
 
@@ -238,8 +265,8 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
             {isDevUser && (
               <button
                 onClick={handleResetRekap}
-                className="h-8 px-2 rounded-xl bg-rose-500/15 text-rose-500 border border-rose-500/30 hover:bg-rose-500/20 text-[11px] font-bold flex items-center gap-1 transition-colors"
-                title="Developer: Reset Rekapan & Chat"
+                className="h-8 px-2 rounded-xl bg-rose-500/15 text-rose-500 border border-rose-500/30 text-[11px] font-bold flex items-center gap-1 hover:bg-rose-500/20 transition-colors"
+                title={`Reset Rekapan ${selectedWeek}`}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Reset</span>
@@ -249,8 +276,8 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
             {isFloating && onClose && (
               <button 
                 onClick={onClose}
-                className="w-8 h-8 rounded-xl bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 flex items-center justify-center transition-colors font-bold shrink-0"
-                title="Tutup Popup"
+                className="h-8 w-8 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] hover:bg-[var(--bg-main)] text-[var(--text-main)] flex items-center justify-center transition-colors"
+                title="Tutup Modal"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -258,38 +285,29 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           </div>
         </div>
 
-        {/* PINNED ANNOUNCEMENT BAR */}
-        <div className="mt-3 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 rounded-2xl p-2.5 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200">
-          <Pin className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-          <div className="flex-1 leading-tight text-[11px]">
-            <span className="font-bold text-amber-600 dark:text-amber-400 mr-1">Pak Aldy:</span>
-            <span>Terlampir Jadwal Inspeksi Periode Week 34 &amp; 35. Dimohon untuk unggah PDF hasil inspeksi Anda ke grup ini.</span>
-          </div>
-        </div>
-
         {/* NAVIGATION TABS */}
-        <div className="mt-3 flex items-center bg-[var(--input-bg)] border border-[var(--border-main)] p-1 rounded-2xl gap-1">
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[var(--border-main)]">
           <button
             onClick={() => setActiveTab('feed')}
-            className={`flex-1 py-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+            className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
               activeTab === 'feed'
                 ? 'bg-[var(--primary)] text-white shadow-md'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
             }`}
           >
             <MessageSquare className="w-3.5 h-3.5" />
-            <span>Laporan PDF ({messages.length})</span>
+            <span>Laporan PDF ({messages.filter(m => m.type === 'pdf_report').length})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('rekap')}
-            className={`flex-1 py-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+            className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
               activeTab === 'rekap'
                 ? 'bg-[var(--primary)] text-white shadow-md'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
             }`}
           >
-            <UserCheck className="w-3.5 h-3.5" />
+            <Users className="w-3.5 h-3.5" />
             <span>Rekap ({rekapSummary.percentage}%)</span>
           </button>
         </div>
@@ -297,14 +315,16 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
 
       {/* ── TAB CONTENT 1: FEED & PDF LAPORAN ── */}
       {activeTab === 'feed' && (
-        <div className={`flex flex-col ${isFloating ? 'flex-1 min-h-0 overflow-hidden' : 'space-y-4'}`}>
+        <div className={`flex flex-col ${isFloating ? 'flex-1 min-h-0' : 'space-y-4'}`}>
           
           {/* Messages Feed Container */}
-          <div className={`bg-[var(--card-bg)] border border-[var(--border-main)] p-3 sm:p-4 space-y-4 overflow-y-auto ${isFloating ? 'flex-1 rounded-none border-x-0 border-t-0' : 'rounded-3xl shadow-xl min-h-[380px]'}`}>
-            <div className="text-center my-1 flex justify-center items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--border-main)] font-mono">
-                Pesan &amp; Laporan PDF
-              </span>
+          <div className={`space-y-3.5 ${isFloating ? 'flex-1 overflow-y-auto p-3' : ''}`}>
+            {/* PINNED ANNOUNCEMENT */}
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2 shadow-xs">
+              <Pin className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Pak Aldy:</span> Terlampir Jadwal Inspeksi Periode Week 34 & 35. Dimohon untuk unggah PDF hasil inspeksi Anda ke grup ini.
+              </div>
             </div>
 
             {loadingFeed ? (
@@ -375,14 +395,6 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                             </div>
                           </div>
 
-                          {msg.photos && msg.photos.length > 0 && (
-                            <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-                              {msg.photos.map((pUrl: string, pIdx: number) => (
-                                <img key={pIdx} src={pUrl} alt="Temuan" className="w-16 h-12 object-cover rounded-lg border border-[var(--border-main)] shrink-0" />
-                              ))}
-                            </div>
-                          )}
-
                           <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--border-main)]">
                             <button
                               onClick={() => openPdfModal(msg.pdfUrl, msg.pdfTitle, msg.senderName)}
@@ -432,48 +444,24 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           {/* Quick Action Input Bar */}
           <div className={`bg-[var(--card-bg)] border border-[var(--border-main)] p-2.5 sm:p-3 shrink-0 ${isFloating ? 'rounded-b-3xl rounded-t-none border-x-0 border-b-0' : 'rounded-3xl shadow-xl'}`}>
             <form onSubmit={handlePostReport} className="space-y-2">
-              
-              {showAttachModal && (
-                <div className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2.5 space-y-2 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[var(--text-main)] flex items-center gap-1">
-                      <Paperclip className="w-3.5 h-3.5 text-[var(--primary)]" /> Form PDF Laporan ({selectedWeek})
-                    </span>
-                    <button type="button" onClick={() => setShowAttachModal(false)} className="text-[10px] text-rose-500 font-bold hover:underline">
-                      Tutup
-                    </button>
-                  </div>
-                  <Input 
-                    placeholder={`Judul PDF (misal: HAZARD REPORT ${selectedWeek})`} 
-                    value={pdfTitleInput}
-                    onChange={e => setPdfTitleInput(e.target.value)}
-                    className="bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)] text-[11px]"
-                  />
-                  <Input 
-                    placeholder="URL Link PDF" 
-                    value={pdfUrlInput}
-                    onChange={e => setPdfUrlInput(e.target.value)}
-                    className="bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)] text-[11px] font-mono"
-                  />
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Judul (cth: W35)..."
+                  value={pdfTitleInput}
+                  onChange={e => setPdfTitleInput(e.target.value)}
+                  className="bg-[var(--input-bg)] border-[var(--border-main)] text-[var(--text-main)] text-xs h-9 rounded-xl w-1/4"
+                />
+                <Input
+                  placeholder="URL Link PDF..."
+                  value={pdfUrlInput}
+                  onChange={e => setPdfUrlInput(e.target.value)}
+                  className="bg-[var(--input-bg)] border-[var(--border-main)] text-[var(--text-main)] text-xs h-9 rounded-xl flex-1 font-mono"
+                />
+              </div>
 
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setShowAttachModal(!showAttachModal)}
-                  className={`p-2 rounded-xl border transition-all ${
-                    showAttachModal 
-                      ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-xs' 
-                      : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:text-[var(--text-main)]'
-                  }`}
-                  title="Lampirkan File PDF"
-                >
-                  <Paperclip className="w-4 h-4" />
-                </button>
-
                 <Input
-                  placeholder="Ketik pesan atau hasil inspeksi..."
+                  placeholder="Ketik catatan / rangkuman hasil inspeksi..."
                   value={textInput}
                   onChange={e => setTextInput(e.target.value)}
                   className="flex-1 bg-[var(--input-bg)] border-[var(--border-main)] text-[var(--text-main)] placeholder:text-[var(--text-muted)] text-xs rounded-xl h-9"
@@ -518,9 +506,9 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           </div>
 
           {/* Summary Dashboard Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
             <Card className="p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] text-center">
-              <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase">Total Personil</p>
+              <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase">Total Wajib</p>
               <h3 className="text-lg font-black text-[var(--text-main)]">{rekapSummary.total}</h3>
             </Card>
 
@@ -534,7 +522,12 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
               <h3 className="text-lg font-black text-amber-600 dark:text-amber-400">{rekapSummary.belum}</h3>
             </Card>
 
-            <Card className="p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-center">
+            <Card className="p-2.5 bg-purple-500/10 border border-purple-500/30 text-center">
+              <p className="text-[10px] text-purple-600 dark:text-purple-300 font-bold uppercase">Sedang Cuti</p>
+              <h3 className="text-lg font-black text-purple-600 dark:text-purple-400">{rekapSummary.cutiCount || 0}</h3>
+            </Card>
+
+            <Card className="p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-center col-span-2 sm:col-span-1">
               <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase">% {selectedWeek}</p>
               <h3 className="text-lg font-black text-[var(--primary)]">{rekapSummary.percentage}%</h3>
             </Card>
@@ -559,7 +552,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                       : 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--border-main)]'
                   }`}
                 >
-                  Semua ({rekapList.length})
+                  Semua ({rekapList.length + cutiList.length})
                 </button>
                 <button
                   onClick={() => setRekapFilterStatus('SUDAH')}
@@ -581,16 +574,17 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                 >
                   ⏳ Belum ({rekapSummary.belum})
                 </button>
-              </div>
-
-              {isDevUser && (
                 <button
-                  onClick={handleResetRekap}
-                  className="px-2 py-1 rounded-lg bg-rose-500/15 text-rose-500 border border-rose-500/30 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-500/20 shrink-0"
+                  onClick={() => setRekapFilterStatus('CUTI')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold shrink-0 ${
+                    rekapFilterStatus === 'CUTI'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--border-main)]'
+                  }`}
                 >
-                  <RotateCcw className="w-3 h-3" /> Reset {selectedWeek}
+                  🏖️ Cuti ({rekapSummary.cutiCount || 0})
                 </button>
-              )}
+              </div>
             </div>
           </div>
 
@@ -608,18 +602,22 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
             ) : (
               filteredRekap.map((emp, i) => {
                 const isDone = emp.status === 'SUDAH';
+                const isCutiPerson = emp.isCuti;
+
                 return (
                   <div 
                     key={emp.nik || i}
                     className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2 text-xs ${
-                      isDone 
+                      isCutiPerson
+                        ? 'bg-purple-500/5 border-purple-500/30 text-[var(--text-main)]'
+                        : isDone 
                         ? 'bg-emerald-500/5 border-emerald-500/30 text-[var(--text-main)]' 
                         : 'bg-[var(--input-bg)] border-[var(--border-main)] text-[var(--text-main)]'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                        isDone ? 'bg-emerald-600 text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+                        isCutiPerson ? 'bg-purple-600 text-white' : isDone ? 'bg-emerald-600 text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
                       }`}>
                         {emp.name.charAt(0)}
                       </div>
@@ -633,7 +631,25 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                     </div>
 
                     <div className="shrink-0 flex items-center gap-1">
-                      {isDone ? (
+                      {isDevUser && (
+                        <button
+                          onClick={() => handleToggleCuti(emp.nik, !!isCutiPerson)}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors ${
+                            isCutiPerson
+                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
+                              : 'bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30 hover:bg-purple-500/25'
+                          }`}
+                          title={isCutiPerson ? "Kembalikan ke Status Wajib Inspeksi" : "Tandai Karyawan Sedang Cuti"}
+                        >
+                          {isCutiPerson ? '✅ Set Wajib' : '🏖️ Set Cuti'}
+                        </button>
+                      )}
+
+                      {isCutiPerson ? (
+                        <span className="px-2 py-1 rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/40 text-[10px] font-bold">
+                          SEDANG CUTI
+                        </span>
+                      ) : isDone ? (
                         <>
                           <button
                             onClick={() => openPdfModal(emp.pdfUrl, `Laporan Inspeksi - ${emp.name}`, emp.name)}
@@ -643,11 +659,11 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                           </button>
                           {emp.pdfUrl && emp.pdfUrl !== '#' && (
                             <a
-                              href={emp.pdfUrl}
+                              href={getPdfEmbedUrl(emp.pdfUrl)}
                               target="_blank"
                               rel="noreferrer"
                               className="p-1 rounded-lg bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] text-[10px] font-bold flex items-center justify-center transition-colors"
-                              title="Buka di Tab Baru"
+                              title="Buka di Tab Baru (Viewer)"
                             >
                               <ExternalLink className="w-3 h-3" />
                             </a>
