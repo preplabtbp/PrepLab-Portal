@@ -274,6 +274,44 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       }
     });
 
+    const isGolonganI = (emp: any): boolean => {
+      const golStr = String(emp.gol || '').trim().toUpperCase();
+      const jgStr = String(emp.jobGrade || '').trim().toUpperCase();
+      const posStr = String(emp.jabatan || emp.position || '').trim().toLowerCase();
+
+      // 1. Check explicit Golongan I in gol column
+      if (
+        golStr === 'I' || golStr === '1' ||
+        golStr.startsWith('I.') || golStr.startsWith('1.') ||
+        golStr.startsWith('I-') || golStr.startsWith('1-') ||
+        golStr.startsWith('I/') || golStr.startsWith('1/') ||
+        golStr.startsWith('I ') || golStr.startsWith('1 ') ||
+        golStr === 'IA' || golStr === 'IB' || golStr === 'IC' || golStr === 'ID' || golStr === 'IE'
+      ) {
+        return true;
+      }
+
+      // 2. Check Job Grade for Crew Golongan I (S1.1, S1.2, S1.3, 1.1, 1.2, 1.3, S1, etc.)
+      if (
+        jgStr.startsWith('S1') || jgStr.startsWith('1.') || jgStr === '1' || 
+        jgStr.startsWith('I.') || jgStr.startsWith('I-')
+      ) {
+        return true;
+      }
+
+      // 3. Crew position without leadership title (Foreman/Supervisor/Admin/Officer/Manager/Superintendent/Specialist)
+      const isLeader = 
+        posStr.includes('foreman') || posStr.includes('supervisor') || posStr.includes('admin') || 
+        posStr.includes('officer') || posStr.includes('manager') || posStr.includes('superintendent') || 
+        posStr.includes('specialist') || posStr.includes('analyst') || posStr.includes('technician') || posStr.includes('chemist');
+
+      if (!golStr && !jgStr && !isLeader) {
+        return true;
+      }
+
+      return false;
+    };
+
     // Filter employees: ONLY GOL II KE ATAS (Exclude Gol I, Exclude GTS, Exclude System Admin, Exclude Cuti)
     const targetEmployees = allEmployees.filter(emp => {
       // 1. Exclude System/Admin accounts
@@ -291,25 +329,16 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         return false;
       }
 
-      // 3. Exclude Employees currently ON CUTI / LEAVE
+      // 3. Exclude Gol I (STRICTLY KEEP GOL II KE ATAS ONLY)
+      if (isGolonganI(emp)) {
+        return false;
+      }
+
+      // 4. Exclude Employees currently ON CUTI / LEAVE
       if (onCutiSet.has(emp.nik)) {
         return false;
       }
 
-      // 4. Exclude Gol I (Keep Gol II ke atas)
-      if (!emp.gol) {
-        const jg = (emp.jobGrade || '').trim().toUpperCase();
-        if (jg && jg.length > 0) return true;
-        const pos = (emp.jabatan || emp.position || '').toLowerCase();
-        if (pos.includes('foreman') || pos.includes('supervisor') || pos.includes('officer') || pos.includes('manager') || pos.includes('superintendent') || pos.includes('specialist')) {
-          return true;
-        }
-        return false;
-      }
-      const golStr = String(emp.gol).trim().toUpperCase();
-      if (golStr === 'I' || golStr === '1' || golStr.startsWith('I-') || golStr.startsWith('1-') || golStr.startsWith('I ') || golStr === 'IA' || golStr === 'IB' || golStr === 'IC' || golStr === 'ID') {
-        return false;
-      }
       return true;
     });
 
@@ -376,7 +405,8 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       if (nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || nikLower.includes('admin')) return false;
       const ptUpper = (emp.pt || '').toString().trim().toUpperCase();
       if (ptUpper === 'GTS' || cleanNik.toUpperCase().startsWith('03') || cleanNik.toUpperCase().startsWith('M03')) return false;
-      
+      if (isGolonganI(emp)) return false;
+
       return onCutiSet.has(cleanNik);
     });
 
