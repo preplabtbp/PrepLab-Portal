@@ -62,6 +62,10 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE user_themes ADD COLUMN IF NOT EXISTS author_name TEXT;`);
     await db.execute(sql`ALTER TABLE user_themes ADD COLUMN IF NOT EXISTS published_at TIMESTAMP;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS cover TEXT;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS avatar TEXT;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS sisa_ct TEXT;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS jatuh_tempo_ct TEXT;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS first_login_complete BOOLEAN DEFAULT false;`);
   } catch (e: any) {
     console.warn("DB schema init warning:", e.message);
   }
