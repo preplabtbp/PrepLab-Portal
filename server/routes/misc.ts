@@ -88,8 +88,25 @@ router.post('/api/group-reports', async (req, res) => {
     // Consolidate all inspector NIKs (multi-inspector support!)
     const niksSet = new Set<string>();
     if (senderNik) niksSet.add(senderNik);
+
+    // Fetch all employees to match NIKs or names
+    const allEmps = await db.select().from(employees);
+
     if (Array.isArray(inspectorNiks)) {
-      inspectorNiks.forEach((n: string) => { if (n && typeof n === 'string') niksSet.add(n.trim()); });
+      inspectorNiks.forEach((item: string) => {
+        if (item && typeof item === 'string') {
+          const trimmed = item.trim();
+          if (trimmed) {
+            niksSet.add(trimmed);
+            // Also match name if string contains inspector name
+            const matchedEmp = allEmps.find(e => 
+              e.nik === trimmed || 
+              (e.name && (e.name.toLowerCase() === trimmed.toLowerCase() || trimmed.toLowerCase().includes(e.name.toLowerCase()) || e.name.toLowerCase().includes(trimmed.toLowerCase())))
+            );
+            if (matchedEmp) niksSet.add(matchedEmp.nik);
+          }
+        }
+      });
     }
 
     const newMsg = {

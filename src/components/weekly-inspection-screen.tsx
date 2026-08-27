@@ -110,9 +110,14 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
 
       // Auto-post PDF report to Safety Group Feed (with multi-inspector NIKs support)
       const allNiks = [
-        inspectorNik, 
-        payload.signatures?.nik1, 
-        payload.signatures?.nik2, 
+        inspectorNik,
+        inspectorName,
+        payload.signatures?.insp2Nik,
+        payload.signatures?.insp2Name,
+        payload.signatures?.insp3Nik,
+        payload.signatures?.insp3Name,
+        payload.signatures?.nik1,
+        payload.signatures?.nik2,
         payload.signatures?.nik3
       ].filter(Boolean);
 

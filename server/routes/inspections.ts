@@ -331,21 +331,40 @@ router.post("/api/inspections/universal", async (req, res) => {
           waMessageText += `\n*DAFTAR TEMUAN*: Nihil\n`;
       }
 
-      const driveTbpUrl = (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) ? pdfUrl : null;
-      const driveGpsUrl = (linkPdf2 && linkPdf2.startsWith('http') && !linkPdf2.includes('/api/inspections/')) ? linkPdf2 : null;
+      let driveTbpUrl = (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) ? pdfUrl : null;
+      let driveGpsUrl = (linkPdf2 && linkPdf2.startsWith('http') && !linkPdf2.includes('/api/inspections/')) ? linkPdf2 : null;
+
+      // Fallback: If GAS didn't return a direct HTTP URL, generate PDF immediately on Google Drive
+      if (!driveTbpUrl) {
+        try {
+          const generatedPdf = await generatePdfFromTemplate(
+            '1YMympG3aA-8l978aAlRJFSoi-SVQAKiS7KmJjNRfuBI',
+            '1JE6EusixbK7saIzboKNOk9aMiAqEX-zF',
+            {
+              '<<JUDUL_FORM>>': finalData.judulForm || 'LAPORAN INSPEKSI TERPADU',
+              '<<LOKASI>>': finalData.lokasiUmum || '-',
+              '<<INSPEKTOR_UTAMA>>': finalData.insp1 || '-',
+              '<<INSPEKTOR_2>>': finalData.insp2 || '-',
+              '<<CATATAN>>': finalData.catatanUmum || '-'
+            },
+            `Laporan_Inspeksi_${finalData.idForm || Date.now()}.pdf`,
+            {}
+          );
+          if (generatedPdf?.pdfUrl) {
+            driveTbpUrl = generatedPdf.pdfUrl;
+          }
+        } catch(e) {
+          console.error("Fallback PDF creation error:", e);
+        }
+      }
 
       if (driveTbpUrl) {
         waMessageText += `\n*Dokumen Laporan TBP*:\n${driveTbpUrl}\n`;
-      } else {
-        waMessageText += `\n*Dokumen Laporan TBP*:\n(Tautan Google Drive sedang diproses / dibuat)\n`;
       }
-
       if (driveGpsUrl) {
         waMessageText += `\n*Dokumen Laporan GPS*:\n${driveGpsUrl}\n`;
-      } else {
-        waMessageText += `\n*Dokumen Laporan GPS*:\n(Tautan Google Drive sedang diproses / dibuat)\n`;
       }
-      
+
       res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl: driveTbpUrl, linkPdf2: driveGpsUrl, waMessageText });
     } catch (error: any) {
       console.error(error);
