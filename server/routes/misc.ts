@@ -173,13 +173,29 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     const selectedWeek = (req.query.week as string) || getISOWeekTag();
     const allEmployees = await db.select().from(employees);
 
-    // Filter employees: ONLY GOL II KE ATAS (Exclude Gol I)
+    // Filter employees: ONLY GOL II KE ATAS (Exclude Gol I, Exclude GTS, Exclude System Admin accounts)
     const targetEmployees = allEmployees.filter(emp => {
+      // 1. Exclude System/Admin accounts
+      const nikLower = (emp.nik || '').toString().trim().toLowerCase();
+      const nameLower = (emp.name || '').toString().trim().toLowerCase();
+      const usernameLower = (emp.username || '').toString().trim().toLowerCase();
+      if (nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || nikLower.includes('admin') || usernameLower.includes('admin') || nameLower.includes('admin')) {
+        return false;
+      }
+
+      // 2. Exclude GTS Employees (pt === GTS or NIK starts with M / 03 / M03 / M04)
+      const ptUpper = (emp.pt || '').toString().trim().toUpperCase();
+      const nikUpper = (emp.nik || '').toString().trim().toUpperCase();
+      if (ptUpper === 'GTS' || nikUpper.startsWith('M') || nikUpper.startsWith('03') || nikUpper.startsWith('M03') || nikUpper.startsWith('M04')) {
+        return false;
+      }
+
+      // 3. Exclude Gol I (Keep Gol II ke atas)
       if (!emp.gol) {
         const jg = (emp.jobGrade || '').trim().toUpperCase();
         if (jg && jg.length > 0) return true;
         const pos = (emp.jabatan || emp.position || '').toLowerCase();
-        if (pos.includes('foreman') || pos.includes('supervisor') || pos.includes('admin') || pos.includes('officer') || pos.includes('manager') || pos.includes('superintendent') || pos.includes('specialist')) {
+        if (pos.includes('foreman') || pos.includes('supervisor') || pos.includes('officer') || pos.includes('manager') || pos.includes('superintendent') || pos.includes('specialist')) {
           return true;
         }
         return false;
