@@ -13,6 +13,7 @@ import { Palette } from 'lucide-react';
 import { initAuth, googleSignIn } from './google-auth';
 import { WhatsAppModal } from './components/whatsapp-modal';
 import { P5MNotificationModal } from './components/p5m-notification-modal';
+import { GroupReportScreen, GroupReportFloatingWidget } from './components/GroupReportScreen';
 
 
 
@@ -1108,7 +1109,8 @@ export default function App() {
               <AnimatePresence mode="wait">
 <Routes location={location} key={location.pathname}>
   <Route path="/" element={<HomeScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} userPt={userProfile?.pt} />} />
-  <Route path="/chat" element={<ChatScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} />} />
+  <Route path="/chat" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
+  <Route path="/group-reports" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
   <Route path="/inspect" element={<InspectionScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} equipmentCategories={equipmentCategories || []} reloadData={fetchMasterData} loading={loadingEquipments} />} />
   <Route path="/downtime" element={<DowntimePage inspectorNik={inspectorNik!} equipmentCategories={equipmentCategories || []} />} />
   <Route path="/create-wo" element={<CreateWOScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} equipmentCategories={equipmentCategories || []} />} />
@@ -1313,6 +1315,17 @@ export default function App() {
         inspectorNik={inspectorNik}
         inspectorName={inspectorName}
       />
+
+      {/* Global Floating Group Safety & PDF Widget (Bottom Right Corner) */}
+      {inspectorNik && (
+        <GroupReportFloatingWidget
+          inspectorNik={inspectorNik}
+          inspectorName={inspectorName || 'Inspector'}
+          inspectorRole={userProfile?.jabatan}
+          inspectorSection={userProfile?.section}
+          isDeveloper={isDeveloper}
+        />
+      )}
 
     </div>
   );

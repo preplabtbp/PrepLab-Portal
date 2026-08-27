@@ -33,17 +33,215 @@ router.get('/api/developers', async (req, res) => {
   }
 });
 
+// In-memory fallback array for Group Safety Reports & Feed
+const chatMessagesMemory: any[] = [];
+const groupReportsMemory: any[] = [];
+
 router.get('/api/chat/:room', async (req, res) => {
-    console.log("Chat route hit for room", req.params.room);
-    try {
-      const room = req.params.room;
-      const msgs = chatMessagesMemory.filter(m => m.room === room);
-      res.json(msgs);
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Failed to fetch messages", details: err.message });
+  try {
+    const room = req.params.room;
+    const msgs = chatMessagesMemory.filter(m => m.room === room);
+    res.json(msgs);
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch messages", details: err.message });
+  }
+});
+
+function getISOWeekTag(d: Date = new Date()): string {
+  const date = new Date(d.getTime());
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  const weekNum = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+  return `W${weekNum}`;
+}
+
+function extractWeekTag(title?: string, fileName?: string, timestamp?: string): string {
+  const combined = `${title || ''} ${fileName || ''}`.toUpperCase();
+  const match = combined.match(/W(?:EEK)?\s*(\d+)/i);
+  if (match && match[1]) {
+    return `W${match[1]}`;
+  }
+  if (timestamp) {
+    return getISOWeekTag(new Date(timestamp));
+  }
+  return getISOWeekTag();
+}
+
+// --- GROUP REPORT & REKAP API ENDPOINTS ---
+router.get('/api/group-reports', async (req, res) => {
+  try {
+    res.json(groupReportsMemory);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/group-reports', async (req, res) => {
+  try {
+    const { senderNik, senderName, senderRole, text, type, pdfTitle, pdfSubTitle, pdfUrl, pdfFileName, photos, inspectorNiks } = req.body;
+    
+    // Extract week tag (e.g. W35, W34, etc.)
+    const weekTag = extractWeekTag(pdfTitle || text, pdfFileName);
+    
+    // Consolidate all inspector NIKs (multi-inspector support!)
+    const niksSet = new Set<string>();
+    if (senderNik) niksSet.add(senderNik);
+    if (Array.isArray(inspectorNiks)) {
+      inspectorNiks.forEach((n: string) => { if (n && typeof n === 'string') niksSet.add(n.trim()); });
     }
-  });
+
+    const newMsg = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      senderNik: senderNik || '02D000000',
+      senderName: senderName || 'Anonim Inspektor',
+      senderRole: senderRole || 'Staff',
+      allInspectorNiks: Array.from(niksSet),
+      text: text || '',
+      type: type || (pdfUrl ? 'pdf_report' : 'text'),
+      pdfTitle: pdfTitle || 'LAPORAN INSPEKSI TERPADU',
+      pdfSubTitle: pdfSubTitle || 'PDF Terlampir',
+      pdfUrl: pdfUrl || null,
+      pdfFileName: pdfFileName || 'Laporan_Inspeksi_PrepLab.pdf',
+      photos: photos || [],
+      week: weekTag,
+      timestamp: new Date().toISOString()
+    };
+    groupReportsMemory.unshift(newMsg);
+    res.status(201).json(newMsg);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete individual chat message (Developer Action)
+router.delete('/api/group-reports/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const index = groupReportsMemory.findIndex(m => m.id === id);
+    if (index !== -1) {
+      groupReportsMemory.splice(index, 1);
+      res.json({ success: true, message: 'Pesan berhasil dihapus.' });
+    } else {
+      res.status(404).json({ error: 'Pesan tidak ditemukan.' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reset Rekapan & Chat (Developer Action)
+router.post('/api/group-reports/reset', async (req, res) => {
+  try {
+    const { week } = req.body;
+    if (week && week !== 'ALL') {
+      for (let i = groupReportsMemory.length - 1; i >= 0; i--) {
+        const msgWeek = groupReportsMemory[i].week || extractWeekTag(groupReportsMemory[i].pdfTitle, groupReportsMemory[i].pdfFileName, groupReportsMemory[i].timestamp);
+        if (msgWeek === week) {
+          groupReportsMemory.splice(i, 1);
+        }
+      }
+    } else {
+      groupReportsMemory.length = 0;
+    }
+    res.json({ success: true, message: `Rekapan ${week ? week : 'keseluruhan'} berhasil di-reset!` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/rekap-inspeksi', async (req, res) => {
+  try {
+    const selectedWeek = (req.query.week as string) || getISOWeekTag();
+    const allEmployees = await db.select().from(employees);
+
+    // Filter employees: ONLY GOL II KE ATAS (Exclude Gol I)
+    const targetEmployees = allEmployees.filter(emp => {
+      if (!emp.gol) {
+        const jg = (emp.jobGrade || '').trim().toUpperCase();
+        if (jg && jg.length > 0) return true;
+        const pos = (emp.jabatan || emp.position || '').toLowerCase();
+        if (pos.includes('foreman') || pos.includes('supervisor') || pos.includes('admin') || pos.includes('officer') || pos.includes('manager') || pos.includes('superintendent') || pos.includes('specialist')) {
+          return true;
+        }
+        return false;
+      }
+      const golStr = String(emp.gol).trim().toUpperCase();
+      if (golStr === 'I' || golStr === '1' || golStr.startsWith('I-') || golStr.startsWith('1-') || golStr.startsWith('I ') || golStr === 'IA' || golStr === 'IB' || golStr === 'IC' || golStr === 'ID') {
+        return false;
+      }
+      return true;
+    });
+
+    // Find all users who completed inspection for the selected week
+    const completedSet = new Map<string, any>();
+    
+    groupReportsMemory.forEach(msg => {
+      const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
+      
+      // Match specified week or all
+      if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
+        if (msg.type === 'pdf_report') {
+          if (msg.senderNik) {
+            completedSet.set(msg.senderNik, {
+              timestamp: msg.timestamp,
+              pdfUrl: msg.pdfUrl,
+              pdfTitle: msg.pdfTitle,
+              week: msgWeek
+            });
+          }
+          // ALSO mark ALL multi-inspectors listed in allInspectorNiks!
+          if (Array.isArray(msg.allInspectorNiks)) {
+            msg.allInspectorNiks.forEach((nik: string) => {
+              if (nik) {
+                completedSet.set(nik, {
+                  timestamp: msg.timestamp,
+                  pdfUrl: msg.pdfUrl,
+                  pdfTitle: msg.pdfTitle,
+                  week: msgWeek
+                });
+              }
+            });
+          }
+        }
+      }
+    });
+
+    const rekapList = targetEmployees.map(emp => {
+      const isDone = completedSet.has(emp.nik);
+      const info = completedSet.get(emp.nik);
+      return {
+        nik: emp.nik,
+        name: emp.name,
+        gol: emp.gol || 'II',
+        jobGrade: emp.jobGrade || '-',
+        section: emp.section || 'General',
+        pt: emp.pt || 'TBP',
+        jabatan: emp.jabatan || emp.position || 'Personil',
+        shift: emp.shift || 'Nonshift',
+        status: isDone ? 'SUDAH' : 'BELUM',
+        completedAt: isDone ? info.timestamp : null,
+        pdfUrl: isDone ? info.pdfUrl : null,
+        pdfTitle: isDone ? info.pdfTitle : null,
+        week: isDone ? info.week : selectedWeek
+      };
+    });
+
+    const total = rekapList.length;
+    const sudah = rekapList.filter(r => r.status === 'SUDAH').length;
+    const belum = total - sudah;
+    const percentage = total > 0 ? Math.round((sudah / total) * 100) : 0;
+
+    res.json({
+      summary: { total, sudah, belum, percentage, selectedWeek },
+      rekapList
+    });
+  } catch (err: any) {
+    console.error('Error fetching rekap:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.get('/api/vapid-public-key', (req, res) => {
     res.send(vapidPublicKey);

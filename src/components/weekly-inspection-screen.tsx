@@ -107,6 +107,33 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
     promise.then((data) => {
       setIsSubmitting(false);
       setSelectedForm('');
+
+      // Auto-post PDF report to Safety Group Feed (with multi-inspector NIKs support)
+      const allNiks = [
+        inspectorNik, 
+        payload.signatures?.nik1, 
+        payload.signatures?.nik2, 
+        payload.signatures?.nik3
+      ].filter(Boolean);
+
+      fetch('/api/group-reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderNik: inspectorNik,
+          senderName: inspectorName,
+          senderRole: inspectorJabatan || 'Inspector',
+          inspectorNiks: allNiks,
+          text: `Formulir Inspeksi ${finalData.judulForm || ''} (${finalData.lokasiUmum || '-'}) telah selesai dilaksanakan.`,
+          type: 'pdf_report',
+          pdfTitle: finalData.judulForm || 'LAPORAN INSPEKSI TERPADU',
+          pdfSubTitle: `Lokasi: ${finalData.lokasiUmum || '-'}`,
+          pdfUrl: data?.pdfUrl || '#',
+          pdfFileName: `Laporan_Inspeksi_${finalData.idForm || 'PrepLab'}.pdf`,
+          photos: payload.fotoTemuanArray || []
+        })
+      }).catch(err => console.error('Failed auto posting to group', err));
+
       if (data?.waMessageText) {
         // Lift to App-level modal so navigating away doesn't lose it
         onInspectionComplete?.(data.waMessageText);

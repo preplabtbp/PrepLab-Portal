@@ -6,7 +6,7 @@ import { Cloud,
   ThermometerSun, LineChart, LayoutDashboard, Wrench, CheckSquare, 
   ShieldCheck, Eye, Activity, Folder, Info, Package, History, 
   PlusCircle, Settings, ArrowRight, Clock, Box, ClipboardList, Briefcase, Users,
-  BookOpen, Sparkles, Edit2, ClipboardCheck, MessageSquarePlus } from 'lucide-react';
+  BookOpen, Sparkles, Edit2, ClipboardCheck, MessageSquarePlus, MessageSquare } from 'lucide-react';
 import { Button } from './ui';
 import { getKtaUrl } from '../sheets-api';
 import { FoodReportModal } from './food-report-modal';
@@ -99,7 +99,6 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       title: 'Observasi & Pelaporan',
       icon: <ShieldCheck className="w-5 h-5" />,
       color: 'amber' as const,
-      bgIcon: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20',
       items: [
         { id: 'weekly-inspection', title: "Inspeksi Mingguan", desc: "Area & kelengkapan", icon: <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('weekly-inspection') },
         { id: 'ticket', title: "Rekapan Temuan Inspeksi", desc: "Laporan temuan unsafe", icon: <Eye className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('ticket') },
