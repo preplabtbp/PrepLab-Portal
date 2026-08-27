@@ -225,18 +225,18 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
 
       <DevModeAccordion inspectorNik={inspectorNik} devOptions={devOptions} setDevOptions={setDevOptions} />
 
-      <Card className="border-t-4 border-t-primary">
-        <h3 className="text-sm font-semibold text-slate-800 mb-4 flex items-center gap-2">
-          <ClipboardCheck className="w-4 h-4 text-primary" />
+      <Card className="border-t-4 border-t-[var(--primary)] bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)]">
+        <h3 className="text-sm font-bold text-[var(--text-main)] mb-4 flex items-center gap-2">
+          <ClipboardCheck className="w-4 h-4 text-[var(--primary)]" />
           Pilih Jenis Inspeksi
         </h3>
         {loading ? (
-          <div className="text-center py-6 text-slate-500 text-sm flex items-center justify-center gap-2">
-             <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+          <div className="text-center py-6 text-[var(--text-muted)] text-sm flex items-center justify-center gap-2">
+             <div className="w-4 h-4 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin"></div>
              Memuat Form dari Server...
           </div>
         ) : (
-          <Select value={selectedForm} onChange={(e) => setSelectedForm(e.target.value)} className="font-semibold text-primary shadow-sm border-primary/20">
+          <Select value={selectedForm} onChange={(e) => setSelectedForm(e.target.value)} className="font-bold text-[var(--text-main)] shadow-sm border-[var(--border-main)] bg-[var(--input-bg)]">
             <option value="">-- Sedang Memuat Form / Pilih --</option>
             
             <optgroup label="[ AREA ]">
