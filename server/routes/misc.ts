@@ -79,10 +79,34 @@ function parseWeekNumber(weekStr?: string): number {
 }
 
 function parseInspectionDate(insp: any, dataFObj?: any): Date {
+  const jsonStr = JSON.stringify(dataFObj || {}) + ' ' + String(insp?.dataF || '') + ' ' + String(insp?.equipmentName || '') + ' ' + String(insp?.location || '');
+
+  // 1. First scan jsonStr for explicit DD/MM/YYYY date pattern (e.g., "05/08/2026", "19/08/2026")
+  const dmYMatches = jsonStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})/g);
+  if (dmYMatches && dmYMatches.length > 0) {
+    for (const matchStr of dmYMatches) {
+      const parts = matchStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})/);
+      if (parts) {
+        const day = parseInt(parts[1], 10);
+        const month = parseInt(parts[2], 10) - 1;
+        const year = parseInt(parts[3], 10);
+        if (day >= 1 && day <= 31 && month >= 0 && month <= 11) {
+          const d = new Date(year, month, day);
+          if (!isNaN(d.getTime())) return d;
+        }
+      }
+    }
+  }
+
+  // 2. Check candidates
   const candidates = [
     dataFObj?.tanggal,
     dataFObj?.date,
     dataFObj?.tgl,
+    dataFObj?.tglInspeksi,
+    dataFObj?.tanggalInspeksi,
+    dataFObj?.tgl_inspeksi,
+    dataFObj?.tanggal_inspeksi,
     insp?.date,
     insp?.tanggal,
     insp?.createdAt
@@ -130,6 +154,8 @@ async function fetchAllGroupReports(filterWeek?: string) {
     if (parsed > 0) targetWeekNum = parsed;
   }
 
+  const cutoffDate = new Date(2026, 7, 24); // 24 August 2026 (00:00:00)
+
   const allEmps = await db.select().from(employees);
 
   const empMapByNik = new Map<string, any>();
@@ -143,8 +169,14 @@ async function fetchAllGroupReports(filterWeek?: string) {
   const seenIds = new Set<string>();
   const seenPdfUrls = new Set<string>();
 
-  const isWeekAllowed = (weekTag: string) => {
+  const isWeekAllowed = (weekTag: string, actualDate?: Date) => {
     if (filterWeek === 'ALL') return true;
+
+    // Strict rule: Any inspection date before 24 August 2026 MUST NOT be included!
+    if (actualDate && actualDate < cutoffDate) {
+      return false;
+    }
+
     const wNum = parseWeekNumber(weekTag);
     if (wNum > 0 && targetWeekNum > 0) {
       return wNum >= targetWeekNum; // Load starting from current week (W35 onwards!)
@@ -156,7 +188,8 @@ async function fetchAllGroupReports(filterWeek?: string) {
   groupReportsMemory.forEach(msg => {
     if (deletedReportIds.has(msg.id)) return;
     const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
-    if (!isWeekAllowed(msgWeek)) return;
+    const msgDate = msg.timestamp ? new Date(msg.timestamp) : undefined;
+    if (!isWeekAllowed(msgWeek, msgDate)) return;
 
     if (msg.id) seenIds.add(msg.id);
     if (msg.pdfUrl) seenPdfUrls.add(msg.pdfUrl);
@@ -181,7 +214,7 @@ async function fetchAllGroupReports(filterWeek?: string) {
       const createdIso = actualDate.toISOString();
       const weekTag = getISOWeekTag(actualDate);
 
-      if (!isWeekAllowed(weekTag)) return;
+      if (!isWeekAllowed(weekTag, actualDate)) return;
 
       let rawPdfUrl = insp.pdfUrl;
       let displayPdfUrl: string | null = null;
