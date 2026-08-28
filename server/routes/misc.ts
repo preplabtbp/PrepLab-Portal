@@ -69,10 +69,136 @@ function extractWeekTag(title?: string, fileName?: string, timestamp?: string): 
   return getISOWeekTag();
 }
 
+const deletedReportIds = new Set<string>();
+
+async function fetchAllGroupReports() {
+  const allEmps = await db.select().from(employees);
+
+  const empMapByNik = new Map<string, any>();
+  const empMapByName = new Map<string, any>();
+  allEmps.forEach(e => {
+    if (e.nik) empMapByNik.set(e.nik.trim().toUpperCase(), e);
+    if (e.name) empMapByName.set(e.name.trim().toLowerCase(), e);
+  });
+
+  const reportsList: any[] = [];
+  const seenIds = new Set<string>();
+  const seenPdfUrls = new Set<string>();
+
+  // 1. Memory reports
+  groupReportsMemory.forEach(msg => {
+    if (deletedReportIds.has(msg.id)) return;
+    if (msg.id) seenIds.add(msg.id);
+    if (msg.pdfUrl) seenPdfUrls.add(msg.pdfUrl);
+    reportsList.push(msg);
+  });
+
+  // 2. DB inspections
+  try {
+    const dbInspections = await db.select().from(inspections);
+    dbInspections.forEach((insp: any) => {
+      const dbMsgId = `insp-db-${insp.id}`;
+      if (deletedReportIds.has(dbMsgId)) return;
+
+      let rawPdfUrl = insp.pdfUrl;
+      let displayPdfUrl: string | null = null;
+
+      if (rawPdfUrl) {
+        if (typeof rawPdfUrl === 'string' && rawPdfUrl.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(rawPdfUrl);
+            displayPdfUrl = parsed.tbp || parsed.gps || (Object.values(parsed)[0] as string) || null;
+          } catch (e) {
+            displayPdfUrl = rawPdfUrl;
+          }
+        } else {
+          displayPdfUrl = String(rawPdfUrl);
+        }
+      }
+
+      if (!displayPdfUrl) return;
+      if (seenPdfUrls.has(displayPdfUrl)) return;
+      seenPdfUrls.add(displayPdfUrl);
+
+      let dataFObj: any = {};
+      if (insp.dataF && typeof insp.dataF === 'string' && insp.dataF.trim().startsWith('{')) {
+        try {
+          dataFObj = JSON.parse(insp.dataF);
+        } catch (e) {}
+      }
+
+      const inspRaw = String(insp.inspectorName || insp.inspector || dataFObj.insp1 || 'Inspektor').trim();
+      const nikMatch = inspRaw.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/i);
+      const extractedNik = nikMatch ? nikMatch[0].toUpperCase() : '';
+      
+      let matchedEmp = extractedNik ? empMapByNik.get(extractedNik) : null;
+      if (!matchedEmp) {
+        const cleanName = inspRaw.split('|')[0].trim().toLowerCase();
+        matchedEmp = empMapByName.get(cleanName);
+      }
+
+      const senderNik = matchedEmp ? matchedEmp.nik : (extractedNik || '02D000000');
+      const senderName = matchedEmp ? matchedEmp.name : (inspRaw.split('|')[0].trim() || 'Inspektor');
+      const senderRole = matchedEmp ? (matchedEmp.jabatan || matchedEmp.position || 'Inspector') : 'Inspector';
+
+      const niksSet = new Set<string>();
+      if (senderNik) niksSet.add(senderNik);
+
+      const allInspTexts = [
+        inspRaw,
+        dataFObj.insp1,
+        dataFObj.insp2,
+        dataFObj.insp3
+      ].filter(Boolean);
+
+      allInspTexts.forEach(t => {
+        const textStr = String(t).trim();
+        const nm = textStr.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/i);
+        if (nm) niksSet.add(nm[0].toUpperCase());
+        allEmps.forEach(e => {
+          if (e.name && textStr.toLowerCase().includes(e.name.toLowerCase().trim())) {
+            niksSet.add(e.nik);
+          }
+        });
+      });
+
+      const title = insp.type || dataFObj.judulForm || 'Checklist Inspeksi Terpadu';
+      const subTitle = (insp.location && insp.location !== '-') ? `Lokasi: ${insp.location}` : (dataFObj.lokasiUmum ? `Lokasi: ${dataFObj.lokasiUmum}` : 'PDF Terlampir');
+      const createdIso = insp.createdAt ? new Date(insp.createdAt).toISOString() : new Date().toISOString();
+      const weekTag = extractWeekTag(title, '', createdIso);
+
+      const dbReportMsg = {
+        id: dbMsgId,
+        senderNik,
+        senderName,
+        senderRole,
+        allInspectorNiks: Array.from(niksSet),
+        text: `Formulir Inspeksi ${title} telah selesai dilaksanakan.`,
+        type: 'pdf_report',
+        pdfTitle: title,
+        pdfSubTitle: subTitle,
+        pdfUrl: displayPdfUrl,
+        pdfFileName: `${title.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`,
+        photos: [],
+        week: weekTag,
+        timestamp: createdIso
+      };
+
+      reportsList.push(dbReportMsg);
+    });
+  } catch (err) {
+    console.error('Error reading DB inspections for group reports:', err);
+  }
+
+  reportsList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  return reportsList;
+}
+
 // --- GROUP REPORT & REKAP API ENDPOINTS ---
 router.get('/api/group-reports', async (req, res) => {
   try {
-    res.json(groupReportsMemory);
+    const reports = await fetchAllGroupReports();
+    res.json(reports);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -136,13 +262,12 @@ router.post('/api/group-reports', async (req, res) => {
 router.delete('/api/group-reports/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    deletedReportIds.add(id);
     const index = groupReportsMemory.findIndex(m => m.id === id);
     if (index !== -1) {
       groupReportsMemory.splice(index, 1);
-      res.json({ success: true, message: 'Pesan berhasil dihapus.' });
-    } else {
-      res.status(404).json({ error: 'Pesan tidak ditemukan.' });
     }
+    res.json({ success: true, message: 'Pesan berhasil dihapus.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
