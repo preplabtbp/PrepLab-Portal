@@ -290,9 +290,9 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
               onClick={handleJsaClick} 
               className="cursor-pointer select-none font-bold text-white hover:text-emerald-300 transition-colors"
               style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
-              title="Formulir Terpadu JSA"
+              title="Formulir Terpadu Mingguan"
             >
-              JSA
+              Mingguan
             </span>
           </span>
         }
@@ -318,7 +318,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
             className="text-[10px] text-[var(--text-muted)] cursor-pointer select-none font-bold px-2 py-0.5 rounded-full bg-[var(--input-bg)] hover:bg-[var(--primary)] hover:text-white transition-colors"
             title="Klik 6x untuk Developer Cheat (Auto Fill YA)"
           >
-            JSA
+            Mingguan
           </span>
         </h3>
         {loading ? (
