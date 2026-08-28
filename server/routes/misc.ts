@@ -78,6 +78,48 @@ function parseWeekNumber(weekStr?: string): number {
   return match && match[1] ? parseInt(match[1], 10) : 0;
 }
 
+function parseInspectionDate(insp: any, dataFObj?: any): Date {
+  const candidates = [
+    dataFObj?.tanggal,
+    dataFObj?.date,
+    dataFObj?.tgl,
+    insp?.date,
+    insp?.tanggal,
+    insp?.createdAt
+  ];
+
+  for (const val of candidates) {
+    if (!val) continue;
+    
+    if (typeof val === 'string') {
+      const dmYMatch = val.trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      if (dmYMatch) {
+        const day = parseInt(dmYMatch[1], 10);
+        const month = parseInt(dmYMatch[2], 10) - 1;
+        const year = parseInt(dmYMatch[3], 10);
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+      }
+      
+      const yMdMatch = val.trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+      if (yMdMatch) {
+        const year = parseInt(yMdMatch[1], 10);
+        const month = parseInt(yMdMatch[2], 10) - 1;
+        const day = parseInt(yMdMatch[3], 10);
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+      }
+    }
+
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      return d;
+    }
+  }
+
+  return new Date();
+}
+
 async function fetchAllGroupReports(filterWeek?: string) {
   const currentWeekTag = getISOWeekTag(new Date());
   const currentWeekNum = parseWeekNumber(currentWeekTag);
@@ -128,9 +170,16 @@ async function fetchAllGroupReports(filterWeek?: string) {
       const dbMsgId = `insp-db-${insp.id}`;
       if (deletedReportIds.has(dbMsgId)) return;
 
-      const title = insp.type || 'Checklist Inspeksi Terpadu';
-      const createdIso = insp.createdAt ? new Date(insp.createdAt).toISOString() : new Date().toISOString();
-      const weekTag = extractWeekTag(title, '', createdIso);
+      let dataFObj: any = {};
+      if (insp.dataF && typeof insp.dataF === 'string' && insp.dataF.trim().startsWith('{')) {
+        try {
+          dataFObj = JSON.parse(insp.dataF);
+        } catch (e) {}
+      }
+
+      const actualDate = parseInspectionDate(insp, dataFObj);
+      const createdIso = actualDate.toISOString();
+      const weekTag = getISOWeekTag(actualDate);
 
       if (!isWeekAllowed(weekTag)) return;
 
@@ -154,13 +203,7 @@ async function fetchAllGroupReports(filterWeek?: string) {
       if (seenPdfUrls.has(displayPdfUrl)) return;
       seenPdfUrls.add(displayPdfUrl);
 
-      let dataFObj: any = {};
-      if (insp.dataF && typeof insp.dataF === 'string' && insp.dataF.trim().startsWith('{')) {
-        try {
-          dataFObj = JSON.parse(insp.dataF);
-        } catch (e) {}
-      }
-
+      const title = insp.type || dataFObj.judulForm || 'Checklist Inspeksi Terpadu';
       const inspRaw = String(insp.inspectorName || insp.inspector || dataFObj.insp1 || 'Inspektor').trim();
       const nikMatch = inspRaw.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/i);
       const extractedNik = nikMatch ? nikMatch[0].toUpperCase() : '';
