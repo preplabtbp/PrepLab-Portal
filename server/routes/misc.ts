@@ -72,6 +72,8 @@ function extractWeekTag(title?: string, fileName?: string, timestamp?: string | 
   return getISOWeekTag();
 }
 
+const deletedReportIds = new Set<string>();
+
 function parseWeekNumber(weekStr?: string): number {
   if (!weekStr) return 0;
   const match = weekStr.match(/W(?:EEK)?\s*(\d+)/i);
