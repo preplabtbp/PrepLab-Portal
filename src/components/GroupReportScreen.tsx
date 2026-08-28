@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { 
   FileText, Send, Paperclip, Download, Eye, CheckCircle2, Clock, 
   Users, AlertTriangle, ShieldCheck, Filter, Search, Sparkles, Pin, 
-  MessageSquare, ChevronRight, Share2, RefreshCw, ExternalLink, UserCheck, UserX, MessageCircle, X, Trash2, RotateCcw, Calendar
+  MessageSquare, ChevronRight, Share2, RefreshCw, ExternalLink, UserCheck, UserX, MessageCircle, X, Trash2, RotateCcw, Calendar, Bell, Check
 } from 'lucide-react';
 import { Card, Button, Input, Select } from './ui';
 import { PageHeader } from './PageHeader';
@@ -52,8 +52,50 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto detect developer status by NIK pattern if not passed
+  // Auto detect developer / Admin Lab status
   const isDevUser = isDeveloper || inspectorNik.startsWith('02D24') || inspectorNik === '02D24000043' || inspectorNik === '02D25000055' || inspectorNik === 'preplabadmin';
+  const isAdminLab = isDevUser || 
+                     (inspectorRole && (
+                       inspectorRole.toLowerCase().includes('admin') || 
+                       inspectorRole.toLowerCase().includes('laboratory') || 
+                       inspectorRole.toLowerCase().includes('superintendent') || 
+                       inspectorRole.toLowerCase().includes('manager')
+                     )) || 
+                     (inspectorSection && (
+                       inspectorSection.toLowerCase().includes('admin') || 
+                       inspectorSection.toLowerCase().includes('laboratory')
+                     ));
+  const canRemind = isDevUser || isAdminLab;
+
+  const [remindedNiks, setRemindedNiks] = useState<Set<string>>(new Set());
+
+  const handleSendReminder = async (emp: any) => {
+    if (remindedNiks.has(emp.nik)) return;
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: emp.nik,
+          title: '🔔 Pengingat Inspeksi Terpadu Mingguan',
+          message: `Halo ${emp.name}, Anda diingatkan oleh ${inspectorName || 'Admin Lab'} untuk segera melaksanakan dan mengisi Laporan Inspeksi Terpadu Mingguan (${selectedWeek}).`,
+          type: 'REMINDER_INSPECTION',
+          role: emp.section || 'Laboratory',
+          isRead: false
+        })
+      });
+
+      if (res.ok) {
+        setRemindedNiks(prev => new Set(prev).add(emp.nik));
+        toast.success(`Push notifikasi pengingat berhasil dikirim ke ${emp.name}!`);
+      } else {
+        toast.error('Gagal mengirimkan notifikasi pengingat.');
+      }
+    } catch (err) {
+      console.error('Failed to send reminder:', err);
+      toast.error('Gagal terhubung ke server pengingat.');
+    }
+  };
 
   useEffect(() => {
     fetchGroupFeed(selectedWeek);
@@ -705,16 +747,31 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                             </a>
                           )}
                         </>
-                      ) : (
+                      ) : canRemind ? (
                         <button
-                          onClick={() => {
-                            const textWA = encodeURIComponent(`Halo ${emp.name}, pengingat untuk mengunggah PDF Laporan Inspeksi ${selectedWeek} Anda ke Grup Safety PrepLab. Terima kasih!`);
-                            window.open(`https://wa.me/?text=${textWA}`, '_blank');
-                          }}
-                          className="px-2 py-1 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 text-[10px] font-bold flex items-center gap-1 shadow-xs"
+                          onClick={() => handleSendReminder(emp)}
+                          disabled={remindedNiks.has(emp.nik)}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs transition-all ${
+                            remindedNiks.has(emp.nik)
+                              ? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/40 opacity-80 cursor-default'
+                              : 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                          }`}
+                          title={`Kirim Push Notifikasi Popup ke akun ${emp.name}`}
                         >
-                          <MessageCircle className="w-3 h-3" /> Ingatkan
+                          {remindedNiks.has(emp.nik) ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-600" /> Sudah Diingatkan
+                            </>
+                          ) : (
+                            <>
+                              <Bell className="w-3 h-3" /> Ingatkan
+                            </>
+                          )}
                         </button>
+                      ) : (
+                        <span className="px-2 py-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-500/20 text-[10px] font-bold">
+                          BELUM INSPEKSI
+                        </span>
                       )}
                     </div>
                   </div>

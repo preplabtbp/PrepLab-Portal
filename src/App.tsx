@@ -14,6 +14,7 @@ import { initAuth, googleSignIn } from './google-auth';
 import { WhatsAppModal } from './components/whatsapp-modal';
 import { P5MNotificationModal } from './components/p5m-notification-modal';
 import { GroupReportScreen, GroupReportFloatingWidget } from './components/GroupReportScreen';
+import { ReminderNotificationModal } from './components/ReminderNotificationModal';
 
 
 
@@ -1324,6 +1325,14 @@ export default function App() {
           inspectorRole={userProfile?.jabatan}
           inspectorSection={userProfile?.section}
           isDeveloper={isDeveloper}
+        />
+      )}
+
+      {/* Global Push Popup Inspection Reminder Modal */}
+      {inspectorNik && (
+        <ReminderNotificationModal
+          userNik={inspectorNik}
+          onNavigateToInspection={() => navigate('/weekly-inspection')}
         />
       )}
 
