@@ -7,6 +7,19 @@ import { employees } from "../../src/db/schema.js";
 
 export const authRouter = Router();
 
+const DEMO_USER = {
+  id: 999999,
+  nik: 'DEMO123',
+  username: 'demo',
+  name: 'User Demo Staging',
+  jabatan: 'Laboratory Supervisor',
+  jobGrade: '2.1',
+  section: 'Preparation & Laboratory',
+  gol: 'II',
+  pt: 'TBP',
+  firstLoginComplete: true
+};
+
 authRouter.post("/check-nik", async (req, res) => {
   try {
     const { nik, identifier } = req.body;
@@ -14,32 +27,20 @@ authRouter.post("/check-nik", async (req, res) => {
     if (!inputVal) return res.json({ status: "error", message: "NIK atau Username tidak boleh kosong" });
     
     const normalized = inputVal.toUpperCase();
+
+    if (normalized === 'DEMO123' || normalized === 'DEMO') {
+      return res.json({
+        status: "success",
+        firstLoginComplete: true,
+        employee: DEMO_USER
+      });
+    }
+
     const employeeList = await db.select().from(employees);
-    let employee = employeeList.find(e => 
+    const employee = employeeList.find(e => 
       e.nik.toUpperCase() === normalized || 
       (e.username && e.username.trim().toUpperCase() === normalized)
     );
-
-    if (!employee && (normalized === 'DEMO123' || normalized === 'DEMO')) {
-      const hash = await bcrypt.hash('112233', 10);
-      try {
-        const insertedList = await db.insert(employees).values({
-          nik: 'DEMO123',
-          username: 'demo',
-          name: 'User Demo Staging',
-          jabatan: 'Laboratory Supervisor',
-          section: 'Preparation & Laboratory',
-          pt: 'TBP',
-          gol: 'II',
-          jobGrade: '2.1',
-          passwordHash: hash,
-          firstLoginComplete: true
-        }).returning();
-        employee = insertedList[0];
-      } catch (err) {
-        console.error("Demo seed notice in check-nik:", err);
-      }
-    }
     
     if (!employee) {
       return res.json({ status: "error", message: `NIK / Username "${inputVal}" tidak ditemukan dalam database.` });
@@ -47,10 +48,18 @@ authRouter.post("/check-nik", async (req, res) => {
     
     return res.json({ 
       status: "success", 
-      firstLoginComplete: employee.nik === 'DEMO123' ? true : employee.firstLoginComplete, 
+      firstLoginComplete: employee.firstLoginComplete, 
       employee: employee 
     });
   } catch(e: any) {
+    const inputVal = (req.body.identifier || req.body.nik || "").trim().toUpperCase();
+    if (inputVal === 'DEMO123' || inputVal === 'DEMO') {
+      return res.json({
+        status: "success",
+        firstLoginComplete: true,
+        employee: DEMO_USER
+      });
+    }
     res.status(500).json({ status: "error", message: "Database Error: " + e.message });
   }
 });
@@ -62,50 +71,40 @@ authRouter.post("/login", async (req, res) => {
     if (!inputVal) return res.status(400).json({ status: "error", message: "NIK atau Username tidak boleh kosong" });
 
     const normalized = inputVal.toUpperCase();
+
+    if (normalized === 'DEMO123' || normalized === 'DEMO') {
+      if (password === '112233') {
+        return res.json({ status: "success", requireSetup: false, employee: DEMO_USER });
+      } else {
+        return res.status(401).json({ status: "error", message: "Password salah" });
+      }
+    }
+
     const employeeList = await db.select().from(employees);
-    let user = employeeList.find(e => 
+    const user = employeeList.find(e => 
       e.nik.toUpperCase() === normalized || 
       (e.username && e.username.trim().toUpperCase() === normalized)
     );
     
-    // Auto-create/seed Demo account if login with DEMO123 or demo
-    if (!user && (normalized === 'DEMO123' || normalized === 'DEMO')) {
-      const hash = await bcrypt.hash('112233', 10);
-      try {
-        const insertedList = await db.insert(employees).values({
-          nik: 'DEMO123',
-          username: 'demo',
-          name: 'User Demo Staging',
-          jabatan: 'Laboratory Supervisor',
-          section: 'Preparation & Laboratory',
-          pt: 'TBP',
-          gol: 'II',
-          jobGrade: '2.1',
-          passwordHash: hash,
-          firstLoginComplete: true
-        }).returning();
-        user = insertedList[0];
-      } catch (err) {
-        console.error("Demo seed notice:", err);
-      }
-    }
-
     if (!user) {
       return res.json({ status: "error", message: "NIK atau Username tidak ditemukan" });
     }
     
-    if (!user.firstLoginComplete && user.nik !== 'DEMO123') {
+    if (!user.firstLoginComplete) {
       return res.json({ status: "success", requireSetup: true, employee: user });
     }
     
-    // Special check for demo password or standard bcrypt
-    const isValid = (user.nik === 'DEMO123' && password === '112233') || await bcrypt.compare(password, user.passwordHash || "");
+    const isValid = await bcrypt.compare(password, user.passwordHash || "");
     if (!isValid) {
       return res.status(401).json({ status: "error", message: "Password salah" });
     }
     
     return res.json({ status: "success", requireSetup: false, employee: user });
   } catch(e: any) {
+    const inputVal = (req.body.identifier || req.body.nik || "").trim().toUpperCase();
+    if ((inputVal === 'DEMO123' || inputVal === 'DEMO') && req.body.password === '112233') {
+      return res.json({ status: "success", requireSetup: false, employee: DEMO_USER });
+    }
     res.status(500).json({ status: "error", message: e.message });
   }
 });
