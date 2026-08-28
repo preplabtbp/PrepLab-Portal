@@ -118,14 +118,81 @@ async function computeRosterData() {
 
   const workCodes = new Set(['D', 'N', 'LS', 'S']);
 
+  function checkIsGolonganI(emp: any): boolean {
+    const golUpper = (emp.gol || '').toString().trim().toUpperCase();
+    const jobGradeUpper = (emp.jobGrade || '').toString().trim().toUpperCase();
+    const jabatanLower = (emp.jabatan || emp.position || '').toString().trim().toLowerCase();
+    
+    if (golUpper === 'I' || golUpper === '1' || golUpper === 'I.1' || golUpper === '1.1' || golUpper === 'S1.1' || golUpper === 'S1.2') {
+      return true;
+    }
+    if (jobGradeUpper.startsWith('S1') || jobGradeUpper.startsWith('1.') || jobGradeUpper === '1' || jobGradeUpper === 'I') {
+      return true;
+    }
+    if (jabatanLower.includes('crew') || jabatanLower.includes('helper') || jabatanLower.includes('operator')) {
+      if (!jabatanLower.includes('foreman') && !jabatanLower.includes('supervisor') && !jabatanLower.includes('admin') && !jabatanLower.includes('superintendent') && !jabatanLower.includes('manager') && !jabatanLower.includes('lead')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   const result = allEmps.map(emp => {
     const sched = rosterByNik[emp.nik] || {};
+    const isGol1 = checkIsGolonganI(emp);
 
     let lastTrvDate: string | null = null;
     let nextTrvDate: string | null = null;
     let nextWorkDate: string | null = null;
+    let outsiteDate: string | null = null;
 
     const datesAsc = Object.keys(sched).sort((a, b) => getDateTs(a) - getDateTs(b));
+
+    // Find outsiteDate:
+    // For Gol II ke atas (!isGol1): Outsite date is when schedule is TRV (or TV) for current/upcoming leave.
+    // For Gol I (isGol1): Outsite date is the first 'C' (or Cuti code) for current/upcoming leave.
+    const todayIndex = datesAsc.findIndex(d => getDateTs(d) >= todayTimestamp);
+    let activeLeaveIdx = -1;
+    if (todayIndex !== -1) {
+      if (isTrvStatus(sched[datesAsc[todayIndex]])) {
+        activeLeaveIdx = todayIndex;
+        while (activeLeaveIdx > 0 && isTrvStatus(sched[datesAsc[activeLeaveIdx - 1]])) {
+          activeLeaveIdx--;
+        }
+      } else {
+        for (let i = todayIndex; i < datesAsc.length; i++) {
+          if (isTrvStatus(sched[datesAsc[i]])) {
+            activeLeaveIdx = i;
+            break;
+          }
+        }
+      }
+    }
+
+    if (activeLeaveIdx !== -1) {
+      const currentLeaveBlock: string[] = [];
+      let i = activeLeaveIdx;
+      while (i < datesAsc.length && isTrvStatus(sched[datesAsc[i]])) {
+        currentLeaveBlock.push(datesAsc[i]);
+        i++;
+      }
+
+      if (!isGol1) {
+        // Gol II ke atas: look for TRV or TV code
+        const trvFound = currentLeaveBlock.find(d => {
+          const code = (sched[d] || '').toUpperCase();
+          return code === 'TRV' || code === 'TV';
+        });
+        outsiteDate = trvFound || currentLeaveBlock[0] || null;
+      } else {
+        // Gol I: look for first 'C' code
+        const cFound = currentLeaveBlock.find(d => {
+          const code = (sched[d] || '').toUpperCase();
+          return code === 'C' || code.startsWith('C');
+        });
+        outsiteDate = cFound || currentLeaveBlock[0] || null;
+      }
+    }
 
     // Search backwards for last TRV/Leave before or on today
     for (let i = datesAsc.length - 1; i >= 0; i--) {
@@ -175,6 +242,7 @@ async function computeRosterData() {
       lastTrvDate,
       nextTrvDate,
       nextWorkDate,
+      outsiteDate,
       schedule: next7Days,
       fullSchedule: sched
     };

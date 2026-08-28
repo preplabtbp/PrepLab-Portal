@@ -551,8 +551,9 @@ export function AdmDashboard() {
                                                     ) : (
                                                       <>
                                                         <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] text-slate-600 font-bold border border-slate-200">Status: {emp.currentShift}</span>
-                                                        {emp.isMasuk && emp.nextTrvDate && <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px] text-amber-800 font-bold border border-amber-200">Next Cuti (TRV/TV): {emp.nextTrvDate}</span>}
-                                                        {emp.isCuti && emp.nextWorkDate && <span className="bg-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-800 font-bold border border-indigo-200">Next Kerja: {emp.nextWorkDate}</span>}
+                                                        {emp.isMasuk && (emp.outsiteDate || emp.nextTrvDate) && <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px] text-amber-800 font-bold border border-amber-200">Next Outsite: {emp.outsiteDate || emp.nextTrvDate}</span>}
+                                                        {emp.isCuti && emp.outsiteDate && <span className="bg-purple-100 px-2 py-0.5 rounded text-[10px] text-purple-800 font-bold border border-purple-200">Outsite: {emp.outsiteDate}</span>}
+                                                        {emp.isCuti && emp.nextWorkDate && <span className="bg-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-800 font-bold border border-indigo-200">Onsite: {emp.nextWorkDate}</span>}
                                                       </>
                                                     )}
                                                   </div>
@@ -604,8 +605,9 @@ export function AdmDashboard() {
                                             ) : (
                                               <>
                                                 <span className="bg-slate-200 px-2 py-0.5 rounded text-[10px] text-slate-700 font-bold">Status: {emp.currentShift}</span>
-                                                {emp.isMasuk && emp.nextTrvDate && <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px] text-amber-800 font-bold">Next Cuti (TRV/TV): {emp.nextTrvDate}</span>}
-                                                {emp.isCuti && emp.nextWorkDate && <span className="bg-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-800 font-bold">Next Kerja: {emp.nextWorkDate}</span>}
+                                                {emp.isMasuk && (emp.outsiteDate || emp.nextTrvDate) && <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px] text-amber-800 font-bold">Next Outsite: {emp.outsiteDate || emp.nextTrvDate}</span>}
+                                                {emp.isCuti && emp.outsiteDate && <span className="bg-purple-100 px-2 py-0.5 rounded text-[10px] text-purple-800 font-bold border border-purple-200">Outsite: {emp.outsiteDate}</span>}
+                                                {emp.isCuti && emp.nextWorkDate && <span className="bg-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-800 font-bold border border-indigo-200">Onsite: {emp.nextWorkDate}</span>}
                                               </>
                                             )}
                                           </div>
