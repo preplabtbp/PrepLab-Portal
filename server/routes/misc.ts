@@ -345,40 +345,77 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     // Find all users who completed inspection for the selected week
     const completedSet = new Map<string, any>();
     
+    const registerCompletedUser = (key: string, info: any) => {
+      if (!key) return;
+      const cleanKey = key.toString().trim().toLowerCase();
+      if (cleanKey && !completedSet.has(cleanKey)) {
+        completedSet.set(cleanKey, info);
+      }
+    };
+
+    // 1. Scan groupReportsMemory (in-memory group posts)
     groupReportsMemory.forEach(msg => {
       const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
       
-      // Match specified week or all
       if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
         if (msg.type === 'pdf_report') {
-          if (msg.senderNik) {
-            completedSet.set(msg.senderNik, {
-              timestamp: msg.timestamp,
-              pdfUrl: msg.pdfUrl,
-              pdfTitle: msg.pdfTitle,
-              week: msgWeek
-            });
-          }
-          // ALSO mark ALL multi-inspectors listed in allInspectorNiks!
+          const info = {
+            timestamp: msg.timestamp,
+            pdfUrl: msg.pdfUrl,
+            pdfTitle: msg.pdfTitle,
+            week: msgWeek
+          };
+
+          if (msg.senderNik) registerCompletedUser(msg.senderNik, info);
+          if (msg.senderName) registerCompletedUser(msg.senderName, info);
+
           if (Array.isArray(msg.allInspectorNiks)) {
-            msg.allInspectorNiks.forEach((nik: string) => {
-              if (nik) {
-                completedSet.set(nik, {
-                  timestamp: msg.timestamp,
-                  pdfUrl: msg.pdfUrl,
-                  pdfTitle: msg.pdfTitle,
-                  week: msgWeek
-                });
-              }
+            msg.allInspectorNiks.forEach((item: string) => {
+              if (item) registerCompletedUser(item, info);
             });
           }
         }
       }
     });
 
+    // 2. Scan DB `inspections` table
+    try {
+      const dbInspections = await db.select().from(inspections);
+      dbInspections.forEach((insp: any) => {
+        const inspText = String(insp.inspector || insp.insp1 || '').trim();
+        const createdIso = insp.createdAt ? new Date(insp.createdAt).toISOString() : new Date().toISOString();
+        const inspWeek = extractWeekTag(insp.judulForm || '', insp.lokasi || '', createdIso);
+
+        if (selectedWeek === 'ALL' || inspWeek === selectedWeek) {
+          const info = {
+            timestamp: createdIso,
+            pdfUrl: insp.pdfUrl,
+            pdfTitle: insp.judulForm || 'Laporan Inspeksi',
+            week: inspWeek
+          };
+
+          if (inspText) registerCompletedUser(inspText, info);
+
+          const nikMatches = inspText.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
+          nikMatches.forEach((nik: string) => registerCompletedUser(nik, info));
+
+          allEmployees.forEach(e => {
+            if (e.name && inspText.toLowerCase().includes(e.name.toLowerCase().trim())) {
+              registerCompletedUser(e.nik, info);
+              registerCompletedUser(e.name, info);
+            }
+          });
+        }
+      });
+    } catch (dbErr) {
+      console.error('Error scanning DB inspections for rekap:', dbErr);
+    }
+
     const rekapList = targetEmployees.map(emp => {
-      const isDone = completedSet.has(emp.nik);
-      const info = completedSet.get(emp.nik);
+      const nikClean = (emp.nik || '').trim().toLowerCase();
+      const nameClean = (emp.name || '').trim().toLowerCase();
+      const isDone = completedSet.has(nikClean) || completedSet.has(nameClean);
+      const info = completedSet.get(nikClean) || completedSet.get(nameClean);
       return {
         nik: emp.nik,
         name: emp.name,
