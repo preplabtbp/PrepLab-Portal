@@ -57,14 +57,17 @@ function getISOWeekTag(d: Date = new Date()): string {
   return `W${weekNum}`;
 }
 
-function extractWeekTag(title?: string, fileName?: string, timestamp?: string): string {
+function extractWeekTag(title?: string, fileName?: string, timestamp?: string | Date): string {
+  if (timestamp) {
+    const d = new Date(timestamp);
+    if (!isNaN(d.getTime())) {
+      return getISOWeekTag(d);
+    }
+  }
   const combined = `${title || ''} ${fileName || ''}`.toUpperCase();
   const match = combined.match(/W(?:EEK)?\s*(\d+)/i);
   if (match && match[1]) {
     return `W${match[1]}`;
-  }
-  if (timestamp) {
-    return getISOWeekTag(new Date(timestamp));
   }
   return getISOWeekTag();
 }
