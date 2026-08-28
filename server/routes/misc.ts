@@ -69,9 +69,22 @@ function extractWeekTag(title?: string, fileName?: string, timestamp?: string): 
   return getISOWeekTag();
 }
 
-const deletedReportIds = new Set<string>();
+function parseWeekNumber(weekStr?: string): number {
+  if (!weekStr) return 0;
+  const match = weekStr.match(/W(?:EEK)?\s*(\d+)/i);
+  return match && match[1] ? parseInt(match[1], 10) : 0;
+}
 
-async function fetchAllGroupReports() {
+async function fetchAllGroupReports(filterWeek?: string) {
+  const currentWeekTag = getISOWeekTag(new Date());
+  const currentWeekNum = parseWeekNumber(currentWeekTag);
+
+  let targetWeekNum = currentWeekNum;
+  if (filterWeek && filterWeek !== 'ALL') {
+    const parsed = parseWeekNumber(filterWeek);
+    if (parsed > 0) targetWeekNum = parsed;
+  }
+
   const allEmps = await db.select().from(employees);
 
   const empMapByNik = new Map<string, any>();
@@ -85,9 +98,21 @@ async function fetchAllGroupReports() {
   const seenIds = new Set<string>();
   const seenPdfUrls = new Set<string>();
 
+  const isWeekAllowed = (weekTag: string) => {
+    if (filterWeek === 'ALL') return true;
+    const wNum = parseWeekNumber(weekTag);
+    if (wNum > 0 && targetWeekNum > 0) {
+      return wNum >= targetWeekNum; // Load starting from current week (W35 onwards!)
+    }
+    return weekTag === currentWeekTag;
+  };
+
   // 1. Memory reports
   groupReportsMemory.forEach(msg => {
     if (deletedReportIds.has(msg.id)) return;
+    const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
+    if (!isWeekAllowed(msgWeek)) return;
+
     if (msg.id) seenIds.add(msg.id);
     if (msg.pdfUrl) seenPdfUrls.add(msg.pdfUrl);
     reportsList.push(msg);
@@ -99,6 +124,12 @@ async function fetchAllGroupReports() {
     dbInspections.forEach((insp: any) => {
       const dbMsgId = `insp-db-${insp.id}`;
       if (deletedReportIds.has(dbMsgId)) return;
+
+      const title = insp.type || 'Checklist Inspeksi Terpadu';
+      const createdIso = insp.createdAt ? new Date(insp.createdAt).toISOString() : new Date().toISOString();
+      const weekTag = extractWeekTag(title, '', createdIso);
+
+      if (!isWeekAllowed(weekTag)) return;
 
       let rawPdfUrl = insp.pdfUrl;
       let displayPdfUrl: string | null = null;
@@ -162,10 +193,7 @@ async function fetchAllGroupReports() {
         });
       });
 
-      const title = insp.type || dataFObj.judulForm || 'Checklist Inspeksi Terpadu';
       const subTitle = (insp.location && insp.location !== '-') ? `Lokasi: ${insp.location}` : (dataFObj.lokasiUmum ? `Lokasi: ${dataFObj.lokasiUmum}` : 'PDF Terlampir');
-      const createdIso = insp.createdAt ? new Date(insp.createdAt).toISOString() : new Date().toISOString();
-      const weekTag = extractWeekTag(title, '', createdIso);
 
       const dbReportMsg = {
         id: dbMsgId,
@@ -197,7 +225,8 @@ async function fetchAllGroupReports() {
 // --- GROUP REPORT & REKAP API ENDPOINTS ---
 router.get('/api/group-reports', async (req, res) => {
   try {
-    const reports = await fetchAllGroupReports();
+    const rawWeek = (req.query.week as string) || '';
+    const reports = await fetchAllGroupReports(rawWeek);
     res.json(reports);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

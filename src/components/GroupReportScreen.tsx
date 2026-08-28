@@ -56,14 +56,14 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   const isDevUser = isDeveloper || inspectorNik.startsWith('02D24') || inspectorNik === '02D24000043' || inspectorNik === '02D25000055' || inspectorNik === 'preplabadmin';
 
   useEffect(() => {
-    fetchGroupFeed();
+    fetchGroupFeed(selectedWeek);
     fetchRekapData(selectedWeek);
   }, [selectedWeek]);
 
-  const fetchGroupFeed = async () => {
+  const fetchGroupFeed = async (week: string = selectedWeek) => {
     try {
       setLoadingFeed(true);
-      const res = await fetch('/api/group-reports');
+      const res = await fetch(`/api/group-reports?week=${week}`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data);
