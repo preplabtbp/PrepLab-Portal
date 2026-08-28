@@ -257,6 +257,8 @@ export default function ThemeModal({
   inspectorNik: string | null;
   onThemeUpdated: (mode: string, colors: ThemeColors, applyToAll?: boolean) => void;
 }) {
+  if (!show) return null;
+
   const [activeTab, setActiveTab] = useState<'templates' | 'studio' | 'preview'>('templates');
   const [targetMode, setTargetMode] = useState(currentMode || 'morning');
   const [applyToAllModes, setApplyToAllModes] = useState(true);
