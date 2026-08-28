@@ -79,27 +79,7 @@ function parseWeekNumber(weekStr?: string): number {
 }
 
 function parseInspectionDate(insp: any, dataFObj?: any): Date {
-  const jsonStr = JSON.stringify(dataFObj || {}) + ' ' + String(insp?.dataF || '') + ' ' + String(insp?.equipmentName || '') + ' ' + String(insp?.location || '');
-
-  // 1. First scan jsonStr for explicit DD/MM/YYYY date pattern (e.g., "05/08/2026", "19/08/2026")
-  const dmYMatches = jsonStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})/g);
-  if (dmYMatches && dmYMatches.length > 0) {
-    for (const matchStr of dmYMatches) {
-      const parts = matchStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})/);
-      if (parts) {
-        const day = parseInt(parts[1], 10);
-        const month = parseInt(parts[2], 10) - 1;
-        const year = parseInt(parts[3], 10);
-        if (day >= 1 && day <= 31 && month >= 0 && month <= 11) {
-          const d = new Date(year, month, day);
-          if (!isNaN(d.getTime())) return d;
-        }
-      }
-    }
-  }
-
-  // 2. Check candidates
-  const candidates = [
+  const userDateFields = [
     dataFObj?.tanggal,
     dataFObj?.date,
     dataFObj?.tgl,
@@ -107,38 +87,45 @@ function parseInspectionDate(insp: any, dataFObj?: any): Date {
     dataFObj?.tanggalInspeksi,
     dataFObj?.tgl_inspeksi,
     dataFObj?.tanggal_inspeksi,
+    dataFObj?.head?.tanggal,
+    dataFObj?.headerInfo?.tanggal,
+    dataFObj?.infoGeneral?.tanggal,
     insp?.date,
-    insp?.tanggal,
-    insp?.createdAt
+    insp?.tanggal
   ];
 
-  for (const val of candidates) {
-    if (!val) continue;
+  for (const val of userDateFields) {
+    if (!val || typeof val !== 'string') continue;
     
-    if (typeof val === 'string') {
-      const dmYMatch = val.trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-      if (dmYMatch) {
-        const day = parseInt(dmYMatch[1], 10);
-        const month = parseInt(dmYMatch[2], 10) - 1;
-        const year = parseInt(dmYMatch[3], 10);
-        const d = new Date(year, month, day);
-        if (!isNaN(d.getTime())) return d;
-      }
-      
-      const yMdMatch = val.trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-      if (yMdMatch) {
-        const year = parseInt(yMdMatch[1], 10);
-        const month = parseInt(yMdMatch[2], 10) - 1;
-        const day = parseInt(yMdMatch[3], 10);
+    // Check DD/MM/YYYY e.g. "19/08/2026" or "28/08/2026"
+    const dmYMatch = val.trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})/);
+    if (dmYMatch) {
+      const day = parseInt(dmYMatch[1], 10);
+      const month = parseInt(dmYMatch[2], 10) - 1;
+      const year = parseInt(dmYMatch[3], 10);
+      if (day >= 1 && day <= 31 && month >= 0 && month <= 11) {
         const d = new Date(year, month, day);
         if (!isNaN(d.getTime())) return d;
       }
     }
+    
+    // Check YYYY-MM-DD
+    const yMdMatch = val.trim().match(/^(20\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (yMdMatch) {
+      const year = parseInt(yMdMatch[1], 10);
+      const month = parseInt(yMdMatch[2], 10) - 1;
+      const day = parseInt(yMdMatch[3], 10);
+      if (day >= 1 && day <= 31 && month >= 0 && month <= 11) {
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+      }
+    }
+  }
 
-    const d = new Date(val);
-    if (!isNaN(d.getTime())) {
-      return d;
-    }
+  // Fallback to record creation timestamp (e.g. 2026-08-28 for today's submission)
+  if (insp?.createdAt) {
+    const d = new Date(insp.createdAt);
+    if (!isNaN(d.getTime())) return d;
   }
 
   return new Date();
@@ -232,9 +219,12 @@ async function fetchAllGroupReports(filterWeek?: string) {
         }
       }
 
-      if (!displayPdfUrl) return;
-      if (seenPdfUrls.has(displayPdfUrl)) return;
-      seenPdfUrls.add(displayPdfUrl);
+      if (!displayPdfUrl || displayPdfUrl === 'null' || displayPdfUrl === 'undefined') {
+        displayPdfUrl = '#';
+      }
+
+      if (seenPdfUrls.has(displayPdfUrl) && displayPdfUrl !== '#') return;
+      if (displayPdfUrl !== '#') seenPdfUrls.add(displayPdfUrl);
 
       const title = insp.type || dataFObj.judulForm || 'Checklist Inspeksi Terpadu';
       const inspRaw = String(insp.inspectorName || insp.inspector || dataFObj.insp1 || 'Inspektor').trim();
