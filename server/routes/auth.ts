@@ -42,20 +42,43 @@ authRouter.post("/login", async (req, res) => {
 
     const normalized = inputVal.toUpperCase();
     const employeeList = await db.select().from(employees);
-    const user = employeeList.find(e => 
+    let user = employeeList.find(e => 
       e.nik.toUpperCase() === normalized || 
       (e.username && e.username.trim().toUpperCase() === normalized)
     );
     
+    // Auto-create/seed Demo account if login with DEMO123 or demo
+    if (!user && (normalized === 'DEMO123' || normalized === 'DEMO')) {
+      const hash = await bcrypt.hash('112233', 10);
+      try {
+        const insertedList = await db.insert(employees).values({
+          nik: 'DEMO123',
+          username: 'demo',
+          name: 'User Demo Staging',
+          jabatan: 'Laboratory Supervisor',
+          section: 'Preparation & Laboratory',
+          pt: 'TBP',
+          gol: 'II',
+          jobGrade: '2.1',
+          passwordHash: hash,
+          firstLoginComplete: true
+        }).returning();
+        user = insertedList[0];
+      } catch (err) {
+        console.error("Demo seed notice:", err);
+      }
+    }
+
     if (!user) {
       return res.json({ status: "error", message: "NIK atau Username tidak ditemukan" });
     }
     
-    if (!user.firstLoginComplete) {
+    if (!user.firstLoginComplete && user.nik !== 'DEMO123') {
       return res.json({ status: "success", requireSetup: true, employee: user });
     }
     
-    const isValid = await bcrypt.compare(password, user.passwordHash || "");
+    // Special check for demo password or standard bcrypt
+    const isValid = (user.nik === 'DEMO123' && password === '112233') || await bcrypt.compare(password, user.passwordHash || "");
     if (!isValid) {
       return res.status(401).json({ status: "error", message: "Password salah" });
     }
