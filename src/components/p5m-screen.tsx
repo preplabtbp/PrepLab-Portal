@@ -19,13 +19,13 @@ const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 const HARI_GABUNGAN = new Set(['Senin', 'Kamis', 'Jumat', 'Minggu']);
 
 const DAY_COLORS: Record<string, string> = {
-  Senin: '#B08848',
-  Selasa: '#5C7CA8',
-  Rabu: '#8A5A7A',
-  Kamis: '#9E7640',
-  Jumat: '#3E8A68',
-  Sabtu: '#A65656',
-  Minggu: '#6B6BB5'
+  Senin: '#3B82F6',   // Vibrant Sapphire Blue
+  Selasa: '#06B6D4',  // Ocean Cyan
+  Rabu: '#10B981',    // Fresh Emerald
+  Kamis: '#F59E0B',   // Warm Amber Gold
+  Jumat: '#6366F1',   // Electric Indigo
+  Sabtu: '#8B5CF6',   // Royal Violet
+  Minggu: '#F43F5E'   // Coral Rose
 };
 
 const DIVISI_OPTIONS = [
@@ -1698,7 +1698,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     <div id={`p5m-col-${day}`} key={day} className={`flex flex-col ${selectedDayFilter === 'ALL' ? 'min-w-[135px]' : 'w-full'}`}>
                       
                       {/* Column Header */}
-                      <div className="bg-[var(--input-bg)] p-2.5 text-center border-b border-[var(--border-main)]" style={{ borderTop: `3px solid ${DAY_COLORS[day]}` }}>
+                      <div className="bg-[var(--input-bg)] p-2.5 text-center border-b border-[var(--border-main)]" style={{ borderTop: `4px solid ${DAY_COLORS[day]}` }}>
                         <div className="font-black text-[var(--text-main)] text-sm">{day}</div>
                         <div className="text-[11px] font-mono text-[var(--text-muted)] font-semibold">{dateInfo?.display || '-'}</div>
                         <span className={`inline-block text-[9px] uppercase font-mono font-black px-2 py-0.5 rounded-full mt-1 ${
