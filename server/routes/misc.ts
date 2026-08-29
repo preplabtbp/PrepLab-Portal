@@ -771,11 +771,12 @@ router.get("/api/gallery", async (req, res) => {
         const weeksSet = new Set<string>();
         allGallery.forEach(p => { if (p.week) weeksSet.add(p.week); });
         const availableWeeks = Array.from(weeksSet).sort((a, b) => b.localeCompare(a));
-        const defaultWeek = availableWeeks[0] || 'Minggu ke-34 (2026)';
-        const reqWeek = (req.query.week as string) || defaultWeek;
-        const filteredPhotos = reqWeek === 'ALL' ? allGallery : allGallery.filter(p => p.week === reqWeek);
+        const defaultWeek = availableWeeks[0] || 'Minggu ke-35 (2026)';
+        const rawReqWeek = (req.query.week as string) || defaultWeek;
+        const isAll = !rawReqWeek || rawReqWeek === 'ALL' || rawReqWeek.toLowerCase().includes('semua');
+        const filteredPhotos = isAll ? allGallery : allGallery.filter(p => p.week === rawReqWeek || (p.week && p.week.toLowerCase() === rawReqWeek.toLowerCase()));
         return res.json({
-          currentWeek: reqWeek,
+          currentWeek: rawReqWeek,
           availableWeeks,
           totalPhotos: allGallery.length,
           photos: filteredPhotos
@@ -899,6 +900,69 @@ router.get("/api/gallery", async (req, res) => {
         }
       }
 
+      // 2. Fetch from PostgreSQL inspections table
+      try {
+        const dbInsps = await db.select().from(inspections);
+        for (const insp of dbInsps) {
+          const dateObj = insp.date ? new Date(insp.date) : new Date();
+          const tglFormatted = dateObj.toLocaleDateString('id-ID');
+          const weekLabel = getISOWeekLabel(dateObj, insp.type);
+          const inspector = insp.inspectorName ? insp.inspectorName.split('|')[0].trim() : 'Inspector';
+          const area = insp.location || 'Area Kerja';
+          const category = insp.type || 'Inspeksi Terpadu';
+
+          if (insp.photoUrl && insp.photoUrl !== '-') {
+            if (insp.photoUrl.startsWith('{')) {
+              try {
+                const parsedPhoto = JSON.parse(insp.photoUrl);
+                if (parsedPhoto.fotoProses && parsedPhoto.fotoProses !== '-' && !seenUrls.has(parsedPhoto.fotoProses.trim())) {
+                  seenUrls.add(parsedPhoto.fotoProses.trim());
+                  allGallery.push({
+                    url: parsedPhoto.fotoProses.trim(),
+                    week: weekLabel,
+                    sumber: `${category}`,
+                    area: `${category} - ${area} (Dokumentasi Proses)`,
+                    inspektor: inspector,
+                    tanggal: tglFormatted,
+                    timestamp: dateObj.getTime()
+                  });
+                }
+                if (Array.isArray(parsedPhoto.fotoTemuanArray)) {
+                  parsedPhoto.fotoTemuanArray.forEach((item: any, idx: number) => {
+                    const photoStr = typeof item === 'string' ? item : item?.url || item?.base64;
+                    if (photoStr && photoStr !== '-' && !photoStr.startsWith('data:') && !seenUrls.has(photoStr.trim())) {
+                      seenUrls.add(photoStr.trim());
+                      allGallery.push({
+                        url: photoStr.trim(),
+                        week: weekLabel,
+                        sumber: `${category}`,
+                        area: `${category} - ${area} (Temuan #${idx + 1})`,
+                        inspektor: inspector,
+                        tanggal: tglFormatted,
+                        timestamp: dateObj.getTime()
+                      });
+                    }
+                  });
+                }
+              } catch(e) {}
+            } else if (insp.photoUrl.startsWith('http') && !seenUrls.has(insp.photoUrl.trim())) {
+              seenUrls.add(insp.photoUrl.trim());
+              allGallery.push({
+                url: insp.photoUrl.trim(),
+                week: weekLabel,
+                sumber: `${category}`,
+                area: `${category} - ${area}`,
+                inspektor: inspector,
+                tanggal: tglFormatted,
+                timestamp: dateObj.getTime()
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error reading db inspections for gallery:", err);
+      }
+
       function getSumberCategory(sheetName: string, area: string, defaultSumber: string): string {
         if (sheetName === 'Log_Umum') {
           const a = (area || '').toLowerCase();
@@ -911,7 +975,7 @@ router.get("/api/gallery", async (req, res) => {
         return defaultSumber;
       }
 
-      // 2. Fetch from Google Sheets for all Form Logs
+      // 3. Fetch from Google Sheets for all Form Logs
       const spreadsheetId = '1vG6iSl8uPHhwtH2tGUlyb0l4IK3r3ZhavtkkdHhEmP0';
       const sheetConfigs = [
         { sheet: 'Log_Umum', sumber: 'Inspeksi Umum', photoKeys: ['URL_Foto_Bukti'], areaKey: 'Lokasi_Spesifik', inspKey: 'Nama_Inspektur', dateKey: 'Timestamp', descKey: 'Catatan_Temuan', idKey: 'ID_Inspeksi' },
@@ -972,13 +1036,14 @@ router.get("/api/gallery", async (req, res) => {
       const weeksSet = new Set<string>();
       allGallery.forEach(p => { if (p.week) weeksSet.add(p.week); });
       const availableWeeks = Array.from(weeksSet).sort((a, b) => b.localeCompare(a));
-      const defaultWeek = availableWeeks[0] || 'Minggu ke-34 (2026)';
-      const reqWeek = (req.query.week as string) || defaultWeek;
+      const defaultWeek = availableWeeks[0] || 'Minggu ke-35 (2026)';
+      const rawReqWeek = (req.query.week as string) || defaultWeek;
+      const isAll = !rawReqWeek || rawReqWeek === 'ALL' || rawReqWeek.toLowerCase().includes('semua');
 
-      const filteredPhotos = reqWeek === 'ALL' ? allGallery : allGallery.filter(p => p.week === reqWeek);
+      const filteredPhotos = isAll ? allGallery : allGallery.filter(p => p.week === rawReqWeek || (p.week && p.week.toLowerCase() === rawReqWeek.toLowerCase()));
 
       return res.json({
-        currentWeek: reqWeek,
+        currentWeek: rawReqWeek,
         availableWeeks,
         totalPhotos: allGallery.length,
         photos: filteredPhotos
