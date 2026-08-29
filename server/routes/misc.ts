@@ -864,43 +864,7 @@ router.get("/api/gallery", async (req, res) => {
         return `Minggu ke-${weekStr} (${weekYear})`;
       }
 
-      // 1. Fetch from PostgreSQL tickets (Temuan & Closing)
-      const allFindingTickets = await db.select().from(tickets).where(eq(tickets.source, 'inspeksi')).orderBy(desc(tickets.id));
-      for (const t of allFindingTickets) {
-        const dateObj = t.date ? new Date(t.date) : new Date();
-        const tglFormatted = dateObj.toLocaleDateString('id-ID');
-        let weekLabel = getISOWeekLabel(dateObj, t.ticketId);
-
-        if (t.photoUrl && t.photoUrl !== '-' && !seenUrls.has(t.photoUrl.trim())) {
-          seenUrls.add(t.photoUrl.trim());
-          allGallery.push({
-            url: t.photoUrl.trim(),
-            week: weekLabel,
-            sumber: 'Temuan K3',
-            area: `${t.location || 'Area'} - ${t.description || 'Temuan'}`,
-            inspektor: t.requestorName || '-',
-            tanggal: tglFormatted,
-            ticketId: t.ticketId,
-            timestamp: dateObj.getTime()
-          });
-        }
-
-        if (t.closingPhoto && t.closingPhoto !== '-' && !seenUrls.has(t.closingPhoto.trim())) {
-          seenUrls.add(t.closingPhoto.trim());
-          allGallery.push({
-            url: t.closingPhoto.trim(),
-            week: weekLabel,
-            sumber: 'Bukti Perbaikan K3',
-            area: `[Selesai] ${t.location || 'Area'} - ${t.actionTaken || t.description || 'Telah Diperbaiki'}`,
-            inspektor: t.pic || t.requestorName || '-',
-            tanggal: t.completionDate ? new Date(t.completionDate).toLocaleDateString('id-ID') : tglFormatted,
-            ticketId: t.ticketId,
-            timestamp: t.completionDate ? new Date(t.completionDate).getTime() : dateObj.getTime()
-          });
-        }
-      }
-
-      // 2. Fetch from PostgreSQL inspections table
+      // 1. Fetch from PostgreSQL inspections table (Dokumentasi Proses Pelaksanaan Inspeksi)
       try {
         const dbInsps = await db.select().from(inspections);
         for (const insp of dbInsps) {
@@ -915,33 +879,17 @@ router.get("/api/gallery", async (req, res) => {
             if (insp.photoUrl.startsWith('{')) {
               try {
                 const parsedPhoto = JSON.parse(insp.photoUrl);
+                // Hanya ambil foto proses dokumentasi inspeksi (bukan foto temuan)
                 if (parsedPhoto.fotoProses && parsedPhoto.fotoProses !== '-' && !seenUrls.has(parsedPhoto.fotoProses.trim())) {
                   seenUrls.add(parsedPhoto.fotoProses.trim());
                   allGallery.push({
                     url: parsedPhoto.fotoProses.trim(),
                     week: weekLabel,
                     sumber: `${category}`,
-                    area: `${category} - ${area} (Dokumentasi Proses)`,
+                    area: `${category} - ${area}`,
                     inspektor: inspector,
                     tanggal: tglFormatted,
                     timestamp: dateObj.getTime()
-                  });
-                }
-                if (Array.isArray(parsedPhoto.fotoTemuanArray)) {
-                  parsedPhoto.fotoTemuanArray.forEach((item: any, idx: number) => {
-                    const photoStr = typeof item === 'string' ? item : item?.url || item?.base64;
-                    if (photoStr && photoStr !== '-' && !photoStr.startsWith('data:') && !seenUrls.has(photoStr.trim())) {
-                      seenUrls.add(photoStr.trim());
-                      allGallery.push({
-                        url: photoStr.trim(),
-                        week: weekLabel,
-                        sumber: `${category}`,
-                        area: `${category} - ${area} (Temuan #${idx + 1})`,
-                        inspektor: inspector,
-                        tanggal: tglFormatted,
-                        timestamp: dateObj.getTime()
-                      });
-                    }
                   });
                 }
               } catch(e) {}
@@ -975,16 +923,16 @@ router.get("/api/gallery", async (req, res) => {
         return defaultSumber;
       }
 
-      // 3. Fetch from Google Sheets for all Form Logs
+      // 2. Fetch from Google Sheets for all Form Logs (Hanya Foto Proses / Dokumentasi Pelaksanaan)
       const spreadsheetId = '1vG6iSl8uPHhwtH2tGUlyb0l4IK3r3ZhavtkkdHhEmP0';
       const sheetConfigs = [
         { sheet: 'Log_Umum', sumber: 'Inspeksi Umum', photoKeys: ['URL_Foto_Bukti'], areaKey: 'Lokasi_Spesifik', inspKey: 'Nama_Inspektur', dateKey: 'Timestamp', descKey: 'Catatan_Temuan', idKey: 'ID_Inspeksi' },
         { sheet: 'Log_APD', sumber: 'Kepatuhan APD', photoKeys: ['Foto Inspeksi'], areaKey: 'Bagian', inspKey: 'Nama Inspektor 1', dateKey: 'Tanggal', descKey: 'Kategori_Laporan', idKey: 'Kategori_Laporan' },
-        { sheet: 'Log_P3K', sumber: 'Kotak P3K', photoKeys: ['Foto Proses', 'Foto Temuan 1', 'Foto Temuan 2'], areaKey: 'Judul Form', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Item P3K', idKey: 'Judul File' },
-        { sheet: 'Log_Perkakas', sumber: 'Peralatan & Perkakas', photoKeys: ['Foto_Proses', 'Foto_Temuan_1', 'Foto_Temuan_2'], areaKey: 'Nama Perkakas', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Catatan', idKey: 'Judul Form' },
-        { sheet: 'Log_Tabung', sumber: 'Tabung Gas', photoKeys: ['Foto_Proses', 'Foto_Temuan_1', 'Foto_Temuan_2'], areaKey: 'Judul Form', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Keterangan', idKey: 'Judul Form' },
-        { sheet: 'Log_Sarana', sumber: 'Sarana Unit', photoKeys: ['Foto_Proses', 'Foto_Temuan_1', 'Foto_Temuan_2'], areaKey: 'Unit Sarana', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Catatan', idKey: 'Judul Form' },
-        { sheet: 'Log_Tangga', sumber: 'Tangga Portabel', photoKeys: ['Foto_Proses', 'Foto_Temuan_1', 'Foto_Temuan_2'], areaKey: 'No Registrasi', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Catatan', idKey: 'Nama File' }
+        { sheet: 'Log_P3K', sumber: 'Kotak P3K', photoKeys: ['Foto Proses'], areaKey: 'Judul Form', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Item P3K', idKey: 'Judul File' },
+        { sheet: 'Log_Perkakas', sumber: 'Peralatan & Perkakas', photoKeys: ['Foto_Proses'], areaKey: 'Nama Perkakas', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Catatan', idKey: 'Judul Form' },
+        { sheet: 'Log_Tabung', sumber: 'Tabung Gas', photoKeys: ['Foto_Proses'], areaKey: 'Judul Form', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Keterangan', idKey: 'Judul Form' },
+        { sheet: 'Log_Sarana', sumber: 'Sarana Unit', photoKeys: ['Foto_Proses'], areaKey: 'Unit Sarana', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Catatan', idKey: 'Judul Form' },
+        { sheet: 'Log_Tangga', sumber: 'Tangga Portabel', photoKeys: ['Foto_Proses'], areaKey: 'No Registrasi', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Catatan', idKey: 'Nama File' }
       ];
 
       await Promise.all(sheetConfigs.map(async (cfg) => {
