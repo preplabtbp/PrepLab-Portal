@@ -12,33 +12,59 @@ router.get("/api/tickets", async (req, res) => {
   try {
     const dbData = await db.select().from(tickets).orderBy(desc(tickets.id));
 
-    // Group / Consolidate APD tickets that belong to the same inspection
+    // Group / Consolidate tickets that belong to the same inspection session
     const consolidated: any[] = [];
-    const seenApdGroup = new Map<string, any>();
+    const seenInspectionGroup = new Map<string, any>();
 
     for (const t of dbData) {
-      const isApdTicket = (t.category || '').toLowerCase().includes('apd') || 
-                          (t.description || '').toLowerCase().includes('ketidakpatuhan apd') ||
-                          (t.risk || '').toLowerCase().includes('pelanggaran prosedur apd');
+      // Create a smart group key:
+      // 1. By documentLink (PDF URL) if present
+      // 2. Or by location + day (YYYY-MM-DD) + requestorName
+      // 3. Or by location + photoUrl (for APD findings)
+      let groupKey = '';
+      const dayStr = t.date ? new Date(t.date).toISOString().slice(0, 10) : '';
 
-      if (isApdTicket && t.photoUrl && t.photoUrl !== '-') {
-        // Group key by photoUrl + location
-        const groupKey = `${t.location || 'Area'}_${t.photoUrl}`;
-        if (seenApdGroup.has(groupKey)) {
-          const parent = seenApdGroup.get(groupKey);
-          // Combine descriptions cleanly
-          if (!parent.description.includes(t.description)) {
+      if (t.documentLink && t.documentLink.startsWith('http')) {
+        groupKey = `doc_${t.documentLink}_${t.location || 'Area'}`;
+      } else if (t.location && t.location !== '-' && dayStr && t.requestorName) {
+        groupKey = `loc_${t.location}_${dayStr}_${t.requestorName}`;
+      } else if (t.photoUrl && t.photoUrl !== '-') {
+        groupKey = `photo_${t.location || 'Area'}_${t.photoUrl}`;
+      }
+
+      if (groupKey) {
+        if (seenInspectionGroup.has(groupKey)) {
+          const parent = seenInspectionGroup.get(groupKey);
+          
+          // Combine descriptions cleanly with newline
+          if (t.description && !parent.description.includes(t.description)) {
             parent.description = `${parent.description}\n${t.description}`;
           }
-          // If any ticket in the group is OPEN, the merged ticket remains OPEN
+
+          // Combine risks if different
+          if (t.risk && (!parent.risk || !parent.risk.includes(t.risk))) {
+            parent.risk = parent.risk ? `${parent.risk} / ${t.risk}` : t.risk;
+          }
+
+          // Combine initial controls if different
+          if (t.initialControl && (!parent.initialControl || !parent.initialControl.includes(t.initialControl))) {
+            parent.initialControl = parent.initialControl ? `${parent.initialControl}; ${t.initialControl}` : t.initialControl;
+          }
+
+          // If any ticket in the group is OPEN, the parent remains OPEN
           if (t.status === 'OPEN') {
             parent.status = 'OPEN';
           }
+
+          // Retain photo if parent is missing photo
+          if (!parent.photoUrl && t.photoUrl) {
+            parent.photoUrl = t.photoUrl;
+          }
+
           continue; // Skip adding redundant separate card
         } else {
-          // Clone ticket object so we don't mutate in place
           const cloned = { ...t };
-          seenApdGroup.set(groupKey, cloned);
+          seenInspectionGroup.set(groupKey, cloned);
           consolidated.push(cloned);
         }
       } else {

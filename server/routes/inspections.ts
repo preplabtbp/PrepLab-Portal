@@ -294,34 +294,40 @@ router.post("/api/inspections/universal", async (req, res) => {
               const currentTicketCount = allExistingTickets.length;
               const inspNameOnly = (finalData.insp1 || 'Inspector').split(' | ')[0].trim();
 
-              const ticketValues = allTemuan.map((t: any, i: number) => {
-                  const isClosed = t.status === 'CLOSED';
-                  return {
-                      ticketId: generateTicketId(i, currentTicketCount),
-                      requestorName: finalData.insp1 || 'Inspector',
-                      category: finalData.judulForm || 'Inspeksi Mingguan',
-                      location: finalData.lokasiUmum || 'Area',
-                      description: t.temuan || 'Temuan Inspeksi',
-                      risk: t.risiko || null,
-                      initialControl: t.pengendalian || null,
-                      source: 'inspeksi',
-                      status: isClosed ? 'CLOSED' : 'OPEN',
-                      priority: (t.risiko || '').toUpperCase().includes('TINGGI') ? 'High' : 'Medium',
-                      pt: req.body.pt || 'TBP',
-                      photoUrl: t.foto || null,
-                      documentLink: (pdfUrl && pdfUrl !== 'GAS_GENERATED' && pdfUrl !== '-') ? pdfUrl : null,
-                      date: new Date(),
-                      completionDate: isClosed ? new Date() : null,
-                      pic: isClosed ? inspNameOnly : null,
-                      actionTaken: isClosed ? (t.pengendalian || '-') : null,
-                      closingPhoto: isClosed ? (t.foto || pdfUrl || null) : null
-                  };
-              });
-              
-              if (ticketValues.length > 0) {
-                  await db.insert(tickets).values(ticketValues);
-                  console.log(`Inserted ${ticketValues.length} temuan into tickets table.`);
-              }
+              const combinedDescription = allTemuan.map((t: any, idx: number) => {
+                  const prefix = allTemuan.length > 1 ? `${idx + 1}. ` : '';
+                  return `${prefix}${t.temuan || 'Temuan Inspeksi'}`;
+              }).join('\n');
+
+              const combinedRisks = Array.from(new Set(allTemuan.map((t: any) => t.risiko).filter(Boolean))).join(' / ');
+              const combinedControls = Array.from(new Set(allTemuan.map((t: any) => t.pengendalian).filter((p: any) => p && p !== '-'))).join('; ');
+              const hasHighPriority = allTemuan.some((t: any) => (t.risiko || '').toUpperCase().includes('TINGGI'));
+              const allClosed = allTemuan.every((t: any) => t.status === 'CLOSED');
+              const primaryPhoto = allTemuan.find((t: any) => t.foto && t.foto !== '-')?.foto || finalFotoProses || (fotoTemuanArray && fotoTemuanArray[0]) || null;
+
+              const singleTicket = {
+                  ticketId: generateTicketId(0, currentTicketCount),
+                  requestorName: finalData.insp1 || 'Inspector',
+                  category: finalData.judulForm || 'Inspeksi Mingguan',
+                  location: finalData.lokasiUmum || 'Area',
+                  description: combinedDescription,
+                  risk: combinedRisks || 'Potensi Bahaya K3',
+                  initialControl: combinedControls || '-',
+                  source: 'inspeksi',
+                  status: allClosed ? 'CLOSED' : 'OPEN',
+                  priority: hasHighPriority ? 'High' : 'Medium',
+                  pt: req.body.pt || 'TBP',
+                  photoUrl: primaryPhoto,
+                  documentLink: (pdfUrl && pdfUrl !== 'GAS_GENERATED' && pdfUrl !== '-') ? pdfUrl : null,
+                  date: new Date(),
+                  completionDate: allClosed ? new Date() : null,
+                  pic: allClosed ? inspNameOnly : null,
+                  actionTaken: allClosed ? (combinedControls || '-') : null,
+                  closingPhoto: allClosed ? (primaryPhoto || pdfUrl || null) : null
+              };
+
+              await db.insert(tickets).values([singleTicket]);
+              console.log(`Inserted 1 consolidated temuan ticket (${singleTicket.ticketId}) into tickets table.`);
           } catch(e) {
               console.error("Failed to insert temuan to tickets table:", e);
           }
