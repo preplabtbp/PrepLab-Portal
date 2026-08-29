@@ -1003,6 +1003,14 @@ p5mRouter.post("/randomize", async (req, res) => {
         kandidat = poolKaryawan.filter(k => filterDasar(k, slot.kelas));
       }
 
+      // STRICT ZERO-TASK FIRST RULE:
+      // If there are eligible candidates who haven't been assigned any task this week (tugasMingguIni === 0),
+      // strictly restrict candidate pool to them so nobody gets a 2nd slot while fresh personnel are available!
+      const zeroTaskCandidates = kandidat.filter(k => k.tugasMingguIni === 0);
+      if (zeroTaskCandidates.length > 0) {
+        kandidat = zeroTaskCandidates;
+      }
+
       // Special handling for SENAM category: Prioritize personnel who have done senam fewest times
       if ((slot.kategori === 'Senam' || slot.isSenam) && kandidat.length > 0) {
         const minSenam = Math.min(...kandidat.map(c => c.senamCount || 0));
@@ -1032,12 +1040,12 @@ p5mRouter.post("/randomize", async (req, res) => {
       if (k.kelas === 'Foreman/Officer') score += 50;
       if (k.kelas === 'Admin') score += 40;
 
-      // Distribusi minggu berjalan
+      // Distribusi minggu berjalan: Prioritaskan penuh yang belum mendapat tugas sama sekali
       if (k.tugasMingguIni === 0) {
-        score += 100;
+        score += 1000;
         if (k.cutiMingguIni) score += 80; // Segera jadwalkan sebelum masuk jadwal cuti
-      } else if (k.tugasMingguIni === 1) {
-        score += 10;
+      } else {
+        score -= 2000; // Penalti mutlak jika sudah memiliki 1 tugas di minggu berjalan
       }
 
       // Penalti jarak hari briefing berturut-turut
