@@ -559,7 +559,7 @@ router.post("/api/inspections", async (req, res) => {
                         return `TKT-W${weekStr}Y${yearYY}-${counter.toString().padStart(3, '0')}`;
                       }
 
-                      const ticketValues = nonCompliant.map((r: any, i: number) => {
+                      const personilList = nonCompliant.map((r: any, idx: number) => {
                           const apdIssues: string[] = [];
                           if (r[9] === '❌') apdIssues.push('Seragam');
                           if (r[10] === '❌') apdIssues.push('Helm');
@@ -568,28 +568,30 @@ router.post("/api/inspections", async (req, res) => {
                           if (r[13] === '❌') apdIssues.push('Ear Plug');
                           if (r[14] === '❌') apdIssues.push('Kacamata');
 
-                          return {
-                              ticketId: generateTicketIdApd(i, currentTicketCount),
-                              requestorName: insp,
-                              category: 'Inspeksi Kepatuhan APD',
-                              location: area,
-                              description: `Ketidakpatuhan APD: ${r[6]} (${r[7]}) - Tidak lengkap: ${apdIssues.join(', ')}. Ket: ${r[15] || '-'}`,
-                              risk: 'Paparan Bahaya K3 / Pelanggaran Prosedur APD',
-                              initialControl: 'Teguran Lisan / Pemberian APD yang Sesuai',
-                              source: 'inspeksi',
-                              status: 'OPEN',
-                              priority: 'Medium',
-                              pt: req.body.pt || 'TBP',
-                              photoUrl: finalFotoProses || null,
-                              documentLink: dbPdfUrl,
-                              date: new Date()
-                          };
-                      });
+                          const issuesStr = apdIssues.length > 0 ? `Tidak lengkap: ${apdIssues.join(', ')}` : 'Tidak Lengkap APD';
+                          const ketStr = (r[15] && r[15] !== '-' && r[15].trim() !== '') ? `, Ket: ${r[15].trim()}` : '';
+                          return `${nonCompliant.length > 1 ? `${idx + 1}. ` : ''}Ketidakpatuhan APD: ${r[6]} (${r[7]}) - ${issuesStr}${ketStr}`;
+                      }).join('\n');
 
-                      if (ticketValues.length > 0) {
-                          await db.insert(tickets).values(ticketValues);
-                          console.log(`Inserted ${ticketValues.length} APD temuan into tickets table.`);
-                      }
+                      const singleTicket = {
+                          ticketId: generateTicketIdApd(0, currentTicketCount),
+                          requestorName: insp,
+                          category: 'Inspeksi Kepatuhan APD',
+                          location: area,
+                          description: personilList,
+                          risk: 'Paparan Bahaya K3 / Pelanggaran Prosedur APD',
+                          initialControl: 'Teguran Lisan / Pemberian APD yang Sesuai & Penggantian APD Rusak',
+                          source: 'inspeksi',
+                          status: 'OPEN',
+                          priority: 'Medium',
+                          pt: req.body.pt || 'TBP',
+                          photoUrl: finalFotoProses || null,
+                          documentLink: dbPdfUrl,
+                          date: new Date()
+                      };
+
+                      await db.insert(tickets).values([singleTicket]);
+                      console.log(`Inserted 1 consolidated APD temuan ticket (${singleTicket.ticketId}) into tickets table.`);
                   }
               } catch(e) {
                   console.error("Failed to insert APD temuan to tickets table:", e);

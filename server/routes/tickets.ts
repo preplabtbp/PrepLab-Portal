@@ -11,7 +11,42 @@ export const router = express.Router();
 router.get("/api/tickets", async (req, res) => {
   try {
     const dbData = await db.select().from(tickets).orderBy(desc(tickets.id));
-    res.json(dbData);
+
+    // Group / Consolidate APD tickets that belong to the same inspection
+    const consolidated: any[] = [];
+    const seenApdGroup = new Map<string, any>();
+
+    for (const t of dbData) {
+      const isApdTicket = (t.category || '').toLowerCase().includes('apd') || 
+                          (t.description || '').toLowerCase().includes('ketidakpatuhan apd') ||
+                          (t.risk || '').toLowerCase().includes('pelanggaran prosedur apd');
+
+      if (isApdTicket && t.photoUrl && t.photoUrl !== '-') {
+        // Group key by photoUrl + location
+        const groupKey = `${t.location || 'Area'}_${t.photoUrl}`;
+        if (seenApdGroup.has(groupKey)) {
+          const parent = seenApdGroup.get(groupKey);
+          // Combine descriptions cleanly
+          if (!parent.description.includes(t.description)) {
+            parent.description = `${parent.description}\n${t.description}`;
+          }
+          // If any ticket in the group is OPEN, the merged ticket remains OPEN
+          if (t.status === 'OPEN') {
+            parent.status = 'OPEN';
+          }
+          continue; // Skip adding redundant separate card
+        } else {
+          // Clone ticket object so we don't mutate in place
+          const cloned = { ...t };
+          seenApdGroup.set(groupKey, cloned);
+          consolidated.push(cloned);
+        }
+      } else {
+        consolidated.push(t);
+      }
+    }
+
+    res.json(consolidated);
   } catch (error) {
     console.error("Error fetching inspection tickets:", error);
     res.status(500).json({ error: "Failed to fetch tickets" });
