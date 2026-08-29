@@ -5,7 +5,7 @@ import { getTickets, closeTicket, getGalleryPhotos } from '../sheets-api';
 import { 
   Loader2, AlertTriangle, CheckCircle2, ShieldCheck, Image as ImageIcon, 
   Camera, User, Calendar as CalendarIcon, Tag, ZoomIn, Filter, Layers, 
-  ChevronRight, ArrowLeft, RefreshCw 
+  ChevronRight, ArrowLeft, RefreshCw, ChevronDown 
 } from 'lucide-react';
 import { ImageModal } from './image-modal';
 import { WhatsAppModal } from './whatsapp-modal';
@@ -608,21 +608,34 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
         description="Monitoring dan tindak lanjut temuan unsafe action / unsafe condition"
         icon={<AlertTriangle className="w-6 h-6 text-amber-500" />}
       >
-        <div className="flex items-center gap-3">
-          <Select 
-            value={filter} 
-            onChange={(e) => setFilter(e.target.value)}
-            className="w-40 bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-md"
-          >
-             <option value="OPEN" className="text-slate-800">Tiket Terbuka</option>
-             <option value="CLOSED" className="text-slate-800">Tiket Selesai</option>
-             <option value="ALL" className="text-slate-800">Semua Tiket</option>
-          </Select>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Filter Status Selector */}
+          <div className="relative">
+            <select 
+              value={filter} 
+              onChange={(e) => setFilter(e.target.value)}
+              className="h-10 pl-9 pr-8 text-xs font-bold rounded-xl bg-slate-800/90 hover:bg-slate-750 text-white border border-slate-600/70 backdrop-blur-md transition-all outline-none focus:ring-2 focus:ring-amber-400/50 cursor-pointer shadow-sm appearance-none"
+            >
+              <option value="OPEN" className="bg-slate-900 text-white py-1">🔴 Tiket Terbuka</option>
+              <option value="CLOSED" className="bg-slate-900 text-white py-1">🟢 Tiket Selesai</option>
+              <option value="ALL" className="bg-slate-900 text-white py-1">📋 Semua Tiket</option>
+            </select>
+            <Filter className="w-3.5 h-3.5 text-amber-300 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <ChevronDown className="w-3.5 h-3.5 text-white/60 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
 
-          <Button onClick={loadGallery} variant="secondary" className="h-9 bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-md flex items-center gap-1.5">
-            <ImageIcon className="w-4 h-4" />
-            Galeri
-          </Button>
+          {/* Tombol Buka Galeri Foto */}
+          <button 
+            onClick={loadGallery}
+            type="button"
+            className="h-10 px-4 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-teal-950/40 border border-teal-400/30 transition-all transform hover:scale-[1.02] active:scale-95 cursor-pointer"
+          >
+            <ImageIcon className="w-4 h-4 text-white" />
+            <span>Galeri Foto</span>
+            <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded-full font-black">
+              {totalGalleryPhotosCount > 0 ? totalGalleryPhotosCount : 'Foto'}
+            </span>
+          </button>
         </div>
       </PageHeader>
 
