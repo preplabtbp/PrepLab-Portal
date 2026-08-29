@@ -154,6 +154,21 @@ async function syncNotionMateriDatabase() {
 // HELPER FUNCTIONS: Klasifikasi Golongan, Kelas, Divisi & Tanggal
 // ============================================================
 function isGolongan2or3(emp: any): boolean {
+  const nik = (emp.nik || '').toUpperCase().trim();
+  const name = (emp.name || '').toLowerCase().trim();
+
+  // Strict: Exclude demo, test, staging, and admin system accounts from P5M schedule
+  if (
+    nik === 'DEMO123' || 
+    nik === 'DEMO' || 
+    nik.includes('DEMO') || 
+    name.includes('demo') || 
+    name.includes('staging') ||
+    nik === 'PREPLABADMIN'
+  ) {
+    return false;
+  }
+
   const g = (emp.gol || '').toUpperCase().trim();
   const j = (emp.jabatan || '').toLowerCase();
 
