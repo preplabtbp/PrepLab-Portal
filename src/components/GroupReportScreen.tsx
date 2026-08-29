@@ -362,10 +362,11 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           {/* Messages Feed Container */}
           <div className={`space-y-3.5 ${isFloating ? 'flex-1 overflow-y-auto p-3' : ''}`}>
             {/* PINNED ANNOUNCEMENT */}
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2 shadow-xs">
-              <Pin className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold">Pengingat:</span> Dimohon kepada seluruh personil untuk mengunggah berkas PDF hasil inspeksi keselamatan kerja ke grup ini.
+            <div className="bg-[var(--primary)]/10 border border-[var(--primary)]/30 rounded-2xl p-3 text-xs flex items-start gap-2.5 shadow-sm">
+              <Pin className="w-4 h-4 text-[var(--primary)] shrink-0 mt-0.5" />
+              <div className="text-xs leading-relaxed">
+                <span className="font-bold text-[var(--primary)] mr-1">Pengingat:</span>
+                <span className="text-[var(--text-main)] font-medium">Dimohon kepada seluruh personil untuk mengunggah berkas PDF hasil inspeksi keselamatan kerja ke grup ini.</span>
               </div>
             </div>
 
