@@ -1317,8 +1317,8 @@ export default function App() {
         inspectorName={inspectorName}
       />
 
-      {/* Global Floating Group Safety & PDF Widget (Bottom Right Corner) */}
-      {inspectorNik && (
+      {/* Global Floating Group Safety & PDF Widget (Disembunyikan untuk user umum selama masa uji coba) */}
+      {isDeveloper && inspectorNik && (
         <GroupReportFloatingWidget
           inspectorNik={inspectorNik}
           inspectorName={inspectorName || 'Inspector'}

@@ -854,6 +854,15 @@ export function GroupReportFloatingWidget({ inspectorName, inspectorNik, inspect
 }) {
   const [isOpen, setIsOpen] = useState(false);
 
+  // Sembunyikan widget untuk user umum selama masa uji coba (hanya tampil untuk developer)
+  const isDevUser = isDeveloper || 
+                    inspectorNik?.startsWith('02D24') || 
+                    inspectorNik === '02D24000043' || 
+                    inspectorNik === '02D25000055' || 
+                    inspectorNik === 'preplabadmin';
+
+  if (!isDevUser) return null;
+
   return (
     <>
       {/* FLOATING CHAT ICON BUTTON (POSITIONED ABOVE BOTTOM NAVBAR) */}
