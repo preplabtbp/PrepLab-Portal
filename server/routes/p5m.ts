@@ -949,17 +949,20 @@ p5mRouter.post("/randomize", async (req, res) => {
 
     // ── Constraint Solver Candidate Selection ────────────────
     function pilihKandidat(hari: string, shift: string, slot: any, sudahDipilihHariIni: Set<string>, subSessionTipe?: string) {
-      function filterDasar(k: any, kelasTarget: string) {
+      function filterDasar(k: any, kelasTarget: string, matchDivisiStrict: boolean = true) {
         const jdwl = (k.jadwal[hari] || '').toUpperCase();
         let isMasuk = false;
         if (shift === 'pagi' && (jdwl === 'D' || jdwl === 'LS' || jdwl === 'S' || jdwl === 'NONSHIFT')) isMasuk = true;
         if (shift === 'malam' && jdwl === 'N') isMasuk = true;
         if (!isMasuk) return false;
 
+        // STRICT DAY SHIFT RULE: MAX 1 SLOT PER WEEK PER PERSON (ZERO 2x IN DAY SHIFT)
+        if (shift === 'pagi' && k.tugasMingguIni >= 1) return false;
+
         // STRICT RULE: SPV MAX 1 SLOT PER WEEK
         if (k.kelas === 'SPV' && k.tugasMingguIni >= 1) return false;
 
-        // Non-SPV personnel MAX 2 slots per week
+        // Non-SPV personnel MAX 2 slots per week (Night shift)
         if (k.tugasMingguIni >= 2) return false;
         if (sudahDipilihHariIni.has(k.nama)) return false;
 
@@ -974,8 +977,8 @@ p5mRouter.post("/randomize", async (req, res) => {
           if (!isLabGroup) return false;
         }
 
-        // Exact slot section filter if set (e.g. user explicitly picked 'Maintenance' or 'Preparation' or 'Quality Assurance')
-        if (slot.divisi && slot.divisi !== 'All') {
+        // Exact slot section filter if matchDivisiStrict is true
+        if (matchDivisiStrict && slot.divisi && slot.divisi !== 'All') {
           if (slot.divisi !== k.divisi) return false;
         }
 
@@ -985,30 +988,33 @@ p5mRouter.post("/randomize", async (req, res) => {
 
       let kandidat: any[] = [];
 
+      // Step 1: Try strict match (exact kelas and exact divisi)
       if (slot.kelas === 'SPV') {
-        kandidat = poolKaryawan.filter(k => filterDasar(k, 'SPV'));
-        // AUTOMATIC FALLBACK: If no SPV is available / all SPVs already reached 1 slot max, fallback to Foreman/Officer
+        kandidat = poolKaryawan.filter(k => filterDasar(k, 'SPV', true));
+        // AUTOMATIC FALLBACK: If no SPV is available, fallback to Foreman/Officer
         if (kandidat.length === 0) {
-          kandidat = poolKaryawan.filter(k => filterDasar(k, 'Foreman/Officer'));
+          kandidat = poolKaryawan.filter(k => filterDasar(k, 'Foreman/Officer', true));
           if (kandidat.length > 0) (kandidat as any)._isFallback = true;
         }
       } else if (slot.kelas === 'All') {
-        // STRICT RULE: Prioritize Foreman/Officer and Admin over SPV when level is 'All'
-        kandidat = poolKaryawan.filter(k => filterDasar(k, 'All') && k.kelas !== 'SPV');
-        // Only if NO Foreman/Officer/Admin available, allow SPV
+        // Prioritize Foreman/Officer and Admin over SPV
+        kandidat = poolKaryawan.filter(k => filterDasar(k, 'All', true) && k.kelas !== 'SPV');
         if (kandidat.length === 0) {
-          kandidat = poolKaryawan.filter(k => filterDasar(k, 'All'));
+          kandidat = poolKaryawan.filter(k => filterDasar(k, 'All', true));
         }
       } else {
-        kandidat = poolKaryawan.filter(k => filterDasar(k, slot.kelas));
+        kandidat = poolKaryawan.filter(k => filterDasar(k, slot.kelas, true));
+        if (kandidat.length === 0) {
+          // Fallback to any kelas in same divisi
+          kandidat = poolKaryawan.filter(k => filterDasar(k, 'All', true));
+          if (kandidat.length > 0) (kandidat as any)._isFallback = true;
+        }
       }
 
-      // STRICT ZERO-TASK FIRST RULE:
-      // If there are eligible candidates who haven't been assigned any task this week (tugasMingguIni === 0),
-      // strictly restrict candidate pool to them so nobody gets a 2nd slot while fresh personnel are available!
-      const zeroTaskCandidates = kandidat.filter(k => k.tugasMingguIni === 0);
-      if (zeroTaskCandidates.length > 0) {
-        kandidat = zeroTaskCandidates;
+      // Step 2: If still no candidate, relax divisi filter within the subsession
+      if (kandidat.length === 0) {
+        kandidat = poolKaryawan.filter(k => filterDasar(k, 'All', false));
+        if (kandidat.length > 0) (kandidat as any)._isFallback = true;
       }
 
       // Special handling for SENAM category: Prioritize personnel who have done senam fewest times
