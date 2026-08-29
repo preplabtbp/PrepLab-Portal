@@ -145,12 +145,12 @@ async function computeRosterData() {
     let nextTrvDate: string | null = null;
     let nextWorkDate: string | null = null;
     let outsiteDate: string | null = null;
+    let onsiteDate: string | null = null;
+    let masukKerjaDate: string | null = null;
 
     const datesAsc = Object.keys(sched).sort((a, b) => getDateTs(a) - getDateTs(b));
 
-    // Find outsiteDate:
-    // For Gol II ke atas (!isGol1): Outsite date is when schedule is TRV (or TV) for current/upcoming leave.
-    // For Gol I (isGol1): Outsite date is the first 'C' (or Cuti code) for current/upcoming leave.
+    // Find active or upcoming leave block around today
     const todayIndex = datesAsc.findIndex(d => getDateTs(d) >= todayTimestamp);
     let activeLeaveIdx = -1;
     if (todayIndex !== -1) {
@@ -177,20 +177,65 @@ async function computeRosterData() {
         i++;
       }
 
-      if (!isGol1) {
-        // Gol II ke atas: look for TRV or TV code
-        const trvFound = currentLeaveBlock.find(d => {
-          const code = (sched[d] || '').toUpperCase();
-          return code === 'TRV' || code === 'TV';
-        });
-        outsiteDate = trvFound || currentLeaveBlock[0] || null;
-      } else {
-        // Gol I: look for first 'C' code
-        const cFound = currentLeaveBlock.find(d => {
-          const code = (sched[d] || '').toUpperCase();
-          return code === 'C' || code.startsWith('C');
-        });
-        outsiteDate = cFound || currentLeaveBlock[0] || null;
+      if (currentLeaveBlock.length > 0) {
+        if (!isGol1) {
+          // ── GOLONGAN II KE ATAS ──
+          // Outsite: first TRV (or first leave day in block)
+          const firstTrv = currentLeaveBlock.find(d => {
+            const code = (sched[d] || '').toUpperCase().trim();
+            return code === 'TRV' || code === 'TV';
+          });
+          outsiteDate = firstTrv || currentLeaveBlock[0];
+
+          // Onsite: TRV terakhir di dalam blok cuti
+          // Jika TRV terakhir hanya ada 1 (atau ada di akhir), dihitung di tanggal itu juga
+          const allTrvs = currentLeaveBlock.filter(d => {
+            const code = (sched[d] || '').toUpperCase().trim();
+            return code === 'TRV' || code === 'TV';
+          });
+
+          if (allTrvs.length > 1) {
+            onsiteDate = allTrvs[allTrvs.length - 1];
+          } else if (allTrvs.length === 1) {
+            const trvIdx = currentLeaveBlock.indexOf(allTrvs[0]);
+            if (trvIdx > 0 || currentLeaveBlock.length === 1) {
+              onsiteDate = allTrvs[0];
+            } else {
+              onsiteDate = currentLeaveBlock[currentLeaveBlock.length - 1];
+            }
+          } else {
+            onsiteDate = currentLeaveBlock[currentLeaveBlock.length - 1];
+          }
+        } else {
+          // ── GOLONGAN I ──
+          // Outsite: first C (or first leave day in block)
+          const firstC = currentLeaveBlock.find(d => {
+            const code = (sched[d] || '').toUpperCase().trim();
+            return code === 'C' || code.startsWith('C');
+          });
+          outsiteDate = firstC || currentLeaveBlock[0];
+
+          // Onsite: C terakhir di dalam blok cuti
+          const allC = currentLeaveBlock.filter(d => {
+            const code = (sched[d] || '').toUpperCase().trim();
+            return code === 'C' || code.startsWith('C');
+          });
+          onsiteDate = allC.length > 0 ? allC[allC.length - 1] : currentLeaveBlock[currentLeaveBlock.length - 1];
+        }
+
+        // Masuk Kerja: 1 hari setelah Onsite (hari setelah TRV untuk gol II / hari setelah C untuk gol I)
+        if (onsiteDate) {
+          const onsiteGlobalIdx = datesAsc.indexOf(onsiteDate);
+          if (onsiteGlobalIdx !== -1 && onsiteGlobalIdx + 1 < datesAsc.length) {
+            masukKerjaDate = datesAsc[onsiteGlobalIdx + 1];
+          } else {
+            const d = new Date(onsiteDate);
+            d.setDate(d.getDate() + 1);
+            const parts = d.toDateString().split(' ');
+            const day = parseInt(parts[2], 10);
+            masukKerjaDate = `${day} ${parts[1]} ${parts[3].substring(2)}`;
+          }
+        }
       }
     }
 
@@ -243,6 +288,8 @@ async function computeRosterData() {
       nextTrvDate,
       nextWorkDate,
       outsiteDate,
+      onsiteDate,
+      masukKerjaDate,
       schedule: next7Days,
       fullSchedule: sched
     };

@@ -190,11 +190,133 @@ export function AdmDashboard() {
          targetData.details.alfa.push(emp);
       }
 
-      if (tab === 'masuk' && isMasuk) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti, isKosong: false });
-      if (tab === 'cuti' && isCuti) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti, isKosong: false });
-      if (tab === 'izin' && isIzin) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti, isKosong: false });
-      if (tab === 'alfa' && isAlfa) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti, isKosong: false });
-      if (tab === 'libur' && isAbsentOrOff) filteredEmployees.push({ ...emp, currentShift: shiftCode, formattedDate, isMasuk, isCuti, isKosong: false });
+      // Dynamic calculation of Outsite, Onsite, and Masuk Kerja
+      let empOutsiteDate = emp.outsiteDate;
+      let empOnsiteDate = emp.onsiteDate;
+      let empMasukKerjaDate = emp.masukKerjaDate;
+
+      if (emp.fullSchedule) {
+        const sched = emp.fullSchedule;
+        const golUpper = (emp.gol || '').toString().trim().toUpperCase();
+        const jobGradeUpper = (emp.jobGrade || '').toString().trim().toUpperCase();
+        const posLower = (emp.jabatan || emp.position || '').toString().trim().toLowerCase();
+        
+        const isGol1 = golUpper === 'I' || golUpper === '1' || golUpper === 'I.1' || golUpper === '1.1' || golUpper === 'S1.1' || golUpper === 'S1.2' ||
+          jobGradeUpper.startsWith('S1') || jobGradeUpper.startsWith('1.') || jobGradeUpper === '1' || jobGradeUpper === 'I' ||
+          ((posLower.includes('crew') || posLower.includes('helper') || posLower.includes('operator') || posLower.includes('sampler') || posLower.includes('driver')) &&
+           !posLower.includes('foreman') && !posLower.includes('supervisor') && !posLower.includes('admin') && !posLower.includes('superintendent') && !posLower.includes('manager') && !posLower.includes('lead') && !posLower.includes('officer') && !posLower.includes('analyst') && !posLower.includes('planner') && !posLower.includes('specialist'));
+
+        const datesAsc = Object.keys(sched).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+        const isLeaveCode = (s?: string) => {
+          if (!s) return false;
+          const u = s.toUpperCase().trim();
+          return ['TRV', 'TV', 'C', 'CR', 'CE', 'CT', 'CI', 'XP', 'TT'].includes(u) || u.startsWith('CT') || u.startsWith('CE');
+        };
+
+        const targetIndex = datesAsc.indexOf(formattedDate);
+        let activeLeaveIdx = -1;
+
+        if (targetIndex !== -1 && isLeaveCode(sched[datesAsc[targetIndex]])) {
+          activeLeaveIdx = targetIndex;
+          while (activeLeaveIdx > 0 && isLeaveCode(sched[datesAsc[activeLeaveIdx - 1]])) {
+            activeLeaveIdx--;
+          }
+        } else if (targetIndex !== -1) {
+          for (let i = targetIndex; i < datesAsc.length; i++) {
+            if (isLeaveCode(sched[datesAsc[i]])) {
+              activeLeaveIdx = i;
+              break;
+            }
+          }
+        }
+
+        if (activeLeaveIdx !== -1) {
+          const currentLeaveBlock: string[] = [];
+          let i = activeLeaveIdx;
+          while (i < datesAsc.length && isLeaveCode(sched[datesAsc[i]])) {
+            currentLeaveBlock.push(datesAsc[i]);
+            i++;
+          }
+
+          if (currentLeaveBlock.length > 0) {
+            if (!isGol1) {
+              // ── GOLONGAN II KE ATAS ──
+              // Outsite: first TRV or first leave day
+              const firstTrv = currentLeaveBlock.find(d => {
+                const code = (sched[d] || '').toUpperCase().trim();
+                return code === 'TRV' || code === 'TV';
+              });
+              empOutsiteDate = firstTrv || currentLeaveBlock[0];
+
+              // Onsite: TRV terakhir di dalam blok cuti
+              const allTrvs = currentLeaveBlock.filter(d => {
+                const code = (sched[d] || '').toUpperCase().trim();
+                return code === 'TRV' || code === 'TV';
+              });
+
+              if (allTrvs.length > 1) {
+                empOnsiteDate = allTrvs[allTrvs.length - 1];
+              } else if (allTrvs.length === 1) {
+                const trvIdx = currentLeaveBlock.indexOf(allTrvs[0]);
+                if (trvIdx > 0 || currentLeaveBlock.length === 1) {
+                  empOnsiteDate = allTrvs[0];
+                } else {
+                  empOnsiteDate = currentLeaveBlock[currentLeaveBlock.length - 1];
+                }
+              } else {
+                empOnsiteDate = currentLeaveBlock[currentLeaveBlock.length - 1];
+              }
+            } else {
+              // ── GOLONGAN I ──
+              // Outsite: first C
+              const firstC = currentLeaveBlock.find(d => {
+                const code = (sched[d] || '').toUpperCase().trim();
+                return code === 'C' || code.startsWith('C');
+              });
+              empOutsiteDate = firstC || currentLeaveBlock[0];
+
+              // Onsite: C terakhir di dalam blok cuti
+              const allC = currentLeaveBlock.filter(d => {
+                const code = (sched[d] || '').toUpperCase().trim();
+                return code === 'C' || code.startsWith('C');
+              });
+              empOnsiteDate = allC.length > 0 ? allC[allC.length - 1] : currentLeaveBlock[currentLeaveBlock.length - 1];
+            }
+
+            // Masuk Kerja: 1 hari setelah Onsite
+            if (empOnsiteDate) {
+              const onsiteGlobalIdx = datesAsc.indexOf(empOnsiteDate);
+              if (onsiteGlobalIdx !== -1 && onsiteGlobalIdx + 1 < datesAsc.length) {
+                empMasukKerjaDate = datesAsc[onsiteGlobalIdx + 1];
+              } else {
+                const dDate = new Date(empOnsiteDate);
+                dDate.setDate(dDate.getDate() + 1);
+                const dParts = dDate.toDateString().split(' ');
+                const dDay = parseInt(dParts[2], 10);
+                empMasukKerjaDate = `${dDay} ${dParts[1]} ${dParts[3].substring(2)}`;
+              }
+            }
+          }
+        }
+      }
+
+      const empEntry = { 
+        ...emp, 
+        currentShift: shiftCode, 
+        formattedDate, 
+        isMasuk, 
+        isCuti, 
+        isKosong: false,
+        outsiteDate: empOutsiteDate,
+        onsiteDate: empOnsiteDate,
+        masukKerjaDate: empMasukKerjaDate
+      };
+
+      if (tab === 'masuk' && isMasuk) filteredEmployees.push(empEntry);
+      if (tab === 'cuti' && isCuti) filteredEmployees.push(empEntry);
+      if (tab === 'izin' && isIzin) filteredEmployees.push(empEntry);
+      if (tab === 'alfa' && isAlfa) filteredEmployees.push(empEntry);
+      if (tab === 'libur' && isAbsentOrOff) filteredEmployees.push(empEntry);
     });
 
     let byShift: any = {
@@ -543,7 +665,7 @@ export function AdmDashboard() {
                                                     <span className="text-slate-400 font-mono">{emp.nik}</span>
                                                   </div>
                                                   
-                                                  <div className="flex gap-2 mt-2 flex-wrap">
+                                                  <div className="flex gap-2 mt-2 flex-wrap items-center">
                                                     {emp.isKosong ? (
                                                       <span className="bg-rose-50 border border-rose-200 text-rose-700 px-2 py-0.5 rounded text-[10px] font-bold">
                                                         Roster kosong (Personil sudah keluar)
@@ -553,7 +675,8 @@ export function AdmDashboard() {
                                                         <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] text-slate-600 font-bold border border-slate-200">Status: {emp.currentShift}</span>
                                                         {emp.isMasuk && (emp.outsiteDate || emp.nextTrvDate) && <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px] text-amber-800 font-bold border border-amber-200">Next Outsite: {emp.outsiteDate || emp.nextTrvDate}</span>}
                                                         {emp.isCuti && emp.outsiteDate && <span className="bg-purple-100 px-2 py-0.5 rounded text-[10px] text-purple-800 font-bold border border-purple-200">Outsite: {emp.outsiteDate}</span>}
-                                                        {emp.isCuti && emp.nextWorkDate && <span className="bg-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-800 font-bold border border-indigo-200">Onsite: {emp.nextWorkDate}</span>}
+                                                        {emp.isCuti && emp.onsiteDate && <span className="bg-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-800 font-bold border border-indigo-200">Onsite: {emp.onsiteDate}</span>}
+                                                        {emp.isCuti && emp.masukKerjaDate && <span className="bg-emerald-100 px-2 py-0.5 rounded text-[10px] text-emerald-800 font-bold border border-emerald-200">Masuk Kerja: {emp.masukKerjaDate}</span>}
                                                       </>
                                                     )}
                                                   </div>
@@ -597,7 +720,7 @@ export function AdmDashboard() {
                                             <span className="text-slate-400 font-mono">{emp.nik}</span>
                                           </div>
                                           
-                                          <div className="flex gap-2 mt-2 flex-wrap">
+                                          <div className="flex gap-2 mt-2 flex-wrap items-center">
                                             {emp.isKosong ? (
                                               <span className="bg-rose-50 border border-rose-200 text-rose-700 px-2 py-0.5 rounded text-[10px] font-bold">
                                                 Roster kosong (Personil sudah keluar)
@@ -605,9 +728,10 @@ export function AdmDashboard() {
                                             ) : (
                                               <>
                                                 <span className="bg-slate-200 px-2 py-0.5 rounded text-[10px] text-slate-700 font-bold">Status: {emp.currentShift}</span>
-                                                {emp.isMasuk && (emp.outsiteDate || emp.nextTrvDate) && <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px] text-amber-800 font-bold">Next Outsite: {emp.outsiteDate || emp.nextTrvDate}</span>}
+                                                {emp.isMasuk && (emp.outsiteDate || emp.nextTrvDate) && <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px] text-amber-800 font-bold border border-amber-200">Next Outsite: {emp.outsiteDate || emp.nextTrvDate}</span>}
                                                 {emp.isCuti && emp.outsiteDate && <span className="bg-purple-100 px-2 py-0.5 rounded text-[10px] text-purple-800 font-bold border border-purple-200">Outsite: {emp.outsiteDate}</span>}
-                                                {emp.isCuti && emp.nextWorkDate && <span className="bg-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-800 font-bold border border-indigo-200">Onsite: {emp.nextWorkDate}</span>}
+                                                {emp.isCuti && emp.onsiteDate && <span className="bg-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-800 font-bold border border-indigo-200">Onsite: {emp.onsiteDate}</span>}
+                                                {emp.isCuti && emp.masukKerjaDate && <span className="bg-emerald-100 px-2 py-0.5 rounded text-[10px] text-emerald-800 font-bold border border-emerald-200">Masuk Kerja: {emp.masukKerjaDate}</span>}
                                               </>
                                             )}
                                           </div>
