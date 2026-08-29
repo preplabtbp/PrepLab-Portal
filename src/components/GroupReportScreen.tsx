@@ -365,7 +365,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2 shadow-xs">
               <Pin className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold">Pak Aldy:</span> Terlampir Jadwal Inspeksi Periode Week 34 & 35. Dimohon untuk unggah PDF hasil inspeksi Anda ke grup ini.
+                <span className="font-bold">Pengingat:</span> Dimohon kepada seluruh personil untuk mengunggah berkas PDF hasil inspeksi keselamatan kerja ke grup ini.
               </div>
             </div>
 
