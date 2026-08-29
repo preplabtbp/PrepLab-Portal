@@ -43,8 +43,18 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
   const [availableGalleryWeeks, setAvailableGalleryWeeks] = useState<string[]>([]);
   const [totalGalleryPhotosCount, setTotalGalleryPhotosCount] = useState<number>(0);
   const [loadingGallery, setLoadingGallery] = useState(false);
-  const [selectedGalleryWeek, setSelectedGalleryWeek] = useState<string>('');
+  const [selectedGalleryWeek, setSelectedGalleryWeek] = useState<string>('Minggu ke-35 (2026)');
   const [selectedGalleryCategory, setSelectedGalleryCategory] = useState<string>('ALL');
+
+  const fallbackWeeks = useMemo(() => {
+    const list: string[] = [];
+    for (let w = 35; w >= 1; w--) {
+      list.push(`Minggu ke-${String(w).padStart(2, '0')} (2026)`);
+    }
+    return list;
+  }, []);
+
+  const displayWeeks = availableGalleryWeeks.length > 0 ? availableGalleryWeeks : fallbackWeeks;
 
   const { devOptions, setDevOptions, parsedDevOptions } = useDevOptions(inspectorNik);
 
@@ -252,12 +262,12 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
                   }}
                   className="w-full bg-slate-50 hover:bg-slate-100/80 border border-slate-300 text-slate-800 text-sm font-semibold rounded-xl px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all cursor-pointer shadow-sm"
                 >
-                  {availableGalleryWeeks.map((wk, idx) => (
+                  {displayWeeks.map((wk, idx) => (
                     <option key={wk} value={wk}>
                       {idx === 0 ? `⭐ ${wk} (Minggu Berjalan)` : wk}
                     </option>
                   ))}
-                  <option value="ALL">Semua Minggu ({totalGalleryPhotosCount || '927'} Foto)</option>
+                  <option value="ALL">Semua Minggu ({totalGalleryPhotosCount || '945'} Foto)</option>
                 </select>
               </div>
             </div>

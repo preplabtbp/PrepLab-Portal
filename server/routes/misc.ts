@@ -990,7 +990,7 @@ router.get("/api/gallery", async (req, res) => {
       await Promise.all(sheetConfigs.map(async (cfg) => {
         try {
           const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${cfg.sheet}`;
-          const res = await fetch(url);
+          const res = await fetch(url, { signal: AbortSignal.timeout(3500) });
           const text = await res.text();
           const records = parse(text, { columns: true, skip_empty_lines: true });
 
