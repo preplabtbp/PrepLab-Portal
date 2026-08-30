@@ -2377,80 +2377,101 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       {/* ── MODAL: PREVIEW FLYER / DOKUMEN IK & SOP ── */}
       {previewImage && (() => {
         const info = getFlyerInfo(previewImage.url, previewImage.title);
+        const hasValidUrl = Boolean(previewImage.url && previewImage.url.trim() && previewImage.url !== '#' && previewImage.url !== 'undefined');
 
         return (
-          <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-            <div className={`bg-slate-900 border border-slate-700 rounded-2xl w-full p-4 space-y-3 shadow-2xl animate-in zoom-in-95 duration-150 ${info.isPdf ? 'max-w-4xl max-h-[90vh]' : 'max-w-2xl'}`}>
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <div className="flex items-center gap-2 min-w-0 pr-4">
-                  {info.isPdf ? (
-                    <FileText className="w-4 h-4 text-orange-400 shrink-0" />
-                  ) : (
-                    <ImageIcon className="w-4 h-4 text-amber-400 shrink-0" />
-                  )}
-                  <h3 className="font-bold text-sm text-white truncate">
-                    {previewImage.title}
-                  </h3>
+          <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-5xl h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+              {/* Header */}
+              <div className="bg-slate-900 border-b border-slate-800 p-3 sm:p-4 flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-500/15 text-orange-400 border border-orange-500/30 flex items-center justify-center font-bold shrink-0 shadow-xs">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm sm:text-base text-white truncate">
+                      {previewImage.title}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-mono truncate">
+                      {info.isPdf ? '📄 Dokumen Prosedur Standar (IK / SOP / PDF)' : '🖼️ Flyer Briefing Keselamatan Kerja'}
+                    </p>
+                  </div>
                 </div>
-                <button 
-                  onClick={() => setPreviewImage(null)} 
-                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {hasValidUrl && (
+                    <a
+                      href={info.viewUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold transition-colors"
+                      title="Buka di Tab Baru"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Buka Tab Baru</span>
+                    </a>
+                  )}
+                  {hasValidUrl && (
+                    <a
+                      href={info.downloadUrl}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs flex items-center gap-1.5 font-bold shadow-md shadow-emerald-950 transition-colors"
+                      title="Unduh File"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Unduh</span>
+                    </a>
+                  )}
+                  <button 
+                    onClick={() => setPreviewImage(null)} 
+                    className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 flex items-center justify-center transition-colors font-bold"
+                    title="Tutup Pratinjau"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
-              {info.isPdf ? (
-                <div className="bg-slate-950 rounded-xl overflow-hidden flex flex-col items-center justify-center h-[65vh] border border-slate-800 relative">
+              {/* Viewer Body */}
+              <div className="flex-1 bg-slate-950 relative min-h-0 w-full flex flex-col items-center justify-center p-2">
+                {hasValidUrl ? (
                   <iframe 
                     src={info.embedUrl} 
                     title={previewImage.title}
-                    className="w-full h-full rounded-lg"
-                    allow="autoplay"
+                    className="w-full h-full rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
+                    allow="autoplay; encrypted-media; fullscreen"
                   />
-                </div>
-              ) : (
-                <div className="bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center max-h-[70vh] border border-slate-800 p-2">
-                  <img 
-                    src={info.imageUrl} 
-                    alt={previewImage.title}
-                    onError={(e) => {
-                      // Fallback to backend streaming if thumbnail blocked
-                      if (e.currentTarget.src !== info.streamUrl) {
-                        e.currentTarget.src = info.streamUrl;
-                      }
-                    }}
-                    className="max-h-[65vh] w-auto object-contain rounded-lg shadow"
-                  />
-                </div>
-              )}
+                ) : (
+                  <div className="text-center p-8 max-w-md space-y-3">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto">
+                      <FileText className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-sm font-bold text-white">Dokumen Belum Dilampirkan</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Belum ada tautan PDF atau Flyer Google Drive untuk materi <b>"{previewImage.title}"</b>. Silakan perbarui materi pada menu <b>Kelola Materi P5M</b> atau hubungi tim QA.
+                    </p>
+                    <div className="pt-2">
+                      <Button
+                        onClick={() => setPreviewImage(null)}
+                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-4 rounded-xl shadow-md"
+                      >
+                        Tutup
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800 flex-wrap">
-                <div className="text-[10px] text-slate-400 font-mono">
-                  {info.isPdf ? '📄 Dokumen Prosedur Standar (IK/SOP)' : '🖼️ Flyer Briefing Keselamatan Kerja'}
-                </div>
-                <div className="flex items-center gap-2">
-                  <a
-                    href={info.viewUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" /> Buka Tab Baru
-                  </a>
-                  <a
-                    href={info.downloadUrl}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs flex items-center gap-1.5 font-bold shadow-md shadow-emerald-950"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Unduh
-                  </a>
-                  <Button
-                    onClick={() => setPreviewImage(null)}
-                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-4 rounded-xl"
-                  >
-                    Tutup
-                  </Button>
-                </div>
+              {/* Footer */}
+              <div className="bg-slate-900 border-t border-slate-800 px-4 py-2.5 flex items-center justify-between text-xs text-slate-400 shrink-0">
+                <span className="font-mono text-[11px]">
+                  {hasValidUrl ? '💡 Tip: Gunakan tombol zoom dan navigasi di dalam viewer untuk melihat detail dokumen.' : 'Status: Link materi kosong'}
+                </span>
+                <Button
+                  onClick={() => setPreviewImage(null)}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs h-7 px-3 rounded-lg"
+                >
+                  Tutup
+                </Button>
               </div>
             </div>
           </div>
