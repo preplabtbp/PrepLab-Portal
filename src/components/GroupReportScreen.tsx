@@ -366,7 +366,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
               <Pin className="w-4 h-4 text-[var(--primary)] shrink-0 mt-0.5" />
               <div className="text-xs leading-relaxed">
                 <span className="font-bold text-[var(--primary)] mr-1">Pengingat:</span>
-                <span className="text-[var(--text-main)] font-medium">Halaman ini digunakan untuk memeriksa ketersediaan berkas PDF laporan inspeksi. Apabila berkas PDF belum tersedia atau belum terbit, harap segera hubungi Team QA.</span>
+                <span className="text-[var(--text-main)] font-medium">Halaman ini digunakan untuk memeriksa apakah berkas PDF laporan inspeksi sudah terlampir atau belum. Apabila berkas PDF belum terlampir, harap segera hubungi Team QA.</span>
               </div>
             </div>
 
