@@ -273,7 +273,17 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     const rawName = (emp.name || '').toString().trim();
     if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
 
-    const matchSearch = rawName.toLowerCase().includes(searchRekap.toLowerCase()) || rawNik.toLowerCase().includes(searchRekap.toLowerCase());
+    const nikLower = rawNik.toLowerCase();
+    const nameLower = rawName.toLowerCase();
+    if (
+      nikLower === 'demo123' || nikLower === 'demo' || nikLower.includes('demo') ||
+      nameLower.includes('demo') || nameLower.includes('staging') || nameLower.includes('test') ||
+      nikLower.includes('admin') || nameLower.includes('admin')
+    ) {
+      return false;
+    }
+
+    const matchSearch = nameLower.includes(searchRekap.toLowerCase()) || nikLower.includes(searchRekap.toLowerCase());
     const matchStatus = rekapFilterStatus === 'ALL' 
       ? true 
       : (rekapFilterStatus === 'CUTI' ? emp.isCuti : emp.status === rekapFilterStatus);

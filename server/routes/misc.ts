@@ -544,11 +544,17 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         return false;
       }
 
-      // 1. Exclude System/Admin accounts
+      // 1. Exclude System/Admin/Demo/Staging accounts
       const nikLower = rawNik.toLowerCase();
       const nameLower = rawName.toLowerCase();
       const usernameLower = (emp.username || '').toString().trim().toLowerCase();
-      if (nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || nikLower.includes('admin') || usernameLower.includes('admin') || nameLower.includes('admin')) {
+      if (
+        nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || 
+        nikLower.includes('admin') || usernameLower.includes('admin') || nameLower.includes('admin') ||
+        nikLower === 'demo123' || nikLower === 'demo' || nikLower.includes('demo') ||
+        nameLower.includes('demo') || nameLower.includes('staging') || nameLower.includes('test') ||
+        usernameLower.includes('demo') || usernameLower.includes('staging') || usernameLower.includes('test')
+      ) {
         return false;
       }
 
@@ -671,7 +677,16 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       if (!cleanNik || cleanNik.includes('#N/A') || cleanNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
       const nikLower = cleanNik.toLowerCase();
       const nameLower = rawName.toLowerCase();
-      if (nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || nikLower.includes('admin') || nameLower.includes('admin')) return false;
+      const usernameLower = (emp.username || '').toString().trim().toLowerCase();
+      if (
+        nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || 
+        nikLower.includes('admin') || usernameLower.includes('admin') || nameLower.includes('admin') ||
+        nikLower === 'demo123' || nikLower === 'demo' || nikLower.includes('demo') ||
+        nameLower.includes('demo') || nameLower.includes('staging') || nameLower.includes('test') ||
+        usernameLower.includes('demo') || usernameLower.includes('staging') || usernameLower.includes('test')
+      ) {
+        return false;
+      }
       const ptUpper = (emp.pt || '').toString().trim().toUpperCase();
       if (ptUpper === 'GTS' || cleanNik.toUpperCase().startsWith('03') || cleanNik.toUpperCase().startsWith('M03') || ptUpper.includes('#N/A')) return false;
       if (isGolonganI(emp)) return false;
