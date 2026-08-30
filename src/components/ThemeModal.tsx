@@ -330,7 +330,7 @@ export default function ThemeModal({
   if (!show) return null;
 
   // Directly apply a theme from presets, community, or custom templates
-  const handleApplyThemeDirectly = async (colors: ThemeColors | Record<string, string>, themeName: string = 'Kustom', existingToastId?: string) => {
+  const handleApplyThemeDirectly = async (colors: ThemeColors | Record<string, string>, themeName: string = 'Kustom', existingToastId?: string | number) => {
     if (!colors || typeof colors !== 'object') {
       toast.error('Format warna tema tidak valid');
       return;
