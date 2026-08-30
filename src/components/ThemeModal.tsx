@@ -24,6 +24,7 @@ export interface ThemeColors {
   '--header-text'?: string;
   '--footer-selected'?: string;
   '--username-color'?: string;
+  [key: string]: string | undefined;
 }
 
 export interface CustomThemeTemplate {
@@ -329,13 +330,14 @@ export default function ThemeModal({
   if (!show) return null;
 
   // Directly apply a theme from presets, community, or custom templates
-  const handleApplyThemeDirectly = async (colors: Record<string, string>, themeName: string = 'Kustom', existingToastId?: string) => {
+  const handleApplyThemeDirectly = async (colors: ThemeColors | Record<string, string>, themeName: string = 'Kustom', existingToastId?: string) => {
     if (!colors || typeof colors !== 'object') {
       toast.error('Format warna tema tidak valid');
       return;
     }
 
-    setEditingColors(colors);
+    const validatedColors = colors as ThemeColors;
+    setEditingColors(validatedColors);
 
     // 1. Immediately apply to DOM
     const root = document.documentElement;
@@ -346,7 +348,7 @@ export default function ThemeModal({
     });
 
     // 2. Immediately apply to App state
-    onThemeUpdated(targetMode, colors, true);
+    onThemeUpdated(targetMode, validatedColors, true);
     
     // 3. Persist in local storage immediately across all modes
     const nik = inspectorNik || localStorage.getItem('p2h_inspector_nik');
