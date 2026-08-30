@@ -269,7 +269,11 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     : (rekapFilterStatus === 'ALL' ? [...rekapList, ...cutiList] : rekapList);
 
   const filteredRekap = sourceList.filter(emp => {
-    const matchSearch = emp.name.toLowerCase().includes(searchRekap.toLowerCase()) || emp.nik.toLowerCase().includes(searchRekap.toLowerCase());
+    const rawNik = (emp.nik || '').toString().trim();
+    const rawName = (emp.name || '').toString().trim();
+    if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
+
+    const matchSearch = rawName.toLowerCase().includes(searchRekap.toLowerCase()) || rawNik.toLowerCase().includes(searchRekap.toLowerCase());
     const matchStatus = rekapFilterStatus === 'ALL' 
       ? true 
       : (rekapFilterStatus === 'CUTI' ? emp.isCuti : emp.status === rekapFilterStatus);

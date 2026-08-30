@@ -497,6 +497,11 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       const jgStr = String(emp.jobGrade || '').trim().toUpperCase();
       const posStr = String(emp.jabatan || emp.position || '').trim().toLowerCase();
 
+      // Broken / error spreadsheet rows (#N/A) are treated as Gol I / excluded
+      if (golStr === '#N/A' || jgStr === '#N/A' || posStr.includes('#n/a')) {
+        return true;
+      }
+
       // 1. Check explicit Golongan I in gol column
       if (
         golStr === 'I' || golStr === '1' ||
@@ -530,11 +535,18 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       return false;
     };
 
-    // Filter employees: ONLY GOL II KE ATAS (Exclude Gol I, Exclude GTS, Exclude System Admin, Exclude Cuti)
+    // Filter employees: ONLY GOL II KE ATAS (Exclude Gol I, Exclude GTS, Exclude System Admin, Exclude Cuti, Exclude #N/A)
     const targetEmployees = allEmployees.filter(emp => {
+      // 0. Exclude broken / spreadsheet formula error rows (#N/A)
+      const rawNik = (emp.nik || '').toString().trim();
+      const rawName = (emp.name || '').toString().trim();
+      if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) {
+        return false;
+      }
+
       // 1. Exclude System/Admin accounts
-      const nikLower = (emp.nik || '').toString().trim().toLowerCase();
-      const nameLower = (emp.name || '').toString().trim().toLowerCase();
+      const nikLower = rawNik.toLowerCase();
+      const nameLower = rawName.toLowerCase();
       const usernameLower = (emp.username || '').toString().trim().toLowerCase();
       if (nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || nikLower.includes('admin') || usernameLower.includes('admin') || nameLower.includes('admin')) {
         return false;
@@ -542,8 +554,8 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
 
       // 2. Exclude GTS Employees ONLY (pt === GTS or NIK starts with 03 / M03). KEEP M04 / M0 (TBP & GPS)!
       const ptUpper = (emp.pt || '').toString().trim().toUpperCase();
-      const nikUpper = (emp.nik || '').toString().trim().toUpperCase();
-      if (ptUpper === 'GTS' || nikUpper.startsWith('03') || nikUpper.startsWith('M03')) {
+      const nikUpper = rawNik.toUpperCase();
+      if (ptUpper === 'GTS' || nikUpper.startsWith('03') || nikUpper.startsWith('M03') || ptUpper.includes('#N/A')) {
         return false;
       }
 
@@ -655,11 +667,13 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     // Build Cuti list
     const cutiEmployees = allEmployees.filter(emp => {
       const cleanNik = (emp.nik || '').trim();
-      if (!cleanNik) return false;
+      const rawName = (emp.name || '').trim();
+      if (!cleanNik || cleanNik.includes('#N/A') || cleanNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
       const nikLower = cleanNik.toLowerCase();
-      if (nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || nikLower.includes('admin')) return false;
+      const nameLower = rawName.toLowerCase();
+      if (nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || nikLower.includes('admin') || nameLower.includes('admin')) return false;
       const ptUpper = (emp.pt || '').toString().trim().toUpperCase();
-      if (ptUpper === 'GTS' || cleanNik.toUpperCase().startsWith('03') || cleanNik.toUpperCase().startsWith('M03')) return false;
+      if (ptUpper === 'GTS' || cleanNik.toUpperCase().startsWith('03') || cleanNik.toUpperCase().startsWith('M03') || ptUpper.includes('#N/A')) return false;
       if (isGolonganI(emp)) return false;
 
       return onCutiSet.has(cleanNik);
