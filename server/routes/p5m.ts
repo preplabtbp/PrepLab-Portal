@@ -1841,22 +1841,25 @@ p5mRouter.get("/flyer", async (req, res) => {
     const title = (req.query.title as string || '').trim();
     const notionId = (req.query.notionId as string || '').trim();
     const id = (req.query.id as string || '').trim();
+    const urlParam = (req.query.url as string || '').trim();
     const isDownload = req.query.download === 'true' || req.query.download === '1';
 
-    let targetFileUrl = '';
+    let targetFileUrl = urlParam || '';
     let targetJudul = title || 'Flyer_P5M';
 
-    if (id) {
-      const row = await db.select().from(p5mMateri).where(eq(p5mMateri.id, Number(id))).limit(1);
-      if (row.length > 0) {
-        targetFileUrl = row[0].fileUrl || '';
-        targetJudul = row[0].judul || targetJudul;
-      }
-    } else if (title) {
-      const row = await db.select().from(p5mMateri).where(eq(p5mMateri.judul, title)).limit(1);
-      if (row.length > 0) {
-        targetFileUrl = row[0].fileUrl || '';
-        targetJudul = row[0].judul || targetJudul;
+    if (!targetFileUrl) {
+      if (id) {
+        const row = await db.select().from(p5mMateri).where(eq(p5mMateri.id, Number(id))).limit(1);
+        if (row.length > 0) {
+          targetFileUrl = row[0].fileUrl || '';
+          targetJudul = row[0].judul || targetJudul;
+        }
+      } else if (title) {
+        const row = await db.select().from(p5mMateri).where(eq(p5mMateri.judul, title)).limit(1);
+        if (row.length > 0) {
+          targetFileUrl = row[0].fileUrl || '';
+          targetJudul = row[0].judul || targetJudul;
+        }
       }
     }
 

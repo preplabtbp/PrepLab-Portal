@@ -39,19 +39,19 @@ export function getFlyerInfo(rawUrl?: string | null, title?: string | null): Fly
   );
 
   const safeTitle = encodeURIComponent(cleanTitle || 'Dokumen_P5M');
-  const streamUrl = `/api/p5m/flyer?title=${safeTitle}`;
-  const downloadUrl = fileId 
-    ? `https://drive.google.com/uc?export=download&id=${fileId}`
-    : `/api/p5m/flyer?download=true&title=${safeTitle}`;
+  const safeUrl = encodeURIComponent(cleanUrl || '');
+
+  // Streaming endpoint with authenticated backend Google Drive Service Account
+  const streamUrl = `/api/p5m/flyer?title=${safeTitle}${cleanUrl ? `&url=${safeUrl}` : ''}`;
+  const downloadUrl = `/api/p5m/flyer?download=true&title=${safeTitle}${cleanUrl ? `&url=${safeUrl}` : ''}`;
 
   if (fileId) {
     return {
       isPdf: true,
       fileId,
-      // Official Google Drive embed URL that works inside iframe for PDFs, Docs, Presentations & Images:
-      embedUrl: `https://drive.google.com/file/d/${fileId}/preview`,
-      // Google CDN thumbnail endpoint for image tag
-      imageUrl: `https://drive.google.com/thumbnail?id=${fileId}&sz=w1600`,
+      // Stream directly to the browser iframe for full native PDF/image preview:
+      embedUrl: streamUrl,
+      imageUrl: streamUrl,
       // Direct link to view file on Google Drive in a new tab:
       viewUrl: `https://drive.google.com/file/d/${fileId}/view?usp=sharing`,
       streamUrl,
@@ -62,14 +62,14 @@ export function getFlyerInfo(rawUrl?: string | null, title?: string | null): Fly
   // Local / direct external URLs
   const isDirectPdf = cleanUrl.toLowerCase().includes('.pdf') || cleanTitle.toLowerCase().includes('.pdf');
   const embedUrl = isDirectPdf && cleanUrl.startsWith('http')
-    ? `https://docs.google.com/viewer?url=${encodeURIComponent(cleanUrl)}&embedded=true`
+    ? streamUrl
     : (cleanUrl || streamUrl);
 
   return {
     isPdf,
     fileId: null,
     embedUrl,
-    imageUrl: cleanUrl || streamUrl,
+    imageUrl: streamUrl,
     viewUrl: cleanUrl || streamUrl,
     streamUrl,
     downloadUrl
