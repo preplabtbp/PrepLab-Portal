@@ -319,7 +319,7 @@ router.get("/api/roster", async (req, res) => {
 router.post("/api/roster/cell", async (req, res) => {
   try {
     const { nik, date, status, editorNik } = req.body;
-    const reqNik = editorNik || req.headers['x-user-nik'] || (req.session as any)?.userNik;
+    const reqNik = editorNik || req.headers['x-user-nik'] || (req as any).session?.userNik;
 
     if (reqNik) {
       const isAuth = await isAuthorizedRosterEditor(reqNik as string);
@@ -357,7 +357,7 @@ router.post("/api/roster/cell", async (req, res) => {
 router.post("/api/roster/izin", async (req, res) => {
     try {
       const { nik, date, type, editorNik } = req.body;
-      const reqNik = editorNik || req.headers['x-user-nik'] || (req.session as any)?.userNik;
+      const reqNik = editorNik || req.headers['x-user-nik'] || (req as any).session?.userNik;
 
       if (reqNik) {
         const isAuth = await isAuthorizedRosterEditor(reqNik as string);
@@ -389,7 +389,7 @@ router.post("/api/roster/izin", async (req, res) => {
 
 router.post(["/api/roster/sync", "/api/admin/sync-roster"], async (req, res) => {
   try {
-    const reqNik = req.body?.editorNik || req.headers['x-user-nik'] || (req.session as any)?.userNik;
+    const reqNik = req.body?.editorNik || req.headers['x-user-nik'] || (req as any).session?.userNik;
     if (reqNik) {
       const isAuth = await isAuthorizedRosterEditor(reqNik as string);
       if (!isAuth) {
