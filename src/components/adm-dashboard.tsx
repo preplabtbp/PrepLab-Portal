@@ -210,7 +210,8 @@ export function AdmDashboard() {
         const isLeaveCode = (s?: string) => {
           if (!s) return false;
           const u = s.toUpperCase().trim();
-          return ['TRV', 'TV', 'C', 'CR', 'CE', 'CT', 'CI', 'XP', 'TT'].includes(u) || u.startsWith('CT') || u.startsWith('CE');
+          return ['TRV', 'TV', 'C', 'CR', 'CE', 'CT', 'CI', 'CS', 'XP', 'TT', 'IK', 'I', 'SL', 'SS', 'IA', 'UL', 'DL'].includes(u) ||
+                 u.startsWith('CT') || u.startsWith('CE') || u.startsWith('CI') || u.startsWith('CS') || u.startsWith('CR');
         };
 
         const targetIndex = datesAsc.indexOf(formattedDate);
@@ -248,43 +249,47 @@ export function AdmDashboard() {
               });
               empOutsiteDate = firstTrv || currentLeaveBlock[0];
 
-              // Onsite: TRV terakhir di dalam blok cuti
-              const allTrvs = currentLeaveBlock.filter(d => {
+              // Onsite: Returning TRV (TRV at/near the end of leave block, after leave days)
+              const firstLeaveDayIdx = currentLeaveBlock.findIndex(d => {
                 const code = (sched[d] || '').toUpperCase().trim();
-                return code === 'TRV' || code === 'TV';
+                return code !== 'TRV' && code !== 'TV';
               });
 
-              if (allTrvs.length > 1) {
-                empOnsiteDate = allTrvs[allTrvs.length - 1];
-              } else if (allTrvs.length === 1) {
-                const trvIdx = currentLeaveBlock.indexOf(allTrvs[0]);
-                if (trvIdx > 0 || currentLeaveBlock.length === 1) {
-                  empOnsiteDate = allTrvs[0];
-                } else {
-                  empOnsiteDate = currentLeaveBlock[currentLeaveBlock.length - 1];
+              let returningTrv: string | null = null;
+              if (firstLeaveDayIdx !== -1) {
+                for (let k = currentLeaveBlock.length - 1; k >= firstLeaveDayIdx; k--) {
+                  const code = (sched[currentLeaveBlock[k]] || '').toUpperCase().trim();
+                  if (code === 'TRV' || code === 'TV') {
+                    returningTrv = currentLeaveBlock[k];
+                    break;
+                  }
                 }
-              } else {
-                empOnsiteDate = currentLeaveBlock[currentLeaveBlock.length - 1];
               }
+
+              empOnsiteDate = returningTrv || currentLeaveBlock[currentLeaveBlock.length - 1];
             } else {
               // ── GOLONGAN I ──
               // Outsite: first C
               const firstC = currentLeaveBlock.find(d => {
                 const code = (sched[d] || '').toUpperCase().trim();
-                return code === 'C' || code.startsWith('C');
+                return code === 'C' || code.startsWith('C') || code.startsWith('CT');
               });
               empOutsiteDate = firstC || currentLeaveBlock[0];
 
               // Onsite: C terakhir di dalam blok cuti
               const allC = currentLeaveBlock.filter(d => {
                 const code = (sched[d] || '').toUpperCase().trim();
-                return code === 'C' || code.startsWith('C');
+                return code === 'C' || code.startsWith('C') || code.startsWith('CT');
               });
               empOnsiteDate = allC.length > 0 ? allC[allC.length - 1] : currentLeaveBlock[currentLeaveBlock.length - 1];
             }
 
-            // Masuk Kerja: 1 hari setelah Onsite
-            if (empOnsiteDate) {
+            // Masuk Kerja: 1 hari setelah akhir blok cuti atau setelah Onsite
+            const lastLeaveDay = currentLeaveBlock[currentLeaveBlock.length - 1];
+            const lastLeaveGlobalIdx = datesAsc.indexOf(lastLeaveDay);
+            if (lastLeaveGlobalIdx !== -1 && lastLeaveGlobalIdx + 1 < datesAsc.length) {
+              empMasukKerjaDate = datesAsc[lastLeaveGlobalIdx + 1];
+            } else if (empOnsiteDate) {
               const onsiteGlobalIdx = datesAsc.indexOf(empOnsiteDate);
               if (onsiteGlobalIdx !== -1 && onsiteGlobalIdx + 1 < datesAsc.length) {
                 empMasukKerjaDate = datesAsc[onsiteGlobalIdx + 1];
