@@ -139,6 +139,10 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   };
 
   useEffect(() => {
+    setSelectedWeek(currentActiveWeek);
+  }, [currentActiveWeek]);
+
+  useEffect(() => {
     fetchGroupFeed(selectedWeek);
     fetchRekapData(selectedWeek);
   }, [selectedWeek]);
