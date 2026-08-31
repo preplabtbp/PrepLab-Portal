@@ -1643,13 +1643,13 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   >
               
               {/* Header Title Bar */}
-              <div className="bg-[var(--card-bg)] text-[var(--text-main)] px-6 py-4 flex flex-col sm:flex-row items-center justify-between border-b-2 border-[var(--primary)] gap-2 shadow-xs">
-                <div className="flex items-center gap-3 text-center sm:text-left">
-                  <div className="w-9 h-9 rounded-lg bg-[var(--primary)] text-white flex items-center justify-center font-black text-sm">
+              <div className="bg-[var(--card-bg)] text-[var(--text-main)] px-5 py-3.5 flex flex-col lg:flex-row items-center justify-between border-b-2 border-[var(--primary)] gap-3 shadow-xs">
+                <div className="flex items-center gap-3 text-center sm:text-left min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-[var(--primary)] text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
                     P5M
                   </div>
-                  <div>
-                    <h2 className="font-bold text-sm tracking-wider uppercase font-mono text-[var(--primary)]">
+                  <div className="min-w-0">
+                    <h2 className="font-black text-sm tracking-wide uppercase font-mono text-[var(--primary)] truncate">
                       Jadwal P5M (Pembicaraan 5 Menit) — Preparation &amp; Laboratory
                     </h2>
                     <p className="text-xs text-[var(--text-muted)] font-mono">
@@ -1658,29 +1658,32 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3.5 text-[11px] font-mono">
+                {/* Proportional Legend Badge Card */}
+                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 bg-[var(--input-bg)]/90 border border-[var(--border-main)] px-3.5 py-1.5 rounded-2xl shadow-2xs shrink-0">
                   {/* Shift Categories */}
-                  <div className="flex items-center gap-2.5 pr-3 border-r border-[var(--border-main)]">
-                    <span className="text-[var(--text-muted)] text-[10px] uppercase font-bold tracking-wider">Shift:</span>
-                    <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-300 font-bold">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm inline-block"></span> ☀️ Day
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono">
+                    <span className="text-[var(--text-muted)] text-[10px] uppercase font-bold tracking-wider mr-0.5">Shift:</span>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/25 text-[10px]">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shadow-2xs"></span> Day
                     </span>
-                    <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-300 font-bold">
-                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 shadow-sm inline-block"></span> 🌙 Night
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-500/25 text-[10px]">
+                      <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block shadow-2xs"></span> Night
                     </span>
                   </div>
 
+                  <div className="hidden sm:block w-px h-4 bg-[var(--border-main)]"></div>
+
                   {/* Section Categories */}
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-[var(--text-muted)] text-[10px] uppercase font-bold tracking-wider">Section:</span>
-                    <span className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400 font-bold">
-                      <span className="w-2.5 h-2.5 rounded bg-orange-500 inline-block shadow-sm"></span> Preparasi
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono">
+                    <span className="text-[var(--text-muted)] text-[10px] uppercase font-bold tracking-wider mr-0.5">Section:</span>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-orange-500/15 text-orange-700 dark:text-orange-300 font-bold border border-orange-500/25 text-[10px]">
+                      <span className="w-2 h-2 rounded bg-orange-500 inline-block shadow-2xs"></span> Preparasi
                     </span>
-                    <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
-                      <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block shadow-sm"></span> Laboratorium
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-500/25 text-[10px]">
+                      <span className="w-2 h-2 rounded bg-emerald-500 inline-block shadow-2xs"></span> Laboratorium
                     </span>
-                    <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold">
-                      <span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block shadow-sm"></span> Gabungan
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/25 text-[10px]">
+                      <span className="w-2 h-2 rounded bg-amber-500 inline-block shadow-2xs"></span> Gabungan
                     </span>
                   </div>
                 </div>
