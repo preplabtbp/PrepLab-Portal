@@ -599,16 +599,16 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       }
     };
 
-    // 1. Scan groupReportsMemory (in-memory group posts)
-    groupReportsMemory.forEach(msg => {
-      const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
-      
-      if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
-        if (msg.type === 'pdf_report') {
+    // 1. Scan all aggregated reports (including memory and DB parsed reports)
+    try {
+      const allGroupReports = await fetchAllGroupReports(selectedWeek);
+      allGroupReports.forEach(msg => {
+        const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
+        if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
           const info = {
             timestamp: msg.timestamp,
             pdfUrl: msg.pdfUrl,
-            pdfTitle: msg.pdfTitle,
+            pdfTitle: msg.pdfTitle || 'Laporan Inspeksi',
             week: msgWeek
           };
 
@@ -620,35 +620,72 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
               if (item) registerCompletedUser(item, info);
             });
           }
-        }
-      }
-    });
 
-    // 2. Scan DB `inspections` table
+          allEmployees.forEach(e => {
+            if (e.name && (msg.senderName?.toLowerCase().includes(e.name.toLowerCase().trim()) || msg.text?.toLowerCase().includes(e.name.toLowerCase().trim()))) {
+              registerCompletedUser(e.nik, info);
+              registerCompletedUser(e.name, info);
+            }
+          });
+        }
+      });
+    } catch (e) {
+      console.error('Error in fetchAllGroupReports for rekap:', e);
+    }
+
+    // 2. Direct deep scan of DB `inspections` table (including dataF inspector payloads)
     try {
       const dbInspections = await db.select().from(inspections);
       dbInspections.forEach((insp: any) => {
-        const inspText = String(insp.inspector || insp.insp1 || '').trim();
-        const createdIso = insp.createdAt ? new Date(insp.createdAt).toISOString() : new Date().toISOString();
-        const inspWeek = extractWeekTag(insp.judulForm || '', insp.lokasi || '', createdIso);
+        let dataFObj: any = {};
+        if (insp.dataF && typeof insp.dataF === 'string' && insp.dataF.trim().startsWith('{')) {
+          try {
+            dataFObj = JSON.parse(insp.dataF);
+          } catch (e) {}
+        }
+
+        const actualDate = parseInspectionDate(insp, dataFObj);
+        const createdIso = actualDate.toISOString();
+        const inspWeek = getISOWeekTag(actualDate);
 
         if (selectedWeek === 'ALL' || inspWeek === selectedWeek) {
+          const title = insp.judulForm || dataFObj.judulForm || 'Laporan Inspeksi';
           const info = {
             timestamp: createdIso,
             pdfUrl: insp.pdfUrl,
-            pdfTitle: insp.judulForm || 'Laporan Inspeksi',
+            pdfTitle: title,
             week: inspWeek
           };
 
-          if (inspText) registerCompletedUser(inspText, info);
+          const rawInspectors: string[] = [
+            insp.inspector,
+            insp.inspectorName,
+            insp.insp1,
+            insp.insp2,
+            insp.insp3,
+            dataFObj.insp1,
+            dataFObj.insp2,
+            dataFObj.insp3,
+            dataFObj.inspector,
+            dataFObj.inspectorName
+          ].filter(Boolean);
 
-          const nikMatches = inspText.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
-          nikMatches.forEach((nik: string) => registerCompletedUser(nik, info));
+          rawInspectors.forEach((rawInsp: string) => {
+            const inspText = String(rawInsp).trim();
+            if (inspText) {
+              registerCompletedUser(inspText, info);
+              const cleanName = inspText.split('|')[0].trim();
+              if (cleanName) registerCompletedUser(cleanName, info);
 
-          allEmployees.forEach(e => {
-            if (e.name && inspText.toLowerCase().includes(e.name.toLowerCase().trim())) {
-              registerCompletedUser(e.nik, info);
-              registerCompletedUser(e.name, info);
+              const nikMatches = inspText.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
+              nikMatches.forEach((nik: string) => registerCompletedUser(nik, info));
+
+              allEmployees.forEach(e => {
+                if (e.name && inspText.toLowerCase().includes(e.name.toLowerCase().trim())) {
+                  registerCompletedUser(e.nik, info);
+                  registerCompletedUser(e.name, info);
+                }
+              });
             }
           });
         }
