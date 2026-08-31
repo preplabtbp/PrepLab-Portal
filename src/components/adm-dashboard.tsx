@@ -379,6 +379,66 @@ export function AdmDashboard() {
       }
     });
 
+    // Helper to parse Outsite Date string (e.g. "15 Aug 26", "27 Aug 26") into numeric timestamp for sorting
+    const parseOutsiteTimestamp = (dateStr?: string | null): number => {
+      if (!dateStr || typeof dateStr !== 'string') return 9999999999999;
+      const clean = dateStr.trim();
+      if (!clean || clean === '-') return 9999999999999;
+
+      const monthMap: Record<string, string> = {
+        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'mei': '05', 'may': '05',
+        'jun': '06', 'jul': '07', 'agu': '08', 'ags': '08', 'aug': '08', 'sep': '09',
+        'okt': '10', 'oct': '10', 'nov': '11', 'des': '12', 'dec': '12'
+      };
+
+      const parts = clean.split(/[\s-]+/);
+      if (parts.length >= 3) {
+        const day = parseInt(parts[0], 10);
+        const monthKey = parts[1].substring(0, 3).toLowerCase();
+        const month = monthMap[monthKey] || '01';
+        let year = parseInt(parts[2], 10);
+        if (year < 100) year += 2000;
+
+        if (!isNaN(day) && !isNaN(year)) {
+          return new Date(year, parseInt(month, 10) - 1, day).getTime();
+        }
+      }
+
+      const parsed = Date.parse(clean);
+      if (!isNaN(parsed)) return parsed;
+
+      return 9999999999999;
+    };
+
+    const sortByOutsite = (a: any, b: any) => {
+      const timeA = parseOutsiteTimestamp(a.outsiteDate || a.nextTrvDate);
+      const timeB = parseOutsiteTimestamp(b.outsiteDate || b.nextTrvDate);
+      if (timeA !== timeB) {
+        return timeA - timeB; // Earliest Outsite first
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    };
+
+    // Sort every position list strictly by Outsite date
+    Object.values(byShift).forEach((shift: any) => {
+      Object.values(shift.sections || {}).forEach((sec: any) => {
+        if (sec.subSections) {
+          Object.values(sec.subSections || {}).forEach((sub: any) => {
+            if (sub.positions) {
+              Object.keys(sub.positions).forEach((posKey) => {
+                sub.positions[posKey].sort(sortByOutsite);
+              });
+            }
+          });
+        }
+        if (sec.positions) {
+          Object.keys(sec.positions).forEach((posKey) => {
+            sec.positions[posKey].sort(sortByOutsite);
+          });
+        }
+      });
+    });
+
     setStaffData(stData);
     setNonStaffData(nstData);
     setData({ totals, byShift });
