@@ -18,6 +18,45 @@ interface GroupReportProps {
   isDeveloper?: boolean;
 }
 
+function getCurrentISOWeekTag(d: Date = new Date()): string {
+  const date = new Date(d.getTime());
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  const weekNum = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+  return `W${weekNum}`;
+}
+
+function generateWeekOptions(activeWeekTag: string, year: number = 2026) {
+  const activeNum = parseInt(activeWeekTag.replace(/\D/g, ''), 10) || 36;
+  const startNum = Math.max(1, activeNum - 3);
+  const endNum = Math.min(52, activeNum + 4);
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+  const options: { value: string; label: string; isCurrent: boolean }[] = [];
+
+  for (let w = startNum; w <= endNum; w++) {
+    const simple = new Date(year, 0, 4);
+    const dayOfWeek = (simple.getDay() + 6) % 7;
+    const week1Monday = new Date(year, 0, 4 - dayOfWeek);
+    
+    const monday = new Date(week1Monday.getTime() + (w - 1) * 7 * 86400000);
+    const sunday = new Date(monday.getTime() + 6 * 86400000);
+
+    const startStr = `${monday.getDate().toString().padStart(2, '0')}-${sunday.getDate().toString().padStart(2, '0')} ${monthNames[sunday.getMonth()]}`;
+    const isCurrent = `W${w}` === activeWeekTag;
+    
+    options.push({
+      value: `W${w}`,
+      label: `Week ${w} (${startStr})${isCurrent ? ' [Aktif]' : ''}`,
+      isCurrent
+    });
+  }
+
+  return options;
+}
+
 export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, inspectorSection, onClose, isFloating = false, isDeveloper = false }: GroupReportProps) {
   const [activeTab, setActiveTab] = useState<'feed' | 'rekap'>('feed');
   const [messages, setMessages] = useState<any[]>([]);
@@ -28,8 +67,10 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAttachModal, setShowAttachModal] = useState(false);
 
-  // Rekap State & Week Filter
-  const [selectedWeek, setSelectedWeek] = useState<string>('W35');
+  // Rekap State & Week Filter (Automatically follow current active date / ISO week)
+  const currentActiveWeek = useMemo(() => getCurrentISOWeekTag(new Date()), []);
+  const [selectedWeek, setSelectedWeek] = useState<string>(currentActiveWeek);
+  const weekOptions = useMemo(() => generateWeekOptions(currentActiveWeek), [currentActiveWeek]);
   const [rekapSummary, setRekapSummary] = useState<{ total: number; sudah: number; belum: number; percentage: number; cutiCount?: number; selectedWeek?: string }>({ total: 0, sudah: 0, belum: 0, percentage: 0, cutiCount: 0 });
   const [rekapList, setRekapList] = useState<any[]>([]);
   const [cutiList, setCutiList] = useState<any[]>([]);
@@ -516,10 +557,11 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
               onChange={(e) => setSelectedWeek(e.target.value)}
               className="bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] text-xs font-bold font-mono px-3 py-1.5 rounded-xl shadow-xs focus:ring-2 focus:ring-[var(--primary)] outline-none"
             >
-              <option value="W34">Week 34 (18-24 Ags)</option>
-              <option value="W35">Week 35 (25-31 Ags) [Aktif]</option>
-              <option value="W36">Week 36 (01-07 Sep)</option>
-              <option value="W37">Week 37 (08-14 Sep)</option>
+              {weekOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
               <option value="ALL">Semua Minggu (Kumulatif)</option>
             </select>
           </div>

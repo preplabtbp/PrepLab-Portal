@@ -436,22 +436,32 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       return false;
     };
 
-    const getDateStringsForWeek = (weekTag: string): string[] => {
-      let startDay = 0, endDay = 0, monthName = 'Aug';
-      if (weekTag === 'W34') { startDay = 18; endDay = 24; monthName = 'Aug'; }
-      else if (weekTag === 'W35') { startDay = 25; endDay = 31; monthName = 'Aug'; }
-      else if (weekTag === 'W36') { startDay = 1; endDay = 7; monthName = 'Sep'; }
-      else if (weekTag === 'W37') { startDay = 8; endDay = 14; monthName = 'Sep'; }
+    const getDateStringsForWeek = (weekTag: string, year: number = 2026): string[] => {
+      const weekNum = parseWeekNumber(weekTag);
+      if (weekNum <= 0) return [];
 
-      if (startDay > 0) {
-        const list: string[] = [];
-        for (let d = startDay; d <= endDay; d++) {
-          list.push(`${d} ${monthName} 26`);
-          list.push(`${d.toString().padStart(2, '0')} ${monthName} 26`);
-        }
-        return list;
+      const simple = new Date(year, 0, 4);
+      const dayOfWeek = (simple.getDay() + 6) % 7;
+      const week1Monday = new Date(year, 0, 4 - dayOfWeek);
+      
+      const monday = new Date(week1Monday.getTime() + (weekNum - 1) * 7 * 86400000);
+
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      const monthNamesEng = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      
+      const list: string[] = [];
+      for (let i = 0; i < 7; i++) {
+        const cur = new Date(monday.getTime() + i * 86400000);
+        const d = cur.getDate();
+        const m = cur.getMonth();
+        const yr = cur.getFullYear() % 100;
+        
+        list.push(`${d} ${monthNamesEng[m]} ${yr}`);
+        list.push(`${d.toString().padStart(2, '0')} ${monthNamesEng[m]} ${yr}`);
+        list.push(`${d} ${monthNames[m]} ${yr}`);
+        list.push(`${d.toString().padStart(2, '0')} ${monthNames[m]} ${yr}`);
       }
-      return [];
+      return list;
     };
 
     const targetWeekDates = getDateStringsForWeek(selectedWeek);
