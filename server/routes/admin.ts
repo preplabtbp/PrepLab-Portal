@@ -48,7 +48,25 @@ router.get("/api/admin/tables/:name", async (req, res) => {
       }
 
       const limit = tableName === 'roster' ? 1000 : 5000;
-      const data = await db.select().from(t).orderBy(desc((t as any).id)).limit(limit);
+      let data = await db.select().from(t).orderBy(desc((t as any).id)).limit(limit);
+
+      if (tableName === 'employees') {
+        data = data.filter((row: any) => {
+          const nik = (row.nik || '').toString().toUpperCase();
+          const name = (row.name || '').toString().toLowerCase();
+          const username = (row.username || '').toString().toLowerCase();
+          if (
+            nik === 'DEMO123' || nik === 'DEMO' || nik.includes('DEMO') ||
+            name.includes('user demo') || name.includes('demo staging') || name.includes('staging') ||
+            username.includes('demo') || username.includes('staging') ||
+            nik === 'PREPLABADMIN' || nik.includes('#N/A') || name.includes('#N/A')
+          ) {
+            return false;
+          }
+          return true;
+        });
+      }
+
       tableCache.set(tableName, { data, timestamp: Date.now() });
       res.json(data);
     } catch (e: any) { res.status(500).json({ error: e.message }); }

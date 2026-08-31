@@ -10,6 +10,22 @@ employeesRouter.get("/", async (req, res) => {
     const { pt, all } = req.query;
     let data = await db.select().from(employees);
 
+    // Strictly exclude demo, staging, admin and broken spreadsheet accounts
+    data = data.filter(e => {
+      const nik = (e.nik || '').toString().toUpperCase();
+      const name = (e.name || '').toString().toLowerCase();
+      const username = (e.username || '').toString().toLowerCase();
+      if (
+        nik === 'DEMO123' || nik === 'DEMO' || nik.includes('DEMO') ||
+        name.includes('user demo') || name.includes('demo staging') || name.includes('staging') ||
+        username.includes('demo') || username.includes('staging') ||
+        nik === 'PREPLABADMIN' || nik.includes('#N/A') || name.includes('#N/A')
+      ) {
+        return false;
+      }
+      return true;
+    });
+
     if (all !== 'true') {
       const isGtsReq = (pt || '').toString().trim().toUpperCase() === 'GTS';
       if (isGtsReq) {

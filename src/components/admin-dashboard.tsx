@@ -404,6 +404,25 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
 
   const filteredAndSortedData = useMemo(() => {
     let result = [...data];
+
+    // Filter out Demo / Staging dummy accounts from employees table
+    if (selectedTable === 'employees') {
+      result = result.filter(item => {
+        const nik = (item.nik || '').toString().toUpperCase();
+        const name = (item.name || '').toString().toLowerCase();
+        const username = (item.username || '').toString().toLowerCase();
+        if (
+          nik === 'DEMO123' || nik === 'DEMO' || nik.includes('DEMO') ||
+          name.includes('user demo') || name.includes('demo staging') || name.includes('staging') ||
+          username.includes('demo') || username.includes('staging') ||
+          nik === 'PREPLABADMIN' || nik.includes('#N/A') || name.includes('#N/A')
+        ) {
+          return false;
+        }
+        return true;
+      });
+    }
+
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       result = result.filter(item => 
