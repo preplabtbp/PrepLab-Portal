@@ -499,29 +499,7 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
         title="Developer Panel"
         description="Modular Panel Konfigurasi Sistem"
         icon={<Database />}
-      >
-        {selectedTable && (
-          <div className="relative w-full md:w-72 mt-2 sm:mt-0">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
-            <input 
-              type="text" 
-              placeholder={`Cari data ${selectedTable}...`} 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-white/10 text-white border border-white/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-white/40 backdrop-blur-md placeholder-slate-300 transition-all shadow-xs"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-white"
-                title="Hapus Pencarian"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        )}
-      </PageHeader>
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
         {visibleModules.map(mod => (
@@ -557,9 +535,9 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
             <option key={emp.nik} value={emp.nik}>{emp.name}</option>
           ))}
         </datalist>
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 p-3.5 sm:p-4 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 p-3.5 sm:p-4 border-b border-slate-100 bg-slate-50/70">
             <div className="flex items-center gap-2 shrink-0">
-              <h3 className="font-bold text-slate-800 capitalize flex items-center gap-1.5 text-sm sm:text-base">
+              <h3 className="font-black text-slate-800 capitalize flex items-center gap-1.5 text-sm sm:text-base font-display">
                 Tabel {selectedTable}
               </h3>
               <span className="bg-slate-200 text-slate-700 text-xs py-0.5 px-2.5 rounded-full font-bold font-mono">
@@ -567,12 +545,12 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
               </span>
             </div>
 
-            {/* Prominent Search Bar directly above table */}
-            <div className="relative flex-1 max-w-md w-full">
+            {/* Clean & Proportional Single Search Bar */}
+            <div className="relative flex-1 max-w-sm w-full mx-0 lg:mx-3">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder={`Cari di tabel ${selectedTable} (nama, NIK, jabatan, lokasi, dll)...`}
+                placeholder={`Cari di ${selectedTable} (nama, NIK, jabatan, dll)...`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-8 py-2 bg-white text-slate-800 border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-xs placeholder:text-slate-400 transition-all"
@@ -580,27 +558,27 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
               {searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
                   title="Hapus Kata Kunci"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap shrink-0 w-full md:w-auto justify-end">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap shrink-0 justify-end">
               <input type="file" className="hidden" accept=".xlsx, .xls, .csv" ref={fileInputRef} onChange={handleFileUpload} />
-              <Button variant="secondary" onClick={() => setShowImportModal(true)} className="px-3" disabled={loading}>
-                <Upload className="w-4 h-4 mr-1" /> Import Excel
+              <Button variant="secondary" onClick={() => setShowImportModal(true)} className="px-3 h-9 text-xs font-semibold rounded-xl" disabled={loading}>
+                <Upload className="w-3.5 h-3.5 mr-1" /> Import Excel
               </Button>
-              <Button variant="danger" onClick={handleDeleteAll} className="px-3" disabled={loading}>
-                <Trash2 className="w-4 h-4 mr-1" /> Hapus Semua
+              <Button variant="danger" onClick={handleDeleteAll} className="px-3 h-9 text-xs font-semibold rounded-xl" disabled={loading}>
+                <Trash2 className="w-3.5 h-3.5 mr-1" /> Hapus Semua
               </Button>
-              <Button variant="secondary" onClick={() => fetchData(true)} className="px-3" disabled={loading} title="Refresh Data">
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <Button variant="secondary" onClick={() => fetchData(true)} className="px-2.5 h-9 rounded-xl" disabled={loading} title="Refresh Data">
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               </Button>
-              <Button onClick={() => { setIsAdding(true); setEditForm({}); setEditingId(null); }} className="px-3">
-                <Plus className="w-4 h-4 mr-1" /> Data Baru
+              <Button onClick={() => { setIsAdding(true); setEditForm({}); setEditingId(null); }} className="px-3.5 h-9 text-xs font-bold rounded-xl shadow-xs bg-teal-600 hover:bg-teal-700 text-white">
+                <Plus className="w-3.5 h-3.5 mr-1" /> Data Baru
               </Button>
             </div>
           </div>
