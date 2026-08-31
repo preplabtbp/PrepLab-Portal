@@ -104,18 +104,18 @@ router.post("/api/admin/tables/:name/bulk", async (req, res) => {
            const cleanedRow = sanitizePayload(t, row);
            
            if (req.params.name === 'workOrders' && cleanedRow.woId) {
-             await db.insert(t as any).values(cleanedRow).onConflictDoUpdate({
-               target: t.woId,
+             await db.insert(workOrders).values(cleanedRow).onConflictDoUpdate({
+               target: workOrders.woId,
                set: cleanedRow
              });
            } else if (req.params.name === 'pemantauan' && cleanedRow.idPemantauan) {
-             await db.insert(t as any).values(cleanedRow).onConflictDoUpdate({
-               target: t.idPemantauan,
+             await db.insert(pemantauan).values(cleanedRow).onConflictDoUpdate({
+               target: pemantauan.idPemantauan,
                set: cleanedRow
              });
            } else if (req.params.name === 'inspections' && cleanedRow.importId) {
-             await db.insert(t as any).values(cleanedRow).onConflictDoUpdate({
-               target: t.importId,
+             await db.insert(inspections).values(cleanedRow).onConflictDoUpdate({
+               target: inspections.importId,
                set: cleanedRow
              });
            } else {
@@ -179,6 +179,7 @@ router.delete("/api/admin/tables/:name", async (req, res) => {
 
 router.post("/api/admin/sync-roster", async (req, res) => {
     try {
+      const { syncRosterData } = await import("../../src/syncRoster.js");
       await syncRosterData();
       res.json({ message: "Sync berhasil" });
     } catch (e) {
