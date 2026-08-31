@@ -738,7 +738,7 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
 });
 
 router.get('/api/vapid-public-key', (req, res) => {
-    res.send(vapidPublicKey);
+    res.send(process.env.VAPID_PUBLIC_KEY || '');
   });
 
 router.post('/api/push/subscribe', async (req, res) => {
@@ -1510,7 +1510,7 @@ router.post("/api/quotes", async (req, res) => {
       try {
         const emp = await db.select().from(employees).where(eq(employees.nik, authorNik)).limit(1);
         if (emp.length > 0) {
-          if (!resolvedName) resolvedName = emp[0].nama || emp[0].name;
+          if (!resolvedName) resolvedName = emp[0].name;
           if (!resolvedRole) resolvedRole = emp[0].jabatan;
           if (!resolvedSection) resolvedSection = emp[0].section || emp[0].department;
         }
@@ -1670,11 +1670,11 @@ router.post("/api/themes/templates", async (req, res) => {
       if (!resolvedAuthor && nik) {
         try {
           const emp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
-          if (emp.length > 0 && emp[0].nama) {
-            resolvedAuthor = emp[0].nama;
+          if (emp.length > 0 && emp[0].name) {
+            resolvedAuthor = emp[0].name;
           } else {
-            const usr = await db.select().from(users).where(eq(users.nik, nik)).limit(1);
-            if (usr.length > 0) resolvedAuthor = usr[0].username || usr[0].nama;
+            const usr = await db.select().from(users).where(eq(users.uid, nik)).limit(1);
+            if (usr.length > 0) resolvedAuthor = usr[0].displayName || usr[0].email;
           }
         } catch (e) {}
       }
@@ -1745,11 +1745,11 @@ router.post("/api/themes/templates/:id/publish", async (req, res) => {
       if (!resolvedAuthor && nik) {
         try {
           const emp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
-          if (emp.length > 0 && emp[0].nama) {
-            resolvedAuthor = emp[0].nama;
+          if (emp.length > 0 && emp[0].name) {
+            resolvedAuthor = emp[0].name;
           } else {
-            const usr = await db.select().from(users).where(eq(users.nik, nik)).limit(1);
-            if (usr.length > 0) resolvedAuthor = usr[0].username || usr[0].nama;
+            const usr = await db.select().from(users).where(eq(users.uid, nik)).limit(1);
+            if (usr.length > 0) resolvedAuthor = usr[0].displayName || usr[0].email;
           }
         } catch (e) {}
       }

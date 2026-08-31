@@ -2494,7 +2494,7 @@ interface PresenterCardProps {
   karyawanPool: any[];
   day: string;
   shift: string;
-  zone: 'day' | 'night' | 'prep' | 'lab';
+  zone: 'day' | 'night' | 'prep' | 'lab' | 'gabungan';
   isDouble: boolean;
   materiList: any[];
   onPreviewImage: (url: string, title: string) => void;
