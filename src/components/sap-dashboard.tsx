@@ -1003,6 +1003,15 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                                (ticket.risk || '').toLowerCase().includes('tinggi') || 
                                (ticket.risk || '').toLowerCase().includes('fatality');
                 
+                const findingPhoto = ticket.photoUrl || ticket.photo || ticket.foto || ticket.evidencePhoto || (Array.isArray(ticket.photos) && ticket.photos[0]) || null;
+                const hasFindingPhoto = findingPhoto && findingPhoto !== '-' && findingPhoto !== 'null' && String(findingPhoto).trim() !== '';
+
+                const closingPhoto = ticket.closingPhoto || ticket.closingPhotoUrl || null;
+                const hasClosingPhoto = closingPhoto && closingPhoto !== '-' && closingPhoto !== 'null' && String(closingPhoto).trim() !== '';
+
+                const pdfLink = ticket.pdfUrl || ticket.documentLink || null;
+                const hasPdf = pdfLink && pdfLink !== '-' && pdfLink !== '#' && pdfLink !== 'null';
+
                 return (
                   <div 
                     key={ticket.ticketId || idx}
@@ -1081,24 +1090,39 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-0 self-start md:self-center">
-                      {ticket.photo && ticket.photo !== '-' && (
+                      {/* Foto Bukti Temuan Awal */}
+                      {hasFindingPhoto && (
                         <Button
                           variant="secondary"
-                          onClick={() => setSelectedImage(ticket.photo)}
-                          className="h-8 px-2.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg border border-slate-200 flex items-center gap-1.5"
+                          onClick={() => setSelectedImage(findingPhoto)}
+                          className="h-8.5 px-3 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 cursor-pointer shadow-xs transition-all active:scale-95"
                           title="Lihat Foto Temuan"
                         >
                           <Camera className="w-3.5 h-3.5 text-teal-600" />
-                          <span>Foto</span>
+                          <span>Foto Temuan</span>
                         </Button>
                       )}
 
-                      {ticket.pdfUrl && ticket.pdfUrl !== '-' && (
+                      {/* Foto Bukti Perbaikan jika sudah closed */}
+                      {isClosed && hasClosingPhoto && (
+                        <Button
+                          variant="secondary"
+                          onClick={() => setSelectedImage(closingPhoto)}
+                          className="h-8.5 px-3 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl border border-emerald-200 flex items-center gap-1.5 cursor-pointer shadow-xs transition-all active:scale-95"
+                          title="Lihat Foto Bukti Perbaikan"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Foto Perbaikan</span>
+                        </Button>
+                      )}
+
+                      {/* PDF Report Link */}
+                      {hasPdf && (
                         <a
-                          href={ticket.pdfUrl}
+                          href={pdfLink}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="h-8 px-2.5 text-xs bg-teal-50 hover:bg-teal-100 text-teal-800 font-semibold rounded-lg border border-teal-200 flex items-center gap-1.5 transition-colors"
+                          className="h-8.5 px-3 text-xs bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold rounded-xl border border-teal-200 flex items-center gap-1.5 transition-colors shadow-xs"
                           title="Buka Laporan PDF Inspeksi"
                         >
                           <FileText className="w-3.5 h-3.5 text-teal-700" />
@@ -1107,6 +1131,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                         </a>
                       )}
 
+                      {/* Tutup Tiket Action Button */}
                       {!isClosed ? (
                         <Button
                           onClick={() => {
@@ -1115,13 +1140,13 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                             setClosingAction('');
                             setClosingPhotoBase64('');
                           }}
-                          className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs flex items-center gap-1.5"
+                          className="h-8.5 px-3.5 text-xs bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
                         >
                           <CheckCircle className="w-3.5 h-3.5" />
                           <span>Tutup Tiket</span>
                         </Button>
                       ) : (
-                        <span className="h-8 px-3 text-xs bg-emerald-100 text-emerald-800 font-bold rounded-lg flex items-center gap-1">
+                        <span className="h-8.5 px-3 text-xs bg-emerald-100 text-emerald-800 font-bold rounded-xl border border-emerald-200 flex items-center gap-1">
                           <Check className="w-3.5 h-3.5" />
                           <span>Tuntas</span>
                         </span>
