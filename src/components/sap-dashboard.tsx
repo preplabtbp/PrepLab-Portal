@@ -103,6 +103,11 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
     fetchData();
   }, []);
 
+  // Auto-reset search query when changing week/period
+  useEffect(() => {
+    setSearchQuery('');
+  }, [filterPeriod]);
+
   // Update rekap summary in background when target week changes (non-blocking)
   useEffect(() => {
     if (!targetWeekTag) return;
@@ -1036,7 +1041,23 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                   <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                 </div>
                 <p className="text-sm font-bold text-slate-700">Tidak ada temuan yang sesuai filter</p>
-                <p className="text-xs text-slate-400">Seluruh area pada periode ini terpantau aman dan tertangani.</p>
+                <p className="text-xs text-slate-400">
+                  {searchQuery ? `Tidak ada temuan yang cocok dengan kata kunci "${searchQuery}"` : 'Seluruh area pada periode ini terpantau aman dan tertangani.'}
+                </p>
+                {(searchQuery || priorityFilter !== 'ALL' || statusTab !== 'ALL') && (
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        setSearchQuery('');
+                        setPriorityFilter('ALL');
+                        setStatusTab('ALL');
+                      }}
+                      className="px-3 py-1 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold rounded-lg transition-colors border border-teal-200"
+                    >
+                      Reset Filter & Tampilkan Semua ({totalFindings}) Temuan
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               visibleTickets.map((ticket, idx) => {
