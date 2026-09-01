@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Button, Input, Textarea } from './ui';
 import { 
   ChevronLeft, BarChart2, Activity, ShieldAlert, CheckCircle2, 
-  AlertTriangle, TrendingUp, Filter, Map, Search, FileText, 
+  AlertTriangle, TrendingUp, Filter, MapPin, Search, FileText, 
   Camera, ExternalLink, RefreshCw, Share2, Check, Clock, 
   ArrowUpRight, Sparkles, Layers, Eye, Tag, X, Upload, CheckCircle
 } from 'lucide-react';
@@ -131,8 +131,8 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
       ]);
 
       if (ticketsResult.status === 'fulfilled' && Array.isArray(ticketsResult.value)) {
-        // Automatically deduplicate redundant/duplicate tickets
-        const dedupeMap = new Map<string, any>();
+        // Automatically deduplicate redundant/duplicate tickets using object map
+        const dedupeMap: Record<string, any> = {};
         for (const t of ticketsResult.value) {
           const cleanDesc = (t.description || '').toLowerCase().replace(/[^a-z0-9]/g, '');
           const cleanLoc = (t.location || t.area || '').toLowerCase().trim();
@@ -149,16 +149,15 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
           }
 
           const dedupeKey = `${dateDay}_${cleanLoc}_${cleanPelapor}_${cleanDesc}`;
-          if (dedupeMap.has(dedupeKey)) {
-            const existing = dedupeMap.get(dedupeKey);
+          if (dedupeMap[dedupeKey]) {
             if ((t.status || '').toUpperCase() === 'CLOSED') {
-              dedupeMap.set(dedupeKey, { ...existing, ...t, status: 'CLOSED' });
+              dedupeMap[dedupeKey] = { ...dedupeMap[dedupeKey], ...t, status: 'CLOSED' };
             }
           } else {
-            dedupeMap.set(dedupeKey, t);
+            dedupeMap[dedupeKey] = t;
           }
         }
-        setAllTickets(Array.from(dedupeMap.values()));
+        setAllTickets(Object.values(dedupeMap));
       }
 
       if (reportsResult.status === 'fulfilled' && Array.isArray(reportsResult.value)) {
@@ -1105,7 +1104,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
 
                       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 pt-0.5 font-medium">
                         <span className="flex items-center gap-1 text-slate-700 font-semibold">
-                          <Map className="w-3.5 h-3.5 text-slate-400" />
+                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
                           {ticket.location || ticket.area || 'Area PrepLab'}
                         </span>
                         <span>•</span>
