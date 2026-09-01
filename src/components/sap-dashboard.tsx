@@ -664,7 +664,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <Map className="w-4 h-4 text-rose-500" />
+                  <MapPin className="w-4 h-4 text-rose-500" />
                   Heatmap Temuan Berulang (Area)
                 </h3>
                 <span className="text-[11px] text-slate-500 font-medium">{heatmapData.length} Area Teridentifikasi</span>
