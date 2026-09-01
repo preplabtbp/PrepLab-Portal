@@ -47,6 +47,7 @@ interface SapDashboardProps {
 
 export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
   const [allTickets, setAllTickets] = useState<any[]>([]);
+  const [allGroupReports, setAllGroupReports] = useState<any[]>([]);
   const [rekapSummary, setRekapSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -91,7 +92,20 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
         setAllTickets(ticketsData);
       }
 
-      // 2. Fetch real inspection compliance summary for the target week
+      // 2. Fetch all completed group inspection reports
+      try {
+        const reportsRes = await fetch('/api/group-reports?week=ALL');
+        if (reportsRes.ok) {
+          const reportsData = await reportsRes.json();
+          if (Array.isArray(reportsData)) {
+            setAllGroupReports(reportsData);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch group reports:", err);
+      }
+
+      // 3. Fetch real inspection compliance summary for the target week
       try {
         const rekapRes = await fetch(`/api/rekap-inspeksi?week=${targetWeekTag}`);
         if (rekapRes.ok) {
@@ -115,6 +129,47 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
     setRefreshing(true);
     fetchData();
   };
+
+  // Filter completed inspections by selected period
+  const completedInspectionsByPeriod = useMemo(() => {
+    return allGroupReports.filter(insp => {
+      if (!insp.timestamp) return false;
+      let d: Date | null = null;
+      try {
+        d = new Date(insp.timestamp);
+      } catch (e) {
+        return true;
+      }
+      if (isNaN(d.getTime())) return true;
+
+      if (filterPeriod === 'this_week' || filterPeriod === 'this_iso_week') return isThisISOWeek(d);
+      if (filterPeriod === 'last_week' || filterPeriod === 'last_iso_week') return isLastISOWeek(d);
+      if (filterPeriod.startsWith('iso_')) {
+        const parts = filterPeriod.split('_');
+        const targetYear = parseInt(parts[1], 10);
+        const targetWeek = parseInt(parts[2], 10);
+        if (!isNaN(targetYear) && !isNaN(targetWeek)) {
+          return isDateInISOWeek(d, targetYear, targetWeek);
+        }
+      }
+      if (filterPeriod === 'this_month') return isThisMonth(d);
+      if (filterPeriod === 'ytd' || filterPeriod === 'this_year') return isThisYear(d);
+      return true;
+    });
+  }, [allGroupReports, filterPeriod]);
+
+  // Target inspections count based on period (29 inspections per week)
+  const targetInspectionsCount = useMemo(() => {
+    if (filterPeriod === 'this_month') return 116; // 4 weeks x 29
+    if (filterPeriod === 'ytd' || filterPeriod === 'this_year') return 1508; // 52 weeks x 29
+    if (filterPeriod === 'all') return Math.max(29, allGroupReports.length);
+    return 29; // Standard weekly target = 29
+  }, [filterPeriod, allGroupReports]);
+
+  const completedInspectionsCount = completedInspectionsByPeriod.length;
+  const complianceScore = targetInspectionsCount > 0 
+    ? Math.round((completedInspectionsCount / targetInspectionsCount) * 100) 
+    : 0;
 
   // Filter tickets by selected period
   const filteredTicketsByPeriod = useMemo(() => {
@@ -158,10 +213,6 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
     (t.risk || '').toLowerCase().includes('fatality')
   ).length;
 
-  // Real Compliance Score Matrix
-  const complianceScore = rekapSummary ? rekapSummary.percentage : (totalFindings > 0 ? closureRate : 0);
-  const completedPersonsCount = rekapSummary ? rekapSummary.sudah : closedFindings;
-  const expectedTotalCount = rekapSummary ? rekapSummary.total : totalFindings;
   const cutiCount = rekapSummary ? (rekapSummary.cutiCount || 0) : 0;
 
   // Real Heatmap Data (Temuan by Area)
@@ -420,6 +471,9 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
                 <span className="bg-teal-500/30 text-teal-200 text-[11px] font-bold uppercase tracking-wider px-3 py-0.5 rounded-full backdrop-blur-md border border-teal-400/30">
                   {targetWeekTag} Compliance Status
                 </span>
+                <span className="bg-white/10 text-teal-100 text-[11px] font-medium px-2.5 py-0.5 rounded-full border border-white/20">
+                  Target: {targetInspectionsCount} Agenda Inspeksi
+                </span>
                 {cutiCount > 0 && (
                   <span className="bg-amber-500/20 text-amber-200 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border border-amber-400/30">
                     {cutiCount} Cuti/Off
@@ -428,17 +482,17 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
               </div>
               <h2 className="text-3xl sm:text-4xl font-extrabold flex items-baseline gap-2 text-white">
                 {complianceScore}%
-                <span className="text-sm sm:text-base font-normal text-teal-200">Tingkat Kepatuhan Inspeksi</span>
+                <span className="text-sm sm:text-base font-normal text-teal-200">Penyelesaian Inspeksi</span>
               </h2>
               <p className="text-xs sm:text-sm text-teal-100/90 leading-relaxed">
-                Persentase inspeksi terencana yang telah terselesaikan oleh personil pengawas dan tim K3 Prep & Lab.
+                Realisasi pelaksanaan inspeksi terencana dari total target 29 agenda inspeksi program K3 Prep & Lab.
               </p>
             </div>
 
-            <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-md border border-white/20 flex flex-col items-center md:items-end justify-center min-w-[200px] text-center md:text-right shadow-inner">
+            <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-md border border-white/20 flex flex-col items-center md:items-end justify-center min-w-[210px] text-center md:text-right shadow-inner">
               <span className="text-xs text-teal-200 font-semibold uppercase tracking-wider mb-0.5">Status Penyelesaian</span>
               <p className="text-lg sm:text-xl font-bold text-white">
-                {completedPersonsCount} <span className="text-xs font-normal text-teal-200">dari</span> {expectedTotalCount} Personil/Area
+                {completedInspectionsCount} <span className="text-xs font-normal text-teal-200">dari</span> {targetInspectionsCount} Inspeksi Selesai
               </p>
               <div className="w-full bg-white/20 h-2 rounded-full mt-2 overflow-hidden">
                 <div 
