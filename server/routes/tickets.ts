@@ -68,6 +68,17 @@ router.get("/api/tickets", async (req, res) => {
       }
     }
 
+    function safeDateDay(val: any): string {
+      if (!val) return '';
+      try {
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) {
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+      } catch (e) {}
+      return String(val).slice(0, 10);
+    }
+
     // Consolidate duplicates that share identical finding description, location, reporter, and date
     const deduplicated: any[] = [];
     const seenDedupe = new Map<string, any>();
@@ -76,16 +87,7 @@ router.get("/api/tickets", async (req, res) => {
       const cleanDesc = (t.description || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       const cleanLoc = (t.location || t.area || '').toLowerCase().trim();
       const cleanPelapor = (t.requestorName || t.reporterName || '').toLowerCase().trim();
-      
-      let dateDay = '';
-      if (t.date) {
-        try {
-          const d = new Date(t.date);
-          dateDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        } catch (e) {
-          dateDay = String(t.date).slice(0, 10);
-        }
-      }
+      const dateDay = safeDateDay(t.date);
 
       const dedupeKey = `${dateDay}_${cleanLoc}_${cleanPelapor}_${cleanDesc}`;
       if (seenDedupe.has(dedupeKey)) {
@@ -110,7 +112,7 @@ router.get("/api/tickets", async (req, res) => {
       if (!pdf && allInspections.length > 0) {
         const isApd = (t.category || '').toLowerCase().includes('apd') || (t.description || '').toLowerCase().includes('apd');
         const tLoc = (t.location || t.area || '').toLowerCase().trim();
-        const tDateDay = t.date ? new Date(t.date).toISOString().slice(0, 10) : '';
+        const tDateDay = safeDateDay(t.date);
 
         const matchedInsp = allInspections.find(insp => {
           const inspPdf = extractDisplayPdfUrl(insp.pdfUrl);
@@ -118,7 +120,7 @@ router.get("/api/tickets", async (req, res) => {
 
           const inspType = (insp.type || '').toLowerCase();
           const inspLoc = (insp.location || '').toLowerCase().trim();
-          const inspDateDay = insp.createdAt ? new Date(insp.createdAt).toISOString().slice(0, 10) : '';
+          const inspDateDay = safeDateDay(insp.createdAt || insp.date);
 
           // Match APD inspection
           if (isApd && (inspType.includes('apd') || inspType.includes('kepatuhan'))) {
