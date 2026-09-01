@@ -43,9 +43,10 @@ ChartJS.register(
 interface SapDashboardProps {
   onBack?: () => void;
   inspectorNik: string;
+  inspectorName?: string;
 }
 
-export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
+export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboardProps) {
   const [allTickets, setAllTickets] = useState<any[]>([]);
   const [allGroupReports, setAllGroupReports] = useState<any[]>([]);
   const [rekapSummary, setRekapSummary] = useState<any>(null);
@@ -65,6 +66,24 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
   const [closingAction, setClosingAction] = useState('');
   const [closingPhotoBase64, setClosingPhotoBase64] = useState('');
   const [submittingClose, setSubmittingClose] = useState(false);
+
+  // Default Inspector PIC display label with both Full Name and NIK
+  const defaultInspectorLabel = useMemo(() => {
+    if (!inspectorNik && !inspectorName) return '';
+    const match = employeesList.find((e: any) => 
+      (e.nik && inspectorNik && e.nik.toUpperCase().trim() === inspectorNik.toUpperCase().trim()) ||
+      (e.name && inspectorName && e.name.toLowerCase().trim() === inspectorName.toLowerCase().trim())
+    );
+    if (match) {
+      const name = match.name || match.nama;
+      const nik = match.nik;
+      return nik ? `${name} (${nik})` : name;
+    }
+    if (inspectorName && inspectorNik) {
+      return `${inspectorName} (${inspectorNik})`;
+    }
+    return inspectorName || inspectorNik || '';
+  }, [inspectorNik, inspectorName, employeesList]);
 
   const isoWeeksList = useMemo(() => getYearISOWeeksList(new Date().getFullYear()), []);
   const currentWeekNumber = getISOWeek(new Date());
@@ -1092,7 +1111,7 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
                         <Button
                           onClick={() => {
                             setClosingTicket(ticket);
-                            setClosingPic(inspectorNik || '');
+                            setClosingPic(defaultInspectorLabel || (inspectorName && inspectorNik ? `${inspectorName} (${inspectorNik})` : (inspectorName || inspectorNik || '')));
                             setClosingAction('');
                             setClosingPhotoBase64('');
                           }}

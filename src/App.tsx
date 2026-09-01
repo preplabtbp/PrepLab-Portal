@@ -1133,7 +1133,7 @@ export default function App() {
   <Route path="/roster-admin" element={<RosterAdminScreen />} />
   <Route path="/settings" element={<SettingsScreen inspectorName={inspectorName} inspectorNik={inspectorNik} onLogoutKaryawan={handleLogoutKaryawan} onOpenThemeModal={() => setShowGlobalThemeModal(true)} onNav={handleNav} />} />
   <Route path="/admin-dashboard" element={<AdminDashboard inspectorNik={inspectorNik!} />} />
-  <Route path="/sap-dashboard" element={<SapDashboard inspectorNik={inspectorNik!} />} />
+  <Route path="/sap-dashboard" element={<SapDashboard inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
   <Route path="/adm-dashboard" element={<AdmDashboard />} />
   <Route path="/pelanggaran-dashboard" element={<PelanggaranDashboard />} />
   <Route path="/wo-maintenance-dashboard" element={<WOMaintenanceDashboard onBack={() => handleNav('home')} inspectorNik={inspectorNik!} />} />
