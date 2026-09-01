@@ -1,6 +1,6 @@
 import express from "express";
 import { db } from "../../src/db/index.js";
-import { tickets, notifications } from "../../src/db/schema.js";
+import { tickets, notifications, inspections } from "../../src/db/schema.js";
 import { ticketSchema } from "../../src/lib/zod.js";
 import { eq, desc } from "drizzle-orm";
 import { sendWebPush } from "../utils.js";
@@ -11,6 +11,27 @@ export const router = express.Router();
 router.get("/api/tickets", async (req, res) => {
   try {
     const dbData = await db.select().from(tickets).orderBy(desc(tickets.id));
+
+    // Fetch inspections to automatically link and backfill missing PDF report URLs
+    let allInspections: any[] = [];
+    try {
+      allInspections = await db.select().from(inspections);
+    } catch (e) {}
+
+    function extractDisplayPdfUrl(rawPdfUrl: any): string | null {
+      if (!rawPdfUrl) return null;
+      if (typeof rawPdfUrl === 'string' && rawPdfUrl.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse(rawPdfUrl);
+          return parsed.tbp || parsed.gps || (Object.values(parsed)[0] as string) || null;
+        } catch (e) {
+          return rawPdfUrl;
+        }
+      }
+      const str = String(rawPdfUrl).trim();
+      if (str.startsWith('http') && !str.includes('/api/inspections/')) return str;
+      return null;
+    }
 
     // Group / Consolidate APD tickets that belong to the same inspection
     const consolidated: any[] = [];
@@ -80,6 +101,52 @@ router.get("/api/tickets", async (req, res) => {
         seenDedupe.set(dedupeKey, t);
         deduplicated.push(t);
       }
+    }
+
+    // Enrich tickets with PDF Report URLs from inspections table if missing
+    for (const t of deduplicated) {
+      let pdf = extractDisplayPdfUrl(t.documentLink || (t as any).pdfUrl);
+      
+      if (!pdf && allInspections.length > 0) {
+        const isApd = (t.category || '').toLowerCase().includes('apd') || (t.description || '').toLowerCase().includes('apd');
+        const tLoc = (t.location || t.area || '').toLowerCase().trim();
+        const tDateDay = t.date ? new Date(t.date).toISOString().slice(0, 10) : '';
+
+        const matchedInsp = allInspections.find(insp => {
+          const inspPdf = extractDisplayPdfUrl(insp.pdfUrl);
+          if (!inspPdf) return false;
+
+          const inspType = (insp.type || '').toLowerCase();
+          const inspLoc = (insp.location || '').toLowerCase().trim();
+          const inspDateDay = insp.createdAt ? new Date(insp.createdAt).toISOString().slice(0, 10) : '';
+
+          // Match APD inspection
+          if (isApd && (inspType.includes('apd') || inspType.includes('kepatuhan'))) {
+            if (tLoc && inspLoc && (inspLoc.includes(tLoc) || tLoc.includes(inspLoc))) {
+              if (tDateDay && inspDateDay && tDateDay === inspDateDay) return true;
+            }
+          }
+
+          // Match general inspection by location and day
+          if (!isApd && tLoc && inspLoc && (inspLoc.includes(tLoc) || tLoc.includes(inspLoc))) {
+            if (tDateDay && inspDateDay && tDateDay === inspDateDay) return true;
+          }
+
+          return false;
+        });
+
+        if (matchedInsp) {
+          pdf = extractDisplayPdfUrl(matchedInsp.pdfUrl);
+          if (pdf) {
+            t.documentLink = pdf;
+            // Backfill in database in background
+            db.update(tickets).set({ documentLink: pdf }).where(eq(tickets.id, t.id)).catch(() => {});
+          }
+        }
+      }
+
+      (t as any).pdfUrl = pdf || '-';
+      t.documentLink = pdf || '-';
     }
 
     res.json(deduplicated);
