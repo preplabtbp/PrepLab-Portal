@@ -149,9 +149,23 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
   useEffect(() => {
     determineAllowedFolders();
     fetchLogs();
-  }, [userProfile]);
+  }, [userProfile, inspectorNik]);
 
   const determineAllowedFolders = () => {
+    const cleanNik = (inspectorNik || userProfile?.nik || '').trim().toUpperCase();
+    const isSuperNik = 
+      cleanNik === '02D24000043' || 
+      cleanNik === '02D25000055' || 
+      cleanNik === '04D25000064' || 
+      cleanNik === 'PREPLABADMIN' || 
+      cleanNik === 'ADMIN' ||
+      cleanNik.includes('02D24000043');
+
+    if (isSuperNik) {
+      setAllowedFolders(ALL_FOLDERS);
+      return;
+    }
+
     if (!userProfile) return;
     if (userProfile.pt === 'GTS') {
       const gtsFolder = ALL_FOLDERS.find(f => f.section === 'GTS');
@@ -172,7 +186,7 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
     if (jab.includes('superintendent') && (jab.includes('laboratory') || jab.includes('preparation'))) isSuper = true;
     if (sec.includes('qa') || sec.includes('quality assurance')) isSuper = true;
     
-    if (isSuper || inspectorNik === 'preplabadmin') {
+    if (isSuper) {
       setAllowedFolders(ALL_FOLDERS);
     } else {
       const filtered = ALL_FOLDERS.filter(f => {
