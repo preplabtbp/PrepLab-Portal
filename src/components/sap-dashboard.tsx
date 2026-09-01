@@ -82,55 +82,50 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  // Update rekap summary in background when target week changes (non-blocking)
+  useEffect(() => {
+    if (!targetWeekTag) return;
+    fetch(`/api/rekap-inspeksi?week=${targetWeekTag}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(rData => {
+        if (rData && rData.summary) {
+          setRekapSummary(rData.summary);
+        }
+      })
+      .catch(err => console.error("Background rekap fetch error:", err));
   }, [targetWeekTag]);
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      if (allTickets.length === 0) {
+        setLoading(true);
+      }
       
-      // 1. Fetch real safety inspection tickets
-      const ticketsData = await getTickets('ALL');
-      if (Array.isArray(ticketsData)) {
-        setAllTickets(ticketsData);
+      // Parallel fetch all data sources for ultra-fast loading
+      const [ticketsResult, reportsResult, rekapResult, employeesResult] = await Promise.allSettled([
+        getTickets('ALL'),
+        fetch('/api/group-reports?week=ALL').then(r => r.ok ? r.json() : []),
+        fetch(`/api/rekap-inspeksi?week=${targetWeekTag}`).then(r => r.ok ? r.json() : null),
+        fetch('/api/employees').then(r => r.ok ? r.json() : [])
+      ]);
+
+      if (ticketsResult.status === 'fulfilled' && Array.isArray(ticketsResult.value)) {
+        setAllTickets(ticketsResult.value);
       }
 
-      // 2. Fetch all completed group inspection reports
-      try {
-        const reportsRes = await fetch('/api/group-reports?week=ALL');
-        if (reportsRes.ok) {
-          const reportsData = await reportsRes.json();
-          if (Array.isArray(reportsData)) {
-            setAllGroupReports(reportsData);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch group reports:", err);
+      if (reportsResult.status === 'fulfilled' && Array.isArray(reportsResult.value)) {
+        setAllGroupReports(reportsResult.value);
       }
 
-      // 3. Fetch real inspection compliance summary for the target week
-      try {
-        const rekapRes = await fetch(`/api/rekap-inspeksi?week=${targetWeekTag}`);
-        if (rekapRes.ok) {
-          const rData = await rekapRes.json();
-          setRekapSummary(rData.summary);
-        }
-      } catch (err) {
-        console.error("Failed to fetch rekap summary:", err);
+      if (rekapResult.status === 'fulfilled' && rekapResult.value && rekapResult.value.summary) {
+        setRekapSummary(rekapResult.value.summary);
       }
 
-      // 4. Fetch employees database for PIC autocomplete suggestions
-      try {
-        const empRes = await fetch('/api/employees');
-        if (empRes.ok) {
-          const empData = await empRes.json();
-          if (Array.isArray(empData)) {
-            setEmployeesList(empData);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch employees list:", err);
+      if (employeesResult.status === 'fulfilled' && Array.isArray(employeesResult.value)) {
+        setEmployeesList(employeesResult.value);
       }
-
     } catch (e) {
       console.error("Error fetching SAP dashboard data:", e);
       toast.error("Gagal memuat data SAP Dashboard");
@@ -956,7 +951,7 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
 
           {/* Ticket Items List */}
           <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
-            {loading ? (
+            {loading && allTickets.length === 0 ? (
               <div className="p-12 text-center text-slate-500 text-sm animate-pulse space-y-2">
                 <div className="w-8 h-8 rounded-full border-2 border-teal-600 border-t-transparent animate-spin mx-auto" />
                 <p className="font-semibold text-slate-700">Memuat Rekapan Temuan K3...</p>
