@@ -634,7 +634,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
               <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
                 <Button
                   onClick={() => setShowInspectionReminder(true)}
-                  variant="outline"
+                  variant="secondary"
                   className="text-xs h-9 px-3.5 border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-100 cursor-pointer"
                 >
                   Detail
@@ -1543,7 +1543,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
 
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   onClick={() => {
                     setShowInspectionReminder(false);
                     const cleanNik = (inspectorNik || '').trim();
