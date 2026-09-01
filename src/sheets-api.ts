@@ -147,13 +147,18 @@ export const appendRowsToSheet = async (sheetName: string, rows: any[][], devOpt
   }
 };
 
-export const getTickets = async (statusFilter: string) => {
-  const res = await fetch('/api/tickets');
-  const data = await res.json();
-  const filteredData = data.filter((t: any) => t.source === 'inspeksi' || t.ticketId.startsWith('TKT-'));
-  if (statusFilter === 'ALL') return filteredData;
-  return filteredData.filter((t: any) => t.status?.toUpperCase() === statusFilter.toUpperCase());
-  
+export const getTickets = async (statusFilter: string = 'ALL') => {
+  try {
+    const res = await fetch('/api/tickets');
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    const filteredData = data.filter((t: any) => t.source === 'inspeksi' || (t.ticketId && t.ticketId.startsWith('TKT-')));
+    if (!statusFilter || statusFilter.toUpperCase() === 'ALL') return filteredData;
+    return filteredData.filter((t: any) => t.status?.toUpperCase() === statusFilter.toUpperCase());
+  } catch (e) {
+    console.error("Error in getTickets:", e);
+    return [];
+  }
 };
 
 export const closeTicket = async (ticketId: string, picName: string, photoBase64: string, notes: string, devOptions?: any) => {
