@@ -283,6 +283,8 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
       const ditutup = ticketsInWeek.filter(t => (t.status || '').toUpperCase() === 'CLOSED').length;
       return {
         name: wl.label,
+        weekNum: wl.weekNum,
+        year: wl.year,
         temuan,
         ditutup
       };
@@ -507,7 +509,10 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
         {/* 2. Top Metric KPI Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Card 
-            onClick={() => setStatusTab('ALL')}
+            onClick={() => {
+              setStatusTab('ALL');
+              document.getElementById('action-items-section')?.scrollIntoView({ behavior: 'smooth' });
+            }}
             className={`p-4.5 bg-white border cursor-pointer hover:border-slate-400 hover:shadow-md transition-all relative overflow-hidden rounded-2xl ${
               statusTab === 'ALL' ? 'ring-2 ring-slate-900 border-transparent shadow-sm' : 'border-slate-200'
             }`}
@@ -523,7 +528,10 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
           </Card>
 
           <Card 
-            onClick={() => setStatusTab('OPEN')}
+            onClick={() => {
+              setStatusTab('OPEN');
+              document.getElementById('action-items-section')?.scrollIntoView({ behavior: 'smooth' });
+            }}
             className={`p-4.5 bg-white border cursor-pointer hover:border-rose-300 hover:shadow-md transition-all relative overflow-hidden rounded-2xl ${
               statusTab === 'OPEN' ? 'ring-2 ring-rose-500 border-transparent shadow-sm bg-rose-50/20' : 'border-slate-200'
             }`}
@@ -541,7 +549,10 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
           </Card>
 
           <Card 
-            onClick={() => setStatusTab('PROGRESS')}
+            onClick={() => {
+              setStatusTab('PROGRESS');
+              document.getElementById('action-items-section')?.scrollIntoView({ behavior: 'smooth' });
+            }}
             className={`p-4.5 bg-white border cursor-pointer hover:border-amber-300 hover:shadow-md transition-all relative overflow-hidden rounded-2xl ${
               statusTab === 'PROGRESS' ? 'ring-2 ring-amber-500 border-transparent shadow-sm bg-amber-50/20' : 'border-slate-200'
             }`}
@@ -557,7 +568,10 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
           </Card>
 
           <Card 
-            onClick={() => setStatusTab('CLOSED')}
+            onClick={() => {
+              setStatusTab('CLOSED');
+              document.getElementById('action-items-section')?.scrollIntoView({ behavior: 'smooth' });
+            }}
             className={`p-4.5 bg-white border cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all relative overflow-hidden rounded-2xl ${
               statusTab === 'CLOSED' ? 'ring-2 ring-emerald-500 border-transparent shadow-sm bg-emerald-50/20' : 'border-slate-200'
             }`}
@@ -595,7 +609,10 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
                   return (
                     <div 
                       key={item.area} 
-                      onClick={() => setSearchQuery(item.area)}
+                      onClick={() => {
+                        setSearchQuery(item.area);
+                        document.getElementById('action-items-section')?.scrollIntoView({ behavior: 'smooth' });
+                      }}
                       className="flex flex-col gap-1 p-2 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
                       title="Klik untuk filter temuan di area ini"
                     >
@@ -644,6 +661,7 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
                 <TrendingUp className="w-4 h-4 text-blue-500" />
                 Tren Temuan vs Penutupan (4 Minggu)
               </h3>
+              <span className="text-[10px] text-slate-400 italic">Klik grafik untuk detail</span>
             </div>
             
             <div className="h-60">
@@ -670,6 +688,34 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
                 options={{
                   responsive: true,
                   maintainAspectRatio: false,
+                  onClick: (event: any, elements: any[]) => {
+                    if (elements && elements.length > 0) {
+                      const el = elements[0];
+                      const datasetIndex = el.datasetIndex; // 0 = Temuan Baru, 1 = Ditutup (Closed)
+                      const index = el.index;
+                      const item = trendData[index];
+                      if (item) {
+                        const weekFilterValue = `iso_${item.year}_${item.weekNum}`;
+                        setFilterPeriod(weekFilterValue);
+                        
+                        if (datasetIndex === 1) {
+                          setStatusTab('CLOSED');
+                          toast.success(`Menampilkan temuan Ditutup (Closed) untuk ${item.name}`);
+                        } else {
+                          setStatusTab('OPEN');
+                          toast.success(`Menampilkan temuan Baru (Open) untuk ${item.name}`);
+                        }
+
+                        setTimeout(() => {
+                          document.getElementById('action-items-section')?.scrollIntoView({ behavior: 'smooth' });
+                        }, 100);
+                      }
+                    }
+                  },
+                  onHover: (event: any, chartElement: any[]) => {
+                    const target = event.native?.target as HTMLElement;
+                    if (target) target.style.cursor = chartElement?.length ? 'pointer' : 'default';
+                  },
                   scales: {
                     x: {
                       grid: { display: false },
@@ -727,6 +773,27 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
                       cutout: '75%',
                       responsive: true,
                       maintainAspectRatio: false,
+                      onClick: (event: any, elements: any[]) => {
+                        if (elements && elements.length > 0) {
+                          const el = elements[0];
+                          const index = el.index;
+                          const selectedStatus = statusPieData[index];
+                          if (selectedStatus) {
+                            if (selectedStatus.name === 'Open') setStatusTab('OPEN');
+                            else if (selectedStatus.name === 'Progress') setStatusTab('PROGRESS');
+                            else if (selectedStatus.name === 'Closed') setStatusTab('CLOSED');
+                            
+                            toast.success(`Menampilkan temuan status ${selectedStatus.name}`);
+                            setTimeout(() => {
+                              document.getElementById('action-items-section')?.scrollIntoView({ behavior: 'smooth' });
+                            }, 100);
+                          }
+                        }
+                      },
+                      onHover: (event: any, chartElement: any[]) => {
+                        const target = event.native?.target as HTMLElement;
+                        if (target) target.style.cursor = chartElement?.length ? 'pointer' : 'default';
+                      },
                       plugins: {
                         legend: {
                           position: 'bottom',
@@ -752,7 +819,10 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
               {categoryData.slice(0, 4).map(c => (
                 <button
                   key={c.name}
-                  onClick={() => setSearchQuery(c.name)}
+                  onClick={() => {
+                    setSearchQuery(c.name);
+                    document.getElementById('action-items-section')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
                   className="text-[10px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md transition-colors"
                 >
                   {c.name} ({c.value})
@@ -763,7 +833,7 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
         </div>
 
         {/* 4. Action Items & Safety Findings Table / Cards */}
-        <Card className="p-0 bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+        <Card id="action-items-section" className="p-0 bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden scroll-mt-20">
           {/* Header & Filter Controls */}
           <div className="p-5 border-b border-slate-100 bg-slate-50/50 space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
