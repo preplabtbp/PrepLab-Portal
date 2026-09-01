@@ -98,10 +98,11 @@ export const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement> & { 
   </div>
 );
 
-export const Button = ({ children, variant = 'primary', className = '', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost' }) => {
+export const Button = ({ children, variant = 'primary', size, className = '', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost'; size?: 'sm' | 'md' | 'lg' | string }) => {
   const isWidthSpecified = className.includes("w-") || className.includes("flex-1");
   const hasPadding = className.includes("p-") || className.includes("px-") || className.includes("py-") || className.includes("h-");
-  const baseStyle = `${isWidthSpecified ? "" : "w-full"} ${hasPadding ? "" : "py-3.5 px-4"} rounded-xl font-medium transition-all inline-flex items-center justify-center gap-2 active:scale-[0.98] text-sm tracking-wide shadow-xs border cursor-pointer`;
+  const sizePadding = size === 'sm' ? 'py-1.5 px-3 text-xs' : size === 'lg' ? 'py-4 px-6 text-base' : 'py-3.5 px-4 text-sm';
+  const baseStyle = `${isWidthSpecified ? "" : "w-full"} ${hasPadding ? "" : sizePadding} rounded-xl font-medium transition-all inline-flex items-center justify-center gap-2 active:scale-[0.98] tracking-wide shadow-xs border cursor-pointer`;
   
   const variants = {
     primary: "text-white border-transparent",

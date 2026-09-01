@@ -38,6 +38,34 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
       ? await db.select().from(workOrders).where(eq(workOrders.pt, 'GTS'))
       : await db.select().from(workOrders);
 
+    // Helper to filter out dummy/test entries
+    const isDummyOrTestWO = (wo: any): boolean => {
+      if (!wo) return false;
+      const desc = String(wo.issueDescription || wo.issue_description || '').toLowerCase().trim();
+      const action = String(wo.actionTaken || wo.action_taken || '').toLowerCase().trim();
+      const eqName = String(wo.equipmentName || wo.equipment_name || '').toLowerCase().trim();
+      const woId = String(wo.woId || wo.wo_id || '').toLowerCase().trim();
+
+      const testKeywords = [
+        'testing', 'test', 'dummy', 'percobaan', 'coba', 'tes wo', 'testing wo',
+        'test wa', 'testing wa', 'trial', 'hanya tes', 'hanya test', 'ujicoba'
+      ];
+
+      for (const kw of testKeywords) {
+        if (desc.includes(kw) || action.includes(kw) || eqName.includes(kw) || woId.includes(kw)) {
+          return true;
+        }
+      }
+
+      if (/^([a-z0-9])\1{2,}$/i.test(desc) || /^(asdf|qwerty|zxcv|1234)/i.test(desc)) {
+        return true;
+      }
+
+      return false;
+    };
+
+    allWOs = allWOs.filter(wo => !isDummyOrTestWO(wo));
+
     // Apply date filters if present
     if (startDate) {
       const sDate = new Date(startDate as string);

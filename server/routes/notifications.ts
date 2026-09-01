@@ -23,36 +23,26 @@ router.get("/api/notifications", async (req, res) => {
       let data = [];
       const userId = req.query.userId as string;
       if (userId) {
-        // Quick check if the user is an admin
-        const isDeveloper = userId === '02D25000055' || userId === '02D24000043' || userId === 'preplabadmin';
-        
-        if (isDeveloper) {
-          // Developer gets their own notifications, plus all role-based and global notifications (userId IS NULL)
-          // This prevents them from seeing thousands of duplicate notifications targeted at individual other users
-          
-          data = await db.select().from(notifications)
-               .where(or(eq(notifications.userId, userId as string), isNull(notifications.userId)))
-               .orderBy(desc(notifications.createdAt));
-        } else {
-          let roles = [];
-          const emp = await db.select().from(employees).where(eq(employees.nik, userId as string)).limit(1);
-          if (emp.length > 0) {
-            const dept = (emp[0].department || '');
-            if (dept) roles.push(dept);
-            const sect = (emp[0].section || '');
-            if (sect) roles.push(sect);
-          }
-          
-          let conditions = [eq(notifications.userId, userId as string)];
-          if (roles.length > 0) {
-            conditions.push(inArray(notifications.role, roles));
-          }
-
-          data = await db.select().from(notifications)
-               .where(or(...conditions))
-               .orderBy(desc(notifications.createdAt));
+        let roles: string[] = [];
+        const emp = await db.select().from(employees).where(eq(employees.nik, userId)).limit(1);
+        if (emp.length > 0) {
+          const dept = emp[0].department;
+          if (dept) roles.push(dept);
+          const sect = emp[0].section;
+          if (sect) roles.push(sect);
+          const pos = emp[0].position || emp[0].jabatan;
+          if (pos) roles.push(pos);
         }
-             
+
+        // Direct personal notifications for this user OR broadcast notifications (where userId IS NULL)
+        const userCondition = eq(notifications.userId, userId);
+        const broadcastCondition = roles.length > 0
+          ? and(isNull(notifications.userId), or(inArray(notifications.role, roles), isNull(notifications.role)))
+          : isNull(notifications.userId);
+
+        data = await db.select().from(notifications)
+             .where(or(userCondition, broadcastCondition))
+             .orderBy(desc(notifications.createdAt));
       } else {
         data = await db.select().from(notifications).orderBy(desc(notifications.createdAt));
       }

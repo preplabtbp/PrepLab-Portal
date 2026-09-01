@@ -4,8 +4,13 @@ import PDFDocument from 'pdfkit-table';
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
 import express from "express";
+import compression from "compression";
+import cookieParser from "cookie-parser";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { env, validateEnv } from "./server/config/env.js";
 validateEnv();
+import { requireAuth } from "./server/middleware/auth.js";
 import { router as miscRouter } from "./server/routes/misc.js";
 import { router as bulletinRouter } from "./server/routes/bulletin.js";
 import { router as quizRouter } from "./server/routes/quiz.js";
@@ -294,9 +299,38 @@ const app = express();
     });
   });
 
-  // Middleware to parse JSON bodies
-  app.use(express.json({ limit: '50mb' })); 
-  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+  // HTTP Compression (B1 Perf Optimization - saves ~70% network payload on JS/CSS/JSON)
+  app.use(compression());
+
+  // Security Headers (P1 Hardening)
+  app.use(helmet({
+    contentSecurityPolicy: false, // Managed by Vite in client development/production
+    crossOriginEmbedderPolicy: false,
+  }));
+
+  // Middleware to parse JSON bodies & Cookies (Restricted body size for DoS protection)
+  app.use(express.json({ limit: '10mb' })); 
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
+  app.use(cookieParser());
+
+  // Rate Limiting (P1 Hardening)
+  const authRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 50, // max 50 auth requests per 15 minutes per IP
+    message: { status: "error", code: "TOO_MANY_REQUESTS", message: "Terlalu banyak percobaan autentikasi. Silakan coba lagi setelah 15 menit." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  const apiGeneralLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 800, // max 800 API requests per minute per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // Apply general API rate limiter
+  app.use("/api", apiGeneralLimiter);
 
   // Static files in public directory (including favicon, logo, etc.)
   app.use(express.static(path.join(process.cwd(), "public")));
@@ -305,8 +339,12 @@ const app = express();
   });
 
   // Mount modular routers
-  app.use("/api/auth", authRouter);
-  app.use("/api/debug", debugRouter);
+  app.use("/api/auth", authRateLimiter, authRouter);
+
+  // Debug router only available in non-production environments
+  if (process.env.NODE_ENV !== 'production') {
+    app.use("/api/debug", debugRouter);
+  }
   app.use("/api/employees", employeesRouter);
   app.use("/api/p5m", p5mRouter);
   app.use(miscRouter);
@@ -469,31 +507,7 @@ async function syncBulletinToAgenda(post: any) {
 
 
 
-  // --- AUTH ENDPOINTS ---
-  
-  app.use("/api/auth", authRouter);
-app.use("/", miscRouter);
-app.use("/", bulletinRouter);
-app.use("/", quizRouter);
-app.use("/", notificationsRouter);
-app.use("/", workOrdersRouter);
-app.use("/", cloudRouter);
-app.use("/", inspectionsRouter);
-app.use("/", ticketsRouter);
-app.use("/", apdRouter);
-app.use("/", rosterRouter);
-app.use("/", adminRouter);
-app.use("/", agendaRouter);
-app.use("/api/debug", debugRouter);
-
-
-
-
-  // --- App Settings ---
-
-
-  // 2. Karyawan (Employees)
-  app.use("/api/employees", employeesRouter);
+  // --- Modular Routers mounted centrally at server startup ---
 
   // 4. Work Orders (WO)
 
@@ -835,8 +849,17 @@ app.use("/api/debug", debugRouter);
   } else {
     // Mode Production: Express langsung melayani file statis dari folder dist/
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, {
+      maxAge: '1y',
+      immutable: true,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      }
+    }));
     app.get("*", (req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

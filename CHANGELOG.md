@@ -4,6 +4,128 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.4] - 2026-09-02
+
+### 🛡️ Audit Ronde 4 — Validasi Wajib Tanggal Lahir & Perbaikan Privasi Notifikasi
+
+- **Penguncian Verifikasi Tanggal Lahir pada Aktivasi Akun (`/setup`)**:
+  - Menjadikan `tanggalLahir` sebagai input wajib (*mandatory field*) jika data karyawan di database memiliki catatan tanggal lahir dari HR. Permintaan setup tanpa menyertakan tanggal lahir atau dengan tanggal lahir yang tidak cocok langsung ditolak dengan status `HTTP 400 Bad Request`.
+- **Perbaikan Isolasi Notifikasi Personal**:
+  - Mengisolasi notifikasi privat perorangan (`REMINDER_INSPECTION`, dll.) agar hanya dikirimkan secara eksklusif ke NIK penerima dan tidak lagi terdistribusi ke rekan kerja di seksi yang sama.
+  - Menambahkan verifikasi ganda di sisi komponen modal frontend (`ReminderNotificationModal.tsx`).
+
+---
+
+## [2.8.3] - 2026-09-02
+
+### 🛡️ Audit Ronde 3 — Penutupan Celah Akun Aktif & Pemulihan Typecheck
+
+- **Penutupan Celah Pengambilalihan Akun pada `/setup` (P0)**:
+  - Menambahkan guard validasi status akun di endpoint `POST /api/auth/setup`. Permintaan setup untuk akun yang sudah pernah diaktivasi (`firstLoginComplete: true`) langsung ditolak dengan status `HTTP 403 Forbidden` (`ACCOUNT_ALREADY_ACTIVE`).
+  - Menambahkan verifikasi tanggal lahir (`tanggalLahir`) terhadap data HR untuk aktivasi pertama kali guna memastikan hanya pemilik sah yang dapat melakukan inisialisasi akun.
+- **Pemulihan Penuh Typecheck & Penghapusan Memory Leak `tsc` (P1)**:
+  - Memperbarui `tsconfig.json` dengan batasan direktori `include` dan `exclude` yang tepat, membebaskan compiler dari ratusan berkas skrip sekali pakai.
+  - Memperbaiki 10 ketidaksesuaian tipe pada komponen aktif (`DailyGreetingHero`, `ui.tsx Button size`, `ImageModal isOpen`, `PageHeader title`, dan `WhatsAppModal message`).
+  - `npm run lint` kini selesai dalam waktu **~10 detik dengan 0 error dan 0 peringatan**.
+- **Optimalisasi `.gcloudignore` & `.gitignore` (P1)**:
+  - Menambahkan aturan pengecualian berkas backup, arsip, dan berkas biner `.xlsx` dari konteks deploy Cloud Build untuk mempercepat proses deployment secara signifikan.
+
+---
+
+## [2.8.2] - 2026-09-02
+
+### 🛡️ Audit Ronde 2 — Hardening Keamanan Kritis & Optimasi Performa
+
+- **Pencabutan Hak Admin dari Akun DEMO**:
+  - Menghapus NIK `DEMO123` dari daftar superadmin di middleware otentikasi. Akun demo kini berstatus user biasa (`isAdmin: false, isDeveloper: false`) dan secara otomatis diblokir dari endpoint `/api/admin/*` (HTTP 403 Forbidden).
+- **Pengamanan `JWT_SECRET` Terpusat**:
+  - Menghilangkan duplikasi dan hardcoded fallback `JWT_SECRET` di source code. Menjadikan `server/config/env.ts` sebagai satu-satunya sumber kebenaran dengan validasi wajib panjang secret (≥ 32 karakter).
+- **Penjagaan Otentikasi API Terpusat (`Centralized API Auth Guard`)**:
+  - Menerapkan middleware `requireAuth` secara terpusat untuk seluruh endpoint `/api/*` dengan daftar izin eksplisit (`PUBLIC_API_PREFIXES`) untuk endpoint login, cek NIK, setup, dan health check. Seluruh API lainnya kini mewajibkan token JWT valid (HTTP 401 jika anonim).
+- **Pembersihan Residu Duplikasi Router**:
+  - Menghapus blok router mounting kedua di `server.ts` yang sebelumnya mengekspos rute debug tanpa pengaman `NODE_ENV`.
+- **Penghapusan File Dump Database Publik**:
+  - Menghapus file `database_backup.json` dari direktori publik dan root proyek untuk mencegah kebocoran data.
+- **Kompresi HTTP & Cache Header Aset Statis**:
+  - Mengintegrasikan library `compression` (Brotli/Gzip) pada Express yang memangkas ukuran transfer bundle hingga ~70%.
+  - Menambahkan header `Cache-Control: public, max-age=31536000, immutable` pada bundle statis Vite dan `no-cache` pada `index.html`.
+- **Aksesibilitas Viewport HP & Optimasi Pool Database**:
+  - Memperbaiki tag `<meta name="viewport">` di `index.html` agar pengguna di lapangan dapat melakukan pinch-zoom.
+  - Meningkatkan pool koneksi database PostgreSQL di `src/db/index.ts` ke `max: 20` dan `idleTimeoutMillis: 30000`.
+
+---
+
+## [2.8.1] - 2026-09-02
+
+### 🎨 UI/UX & Peningkatan Kualitas Data
+
+- **Pembersihan Otomatis Data Testing/Dummy (`Test & Dummy Data Filtering`)**:
+  - Menambahkan penyaring otomatis di backend (`/api/work-orders/maintenance-summary`) dan frontend untuk menyembunyikan entri work order testing (seperti *"testing wo baru"*, *"Testing wa baru"*, *"dddddd"*, *"coba"*, dll.) dari grafik, rekapitulasi downtime, kartu suku cadang, dan tabel work order.
+- **Penyelarasan Kontras Tema Terang/Gelap (`High-Contrast Theme Adaptation`)**:
+  - Memperbaiki kontras font di tema terang pada seluruh kartu KPI, kartu suku cadang, select dropdown, dan kartu mobile agar teks judul dan angka selalu tampil gelap pekat (`#0f172a` / `#1e293b`) dan tidak memudar/putih di atas latar belakang terang.
+- **Responsivitas Layar HP Dasbor WO Maintenance**:
+  - Menghadirkan tampilan **Mobile WO Cards** interaktif khusus layar smartphone dengan tata letak lencana ISO Week, badge status berwarna pekat, dan tombol aksi detail yang mudah diakses.
+- **Proporsionalitas Modal Pengingat SAP Inspection**:
+  - Merapikan tata letak tombol dan informasi pada pop-up pengingat inspeksi SAP agar lebih proporsional dan dilengkapi tombol dismiss `X`.
+
+---
+
+## [2.8.0] - 2026-09-02
+
+### 🛡️ Peningkatan Keamanan Sistem (Enterprise Security Hardening)
+
+- **Lapisan Otentikasi & Otorisasi Server Terpusat (`Server-side JWT & RBAC`)**:
+  - **JSON Web Token (JWT) & HttpOnly Cookie**: Mengganti sistem otentikasi berbasis klien dengan token JWT resmi bertanda tangan kriptografis yang disimpan dalam cookie `httpOnly` (`SameSite=Lax`) serta mendukung otentikasi via header `Authorization: Bearer <token>`.
+  - **Middleware `requireAuth`**: Backend memverifikasi validitas token secara otomatis pada setiap panggilan API sebelum request diproses.
+  - **Middleware `requireRole`**: Membatasi akses menu dan endpoint sensitif berdasarkan hak akses peran (*Role-Based Access Control*).
+
+- **Penguncian Total Router Admin (`Admin Route Lockdown`)**:
+  - Seluruh endpoint `/api/admin/*` kini terkunci di balik otentikasi peran `admin` atau `developer`.
+  - **Penghapusan Permanen Endpoint Truncate**: Menghapus endpoint `DELETE /api/admin/tables/:name` untuk mencegah risiko penghapusan data massal tanpa konfirmasi.
+
+- **Proteksi Data Pribadi (PII) & Sanitasi Hash Password**:
+  - **Helper `toPublicEmployee`**: Memastikan atribut sensitif seperti `passwordHash` otomatis disensor dari semua respons API karyawan, tabel admin, maupun autentikasi.
+  - **Sterilisasi `/check-nik`**: Tidak lagi membocorkan data profil lengkap ke publik saat pemeriksaan akun, hanya mengembalikan status minimal yang dibutuhkan alur login.
+
+- **Perlindungan Serangan Brute-Force & Denial of Service (`Rate Limiting`)**:
+  - Menambahkan pembatas frekuensi request (`express-rate-limit`) pada endpoint autentikasi (`/api/auth/*`) untuk menangkal serangan penebakan password (*brute force*).
+  - Pembatasan beban traffic umum pada seluruh endpoint `/api/*` untuk menjaga stabilitas server.
+
+- **Penerapan Header Keamanan Industri (`Helmet`)**:
+  - Mengintegrasikan library `helmet` untuk menyuntikkan header keamanan HTTP standar terhadap ancaman XSS, Clickjacking, dan MIME-sniffing.
+
+- **Validasi Proxy Media & Keamanan File**:
+  - Menambahkan validasi regex ketat pada parameter berkas Google Drive (`/api/drive/view/:fileId`) untuk mencegah serangan SSRF dan injeksi parameter.
+  - Mengoptimalkan penyaringan target notifikasi dengan query langsung SQL `WHERE` di database.
+  - Membersihkan file backup database lokal dari pelacakan git serta memperketat aturan `.gitignore`.
+
+---
+
+## [2.7.0] - 2026-09-01
+
+### 🚀 Fitur Baru & Peningkatan Utama
+
+- **Pembaruan Dashboard K3 & SAP (`Safety Accountability Program Dashboard`)**:
+  - **Matriks Kepatuhan Inspeksi (Compliance Matrix)**: Menampilkan persentase kepatuhan mingguan, jumlah target realisasi (29 agenda terencana), status cuti/off, dan skor performa keselamatan kerja secara langsung.
+  - **Popup & Banner Pengingat Inspeksi K3**:
+    - Sistem otomatis mendeteksi status personil yang sedang login untuk minggu berjalan (contoh: `W36`).
+    - Jika personil tercatat **`BELUM`** inspeksi, modal interaktif dan banner atas akan muncul memberikan pengingat dengan tombol langsung **`Mulai Inspeksi Sekarang ↗`** menuju form inspeksi mingguan (`/weekly-inspection`).
+    - Dilengkapi tombol penutup *"Nanti Saja"* yang mengingat preferensi pengguna selama sesi aktif.
+  - **Penyempurnaan Filter & Tabel Temuan Ketidaksesuaian**:
+    - Filter status cepat (*Semua, Terbuka/Open, Selesai/Closed*), filter area inspeksi, dan pencarian bebas berdasarkan nama pemeriksa, lokasi, maupun tindakan perbaikan.
+    - Otomatis mereset kata kunci pencarian saat mengganti minggu ISO untuk menghindari data kosong akibat filter lama.
+    - Tombol *1-Click Reset Filter* pada tampilan kosong untuk memulihkan seluruh daftar temuan dengan instan.
+  - **Modal Penutupan Tiket Temuan (Action Closure Modal)**:
+    - Mempermudah penyelesaian temuan langsung dari dashboard SAP dengan dukungan saran otomatis nama PIC, deskripsi tindakan perbaikan (*Action Taken*), dan unggah foto bukti penyelesaian.
+
+### 🛠 Perbaikan Sistem (Bug Fixes & Optimasi)
+
+- **Optimasi Koneksi Database Cloud SQL**: Menyesuaikan konfigurasi koneksi pool PostgreSQL agar mencegah batas koneksi habis (*connection slot saturation / error 53300*).
+- **Penanganan Format Tanggal Aman (`safeDateDay`)**: Mencegah kesalahan parsing tanggal `Invalid time value` pada pembuatan tiket dan penarikan laporan berkala.
+- **Pembersihan Konflik Komponen JSX**: Memperbaiki benturan nama ikon peta dengan konstruktor Javascript bawaan.
+
+---
+
 ## [2.6.0] - 2026-08-25
 
 ### 🚀 Fitur Baru & Peningkatan Utama

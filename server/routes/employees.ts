@@ -2,6 +2,7 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db } from "../../src/db/index.js";
 import { employees } from "../../src/db/schema.js";
+import { toPublicEmployee } from "../middleware/auth.js";
 
 export const employeesRouter = Router();
 
@@ -45,7 +46,7 @@ employeesRouter.get("/", async (req, res) => {
       }
     }
 
-    res.json(data);
+    res.json(data.map(e => toPublicEmployee(e)));
   } catch (error) {
     console.error("Error fetching employees:", error);
     res.status(500).json({ error: "Failed to fetch employees" });
@@ -71,7 +72,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
         sectionLower.includes("qa") || deptLower.includes("qa") || sectionLower.includes("quality assurance") || deptLower.includes("quality assurance") ||
         jabatanLower.includes("admin")) {
       const allData = await db.select().from(employees);
-      return res.json({ status: "success", data: allData });
+      return res.json({ status: "success", data: allData.map(e => toPublicEmployee(e)) });
     }
     
     // Determine subordinates based on Jabatan
@@ -86,20 +87,18 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     
     if (allowedJabatans.length === 0) {
       // Crew or someone with no subordinates
-      return res.json({ status: "success", data: [user] });
+      return res.json({ status: "success", data: [toPublicEmployee(user)] });
     }
     
     // Fetch all employees
     const allEmployees = await db.select().from(employees);
     const subordinates = allEmployees.filter(e => {
-      // Must be same section or department (if section is broad enough)
       const eSection = (e.section || "").toLowerCase();
       const eDept = (e.department || "").toLowerCase();
       const isSameDept = (deptLower && eDept === deptLower) || (sectionLower && eSection === sectionLower);
       if (!isSameDept) return false;
       
       const eJabatan = (e.jabatan || "").toLowerCase();
-      // Check if eJabatan matches any of the allowed
       return allowedJabatans.some(allowed => eJabatan.includes(allowed));
     });
     
@@ -108,7 +107,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
       subordinates.unshift(user);
     }
     
-    res.json({ status: "success", data: subordinates });
+    res.json({ status: "success", data: subordinates.map(e => toPublicEmployee(e)) });
   } catch (error) {
     console.error("Error fetching hierarchy:", error);
     res.status(500).json({ status: "error", message: "Failed to fetch hierarchy" });
@@ -120,7 +119,7 @@ employeesRouter.get("/:nik", async (req, res) => {
     const { nik } = req.params;
     const data = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
     if (data.length > 0) {
-      res.json({ status: "success", employee: data[0] });
+      res.json({ status: "success", employee: toPublicEmployee(data[0]) });
     } else {
       res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan" });
     }
@@ -133,7 +132,7 @@ employeesRouter.get("/:nik", async (req, res) => {
 employeesRouter.post("/", async (req, res) => {
   try {
     const result = await db.insert(employees).values(req.body).returning();
-    res.status(201).json(result[0]);
+    res.status(201).json(toPublicEmployee(result[0]));
   } catch (error) {
     console.error("Error creating employee:", error);
     res.status(500).json({ error: "Failed to create employee" });
@@ -150,7 +149,7 @@ employeesRouter.post("/avatar", async (req, res) => {
       .set({ avatar: avatar || null })
       .where(eq(employees.nik, nik))
       .returning();
-    return res.json({ status: "success", employee: result[0] || null });
+    return res.json({ status: "success", employee: toPublicEmployee(result[0]) || null });
   } catch (error) {
     console.error("Error updating avatar:", error);
     res.status(500).json({ status: "error", message: "Failed to update avatar" });
@@ -167,7 +166,7 @@ employeesRouter.post("/cover", async (req, res) => {
       .set({ cover: cover || null })
       .where(eq(employees.nik, nik))
       .returning();
-    return res.json({ status: "success", employee: result[0] || null });
+    return res.json({ status: "success", employee: toPublicEmployee(result[0]) || null });
   } catch (error) {
     console.error("Error updating cover:", error);
     res.status(500).json({ status: "error", message: "Failed to update cover" });

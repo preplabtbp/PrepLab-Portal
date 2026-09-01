@@ -121,7 +121,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           title: '🔔 Pengingat Inspeksi Terpadu Mingguan',
           message: `Halo ${emp.name}, Anda diingatkan oleh ${inspectorName || 'Admin Lab'} untuk segera melaksanakan dan mengisi Laporan Inspeksi Terpadu Mingguan (${selectedWeek}).`,
           type: 'REMINDER_INSPECTION',
-          role: emp.section || 'Laboratory',
+          role: null,
           isRead: false
         })
       });

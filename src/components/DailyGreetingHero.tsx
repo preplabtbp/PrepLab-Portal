@@ -602,12 +602,12 @@ export function DailyGreetingHero({
                   <div className="flex items-center gap-2">
                     <Quote className="w-4 h-4 text-amber-400" />
                     <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                      Quote Hari Ini • {activeQuote.vibe}
+                      Quote Hari Ini • {(activeQuote as any).vibe || (activeQuote as any).category || 'Motivasi'}
                     </span>
                   </div>
-                  {activeQuote.tag && (
+                  {Boolean((activeQuote as any).tag) && (
                     <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-white/10 text-white/70 font-mono border border-white/10">
-                      {activeQuote.tag}
+                      {(activeQuote as any).tag}
                     </span>
                   )}
                 </div>

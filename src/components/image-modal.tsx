@@ -3,6 +3,7 @@ import { X, ZoomIn, ZoomOut, RotateCw, RotateCcw, Download, ExternalLink, Move }
 
 export interface ImageModalProps {
   imageUrl: string | null;
+  isOpen?: boolean;
   title?: string;
   driveViewUrl?: string;
   driveDownloadUrl?: string;
@@ -11,12 +12,13 @@ export interface ImageModalProps {
 
 export function ImageModal({
   imageUrl,
+  isOpen,
   title = 'Image Preview',
   driveViewUrl,
   driveDownloadUrl,
   onClose,
 }: ImageModalProps) {
-  if (!imageUrl) return null;
+  if (!imageUrl || (isOpen !== undefined && !isOpen)) return null;
 
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });

@@ -7,3 +7,16 @@ coverage/
 .env*
 !.env.example
 public/uploads/
+
+# Backups, sensitive dumps, and credentials
+cookies.txt
+*.backup.ts
+*backup*.json
+db_backups/
+database_backup.json
+public/database_backup.json
+*.xlsx
+*.xls
+sheet.html
+scratch_prompt.txt
+scratch/

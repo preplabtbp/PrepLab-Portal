@@ -385,7 +385,9 @@ router.delete("/api/bulletin/:id", async (req, res) => {
 router.get("/api/drive/view/:fileId", async (req, res) => {
   try {
     const fileId = req.params.fileId;
-    if (!fileId || fileId.length < 5) return res.status(400).send("Invalid file ID");
+    if (!fileId || fileId.length < 5 || !/^[a-zA-Z0-9_\-]+$/.test(fileId)) {
+      return res.status(400).send("Invalid file ID format");
+    }
 
     // 1. Try streaming via Drive SDK if OAuth configured
     try {

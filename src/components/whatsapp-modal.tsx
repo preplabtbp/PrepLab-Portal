@@ -6,13 +6,15 @@ import { getAppSettings } from '../sheets-api';
 interface WhatsAppModalProps {
   isOpen: boolean;
   onClose: () => void;
-  messageText: string;
+  messageText?: string;
+  message?: string;
   title?: string;
   description?: string;
 }
 
-export function WhatsAppModal({ isOpen, onClose, messageText, title, description }: WhatsAppModalProps) {
+export function WhatsAppModal({ isOpen, onClose, messageText, message, title, description }: WhatsAppModalProps) {
   const [targetNumber, setTargetNumber] = useState('');
+  const finalMessage = messageText || message || '';
 
   useEffect(() => {
     if (isOpen) {
@@ -30,7 +32,7 @@ export function WhatsAppModal({ isOpen, onClose, messageText, title, description
   if (!isOpen) return null;
 
   const handleSend = () => {
-    let waUrl = `https://wa.me/?text=${encodeURIComponent(messageText)}`;
+    let waUrl = `https://wa.me/?text=${encodeURIComponent(finalMessage)}`;
     
     if (targetNumber) {
       if (targetNumber.includes('chat.whatsapp.com')) {

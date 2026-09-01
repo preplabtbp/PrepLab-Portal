@@ -1,3 +1,14 @@
 .git
 node_modules
 dist
+*.xlsx
+*.xls
+*.csv
+*.bak
+*.backup.ts
+*.log
+*.zip
+sheet.html
+scratch_prompt.txt
+db_backups/
+scratch/

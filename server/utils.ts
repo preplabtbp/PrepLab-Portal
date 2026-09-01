@@ -7,7 +7,7 @@ import {
   appSettings, pelanggaran, mealReports, quizQuestions, preplabCloudLogs, 
   quizScores, induksi, chatMessages, equipments, downtime, users, developerUsers, appFeedbacks
 } from "../src/db/schema.js";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import webpush from 'web-push';
 
 export async function sendWebPush(notifs: any | any[]) {
@@ -131,20 +131,25 @@ export async function syncBulletinToAgenda(post: any) {
 }
 
 export async function getNotificationTargets(dept: string) {
-  const allEmployees = await db.select().from(employees);
-  if (dept === 'Prep & Lab') {
-    return allEmployees.filter(e => e.department === 'Prep & Lab' || e.department === 'Preparation' || e.department === 'Laboratory');
-  } else if (dept === 'Grade 4+') {
-    return allEmployees.filter(e => {
-      if (!e.jobGrade) return false;
-      const gradeMatch = e.jobGrade.match(/Grade (\d+)/i);
-      if (gradeMatch) {
-         return parseInt(gradeMatch[1]) >= 4;
-      }
-      return false;
-    });
+  try {
+    if (dept === 'Prep & Lab') {
+      return await db.select().from(employees).where(
+        or(
+          eq(employees.department, 'Prep & Lab'),
+          eq(employees.department, 'Preparation'),
+          eq(employees.department, 'Laboratory')
+        )
+      );
+    } else if (dept === 'Grade 4+') {
+      return await db.select().from(employees).where(
+        sql`CAST(SUBSTRING(COALESCE(${employees.jobGrade}, '') FROM '[0-9]+') AS INTEGER) >= 4`
+      );
+    }
+    return await db.select().from(employees).where(eq(employees.department, dept));
+  } catch (e) {
+    console.error("Error getNotificationTargets:", e);
+    return [];
   }
-  return allEmployees.filter(e => e.department === dept);
 }
 
 export const getTableObj = (name: string) => {

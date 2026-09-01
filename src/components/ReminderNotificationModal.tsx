@@ -16,17 +16,19 @@ export function ReminderNotificationModal({ userNik, onNavigateToInspection }: R
       const res = await fetch(`/api/notifications?userId=${userNik}`);
       if (res.ok) {
         const data = await res.json();
-        
-        // Find unread inspection reminder
+        // Find unread inspection reminder targeted specifically to this logged-in user
         const readIds = JSON.parse(localStorage.getItem(`notif_read_ids_${userNik}`) || '[]');
-        const unreadReminder = data.find((n: any) => 
+        const unreadReminder = Array.isArray(data) ? data.find((n: any) => 
           n.type === 'REMINDER_INSPECTION' && 
+          (!n.userId || n.userId === userNik) &&
           !n.isRead && 
           !readIds.includes(n.id)
-        );
+        ) : null;
 
         if (unreadReminder) {
           setActiveReminder(unreadReminder);
+        } else {
+          setActiveReminder(null);
         }
       }
     } catch (err) {
