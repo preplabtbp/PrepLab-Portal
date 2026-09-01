@@ -49,6 +49,7 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
   const [allTickets, setAllTickets] = useState<any[]>([]);
   const [allGroupReports, setAllGroupReports] = useState<any[]>([]);
   const [rekapSummary, setRekapSummary] = useState<any>(null);
+  const [employeesList, setEmployeesList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filterPeriod, setFilterPeriod] = useState('this_week');
@@ -60,6 +61,7 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
   // Close ticket modal state
   const [closingTicket, setClosingTicket] = useState<any | null>(null);
   const [closingPic, setClosingPic] = useState('');
+  const [showPicSuggestions, setShowPicSuggestions] = useState(false);
   const [closingAction, setClosingAction] = useState('');
   const [closingPhotoBase64, setClosingPhotoBase64] = useState('');
   const [submittingClose, setSubmittingClose] = useState(false);
@@ -114,6 +116,19 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
         }
       } catch (err) {
         console.error("Failed to fetch rekap summary:", err);
+      }
+
+      // 4. Fetch employees database for PIC autocomplete suggestions
+      try {
+        const empRes = await fetch('/api/employees');
+        if (empRes.ok) {
+          const empData = await empRes.json();
+          if (Array.isArray(empData)) {
+            setEmployeesList(empData);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch employees list:", err);
       }
 
     } catch (e) {
@@ -359,6 +374,7 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
       setClosingTicket(null);
       setClosingAction('');
       setClosingPic('');
+      setShowPicSuggestions(false);
       setClosingPhotoBase64('');
     } catch (err: any) {
       console.error(err);
@@ -857,51 +873,62 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
             {/* Filter Tabs & Search Bar */}
             <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-2">
               {/* Status Tabs */}
-              <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
                 <button
                   onClick={() => setStatusTab('ALL')}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                    statusTab === 'ALL' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+                    statusTab === 'ALL'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                   }`}
                 >
                   Semua ({totalFindings})
                 </button>
                 <button
                   onClick={() => setStatusTab('OPEN')}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                    statusTab === 'OPEN' ? 'bg-rose-600 text-white shadow-xs' : 'text-rose-600 hover:bg-rose-50'
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                    statusTab === 'OPEN'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-white text-rose-600 hover:bg-rose-50 border border-slate-200'
                   }`}
                 >
-                  <span>🚨 Open ({openFindings})</span>
+                  <span className="w-2 h-2 rounded-full bg-rose-400" />
+                  Open ({openFindings})
                 </button>
                 <button
                   onClick={() => setStatusTab('PROGRESS')}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                    statusTab === 'PROGRESS' ? 'bg-amber-500 text-white shadow-xs' : 'text-amber-700 hover:bg-amber-50'
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                    statusTab === 'PROGRESS'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'bg-white text-amber-600 hover:bg-amber-50 border border-slate-200'
                   }`}
                 >
-                  <span>In Progress ({progressFindings})</span>
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  In Progress ({progressFindings})
                 </button>
                 <button
                   onClick={() => setStatusTab('CLOSED')}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                    statusTab === 'CLOSED' ? 'bg-emerald-600 text-white shadow-xs' : 'text-emerald-700 hover:bg-emerald-50'
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                    statusTab === 'CLOSED'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-white text-emerald-600 hover:bg-emerald-50 border border-slate-200'
                   }`}
                 >
-                  <span>✅ Closed ({closedFindings})</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  Closed ({closedFindings})
                 </button>
               </div>
 
               {/* Search & Priority Filter */}
               <div className="flex items-center gap-2">
                 <div className="relative flex-1 sm:w-64">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Cari ID, Area, Deskripsi..."
-                    className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-xs text-slate-800 placeholder:text-slate-400"
+                    className="w-full pl-9 pr-4 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800 placeholder:text-slate-400 font-medium"
                   />
                   {searchQuery && (
                     <button 
@@ -916,136 +943,150 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
                 <select
                   value={priorityFilter}
                   onChange={(e: any) => setPriorityFilter(e.target.value)}
-                  className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 bg-white text-slate-700 font-semibold shadow-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="text-xs bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
                 >
                   <option value="ALL">Semua Prioritas</option>
-                  <option value="High">🔴 High Priority</option>
-                  <option value="Medium">🟡 Medium Priority</option>
-                  <option value="Low">🟢 Low Priority</option>
+                  <option value="High">🚨 High / Fatality</option>
+                  <option value="Medium">⚡ Medium</option>
+                  <option value="Low">🌱 Low</option>
                 </select>
               </div>
             </div>
           </div>
 
           {/* Ticket Items List */}
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
             {loading ? (
               <div className="p-12 text-center text-slate-500 text-sm animate-pulse space-y-2">
                 <div className="w-8 h-8 rounded-full border-2 border-teal-600 border-t-transparent animate-spin mx-auto" />
                 <p className="font-semibold text-slate-700">Memuat Rekapan Temuan K3...</p>
               </div>
             ) : visibleTickets.length === 0 ? (
-              <div className="p-12 text-center space-y-2 bg-slate-50/50">
-                <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
-                <h4 className="font-bold text-slate-800 text-base">Tidak Ada Temuan Sesuai Filter</h4>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Semua temuan pada kategori ini telah selesai ditindaklanjuti atau tidak ditemukan data yang cocok.
-                </p>
+              <div className="py-16 text-center space-y-2">
+                <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                </div>
+                <p className="text-sm font-bold text-slate-700">Tidak ada temuan yang sesuai filter</p>
+                <p className="text-xs text-slate-400">Seluruh area pada periode ini terpantau aman dan tertangani.</p>
               </div>
             ) : (
-              visibleTickets.map((t, idx) => {
-                const isOpen = (t.status || '').toUpperCase() === 'OPEN';
-                const isProgress = (t.status || '').toUpperCase() === 'PROGRESS';
-                const isClosed = (t.status || '').toUpperCase() === 'CLOSED';
-                const isHigh = (t.priority || '').toUpperCase() === 'HIGH' || (t.risk || '').toLowerCase().includes('tinggi');
+              visibleTickets.map((ticket, idx) => {
+                const isClosed = (ticket.status || '').toUpperCase() === 'CLOSED';
+                const isProgress = (ticket.status || '').toUpperCase() === 'PROGRESS';
+                const isHigh = (ticket.priority || '').toUpperCase() === 'HIGH' || 
+                               (ticket.risk || '').toLowerCase().includes('tinggi') || 
+                               (ticket.risk || '').toLowerCase().includes('fatality');
                 
                 return (
                   <div 
-                    key={`${t.ticketId || t.id}-${idx}`}
-                    className={`p-4 sm:p-5 hover:bg-slate-50/80 transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${
-                      isOpen ? 'border-l-4 border-l-rose-500' : isProgress ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-emerald-500'
+                    key={ticket.ticketId || idx}
+                    className={`p-4 sm:p-5 hover:bg-slate-50/80 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 border-l-4 ${
+                      isClosed ? 'border-l-emerald-500' : isProgress ? 'border-l-amber-500' : 'border-l-rose-500'
                     }`}
                   >
-                    <div className="flex-1 min-w-0 space-y-2">
+                    <div className="space-y-1.5 flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full tracking-wider ${
-                          isOpen ? 'bg-rose-100 text-rose-700 border border-rose-200' :
-                          isProgress ? 'bg-amber-100 text-amber-800 border border-amber-200' :
-                          'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                          isClosed 
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                            : isProgress
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-rose-50 text-rose-700 border-rose-200'
                         }`}>
-                          {t.status || 'OPEN'}
+                          {ticket.status || 'OPEN'}
                         </span>
 
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                          isHigh ? 'bg-red-50 text-red-700 border border-red-200 font-black' : 'bg-slate-100 text-slate-700'
-                        }`}>
-                          {t.risk || t.priority || 'Medium Risk'}
+                        {isHigh && (
+                          <span className="bg-rose-600 text-white text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full shadow-xs">
+                            High Priority
+                          </span>
+                        )}
+
+                        {ticket.category && (
+                          <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                            {ticket.category}
+                          </span>
+                        )}
+
+                        <span className="text-[11px] font-mono text-slate-400 font-medium">
+                          {ticket.ticketId}
                         </span>
 
-                        <span className="text-xs font-mono font-bold text-slate-600">
-                          {t.ticketId}
-                        </span>
-
-                        <span className="text-xs text-slate-400 font-medium">
-                          • {t.date ? format(new Date(t.date), 'dd MMM yyyy, HH:mm') : '-'}
-                        </span>
-                      </div>
-
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm leading-snug">
-                          {t.description || 'Temuan Inspeksi K3'}
-                        </h4>
-                        {t.initialControl && (
-                          <p className="text-xs text-teal-700 font-medium mt-1 flex items-center gap-1">
-                            <span className="font-bold text-slate-500">Rekomendasi:</span> {t.initialControl}
-                          </p>
+                        {ticket.date && (
+                          <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                            • {(() => {
+                              try {
+                                return format(new Date(ticket.date), 'dd MMM yyyy, HH:mm');
+                              } catch(e) {
+                                return String(ticket.date);
+                              }
+                            })()}
+                          </span>
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 pt-1">
-                        <span className="flex items-center gap-1 font-medium text-slate-700">
+                      <h4 className="text-sm font-bold text-slate-900 leading-snug break-words">
+                        {ticket.description || 'Tidak ada deskripsi temuan'}
+                      </h4>
+
+                      {ticket.recommendation && (
+                        <p className="text-xs text-teal-800 font-medium bg-teal-50/60 p-2 rounded-lg border border-teal-100/80">
+                          <strong>Rekomendasi:</strong> {ticket.recommendation}
+                        </p>
+                      )}
+
+                      {ticket.actionTaken && isClosed && (
+                        <p className="text-xs text-emerald-800 font-medium bg-emerald-50/60 p-2 rounded-lg border border-emerald-100/80">
+                          <strong>Tindakan Selesai:</strong> {ticket.actionTaken} {ticket.pic ? `(Oleh: ${ticket.pic})` : ''}
+                        </p>
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 pt-0.5 font-medium">
+                        <span className="flex items-center gap-1 text-slate-700 font-semibold">
                           <Map className="w-3.5 h-3.5 text-slate-400" />
-                          {t.location || t.area || 'General Area'}
+                          {ticket.location || ticket.area || 'Area PrepLab'}
                         </span>
                         <span>•</span>
-                        <span className="text-slate-600">
-                          Pelapor: <strong className="text-slate-800">{t.requestorName || 'Inspector'}</strong>
-                        </span>
-                        {t.pic && (
-                          <>
-                            <span>•</span>
-                            <span className="text-emerald-700 font-medium">
-                              PIC: <strong>{t.pic}</strong>
-                            </span>
-                          </>
+                        <span>Pelapor: <strong>{ticket.requestorName || ticket.reporterName || 'Inspector'}</strong></span>
+                        {ticket.requestorPosition && (
+                          <span className="text-slate-400">({ticket.requestorPosition})</span>
                         )}
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto justify-end pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
-                      {t.photoUrl && t.photoUrl !== '-' && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-0 self-start md:self-center">
+                      {ticket.photo && ticket.photo !== '-' && (
                         <Button
                           variant="secondary"
-                          onClick={() => setSelectedImage(t.photoUrl)}
-                          className="h-8 px-2.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg flex items-center gap-1"
+                          onClick={() => setSelectedImage(ticket.photo)}
+                          className="h-8 px-2.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg border border-slate-200 flex items-center gap-1.5"
                           title="Lihat Foto Temuan"
                         >
-                          <Camera className="w-3.5 h-3.5 text-slate-600" />
+                          <Camera className="w-3.5 h-3.5 text-teal-600" />
                           <span>Foto</span>
                         </Button>
                       )}
 
-                      {t.documentLink && (
+                      {ticket.pdfUrl && ticket.pdfUrl !== '-' && (
                         <a
-                          href={t.documentLink}
+                          href={ticket.pdfUrl}
                           target="_blank"
-                          rel="noreferrer"
-                          className="h-8 px-2.5 text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 font-semibold rounded-lg flex items-center gap-1 transition-colors"
-                          title="Lihat Dokumen PDF Laporan"
+                          rel="noopener noreferrer"
+                          className="h-8 px-2.5 text-xs bg-teal-50 hover:bg-teal-100 text-teal-800 font-semibold rounded-lg border border-teal-200 flex items-center gap-1.5 transition-colors"
+                          title="Buka Laporan PDF Inspeksi"
                         >
-                          <FileText className="w-3.5 h-3.5 text-teal-600" />
+                          <FileText className="w-3.5 h-3.5 text-teal-700" />
                           <span>PDF Laporan</span>
-                          <ArrowUpRight className="w-3 h-3" />
+                          <ExternalLink className="w-3 h-3 opacity-60" />
                         </a>
                       )}
 
                       {!isClosed ? (
                         <Button
                           onClick={() => {
-                            setClosingTicket(t);
-                            setClosingPic(t.pic || '');
-                            setClosingAction(t.actionTaken || '');
+                            setClosingTicket(ticket);
+                            setClosingPic(inspectorNik || '');
+                            setClosingAction('');
                             setClosingPhotoBase64('');
                           }}
                           className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs flex items-center gap-1.5"
@@ -1082,8 +1123,11 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
                 </h3>
               </div>
               <button 
-                onClick={() => setClosingTicket(null)}
-                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg"
+                onClick={() => {
+                  setClosingTicket(null);
+                  setShowPicSuggestions(false);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1096,13 +1140,82 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
             </div>
 
             <form onSubmit={handleSubmitCloseTicket} className="space-y-4">
-              <Input
-                label="Nama PIC / Penanggung Jawab Penutupan"
-                placeholder="Contoh: Muhammad Ardiyan Syah"
-                value={closingPic}
-                onChange={(e) => setClosingPic(e.target.value)}
-                required
-              />
+              {/* PIC Autocomplete Input */}
+              <div className="relative">
+                <label className="text-xs uppercase tracking-wider font-semibold text-slate-600 block mb-1.5">
+                  Nama PIC / Penanggung Jawab Penutupan <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Ketik nama atau NIK (misal: Muhammad Ardiyan Syah)..."
+                    value={closingPic}
+                    onChange={(e) => {
+                      setClosingPic(e.target.value);
+                      setShowPicSuggestions(true);
+                    }}
+                    onFocus={() => setShowPicSuggestions(true)}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white text-slate-900 shadow-xs"
+                    required
+                  />
+                  {closingPic && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setClosingPic('');
+                        setShowPicSuggestions(false);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Dropdown Suggestions */}
+                {showPicSuggestions && filteredPicSuggestions.length > 0 && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-10" 
+                      onClick={() => setShowPicSuggestions(false)} 
+                    />
+                    <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-20 max-h-56 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+                      {filteredPicSuggestions.map((emp: any, idx: number) => {
+                        const empName = emp.name || emp.nama || 'Tanpa Nama';
+                        const empNik = emp.nik || '-';
+                        const empPos = emp.position || emp.jabatan || emp.department || '';
+                        return (
+                          <div
+                            key={emp.id || emp.nik || idx}
+                            onClick={() => {
+                              setClosingPic(`${empName} (${empNik})`);
+                              setShowPicSuggestions(false);
+                            }}
+                            className="p-3 hover:bg-teal-50/80 transition-colors cursor-pointer flex items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5">
+                                <span>{empName}</span>
+                                <span className="text-[11px] font-semibold text-teal-700 bg-teal-100/80 px-1.5 py-0.2 rounded-md">
+                                  {empNik}
+                                </span>
+                              </p>
+                              {empPos && (
+                                <p className="text-xs text-slate-500 truncate mt-0.5">
+                                  {empPos}
+                                </p>
+                              )}
+                            </div>
+                            <span className="text-xs font-semibold text-teal-600 shrink-0">
+                              Pilih
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
 
               <Textarea
                 label="Tindakan Perbaikan yang Dilakukan (Action Taken)"
@@ -1134,23 +1247,25 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
                 )}
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                <Button
+              <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
+                <button
                   type="button"
-                  variant="secondary"
-                  onClick={() => setClosingTicket(null)}
-                  className="h-10 px-4 text-xs font-semibold rounded-xl"
+                  onClick={() => {
+                    setClosingTicket(null);
+                    setShowPicSuggestions(false);
+                  }}
+                  className="h-11 px-5 text-sm font-semibold rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center justify-center cursor-pointer"
                 >
                   Batal
-                </Button>
-                <Button
+                </button>
+                <button
                   type="submit"
                   disabled={submittingClose}
-                  className="h-10 px-5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md flex items-center gap-1.5"
+                  className="h-11 px-6 text-sm bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 whitespace-nowrap transition-all cursor-pointer disabled:opacity-50"
                 >
-                  <Check className="w-4 h-4" />
+                  <Check className="w-4 h-4 flex-shrink-0" />
                   <span>{submittingClose ? 'Menyimpan...' : 'Tutup & Selesaikan Tiket'}</span>
-                </Button>
+                </button>
               </div>
             </form>
           </div>
