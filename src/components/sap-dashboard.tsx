@@ -333,6 +333,18 @@ export function SapDashboard({ onBack, inspectorNik }: SapDashboardProps) {
     });
   }, [filteredTicketsByPeriod, statusTab, priorityFilter, searchQuery]);
 
+  // Autocomplete Suggestions for PIC Input
+  const filteredPicSuggestions = useMemo(() => {
+    if (!closingPic.trim()) return [];
+    const query = closingPic.toLowerCase().trim();
+    return employeesList.filter((emp: any) => {
+      const name = (emp.name || emp.nama || '').toLowerCase();
+      const nik = (emp.nik || '').toLowerCase();
+      const pos = (emp.position || emp.jabatan || emp.department || '').toLowerCase();
+      return name.includes(query) || nik.includes(query) || pos.includes(query);
+    }).slice(0, 8);
+  }, [closingPic, employeesList]);
+
   // Handle Close Ticket Submission
   const handleSubmitCloseTicket = async (e: React.FormEvent) => {
     e.preventDefault();
