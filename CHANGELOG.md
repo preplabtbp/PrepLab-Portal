@@ -4,6 +4,18 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.5] - 2026-09-02
+
+### 🛡️ Audit Ronde 5 & 6 — Normalisasi Repositori & Konsistensi Cross-Platform
+
+- **Penyatuan & Perlindungan Seluruh Patch Keamanan ke Git**:
+  - Mengamankan seluruh perubahan keamanan dari 4 ronde audit sebelumnya (JWT hardening, RBAC admin, proteksi `/setup`, middleware otentikasi terpusat, dan perbaikan typecheck) ke dalam commit terstruktur di repositori `staging`.
+- **Normalisasi Line-Ending Cross-Platform (`.gitattributes`)**:
+  - Mengintegrasikan konfigurasi `.gitattributes` untuk memastikan konversi otomatis line-ending (`* text=auto eol=lf`) dan proteksi berkas biner (`.xlsx`, `.pdf`, `.png`, `.jpg`, `.zip`).
+  - Menghilangkan anomali 111 file "modified" palsu akibat perbedaan CRLF ↔ LF antara lingkungan Windows dan Linux/Cloud Build, menjaga `git status` dan *code review* tetap bersih.
+
+---
+
 ## [2.8.4] - 2026-09-02
 
 ### 🛡️ Audit Ronde 4 — Validasi Wajib Tanggal Lahir & Perbaikan Privasi Notifikasi
