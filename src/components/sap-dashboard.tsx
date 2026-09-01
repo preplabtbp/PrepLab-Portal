@@ -124,13 +124,31 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
       
       // Parallel fetch all data sources for ultra-fast loading
       const [ticketsResult, reportsResult, rekapResult, employeesResult] = await Promise.allSettled([
-        getTickets('ALL'),
-        fetch('/api/group-reports?week=ALL').then(r => r.ok ? r.json() : []),
-        fetch(`/api/rekap-inspeksi?week=${targetWeekTag}`).then(r => r.ok ? r.json() : null),
-        fetch('/api/employees').then(r => r.ok ? r.json() : [])
+        getTickets('ALL').catch(e => {
+          console.warn("Tickets fetch warning:", e);
+          return [];
+        }),
+        fetch('/api/group-reports?week=ALL')
+          .then(r => r.ok ? r.json() : [])
+          .catch(e => {
+            console.warn("Group reports fetch warning:", e);
+            return [];
+          }),
+        fetch(`/api/rekap-inspeksi?week=${targetWeekTag}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(e => {
+            console.warn("Rekap fetch warning:", e);
+            return null;
+          }),
+        fetch('/api/employees')
+          .then(r => r.ok ? r.json() : [])
+          .catch(e => {
+            console.warn("Employees fetch warning:", e);
+            return [];
+          })
       ]);
 
-      if (ticketsResult.status === 'fulfilled' && Array.isArray(ticketsResult.value)) {
+      if (ticketsResult.status === 'fulfilled' && Array.isArray(ticketsResult.value) && ticketsResult.value.length > 0) {
         // Automatically deduplicate redundant/duplicate tickets using object map
         const dedupeMap: Record<string, any> = {};
         for (const t of ticketsResult.value) {
@@ -160,7 +178,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
         setAllTickets(Object.values(dedupeMap));
       }
 
-      if (reportsResult.status === 'fulfilled' && Array.isArray(reportsResult.value)) {
+      if (reportsResult.status === 'fulfilled' && Array.isArray(reportsResult.value) && reportsResult.value.length > 0) {
         setAllGroupReports(reportsResult.value);
       }
 
@@ -168,12 +186,11 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
         setRekapSummary(rekapResult.value.summary);
       }
 
-      if (employeesResult.status === 'fulfilled' && Array.isArray(employeesResult.value)) {
+      if (employeesResult.status === 'fulfilled' && Array.isArray(employeesResult.value) && employeesResult.value.length > 0) {
         setEmployeesList(employeesResult.value);
       }
     } catch (e) {
-      console.error("Error fetching SAP dashboard data:", e);
-      toast.error("Gagal memuat data SAP Dashboard");
+      console.warn("Non-fatal notice fetching SAP dashboard data:", e);
     } finally {
       setLoading(false);
       setRefreshing(false);
