@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, Button, Input, Textarea } from './ui';
 import { 
   ChevronLeft, BarChart2, Activity, ShieldAlert, CheckCircle2, 
   AlertTriangle, TrendingUp, Filter, MapPin, Search, FileText, 
   Camera, ExternalLink, RefreshCw, Share2, Check, Clock, 
-  ArrowUpRight, Sparkles, Layers, Eye, Tag, X, Upload, CheckCircle
+  ArrowUpRight, Sparkles, Layers, Eye, Tag, X, Upload, CheckCircle,
+  ClipboardCheck, BellRing
 } from 'lucide-react';
 import { getTickets, closeTicket } from '../sheets-api';
 import { format, isThisMonth, isThisYear } from 'date-fns';
@@ -47,9 +49,11 @@ interface SapDashboardProps {
 }
 
 export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboardProps) {
+  const navigate = useNavigate();
   const [allTickets, setAllTickets] = useState<any[]>([]);
   const [allGroupReports, setAllGroupReports] = useState<any[]>([]);
   const [rekapSummary, setRekapSummary] = useState<any>(null);
+  const [rekapList, setRekapList] = useState<any[]>([]);
   const [employeesList, setEmployeesList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -58,6 +62,10 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'High' | 'Medium' | 'Low'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // Inspection reminder popup state for current logged-in user
+  const [showInspectionReminder, setShowInspectionReminder] = useState(false);
+  const [userInspectionItem, setUserInspectionItem] = useState<any | null>(null);
 
   // Close ticket modal state
   const [closingTicket, setClosingTicket] = useState<any | null>(null);
@@ -108,7 +116,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
     setSearchQuery('');
   }, [filterPeriod]);
 
-  // Update rekap summary in background when target week changes (non-blocking)
+  // Update rekap summary & check reminder in background when target week changes (non-blocking)
   useEffect(() => {
     if (!targetWeekTag) return;
     fetch(`/api/rekap-inspeksi?week=${targetWeekTag}`)
@@ -117,9 +125,31 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
         if (rData && rData.summary) {
           setRekapSummary(rData.summary);
         }
+        if (rData && Array.isArray(rData.rekapList)) {
+          setRekapList(rData.rekapList);
+          
+          const cleanNik = (inspectorNik || '').trim();
+          const cleanName = (inspectorName || '').toLowerCase().trim();
+          
+          const found = rData.rekapList.find((emp: any) => {
+            const empNik = (emp.nik || '').trim();
+            const empName = (emp.name || '').toLowerCase().trim();
+            return (cleanNik && empNik === cleanNik) || (cleanName && empName === cleanName);
+          });
+
+          if (found && found.status === 'BELUM' && !found.isCuti) {
+            setUserInspectionItem(found);
+            const dismissed = sessionStorage.getItem(`dismissed_sap_reminder_${targetWeekTag}_${cleanNik}`);
+            if (!dismissed) {
+              setShowInspectionReminder(true);
+            }
+          } else {
+            setUserInspectionItem(null);
+          }
+        }
       })
       .catch(err => console.error("Background rekap fetch error:", err));
-  }, [targetWeekTag]);
+  }, [targetWeekTag, inspectorNik, inspectorName]);
 
   const fetchData = async () => {
     try {
@@ -187,8 +217,32 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
         setAllGroupReports(reportsResult.value);
       }
 
-      if (rekapResult.status === 'fulfilled' && rekapResult.value && rekapResult.value.summary) {
-        setRekapSummary(rekapResult.value.summary);
+      if (rekapResult.status === 'fulfilled' && rekapResult.value) {
+        if (rekapResult.value.summary) {
+          setRekapSummary(rekapResult.value.summary);
+        }
+        if (Array.isArray(rekapResult.value.rekapList)) {
+          setRekapList(rekapResult.value.rekapList);
+          
+          const cleanNik = (inspectorNik || '').trim();
+          const cleanName = (inspectorName || '').toLowerCase().trim();
+          
+          const found = rekapResult.value.rekapList.find((emp: any) => {
+            const empNik = (emp.nik || '').trim();
+            const empName = (emp.name || '').toLowerCase().trim();
+            return (cleanNik && empNik === cleanNik) || (cleanName && empName === cleanName);
+          });
+
+          if (found && found.status === 'BELUM' && !found.isCuti) {
+            setUserInspectionItem(found);
+            const dismissed = sessionStorage.getItem(`dismissed_sap_reminder_${targetWeekTag}_${cleanNik}`);
+            if (!dismissed) {
+              setShowInspectionReminder(true);
+            }
+          } else {
+            setUserInspectionItem(null);
+          }
+        }
       }
 
       if (employeesResult.status === 'fulfilled' && Array.isArray(employeesResult.value) && employeesResult.value.length > 0) {
@@ -551,6 +605,52 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
       </header>
 
       <main className="max-w-7xl mx-auto w-full p-4 sm:p-6 space-y-6">
+        {/* Personal Inspection Reminder Banner if user hasn't inspected this week */}
+        {userInspectionItem && userInspectionItem.status === 'BELUM' && !userInspectionItem.isCuti && (
+          <div className="bg-gradient-to-r from-rose-500 via-amber-500 to-rose-600 p-0.5 rounded-3xl shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-[22px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 flex items-center justify-center shrink-0">
+                  <ShieldAlert className="w-6 h-6 text-rose-600 animate-bounce" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-extrabold tracking-wider uppercase px-2 py-0.5 bg-rose-100 text-rose-700 rounded-md">
+                      PENGINGAT INSPEKSI ({targetWeekTag})
+                    </span>
+                    <span className="text-[11px] font-bold text-rose-600">
+                      Status: Belum Inspeksi
+                    </span>
+                  </div>
+                  <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-0.5">
+                    Halo {inspectorName || 'Rekan K3'}, Anda belum melaksanakan inspeksi program K3 minggu ini!
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Target agenda inspeksi terencana Anda perlu diselesaikan untuk menjaga komitmen keselamatan bersama.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
+                <Button
+                  onClick={() => setShowInspectionReminder(true)}
+                  variant="outline"
+                  className="text-xs h-9 px-3.5 border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-100 cursor-pointer"
+                >
+                  Detail
+                </Button>
+                <Button
+                  onClick={() => navigate('/weekly-inspection')}
+                  className="text-xs h-9 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>Mulai Inspeksi Sekarang</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 1. Hero Card: Compliance Score Matrix */}
         <Card className="p-5 md:p-6 bg-gradient-to-br from-teal-700 via-teal-800 to-slate-900 border-none shadow-lg relative overflow-hidden text-white rounded-3xl">
           <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none">
@@ -1383,6 +1483,78 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Popup / Modal Pengingat Belum Inspeksi */}
+      {showInspectionReminder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-rose-100 overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Decorative Top Accent */}
+            <div className="h-3 bg-gradient-to-r from-amber-500 via-rose-500 to-teal-500" />
+            
+            <div className="p-6 sm:p-8 space-y-6">
+              {/* Header */}
+              <div className="flex items-start gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0 shadow-inner">
+                  <ShieldAlert className="w-8 h-8 text-rose-600 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-100/80 text-rose-700 text-[11px] font-extrabold uppercase tracking-wide">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Safety Accountability Program
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-tight">
+                    Pengingat: Anda Belum Melakukan Inspeksi K3!
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Periode Inspeksi: <span className="font-bold text-slate-700">{targetWeekTag}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs sm:text-sm text-slate-600 leading-relaxed">
+                <p>
+                  Halo, <strong className="text-slate-900">{inspectorName || 'Rekan K3'}</strong> ({inspectorNik || '-'}),
+                </p>
+                <p>
+                  Nama Anda terdaftar dalam target inspeksi terencana program K3 minggu <strong className="text-rose-600">{targetWeekTag}</strong> dengan status <strong className="text-rose-600 uppercase">Belum Melaksanakan Inspeksi</strong>.
+                </p>
+                <p className="text-slate-500 text-xs">
+                  Mari wujudkan komitmen keselamatan kerja di lingkungan Prep & Lab Harita Nickel dengan segera menyelesaikan inspeksi terencana Anda.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    navigate('/weekly-inspection');
+                  }}
+                  className="flex-1 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-bold py-3 px-5 rounded-2xl shadow-lg shadow-teal-600/20 flex items-center justify-center gap-2 group transition-all text-xs sm:text-sm cursor-pointer"
+                >
+                  <ClipboardCheck className="w-4 h-4" />
+                  <span>Mulai Inspeksi Sekarang</span>
+                  <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowInspectionReminder(false);
+                    const cleanNik = (inspectorNik || '').trim();
+                    sessionStorage.setItem(`dismissed_sap_reminder_${targetWeekTag}_${cleanNik}`, 'true');
+                  }}
+                  className="border-slate-200 text-slate-600 hover:bg-slate-100 font-semibold py-3 px-5 rounded-2xl text-xs sm:text-sm cursor-pointer"
+                >
+                  Nanti Saja
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}
