@@ -42,12 +42,47 @@ router.get("/api/tickets", async (req, res) => {
           consolidated.push(cloned);
         }
       } else {
-        // Temuan inspeksi umum (seperti Preparasi Basah, oven 6&7, oven 5&3) tetap dipisah per kartu tiket
+        // Temuan inspeksi umum tetap dimasukkan ke list
         consolidated.push(t);
       }
     }
 
-    res.json(consolidated);
+    // Consolidate duplicates that share identical finding description, location, reporter, and date
+    const deduplicated: any[] = [];
+    const seenDedupe = new Map<string, any>();
+
+    for (const t of consolidated) {
+      const cleanDesc = (t.description || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanLoc = (t.location || t.area || '').toLowerCase().trim();
+      const cleanPelapor = (t.requestorName || t.reporterName || '').toLowerCase().trim();
+      
+      let dateDay = '';
+      if (t.date) {
+        try {
+          const d = new Date(t.date);
+          dateDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        } catch (e) {
+          dateDay = String(t.date).slice(0, 10);
+        }
+      }
+
+      const dedupeKey = `${dateDay}_${cleanLoc}_${cleanPelapor}_${cleanDesc}`;
+      if (seenDedupe.has(dedupeKey)) {
+        const existing = seenDedupe.get(dedupeKey);
+        // If current item is CLOSED, preserve the closed state
+        if (t.status === 'CLOSED') {
+          existing.status = 'CLOSED';
+          existing.actionTaken = t.actionTaken || existing.actionTaken;
+          existing.pic = t.pic || existing.pic;
+          existing.closingPhoto = t.closingPhoto || existing.closingPhoto;
+        }
+      } else {
+        seenDedupe.set(dedupeKey, t);
+        deduplicated.push(t);
+      }
+    }
+
+    res.json(deduplicated);
   } catch (error) {
     console.error("Error fetching inspection tickets:", error);
     res.status(500).json({ error: "Failed to fetch tickets" });

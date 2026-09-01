@@ -131,7 +131,34 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
       ]);
 
       if (ticketsResult.status === 'fulfilled' && Array.isArray(ticketsResult.value)) {
-        setAllTickets(ticketsResult.value);
+        // Automatically deduplicate redundant/duplicate tickets
+        const dedupeMap = new Map<string, any>();
+        for (const t of ticketsResult.value) {
+          const cleanDesc = (t.description || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const cleanLoc = (t.location || t.area || '').toLowerCase().trim();
+          const cleanPelapor = (t.requestorName || t.reporterName || '').toLowerCase().trim();
+          
+          let dateDay = '';
+          if (t.date) {
+            try {
+              const d = new Date(t.date);
+              dateDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            } catch (e) {
+              dateDay = String(t.date).slice(0, 10);
+            }
+          }
+
+          const dedupeKey = `${dateDay}_${cleanLoc}_${cleanPelapor}_${cleanDesc}`;
+          if (dedupeMap.has(dedupeKey)) {
+            const existing = dedupeMap.get(dedupeKey);
+            if ((t.status || '').toUpperCase() === 'CLOSED') {
+              dedupeMap.set(dedupeKey, { ...existing, ...t, status: 'CLOSED' });
+            }
+          } else {
+            dedupeMap.set(dedupeKey, t);
+          }
+        }
+        setAllTickets(Array.from(dedupeMap.values()));
       }
 
       if (reportsResult.status === 'fulfilled' && Array.isArray(reportsResult.value)) {
