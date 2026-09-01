@@ -118,7 +118,7 @@ function getUniverse(pt) {
 }
 
 async function startServer() {
-  await initDbSchema();
+  initDbSchema().catch(e => console.warn('Schema init non-fatal:', e.message));
   
 // --- Google Drive Helper Functions ---
 
