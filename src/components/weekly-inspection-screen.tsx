@@ -12,60 +12,69 @@ import { FormTangga } from './inspection-forms/FormTangga';
 import { FormAPD } from './inspection-forms/FormAPD';
 import { DevModeAccordion, useDevOptions } from './dev-mode-accordion';
 import { PageHeader } from './PageHeader';
+import fallbackQuestions from '../data/master-questions.json';
 
 export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJabatan, onInspectionComplete }: { inspectorName: string, inspectorNik: string, inspectorJabatan?: string, onInspectionComplete?: (message: string) => void }) {
   const [loading, setLoading] = useState(true);
-  const [masterForms, setMasterForms] = useState<any[]>([]);
+  const [masterForms, setMasterForms] = useState<any[]>(fallbackQuestions);
   const [selectedForm, setSelectedForm] = useState<string>('');
   
   const { devOptions, setDevOptions, parsedDevOptions } = useDevOptions(inspectorNik);
 
-  // Just for demonstrating that it's connecting to API and grouped form 
-  const [uniqueForms, setUniqueForms] = useState<{id: string, judul: string, tipe: string}[]>([]);
+  // Extract unique forms from questions data
+  const extractUniqueForms = (data: any[]) => {
+    const listUniqueForm: {id: string, judul: string, tipe: string}[] = [];
+    const mapForm = new Map();
+    
+    if (Array.isArray(data)) {
+      data.forEach((item: any) => {
+        const formId = item.id_form || item.idForm;
+        if (formId && !mapForm.has(formId)) {
+          mapForm.set(formId, true);
+          let jdl = item.judul_form || item.judulForm || "";
+          let tipe = (item.tipe_input || item.tipeInput || "").toString().trim().toUpperCase();
+          
+          // Clean up title
+          let lowerJdl = jdl.toLowerCase();
+          let keywords = ["inspeksi", "checklist", "formulir"];
+          let cutIdx = -1;
+          for (let i = 0; i < keywords.length; i++) {
+            let idx = lowerJdl.indexOf(keywords[i]);
+            if (idx !== -1) {
+              cutIdx = idx;
+              break;
+            }
+          }
+          if (cutIdx !== -1) jdl = jdl.substring(cutIdx);
+          jdl = jdl.charAt(0).toUpperCase() + jdl.slice(1).trim();
+          
+          listUniqueForm.push({ id: formId, judul: jdl, tipe: tipe });
+        }
+      });
+    }
+    return listUniqueForm;
+  };
+
+  const [uniqueForms, setUniqueForms] = useState<{id: string, judul: string, tipe: string}[]>(() => extractUniqueForms(fallbackQuestions));
 
   useEffect(() => {
     fetchMasterData();
   }, []);
 
   const fetchMasterData = async () => {
-    setLoading(true);
     try {
       const data = await getMasterPertanyaan();
-      
-      const listUniqueForm: {id: string, judul: string, tipe: string}[] = [];
-      const mapForm = new Map();
-      
-      if (Array.isArray(data)) {
-        data.forEach((item: any) => {
-          if (!mapForm.has(item.id_form || item.idForm)) {
-            const formId = item.id_form || item.idForm;
-            mapForm.set(formId, true);
-            let jdl = item.judul_form || item.judulForm || "";
-            let tipe = (item.tipe_input || item.tipeInput || "").toString().trim().toUpperCase();
-            
-            // Clean up title
-            let lowerJdl = jdl.toLowerCase();
-            let keywords = ["inspeksi", "checklist", "formulir"];
-            let cutIdx = -1;
-            for (let i = 0; i < keywords.length; i++) {
-              let idx = lowerJdl.indexOf(keywords[i]);
-              if (idx !== -1) {
-                cutIdx = idx;
-                break;
-              }
-            }
-            if (cutIdx !== -1) jdl = jdl.substring(cutIdx);
-            jdl = jdl.charAt(0).toUpperCase() + jdl.slice(1).trim();
-            
-            listUniqueForm.push({ id: formId, judul: jdl, tipe: tipe });
-          }
-        });
+      if (Array.isArray(data) && data.length > 0) {
+        setMasterForms(data);
+        setUniqueForms(extractUniqueForms(data));
+      } else {
+        setMasterForms(fallbackQuestions);
+        setUniqueForms(extractUniqueForms(fallbackQuestions));
       }
-      setMasterForms(Array.isArray(data) ? data : []);
-      setUniqueForms(listUniqueForm);
     } catch (err) {
-      console.error(err);
-      // Fallback for demonstration if API fails or needs to be updated by user
+      console.warn("Using offline master questions fallback:", err);
+      setMasterForms(fallbackQuestions);
+      setUniqueForms(extractUniqueForms(fallbackQuestions));
     } finally {
       setLoading(false);
     }

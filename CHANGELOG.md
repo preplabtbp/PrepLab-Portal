@@ -4,6 +4,16 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.16] - 2026-09-02
+
+### ⚡ Client-Side Instant Master Questions Fallback (`WeeklyInspectionScreen.tsx`)
+
+- **Penyediaan Bundel Master Questions 228 Formulir di Sisi Klien**:
+  - Mengintegrasikan berkas master questions fallback (`src/data/master-questions.json`) langsung ke dalam state awal komponen `WeeklyInspectionScreen`.
+  - Menjamin seluruh kategori dropdown (*[ AREA ]*, *[ KOTAK P3K ]*, *[ ASSET & LAINNYA ]*, *[ ALAT PELINDUNG DIRI ]*) langsung muncul seketika (0ms delay) tanpa tergantung kecepatan atau latency koneksi database/API.
+
+---
+
 ## [2.8.15] - 2026-09-02
 
 ### 📋 Auto-Sync Master Pertanyaan & Formulir Inspeksi (`/api/questions`)
