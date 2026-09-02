@@ -4,6 +4,19 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.7] - 2026-09-02
+
+### 🛡️ Audit Ronde 8 & 9 — Automated Security Test Suite & Konfigurasi Secret Cloud Build
+
+- **Integrasi Automated Security Test Suite (`npm test`)**:
+  - Menambahkan pengujian keamanan otomatis pada berkas `test/auth-guard.test.ts` untuk memastikan 9 rute terproteksi menolak akses anonim (HTTP 401) dan rute allowlist tetap terbuka (HTTP 200).
+- **Konfigurasi Secret `JWT_SECRET` pada Cloud Build**:
+  - Memperbarui `cloudbuild.yaml` dan `cloudbuild-staging.yaml` dengan menyertakan `JWT_SECRET=JWT_SECRET:latest` pada argumen `--set-secrets` Cloud Run agar deployment production/staging berjalan mulus tanpa error `MISSING OR INVALID REQUIRED ENVIRONMENT VARIABLES`.
+- **Penyempurnaan Proporsi Modal Pengingat SAP**:
+  - Memperbaiki tata letak, hierarki tipografi, padding, dan tombol aksi pada modal pengingat target inspeksi K3 mingguan.
+
+---
+
 ## [2.8.6] - 2026-09-02
 
 ### 🛡️ Audit Ronde 7 — Pemulihan Guard Otentikasi Terpusat API (P0)
