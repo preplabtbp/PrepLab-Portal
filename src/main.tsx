@@ -40,6 +40,18 @@ import { Toaster } from 'sonner';
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
   let [resource, config] = args;
+  config = config || {};
+  config.credentials = config.credentials || 'include';
+
+  const token = localStorage.getItem('p2h_token') || localStorage.getItem('token');
+  if (token && typeof resource === 'string' && (resource.startsWith('/api/') || resource.startsWith('http://localhost:3000/api/'))) {
+    const headers = new Headers(config.headers || {});
+    if (!headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    config.headers = headers;
+  }
+  
   const profileStr = localStorage.getItem('p2h_inspector_profile');
   let pt = 'TBP';
   if (profileStr) {

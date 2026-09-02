@@ -210,7 +210,27 @@ export default function App() {
         }
       })
       .catch(() => {});
-  }, []);
+
+    // Validate active login session against backend
+    if (inspectorNik) {
+      fetch('/api/auth/me')
+        .then(res => {
+          if (res.status === 401) {
+            console.warn('[Auth] Session token is missing or expired. Prompting re-login...');
+            localStorage.removeItem('p2h_token');
+            localStorage.removeItem('token');
+            localStorage.removeItem('p2h_inspector_nik');
+            localStorage.removeItem('p2h_inspector_name');
+            localStorage.removeItem('p2h_inspector_jabatan');
+            localStorage.removeItem('p2h_inspector_profile');
+            setInspectorNik(null);
+            setInspectorName(null);
+            toast.error('Sesi login telah berakhir. Silakan login kembali untuk mengakses database.', { duration: 6000 });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [inspectorNik]);
 
   const isDeveloper = React.useMemo(() => {
     if (inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin') return true;
@@ -629,6 +649,10 @@ export default function App() {
               } else {
                   const validNik = data.employee.nik;
                   const validUsername = data.employee.username || '';
+                  if (data.token) {
+                      localStorage.setItem('p2h_token', data.token);
+                      localStorage.setItem('token', data.token);
+                  }
                   setInspectorNik(validNik);
                   setInspectorName(data.employee.name);
                   localStorage.setItem('p2h_inspector_nik', validNik);

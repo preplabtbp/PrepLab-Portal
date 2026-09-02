@@ -4,6 +4,18 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.9] - 2026-09-02
+
+### 🔑 Sinkronisasi JWT Token Global & Pemulihan Sesi Browser
+
+- **Penyimpanan Token JWT Global pada Client (`p2h_token`)**:
+  - Menyimpan token JWT hasil login/setup password ke `localStorage` agar tidak hilang saat cookie diblokir atau sesi browser kedaluwarsa.
+  - Menambahkan penyisipan otomatis header `Authorization: Bearer <token>` dan `credentials: 'include'` pada seluruh pemanggilan `fetch('/api/*')` di `src/main.tsx`.
+- **Validasi Sesi Otomatis & Pemulihan Dashboard**:
+  - Menambahkan pengecekan `/api/auth/me` pada startup aplikasi di `src/App.tsx`. Jika token kedaluwarsa/hilang setelah server restart, sistem akan mengarahkan pengguna untuk login ulang alih-alih membiarkan dashboard kosong/gagal memuat data.
+
+---
+
 ## [2.8.8] - 2026-09-02
 
 ### 🔍 Perbaikan Ekstraksi Co-Inspector & Rekap Otomatis Multi-Inspektor
