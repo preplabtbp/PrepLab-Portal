@@ -1289,11 +1289,101 @@ router.post("/api/pdf/generate", async (req, res) => {
     }
   });
 
-router.get("/api/questions",
- async (req, res) => {
-    const data = await db.select().from(questions);
+function parseQuestionsCSV(text: string): Record<string, string>[] {
+  const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+  if (lines.length < 2) return [];
+  
+  const parseLine = (line: string): string[] => {
+    const result: string[] = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (c === ',' && !inQuotes) {
+        result.push(cur.trim());
+        cur = '';
+      } else {
+        cur += c;
+      }
+    }
+    result.push(cur.trim());
+    return result;
+  };
+
+  const headers = parseLine(lines[0]);
+  const rows: Record<string, string>[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseLine(lines[i]);
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => {
+      row[h] = values[idx] || '';
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
+export async function syncMasterQuestionsFromSheet() {
+  try {
+    const res = await fetch('https://docs.google.com/spreadsheets/d/1wk0bXvmbZHZOjTTGDy-5oQrFZJmFjJ1c/export?format=csv&gid=685685374');
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    const text = await res.text();
+    const rows = parseQuestionsCSV(text);
+    if (rows.length === 0) return [];
+
+    await db.delete(questions);
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE).map(row => ({
+        idForm: row.ID_Inspeksi || '',
+        judulForm: row.Judul_Inspeksi || '',
+        kategori: row.Kategori_Pertanyaan || '',
+        tipeInput: row.Tipe_Input || '',
+        item: row.Item_Inspeksi || '',
+        info1: row.Info_1 || '',
+        info2: row.Info_2 || '',
+        info3: row.Info_3 || '',
+        info4: row.Info_4 || '',
+        questionText: row.Item_Inspeksi || '',
+        category: row.Kategori_Pertanyaan || ''
+      }));
+      await db.insert(questions).values(batch);
+    }
+    return await db.select().from(questions);
+  } catch (err: any) {
+    console.error("Failed to auto-sync questions from sheet:", err.message);
+    return [];
+  }
+}
+
+router.get("/api/questions", async (req, res) => {
+  try {
+    let data = await db.select().from(questions);
+    if (!data || data.length === 0) {
+      data = await syncMasterQuestionsFromSheet();
+    }
     res.json(data);
-  });
+  } catch (error: any) {
+    console.error("Error fetching questions:", error);
+    res.status(500).json({ error: "Failed to fetch questions" });
+  }
+});
+
+router.post("/api/questions/sync", async (req, res) => {
+  try {
+    const data = await syncMasterQuestionsFromSheet();
+    res.json({ success: true, count: data.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 router.get("/api/notes", async (req, res) => {
     try {

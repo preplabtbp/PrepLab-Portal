@@ -18,7 +18,7 @@ try {
   process.exit(1);
 }
 import { requireAuth } from "./server/middleware/auth.js";
-import { router as miscRouter } from "./server/routes/misc.js";
+import { router as miscRouter, syncMasterQuestionsFromSheet } from "./server/routes/misc.js";
 import { router as bulletinRouter } from "./server/routes/bulletin.js";
 import { router as quizRouter } from "./server/routes/quiz.js";
 import { router as notificationsRouter } from "./server/routes/notifications.js";
@@ -83,6 +83,12 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS sisa_ct TEXT;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS jatuh_tempo_ct TEXT;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS first_login_complete BOOLEAN DEFAULT false;`);
+    
+    // Auto seed questions if table is empty
+    const qCount = await db.select().from(questions).limit(1);
+    if (!qCount || qCount.length === 0) {
+      syncMasterQuestionsFromSheet().catch(e => console.warn('Questions auto-seed notice:', e.message));
+    }
   } catch (e: any) {
     console.warn("DB schema init warning:", e.message);
   }

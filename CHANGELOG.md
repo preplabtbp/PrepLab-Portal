@@ -4,6 +4,16 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.15] - 2026-09-02
+
+### 📋 Auto-Sync Master Pertanyaan & Formulir Inspeksi (`/api/questions`)
+
+- **Sinkronisasi Otomatis 228 Bank Pertanyaan Inspeksi Terpadu**:
+  - Menambahkan mekanisme *auto-seed / auto-sync* pada `/api/questions` dan `initDbSchema()` yang secara cerdas mendeteksi jika tabel database kosong, lalu mengunduh dan menyinkronkan seluruh 228 pertanyaan master formulir inspeksi (*Area*, *P3K*, *Tabung Gas*, *Perkakas*, dll.) dari Google Sheet resmi secara otomatis.
+  - Memastikan seluruh kelompok dropdown (*AREA*, *KOTAK P3K*, *ASSET & LAINNYA*) pada halaman `/weekly-inspection` selalu terisi lengkap dan berfungsi sempurna di Server Main maupun Localhost.
+
+---
+
 ## [2.8.14] - 2026-09-02
 
 ### 📊 Deduplikasi Perhitungan Target Penyelesaian Inspeksi (29 Area/Agenda Unik)
