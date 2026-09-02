@@ -8,7 +8,7 @@ import {
   pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, 
   notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, 
   mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi,
-  developerUsers, communityQuotes
+  developerUsers, communityQuotes, rekapManualOverrides
 } from "../../src/db/schema.js";
 import { generatePdfFromTemplate, drive } from '../../google-services.js';
 import { 
@@ -427,15 +427,82 @@ export const manualCutiOverridesMap = new Map<string, boolean>();
 
 router.post('/api/rekap-inspeksi/override-cuti', async (req, res) => {
   try {
-    const { nik, isCuti } = req.body;
+    const { nik, isCuti, week } = req.body;
     if (!nik) return res.status(400).json({ error: 'NIK wajib diisi!' });
+    const cleanNik = String(nik).trim();
+    const cleanWeek = String(week || getISOWeekTag()).trim().toUpperCase();
     
-    manualCutiOverridesMap.set(String(nik).trim(), !!isCuti);
+    manualCutiOverridesMap.set(cleanNik, !!isCuti);
+
+    const existing = await db.select().from(rekapManualOverrides)
+      .where(and(eq(rekapManualOverrides.week, cleanWeek), eq(rekapManualOverrides.nik, cleanNik)));
+
+    if (isCuti) {
+      if (existing.length > 0) {
+        await db.update(rekapManualOverrides).set({ status: 'CUTI', updatedAt: new Date() })
+          .where(eq(rekapManualOverrides.id, existing[0].id));
+      } else {
+        await db.insert(rekapManualOverrides).values({ week: cleanWeek, nik: cleanNik, status: 'CUTI' });
+      }
+    } else {
+      if (existing.length > 0 && existing[0].status === 'CUTI') {
+        await db.delete(rekapManualOverrides).where(eq(rekapManualOverrides.id, existing[0].id));
+      }
+    }
+
     res.json({ 
       success: true, 
       message: `Status personil NIK ${nik} berhasil diubah ke ${isCuti ? 'Cuti' : 'Aktif (Wajib Inspeksi)'}!` 
     });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/rekap-inspeksi/override-status', async (req, res) => {
+  try {
+    const { week, nik, status, notes, updatedBy } = req.body;
+    if (!nik || !week) return res.status(400).json({ error: 'NIK dan Week wajib diisi!' });
+    const cleanNik = String(nik).trim();
+    const cleanWeek = String(week).trim().toUpperCase();
+    const cleanStatus = String(status || 'SUDAH').trim().toUpperCase();
+
+    const existing = await db.select().from(rekapManualOverrides)
+      .where(and(eq(rekapManualOverrides.week, cleanWeek), eq(rekapManualOverrides.nik, cleanNik)));
+
+    if (cleanStatus === 'RESET') {
+      if (existing.length > 0) {
+        await db.delete(rekapManualOverrides)
+          .where(and(eq(rekapManualOverrides.week, cleanWeek), eq(rekapManualOverrides.nik, cleanNik)));
+      }
+      return res.json({ success: true, message: `Status personil NIK ${cleanNik} untuk ${cleanWeek} dikembalikan ke otomatis!` });
+    }
+
+    if (existing.length > 0) {
+      await db.update(rekapManualOverrides).set({
+        status: cleanStatus,
+        notes: notes || 'Manual Override Admin',
+        updatedBy: updatedBy || 'Admin',
+        updatedAt: new Date()
+      }).where(eq(rekapManualOverrides.id, existing[0].id));
+    } else {
+      await db.insert(rekapManualOverrides).values({
+        week: cleanWeek,
+        nik: cleanNik,
+        status: cleanStatus,
+        notes: notes || 'Manual Override Admin',
+        pdfTitle: cleanStatus === 'SUDAH' ? 'Diverifikasi Manual (Admin)' : null,
+        pdfUrl: '#',
+        updatedBy: updatedBy || 'Admin'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Status personil NIK ${cleanNik} untuk ${cleanWeek} berhasil diubah ke ${cleanStatus}!`
+    });
+  } catch (err: any) {
+    console.error("Error updating manual override:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -503,12 +570,37 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
 
     const targetWeekDates = getDateStringsForWeek(selectedWeek);
 
+    // Load persistent manual overrides for this week
+    let manualOverrides: any[] = [];
+    try {
+      manualOverrides = await db.select().from(rekapManualOverrides)
+        .where(selectedWeek === 'ALL' ? undefined : eq(rekapManualOverrides.week, selectedWeek));
+    } catch (e) {}
+
+    const manualOverrideMap = new Map<string, any>();
+    manualOverrides.forEach(ov => {
+      if (ov.nik) manualOverrideMap.set(ov.nik.toLowerCase().trim(), ov);
+    });
+
     allEmployees.forEach(emp => {
       if (!emp.nik) return;
       
       const cleanNik = emp.nik.trim();
+      const nikLower = cleanNik.toLowerCase();
 
-      // 1. Check manual override first
+      // 1. Check persistent manual override first
+      if (manualOverrideMap.has(nikLower)) {
+        const ov = manualOverrideMap.get(nikLower);
+        if (ov.status === 'CUTI') {
+          onCutiSet.add(cleanNik);
+          return;
+        } else if (ov.status === 'SUDAH' || ov.status === 'BELUM') {
+          // Explicitly active / not on cuti
+          return;
+        }
+      }
+
+      // Check temporary in-memory override
       if (manualCutiOverridesMap.has(cleanNik)) {
         if (manualCutiOverridesMap.get(cleanNik) === true) {
           onCutiSet.add(cleanNik);
@@ -763,8 +855,27 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     const rekapList = targetEmployees.map(emp => {
       const nikClean = (emp.nik || '').trim().toLowerCase();
       const nameClean = (emp.name || '').trim().toLowerCase();
-      const isDone = completedSet.has(nikClean) || completedSet.has(nameClean);
-      const info = completedSet.get(nikClean) || completedSet.get(nameClean);
+      const override = manualOverrideMap.get(nikClean);
+
+      let isDone = completedSet.has(nikClean) || completedSet.has(nameClean);
+      let info = completedSet.get(nikClean) || completedSet.get(nameClean);
+      let isManualOverride = false;
+
+      if (override) {
+        isManualOverride = true;
+        if (override.status === 'SUDAH') {
+          isDone = true;
+          info = {
+            timestamp: override.createdAt ? override.createdAt.toISOString() : new Date().toISOString(),
+            pdfUrl: override.pdfUrl || '#',
+            pdfTitle: override.pdfTitle || 'Diverifikasi Manual (Admin)',
+            week: selectedWeek
+          };
+        } else if (override.status === 'BELUM') {
+          isDone = false;
+        }
+      }
+
       return {
         nik: emp.nik,
         name: emp.name,
@@ -775,11 +886,12 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         jabatan: emp.jabatan || emp.position || 'Personil',
         shift: emp.shift || 'Nonshift',
         status: isDone ? 'SUDAH' : 'BELUM',
+        isManualOverride,
         isCuti: false,
-        completedAt: isDone ? info.timestamp : null,
-        pdfUrl: isDone ? info.pdfUrl : null,
-        pdfTitle: isDone ? info.pdfTitle : null,
-        week: isDone ? info.week : selectedWeek
+        completedAt: isDone ? info?.timestamp : null,
+        pdfUrl: isDone ? info?.pdfUrl : null,
+        pdfTitle: isDone ? info?.pdfTitle : null,
+        week: isDone ? info?.week : selectedWeek
       };
     });
 

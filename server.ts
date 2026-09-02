@@ -84,6 +84,19 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS jatuh_tempo_ct TEXT;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS first_login_complete BOOLEAN DEFAULT false;`);
     
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS rekap_manual_overrides (
+      id SERIAL PRIMARY KEY,
+      week TEXT NOT NULL,
+      nik TEXT NOT NULL,
+      status TEXT NOT NULL,
+      notes TEXT,
+      pdf_url TEXT,
+      pdf_title TEXT,
+      updated_by TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );`);
+    
     // Auto seed questions if table is empty
     const qCount = await db.select().from(questions).limit(1);
     if (!qCount || qCount.length === 0) {

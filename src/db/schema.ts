@@ -554,3 +554,17 @@ export const appFeedbacks = pgTable('app_feedbacks', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Define 'rekap_manual_overrides' table (Manual Status Overrides per Week)
+export const rekapManualOverrides = pgTable('rekap_manual_overrides', {
+  id: serial('id').primaryKey(),
+  week: text('week').notNull(), // e.g. 'W36', 'W37'
+  nik: text('nik').notNull(),
+  status: text('status').notNull(), // 'SUDAH', 'BELUM', 'CUTI'
+  notes: text('notes'),
+  pdfUrl: text('pdf_url'),
+  pdfTitle: text('pdf_title'),
+  updatedBy: text('updated_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+

@@ -184,7 +184,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
       const res = await fetch('/api/rekap-inspeksi/override-cuti', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nik: empNik, isCuti: !currentIsCuti })
+        body: JSON.stringify({ nik: empNik, isCuti: !currentIsCuti, week: selectedWeek })
       });
       if (res.ok) {
         toast.success(`Status personil ${empNik} berhasil diubah ke ${!currentIsCuti ? 'Cuti' : 'Aktif (Wajib Inspeksi)'}!`);
@@ -192,6 +192,31 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
       } else {
         const errData = await res.json();
         toast.error(errData.error || 'Gagal mengubah status Cuti');
+      }
+    } catch (err: any) {
+      toast.error('Gagal mengubah status: ' + err.message);
+    }
+  };
+
+  const handleToggleSudah = async (empNik: string, currentStatus: string, isManual?: boolean) => {
+    try {
+      const nextStatus = currentStatus === 'SUDAH' ? (isManual ? 'RESET' : 'BELUM') : 'SUDAH';
+      const res = await fetch('/api/rekap-inspeksi/override-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          week: selectedWeek,
+          nik: empNik,
+          status: nextStatus,
+          updatedBy: inspectorName
+        })
+      });
+      if (res.ok) {
+        toast.success(`Status personil ${empNik} pada ${selectedWeek} berhasil diubah ke ${nextStatus === 'RESET' ? 'Otomatis' : nextStatus}!`);
+        fetchRekapData(selectedWeek);
+      } else {
+        const errData = await res.json();
+        toast.error(errData.error || 'Gagal mengubah status Inspeksi');
       }
     } catch (err: any) {
       toast.error('Gagal mengubah status: ' + err.message);
@@ -708,7 +733,14 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                       </div>
 
                       <div className="min-w-0">
-                        <h5 className="font-bold text-xs text-[var(--text-main)] truncate">{emp.name}</h5>
+                        <div className="flex items-center gap-1.5 truncate">
+                          <h5 className="font-bold text-xs text-[var(--text-main)] truncate">{emp.name}</h5>
+                          {emp.isManualOverride && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-500/30 shrink-0" title={`Diverifikasi Manual oleh Admin pada ${selectedWeek}`}>
+                              Manual
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-[var(--text-muted)] truncate">
                           {emp.nik} • {emp.section} • <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">Gol {emp.gol}</span>
                         </p>
@@ -716,6 +748,20 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                     </div>
 
                     <div className="shrink-0 flex items-center gap-1">
+                      {isDevUser && !isCutiPerson && (
+                        <button
+                          onClick={() => handleToggleSudah(emp.nik, emp.status, emp.isManualOverride)}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors ${
+                            isDone && emp.isManualOverride
+                              ? 'bg-slate-500/15 text-slate-600 dark:text-slate-300 border border-slate-500/30 hover:bg-slate-500/25'
+                              : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
+                          }`}
+                          title={isDone && emp.isManualOverride ? `Kembalikan ke Deteksi Otomatis (${selectedWeek})` : `Tandai Sudah Inspeksi Secara Manual (${selectedWeek})`}
+                        >
+                          {isDone && emp.isManualOverride ? '↩️ Reset' : '✅ Set Sudah'}
+                        </button>
+                      )}
+
                       {isDevUser && (
                         <button
                           onClick={() => handleToggleCuti(emp.nik, !!isCutiPerson)}

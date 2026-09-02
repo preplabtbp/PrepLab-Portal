@@ -4,6 +4,17 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.18] - 2026-09-02
+
+### ✍️ Fitur Verifikasi Manual Status Inspeksi Personil per Minggu (`rekap_manual_overrides`)
+
+- **Tombol "Set Sudah" & "Reset Auto" pada Tab Rekapitulasi Personil**:
+  - Menambahkan tombol **`✅ Set Sudah`** pada personil yang belum berstatus inspeksi (atau jika terdapat laporan personil yang terkendala/tidak terekap otomatis).
+  - Menambahkan tombol **`↩️ Reset`** untuk mengembalikan status personil ke hasil pemindaian otomatis sistem.
+  - Perubahan disimpan secara persisten di database tabel `rekap_manual_overrides` sesuai minggu yang dipilih (*Week-based override*), sehingga statistik rekapitulasi langsung terupdate akurat dan permanen.
+
+---
+
 ## [2.8.17] - 2026-09-02
 
 ### 🚀 Perbaikan Konflik Tipe Variabel Pipeline Deploy Cloud Build (`cloudbuild.yaml`)
