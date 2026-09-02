@@ -717,7 +717,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                 return (
                   <div 
                     key={emp.nik || i}
-                    className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2 text-xs ${
+                    className={`p-2.5 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
                       isCutiPerson
                         ? 'bg-purple-500/5 border-purple-500/30 text-[var(--text-main)]'
                         : isDone 
@@ -725,30 +725,31 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                         : 'bg-[var(--input-bg)] border-[var(--border-main)] text-[var(--text-main)]'
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
                         isCutiPerson ? 'bg-purple-600 text-white' : isDone ? 'bg-emerald-600 text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
                       }`}>
                         {emp.name.charAt(0)}
                       </div>
 
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <h5 className="font-bold text-xs text-[var(--text-main)] truncate">{emp.name}</h5>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h5 className="font-bold text-xs text-[var(--text-main)] leading-tight">{emp.name}</h5>
                           {emp.isManualOverride && (
                             <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-500/30 shrink-0" title={`Diverifikasi Manual oleh Admin pada ${selectedWeek}`}>
                               Manual
                             </span>
                           )}
                         </div>
-                        <p className="text-[10px] text-[var(--text-muted)] truncate">
+                        <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
                           {emp.nik} • {emp.section} • <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">Gol {emp.gol}</span>
                         </p>
                       </div>
                     </div>
 
-                    <div className="shrink-0 flex items-center gap-1">
-                      {isDevUser && !isCutiPerson && (
+                    <div className="shrink-0 flex items-center gap-1.5 flex-wrap justify-end">
+                      {/* Set Sudah / Reset Button: only show Set Sudah if !isDone, or Reset if manual override */}
+                      {isDevUser && !isCutiPerson && (!isDone || emp.isManualOverride) && (
                         <button
                           onClick={() => handleToggleSudah(emp.nik, emp.status, emp.isManualOverride)}
                           className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors ${
@@ -762,6 +763,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                         </button>
                       )}
 
+                      {/* Set Cuti Button */}
                       {isDevUser && (
                         <button
                           onClick={() => handleToggleCuti(emp.nik, !!isCutiPerson)}
