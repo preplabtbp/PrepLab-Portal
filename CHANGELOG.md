@@ -4,6 +4,17 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.13] - 2026-09-02
+
+### 🛡️ Pemulihan Validasi Ketat JWT_SECRET Production (P0 Fix)
+
+- **Penghapusan Fallback JWT Publik di Production**:
+  - Mengembalikan validasi ketat `server/config/env.ts` agar melempar error fatal jika `JWT_SECRET` tidak disetel atau kurang dari 32 karakter saat `NODE_ENV === 'production'`.
+  - Meniadakan seluruh *hardcoded fallback* di lingkungan production guna menjamin token otentikasi tidak dapat dipalsukan oleh pihak luar.
+  - Mempertahankan pesan diagnostik startup yang jelas dan terstruktur pada `server.ts`.
+
+---
+
 ## [2.8.12] - 2026-09-02
 
 ### ⚙️ Sinkronisasi Script Deploy CLI & Automated Pipeline Test
