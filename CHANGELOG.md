@@ -4,6 +4,16 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.14] - 2026-09-02
+
+### 📊 Deduplikasi Perhitungan Target Penyelesaian Inspeksi (29 Area/Agenda Unik)
+
+- **Penyelarasan Metrik Penyelesaian Inspeksi SAP Dashboard (`sap-dashboard.tsx`)**:
+  - Menerapkan deduplikasi cerdas pada kalkulasi target 29 inspeksi berdasarkan kombinasi unik agenda dan area kerja (misal: *Gudang Preparasi*, *Gudang Kontainer*, *APD Lab*, *P3K*, dll.).
+  - Pengiriman laporan inspeksi berulang untuk area atau agenda yang sama dalam 1 pekan kini dihitung tepat **1 kali** terhadap target pemenuhan 29 agenda K3 terencana, mencegah penggelembungan persentase (*duplicate inflation*).
+
+---
+
 ## [2.8.13] - 2026-09-02
 
 ### 🛡️ Pemulihan Validasi Ketat JWT_SECRET Production (P0 Fix)

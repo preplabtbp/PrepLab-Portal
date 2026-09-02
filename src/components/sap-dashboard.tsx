@@ -261,9 +261,9 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
     fetchData();
   };
 
-  // Filter completed inspections by selected period
+  // Filter completed inspections by selected period (deduplicated by distinct inspection agenda / area)
   const completedInspectionsByPeriod = useMemo(() => {
-    return allGroupReports.filter(insp => {
+    const rawPeriodList = allGroupReports.filter(insp => {
       if (!insp.timestamp) return false;
       let d: Date | null = null;
       try {
@@ -287,6 +287,24 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
       if (filterPeriod === 'ytd' || filterPeriod === 'this_year') return isThisYear(d);
       return true;
     });
+
+    // Deduplicate: Each distinct inspection agenda / area only counts 1 time towards completion target
+    const seenAgendas = new Set<string>();
+    const distinctAgendas: any[] = [];
+
+    rawPeriodList.forEach(insp => {
+      const title = (insp.pdfTitle || insp.title || insp.type || 'Inspeksi').trim().toLowerCase();
+      let sub = (insp.pdfSubTitle || insp.subTitle || insp.location || '').trim().toLowerCase();
+      sub = sub.replace(/^lokasi:\s*/i, '').trim();
+      const agendaKey = (!sub || sub === '-' || sub === 'pdf terlampir') ? title : `${title}__${sub}`;
+
+      if (!seenAgendas.has(agendaKey)) {
+        seenAgendas.add(agendaKey);
+        distinctAgendas.push(insp);
+      }
+    });
+
+    return distinctAgendas;
   }, [allGroupReports, filterPeriod]);
 
   // Target inspections count based on period (29 inspections per week)
