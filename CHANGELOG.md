@@ -4,6 +4,17 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.6] - 2026-09-02
+
+### 🛡️ Audit Ronde 7 — Pemulihan Guard Otentikasi Terpusat API (P0)
+
+- **Penerapan Permanen Centralized API Authentication Guard**:
+  - Memasang kembali middleware pengaman `requireAuth` terpusat pada seluruh rute `/api/*` di `server.ts` dengan allowlist ketat (`PUBLIC_API_PREFIXES`: `/login`, `/check-nik`, `/setup`, `/reset-password`, `/health`, dan `/drive/view`).
+  - Seluruh endpoint data sensitif dan operasional (`/api/employees`, `/api/tickets`, `/api/roster`, `/api/inspections`, `/api/notifications`, `/api/admin/*`, dll.) kini 100% menolak akses tanpa token dengan status `HTTP 401 Unauthorized`.
+  - Akses dengan token JWT yang sah terverifikasi berjalan lancar (`HTTP 200 OK`).
+
+---
+
 ## [2.8.5] - 2026-09-02
 
 ### 🛡️ Audit Ronde 5 & 6 — Normalisasi Repositori & Konsistensi Cross-Platform

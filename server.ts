@@ -338,6 +338,25 @@ const app = express();
     res.sendFile(path.join(process.cwd(), "public", "favicon.ico"));
   });
 
+  // Centralized API Authentication Guard (P0 Hardening)
+  const PUBLIC_API_PREFIXES = [
+    '/api/auth/login',
+    '/api/auth/check-nik',
+    '/api/auth/setup',
+    '/api/auth/reset-password',
+    '/api/health',
+    '/api/drive/view'
+  ];
+
+  app.use('/api', (req, res, next) => {
+    const url = req.originalUrl.split('?')[0];
+    const isPublic = PUBLIC_API_PREFIXES.some(prefix => url === prefix || url.startsWith(prefix + '/'));
+    if (isPublic) {
+      return next();
+    }
+    return requireAuth(req, res, next);
+  });
+
   // Mount modular routers
   app.use("/api/auth", authRateLimiter, authRouter);
 
