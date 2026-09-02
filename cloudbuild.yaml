@@ -1,3 +1,5 @@
+# NOTE: File ini digunakan ketika Cloud Build Trigger aktif di Google Cloud Console.
+# Untuk deploy manual via CLI, gunakan: npm run deploy:main
 steps:
   # Build the container image
   - name: 'gcr.io/cloud-builders/docker'

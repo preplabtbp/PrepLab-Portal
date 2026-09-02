@@ -12,8 +12,8 @@
     "lint": "tsc --noEmit",
     "test:auth": "tsx test/auth-guard.test.ts",
     "test": "npm run test:auth",
-    "deploy:staging": "npm run build && gcloud run deploy preplab-portal-staging --source . --region asia-southeast2",
-    "deploy:main": "npm run build && gcloud run deploy preplab-portal --source . --region us-central1"
+    "deploy:staging": "npm run build && gcloud run deploy preplab-portal-staging --source . --region asia-southeast2 --update-secrets JWT_SECRET=JWT_SECRET:latest",
+    "deploy:main": "npm run build && gcloud run deploy preplab-portal --source . --region us-central1 --update-secrets JWT_SECRET=JWT_SECRET:latest"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.21",

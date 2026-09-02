@@ -9,7 +9,14 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { env, validateEnv } from "./server/config/env.js";
-validateEnv();
+try {
+  validateEnv();
+} catch (e: any) {
+  console.error('❌ STARTUP GAGAL — konfigurasi environment tidak lengkap:');
+  console.error(`   ${e.message}`);
+  console.error('   Container akan berhenti. Periksa --set-secrets / --update-secrets di Cloud Run.');
+  process.exit(1);
+}
 import { requireAuth } from "./server/middleware/auth.js";
 import { router as miscRouter } from "./server/routes/misc.js";
 import { router as bulletinRouter } from "./server/routes/bulletin.js";

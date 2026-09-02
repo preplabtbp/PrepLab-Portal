@@ -4,6 +4,20 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.12] - 2026-09-02
+
+### ⚙️ Sinkronisasi Script Deploy CLI & Automated Pipeline Test
+
+- **Penyelarasan Script Deploy CLI `package.json`**:
+  - Memperbarui perintah `npm run deploy:main` dan `npm run deploy:staging` dengan menyertakan argumen `--update-secrets JWT_SECRET=JWT_SECRET:latest` secara eksplisit.
+  - Memastikan proses deploy manual via `gcloud run deploy --source .` selalu membawa secret autentikasi tanpa menghapus secret OAuth / WhatsApp yang sudah ada.
+- **Integrasi Automated Test Step pada `cloudbuild-staging.yaml`**:
+  - Menambahkan step pengujian otomatis `TEST_BASE_URL=... npm test` di akhir pipeline staging untuk memverifikasi autentikasi terpusat.
+- **Penyempurnaan Pesan Log Startup Error `server.ts`**:
+  - Menyediakan output diagnostik jelas di Cloud Logging jika terjadi kegagalan konfigurasi environment pada level proses.
+
+---
+
 ## [2.8.11] - 2026-09-02
 
 ### 🛡️ Zero-Crash Startup Guard untuk Cloud Run Port Binding
