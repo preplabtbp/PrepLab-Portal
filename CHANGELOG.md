@@ -4,6 +4,16 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.17] - 2026-09-02
+
+### 🚀 Perbaikan Konflik Tipe Variabel Pipeline Deploy Cloud Build (`cloudbuild.yaml`)
+
+- **Penyederhanaan Argumen Deploy Cloud Build**:
+  - Menghapus argumen redundan yang memicu bentrok tipe variabel `SQL_PASSWORD` antara environment variable teks biasa dan Secret Manager di Cloud Run.
+  - Mempertahankan argumen esensial `--update-secrets JWT_SECRET=JWT_SECRET:latest` sehingga proses build dan deploy otomatis melalui Cloud Build Trigger berjalan mulus tanpa error.
+
+---
+
 ## [2.8.16] - 2026-09-02
 
 ### ⚡ Client-Side Instant Master Questions Fallback (`WeeklyInspectionScreen.tsx`)
