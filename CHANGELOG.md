@@ -4,6 +4,17 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.10] - 2026-09-02
+
+### 🚀 Perbaikan Konfigurasi Deploy Cloud Build Production (Port 8080 Crash Fix)
+
+- **Penyelarasan Environment Variables & Secret Cloud Run Production**:
+  - Menambahkan argumen `--update-env-vars` eksplisit pada `cloudbuild.yaml` (`SQL_HOST`, `SQL_USER`, `SQL_DB_NAME`, `VAPID_PUBLIC_KEY`, dll.) agar tidak gagal validasi startup saat deploy ke production.
+  - Mengubah `--set-secrets` menjadi `--update-secrets` pada `cloudbuild.yaml` dan `cloudbuild-staging.yaml` untuk mencegah terhapusnya variabel rahasia lain yang terpasang di Cloud Run.
+  - Memasang pengaman *try-catch* pada inisialisasi modul `web-push` di `server.ts` agar server backend dapat mengikat port `$PORT` (8080) secara instan tanpa terhalang inisialisasi library pihak ketiga.
+
+---
+
 ## [2.8.9] - 2026-09-02
 
 ### 🔑 Sinkronisasi JWT Token Global & Pemulihan Sesi Browser

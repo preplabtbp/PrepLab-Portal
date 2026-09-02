@@ -32,15 +32,20 @@ import { Server } from "socket.io";
 import { db, pool } from "./src/db/index.js";
 import { chatMessages, employees, equipments, workOrders, users, tickets, downtime, spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, easterEggProgress, induksi, developerUsers } from "./src/db/schema.js";
 
-// Initialize web-push
-// We generate keys if they are not in the environment
+// Initialize web-push safely
 const vapidPublicKey = env.VAPID_PUBLIC_KEY as string;
 const vapidPrivateKey = env.VAPID_PRIVATE_KEY as string;
-webpush.setVapidDetails(
-  'mailto:prep.lab.tbp@gmail.com',
-  vapidPublicKey,
-  vapidPrivateKey
-);
+if (vapidPublicKey && vapidPrivateKey) {
+  try {
+    webpush.setVapidDetails(
+      'mailto:prep.lab.tbp@gmail.com',
+      vapidPublicKey,
+      vapidPrivateKey
+    );
+  } catch (err) {
+    console.warn('Warning: Failed to initialize web-push:', err);
+  }
+}
 import { ticketSchema, workOrderSchema } from "./src/lib/zod.js";
 import { eq, desc, or, inArray, isNull, and, gte, lte, sql } from "drizzle-orm";
 import { authRouter } from "./server/routes/auth.js";
