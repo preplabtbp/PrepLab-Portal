@@ -601,11 +601,6 @@ export default function App() {
              setIsVerifyingNik(false);
              return;
          }
-         if (!setupTanggalLahir) {
-             toast.error("Tanggal lahir harus diisi!");
-             setIsVerifyingNik(false);
-             return;
-         }
          const res = await fetch('/api/auth/setup', {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
@@ -613,8 +608,7 @@ export default function App() {
                  identifier: inputNik,
                  nik: inputNik, 
                  password: setupPassword1, 
-                 email: setupEmail,
-                 tanggalLahir: setupTanggalLahir 
+                 email: setupEmail
              })
          });
          const data = await res.json();
@@ -897,17 +891,6 @@ export default function App() {
                     placeholder="nama@haritanickel.com"
                     value={setupEmail}
                     onChange={e => setSetupEmail(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-300">Tanggal Lahir (Verifikasi Identitas)</label>
-                  <input 
-                    type="date"
-                    value={setupTanggalLahir}
-                    onChange={e => setSetupTanggalLahir(e.target.value)}
                     required
                     className="w-full px-3 py-2 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
                   />

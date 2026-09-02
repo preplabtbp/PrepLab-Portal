@@ -292,24 +292,6 @@ authRouter.post("/setup", async (req, res) => {
         message: "Akun ini sudah pernah diaktivasi dan aktif. Silakan login atau gunakan menu Lupa Password untuk mereset akun Anda." 
       });
     }
-
-    // Verify birth date: mandatory if user has tanggalLahir in HR database
-    if (user.tanggalLahir) {
-      if (!tanggalLahir) {
-        return res.status(400).json({ 
-          status: "error", 
-          message: "Tanggal lahir wajib diisi untuk verifikasi aktivasi akun." 
-        });
-      }
-      const dbDate = new Date(user.tanggalLahir).toISOString().split('T')[0];
-      const inputDate = new Date(tanggalLahir).toISOString().split('T')[0];
-      if (dbDate !== inputDate) {
-        return res.status(400).json({ 
-          status: "error", 
-          message: "Tanggal lahir tidak sesuai dengan data terdaftar di HR." 
-        });
-      }
-    }
     
     const hash = await bcrypt.hash(password, 10);
     

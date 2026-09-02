@@ -4,6 +4,16 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.20] - 2026-09-02
+
+### 🔓 Penyederhanaan Alur Setup Password Akun Awal (`/api/auth/setup` & `App.tsx`)
+
+- **Penghapusan Verifikasi Tanggal Lahir pada Setup Akun**:
+  - Menghapus input dan validasi tanggal lahir pada proses inisialisasi password akun baru.
+  - Personil kini dapat langsung mengaktifkan akun dan membuat password baru secara cepat hanya dengan NIK, Email, dan Password Baru tanpa hambatan kecocokan format tanggal lahir HR.
+
+---
+
 ## [2.8.19] - 2026-09-02
 
 ### 📱 Optimasi Tata Letak Rekap Personil & Tampilan Nama Lengkap (`GroupReportScreen.tsx`)
