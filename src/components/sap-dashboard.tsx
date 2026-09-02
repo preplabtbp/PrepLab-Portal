@@ -1487,69 +1487,75 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
         </div>
       )}
 
-      {/* Popup / Modal Pengingat Belum Inspeksi */}
+      {/* Popup / Modal Pengingat Belum Inspeksi - Proportional & Sleek */}
       {showInspectionReminder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-rose-100/80 overflow-hidden animate-in zoom-in-95 duration-200">
-            {/* Top Accent Gradient Bar */}
-            <div className="h-2.5 bg-gradient-to-r from-amber-500 via-rose-500 to-teal-500" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-sm sm:max-w-md bg-[var(--card-bg,#ffffff)] text-[var(--text-main,#0f172a)] rounded-3xl shadow-2xl border border-[var(--border-main,#e2e8f0)] overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Top Glowing Gradient Bar */}
+            <div className="h-2 bg-gradient-to-r from-amber-500 via-rose-500 to-teal-500" />
             
             {/* Dismiss Close Button */}
             <button
+              type="button"
               onClick={() => {
                 setShowInspectionReminder(false);
                 const cleanNik = (inspectorNik || '').trim();
                 sessionStorage.setItem(`dismissed_sap_reminder_${targetWeekTag}_${cleanNik}`, 'true');
               }}
-              className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              aria-label="Tutup Pengingat"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="p-6 sm:p-7 space-y-5">
-              {/* Header */}
-              <div className="flex items-center gap-3.5 pr-6">
-                <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200/80 flex items-center justify-center shrink-0 shadow-inner">
-                  <ShieldAlert className="w-6 h-6 text-rose-600 animate-pulse" />
+              {/* Header Icon + Title */}
+              <div className="flex items-start gap-3.5 pr-6">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500/15 to-amber-500/15 border border-rose-500/30 flex items-center justify-center shrink-0 shadow-inner">
+                  <ShieldAlert className="w-6 h-6 text-rose-600 dark:text-rose-400 animate-pulse" />
                 </div>
-                <div className="space-y-0.5">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[10px] font-extrabold uppercase tracking-wider">
+                <div className="space-y-1">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-extrabold uppercase tracking-wider border border-rose-500/20">
                     <AlertTriangle className="w-3 h-3" />
                     Safety Accountability Program
                   </span>
-                  <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug">
-                    Pengingat Inspeksi K3 ({targetWeekTag})
+                  <h3 className="text-base sm:text-lg font-black tracking-tight leading-snug">
+                    Pengingat Target Inspeksi K3
                   </h3>
+                  <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">
+                    Periode Inspeksi: {targetWeekTag}
+                  </p>
                 </div>
               </div>
 
-              {/* Body Card */}
-              <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/70 space-y-2.5 text-xs text-slate-600 leading-relaxed">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-200/60">
-                  <span className="text-slate-500 font-medium">Personil:</span>
-                  <span className="font-bold text-slate-900 text-right truncate max-w-[200px]">
-                    {inspectorName || 'Rekan K3'} ({inspectorNik || '-'})
+              {/* Detail Info Card */}
+              <div className="p-4 rounded-2xl bg-slate-500/5 border border-[var(--border-main,#e2e8f0)] space-y-2.5 text-xs leading-relaxed">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-500/10">
+                  <span className="text-[var(--text-muted,#64748b)] font-medium">Personil:</span>
+                  <span className="font-bold text-right truncate max-w-[210px]">
+                    {inspectorName || 'Rekan K3'} <span className="text-[11px] font-semibold text-[var(--text-muted,#64748b)]">({inspectorNik || '-'})</span>
                   </span>
                 </div>
-                <div className="flex justify-between items-center pb-2 border-b border-slate-200/60">
-                  <span className="text-slate-500 font-medium">Status Target:</span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-extrabold text-[10px] uppercase tracking-wide">
-                    Belum Terlaksana
+                <div className="flex justify-between items-center pb-2 border-b border-slate-500/10">
+                  <span className="text-[var(--text-muted,#64748b)] font-medium">Status Target:</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 font-extrabold text-[10px] uppercase tracking-wide border border-rose-500/25">
+                    Belum Melaksanakan Inspeksi
                   </span>
                 </div>
-                <p className="text-slate-500 text-[11px] pt-0.5 leading-relaxed">
-                  Nama Anda terdaftar dalam target agenda inspeksi keselamatan kerja minggu <strong className="text-slate-700 font-bold">{targetWeekTag}</strong>. Mari wujudkan komitmen keselamatan bersama dengan segera menyelesaikan inspeksi terencana Anda.
+                <p className="text-[var(--text-muted,#64748b)] text-[11px] pt-0.5 leading-relaxed">
+                  Nama Anda terdaftar dalam target agenda inspeksi keselamatan kerja minggu <strong className="text-[var(--text-main,#0f172a)] font-bold">{targetWeekTag}</strong>. Mari wujudkan komitmen keselamatan kerja dengan segera menyelesaikan inspeksi terencana Anda.
                 </p>
               </div>
 
-              {/* Action Buttons (Proportional & Clean) */}
+              {/* Action Buttons */}
               <div className="space-y-2 pt-1">
                 <button
                   type="button"
                   onClick={() => {
+                    setShowInspectionReminder(false);
                     navigate('/weekly-inspection');
                   }}
-                  className="w-full h-11 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 active:scale-[0.98] text-white font-bold rounded-xl shadow-md shadow-teal-600/20 flex items-center justify-center gap-2 transition-all text-xs sm:text-sm cursor-pointer whitespace-nowrap"
+                  className="w-full h-11 bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-500 hover:to-emerald-600 active:scale-[0.98] text-white font-bold rounded-xl shadow-md shadow-teal-600/20 flex items-center justify-center gap-2 transition-all text-xs sm:text-sm cursor-pointer whitespace-nowrap"
                 >
                   <ClipboardCheck className="w-4 h-4 shrink-0" />
                   <span>Mulai Inspeksi Sekarang</span>
@@ -1563,7 +1569,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                     const cleanNik = (inspectorNik || '').trim();
                     sessionStorage.setItem(`dismissed_sap_reminder_${targetWeekTag}_${cleanNik}`, 'true');
                   }}
-                  className="w-full h-9 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 font-semibold rounded-xl transition-colors cursor-pointer"
+                  className="w-full h-9 text-xs text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#0f172a)] hover:bg-slate-500/10 font-semibold rounded-xl transition-colors cursor-pointer"
                 >
                   Nanti Saja (Tutup Pengingat)
                 </button>
