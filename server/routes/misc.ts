@@ -186,13 +186,25 @@ async function fetchAllGroupReports(filterWeek?: string) {
       if (deletedReportIds.has(dbMsgId)) return;
 
       let dataFObj: any = {};
-      if (insp.dataF && typeof insp.dataF === 'string' && insp.dataF.trim().startsWith('{')) {
+      let dataFArray: any[] = [];
+      if (insp.dataF && typeof insp.dataF === 'string') {
         try {
-          dataFObj = JSON.parse(insp.dataF);
+          const parsed = JSON.parse(insp.dataF);
+          if (Array.isArray(parsed)) {
+            dataFArray = parsed;
+          } else if (parsed && typeof parsed === 'object') {
+            dataFObj = parsed;
+          }
         } catch (e) {}
       }
 
-      const actualDate = parseInspectionDate(insp, dataFObj);
+      // If dataF is array (e.g. APD matrix), check date in cell [0][1]
+      let arrayDateVal: string | null = null;
+      if (dataFArray.length > 0 && Array.isArray(dataFArray[0]) && dataFArray[0][1]) {
+        arrayDateVal = String(dataFArray[0][1]);
+      }
+
+      const actualDate = parseInspectionDate({ ...insp, tanggal: arrayDateVal || insp.tanggal || insp.date }, dataFObj);
       const createdIso = actualDate.toISOString();
       const weekTag = getISOWeekTag(actualDate);
 
@@ -239,21 +251,46 @@ async function fetchAllGroupReports(filterWeek?: string) {
       const niksSet = new Set<string>();
       if (senderNik) niksSet.add(senderNik);
 
-      const allInspTexts = [
+      const allInspTexts: string[] = [
         inspRaw,
+        insp.inspector,
+        insp.inspectorName,
+        insp.insp1,
+        insp.insp2,
+        insp.insp3,
         dataFObj.insp1,
         dataFObj.insp2,
-        dataFObj.insp3
-      ].filter(Boolean);
+        dataFObj.insp3,
+        dataFObj.inspector,
+        dataFObj.inspectorName,
+        ...(Array.isArray(dataFObj.coInspectors) ? dataFObj.coInspectors : []),
+        ...(Array.isArray(dataFObj.inspectors) ? dataFObj.inspectors : [])
+      ].filter(Boolean).map(String);
+
+      // Extract co-inspectors from APD matrix row 0 (columns 16, 18, 20)
+      if (dataFArray.length > 0 && Array.isArray(dataFArray[0])) {
+        const row0 = dataFArray[0];
+        [16, 18, 20].forEach(idx => {
+          if (row0[idx] && typeof row0[idx] === 'string') {
+            const v = row0[idx].trim();
+            if (v && v !== '-' && v.length > 2) allInspTexts.push(v);
+          }
+        });
+      }
 
       allInspTexts.forEach(t => {
         const textStr = String(t).trim();
-        const nm = textStr.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/i);
-        if (nm) niksSet.add(nm[0].toUpperCase());
-        allEmps.forEach(e => {
-          if (e.name && textStr.toLowerCase().includes(e.name.toLowerCase().trim())) {
-            niksSet.add(e.nik);
-          }
+        const parts = textStr.split(/[,&/|]/).map(p => p.trim()).filter(Boolean);
+        parts.forEach(part => {
+          const nm = part.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/i);
+          if (nm) niksSet.add(nm[0].toUpperCase());
+          const cleanPart = part.toLowerCase();
+          allEmps.forEach(e => {
+            const eName = (e.name || '').trim().toLowerCase();
+            if (eName && (cleanPart === eName || cleanPart.includes(eName))) {
+              niksSet.add(e.nik);
+            }
+          });
         });
       });
 
@@ -638,18 +675,30 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       const dbInspections = await db.select().from(inspections);
       dbInspections.forEach((insp: any) => {
         let dataFObj: any = {};
-        if (insp.dataF && typeof insp.dataF === 'string' && insp.dataF.trim().startsWith('{')) {
+        let dataFArray: any[] = [];
+        if (insp.dataF && typeof insp.dataF === 'string') {
           try {
-            dataFObj = JSON.parse(insp.dataF);
+            const parsed = JSON.parse(insp.dataF);
+            if (Array.isArray(parsed)) {
+              dataFArray = parsed;
+            } else if (parsed && typeof parsed === 'object') {
+              dataFObj = parsed;
+            }
           } catch (e) {}
         }
 
-        const actualDate = parseInspectionDate(insp, dataFObj);
+        // If dataF is array (e.g. APD matrix), check date in cell [0][1]
+        let arrayDateVal: string | null = null;
+        if (dataFArray.length > 0 && Array.isArray(dataFArray[0]) && dataFArray[0][1]) {
+          arrayDateVal = String(dataFArray[0][1]);
+        }
+
+        const actualDate = parseInspectionDate({ ...insp, tanggal: arrayDateVal || insp.tanggal || insp.date }, dataFObj);
         const createdIso = actualDate.toISOString();
         const inspWeek = getISOWeekTag(actualDate);
 
         if (selectedWeek === 'ALL' || inspWeek === selectedWeek) {
-          const title = insp.judulForm || dataFObj.judulForm || 'Laporan Inspeksi';
+          const title = insp.type || insp.judulForm || dataFObj.judulForm || 'Laporan Inspeksi';
           const info = {
             timestamp: createdIso,
             pdfUrl: insp.pdfUrl,
@@ -667,24 +716,41 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
             dataFObj.insp2,
             dataFObj.insp3,
             dataFObj.inspector,
-            dataFObj.inspectorName
-          ].filter(Boolean);
+            dataFObj.inspectorName,
+            ...(Array.isArray(dataFObj.coInspectors) ? dataFObj.coInspectors : []),
+            ...(Array.isArray(dataFObj.inspectors) ? dataFObj.inspectors : [])
+          ].filter(Boolean).map(String);
+
+          // Extract co-inspectors from APD matrix row 0 (columns 16, 18, 20)
+          if (dataFArray.length > 0 && Array.isArray(dataFArray[0])) {
+            const row0 = dataFArray[0];
+            [16, 18, 20].forEach(idx => {
+              if (row0[idx] && typeof row0[idx] === 'string') {
+                const v = row0[idx].trim();
+                if (v && v !== '-' && v.length > 2) rawInspectors.push(v);
+              }
+            });
+          }
 
           rawInspectors.forEach((rawInsp: string) => {
             const inspText = String(rawInsp).trim();
             if (inspText) {
               registerCompletedUser(inspText, info);
-              const cleanName = inspText.split('|')[0].trim();
-              if (cleanName) registerCompletedUser(cleanName, info);
+              const parts = inspText.split(/[,&/|]/).map(p => p.trim()).filter(Boolean);
+              parts.forEach(part => {
+                registerCompletedUser(part, info);
+                const cleanName = part.split('|')[0].trim();
+                if (cleanName) registerCompletedUser(cleanName, info);
 
-              const nikMatches = inspText.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
-              nikMatches.forEach((nik: string) => registerCompletedUser(nik, info));
+                const nikMatches = part.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
+                nikMatches.forEach((nik: string) => registerCompletedUser(nik, info));
 
-              allEmployees.forEach(e => {
-                if (e.name && inspText.toLowerCase().includes(e.name.toLowerCase().trim())) {
-                  registerCompletedUser(e.nik, info);
-                  registerCompletedUser(e.name, info);
-                }
+                allEmployees.forEach(e => {
+                  if (e.name && (part.toLowerCase().includes(e.name.toLowerCase().trim()) || e.name.toLowerCase().trim().includes(part.toLowerCase()))) {
+                    registerCompletedUser(e.nik, info);
+                    registerCompletedUser(e.name, info);
+                  }
+                });
               });
             }
           });
