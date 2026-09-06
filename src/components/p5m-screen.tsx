@@ -1637,7 +1637,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 >
                   <div 
                     className={`bg-[var(--card-bg)] text-[var(--text-main)] rounded-2xl overflow-hidden shadow-xl border border-[var(--border-main)] transition-all ${
-                      selectedDayFilter === 'ALL' ? 'min-w-[1050px]' : 'w-full min-w-0'
+                      selectedDayFilter === 'ALL' ? 'min-w-[1260px]' : 'w-full min-w-0'
                     }`} 
                     ref={captureRef}
                   >
@@ -1649,7 +1649,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     P5M
                   </div>
                   <div className="min-w-0">
-                    <h2 className="font-black text-sm tracking-wide uppercase font-mono text-[var(--primary)] truncate">
+                    <h2 className="font-black text-sm sm:text-base tracking-wide uppercase font-mono text-[var(--primary)] whitespace-normal">
                       Jadwal P5M (Pembicaraan 5 Menit) — Preparation &amp; Laboratory
                     </h2>
                     <p className="text-xs text-[var(--text-muted)] font-mono">
@@ -1698,7 +1698,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   const dateInfo = datesMeta[day];
 
                   return (
-                    <div id={`p5m-col-${day}`} key={day} className={`flex flex-col ${selectedDayFilter === 'ALL' ? 'min-w-[135px]' : 'w-full'}`}>
+                    <div id={`p5m-col-${day}`} key={day} className={`flex flex-col ${selectedDayFilter === 'ALL' ? 'min-w-[165px]' : 'w-full'}`}>
                       
                       {/* Column Header */}
                       <div className="bg-[var(--input-bg)] p-2.5 text-center border-b border-[var(--border-main)]" style={{ borderTop: `4px solid ${DAY_COLORS[day]}` }}>
@@ -2548,17 +2548,24 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
 
   // Filtered materi list
   const filteredMateriList = useMemo(() => {
-    const isGabunganDay = ['Senin', 'Kamis', 'Jumat', 'Minggu'].includes(day);
     return materiList.filter(m => {
-      // Aturan P5M Gabungan: Hanya materi General (universal untuk semua personil)
-      if (isGabunganDay && m.subKategori && m.subKategori !== 'General') {
-        return false;
-      }
       const matchSearch = !mSearch || m.judul?.toLowerCase().includes(mSearch.toLowerCase());
-      const matchKat = mKatFilter === 'All' || m.kategori === mKatFilter || (mKatFilter === 'Senam' && m.kategori === 'Senam') || m.subKategori === mKatFilter;
-      return matchSearch && matchKat;
+      if (!matchSearch) return false;
+
+      if (mKatFilter === 'All') return true;
+      if (mKatFilter === 'SOP / IK') {
+        const j = (m.judul || '').toLowerCase();
+        return j.startsWith('sop') || j.startsWith('ik ') || j.includes('sop') || j.includes('ik -') || j.includes('instruksi kerja');
+      }
+      if (mKatFilter === 'Senam') return m.kategori === 'Senam';
+      if (mKatFilter === 'Non-Teknis') return m.kategori === 'Non-Teknis';
+      if (mKatFilter === 'General') return m.subKategori === 'General';
+      if (mKatFilter === 'Preparation') return m.subKategori === 'Preparation' || m.divisi === 'Preparation' || (m.judul || '').toLowerCase().includes('prep');
+      if (mKatFilter === 'Laboratory') return m.subKategori === 'Laboratory' || m.divisi === 'Laboratory' || (m.judul || '').toLowerCase().includes('lab');
+
+      return m.kategori === mKatFilter || m.subKategori === mKatFilter;
     });
-  }, [materiList, mSearch, mKatFilter, day]);
+  }, [materiList, mSearch, mKatFilter]);
 
   const isEmptySDM = !slot.nama || slot.nama.includes('KOSONG');
 
@@ -2655,7 +2662,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
           </div>
         ) : (
           <div className="flex items-center justify-between gap-1">
-            <span className={`font-black text-xs truncate ${isEmptySDM ? 'text-rose-600 italic' : 'text-slate-900'}`}>
+            <span className={`font-black text-[11px] leading-tight break-words ${isEmptySDM ? 'text-rose-600 italic' : 'text-slate-900'}`}>
               {slot.nama || '— Tidak Ada SDM —'}
             </span>
             {isDouble && (
@@ -2716,7 +2723,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
 
                     {/* Filter Category Tabs */}
                     <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[9px] font-mono scrollbar-none">
-                      {['All', 'Preparation', 'Laboratory', 'General', 'Non-Teknis'].map(kat => (
+                      {['All', 'SOP / IK', 'Preparation', 'Laboratory', 'General', 'Non-Teknis'].map(kat => (
                         <button
                           key={kat}
                           type="button"
