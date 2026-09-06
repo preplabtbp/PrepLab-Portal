@@ -1637,29 +1637,29 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 >
                   <div 
                     className={`bg-[var(--card-bg)] text-[var(--text-main)] rounded-2xl overflow-hidden shadow-xl border border-[var(--border-main)] transition-all ${
-                      selectedDayFilter === 'ALL' ? 'min-w-[1260px]' : 'w-full min-w-0'
+                      selectedDayFilter === 'ALL' ? 'min-w-[1100px]' : 'w-full min-w-0'
                     }`} 
                     ref={captureRef}
                   >
               
               {/* Header Title Bar */}
-              <div className="bg-[var(--card-bg)] text-[var(--text-main)] px-5 py-3.5 flex flex-col lg:flex-row items-center justify-between border-b-2 border-[var(--primary)] gap-3 shadow-xs">
-                <div className="flex items-center gap-3 text-center sm:text-left min-w-0">
+              <div className="bg-[var(--card-bg)] text-[var(--text-main)] px-5 py-3.5 flex flex-col md:flex-row items-start md:items-center justify-between border-b-2 border-[var(--primary)] gap-3 shadow-xs">
+                <div className="flex items-center gap-3 text-left min-w-0 flex-1">
                   <div className="w-10 h-10 rounded-xl bg-[var(--primary)] text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
                     P5M
                   </div>
-                  <div className="min-w-0">
-                    <h2 className="font-black text-sm sm:text-base tracking-wide uppercase font-mono text-[var(--primary)] whitespace-normal">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <h2 className="font-black text-xs sm:text-sm tracking-wide uppercase font-mono text-[var(--primary)] leading-snug">
                       Jadwal P5M (Pembicaraan 5 Menit) — Preparation &amp; Laboratory
                     </h2>
-                    <p className="text-xs text-[var(--text-muted)] font-mono">
+                    <p className="text-[11px] text-[var(--text-muted)] font-mono leading-normal">
                       Plant: PT {selectedPt === 'GTS' ? 'GTS' : 'TBP / GPS'} • Periode: {weekRangeDisplay}
                     </p>
                   </div>
                 </div>
 
                 {/* Proportional Legend Badge Card */}
-                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 bg-[var(--input-bg)]/90 border border-[var(--border-main)] px-3.5 py-1.5 rounded-2xl shadow-2xs shrink-0">
+                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 bg-[var(--input-bg)]/90 border border-[var(--border-main)] px-3.5 py-1.5 rounded-2xl shadow-2xs shrink-0 self-stretch md:self-auto">
                   {/* Shift Categories */}
                   <div className="flex items-center gap-1.5 text-[11px] font-mono">
                     <span className="text-[var(--text-muted)] text-[10px] uppercase font-bold tracking-wider mr-0.5">Shift:</span>
@@ -1698,7 +1698,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   const dateInfo = datesMeta[day];
 
                   return (
-                    <div id={`p5m-col-${day}`} key={day} className={`flex flex-col ${selectedDayFilter === 'ALL' ? 'min-w-[165px]' : 'w-full'}`}>
+                    <div id={`p5m-col-${day}`} key={day} className={`flex flex-col ${selectedDayFilter === 'ALL' ? 'min-w-[145px]' : 'w-full'}`}>
                       
                       {/* Column Header */}
                       <div className="bg-[var(--input-bg)] p-2.5 text-center border-b border-[var(--border-main)]" style={{ borderTop: `4px solid ${DAY_COLORS[day]}` }}>
@@ -2661,8 +2661,11 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
             )}
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-1">
-            <span className={`font-black text-[11px] leading-tight break-words ${isEmptySDM ? 'text-rose-600 italic' : 'text-slate-900'}`}>
+          <div className="flex items-center justify-between gap-1 min-w-0">
+            <span 
+              className={`font-black text-xs truncate ${isEmptySDM ? 'text-rose-600 italic' : 'text-slate-900'}`}
+              title={slot.nama}
+            >
               {slot.nama || '— Tidak Ada SDM —'}
             </span>
             {isDouble && (
