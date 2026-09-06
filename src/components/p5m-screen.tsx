@@ -1910,13 +1910,13 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       {/* ── TAB 2: BANK MATERI P5M ── */}
       {activeTab === 'materi' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-800/80 border border-slate-700 p-4 rounded-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--card-bg)] border border-[var(--border-main)] p-4 rounded-2xl shadow-xs">
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-amber-400" />
+              <h2 className="text-base font-bold text-[var(--text-main)] flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-amber-500" />
                 Bank Data Materi P5M &amp; Safety Talk
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
                 Koleksi materi teknis &amp; non-teknis dengan flyer yang tersimpan di Cloud SQL &amp; Google Drive.
               </p>
             </div>
@@ -1926,7 +1926,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 variant="secondary"
                 onClick={fetchMateriList}
                 disabled={loadingMateri}
-                className="bg-slate-800 text-amber-400 border-amber-500/30 hover:bg-slate-750 text-xs h-9 px-3 rounded-xl"
+                className="bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] hover:bg-[var(--card-bg)] text-xs h-9 px-3 rounded-xl shadow-xs"
               >
                 {loadingMateri ? (
                   <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
@@ -1957,22 +1957,22 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
           </div>
 
           {/* Search & Filter Bar */}
-          <div className="flex flex-wrap items-center gap-2 bg-slate-800/50 border border-slate-700/60 p-3 rounded-xl">
+          <div className="flex flex-wrap items-center gap-2 bg-[var(--card-bg)] border border-[var(--border-main)] p-3 rounded-xl shadow-xs">
             <div className="flex-1 min-w-[200px] relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 type="text"
                 placeholder="Cari judul materi briefing..."
                 value={materiSearch}
                 onChange={e => setMateriSearch(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 outline-none focus:border-amber-500"
+                className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl pl-9 pr-3 py-1.5 text-xs text-[var(--text-main)] outline-none focus:border-amber-500 transition-colors"
               />
             </div>
 
             <select
               value={materiFilterKat}
               onChange={e => setMateriFilterKat(e.target.value)}
-              className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none cursor-pointer"
+              className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-main)] outline-none cursor-pointer"
             >
               <option value="All">Semua Kategori</option>
               <option value="Teknis">Teknis</option>
@@ -1982,7 +1982,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
             <select
               value={materiFilterSubKat}
               onChange={e => setMateriFilterSubKat(e.target.value)}
-              className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none cursor-pointer"
+              className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-main)] outline-none cursor-pointer"
             >
               <option value="All">Semua Sub-Kategori</option>
               <option value="General">General (Semua Section)</option>
@@ -1993,21 +1993,21 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
           </div>
 
           {/* Table List */}
-          <Card className="bg-slate-800 border-slate-700 overflow-hidden rounded-2xl shadow-lg">
+          <Card className="border-[var(--border-main)] overflow-hidden rounded-2xl shadow-sm p-0">
             {loadingMateri ? (
-              <div className="py-16 text-center text-slate-400 flex flex-col items-center justify-center space-y-2">
+              <div className="py-16 text-center text-[var(--text-muted)] flex flex-col items-center justify-center space-y-2">
                 <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
                 <p className="text-xs">Memuat database materi...</p>
               </div>
             ) : filteredMateri.length === 0 ? (
-              <div className="py-16 text-center text-slate-400 space-y-2">
-                <BookOpen className="w-10 h-10 text-slate-600 mx-auto" />
-                <p className="text-sm font-semibold">Tidak ada materi yang cocok</p>
+              <div className="py-16 text-center text-[var(--text-muted)] space-y-2">
+                <BookOpen className="w-10 h-10 text-[var(--text-muted)] opacity-40 mx-auto" />
+                <p className="text-sm font-semibold text-[var(--text-main)]">Tidak ada materi yang cocok</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-300">
-                  <thead className="bg-slate-900/80 text-slate-400 uppercase font-mono text-[10px] border-b border-slate-700">
+                <table className="w-full text-left text-xs text-[var(--text-main)]">
+                  <thead className="bg-[var(--input-bg)] text-[var(--text-muted)] uppercase font-mono text-[10px] border-b border-[var(--border-main)]">
                     <tr>
                       <th className="py-3 px-4 w-12 text-center">No</th>
                       <th className="py-3 px-4">Judul Materi Briefing</th>
@@ -2018,15 +2018,15 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       <th className="py-3 px-4 w-24 text-center">Aksi</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-700/60">
+                  <tbody className="divide-y divide-[var(--border-main)]">
                     {filteredMateri.map((item, idx) => (
-                      <tr key={item.id} className="hover:bg-slate-750/50 transition-colors">
-                        <td className="py-3 px-4 text-center font-mono text-slate-500">{idx + 1}</td>
-                        <td className="py-3 px-4 font-semibold text-white">
+                      <tr key={item.id} className="hover:bg-[var(--input-bg)] transition-colors">
+                        <td className="py-3 px-4 text-center font-mono text-[var(--text-muted)]">{idx + 1}</td>
+                        <td className="py-3 px-4 font-semibold text-[var(--text-main)]">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span>{item.judul}</span>
+                            <span className="text-[var(--text-main)] font-semibold">{item.judul}</span>
                             {item.isInternal && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">
                                 ⭐ Internal (Sabtu)
                               </span>
                             )}
@@ -2035,14 +2035,14 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                         <td className="py-3 px-4">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
                             item.kategori === 'Teknis' 
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                              : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
+                              : 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30'
                           }`}>
                             {item.kategori}
                           </span>
                         </td>
-                        <td className="py-3 px-4 font-mono text-slate-300">
-                          <span className="px-2 py-0.5 rounded bg-slate-900/80 border border-slate-700 text-[10px]">
+                        <td className="py-3 px-4 font-mono">
+                          <span className="px-2 py-0.5 rounded bg-[var(--input-bg)] border border-[var(--border-main)] text-[var(--text-main)] text-[10px]">
                             {item.subKategori === 'General' 
                               ? 'General' 
                               : item.subKategori === 'Laboratory'
@@ -2060,8 +2060,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 onClick={() => setPreviewImage({ url: item.fileUrl, title: item.judul })}
                                 className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 mx-auto border transition-colors ${
                                   isPdf 
-                                    ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/30' 
-                                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30'
+                                    ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-500/30' 
+                                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30'
                                 }`}
                               >
                                 {isPdf ? <FileText className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
@@ -2069,10 +2069,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                               </button>
                             );
                           })() : (
-                            <span className="text-slate-600 font-mono text-[10px]">—</span>
+                            <span className="text-[var(--text-muted)] font-mono text-[10px]">—</span>
                           )}
                         </td>
-                        <td className="py-3 px-4 font-mono text-slate-400 text-[11px]">
+                        <td className="py-3 px-4 font-mono text-[var(--text-muted)] text-[11px]">
                           {item.lastUsed ? new Date(item.lastUsed).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '— Belum pernah'}
                         </td>
                         <td className="py-3 px-4 text-center">
@@ -2087,14 +2087,14 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 setFormIsInternal(Boolean(item.isInternal));
                                 setMateriModalOpen(true);
                               }}
-                              className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-slate-700 rounded-lg transition-colors"
+                              className="p-1.5 text-[var(--text-muted)] hover:text-amber-500 hover:bg-[var(--input-bg)] rounded-lg transition-colors"
                               title="Edit Materi"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => handleDeleteMateri(item.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-700 rounded-lg transition-colors"
+                              className="p-1.5 text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--input-bg)] rounded-lg transition-colors"
                               title="Hapus Materi"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -2114,44 +2114,44 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       {/* ── TAB 3: ARSIP JADWAL ── */}
       {activeTab === 'archive' && (
         <div className="space-y-4">
-          <div className="bg-slate-800/80 border border-slate-700 p-4 rounded-2xl">
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <History className="w-5 h-5 text-amber-400" />
+          <div className="bg-[var(--card-bg)] border border-[var(--border-main)] p-4 rounded-2xl shadow-xs">
+            <h2 className="text-base font-bold text-[var(--text-main)] flex items-center gap-2">
+              <History className="w-5 h-5 text-amber-500" />
               Arsip Jadwal P5M Tersimpan
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
               Daftar seluruh jadwal mingguan yang telah disimpan dan dipublikasikan sebelumnya.
             </p>
           </div>
 
-          <Card className="bg-slate-800 border-slate-700 p-4 rounded-2xl">
+          <Card className="border-[var(--border-main)] p-4 rounded-2xl shadow-xs">
             {loadingArchive ? (
-              <div className="py-16 text-center text-slate-400 flex flex-col items-center justify-center space-y-2">
+              <div className="py-16 text-center text-[var(--text-muted)] flex flex-col items-center justify-center space-y-2">
                 <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
                 <p className="text-xs">Memuat arsip jadwal...</p>
               </div>
             ) : archiveList.length === 0 ? (
-              <div className="py-16 text-center text-slate-400 space-y-2">
-                <History className="w-10 h-10 text-slate-600 mx-auto" />
-                <p className="text-sm font-semibold">Belum ada riwayat jadwal tersimpan</p>
+              <div className="py-16 text-center text-[var(--text-muted)] space-y-2">
+                <History className="w-10 h-10 text-[var(--text-muted)] opacity-40 mx-auto" />
+                <p className="text-sm font-semibold text-[var(--text-main)]">Belum ada riwayat jadwal tersimpan</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {archiveList.map(arch => (
-                  <div key={arch.id} className="bg-slate-900/90 border border-slate-700 rounded-xl p-4 space-y-3 hover:border-amber-500/50 transition-all shadow-md">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                      <span className="font-bold text-sm text-white font-mono">
+                  <div key={arch.id} className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-4 space-y-3 hover:border-amber-500/50 transition-all shadow-xs">
+                    <div className="flex items-center justify-between border-b border-[var(--border-main)] pb-2">
+                      <span className="font-bold text-sm text-[var(--text-main)] font-mono">
                         {arch.dateStart} – {arch.dateEnd}
                       </span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                         {arch.summary?.pt ? `PT ${arch.summary.pt}` : 'Saved'}
                       </span>
                     </div>
 
-                    <div className="text-xs text-slate-400 space-y-1 font-mono">
-                      <div>Dibuat oleh: <strong className="text-slate-200">{arch.createdBy || 'Admin'}</strong></div>
-                      <div>Waktu simpan: <span className="text-slate-400">{new Date(arch.createdAt).toLocaleString('id-ID')}</span></div>
-                      <div>Total Sesi: <span className="text-amber-400 font-bold">{arch.summary?.totalSlots || '-'} Sesi</span></div>
+                    <div className="text-xs text-[var(--text-muted)] space-y-1 font-mono">
+                      <div>Dibuat oleh: <strong className="text-[var(--text-main)]">{arch.createdBy || 'Admin'}</strong></div>
+                      <div>Waktu simpan: <span className="text-[var(--text-muted)]">{new Date(arch.createdAt).toLocaleString('id-ID')}</span></div>
+                      <div>Total Sesi: <span className="text-amber-500 font-bold">{arch.summary?.totalSlots || '-'} Sesi</span></div>
                     </div>
 
                     <div className="pt-2 flex items-center gap-2">
@@ -2164,7 +2164,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                           setActiveTab('schedule');
                           toast.success('Jadwal berhasil dimuat ke editor untuk ditinjau / diedit!');
                         }}
-                        className="w-full bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-200 text-xs h-8 rounded-lg font-bold border border-slate-700 transition-all"
+                        className="w-full bg-[var(--card-bg)] hover:bg-amber-500 hover:text-slate-950 text-[var(--text-main)] text-xs h-8 rounded-lg font-bold border border-[var(--border-main)] transition-all"
                       >
                         <Eye className="w-3.5 h-3.5 mr-1.5" /> Buka Jadwal Ini
                       </Button>
@@ -2179,11 +2179,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
       {/* ── MODAL: TAMBAH / EDIT MATERI ── */}
       {materiModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <Card className="bg-slate-900 border border-slate-700 w-full max-w-lg p-5 rounded-2xl shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-amber-400" />
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <Card className="bg-[var(--card-bg)] border border-[var(--border-main)] w-full max-w-lg p-5 rounded-2xl shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[var(--border-main)] pb-3">
+              <h3 className="font-bold text-sm text-[var(--text-main)] flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-amber-500" />
                 {editingMateri ? 'Edit Materi P5M' : 'Tambah Materi Baru'}
               </h3>
               <button 
@@ -2193,7 +2193,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   setFormImagePreview(null);
                   setFormImageFilename('');
                 }} 
-                className="text-slate-400 hover:text-white"
+                className="text-[var(--text-muted)] hover:text-[var(--text-main)]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2201,24 +2201,24 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
             <form onSubmit={handleSaveMateriModal} className="space-y-3.5 text-xs">
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Judul Materi / Topik Briefing *</label>
+                <label className="block text-[var(--text-main)] font-semibold mb-1">Judul Materi / Topik Briefing *</label>
                 <textarea
                   required
                   rows={2}
                   value={formJudul}
                   onChange={e => setFormJudul(e.target.value)}
                   placeholder="Contoh: Prosedur Pengoperasian Jaw Crusher & Pencegahan Debu"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white outline-none focus:border-amber-500 resize-none"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2.5 text-xs text-[var(--text-main)] outline-none focus:border-amber-500 resize-none transition-colors"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Kategori Utama</label>
+                  <label className="block text-[var(--text-main)] font-semibold mb-1">Kategori Utama</label>
                   <select
                     value={formKategori}
                     onChange={e => setFormKategori(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-white outline-none cursor-pointer"
+                    className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer"
                   >
                     <option value="Teknis">Teknis</option>
                     <option value="Non-Teknis">Non-Teknis</option>
@@ -2227,11 +2227,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Target Section / Divisi</label>
+                  <label className="block text-[var(--text-main)] font-semibold mb-1">Target Section / Divisi</label>
                   <select
                     value={formDivisi}
                     onChange={e => setFormDivisi(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-white outline-none cursor-pointer"
+                    className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer"
                   >
                     <option value="All">Semua Section (All)</option>
                     <option value="Preparation">Preparation</option>
@@ -2246,11 +2246,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
               {formKategori === 'Teknis' && (
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Sub-Kategori Teknis</label>
+                  <label className="block text-[var(--text-main)] font-semibold mb-1">Sub-Kategori Teknis</label>
                   <select
                     value={formSubKategori}
                     onChange={e => setFormSubKategori(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-white outline-none cursor-pointer"
+                    className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer"
                   >
                     <option value="General">Teknis General (Semua Section)</option>
                     <option value="Preparation">Teknis Preparation</option>
@@ -2261,19 +2261,19 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               )}
 
               {/* Checkbox Materi Internal (Sabtu) */}
-              <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl p-3">
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
                 <label className="flex items-start gap-2.5 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formIsInternal}
                     onChange={e => setFormIsInternal(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-slate-700 bg-slate-800 cursor-pointer"
+                    className="mt-0.5 w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-[var(--border-main)] bg-[var(--input-bg)] cursor-pointer"
                   />
                   <div>
-                    <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <div className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                       <span>⭐ Materi Internal (Jadwalkan di Hari Sabtu Periode Selanjutnya)</span>
                     </div>
-                    <p className="text-[11px] text-amber-400/80 mt-0.5 leading-relaxed">
+                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5 leading-relaxed">
                       Materi ini akan secara otomatis diprioritaskan dan dijadwalkan pada <strong>hari Sabtu</strong> periode penjadwalan P5M berikutnya sesuai kelompoknya (Teknis / Non-Teknis).
                     </p>
                   </div>
@@ -2282,20 +2282,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
               {/* Upload Flyer / Poster */}
               <div className="space-y-1.5 pt-1">
-                <label className="block text-slate-300 font-semibold">Upload Gambar / Flyer Materi (Google Drive &amp; Cloud Storage)</label>
+                <label className="block text-[var(--text-main)] font-semibold">Upload Gambar / Flyer Materi (Google Drive &amp; Cloud Storage)</label>
                 
                 {formImagePreview || editingMateri?.fileUrl ? (
-                  <div className="relative rounded-xl border border-emerald-500/40 bg-slate-950 p-2 flex items-center gap-3">
+                  <div className="relative rounded-xl border border-emerald-500/40 bg-[var(--input-bg)] p-2 flex items-center gap-3">
                     <img 
                       src={formImagePreview || editingMateri?.fileUrl} 
                       alt="Flyer Preview" 
-                      className="w-16 h-16 object-cover rounded-lg border border-slate-700 bg-slate-900"
+                      className="w-16 h-16 object-cover rounded-lg border border-[var(--border-main)] bg-[var(--card-bg)]"
                     />
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold text-white truncate">
+                      <div className="text-xs font-bold text-[var(--text-main)] truncate">
                         {formImageFilename || 'Flyer Terlampir'}
                       </div>
-                      <div className="text-[10px] text-emerald-400 font-mono">
+                      <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
                         {formImagePreview ? 'File baru siap diunggah' : 'File tersimpan di Google Drive'}
                       </div>
                     </div>
@@ -2306,17 +2306,17 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                         setFormImagePreview(null);
                         setFormImageFilename('');
                       }}
-                      className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-lg transition-colors"
+                      className="p-1.5 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors"
                       title="Hapus gambar"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 ) : (
-                  <label className="border-2 border-dashed border-slate-700 hover:border-amber-500/60 bg-slate-800/40 hover:bg-slate-800/80 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all">
-                    <ImageIcon className="w-7 h-7 text-slate-500 mb-1" />
-                    <span className="text-xs text-slate-300 font-medium">Klik untuk memilih file flyer (PNG/JPG)</span>
-                    <span className="text-[10px] text-slate-500 mt-0.5">Maksimal 10MB • Akan disimpan ke Google Drive</span>
+                  <label className="border-2 border-dashed border-[var(--border-main)] hover:border-amber-500/60 bg-[var(--input-bg)] rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all">
+                    <ImageIcon className="w-7 h-7 text-[var(--text-muted)] mb-1" />
+                    <span className="text-xs text-[var(--text-main)] font-medium">Klik untuk memilih file flyer (PNG/JPG)</span>
+                    <span className="text-[10px] text-[var(--text-muted)] mt-0.5">Maksimal 10MB • Akan disimpan ke Google Drive</span>
                     <input 
                       type="file" 
                       accept="image/*" 
@@ -2343,7 +2343,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 )}
               </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+              <div className="pt-3 flex items-center justify-end gap-2 border-t border-[var(--border-main)]">
                 <Button 
                   type="button" 
                   variant="ghost" 
@@ -2353,7 +2353,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     setFormImagePreview(null);
                     setFormImageFilename('');
                   }} 
-                  className="text-xs h-8 text-slate-400"
+                  className="text-xs h-8 text-[var(--text-muted)] hover:text-[var(--text-main)]"
                 >
                   Batal
                 </Button>
