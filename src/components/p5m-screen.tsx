@@ -1637,7 +1637,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 >
                   <div 
                     className={`bg-[var(--card-bg)] text-[var(--text-main)] rounded-2xl overflow-hidden shadow-xl border border-[var(--border-main)] transition-all ${
-                      selectedDayFilter === 'ALL' ? 'min-w-[1100px]' : 'w-full min-w-0'
+                      selectedDayFilter === 'ALL' ? 'min-w-[1180px]' : 'w-full min-w-0'
                     }`} 
                     ref={captureRef}
                   >
@@ -1698,7 +1698,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   const dateInfo = datesMeta[day];
 
                   return (
-                    <div id={`p5m-col-${day}`} key={day} className={`flex flex-col ${selectedDayFilter === 'ALL' ? 'min-w-[145px]' : 'w-full'}`}>
+                    <div id={`p5m-col-${day}`} key={day} className={`flex flex-col ${selectedDayFilter === 'ALL' ? 'min-w-[160px]' : 'w-full'}`}>
                       
                       {/* Column Header */}
                       <div className="bg-[var(--input-bg)] p-2.5 text-center border-b border-[var(--border-main)]" style={{ borderTop: `4px solid ${DAY_COLORS[day]}` }}>
@@ -2661,15 +2661,15 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
             )}
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-1 min-w-0">
+          <div className="flex items-start justify-between gap-1 min-w-0">
             <span 
-              className={`font-black text-xs truncate ${isEmptySDM ? 'text-rose-600 italic' : 'text-slate-900'}`}
+              className={`font-bold text-[11px] leading-snug break-words ${isEmptySDM ? 'text-rose-600 italic' : 'text-slate-900'}`}
               title={slot.nama}
             >
               {slot.nama || '— Tidak Ada SDM —'}
             </span>
             {isDouble && (
-              <span className="px-1.5 py-0.2 bg-slate-900 text-white font-black text-[9px] rounded font-mono shadow-sm flex-shrink-0">
+              <span className="px-1.5 py-0.2 bg-slate-900 text-white font-black text-[9px] rounded font-mono shadow-sm shrink-0 mt-0.5">
                 2×
               </span>
             )}
