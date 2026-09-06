@@ -11,8 +11,6 @@ import {
   X, 
   FileText, 
   Sparkles, 
-  Tag, 
-  Layers,
   Eye
 } from 'lucide-react';
 import { Button } from './ui';
@@ -85,37 +83,37 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
   return (
     <>
       <AnimatePresence>
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.92, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="w-full max-w-lg bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-amber-500/40 rounded-3xl shadow-2xl overflow-hidden relative text-white"
+            className="w-full max-w-lg bg-[var(--card-bg)] border border-[var(--border-main)] rounded-3xl shadow-2xl overflow-hidden relative text-[var(--text-main)]"
           >
             {/* Top decorative glow */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-24 bg-gradient-to-b from-amber-500/20 to-transparent blur-2xl pointer-events-none" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-20 bg-gradient-to-b from-amber-500/15 to-transparent blur-2xl pointer-events-none" />
 
             {/* Header */}
-            <div className="relative p-6 pb-4 flex items-start justify-between border-b border-slate-800/80">
+            <div className="relative p-6 pb-4 flex items-start justify-between border-b border-[var(--border-main)]">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-inner">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-inner">
                   <Megaphone className="w-6 h-6 animate-pulse" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                    <span className="text-[10px] font-mono uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1">
                       <Sparkles className="w-2.5 h-2.5" /> P5M Briefing Alert
                     </span>
                   </div>
-                  <h3 className="text-lg font-bold text-white mt-1">
+                  <h3 className="text-lg font-bold text-[var(--text-main)] mt-1">
                     Jadwal Pembawa Materi P5M
                   </h3>
                 </div>
               </div>
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="p-1.5 rounded-full text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--input-bg)] transition-colors"
                 aria-label="Tutup"
               >
                 <X className="w-5 h-5" />
@@ -124,44 +122,44 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
 
             {/* Body */}
             <div className="p-6 space-y-4">
-              <p className="text-slate-300 text-sm leading-relaxed">
-                Halo <span className="font-bold text-amber-300">{assignment.nama}</span>, Anda telah dijadwalkan sebagai <span className="font-semibold text-white">pembawa materi briefing keselamatan kerja P5M</span> minggu ini:
+              <p className="text-[var(--text-muted)] text-sm leading-relaxed">
+                Halo <span className="font-bold text-amber-600 dark:text-amber-400">{assignment.nama}</span>, Anda telah dijadwalkan sebagai <span className="font-semibold text-[var(--text-main)]">pembawa materi briefing keselamatan kerja P5M</span> minggu ini:
               </p>
 
               {/* Assignment Details Card */}
-              <div className="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-4 space-y-3 shadow-inner">
+              <div className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-2xl p-4 space-y-3 shadow-xs">
                 {/* Hari & Shift */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50 flex items-start gap-2.5 min-w-0">
-                    <Calendar className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="bg-[var(--card-bg)] p-3 rounded-xl border border-[var(--border-main)] flex items-start gap-2.5 min-w-0 shadow-xs">
+                    <Calendar className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
-                      <div className="text-[9px] uppercase font-mono text-slate-400 font-semibold tracking-wider">Hari Briefing</div>
-                      <div className="text-xs font-bold text-white leading-snug">{assignment.day}</div>
+                      <div className="text-[9px] uppercase font-mono text-[var(--text-muted)] font-semibold tracking-wider">Hari Briefing</div>
+                      <div className="text-xs font-bold text-[var(--text-main)] leading-snug">{assignment.day}</div>
                     </div>
                   </div>
 
-                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50 flex items-start gap-2.5 min-w-0">
-                    <Clock className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                  <div className="bg-[var(--card-bg)] p-3 rounded-xl border border-[var(--border-main)] flex items-start gap-2.5 min-w-0 shadow-xs">
+                    <Clock className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
-                      <div className="text-[9px] uppercase font-mono text-slate-400 font-semibold tracking-wider">Shift & Zona</div>
-                      <div className="text-xs font-bold text-white leading-snug break-words">{assignment.shift} • {assignment.zone}</div>
+                      <div className="text-[9px] uppercase font-mono text-[var(--text-muted)] font-semibold tracking-wider">Shift &amp; Zona</div>
+                      <div className="text-xs font-bold text-[var(--text-main)] leading-snug break-words">{assignment.shift} • {assignment.zone}</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Judul Materi */}
-                <div className="bg-slate-900/80 p-3.5 rounded-xl border border-amber-500/20 space-y-1">
+                <div className="bg-[var(--card-bg)] p-3.5 rounded-xl border border-amber-500/30 space-y-1 shadow-xs">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-mono font-bold text-amber-400 flex items-center gap-1.5">
+                    <span className="text-[10px] uppercase font-mono font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                       <BookOpen className="w-3.5 h-3.5" /> Judul Materi
                     </span>
                     {assignment.kategori && (
-                      <span className="text-[9px] font-mono px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-semibold">
+                      <span className="text-[9px] font-mono px-2 py-0.5 rounded-md bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--border-main)] font-semibold">
                         {assignment.kategori}
                       </span>
                     )}
                   </div>
-                  <div className="text-sm font-extrabold text-white leading-snug break-words">
+                  <div className="text-sm font-extrabold text-[var(--text-main)] leading-snug break-words">
                     {assignment.materi || 'Briefing Standar Operasional'}
                   </div>
                 </div>
@@ -169,14 +167,14 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
 
               {/* Flyer Download Action if Available */}
               {assignment.fileUrl ? (
-                <div className="bg-gradient-to-r from-emerald-950/40 via-teal-950/30 to-slate-900 p-3.5 rounded-2xl border border-emerald-500/30 flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+                <div className="bg-emerald-500/10 p-3.5 rounded-2xl border border-emerald-500/30 flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
                       <FileText className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs font-bold text-emerald-200">Flyer / Modul Materi Tersedia</div>
-                      <div className="text-[10px] text-slate-400">Unduh atau buka materi untuk persiapan briefing.</div>
+                      <div className="text-xs font-bold text-emerald-700 dark:text-emerald-300">Flyer / Modul Materi Tersedia</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">Unduh atau buka materi untuk persiapan briefing.</div>
                     </div>
                   </div>
 
@@ -184,41 +182,41 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
                     <Button
                       onClick={() => setPreviewFlyer({ url: assignment.fileUrl, title: assignment.materi })}
                       size="sm"
-                      className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-2.5 py-1.5 rounded-xl border border-slate-700 flex items-center gap-1"
+                      className="bg-[var(--card-bg)] hover:bg-[var(--input-bg)] text-[var(--text-main)] text-xs px-2.5 py-1.5 rounded-xl border border-[var(--border-main)] flex items-center gap-1 shadow-xs"
                     >
                       <Eye className="w-3.5 h-3.5" /> Lihat
                     </Button>
                     <Button
                       onClick={handleDownloadFlyer}
                       size="sm"
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-xl font-bold shadow-md shadow-emerald-950 flex items-center gap-1"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-xl font-bold shadow-md flex items-center gap-1"
                     >
                       <Download className="w-3.5 h-3.5" /> Buka / Unduh
                     </Button>
                   </div>
                 </div>
               ) : (
-                <div className="p-2.5 rounded-xl bg-slate-800/40 border border-slate-700/40 text-[11px] text-slate-400 text-center italic">
+                <div className="p-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-main)] text-[11px] text-[var(--text-muted)] text-center italic">
                   — Tidak ada lampiran flyer untuk topik ini (Gunakan materi briefing standar) —
                 </div>
               )}
             </div>
 
             {/* Footer */}
-            <div className="p-4 bg-slate-950/90 border-t border-slate-800/80 flex items-center justify-end gap-3 flex-wrap sm:flex-nowrap">
+            <div className="p-4 bg-[var(--card-bg)] border-t border-[var(--border-main)] flex items-center justify-end gap-3 flex-wrap sm:flex-nowrap">
               <Button
                 variant="ghost"
                 onClick={() => setIsOpen(false)}
-                className="text-slate-400 hover:text-white text-xs px-3 py-2"
+                className="text-[var(--text-muted)] hover:text-[var(--text-main)] text-xs px-3 py-2"
               >
                 Nanti Saja
               </Button>
               <Button
                 onClick={handleAcknowledge}
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 py-2 rounded-xl shadow-lg shadow-amber-950/50 flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 py-2 rounded-xl shadow-md flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
                 <CheckCircle2 className="w-4 h-4 text-slate-950 shrink-0" />
-                <span>Saya Sudah Paham & Siap</span>
+                <span>Saya Sudah Paham &amp; Siap</span>
               </Button>
             </div>
           </motion.div>
@@ -231,32 +229,32 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
 
         return (
           <div 
-            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
             onClick={() => setPreviewFlyer(null)}
           >
             <div 
-              className={`w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl p-4 space-y-3 ${info.isPdf ? 'max-w-4xl max-h-[90vh]' : 'max-w-2xl'}`}
+              className={`w-full bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] rounded-2xl overflow-hidden shadow-2xl p-4 space-y-3 ${info.isPdf ? 'max-w-4xl max-h-[90vh]' : 'max-w-2xl'}`}
               onClick={e => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex items-center justify-between border-b border-[var(--border-main)] pb-2">
                 <div className="flex items-center gap-2 min-w-0 pr-3">
                   {info.isPdf ? (
-                    <FileText className="w-4 h-4 text-orange-400 shrink-0" />
+                    <FileText className="w-4 h-4 text-orange-500 shrink-0" />
                   ) : (
-                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                    <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
                   )}
-                  <h4 className="text-xs font-bold text-white truncate max-w-md">{previewFlyer.title}</h4>
+                  <h4 className="text-xs font-bold text-[var(--text-main)] truncate max-w-md">{previewFlyer.title}</h4>
                 </div>
                 <button 
                   onClick={() => setPreviewFlyer(null)} 
-                  className="p-1 rounded-lg text-slate-400 hover:text-white"
+                  className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)]"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {info.isPdf ? (
-                <div className="bg-slate-950 rounded-xl overflow-hidden flex flex-col items-center justify-center h-[65vh] border border-slate-800 relative">
+                <div className="bg-[var(--input-bg)] rounded-xl overflow-hidden flex flex-col items-center justify-center h-[65vh] border border-[var(--border-main)] relative">
                   <iframe 
                     src={info.embedUrl} 
                     title={previewFlyer.title}
@@ -265,7 +263,7 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
                   />
                 </div>
               ) : (
-                <div className="max-h-[70vh] overflow-y-auto flex items-center justify-center bg-slate-950 rounded-xl p-2 min-h-[220px]">
+                <div className="max-h-[70vh] overflow-y-auto flex items-center justify-center bg-[var(--input-bg)] rounded-xl p-2 min-h-[220px] border border-[var(--border-main)]">
                   <img 
                     src={info.imageUrl} 
                     alt={previewFlyer.title} 
@@ -280,20 +278,20 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
                 </div>
               )}
 
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800 flex-wrap">
-                <div className="text-[10px] text-slate-400 font-mono">
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-[var(--border-main)] flex-wrap">
+                <div className="text-[10px] text-[var(--text-muted)] font-mono">
                   {info.isPdf ? '📄 Dokumen Prosedur Standar (IK/SOP)' : '🖼️ Flyer Briefing Keselamatan'}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
                     onClick={() => window.open(info.viewUrl, '_blank')}
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-xl border border-slate-700 flex items-center gap-1"
+                    className="bg-[var(--input-bg)] hover:bg-[var(--card-bg)] text-[var(--text-main)] text-xs font-semibold px-3 py-1.5 rounded-xl border border-[var(--border-main)] flex items-center gap-1 shadow-xs"
                   >
                     <ExternalLink className="w-3.5 h-3.5" /> Buka Tab Baru
                   </Button>
                   <Button
                     onClick={handleDownloadFlyer}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 shadow-md shadow-emerald-950"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 shadow-md"
                   >
                     <Download className="w-3.5 h-3.5" /> Unduh
                   </Button>
