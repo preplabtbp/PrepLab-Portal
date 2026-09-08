@@ -13,6 +13,7 @@ import { FoodReportModal } from './food-report-modal';
 import { UsernamePromptModal } from './UsernamePromptModal';
 import { getDailySkenaQuote } from '../utils/skena-quotes';
 import { DailyGreetingHero } from './DailyGreetingHero';
+import { InspectionScheduleCard } from './InspectionScheduleCard';
 
 export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: { 
   inspectorName: string, 
@@ -210,6 +211,17 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
         inspectorName={inspectorName} 
         inspectorNik={inspectorNik} 
         onOpenUsernameModal={() => setShowUsernameModal(true)} 
+      />
+
+      {/* Live Inspection Schedule Card from Google Sheet */}
+      <InspectionScheduleCard
+        inspectorName={inspectorName}
+        inspectorNik={inspectorNik}
+        onNavigateToInspection={(formId, subArea) => {
+          if (formId) sessionStorage.setItem('preselected_form_id', formId);
+          if (subArea) sessionStorage.setItem('preselected_sub_area', subArea);
+          onNav('weekly-inspection');
+        }}
       />
 
       {/* Sticky Tabs for Mobile/Desktop */}
