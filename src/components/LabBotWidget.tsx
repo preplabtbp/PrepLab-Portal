@@ -261,19 +261,19 @@ export function LabBotWidget({ inspectorName, inspectorNik }: { inspectorName?: 
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0, opacity: 0 }}
-          className="fixed bottom-20 md:bottom-6 right-5 z-40 flex items-center"
+          className="fixed bottom-38 sm:bottom-42 right-4 sm:right-6 z-40 flex items-center"
         >
           <button
             onClick={() => setIsOpen(true)}
-            className="group relative flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-300 border border-emerald-400/40 cursor-pointer"
-            title="Buka Asisten Pintar SOP Lab & K3"
+            className="group relative flex items-center gap-2 p-2.5 sm:px-4 sm:py-2.5 rounded-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all duration-300 border-2 border-white/30 ring-4 ring-emerald-500/20 cursor-pointer"
+            title="Buka Asisten Pintar SOP Lab & K3 (LabBot AI)"
           >
             <div className="relative">
-              <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-xs flex items-center justify-center text-white">
-                <Bot className="w-5 h-5" />
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/20 backdrop-blur-xs flex items-center justify-center text-white">
+                <Bot className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 border-2 border-emerald-700 rounded-full animate-ping" />
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 border-2 border-emerald-700 rounded-full" />
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 border-2 border-emerald-700 rounded-full animate-ping" />
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 border-2 border-emerald-700 rounded-full" />
             </div>
 
             <div className="text-left hidden sm:block">
@@ -300,7 +300,7 @@ export function LabBotWidget({ inspectorName, inspectorNik }: { inspectorName?: 
             className={`fixed z-50 transition-all duration-300 ${
               isExpanded 
                 ? 'inset-3 sm:inset-6 md:inset-10' 
-                : 'bottom-4 right-4 sm:bottom-6 sm:right-6 w-[94vw] sm:w-[480px] md:w-[520px] h-[84vh] sm:h-[660px] max-h-[92vh]'
+                : 'bottom-[5.5rem] sm:bottom-6 right-3 sm:right-6 w-[calc(100vw-24px)] sm:w-[480px] md:w-[520px] h-[calc(100vh-7rem)] sm:h-[660px] max-h-[660px]'
             }`}
           >
             <div className="flex flex-col h-full bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl">
