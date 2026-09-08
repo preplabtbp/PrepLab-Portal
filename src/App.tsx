@@ -16,6 +16,7 @@ import { P5MNotificationModal } from './components/p5m-notification-modal';
 import { GroupReportScreen, GroupReportFloatingWidget } from './components/GroupReportScreen';
 import { ReminderNotificationModal } from './components/ReminderNotificationModal';
 import { InspectionNotificationModal } from './components/InspectionNotificationModal';
+import { GlobalOpenFindingsReminder } from './components/OpenFindingsReminderModal';
 
 
 
@@ -1352,6 +1353,18 @@ export default function App() {
         <ReminderNotificationModal
           userNik={inspectorNik}
           onNavigateToInspection={() => navigate('/weekly-inspection')}
+        />
+      )}
+
+      {/* Global Open Inspection Findings Reminder Modal for Assigned Supervisors */}
+      {inspectorNik && (
+        <GlobalOpenFindingsReminder
+          inspectorNik={inspectorNik}
+          inspectorName={inspectorName}
+          inspectorJabatan={userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan')}
+          onNavigateToDashboard={() => {
+            navigate('/sap-dashboard');
+          }}
         />
       )}
 
