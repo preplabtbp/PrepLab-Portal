@@ -1129,6 +1129,32 @@ router.get("/api/gallery", async (req, res) => {
           const area = insp.location || 'Area Kerja';
           const category = insp.type || 'Inspeksi Terpadu';
 
+          // Check for individual unit/item photos in dataF (e.g. Inspeksi Sarana with up to 3 units, each having its own photo)
+          if (insp.dataF) {
+            try {
+              const parsedDF = typeof insp.dataF === 'string' ? JSON.parse(insp.dataF) : insp.dataF;
+              const payloadArr = parsedDF?.payload || (Array.isArray(parsedDF) ? parsedDF : null);
+              if (Array.isArray(payloadArr)) {
+                payloadArr.forEach((item: any, pIdx: number) => {
+                  const unitPhoto = item.foto || item.photo || item.url;
+                  if (unitPhoto && typeof unitPhoto === 'string' && unitPhoto.startsWith('http') && !seenUrls.has(unitPhoto.trim())) {
+                    seenUrls.add(unitPhoto.trim());
+                    const unitName = item.unit || item.reg || item.item || item.nama || `Unit ${pIdx + 1}`;
+                    allGallery.push({
+                      url: unitPhoto.trim(),
+                      week: weekLabel,
+                      sumber: `${category}`,
+                      area: `${category} - ${unitName}`,
+                      inspektor: inspector,
+                      tanggal: tglFormatted,
+                      timestamp: dateObj.getTime()
+                    });
+                  }
+                });
+              }
+            } catch(e) {}
+          }
+
           if (insp.photoUrl && insp.photoUrl !== '-') {
             if (insp.photoUrl.startsWith('{')) {
               try {
@@ -1185,7 +1211,7 @@ router.get("/api/gallery", async (req, res) => {
         { sheet: 'Log_P3K', sumber: 'Kotak P3K', photoKeys: ['Foto Proses'], areaKey: 'Judul Form', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Item P3K', idKey: 'Judul File' },
         { sheet: 'Log_Perkakas', sumber: 'Peralatan & Perkakas', photoKeys: ['Foto_Proses'], areaKey: 'Nama Perkakas', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Catatan', idKey: 'Judul Form' },
         { sheet: 'Log_Tabung', sumber: 'Tabung Gas', photoKeys: ['Foto_Proses'], areaKey: 'Judul Form', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Keterangan', idKey: 'Judul Form' },
-        { sheet: 'Log_Sarana', sumber: 'Sarana Unit', photoKeys: ['Foto_Proses'], areaKey: 'Unit Sarana', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Catatan', idKey: 'Judul Form' },
+        { sheet: 'Log_Sarana', sumber: 'Sarana Unit', photoKeys: ['Foto Unit 1', 'Foto Unit 2', 'Foto Unit 3', 'Foto_Proses'], areaKey: 'Nama/No Unit', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Keterangan', idKey: 'Judul Form' },
         { sheet: 'Log_Tangga', sumber: 'Tangga Portabel', photoKeys: ['Foto_Proses'], areaKey: 'No Registrasi', inspKey: 'Inspektor 1', dateKey: 'Tanggal', descKey: 'Catatan', idKey: 'Nama File' }
       ];
 

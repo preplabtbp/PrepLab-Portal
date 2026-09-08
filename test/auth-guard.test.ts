@@ -3,10 +3,7 @@
  * Run via: npm test or npm run test:auth
  */
 
-declare const process: {
-  env: Record<string, string | undefined>;
-  exit: (code?: number) => never;
-};
+import process from 'node:process';
 
 const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000';
 

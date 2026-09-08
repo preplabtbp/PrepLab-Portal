@@ -98,7 +98,7 @@ export const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement> & { 
   </div>
 );
 
-export const Button = ({ children, variant = 'primary', size, className = '', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost'; size?: 'sm' | 'md' | 'lg' | string }) => {
+export const Button = ({ children, variant = 'primary', size, className = '', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline'; size?: 'sm' | 'md' | 'lg' | string }) => {
   const isWidthSpecified = className.includes("w-") || className.includes("flex-1");
   const hasPadding = className.includes("p-") || className.includes("px-") || className.includes("py-") || className.includes("h-");
   const sizePadding = size === 'sm' ? 'py-1.5 px-3 text-xs' : size === 'lg' ? 'py-4 px-6 text-base' : 'py-3.5 px-4 text-sm';
@@ -108,7 +108,8 @@ export const Button = ({ children, variant = 'primary', size, className = '', ..
     primary: "text-white border-transparent",
     secondary: "hover:opacity-90",
     danger: "bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/30",
-    ghost: "bg-transparent border-transparent shadow-none hover:bg-black/5 opacity-80 hover:opacity-100"
+    ghost: "bg-transparent border-transparent shadow-none hover:bg-black/5 opacity-80 hover:opacity-100",
+    outline: "bg-transparent border-[var(--border-main)] hover:bg-[var(--input-bg)] text-[var(--text-main)]"
   };
 
   const dynamicStyle = variant === 'primary' 

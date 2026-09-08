@@ -111,13 +111,14 @@ export function FormTabung({ data, inspectorName, inspectorNik, onSubmit, autoFi
 
     const payload: any[] = [];
     data.forEach(q => {
-      const item = q.item.replace(/^\\d+\\.\\s*/, "").trim();
+      const item = q.item.replace(/^\d+\.\s*/, "").trim();
       const ans = answers[q.item] || { jawaban: 'YA' };
       const isTdk = ans.jawaban === 'TIDAK';
       const hariArr = ans.hari || [];
       const ket = (ans.ket || '').trim();
+      const isIgnored = item.toLowerCase().includes('flash back arrestor ganda') || item.toLowerCase().includes('flashback arrestor ganda');
 
-      if (isTdk) {
+      if (isTdk && !isIgnored) {
         if (hariArr.length === 0) {
           hasError = true;
           errorMessage = `Peringatan pada item:\n"${item}"\n\nAnda menjawab TIDAK, silakan pilih minimal 1 Hari Kendala.`;
@@ -131,7 +132,7 @@ export function FormTabung({ data, inspectorName, inspectorNik, onSubmit, autoFi
         item,
         jawaban: ans.jawaban || 'YA',
         hari: isTdk && hariArr.length > 0 ? hariArr.join(", ") : "-",
-        keterangan: isTdk ? ket : "-"
+        keterangan: isTdk ? (ket || (isIgnored ? "Tidak menggunakan (Bukan temuan)" : "-")) : "-"
       });
     });
 
@@ -199,9 +200,18 @@ export function FormTabung({ data, inspectorName, inspectorNik, onSubmit, autoFi
         const ans = answers[q.item] || { jawaban: 'YA' };
         const isTdk = ans.jawaban === 'TIDAK';
 
+        const isIgnored = q.item.toLowerCase().includes('flash back arrestor ganda') || q.item.toLowerCase().includes('flashback arrestor ganda');
+
         return (
           <Card key={idx} className="border-l-4 border-l-sky-500 p-4 space-y-4 bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)]">
-            <h6 className="font-bold text-[var(--text-main)] text-sm">{idx + 1}. {q.item}</h6>
+            <div className="flex items-start justify-between gap-2">
+              <h6 className="font-bold text-[var(--text-main)] text-sm">{idx + 1}. {q.item}</h6>
+              {isIgnored && (
+                <span className="shrink-0 px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                  Tidak Digunakan di Lab (Bukan Temuan)
+                </span>
+              )}
+            </div>
             
             <div className="flex gap-2">
               <button
@@ -218,7 +228,14 @@ export function FormTabung({ data, inspectorName, inspectorNik, onSubmit, autoFi
               </button>
             </div>
 
-            {isTdk && (
+            {isTdk && isIgnored && (
+              <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                <span>Flash back arrestor ganda tidak digunakan di area ini. Status TIDAK dicatat sebagai informasi operasional dan <strong>bukan temuan K3</strong>.</span>
+              </div>
+            )}
+
+            {isTdk && !isIgnored && (
               <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl space-y-4 animate-in fade-in zoom-in-95 mt-2">
                 <div>
                   <label className="text-xs font-semibold text-rose-700 block mb-2 flex items-center gap-1">

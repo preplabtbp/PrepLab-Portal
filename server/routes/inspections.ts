@@ -228,7 +228,15 @@ router.post("/api/inspections/universal", async (req, res) => {
                   }
               });
           } else if ((finalData.tipe === "TABUNG_MINGGUAN" || finalData.tipe === "TABUNG") && Array.isArray(finalData.payload)) {
-              finalData.payload.filter((item: any) => item.jawaban === 'TIDAK').forEach((item: any) => {
+              finalData.payload.filter((item: any) => {
+                  if (item.jawaban !== 'TIDAK') return false;
+                  const itemText = (item.item || '').toLowerCase();
+                  const ketText = (item.keterangan || '').toLowerCase();
+                  // Flash back arrestor ganda memang tidak digunakan di site ini, sehingga bukan temuan
+                  if (itemText.includes('flash back arrestor ganda') || itemText.includes('flashback arrestor ganda')) return false;
+                  if (ketText.includes('tidak menggunakan') || ketText.includes('tidak pakai') || ketText.includes('n/a') || ketText.includes('tidak ada')) return false;
+                  return true;
+              }).forEach((item: any) => {
                   allTemuan.push({
                       temuan: `Kendala Tabung Gas ${finalData.tabungMeta?.reg || ''} - ${item.item} (${item.hari || ''}): ${item.keterangan || '-'}`,
                       risiko: 'Kebocoran Gas / Ledakan / Keracunan',
