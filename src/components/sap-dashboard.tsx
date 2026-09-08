@@ -366,16 +366,33 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
 
   // Real Heatmap Data (Temuan by Area)
   const heatmapData = useMemo(() => {
-    const areaCounts = filteredTicketsByPeriod.reduce((acc: Record<string, number>, curr) => {
+    const areaStats = filteredTicketsByPeriod.reduce((acc: Record<string, { count: number; openCount: number; closedCount: number }>, curr) => {
       const area = (curr.location && curr.location !== '-') ? curr.location.trim() : (curr.area || 'General / Lainnya');
-      acc[area] = (acc[area] || 0) + 1;
+      if (!acc[area]) {
+        acc[area] = { count: 0, openCount: 0, closedCount: 0 };
+      }
+      acc[area].count += 1;
+      const isClosed = (curr.status || '').toUpperCase() === 'CLOSED';
+      if (isClosed) {
+        acc[area].closedCount += 1;
+      } else {
+        acc[area].openCount += 1;
+      }
       return acc;
     }, {});
     
-    return Object.keys(areaCounts).map(area => ({
+    return Object.keys(areaStats).map(area => ({
       area,
-      count: areaCounts[area]
-    })).sort((a, b) => b.count - a.count).slice(0, 6);
+      count: areaStats[area].count,
+      openCount: areaStats[area].openCount,
+      closedCount: areaStats[area].closedCount,
+    })).sort((a, b) => {
+      // Prioritize areas with open findings first, then by total count
+      if (b.openCount !== a.openCount) {
+        return b.openCount - a.openCount;
+      }
+      return b.count - a.count;
+    }).slice(0, 6);
   }, [filteredTicketsByPeriod]);
 
   // Real Category Breakdown
@@ -428,14 +445,16 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
         }
       });
 
-      const temuan = ticketsInWeek.length;
+      const total = ticketsInWeek.length;
       const ditutup = ticketsInWeek.filter(t => (t.status || '').toUpperCase() === 'CLOSED').length;
+      const open = ticketsInWeek.filter(t => (t.status || '').toUpperCase() !== 'CLOSED').length;
       return {
         name: wl.label,
         weekNum: wl.weekNum,
         year: wl.year,
-        temuan,
-        ditutup
+        temuan: total,
+        ditutup,
+        open
       };
     });
   }, [allTickets]);
@@ -814,6 +833,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                 {heatmapData.length > 0 ? heatmapData.map((item, i) => {
                   const maxCount = heatmapData[0].count;
                   const percentage = maxCount > 0 ? Math.round((item.count / maxCount) * 100) : 0;
+                  const hasOpen = item.openCount > 0;
                   return (
                     <div 
                       key={item.area} 
@@ -826,17 +846,29 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                     >
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-semibold text-slate-800 truncate mr-2 flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded-full ${i === 0 ? 'bg-rose-500' : i === 1 ? 'bg-orange-500' : 'bg-amber-400'}`} />
+                          <span className={`w-2 h-2 rounded-full ${
+                            hasOpen 
+                              ? (i === 0 ? 'bg-rose-500' : i === 1 ? 'bg-orange-500' : 'bg-amber-400')
+                              : 'bg-emerald-500'
+                          }`} />
                           {item.area}
                         </span>
-                        <span className="text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded-md">
-                          {item.count} temuan
-                        </span>
+                        {hasOpen ? (
+                          <span className="text-rose-600 font-bold bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md flex items-center gap-1 text-[11px]">
+                            {item.openCount} Open {item.closedCount > 0 && <span className="text-slate-400 font-normal">({item.closedCount} Selesai)</span>}
+                          </span>
+                        ) : (
+                          <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md flex items-center gap-1 text-[11px]">
+                            ✓ Tuntas ({item.closedCount} Ditutup)
+                          </span>
+                        )}
                       </div>
                       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                         <div 
                           className={`h-full rounded-full transition-all duration-500 ${
-                            i === 0 ? 'bg-rose-500' : i === 1 ? 'bg-orange-500' : 'bg-amber-400'
+                            hasOpen 
+                              ? (i === 0 ? 'bg-rose-500' : i === 1 ? 'bg-orange-500' : 'bg-amber-400')
+                              : 'bg-emerald-500'
                           }`} 
                           style={{ width: `${percentage}%` }}
                         />
@@ -878,8 +910,8 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                   labels: trendData.map(d => d.name),
                   datasets: [
                     {
-                      label: 'Temuan Baru',
-                      data: trendData.map(d => d.temuan),
+                      label: 'Belum Ditutup (Open)',
+                      data: trendData.map(d => d.open),
                       backgroundColor: '#ef4444',
                       borderRadius: 6,
                       barPercentage: 0.6,
@@ -899,7 +931,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                   onClick: (event: any, elements: any[]) => {
                     if (elements && elements.length > 0) {
                       const el = elements[0];
-                      const datasetIndex = el.datasetIndex; // 0 = Temuan Baru, 1 = Ditutup (Closed)
+                      const datasetIndex = el.datasetIndex; // 0 = Belum Ditutup (Open), 1 = Ditutup (Closed)
                       const index = el.index;
                       const item = trendData[index];
                       if (item) {
@@ -911,7 +943,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                           toast.success(`Menampilkan temuan Ditutup (Closed) untuk ${item.name}`);
                         } else {
                           setStatusTab('OPEN');
-                          toast.success(`Menampilkan temuan Baru (Open) untuk ${item.name}`);
+                          toast.success(`Menampilkan temuan Belum Ditutup (Open) untuk ${item.name}`);
                         }
 
                         setTimeout(() => {
@@ -947,7 +979,17 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                       bodyColor: '#e2e8f0',
                       padding: 10,
                       cornerRadius: 8,
-                      usePointStyle: true
+                      usePointStyle: true,
+                      callbacks: {
+                        footer: (tooltipItems: any[]) => {
+                          const index = tooltipItems[0]?.dataIndex;
+                          if (index !== undefined && trendData[index]) {
+                            const item = trendData[index];
+                            return `Total Temuan: ${item.temuan} | Selesai: ${item.temuan > 0 ? Math.round((item.ditutup / item.temuan) * 100) : 0}%`;
+                          }
+                          return '';
+                        }
+                      }
                     }
                   }
                 }}
