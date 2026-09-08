@@ -495,7 +495,7 @@ export function RosterAdminScreen() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-16">
+    <div className="space-y-3 sm:space-y-6 animate-in fade-in duration-500 pb-24">
       <PageHeader 
         title="Tabel Roster & Jadwal Kerja"
         description={
@@ -505,34 +505,34 @@ export function RosterAdminScreen() {
         }
         icon={<Calendar />}
       >
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           {canEditRoster ? (
             <span 
-              className="text-xs font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 shadow-2xs bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+              className="text-[11px] sm:text-xs font-bold px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border flex items-center gap-1.5 shadow-2xs bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
             >
-              <Edit2 className="w-3.5 h-3.5" /> Editor Roster (Admin & Dev)
+              <Edit2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Editor Roster
             </span>
           ) : (
             <span 
-              className="text-xs font-medium px-3 py-1.5 rounded-xl border flex items-center gap-1.5 shadow-2xs opacity-80"
+              className="text-[11px] sm:text-xs font-medium px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border flex items-center gap-1.5 shadow-2xs opacity-80"
               style={{
                 backgroundColor: 'var(--input-bg)',
                 borderColor: 'var(--border-main)',
                 color: 'var(--text-muted)'
               }}
             >
-              <Info className="w-3.5 h-3.5 text-slate-400" /> Mode Baca Roster
+              <Info className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" /> Mode Baca
             </span>
           )}
           {canEditRoster && (
             <Button
               onClick={handleManualSync}
               disabled={isSyncing}
-              className="text-white flex items-center gap-2 rounded-xl text-xs font-bold px-3.5 py-2 shadow-sm transition-all cursor-pointer"
+              className="text-white flex items-center gap-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 shadow-sm transition-all cursor-pointer"
               style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'Menyinkronkan...' : 'Sinkron Google Sheets'}
+              <RefreshCw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Menyinkronkan...' : 'Sinkron Sheets'}
             </Button>
           )}
         </div>
@@ -566,26 +566,26 @@ export function RosterAdminScreen() {
 
       {/* Control Bar (Filter, Search, Date Range) */}
       <div 
-        className="p-4 rounded-2xl border shadow-xs space-y-3.5"
+        className="p-3 sm:p-4 rounded-xl sm:rounded-2xl border shadow-xs space-y-2.5 sm:space-y-3.5"
         style={{
           backgroundColor: 'var(--card-bg, #FFFFFF)',
           borderColor: 'var(--border-main, #E2E8F0)',
           color: 'var(--text-main, #1E293B)'
         }}
       >
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
           {/* Section & Department Filter */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <Filter className="w-4 h-4" style={{ color: 'var(--primary)' }} />
-              <span className="text-xs font-bold uppercase tracking-wider opacity-75" style={{ color: 'var(--text-muted)' }}>
-                Filter Section:
+          <div className="flex items-center gap-2 flex-1">
+            <div className="flex items-center gap-1 shrink-0">
+              <Filter className="w-3.5 h-3.5" style={{ color: 'var(--primary)' }} />
+              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider opacity-75" style={{ color: 'var(--text-muted)' }}>
+                Section:
               </span>
             </div>
             <select 
               value={sectionFilter} 
               onChange={(e) => setSectionFilter(e.target.value)}
-              className="text-xs font-bold py-1.5 px-3 rounded-xl border outline-none cursor-pointer shadow-2xs"
+              className="text-xs font-bold py-1.5 px-2.5 rounded-xl border outline-none cursor-pointer shadow-2xs flex-1 sm:flex-none sm:max-w-xs"
               style={{
                 backgroundColor: 'var(--input-bg, #FFFFFF)',
                 borderColor: 'var(--border-main, #E2E8F0)',
@@ -605,14 +605,14 @@ export function RosterAdminScreen() {
           </div>
 
           {/* Search Input */}
-          <div className="relative flex-1 lg:max-w-xs">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 opacity-50" style={{ color: 'var(--text-muted)' }} />
+          <div className="relative flex-1 sm:max-w-xs">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 opacity-50" style={{ color: 'var(--text-muted)' }} />
             <input 
               type="text" 
               placeholder="Cari nama, NIK, jabatan..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-1.5 rounded-xl text-xs border outline-none font-medium transition-all shadow-2xs"
+              className="w-full pl-8 pr-3 py-1.5 rounded-xl text-xs border outline-none font-medium transition-all shadow-2xs"
               style={{
                 backgroundColor: 'var(--input-bg, #FFFFFF)',
                 borderColor: 'var(--border-main, #E2E8F0)',
@@ -623,52 +623,52 @@ export function RosterAdminScreen() {
         </div>
 
         {/* Date Presets & Custom Picker */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t" style={{ borderColor: 'var(--border-main)' }}>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold opacity-75" style={{ color: 'var(--text-muted)' }}>Preset Rentang:</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-main)' }}>
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+            <span className="text-[11px] sm:text-xs font-bold opacity-75 shrink-0" style={{ color: 'var(--text-muted)' }}>Rentang:</span>
             <button 
               onClick={() => setQuickRange(7)}
-              className="px-2.5 py-1 text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs"
+              className={`px-2 py-1 text-[11px] sm:text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs shrink-0 ${dateColumns.length === 7 ? 'ring-2 ring-teal-500 font-black' : ''}`}
               style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)', color: 'var(--text-main)' }}
             >
               7 Hari
             </button>
             <button 
               onClick={() => setQuickRange(14)}
-              className="px-2.5 py-1 text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs"
+              className={`px-2 py-1 text-[11px] sm:text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs shrink-0 ${dateColumns.length === 14 ? 'ring-2 ring-teal-500 font-black' : ''}`}
               style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)', color: 'var(--text-main)' }}
             >
               14 Hari
             </button>
             <button 
               onClick={() => setQuickRange(30)}
-              className="px-2.5 py-1 text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs"
+              className={`px-2 py-1 text-[11px] sm:text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs shrink-0 ${dateColumns.length === 30 ? 'ring-2 ring-teal-500 font-black' : ''}`}
               style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)', color: 'var(--text-main)' }}
             >
               30 Hari
             </button>
           </div>
 
-          <div className="flex items-center gap-2 text-xs">
-            <span className="font-bold opacity-75" style={{ color: 'var(--text-muted)' }}>Tanggal:</span>
+          <div className="flex items-center gap-1.5 text-xs overflow-x-auto py-0.5">
+            <span className="font-bold opacity-75 text-[11px] shrink-0" style={{ color: 'var(--text-muted)' }}>Tanggal:</span>
             <input 
               type="date" 
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="px-2.5 py-1 rounded-lg border text-xs font-bold outline-none shadow-2xs"
+              className="px-2 py-1 rounded-lg border text-xs font-bold outline-none shadow-2xs flex-1 sm:flex-none"
               style={{
                 backgroundColor: 'var(--input-bg)',
                 borderColor: 'var(--border-main)',
                 color: 'var(--text-main)'
               }}
             />
-            <span className="opacity-60 font-medium">s/d</span>
+            <span className="opacity-60 font-medium text-[11px] shrink-0">s/d</span>
             <input 
               type="date" 
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               max={new Date(new Date(startDate).getTime() + 31 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-              className="px-2.5 py-1 rounded-lg border text-xs font-bold outline-none shadow-2xs"
+              className="px-2 py-1 rounded-lg border text-xs font-bold outline-none shadow-2xs flex-1 sm:flex-none"
               style={{
                 backgroundColor: 'var(--input-bg)',
                 borderColor: 'var(--border-main)',
@@ -715,7 +715,7 @@ export function RosterAdminScreen() {
         >
           {/* Table Container with Horizontal Scroll */}
           <div className="overflow-x-auto overflow-y-auto max-h-[72vh] relative">
-            <table className="w-full text-left border-collapse min-w-[850px]">
+            <table className="w-full text-left border-collapse min-w-max">
               {/* Table Header */}
               <thead>
                 <tr 
@@ -727,15 +727,15 @@ export function RosterAdminScreen() {
                 >
                   {/* Sticky Column: Nama Personil */}
                   <th 
-                    className="sticky left-0 z-40 p-3 sm:p-3.5 text-xs font-bold uppercase tracking-wider w-[240px] sm:w-[280px] min-w-[240px] border-r shadow-xs backdrop-blur-md"
+                    className="sticky left-0 z-40 p-2 sm:p-3.5 text-[11px] sm:text-xs font-bold uppercase tracking-wider w-[125px] sm:w-[260px] min-w-[125px] sm:min-w-[260px] max-w-[130px] sm:max-w-none border-r shadow-xs backdrop-blur-md"
                     style={{
                       backgroundColor: 'var(--bg-main, #F8FAFC)',
                       borderColor: 'var(--border-main, #E2E8F0)',
                       color: 'var(--text-main, #1E293B)'
                     }}
                   >
-                    <div className="flex items-center justify-between">
-                      <span>Nama Personil & Jabatan</span>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="truncate">Personil</span>
                       <span className="text-[10px] opacity-60 font-mono">({filteredRoster.length})</span>
                     </div>
                   </th>
@@ -744,7 +744,7 @@ export function RosterAdminScreen() {
                   {dateColumns.map((col, idx) => (
                     <th 
                       key={idx}
-                      className={`p-2 text-center text-xs font-bold border-r min-w-[58px] max-w-[68px] ${
+                      className={`p-1 sm:p-2 text-center text-xs font-bold border-r min-w-[44px] sm:min-w-[58px] max-w-[48px] sm:max-w-[68px] ${
                         col.isToday ? 'ring-2 ring-inset ring-teal-500' : ''
                       }`}
                       style={{
@@ -757,14 +757,14 @@ export function RosterAdminScreen() {
                         color: col.isToday ? 'var(--primary)' : 'var(--text-main)'
                       }}
                     >
-                      <div className="text-[10px] uppercase font-bold tracking-tight opacity-75">
+                      <div className="text-[9px] sm:text-[10px] uppercase font-bold tracking-tight opacity-75">
                         {col.dayName}
                       </div>
-                      <div className="text-xs font-black">
+                      <div className="text-[10px] sm:text-xs font-black">
                         {col.dateNumber}
                       </div>
                       {col.isToday && (
-                        <span className="inline-block text-[8px] font-black uppercase px-1 rounded bg-teal-500 text-white mt-0.5">
+                        <span className="inline-block text-[7px] sm:text-[8px] font-black uppercase px-0.5 sm:px-1 rounded bg-teal-500 text-white mt-0.5">
                           Hari Ini
                         </span>
                       )}
@@ -789,34 +789,38 @@ export function RosterAdminScreen() {
                     >
                       {/* Sticky Person Info Cell */}
                       <td 
-                        className="sticky left-0 z-20 p-3 sm:p-3.5 border-r shadow-xs backdrop-blur-md"
+                        className="sticky left-0 z-20 p-2 sm:p-3.5 border-r shadow-xs backdrop-blur-md w-[125px] sm:w-[260px] min-w-[125px] sm:min-w-[260px] max-w-[130px] sm:max-w-none"
                         style={{
                           backgroundColor: isSelf ? 'var(--input-bg)' : 'var(--card-bg)',
                           borderColor: 'var(--border-main)'
                         }}
                       >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-sm truncate" style={{ color: 'var(--text-main)' }}>
+                        <div className="space-y-0.5 sm:space-y-1">
+                          <div className="flex items-center gap-1">
+                            <span className="font-bold text-xs sm:text-sm truncate block" style={{ color: 'var(--text-main)' }} title={emp.name || emp.nama}>
                               {emp.name || emp.nama}
                             </span>
                             {isSelf && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-white bg-teal-600">
+                              <span className="shrink-0 text-[8px] sm:text-[9px] font-bold px-1 py-0.2 rounded text-white bg-teal-600">
                                 Anda
                               </span>
                             )}
                           </div>
 
-                          <div className="flex flex-wrap items-center gap-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          <div className="flex items-center gap-1 text-[9px] sm:text-[10px]" style={{ color: 'var(--text-muted)' }}>
                             <span className="font-mono">{emp.nik}</span>
-                            <span>•</span>
-                            <span className="font-semibold truncate max-w-[140px]">{emp.jabatan}</span>
+                            <span className="hidden sm:inline">•</span>
+                            <span className="hidden sm:inline font-semibold truncate max-w-[140px]">{emp.jabatan}</span>
+                          </div>
+
+                          <div className="sm:hidden text-[9px] font-semibold text-slate-500 truncate max-w-[115px]" title={emp.jabatan}>
+                            {emp.jabatan}
                           </div>
 
                           <div className="flex flex-wrap items-center gap-1 pt-0.5">
                             {emp.section && (
                               <span 
-                                className="text-[9px] font-bold px-1.5 py-0.5 rounded border"
+                                className="hidden sm:inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border"
                                 style={{
                                   backgroundColor: 'var(--input-bg)',
                                   borderColor: 'var(--border-main)',
@@ -828,7 +832,7 @@ export function RosterAdminScreen() {
                             )}
                             {emp.gol && (
                               <span 
-                                className="text-[9px] font-bold px-1.5 py-0.5 rounded border opacity-75"
+                                className="text-[8px] sm:text-[9px] font-bold px-1 sm:px-1.5 py-0.2 sm:py-0.5 rounded border opacity-75"
                                 style={{
                                   backgroundColor: 'var(--input-bg)',
                                   borderColor: 'var(--border-main)'
@@ -839,7 +843,7 @@ export function RosterAdminScreen() {
                             )}
                             {leave?.actualCuti && (
                               <span 
-                                className="text-[9px] font-semibold px-1.5 py-0.5 rounded border text-emerald-600 dark:text-emerald-400"
+                                className="text-[8px] sm:text-[9px] font-semibold px-1 sm:px-1.5 py-0.2 sm:py-0.5 rounded border text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
                                 style={{
                                   backgroundColor: 'rgba(16, 185, 129, 0.08)',
                                   borderColor: 'rgba(16, 185, 129, 0.2)'
@@ -877,7 +881,7 @@ export function RosterAdminScreen() {
                                 });
                               }
                             }}
-                            className={`p-1.5 text-center border-r transition-all select-none ${
+                            className={`p-1 sm:p-1.5 text-center border-r transition-all select-none ${
                               canEditRoster ? 'cursor-pointer hover:scale-105 hover:z-10' : 'cursor-default'
                             } ${col.isToday ? 'bg-teal-500/5' : ''}`}
                             style={{
@@ -886,7 +890,7 @@ export function RosterAdminScreen() {
                             title={canEditRoster ? `Klik untuk mengedit roster ${emp.name || emp.nama} pada ${col.dateNumber}` : `Roster ${emp.name || emp.nama} (${shiftCode})`}
                           >
                             <div 
-                              className={`w-full py-1.5 px-1 rounded-lg border text-center text-xs transition-transform ${badgeStyle}`}
+                              className={`w-full py-1 sm:py-1.5 px-0.5 sm:px-1 rounded sm:rounded-lg border text-center text-[10px] sm:text-xs transition-transform ${badgeStyle}`}
                             >
                               {shiftCode}
                             </div>
@@ -902,25 +906,25 @@ export function RosterAdminScreen() {
 
           {/* Table Legend Footer */}
           <div 
-            className="p-3.5 border-t flex flex-wrap items-center justify-between gap-3 text-xs shrink-0 select-none"
+            className="p-2.5 sm:p-3.5 border-t flex flex-wrap items-center justify-between gap-2 text-xs shrink-0 select-none"
             style={{
               backgroundColor: 'var(--bg-main, #F8FAFC)',
               borderColor: 'var(--border-main, #E2E8F0)'
             }}
           >
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-bold opacity-75 mr-1" style={{ color: 'var(--text-muted)' }}>Keterangan:</span>
-              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-blue-500/15 text-blue-600 border-blue-500/30">D = Day Shift</span>
-              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-blue-900 text-white border-blue-800">N = Night Shift</span>
-              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-slate-500/15 text-slate-600 border-slate-500/30">OFF = Libur</span>
-              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-amber-500/15 text-amber-600 border-amber-500/30">TRV/TV = Travel Cuti</span>
-              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-purple-500/20 text-purple-600 border-purple-500/30">C/CT/CI = Cuti</span>
-              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-emerald-500/15 text-emerald-600 border-emerald-500/30">S = Sakit</span>
-              <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-teal-500/15 text-teal-600 border-teal-500/30">LS = Longshift</span>
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="font-bold opacity-75 mr-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>Keterangan:</span>
+              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-blue-500/15 text-blue-600 border-blue-500/30">D = Day</span>
+              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-blue-900 text-white border-blue-800">N = Night</span>
+              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-slate-500/15 text-slate-600 border-slate-500/30">OFF = Libur</span>
+              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-amber-500/15 text-amber-600 border-amber-500/30">TRV/TV = Travel</span>
+              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-purple-500/20 text-purple-600 border-purple-500/30">C/CT = Cuti</span>
+              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-emerald-500/15 text-emerald-600 border-emerald-500/30">S = Sakit</span>
+              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-teal-500/15 text-teal-600 border-teal-500/30">LS = Longshift</span>
             </div>
 
-            <span className="text-[11px] font-semibold opacity-70" style={{ color: 'var(--text-muted)' }}>
-              {canEditRoster ? '💡 Klik pada sel jadwal untuk mengubah kode shift secara langsung.' : 'Tampilan baca roster tim.'}
+            <span className="text-[10px] sm:text-[11px] font-semibold opacity-70" style={{ color: 'var(--text-muted)' }}>
+              {canEditRoster ? '💡 Klik sel untuk ubah shift.' : 'Mode baca.'}
             </span>
           </div>
         </div>
