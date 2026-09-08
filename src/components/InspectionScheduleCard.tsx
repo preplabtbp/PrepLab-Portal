@@ -24,10 +24,11 @@ interface ScheduleItem {
 interface InspectionScheduleCardProps {
   inspectorName: string;
   inspectorNik?: string;
+  isAdminOrDeveloper?: boolean;
   onNavigateToInspection?: (formId?: string, subArea?: string) => void;
 }
 
-export function InspectionScheduleCard({ inspectorName, inspectorNik, onNavigateToInspection }: InspectionScheduleCardProps) {
+export function InspectionScheduleCard({ inspectorName, inspectorNik, isAdminOrDeveloper, onNavigateToInspection }: InspectionScheduleCardProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [mySchedule, setMySchedule] = useState<ScheduleItem | null>(null);
@@ -35,6 +36,22 @@ export function InspectionScheduleCard({ inspectorName, inspectorNik, onNavigate
   const [showFullScheduleModal, setShowFullScheduleModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterShift, setFilterShift] = useState<string>('all');
+
+  // Verify Admin / Developer Access for Full Team Schedule Modal
+  const hasAdminAccess = React.useMemo(() => {
+    if (typeof isAdminOrDeveloper === 'boolean') return isAdminOrDeveloper;
+    try {
+      const profile = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
+      const jab = (profile.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+      const sec = (profile.section || '').toLowerCase();
+      const nik = (inspectorNik || '').toUpperCase();
+      const isDev = nik === '02D25000055' || nik === '02D24000043' || nik === 'PREPLABADMIN';
+      const isAdmin = jab.includes('admin') || jab.includes('manager') || jab.includes('superintendent') || sec.includes('admin') || sec.includes('administrasi');
+      return isDev || isAdmin;
+    } catch {
+      return false;
+    }
+  }, [isAdminOrDeveloper, inspectorNik]);
 
   const fetchSchedule = async (forceRefresh = false) => {
     if (forceRefresh) setRefreshing(true);
@@ -57,12 +74,14 @@ export function InspectionScheduleCard({ inspectorName, inspectorNik, onNavigate
         }
       }
 
-      // Pre-fetch all schedules for the modal viewer
-      const resAll = await fetch(`/api/inspection-schedule${forceRefresh ? '?refresh=true' : ''}`);
-      if (resAll.ok) {
-        const jsonAll = await resAll.json();
-        if (jsonAll.data) {
-          setAllSchedules(jsonAll.data);
+      // Pre-fetch all schedules for modal viewer ONLY if user is admin or developer
+      if (hasAdminAccess) {
+        const resAll = await fetch(`/api/inspection-schedule${forceRefresh ? '?refresh=true' : ''}`);
+        if (resAll.ok) {
+          const jsonAll = await resAll.json();
+          if (jsonAll.data) {
+            setAllSchedules(jsonAll.data);
+          }
         }
       }
     } catch (e) {
@@ -139,13 +158,15 @@ export function InspectionScheduleCard({ inspectorName, inspectorNik, onNavigate
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-emerald-500' : ''}`} />
               <span className="text-[10px] font-medium hidden sm:inline">Refresh</span>
             </button>
-            <button
-              onClick={() => setShowFullScheduleModal(true)}
-              className="px-2.5 py-1.5 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] hover:bg-[var(--card-bg)] text-[var(--text-main)] font-bold text-[11px] flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-            >
-              <Users className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>Jadwal Tim ({allSchedules.length})</span>
-            </button>
+            {hasAdminAccess && (
+              <button
+                onClick={() => setShowFullScheduleModal(true)}
+                className="px-2.5 py-1.5 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] hover:bg-[var(--card-bg)] text-[var(--text-main)] font-bold text-[11px] flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+              >
+                <Users className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Jadwal Tim ({allSchedules.length})</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -211,23 +232,25 @@ export function InspectionScheduleCard({ inspectorName, inspectorNik, onNavigate
                 <div>
                   <span className="font-bold">Nama Anda belum terjadwal di draft minggu ini.</span>
                   <p className="text-[11px] text-amber-800/80 dark:text-amber-300">
-                    Silakan hubungi Admin atau cek daftar lengkap untuk memastikan pembagian tugas.
+                    Silakan hubungi Admin atau pastikan nama profil Anda sesuai dengan daftar roster.
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setShowFullScheduleModal(true)}
-                className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-900 dark:text-amber-200 font-bold text-[11px] transition-colors"
-              >
-                Cek Tabel
-              </button>
+              {hasAdminAccess && (
+                <button
+                  onClick={() => setShowFullScheduleModal(true)}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-900 dark:text-amber-200 font-bold text-[11px] transition-colors cursor-pointer"
+                >
+                  Cek Tabel
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* MODAL: SELURUH JADWAL TIM (GOOGLE SHEET VIEWER) */}
-      {showFullScheduleModal && (
+      {/* MODAL: SELURUH JADWAL TIM (GOOGLE SHEET VIEWER) - ADMIN & DEVELOPER ONLY */}
+      {hasAdminAccess && showFullScheduleModal && (
         <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
           <div className="relative w-full max-w-4xl max-h-[90vh] bg-[var(--card-bg)] border border-[var(--border-main)] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Header */}
