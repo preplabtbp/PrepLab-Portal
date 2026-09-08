@@ -1911,6 +1911,31 @@ p5mRouter.get("/flyer", async (req, res) => {
         return driveStream.data.pipe(res);
       } catch (driveErr: any) {
         console.warn('Google Drive API stream failed, fallback to direct fetch/redirect:', driveErr.message);
+        if (isDownload) {
+          return res.redirect(`https://drive.google.com/uc?export=download&id=${driveFileId}`);
+        }
+
+        // Try direct streaming from Drive CDN
+        const candidateUrls = [
+          `https://drive.google.com/uc?export=download&id=${driveFileId}`,
+          `https://drive.google.com/thumbnail?id=${driveFileId}&sz=w2000`,
+          `https://lh3.googleusercontent.com/d/${driveFileId}`
+        ];
+
+        for (const cUrl of candidateUrls) {
+          try {
+            const fetchRes = await fetch(cUrl);
+            if (fetchRes.ok) {
+              const contentType = fetchRes.headers.get('content-type') || 'image/png';
+              res.setHeader('Content-Type', contentType);
+              res.setHeader('Cache-Control', 'public, max-age=86400');
+              const arrayBuf = await fetchRes.arrayBuffer();
+              return res.send(Buffer.from(arrayBuf));
+            }
+          } catch (err) {}
+        }
+
+        return res.redirect(`https://drive.google.com/file/d/${driveFileId}/preview`);
       }
     }
 

@@ -401,6 +401,7 @@ const app = express();
     '/api/health',
     '/api/drive/view',
     '/api/labbot/chat',
+    '/api/p5m/flyer',
     '/api/inspection-schedule'
   ];
 

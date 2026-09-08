@@ -2437,12 +2437,27 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               {/* Viewer Body */}
               <div className="flex-1 bg-slate-950 relative min-h-0 w-full flex flex-col items-center justify-center p-2">
                 {hasValidUrl ? (
-                  <iframe 
-                    src={info.embedUrl} 
-                    title={previewImage.title}
-                    className="w-full h-full rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
-                    allow="autoplay; encrypted-media; fullscreen"
-                  />
+                  info.isPdf ? (
+                    <iframe 
+                      src={info.embedUrl} 
+                      title={previewImage.title}
+                      className="w-full h-full rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
+                      allow="autoplay; encrypted-media; fullscreen"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center p-2 overflow-auto">
+                      <img
+                        src={info.imageUrl}
+                        alt={previewImage.title}
+                        onError={(e) => {
+                          if (e.currentTarget.src !== info.streamUrl) {
+                            e.currentTarget.src = info.streamUrl;
+                          }
+                        }}
+                        className="max-h-full max-w-full object-contain rounded-xl shadow-lg"
+                      />
+                    </div>
+                  )
                 ) : (
                   <div className="text-center p-8 max-w-md space-y-3">
                     <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto">

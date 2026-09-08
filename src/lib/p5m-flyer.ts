@@ -35,27 +35,31 @@ export function getFlyerInfo(rawUrl?: string | null, title?: string | null): Fly
     cleanUrl.toLowerCase().includes('.pdf') ||
     cleanTitle.toLowerCase().includes('.pdf') ||
     cleanTitle.startsWith('IK ') ||
-    cleanTitle.startsWith('SOP ')
+    cleanTitle.startsWith('SOP ') ||
+    cleanTitle.startsWith('JSA ')
   );
 
   const safeTitle = encodeURIComponent(cleanTitle || 'Dokumen_P5M');
   const safeUrl = encodeURIComponent(cleanUrl || '');
 
-  // Streaming endpoint with authenticated backend Google Drive Service Account
+  // Backend streaming endpoint (public endpoint with fallback)
   const streamUrl = `/api/p5m/flyer?title=${safeTitle}${cleanUrl ? `&url=${safeUrl}` : ''}`;
-  const downloadUrl = `/api/p5m/flyer?download=true&title=${safeTitle}${cleanUrl ? `&url=${safeUrl}` : ''}`;
 
   if (fileId) {
+    const drivePreviewUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+    const driveViewUrl = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`;
+    const driveDownloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    const driveImageUrl = `/api/drive/view/${fileId}`;
+
     return {
       isPdf: true,
       fileId,
-      // Stream directly to the browser iframe for full native PDF/image preview:
-      embedUrl: streamUrl,
-      imageUrl: streamUrl,
-      // Direct link to view file on Google Drive in a new tab:
-      viewUrl: `https://drive.google.com/file/d/${fileId}/view?usp=sharing`,
+      // Direct Google Drive embed viewer for seamless iframe rendering with native zoom and controls:
+      embedUrl: drivePreviewUrl,
+      imageUrl: driveImageUrl,
+      viewUrl: driveViewUrl,
       streamUrl,
-      downloadUrl
+      downloadUrl: driveDownloadUrl
     };
   }
 
@@ -64,6 +68,8 @@ export function getFlyerInfo(rawUrl?: string | null, title?: string | null): Fly
   const embedUrl = isDirectPdf && cleanUrl.startsWith('http')
     ? streamUrl
     : (cleanUrl || streamUrl);
+
+  const downloadUrl = `/api/p5m/flyer?download=true&title=${safeTitle}${cleanUrl ? `&url=${safeUrl}` : ''}`;
 
   return {
     isPdf,
