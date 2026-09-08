@@ -2,7 +2,7 @@ import { NotificationBell } from "./components/notification-bell";
 import React, { useState, useEffect, Suspense, lazy, useRef, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 
-import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical, Building2, LayoutDashboard, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight } from 'lucide-react';
+import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical, Building2, LayoutDashboard, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { appendRowsToSheet, getDowntimeRecords,updateDowntimeRepair, getEmployees, loginEmployee, getEquipments, ToolRecord, updateToolPhotoUrl, uploadPhotoToDrive } from './sheets-api';
@@ -88,6 +88,8 @@ const EmployeeDatabaseScreen = lazyWithRetry(() => import('./components/employee
 const WOMaintenanceDashboard = lazyWithRetry(() => import('./components/wo-maintenance-dashboard').then(m => ({ default: m.WOMaintenanceDashboard })));
 const FeedbackSupportScreen = lazyWithRetry(() => import('./components/feedback-support-screen').then(m => ({ default: m.FeedbackSupportScreen })));
 const EasterEggGame = lazyWithRetry(() => import('./components/easter-egg-game').then(m => ({ default: m.EasterEggGame })));
+const FinanceScreen = lazyWithRetry(() => import('./components/FinanceScreen').then(m => ({ default: m.FinanceScreen || m.default })));
+import { LabBotWidget } from './components/LabBotWidget';
 
 export default function App() {
 
@@ -1150,6 +1152,7 @@ export default function App() {
   <Route path="/agenda" element={<AgendaDashboard key="agenda" inspectorNik={inspectorNik!} inspectorName={inspectorName!} userDept={userDept || undefined} />} />
   <Route path="/p5m" element={<P5MScreen onBack={() => handleNav('home')} userProfile={userProfile} />} />
   <Route path="/feedback-support" element={<FeedbackSupportScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
+  <Route path="/finance" element={<FinanceScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
   </AnimatePresence>
@@ -1280,6 +1283,12 @@ export default function App() {
             active={activeTab === 'preplab-cloud'} 
             onClick={() => handleNav('preplab-cloud')} 
           />
+          <NavItem 
+            icon={<Receipt className="w-5 h-5" />} 
+            label="Keuangan" 
+            active={activeTab === 'finance'} 
+            onClick={() => handleNav('finance')} 
+          />
 
           <NavItem 
             icon={<Settings className="w-5 h-5" />} 
@@ -1342,6 +1351,12 @@ export default function App() {
           onNavigateToInspection={() => navigate('/weekly-inspection')}
         />
       )}
+
+      {/* Global Interactive LabBot AI Assistant (SOP & K3) */}
+      <LabBotWidget
+        inspectorNik={inspectorNik || undefined}
+        inspectorName={inspectorName || undefined}
+      />
 
     </div>
   );

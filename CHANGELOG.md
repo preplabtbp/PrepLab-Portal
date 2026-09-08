@@ -4,6 +4,21 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ---
 
+## [2.8.21] - 2026-09-04
+
+### 📸 Modul Pencatatan Keuangan & Pemindaian Struk AI Vision (`FinanceScreen.tsx` & `/api/finance`)
+
+- **Fitur Scan Struk Belanjaan & Mutasi dengan AI Gemini Vision**:
+  - Mengintegrasikan SDK Gemini AI (`@google/genai`) dengan model `gemini-1.5-flash` (beserta fallback multi-model) untuk memindai foto struk belanjaan / screenshot mutasi dan menguraikan setiap item produk secara terpisah (nama produk, toko, kategori, metode pembayaran, dan harga).
+  - Tampilan pratinjau hasil scan bergaya WhatsApp dengan generator kode transaksi unik (`#LUEBOBA`, `#LUEBU1U`, dll.).
+- **Dashboard Ringkasan Keuangan & Input Manual**:
+  - Kartu statistik *Total Pengeluaran*, *Jumlah Transaksi*, dan *Kategori Terbesar*.
+  - Form pencatatan manual serta riwayat transaksi lengkap dengan filter kategori & pencarian instan.
+- **Tabel Database `finance_transactions`**:
+  - Menambahkan skema tabel transaksi keuangan di PostgreSQL.
+
+---
+
 ## [2.8.20] - 2026-09-02
 
 ### 🔓 Penyederhanaan Alur Setup Password Akun Awal (`/api/auth/setup` & `App.tsx`)

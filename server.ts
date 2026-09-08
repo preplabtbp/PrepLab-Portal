@@ -59,6 +59,8 @@ import { authRouter } from "./server/routes/auth.js";
 import { debugRouter } from "./server/routes/debug.js";
 import { employeesRouter } from "./server/routes/employees.js";
 import { p5mRouter } from "./server/routes/p5m.js";
+import { financeRouter } from "./server/routes/finance.js";
+import { labbotRouter } from "./server/routes/labbot.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
 
 async function initDbSchema() {
@@ -93,6 +95,24 @@ async function initDbSchema() {
       pdf_url TEXT,
       pdf_title TEXT,
       updated_by TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );`);
+
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS finance_transactions (
+      id SERIAL PRIMARY KEY,
+      transaction_code TEXT,
+      date TEXT NOT NULL,
+      item_title TEXT NOT NULL,
+      merchant_name TEXT DEFAULT 'Rahmatika Freshmart',
+      category TEXT DEFAULT '#Makanan',
+      payment_method TEXT DEFAULT 'Tunai',
+      amount INTEGER NOT NULL DEFAULT 0,
+      qty INTEGER DEFAULT 1,
+      notes TEXT,
+      receipt_photo_url TEXT,
+      created_by_nik TEXT,
+      created_by_name TEXT,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );`);
@@ -376,7 +396,8 @@ const app = express();
     '/api/auth/setup',
     '/api/auth/reset-password',
     '/api/health',
-    '/api/drive/view'
+    '/api/drive/view',
+    '/api/labbot/chat'
   ];
 
   app.use('/api', (req, res, next) => {
@@ -410,6 +431,8 @@ const app = express();
   app.use(adminRouter);
   app.use(agendaRouter);
   app.use(feedbackRouter);
+  app.use(financeRouter);
+  app.use(labbotRouter);
 
   // In-memory chat storage as fallback since DB is disconnected
   const chatMessagesMemory: any[] = [];

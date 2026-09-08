@@ -6,7 +6,7 @@ import { Cloud,
   ThermometerSun, LineChart, LayoutDashboard, Wrench, CheckSquare, 
   ShieldCheck, Eye, Activity, Folder, Info, Package, History, 
   PlusCircle, Settings, ArrowRight, Clock, Box, ClipboardList, Briefcase, Users,
-  BookOpen, Sparkles, Edit2, ClipboardCheck, MessageSquarePlus, MessageSquare } from 'lucide-react';
+  BookOpen, Sparkles, Edit2, ClipboardCheck, MessageSquarePlus, MessageSquare, Receipt } from 'lucide-react';
 import { Button } from './ui';
 import { getKtaUrl } from '../sheets-api';
 import { FoodReportModal } from './food-report-modal';
@@ -143,6 +143,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
         { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('agenda') },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('roster-admin') },
         { id: 'food-report', title: "Lapor Makan", desc: "Status konsumsi", icon: <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => setShowFoodReportModal(true) },
+        { id: 'finance', title: "Catat Keuangan (AI)", desc: "Scan struk & transaksi", icon: <Receipt className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('finance') },
       ]
     },
     {

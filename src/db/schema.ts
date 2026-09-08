@@ -568,3 +568,22 @@ export const rekapManualOverrides = pgTable('rekap_manual_overrides', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Define 'finance_transactions' table (Catat Keuangan & Struk AI)
+export const financeTransactions = pgTable('finance_transactions', {
+  id: serial('id').primaryKey(),
+  transactionCode: text('transaction_code'), // e.g. #LUEBOBA
+  date: text('date').notNull(), // YYYY-MM-DD
+  itemTitle: text('item_title').notNull(), // e.g. IKAN NILA
+  merchantName: text('merchant_name').default('Rahmatika Freshmart'), // Store / merchant name
+  category: text('category').default('#Makanan'), // #Makanan, #Peralatan, #Operasional, #Logistik, #Lainnya
+  paymentMethod: text('payment_method').default('Tunai'), // Tunai, Transfer, QRIS, Kartu
+  amount: integer('amount').notNull().default(0), // Nominal dalam Rp
+  qty: integer('qty').default(1),
+  notes: text('notes'),
+  receiptPhotoUrl: text('receipt_photo_url'), // Storage URL for scanned receipt
+  createdByNik: text('created_by_nik'),
+  createdByName: text('created_by_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
