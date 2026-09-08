@@ -991,3 +991,212 @@ router.put("/api/downtime/:id", async (req, res) => {
       res.status(500).json({ error: "Failed to update downtime" });
     }
   });
+
+// ── INSPECTION SCHEDULE (LIVE GOOGLE SHEETS SYNC) ─────────────────────────────
+export function mapInspectionToFormInfo(name: string): { formId: string; tipe: string; formTitle: string; subArea?: string } {
+  const n = (name || '').toLowerCase().trim();
+
+  // APD
+  if (n.includes('kepatuhan alat pelindung diri') || n.includes('inspeksi apd')) {
+    if (n.includes('shift a') && n.includes('prep')) return { formId: '19', tipe: 'APD', formTitle: 'Inspeksi APD - Shift A Prep' };
+    if (n.includes('shift b') && n.includes('prep')) return { formId: '20', tipe: 'APD', formTitle: 'Inspeksi APD - Shift B Prep' };
+    if (n.includes('shift a') && n.includes('lab')) return { formId: '17', tipe: 'APD', formTitle: 'Inspeksi APD - Shift A Lab' };
+    if (n.includes('shift b') && n.includes('lab')) return { formId: '18', tipe: 'APD', formTitle: 'Inspeksi APD - Shift B Lab' };
+    if (n.includes('maintenance')) return { formId: '21', tipe: 'APD', formTitle: 'Inspeksi APD - Maintenance' };
+    return { formId: '17', tipe: 'APD', formTitle: name };
+  }
+
+  // Kotak P3K
+  if (n.includes('p3k')) {
+    if (n.includes('kering')) return { formId: '23. TBP-FR-OH-04.08-02', tipe: 'P3K', formTitle: 'Checklist Isi Kotak P3K Preparasi Kering' };
+    if (n.includes('basah')) return { formId: '22. TBP-FR-OH-04.08-02', tipe: 'P3K', formTitle: 'Checklist Isi Kotak P3K Preparasi Basah' };
+    return { formId: '24. TBP-FR-OH-04.08-02', tipe: 'P3K', formTitle: 'Checklist Isi Kotak P3K Laboratorium' };
+  }
+
+  // Sarana
+  if (n.includes('saranaprasarana') || n.includes('sarana')) {
+    return { formId: '27. TBP-FR-SFT-05.07-11', tipe: 'SARANA', formTitle: 'Formulir Kelengkapan Saranaprasarana Unit' };
+  }
+
+  // Tabung Gas
+  if (n.includes('tabung gas')) {
+    return { formId: '26. TBP-FR-SFT-04.13-02', tipe: 'TABUNG_MINGGUAN', formTitle: 'Inspeksi Harian Pra Pakai Tabung Gas Bertekanan' };
+  }
+
+  // Perkakas
+  if (n.includes('perkakas')) {
+    return { formId: '25. TBP-FR-SFT-04.18-01', tipe: 'PERKAKAS', formTitle: 'Inspeksi Perkakas Tangan Portabel' };
+  }
+
+  // Tangga
+  if (n.includes('tangga')) {
+    return { formId: '28. TBP-FR-SFT-04.15-01', tipe: 'TANGGA', formTitle: 'Inspeksi Tangga Portabel' };
+  }
+
+  // Inspeksi Umum Terencana (Area)
+  if (n.includes('preparasi')) {
+    let sub = 'Preparasi';
+    if (n.includes('basah')) sub = 'Preparasi Basah';
+    if (n.includes('kering')) sub = 'Preparasi Kering';
+    return { formId: '01. PREP', tipe: 'UMUM', formTitle: 'Inspeksi Umum Terencana Area Preparasi', subArea: sub };
+  }
+
+  if (n.includes('gudang') || n.includes('kontainer') || n.includes('transit') || n.includes('carpenter')) {
+    return { formId: '03. GUDANG', tipe: 'UMUM', formTitle: 'Inspeksi Umum Terencana Area Gudang dan Fasilitas Penunjang', subArea: name };
+  }
+
+  // Lab
+  return { formId: '02, LAB', tipe: 'UMUM', formTitle: 'Inspeksi Umum Terencana Area Laboratorium', subArea: name };
+}
+
+let cachedSchedule: any[] | null = null;
+let lastScheduleFetchTime = 0;
+const SCHEDULE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+async function fetchInspectionScheduleFromSheet(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedSchedule && (now - lastScheduleFetchTime < SCHEDULE_CACHE_TTL)) {
+    return cachedSchedule;
+  }
+
+  const SPREADSHEET_ID = "1hEcUnXhqvsKsIYxqfzZxIqiVaonshL-pSstEh2DdmIY";
+  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&gid=0`;
+  
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch spreadsheet: ${res.status}`);
+  const text = await res.text();
+
+  // CSV parser handling quoted cells
+  const lines = text.split(/\r?\n/);
+  const rows: string[][] = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const values: string[] = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (c === ',' && !inQuotes) {
+        values.push(cur.trim());
+        cur = '';
+      } else {
+        cur += c;
+      }
+    }
+    values.push(cur.trim());
+    rows.push(values);
+  }
+
+  const scheduleList: any[] = [];
+  let currentShiftGroup = 'Nonshift';
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const col0 = (r[0] || '').trim();
+    const col1 = (r[1] || '').trim();
+    const col2 = (r[2] || '').trim();
+    const col3 = (r[3] || '').trim();
+    const col4 = (r[4] || '').trim();
+    const col5 = (r[5] || '').trim();
+
+    // Check for section markers
+    if (col1.toLowerCase() === 'malam' || col0.toLowerCase().includes('shift a')) {
+      currentShiftGroup = 'Shift A (Malam)';
+      continue;
+    }
+    if (col1.toLowerCase() === 'siang' || col0.toLowerCase().includes('shift b')) {
+      currentShiftGroup = 'Shift B (Siang)';
+      continue;
+    }
+
+    // Skip header rows
+    if (col1.toUpperCase() === 'NAMA KARYAWAN' || !col1) continue;
+
+    const no = parseInt(col0, 10);
+    if (!isNaN(no) && col1) {
+      const isCuti = col5.toLowerCase() === 'cuti' || col2.toLowerCase() === 'cuti';
+      let cleanShift = col3;
+      if (isCuti) {
+        cleanShift = 'Cuti';
+      } else if (!cleanShift) {
+        cleanShift = currentShiftGroup;
+      } else if (cleanShift === 'A') {
+        cleanShift = 'Shift A (Malam)';
+      } else if (cleanShift === 'B') {
+        cleanShift = 'Shift B (Siang)';
+      }
+
+      const formInfo = isCuti ? null : mapInspectionToFormInfo(col5);
+
+      scheduleList.push({
+        no,
+        name: col1,
+        jabatan: col2,
+        shift: cleanShift,
+        roleIndex: col4 ? parseInt(col4, 10) : 1,
+        inspeksi: col5,
+        isCuti,
+        formInfo
+      });
+    }
+  }
+
+  cachedSchedule = scheduleList;
+  lastScheduleFetchTime = now;
+  return scheduleList;
+}
+
+router.get("/api/inspection-schedule", async (req, res) => {
+  try {
+    const forceRefresh = req.query.refresh === 'true';
+    const queryName = typeof req.query.name === 'string' ? req.query.name.trim().toLowerCase() : '';
+    const queryNik = typeof req.query.nik === 'string' ? req.query.nik.trim().toLowerCase() : '';
+
+    const allSchedules = await fetchInspectionScheduleFromSheet(forceRefresh);
+
+    if (queryName || queryNik) {
+      let searchNames = [queryName];
+      if (queryNik) {
+        const [emp] = await db.select().from(employees).where(eq(employees.nik, queryNik)).limit(1);
+        if (emp && emp.name) {
+          searchNames.push(emp.name.toLowerCase());
+        }
+      }
+      searchNames = searchNames.filter(Boolean);
+
+      const matched = allSchedules.find(s => {
+        const sName = s.name.toLowerCase();
+        return searchNames.some(target => {
+          if (sName.includes(target) || target.includes(sName)) return true;
+          // Check multi-word match (e.g. "Muhammad Furqan")
+          const parts = target.split(/\s+/).filter(Boolean);
+          if (parts.length >= 2 && parts.every(p => sName.includes(p))) return true;
+          return false;
+        });
+      });
+
+      return res.json({
+        found: !!matched,
+        schedule: matched || null,
+        totalScheduled: allSchedules.length
+      });
+    }
+
+    res.json({
+      success: true,
+      total: allSchedules.length,
+      data: allSchedules
+    });
+  } catch (error: any) {
+    console.error("Error fetching inspection schedule:", error);
+    res.status(500).json({ error: error.message || "Failed to load inspection schedule" });
+  }
+});
+
