@@ -450,10 +450,10 @@ export const resolveInternalTicket = async (data: any) => {
   return await res.json();
 };
 
-// Put back Roster functions
 export const getRosterData = async (params?: any) => {
   try {
-    const res = await fetch('/api/roster');
+    const url = (params?.force || params?.refresh) ? '/api/roster?refresh=true' : '/api/roster';
+    const res = await fetch(url);
     if (!res.ok) {
       throw new Error('Failed to fetch roster');
     }

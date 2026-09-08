@@ -85,12 +85,26 @@ async function computeRosterData() {
   todayDate.setHours(0, 0, 0, 0);
   const todayTimestamp = todayDate.getTime();
 
+  const idToEnMonths: Record<string, string> = {
+    'mei': 'May', 'agu': 'Aug', 'ags': 'Aug', 'okt': 'Oct', 'des': 'Dec'
+  };
+  function normalizeDateStr(dStr: string): string {
+    if (!dStr) return '';
+    let s = String(dStr).trim();
+    for (const [idm, enm] of Object.entries(idToEnMonths)) {
+      s = s.replace(new RegExp(`\\b${idm}\\b`, 'gi'), enm);
+    }
+    return s;
+  }
+
   // Fast date timestamp cache to eliminate repeated Date parsing
   const dateTimestampMap = new Map<string, number>();
   function getDateTs(dStr: string): number {
     let ts = dateTimestampMap.get(dStr);
     if (ts === undefined) {
-      ts = new Date(dStr).getTime();
+      const norm = normalizeDateStr(dStr);
+      ts = new Date(norm).getTime();
+      if (isNaN(ts)) ts = 0;
       dateTimestampMap.set(dStr, ts);
     }
     return ts;
@@ -233,11 +247,20 @@ async function computeRosterData() {
           if (onsiteGlobalIdx !== -1 && onsiteGlobalIdx + 1 < datesAsc.length) {
             masukKerjaDate = datesAsc[onsiteGlobalIdx + 1];
           } else {
-            const d = new Date(onsiteDate);
-            d.setDate(d.getDate() + 1);
-            const parts = d.toDateString().split(' ');
-            const day = parseInt(parts[2], 10);
-            masukKerjaDate = `${day} ${parts[1]} ${parts[3].substring(2)}`;
+            const norm = normalizeDateStr(onsiteDate);
+            const d = new Date(norm);
+            if (!isNaN(d.getTime())) {
+              d.setDate(d.getDate() + 1);
+              const parts = d.toDateString().split(' ');
+              if (parts && parts.length >= 4 && parts[3]) {
+                const day = parseInt(parts[2], 10);
+                masukKerjaDate = `${day} ${parts[1]} ${parts[3].substring(2)}`;
+              } else {
+                masukKerjaDate = '-';
+              }
+            } else {
+              masukKerjaDate = '-';
+            }
           }
         }
       }
@@ -334,9 +357,14 @@ router.post("/api/roster/cell", async (req, res) => {
 
     let properDate = date;
     if (date.includes('-')) {
-      const parts = new Date(date).toDateString().split(' ');
-      const day = parseInt(parts[2], 10);
-      properDate = day + ' ' + parts[1] + ' ' + parts[3].substring(2);
+      const d = new Date(date);
+      if (!isNaN(d.getTime())) {
+        const parts = d.toDateString().split(' ');
+        if (parts && parts.length >= 4 && parts[3]) {
+          const day = parseInt(parts[2], 10);
+          properDate = day + ' ' + parts[1] + ' ' + parts[3].substring(2);
+        }
+      }
     }
 
     const existing = await db.select().from(roster).where(and(eq(roster.nik, nik), eq(roster.date, properDate))).limit(1);
@@ -368,9 +396,15 @@ router.post("/api/roster/izin", async (req, res) => {
 
       const formattedDate = new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }).replace(/,/g, '');
       
-      const parts = new Date(date).toDateString().split(' ');
-      const day = parseInt(parts[2], 10);
-      const properDate = day + ' ' + parts[1] + ' ' + parts[3].substring(2);
+      const d = new Date(date);
+      let properDate = date;
+      if (!isNaN(d.getTime())) {
+        const parts = d.toDateString().split(' ');
+        if (parts && parts.length >= 4 && parts[3]) {
+          const day = parseInt(parts[2], 10);
+          properDate = day + ' ' + parts[1] + ' ' + parts[3].substring(2);
+        }
+      }
 
       const existing = await db.select().from(roster).where(and(eq(roster.nik, nik), eq(roster.date, properDate))).limit(1);
       

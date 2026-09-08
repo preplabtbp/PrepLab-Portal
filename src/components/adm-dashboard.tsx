@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Activity, Users, Building2, Droplets, Wind, ShieldAlert, BadgeInfo, ChevronDown, ChevronUp, Calendar, PlusCircle, X, Search, Plane, Clock, AlertTriangle, CircleUser, UserX } from 'lucide-react';
+import { User, Activity, Users, Building2, Droplets, Wind, ShieldAlert, BadgeInfo, ChevronDown, ChevronUp, Calendar, PlusCircle, X, Search, Plane, Clock, AlertTriangle, CircleUser, UserX, RefreshCw } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { getRosterData, addIzin } from '../sheets-api';
 import { Button, Card, Input, Select, Textarea } from './ui';
@@ -12,6 +12,7 @@ export function AdmDashboard() {
   const isAdministration = currentUserProfile?.section?.toLowerCase() === 'administration';
   
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [targetDate, setTargetDate] = useState<string>(new Date().toISOString().split('T')[0]);
   
   
@@ -90,24 +91,89 @@ export function AdmDashboard() {
     }
   }, [targetDate, activeTab, rawRoster]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    const { success, roster } = await getRosterData({});
+  const fetchData = async (forceRefresh = false) => {
+    if (forceRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    const { success, roster } = await getRosterData({ force: forceRefresh });
     if (success && Array.isArray(roster)) {
       setRawRoster(roster);
       processData(roster, targetDate, activeTab);
+      if (forceRefresh) toast.success("Data roster berhasil disinkronkan dari database!");
     } else {
       setRawRoster([]);
       processData([], targetDate, activeTab);
+      if (forceRefresh) toast.error("Gagal memuat ulang data roster");
     }
     setLoading(false);
+    setRefreshing(false);
+  };
+
+  // Helper to safely parse date strings (supporting Indonesian month names and various formats)
+  const parseDateSafe = (dateStr?: string | null): Date | null => {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const clean = dateStr.trim();
+    if (!clean || clean === '-' || clean === 'N/A') return null;
+
+    const idToEnMonths: Record<string, string> = {
+      'mei': 'May',
+      'agu': 'Aug',
+      'ags': 'Aug',
+      'okt': 'Oct',
+      'des': 'Dec'
+    };
+
+    let normalized = clean;
+    for (const [idm, enm] of Object.entries(idToEnMonths)) {
+      normalized = normalized.replace(new RegExp(`\\b${idm}\\b`, 'gi'), enm);
+    }
+
+    if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(normalized)) {
+      const p = normalized.split(/[/-]/);
+      let yr = parseInt(p[2], 10);
+      if (yr < 100) yr += 2000;
+      const mo = parseInt(p[1], 10) - 1;
+      const dy = parseInt(p[0], 10);
+      const dObj = new Date(yr, mo, dy);
+      if (!isNaN(dObj.getTime())) return dObj;
+    }
+
+    const parts = normalized.split(/[\s-]+/);
+    if (parts.length >= 3) {
+      const dy = parseInt(parts[0], 10);
+      let yr = parseInt(parts[2], 10);
+      if (yr < 100) yr += 2000;
+      const moName = parts[1].toLowerCase().slice(0, 3);
+      const monthMap: Record<string, number> = {
+        'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
+        'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
+      };
+      if (!isNaN(dy) && !isNaN(yr) && monthMap[moName] !== undefined) {
+        return new Date(yr, monthMap[moName], dy);
+      }
+    }
+
+    const standardParsed = new Date(normalized);
+    if (!isNaN(standardParsed.getTime())) return standardParsed;
+
+    return null;
+  };
+
+  const formatShortDateSafe = (d: Date | string | null | undefined, fallback = '-'): string => {
+    if (!d) return fallback;
+    const dObj = d instanceof Date ? d : parseDateSafe(d);
+    if (!dObj || isNaN(dObj.getTime())) return typeof d === 'string' ? d : fallback;
+
+    const dParts = dObj.toDateString().split(' ');
+    if (!dParts || dParts.length < 4 || !dParts[3]) return fallback;
+
+    const day = parseInt(dParts[2], 10);
+    const yr = dParts[3].length >= 2 ? dParts[3].substring(2) : dParts[3];
+    return `${day} ${dParts[1]} ${yr}`;
   };
 
   const processData = (roster: any[], tDateStr: string, tab: string) => {
-    const d = new Date(tDateStr);
-    const parts = d.toDateString().split(' ');
-    const day = parseInt(parts[2], 10);
-    const formattedDate = day + ' ' + parts[1] + ' ' + parts[3].substring(2);
+    const formattedDate = formatShortDateSafe(tDateStr, tDateStr);
 
     let totals = { masuk: 0, cuti: 0, izin: 0, alfa: 0, libur: 0, lainnya: 0 };
     let stData = { hadir: 0, cuti: 0, izin: 0, alfa: 0, sakit: 0, libur: 0, total: 0, details: { sakit: [], izin: [], alfa: [], libur: [] } };
@@ -206,7 +272,11 @@ export function AdmDashboard() {
           ((posLower.includes('crew') || posLower.includes('helper') || posLower.includes('operator') || posLower.includes('sampler') || posLower.includes('driver')) &&
            !posLower.includes('foreman') && !posLower.includes('supervisor') && !posLower.includes('admin') && !posLower.includes('superintendent') && !posLower.includes('manager') && !posLower.includes('lead') && !posLower.includes('officer') && !posLower.includes('analyst') && !posLower.includes('planner') && !posLower.includes('specialist'));
 
-        const datesAsc = Object.keys(sched).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+        const datesAsc = Object.keys(sched).sort((a, b) => {
+          const tA = parseDateSafe(a)?.getTime() || 0;
+          const tB = parseDateSafe(b)?.getTime() || 0;
+          return tA - tB;
+        });
         const isLeaveCode = (s?: string) => {
           if (!s) return false;
           const u = s.toUpperCase().trim();
@@ -294,11 +364,13 @@ export function AdmDashboard() {
               if (onsiteGlobalIdx !== -1 && onsiteGlobalIdx + 1 < datesAsc.length) {
                 empMasukKerjaDate = datesAsc[onsiteGlobalIdx + 1];
               } else {
-                const dDate = new Date(empOnsiteDate);
-                dDate.setDate(dDate.getDate() + 1);
-                const dParts = dDate.toDateString().split(' ');
-                const dDay = parseInt(dParts[2], 10);
-                empMasukKerjaDate = `${dDay} ${dParts[1]} ${dParts[3].substring(2)}`;
+                const dDate = parseDateSafe(empOnsiteDate);
+                if (dDate) {
+                  dDate.setDate(dDate.getDate() + 1);
+                  empMasukKerjaDate = formatShortDateSafe(dDate, '-');
+                } else {
+                  empMasukKerjaDate = '-';
+                }
               }
             }
           }
@@ -390,27 +462,8 @@ export function AdmDashboard() {
       const clean = dateStr.trim();
       if (!clean || clean === '-') return 9999999999999;
 
-      const monthMap: Record<string, string> = {
-        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'mei': '05', 'may': '05',
-        'jun': '06', 'jul': '07', 'agu': '08', 'ags': '08', 'aug': '08', 'sep': '09',
-        'okt': '10', 'oct': '10', 'nov': '11', 'des': '12', 'dec': '12'
-      };
-
-      const parts = clean.split(/[\s-]+/);
-      if (parts.length >= 3) {
-        const day = parseInt(parts[0], 10);
-        const monthKey = parts[1].substring(0, 3).toLowerCase();
-        const month = monthMap[monthKey] || '01';
-        let year = parseInt(parts[2], 10);
-        if (year < 100) year += 2000;
-
-        if (!isNaN(day) && !isNaN(year)) {
-          return new Date(year, parseInt(month, 10) - 1, day).getTime();
-        }
-      }
-
-      const parsed = Date.parse(clean);
-      if (!isNaN(parsed)) return parsed;
+      const dObj = parseDateSafe(clean);
+      if (dObj) return dObj.getTime();
 
       return 9999999999999;
     };
@@ -501,6 +554,17 @@ export function AdmDashboard() {
               className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-all outline-none"
             />
           </div>
+
+          <button 
+            onClick={() => fetchData(true)} 
+            disabled={refreshing || loading}
+            title="Muat ulang data terbaru langsung dari database SQL"
+            className="flex items-center justify-center gap-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 px-4 py-2.5 rounded-xl font-semibold transition-all shadow-sm active:scale-95 disabled:opacity-50 text-sm"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-teal-600' : ''}`} />
+            <span>{refreshing ? 'Menyinkronkan...' : 'Refresh DB'}</span>
+          </button>
+
           {isAdministration && (
           <button 
             onClick={() => {
@@ -508,7 +572,7 @@ export function AdmDashboard() {
               setEmpSearch('');
               setShowIzinModal(true);
             }} 
-            className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-sm hover:shadow"
+            className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-sm hover:shadow text-sm"
           >
             <PlusCircle className="w-5 h-5" /> Input Izin / Alfa
           </button>
