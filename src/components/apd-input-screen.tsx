@@ -529,7 +529,8 @@ export function ApdInputScreen() {
                       {historyList.map((histObj: any, idx: number) => {
 
                         const hDate = typeof histObj === 'string' ? histObj : histObj.date;
-                        const hUrl = typeof histObj === 'string' ? null : histObj.url;
+                        const rawUrl = typeof histObj === 'string' ? null : histObj.url;
+                        const hUrl = (rawUrl && typeof rawUrl === 'string' && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('/uploads/') || rawUrl.startsWith('/api/'))) ? rawUrl.trim() : null;
                         let displayDate = hDate;
                         try {
                           if (hDate.includes('T')) {
@@ -749,16 +750,18 @@ export function ApdInputScreen() {
 
       {/* ── MODAL: PREVIEW DOKUMEN PDF APD ── */}
       {previewDoc && (() => {
-        const fileId = parseGoogleDriveId(previewDoc.url);
+        const rawUrl = (previewDoc.url || '').trim();
+        const isValidUrl = Boolean(rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('/uploads/') || rawUrl.startsWith('/api/')));
+        const fileId = isValidUrl ? parseGoogleDriveId(rawUrl) : null;
         const embedUrl = fileId 
           ? `https://drive.google.com/file/d/${fileId}/preview`
-          : previewDoc.url;
+          : (isValidUrl ? rawUrl : '');
         const viewUrl = fileId
           ? `https://drive.google.com/file/d/${fileId}/view?usp=sharing`
-          : previewDoc.url;
+          : (isValidUrl ? rawUrl : '');
         const downloadUrl = fileId
           ? `https://drive.google.com/uc?export=download&id=${fileId}`
-          : previewDoc.url;
+          : (isValidUrl ? rawUrl : '');
 
         return (
           <div className="fixed inset-0 z-[80] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
@@ -780,24 +783,28 @@ export function ApdInputScreen() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <a
-                    href={viewUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold transition-colors"
-                    title="Buka di Tab Baru"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Buka Tab Baru</span>
-                  </a>
-                  <a
-                    href={downloadUrl}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs flex items-center gap-1.5 font-bold shadow-md shadow-emerald-950 transition-colors"
-                    title="Unduh Dokumen PDF"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Unduh PDF</span>
-                  </a>
+                  {isValidUrl && (
+                    <>
+                      <a
+                        href={viewUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold transition-colors"
+                        title="Buka di Tab Baru"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Buka Tab Baru</span>
+                      </a>
+                      <a
+                        href={downloadUrl}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs flex items-center gap-1.5 font-bold shadow-md shadow-emerald-950 transition-colors"
+                        title="Unduh Dokumen PDF"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Unduh PDF</span>
+                      </a>
+                    </>
+                  )}
                   <button 
                     onClick={() => setPreviewDoc(null)} 
                     className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 flex items-center justify-center transition-colors font-bold cursor-pointer"
@@ -810,12 +817,32 @@ export function ApdInputScreen() {
 
               {/* Viewer Body */}
               <div className="flex-1 bg-slate-950 relative min-h-0 w-full flex flex-col items-center justify-center p-2">
-                <iframe 
-                  src={embedUrl} 
-                  title={`Dokumen ${previewDoc.title}`}
-                  className="w-full h-full rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
-                  allow="autoplay; encrypted-media; fullscreen"
-                />
+                {isValidUrl ? (
+                  <iframe 
+                    src={embedUrl} 
+                    title={`Dokumen ${previewDoc.title}`}
+                    className="w-full h-full rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
+                    allow="autoplay; encrypted-media; fullscreen"
+                  />
+                ) : (
+                  <div className="text-center p-8 max-w-md space-y-3">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto">
+                      <FileText className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-sm font-bold text-white">Tautan Dokumen Tidak Tersedia</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Belum ada link dokumen PDF atau file Google Drive yang valid untuk item ini.
+                    </p>
+                    <div className="pt-2">
+                      <Button
+                        onClick={() => setPreviewDoc(null)}
+                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-4 rounded-xl shadow-md"
+                      >
+                        Tutup
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Footer */}
