@@ -166,32 +166,56 @@ router.post("/api/tickets", async (req, res) => {
       return res.status(400).json({ error: validation.error.format() });
     }
     const newTicket = validation.data as any;
-    if (!newTicket.ticketId) {
-      newTicket.ticketId = `TKT-${Date.now()}`;
-      newTicket.source = 'inspeksi';
+    const isInternal = newTicket.source === 'internal' || !!newTicket.targetDate || (
+      ['rekayasa engineering', 'pembuatan alat bantu kerja', 'modifikasi fasilitas', 'pembuatan alat baru'].some(c => (newTicket.category || '').toLowerCase().includes(c))
+    );
+
+    if (isInternal) {
+      newTicket.source = 'internal';
+      if (!newTicket.ticketId) {
+        newTicket.ticketId = `RWO-${Date.now()}`;
+      }
+    } else {
+      if (!newTicket.ticketId) {
+        newTicket.ticketId = `TKT-${Date.now()}`;
+      }
+      if (!newTicket.source) {
+        newTicket.source = 'inspeksi';
+      }
     }
+
     const result = await db.insert(tickets).values(newTicket).returning();
     const ticket = result[0];
     
-    const waMessageText = `*==== TEMUAN INSPEKSI K3 BARU ====*\n\n` +
-      `*Ticket ID:* ${ticket.ticketId}\n` +
-      `*Pelapor:* ${ticket.requestorName}\n` +
-      `*Area/Lokasi:* ${ticket.location || '-'}\n` +
-      `*Kategori:* ${ticket.category || '-'}\n` +
-      `*Tingkat Risiko:* ${ticket.risk || ticket.priority || 'Medium'}\n\n` +
-      `*Deskripsi Temuan:*\n${ticket.description || '-'}\n\n` +
-      `*Saran Tindakan/Pengendalian:*\n${ticket.initialControl || '-'}\n\n` +
-      `*Lampiran:*\n${ticket.photoUrl && ticket.photoUrl.startsWith('data:image') ? '(Gambar terlampir di sistem)' : (ticket.photoUrl || '-')}`;
+    const waMessageText = isInternal
+      ? `*==== WORK ORDER PERMINTAAN (RWO) BARU ====*\n\n` +
+        `*Ticket ID:* ${ticket.ticketId}\n` +
+        `*Pemohon:* ${ticket.requestorName}\n` +
+        `*Area/Lokasi:* ${ticket.location || '-'}\n` +
+        `*Tipe Request / Kategori:* ${ticket.category || '-'}\n` +
+        `*Prioritas:* ${ticket.priority || 'Medium'}\n` +
+        `*Target Waktu:* ${ticket.targetDate || '-'}\n\n` +
+        `*Deskripsi Pekerjaan:*\n${ticket.description || '-'}\n\n` +
+        `*Lampiran:*\n${ticket.photoUrl && ticket.photoUrl.startsWith('data:image') ? '(Gambar terlampir di sistem)' : (ticket.photoUrl || '-')}`
+      : `*==== TEMUAN INSPEKSI K3 BARU ====*\n\n` +
+        `*Ticket ID:* ${ticket.ticketId}\n` +
+        `*Pelapor:* ${ticket.requestorName}\n` +
+        `*Area/Lokasi:* ${ticket.location || '-'}\n` +
+        `*Kategori:* ${ticket.category || '-'}\n` +
+        `*Tingkat Risiko:* ${ticket.risk || ticket.priority || 'Medium'}\n\n` +
+        `*Deskripsi Temuan:*\n${ticket.description || '-'}\n\n` +
+        `*Saran Tindakan/Pengendalian:*\n${ticket.initialControl || '-'}\n\n` +
+        `*Lampiran:*\n${ticket.photoUrl && ticket.photoUrl.startsWith('data:image') ? '(Gambar terlampir di sistem)' : (ticket.photoUrl || '-')}`;
     
     // Push Notification to Safety / QA / Maintenance if needed
     try {
       const _n = await db.insert(notifications).values({
         userId: null,
-        role: 'Safety',
-        title: 'Temuan Inspeksi Baru',
-        message: `${ticket.requestorName} mencatat temuan di ${ticket.location}`,
+        role: isInternal ? 'Maintenance' : 'Safety',
+        title: isInternal ? 'WO Permintaan Baru' : 'Temuan Inspeksi Baru',
+        message: isInternal ? `${ticket.requestorName} mengajukan permintaan pekerjaan di ${ticket.location || '-'}` : `${ticket.requestorName} mencatat temuan di ${ticket.location || '-'}`,
         type: 'warning',
-        link: '/ticket'
+        link: isInternal ? '/wo' : '/ticket'
       }).returning();
       sendWebPush(_n);
     } catch(e) { console.error('Ticket push error:', e); }

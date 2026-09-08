@@ -152,7 +152,10 @@ export const getTickets = async (statusFilter: string = 'ALL') => {
     const res = await fetch('/api/tickets');
     const data = await res.json();
     if (!Array.isArray(data)) return [];
-    const filteredData = data.filter((t: any) => t.source === 'inspeksi' || (t.ticketId && t.ticketId.startsWith('TKT-')));
+    const filteredData = data.filter((t: any) => {
+      if (t.source === 'internal' || (t.ticketId && t.ticketId.startsWith('RWO-'))) return false;
+      return t.source === 'inspeksi' || (t.ticketId && t.ticketId.startsWith('TKT-'));
+    });
     if (!statusFilter || statusFilter.toUpperCase() === 'ALL') return filteredData;
     return filteredData.filter((t: any) => t.status?.toUpperCase() === statusFilter.toUpperCase());
   } catch (e) {
@@ -407,6 +410,10 @@ export const uploadDocumentProof = async (docId: string, base64: string, fileNam
 
 
 export const createInternalTicket = async (data: any) => {
+  data.source = data.source || 'internal';
+  if (!data.ticketId) {
+    data.ticketId = `RWO-${Date.now()}`;
+  }
   let photoUrl = data.photoUrl || '';
   if (photoUrl && photoUrl.startsWith('data:image')) {
      try {
