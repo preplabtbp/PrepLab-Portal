@@ -1,11 +1,12 @@
 import { toast } from 'sonner';
 import React, { useState, useEffect } from 'react';
-import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2 } from 'lucide-react';
+import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText } from 'lucide-react';
 import { ImageModal } from './image-modal';
 import { Button, Input, Select } from './ui';
 
 import { addMonths, isBefore, parseISO, format, startOfDay } from 'date-fns';
 import { useApdInput, ApdEntry, getHistoryIgnoreCase } from '../features/apd/hooks/useApdInput';
+import { parseGoogleDriveId } from '../lib/p5m-flyer';
 
 import { getApdSettings, getApdHistoryByNik, recordApdTakes, getEmployees, addEmployee, generateApdDocument, uploadApdProof } from '../sheets-api';
 import { PageHeader } from './PageHeader';
@@ -53,6 +54,15 @@ export function ApdInputScreen() {
     uploadingApd,
     handleUploadProof
   } = useApdInput();
+
+  // State for interactive APD PDF / Document viewer modal
+  const [previewDoc, setPreviewDoc] = useState<{
+    url: string;
+    title: string;
+    date: string;
+    employeeName: string;
+    nik: string;
+  } | null>(null);
 
 
 
@@ -535,9 +545,24 @@ export function ApdInputScreen() {
                             Ke-{idx + 1}
                           </span>
                           {hUrl ? (
-                            <button type="button" onClick={(e) => { e.preventDefault(); window.open(hUrl, "_blank", "noopener,noreferrer"); }} className="flex items-center gap-1.5 text-teal-700 bg-teal-50 shadow-sm px-2 py-1.5 rounded-lg text-xs font-medium border border-teal-200 hover:bg-teal-100 transition-colors z-10 relative">
-                              <Calendar className="w-3.5 h-3.5 text-teal-500" />
-                              {displayDate}
+                            <button 
+                              type="button" 
+                              onClick={(e) => { 
+                                e.preventDefault(); 
+                                setPreviewDoc({
+                                  url: hUrl,
+                                  title: apd,
+                                  date: displayDate,
+                                  employeeName: employeeData.nama,
+                                  nik: employeeData.nik
+                                });
+                              }} 
+                              className="flex items-center gap-1.5 text-teal-700 bg-teal-50 shadow-xs px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-teal-200 hover:bg-teal-100 hover:border-teal-300 hover:shadow-sm transition-all z-10 relative group cursor-pointer"
+                              title="Klik untuk membuka dokumen PDF"
+                            >
+                              <Calendar className="w-3.5 h-3.5 text-teal-600" />
+                              <span>{displayDate}</span>
+                              <ExternalLink className="w-3 h-3 text-teal-500 opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
                             </button>
                           ) : (
                             <div className="flex items-center gap-2">
@@ -722,5 +747,94 @@ export function ApdInputScreen() {
         </div>
       )}
 
+      {/* ── MODAL: PREVIEW DOKUMEN PDF APD ── */}
+      {previewDoc && (() => {
+        const fileId = parseGoogleDriveId(previewDoc.url);
+        const embedUrl = fileId 
+          ? `https://drive.google.com/file/d/${fileId}/preview`
+          : previewDoc.url;
+        const viewUrl = fileId
+          ? `https://drive.google.com/file/d/${fileId}/view?usp=sharing`
+          : previewDoc.url;
+        const downloadUrl = fileId
+          ? `https://drive.google.com/uc?export=download&id=${fileId}`
+          : previewDoc.url;
 
-</div>  );}
+        return (
+          <div className="fixed inset-0 z-[80] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-5xl h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+              {/* Header */}
+              <div className="bg-slate-900 border-b border-slate-800 p-3 sm:p-4 flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-teal-500/15 text-teal-400 border border-teal-500/30 flex items-center justify-center font-bold shrink-0 shadow-xs">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm sm:text-base text-white truncate">
+                      Dokumen Bukti Pengambilan: {previewDoc.title}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-mono truncate">
+                      👤 {previewDoc.employeeName} ({previewDoc.nik}) • 📅 {previewDoc.date}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={viewUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold transition-colors"
+                    title="Buka di Tab Baru"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Buka Tab Baru</span>
+                  </a>
+                  <a
+                    href={downloadUrl}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs flex items-center gap-1.5 font-bold shadow-md shadow-emerald-950 transition-colors"
+                    title="Unduh Dokumen PDF"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Unduh PDF</span>
+                  </a>
+                  <button 
+                    onClick={() => setPreviewDoc(null)} 
+                    className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 flex items-center justify-center transition-colors font-bold cursor-pointer"
+                    title="Tutup Pratinjau"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Viewer Body */}
+              <div className="flex-1 bg-slate-950 relative min-h-0 w-full flex flex-col items-center justify-center p-2">
+                <iframe 
+                  src={embedUrl} 
+                  title={`Dokumen ${previewDoc.title}`}
+                  className="w-full h-full rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
+                  allow="autoplay; encrypted-media; fullscreen"
+                />
+              </div>
+
+              {/* Footer */}
+              <div className="bg-slate-900 border-t border-slate-800 px-4 py-2.5 flex items-center justify-between text-xs text-slate-400 shrink-0">
+                <span className="font-mono text-[11px]">
+                  💡 Gunakan kontrol zoom dan navigasi di dalam viewer untuk melihat detail dokumen PDF.
+                </span>
+                <Button
+                  onClick={() => setPreviewDoc(null)}
+                  className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-7 px-4 rounded-xl font-semibold shadow-xs"
+                >
+                  Tutup
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+    </div>
+  );
+}
