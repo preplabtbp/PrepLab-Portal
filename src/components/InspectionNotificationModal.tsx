@@ -9,7 +9,8 @@ import {
   X, 
   ArrowRight,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Users
 } from 'lucide-react';
 import { Button } from './ui';
 
@@ -149,6 +150,20 @@ export function InspectionNotificationModal({ inspectorNik, inspectorName, onNav
                   <ShieldCheck className="w-3.5 h-3.5" /> Terdaftar di Sheet
                 </span>
               </div>
+
+              {schedule.partners && schedule.partners.length > 0 && (
+                <div className="pt-2 border-t border-[var(--border-main)] flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span className="inline-flex items-center gap-1 font-bold text-teal-700 dark:text-teal-300 bg-teal-500/15 border border-teal-500/30 px-2 py-0.5 rounded-lg text-[10px]">
+                    <Users className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                    {schedule.partners.length === 1 ? 'Pasangan Tugas:' : 'Rekan Tim:'}
+                  </span>
+                  {schedule.partners.map((p: any, idx: number) => (
+                    <span key={idx} className="text-[var(--text-main)] font-semibold text-xs">
+                      {p.name} <span className="text-[10px] text-[var(--text-muted)] font-normal">({p.roleIndex === 1 ? 'Inspektor 1 - Utama' : `Inspektor ${p.roleIndex} - Pendamping`} • {p.jabatan})</span>{idx < schedule.partners.length - 1 ? ', ' : ''}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">

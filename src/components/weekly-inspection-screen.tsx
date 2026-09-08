@@ -1,7 +1,7 @@
 import { toast } from 'sonner';
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Input, Select } from './ui';
-import { ClipboardCheck, Server, AlertTriangle, Eye, Wrench, ChevronLeft, Loader2 } from 'lucide-react';
+import { ClipboardCheck, Server, AlertTriangle, Eye, Wrench, ChevronLeft, Loader2, Users } from 'lucide-react';
 import { getMasterPertanyaan, submitInspeksiUniversal, submitInspeksi } from '../sheets-api';
 import { FormUmum } from './inspection-forms/FormUmum';
 import { FormP3K } from './inspection-forms/FormP3K';
@@ -370,6 +370,19 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
                 <div className="text-[10px] text-[var(--text-muted)] font-medium mt-0.5">
                   Shift: <span className="font-bold text-emerald-600 dark:text-emerald-400">{userScheduledTask.shift}</span> • Peran: Inspektor {userScheduledTask.roleIndex} {userScheduledTask.roleIndex === 1 ? '(Utama)' : '(Pendamping)'}
                 </div>
+                {userScheduledTask.partners && userScheduledTask.partners.length > 0 && (
+                  <div className="text-[11px] text-[var(--text-muted)] font-medium mt-1 flex flex-wrap items-center gap-1">
+                    <span className="inline-flex items-center gap-1 font-bold text-teal-700 dark:text-teal-300 bg-teal-500/15 border border-teal-500/30 px-1.5 py-0.2 rounded-md text-[10px]">
+                      <Users className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                      {userScheduledTask.partners.length === 1 ? 'Pasangan:' : 'Rekan Tim:'}
+                    </span>
+                    {userScheduledTask.partners.map((p: any, idx: number) => (
+                      <span key={idx} className="font-bold text-[var(--text-main)]">
+                        {p.name} <span className="text-[10px] text-[var(--text-muted)] font-normal">({p.roleIndex === 1 ? 'Inspektor 1' : `Inspektor ${p.roleIndex}`} • {p.jabatan})</span>{idx < userScheduledTask.partners.length - 1 ? ', ' : ''}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             {selectedForm !== userScheduledTask.formInfo?.formId && userScheduledTask.formInfo?.formId && (
