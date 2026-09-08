@@ -56,10 +56,36 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
   };
 
   const [uniqueForms, setUniqueForms] = useState<{id: string, judul: string, tipe: string}[]>(() => extractUniqueForms(fallbackQuestions));
+  const [userScheduledTask, setUserScheduledTask] = useState<any | null>(null);
 
   useEffect(() => {
     fetchMasterData();
-  }, []);
+
+    // Check preselected form from sessionStorage
+    const preForm = sessionStorage.getItem('preselected_form_id');
+    if (preForm) {
+      setSelectedForm(preForm);
+      sessionStorage.removeItem('preselected_form_id');
+    }
+
+    // Live sync personal schedule from Google Sheet
+    if (inspectorName || inspectorNik) {
+      const q = new URLSearchParams();
+      if (inspectorName) q.append('name', inspectorName);
+      if (inspectorNik) q.append('nik', inspectorNik);
+      fetch(`/api/inspection-schedule?${q.toString()}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.found && d.schedule && !d.schedule.isCuti) {
+            setUserScheduledTask(d.schedule);
+            if (!preForm && d.schedule.formInfo?.formId) {
+              setSelectedForm(d.schedule.formInfo.formId);
+            }
+          }
+        })
+        .catch(console.error);
+    }
+  }, [inspectorName, inspectorNik]);
 
   const fetchMasterData = async () => {
     try {
@@ -330,6 +356,34 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
             Mingguan
           </span>
         </h3>
+        {userScheduledTask && (
+          <div className="mb-3.5 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-start gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping mt-1 shrink-0" />
+              <div>
+                <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                  Tugas Terjadwal Anda Minggu Ini:
+                </span>{' '}
+                <span className="font-black text-[var(--text-main)]">
+                  {userScheduledTask.inspeksi}
+                </span>{' '}
+                <div className="text-[10px] text-[var(--text-muted)] font-medium mt-0.5">
+                  Shift: <span className="font-bold text-emerald-600 dark:text-emerald-400">{userScheduledTask.shift}</span> • Peran: Inspektor {userScheduledTask.roleIndex} {userScheduledTask.roleIndex === 1 ? '(Utama)' : '(Pendamping)'}
+                </div>
+              </div>
+            </div>
+            {selectedForm !== userScheduledTask.formInfo?.formId && userScheduledTask.formInfo?.formId && (
+              <button
+                type="button"
+                onClick={() => setSelectedForm(userScheduledTask.formInfo.formId)}
+                className="self-end sm:self-center px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shrink-0 transition-colors shadow-2xs cursor-pointer"
+              >
+                Pilih Form Ini
+              </button>
+            )}
+          </div>
+        )}
+
         {loading ? (
           <div className="text-center py-6 text-[var(--text-muted)] text-sm flex items-center justify-center gap-2">
              <div className="w-4 h-4 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin"></div>

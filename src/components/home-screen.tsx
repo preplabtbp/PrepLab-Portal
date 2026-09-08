@@ -13,6 +13,7 @@ import { FoodReportModal } from './food-report-modal';
 import { UsernamePromptModal } from './UsernamePromptModal';
 import { getDailySkenaQuote } from '../utils/skena-quotes';
 import { DailyGreetingHero } from './DailyGreetingHero';
+import { InspectionScheduleCard } from './InspectionScheduleCard';
 
 export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: { 
   inspectorName: string, 
@@ -62,6 +63,12 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
 
   const isSuperAdmin = inspectorNik === '02D25000055' || inspectorNik === '02D24000043';
   const isDeveloper = isSuperAdmin || inspectorNik === 'preplabadmin' || developerList.includes(inspectorNik);
+  const isAdminRole = 
+    userJabatan.toLowerCase().includes('admin') || 
+    userJabatan.toLowerCase().includes('manager') || 
+    userJabatan.toLowerCase().includes('superintendent') || 
+    userSection.toLowerCase().includes('admin') ||
+    userSection.toLowerCase().includes('administrasi');
 
   const isLab = userSection.toLowerCase().includes('laboratory') || isDeveloper;
   const isMaintenance = userSection.toLowerCase().includes('maintenance') || isDeveloper;
@@ -209,6 +216,18 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
         inspectorName={inspectorName} 
         inspectorNik={inspectorNik} 
         onOpenUsernameModal={() => setShowUsernameModal(true)} 
+      />
+
+      {/* Live Inspection Schedule Card from Google Sheet */}
+      <InspectionScheduleCard
+        inspectorName={inspectorName}
+        inspectorNik={inspectorNik}
+        isAdminOrDeveloper={isDeveloper || isAdminRole}
+        onNavigateToInspection={(formId, subArea) => {
+          if (formId) sessionStorage.setItem('preselected_form_id', formId);
+          if (subArea) sessionStorage.setItem('preselected_sub_area', subArea);
+          onNav('weekly-inspection');
+        }}
       />
 
       {/* Sticky Tabs for Mobile/Desktop */}

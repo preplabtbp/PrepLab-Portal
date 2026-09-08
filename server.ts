@@ -376,7 +376,8 @@ const app = express();
     '/api/auth/setup',
     '/api/auth/reset-password',
     '/api/health',
-    '/api/drive/view'
+    '/api/drive/view',
+    '/api/inspection-schedule'
   ];
 
   app.use('/api', (req, res, next) => {
