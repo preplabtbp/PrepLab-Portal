@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 import { 
   FileText, Send, Paperclip, Download, Eye, CheckCircle2, Clock, 
-  Users, AlertTriangle, ShieldCheck, Filter, Search, Sparkles, Pin, 
+  Users, AlertTriangle, ShieldCheck, ShieldAlert, Filter, Search, Sparkles, Pin, 
   MessageSquare, ChevronRight, Share2, RefreshCw, ExternalLink, UserCheck, UserX, MessageCircle, X, Trash2, RotateCcw, Calendar, Bell, Check
 } from 'lucide-react';
 import { Card, Button, Input, Select } from './ui';
@@ -911,25 +911,25 @@ export function GroupReportFloatingWidget({ inspectorName, inspectorNik, inspect
 
   return (
     <>
-      {/* FLOATING CHAT ICON BUTTON (POSITIONED ABOVE BOTTOM NAVBAR) */}
-      <div className="fixed bottom-24 right-4 sm:bottom-24 sm:right-6 z-40">
+      {/* FLOATING HAZARD SAFETY ICON BUTTON (POSITIONED ABOVE BOTTOM NAVBAR) */}
+      <div className="fixed bottom-22 right-4 sm:bottom-24 sm:right-6 z-40">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="group relative w-13 h-13 sm:w-14 sm:h-14 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-full shadow-2xl flex items-center justify-center transition-all transform hover:scale-110 active:scale-95 border-2 border-white/30 ring-4 ring-emerald-500/20"
-          title="Grup Safety & Rekap PDF"
+          className="group relative w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-full shadow-2xl flex items-center justify-center transition-all transform hover:scale-110 active:scale-95 border-2 border-white/40 ring-4 ring-amber-500/20 cursor-pointer"
+          title="Pelaporan Hazard Safety & Rekap"
         >
           {/* Notification Badge */}
           <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-white shadow-md animate-bounce">
             •
           </span>
 
-          <MessageCircle className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+          <ShieldAlert className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
         </button>
       </div>
 
       {/* FLOATING POPUP DRAWER WINDOW (POSITIONED ABOVE BOTTOM NAVBAR) */}
       {isOpen && (
-        <div className="fixed bottom-[6.5rem] right-4 sm:bottom-[6.5rem] sm:right-6 w-[calc(100vw-32px)] sm:w-[420px] h-[540px] z-50 bg-[var(--card-bg)] border border-[var(--border-main)] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-6 fade-in duration-300">
+        <div className="fixed bottom-[5.5rem] right-3 sm:bottom-[6.5rem] sm:right-6 w-[calc(100vw-24px)] sm:w-[430px] h-[560px] max-h-[calc(100vh-6.5rem)] z-50 bg-[var(--card-bg)] border border-[var(--border-main)] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-6 fade-in duration-300">
           <GroupReportScreen
             inspectorName={inspectorName}
             inspectorNik={inspectorNik}
