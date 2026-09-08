@@ -380,6 +380,7 @@ const app = express();
     '/api/auth/reset-password',
     '/api/health',
     '/api/drive/view',
+    '/api/p5m/flyer',
     '/api/inspection-schedule'
   ];
 
