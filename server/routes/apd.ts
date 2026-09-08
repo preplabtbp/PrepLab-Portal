@@ -5,19 +5,25 @@ import {
   apdSettings, apdHistory, apdDocuments, employees 
 } from "../../src/db/schema.js";
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 
 export const router = Router();
 
 const APD_SPREADSHEET_ID = "1rGB-uSSzKcefu6dEd-4pWjDSS7NcWY_2TwLf8Fo4aT4";
-const APD_HISTORY_CSV_URL = `https://docs.google.com/spreadsheets/d/${APD_SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=apd_history`;
+const APD_XLSX_URL = `https://docs.google.com/spreadsheets/d/${APD_SPREADSHEET_ID}/export?format=xlsx`;
 const APD_SETTINGS_CSV_URL = `https://docs.google.com/spreadsheets/d/${APD_SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=apd_settings`;
 
 let lastApdSyncTime = 0;
 const APD_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes cache
 
-function parseTimestamp(ts: string): Date {
+function parseTimestamp(ts: any): Date {
   if (!ts) return new Date();
-  const trimmed = ts.trim();
+  if (typeof ts === 'number') {
+    const utc_days = Math.floor(ts - 25569);
+    const utc_value = utc_days * 86400;
+    return new Date(utc_value * 1000);
+  }
+  const trimmed = String(ts).trim();
   const parts = trimmed.split(/[/ -]/);
   if (parts.length === 3) {
     let d = parseInt(parts[0], 10);
@@ -62,53 +68,76 @@ export async function syncApdDataFromSheet(force: boolean = false) {
       console.warn("Failed to sync APD Settings from sheet:", e.message);
     }
 
-    // 2. Sync APD History
-    const resHistory = await fetch(APD_HISTORY_CSV_URL);
-    if (!resHistory.ok) {
-      console.warn("Failed to fetch APD history CSV, status:", resHistory.status);
-      return;
-    }
+    // 2. Sync APD History using XLSX to preserve rich-text hyperlinks
+    try {
+      const resHistory = await fetch(APD_XLSX_URL);
+      if (resHistory.ok) {
+        const buf = await resHistory.arrayBuffer();
+        const wb = XLSX.read(Buffer.from(buf), { type: 'buffer' });
+        const sheet = wb.Sheets['apd_history'];
+        if (sheet && sheet['!ref']) {
+          const range = XLSX.utils.decode_range(sheet['!ref']);
+          const existingHistory = await db.select().from(apdHistory);
+          const existingMap = new Map();
+          for (const h of existingHistory) {
+            const key = `${(h.nik || '').trim().toLowerCase()}_${(h.itemName || '').trim().toLowerCase()}_${h.dateTaken ? new Date(h.dateTaken).toISOString().slice(0, 10) : ''}`;
+            existingMap.set(key, h);
+          }
 
-    const textHistory = await resHistory.text();
-    const parsedHistory = Papa.parse(textHistory, { header: true, skipEmptyLines: true });
-    const rows = (parsedHistory.data as any[]).filter(r => r.NIK && r.NIK.trim() && r.ApdType && r.ApdType.trim());
+          const toInsert: any[] = [];
+          for (let r = 1; r <= range.e.r; r++) {
+            const timestamp = sheet[XLSX.utils.encode_cell({ r, c: 0 })]?.v;
+            const nik = (sheet[XLSX.utils.encode_cell({ r, c: 1 })]?.v || '').toString().trim();
+            const name = (sheet[XLSX.utils.encode_cell({ r, c: 2 })]?.v || '').toString().trim();
+            const apdType = (sheet[XLSX.utils.encode_cell({ r, c: 3 })]?.v || '').toString().trim();
+            const cellH = sheet[XLSX.utils.encode_cell({ r, c: 7 })];
 
-    if (rows.length > 0) {
-      const existingHistory = await db.select().from(apdHistory);
-      const existingKeys = new Set(
-        existingHistory.map(h => `${(h.nik || '').trim().toLowerCase()}_${(h.itemName || '').trim().toLowerCase()}_${h.dateTaken ? new Date(h.dateTaken).toISOString().slice(0, 10) : ''}`)
-      );
+            if (!nik || !apdType) continue;
 
-      const toInsert: any[] = [];
-      for (const r of rows) {
-        const nik = (r.NIK || '').trim();
-        const apdType = (r.ApdType || '').trim();
-        const name = (r.NAMA || '').trim();
-        const parsedDate = parseTimestamp(r.Timestamp);
-        const dateKey = parsedDate.toISOString().slice(0, 10);
-        const link = (r['Link form APD'] || r.Link || '').trim();
-        const uniqueKey = `${nik.toLowerCase()}_${apdType.toLowerCase()}_${dateKey}`;
+            let link = cellH?.l?.Target || '';
+            if (!link && typeof cellH?.v === 'string' && cellH.v.startsWith('http')) {
+              link = cellH.v.trim();
+            }
+            if (link && !link.startsWith('http://') && !link.startsWith('https://') && !link.startsWith('/')) {
+              link = '';
+            }
 
-        if (!existingKeys.has(uniqueKey)) {
-          existingKeys.add(uniqueKey);
-          toInsert.push({
-            nik: nik,
-            name: name,
-            itemName: apdType,
-            dateTaken: parsedDate,
-            photoUrl: link,
-            pt: 'TBP'
-          });
+            const parsedDate = parseTimestamp(timestamp);
+            const dateKey = parsedDate.toISOString().slice(0, 10);
+            const uniqueKey = `${nik.toLowerCase()}_${apdType.toLowerCase()}_${dateKey}`;
+
+            const existing = existingMap.get(uniqueKey);
+            if (existing) {
+              if (link && (!existing.photoUrl || existing.photoUrl === 'Link form APD' || !existing.photoUrl.startsWith('http'))) {
+                await db.update(apdHistory)
+                  .set({ photoUrl: link })
+                  .where(eq(apdHistory.id, existing.id));
+                existing.photoUrl = link;
+              }
+            } else {
+              existingMap.set(uniqueKey, { nik, itemName: apdType, dateTaken: parsedDate, photoUrl: link });
+              toInsert.push({
+                nik,
+                name,
+                itemName: apdType,
+                dateTaken: parsedDate,
+                photoUrl: link,
+                pt: 'TBP'
+              });
+            }
+          }
+
+          if (toInsert.length > 0) {
+            const CHUNK_SIZE = 50;
+            for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
+              await db.insert(apdHistory).values(toInsert.slice(i, i + CHUNK_SIZE));
+            }
+            console.log(`[APD Sync] Successfully synced ${toInsert.length} new APD history records from XLSX.`);
+          }
         }
       }
-
-      if (toInsert.length > 0) {
-        const CHUNK_SIZE = 50;
-        for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
-          await db.insert(apdHistory).values(toInsert.slice(i, i + CHUNK_SIZE));
-        }
-        console.log(`[APD Sync] Successfully synced ${toInsert.length} new APD history records from sheet.`);
-      }
+    } catch (sheetErr: any) {
+      console.warn("Failed to sync APD History from XLSX:", sheetErr.message);
     }
 
     lastApdSyncTime = now;
