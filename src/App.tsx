@@ -15,6 +15,7 @@ import { WhatsAppModal } from './components/whatsapp-modal';
 import { P5MNotificationModal } from './components/p5m-notification-modal';
 import { GroupReportScreen, GroupReportFloatingWidget } from './components/GroupReportScreen';
 import { ReminderNotificationModal } from './components/ReminderNotificationModal';
+import { InspectionNotificationModal } from './components/InspectionNotificationModal';
 
 
 
@@ -1322,6 +1323,17 @@ export default function App() {
       <P5MNotificationModal
         inspectorNik={inspectorNik}
         inspectorName={inspectorName}
+      />
+
+      {/* Global Weekly Inspection Assignment Notification Modal (Google Sheet Live) */}
+      <InspectionNotificationModal
+        inspectorNik={inspectorNik}
+        inspectorName={inspectorName}
+        onNavigateToInspection={(formId, subArea) => {
+          if (formId) sessionStorage.setItem('preselected_form_id', formId);
+          if (subArea) sessionStorage.setItem('preselected_sub_area', subArea);
+          navigate('/weekly-inspection');
+        }}
       />
 
       {/* Global Floating Group Safety & PDF Widget */}
