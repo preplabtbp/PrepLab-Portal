@@ -367,12 +367,16 @@ export const saveApdSettings = async (intervals: Record<string, number>) => {
 };
 
 export const getApdHistoryByNik = async (nik: string) => {
-  const res = await fetch('/api/apd/history');
+  const res = await fetch(`/api/apd/history?nik=${encodeURIComponent(nik)}`);
   return await res.json();
 };
 
 export const recordApdTakes = async (nik: string, nama: string, entries: any[], pdfUrl?: string) => {
-  const res = await fetch('/api/apd/history', { method: 'POST', body: JSON.stringify({ entries }) });
+  const res = await fetch('/api/apd/history', { 
+    method: 'POST', 
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nik, nama, entries, pdfUrl }) 
+  });
   return await res.json();
 };
 

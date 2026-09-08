@@ -26,7 +26,7 @@ import { router as workOrdersRouter } from "./server/routes/workOrders.js";
 import { router as cloudRouter } from "./server/routes/cloud.js";
 import { router as inspectionsRouter } from "./server/routes/inspections.js";
 import { router as ticketsRouter } from "./server/routes/tickets.js";
-import { router as apdRouter } from "./server/routes/apd.js";
+import { router as apdRouter, syncApdDataFromSheet } from "./server/routes/apd.js";
 import { router as rosterRouter } from "./server/routes/roster.js";
 import { router as adminRouter } from "./server/routes/admin.js";
 import { router as agendaRouter } from "./server/routes/agenda.js";
@@ -102,6 +102,9 @@ async function initDbSchema() {
     if (!qCount || qCount.length === 0) {
       syncMasterQuestionsFromSheet().catch(e => console.warn('Questions auto-seed notice:', e.message));
     }
+
+    // Auto seed APD data from spreadsheet
+    syncApdDataFromSheet().catch(e => console.warn('APD auto-seed notice:', e.message));
   } catch (e: any) {
     console.warn("DB schema init warning:", e.message);
   }
