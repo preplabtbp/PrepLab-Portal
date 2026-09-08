@@ -1148,6 +1148,38 @@ async function fetchInspectionScheduleFromSheet(forceRefresh = false) {
     }
   }
 
+  // Group schedules by inspection title to identify partners/teams
+  const inspectionGroups = new Map<string, any[]>();
+  for (const item of scheduleList) {
+    if (item.isCuti || !item.inspeksi) continue;
+    const key = item.inspeksi.trim().toLowerCase();
+    if (!inspectionGroups.has(key)) {
+      inspectionGroups.set(key, []);
+    }
+    inspectionGroups.get(key)!.push(item);
+  }
+
+  // Attach partners to each schedule item
+  for (const item of scheduleList as any[]) {
+    if (item.isCuti || !item.inspeksi) {
+      item.partners = [];
+      continue;
+    }
+    const key = item.inspeksi.trim().toLowerCase();
+    const group = inspectionGroups.get(key) || [];
+    item.partners = group
+      .filter(other => other.name.trim().toLowerCase() !== item.name.trim().toLowerCase())
+      .sort((a, b) => a.roleIndex - b.roleIndex)
+      .map(other => ({
+        no: other.no,
+        name: other.name,
+        jabatan: other.jabatan,
+        shift: other.shift,
+        roleIndex: other.roleIndex,
+        roleLabel: other.roleIndex === 1 ? 'Inspektor 1 (Utama)' : `Inspektor ${other.roleIndex} (Pendamping)`
+      }));
+  }
+
   cachedSchedule = scheduleList;
   lastScheduleFetchTime = now;
   return scheduleList;

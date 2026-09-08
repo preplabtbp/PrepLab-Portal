@@ -5,6 +5,15 @@ import {
 } from 'lucide-react';
 import { Button } from './ui';
 
+interface SchedulePartner {
+  no?: number;
+  name: string;
+  jabatan: string;
+  shift?: string;
+  roleIndex: number;
+  roleLabel?: string;
+}
+
 interface ScheduleItem {
   no: number;
   name: string;
@@ -13,6 +22,7 @@ interface ScheduleItem {
   roleIndex: number;
   inspeksi: string;
   isCuti: boolean;
+  partners?: SchedulePartner[];
   formInfo?: {
     formId: string;
     tipe: string;
@@ -212,6 +222,23 @@ export function InspectionScheduleCard({ inspectorName, inspectorNik, isAdminOrD
                   <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5">
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400">Petugas:</span> {mySchedule.name} • <span className="opacity-80">{mySchedule.jabatan}</span>
                   </p>
+
+                  {mySchedule.partners && mySchedule.partners.length > 0 && (
+                    <div className="pt-2 mt-1.5 border-t border-[var(--border-main)] flex flex-wrap items-center gap-2 text-xs">
+                      <span className="inline-flex items-center gap-1 font-extrabold text-teal-700 dark:text-teal-300 bg-teal-500/15 border border-teal-500/30 px-2.5 py-1 rounded-xl text-[11px]">
+                        <Users className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                        {mySchedule.partners.length === 1 ? 'Pasangan Tugas:' : 'Rekan Tim Tugas:'}
+                      </span>
+                      {mySchedule.partners.map((p, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5 text-[var(--text-main)] font-bold text-xs bg-[var(--card-bg)] border border-[var(--border-main)] px-2.5 py-0.5 rounded-lg shadow-2xs">
+                          <span className="text-teal-600 dark:text-teal-400">{p.name}</span>
+                          <span className="text-[10px] text-[var(--text-muted)] font-medium">
+                            ({p.roleIndex === 1 ? 'Inspektor 1 - Utama' : `Inspektor ${p.roleIndex} - Pendamping`} • {p.jabatan})
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="shrink-0">
@@ -374,9 +401,21 @@ export function InspectionScheduleCard({ inspectorName, inspectorNik, isAdminOrD
                                 🏖️ Sedang Cuti
                               </span>
                             ) : (
-                              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 leading-tight">
-                                {item.inspeksi}
-                              </p>
+                              <div>
+                                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 leading-tight">
+                                  {item.inspeksi}
+                                </p>
+                                {item.partners && item.partners.length > 0 && (
+                                  <p className="text-[10px] text-[var(--text-muted)] flex items-center gap-1 mt-0.5">
+                                    <span className="font-semibold text-teal-600 dark:text-teal-400">
+                                      {item.partners.length === 1 ? 'Pasangan:' : 'Rekan Tim:'}
+                                    </span>{' '}
+                                    <span>
+                                      {item.partners.map(p => `${p.name} (${p.roleIndex === 1 ? 'Inspektor 1' : `Inspektor ${p.roleIndex}`})`).join(', ')}
+                                    </span>
+                                  </p>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
