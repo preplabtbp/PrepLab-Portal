@@ -3,8 +3,8 @@ self.addEventListener('push', function(event) {
     const data = event.data.json();
     const options = {
       body: data.body,
-      icon: '/logo.png',
-      badge: '/logo.png',
+      icon: '/icon-192.png',
+      badge: '/favicon-32.png',
       vibrate: [500, 250, 500, 250, 500],
       tag: 'p2h-notification-' + Date.now(),
       renotify: true,
