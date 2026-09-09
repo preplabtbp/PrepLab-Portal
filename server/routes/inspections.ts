@@ -1292,6 +1292,14 @@ async function enrichSchedulesWithCompletion(schedules: any[]): Promise<any[]> {
       return getISOWeekTagForSchedule(new Date(insp.date)) === currentWeekTag;
     });
 
+    const allEmps = await db.select().from(employees);
+    const empNameToNik = new Map<string, string>();
+    allEmps.forEach(e => {
+      if (e.name && e.nik) {
+        empNameToNik.set(e.name.toLowerCase().trim(), e.nik.toLowerCase().trim());
+      }
+    });
+
     for (const s of schedules) {
       if (!s || s.isCuti) {
         s.isCompleted = false;
@@ -1299,11 +1307,13 @@ async function enrichSchedulesWithCompletion(schedules: any[]): Promise<any[]> {
       }
 
       const personNames = [s.name, ...(s.partners || []).map((p: any) => p.name)].filter(Boolean).map((n: string) => n.trim().toLowerCase());
+      const personNiks = personNames.map(pName => empNameToNik.get(pName)).filter(Boolean) as string[];
       const sInspeksi = (s.inspeksi || '').toLowerCase();
       const sSubArea = (s.formInfo?.subArea || '').toLowerCase();
       const sFormTitle = (s.formInfo?.formTitle || '').toLowerCase();
 
-      let matchedInsp: any = null;
+      let matchedStrict: any = null;
+      let matchedAny: any = null;
 
       for (const insp of currentWeekInspections) {
         let dataFObj: any = {};
@@ -1316,10 +1326,11 @@ async function enrichSchedulesWithCompletion(schedules: any[]): Promise<any[]> {
         const insp1 = (dataFObj.insp1 || insp.inspectorName || '').toLowerCase();
         const insp2 = (dataFObj.insp2 || '').toLowerCase();
         const insp3 = (dataFObj.insp3 || '').toLowerCase();
+        const rawDataF = typeof insp.dataF === 'string' ? insp.dataF.toLowerCase() : '';
         const location = (insp.location || dataFObj.lokasiUmum || '').toLowerCase();
         const judulForm = (insp.type || dataFObj.judulForm || '').toLowerCase();
 
-        // 1. Check person match
+        // 1. Check person match (by name or NIK)
         const isPersonMatch = personNames.some(pName => {
           if (!pName) return false;
           if (insp1.includes(pName) || pName.includes(insp1)) return true;
@@ -1330,6 +1341,9 @@ async function enrichSchedulesWithCompletion(schedules: any[]): Promise<any[]> {
             return true;
           }
           return false;
+        }) || personNiks.some(nik => {
+          if (!nik) return false;
+          return insp1.includes(nik) || insp2.includes(nik) || insp3.includes(nik) || rawDataF.includes(nik);
         });
 
         // 2. Check area / form match
@@ -1338,11 +1352,18 @@ async function enrichSchedulesWithCompletion(schedules: any[]): Promise<any[]> {
           (sInspeksi && (location.includes(sInspeksi) || sInspeksi.includes(location))) ||
           (judulForm && sFormTitle && (judulForm.includes(sFormTitle) || sFormTitle.includes(judulForm)));
 
-        if (isPersonMatch && (isAreaMatch || !s.inspeksi)) {
-          matchedInsp = { insp, dataFObj };
-          break;
+        if (isPersonMatch) {
+          if (!matchedAny) {
+            matchedAny = { insp, dataFObj };
+          }
+          if (isAreaMatch || !s.inspeksi) {
+            matchedStrict = { insp, dataFObj };
+            break;
+          }
         }
       }
+
+      const matchedInsp = matchedStrict || matchedAny;
 
       if (matchedInsp) {
         const { insp, dataFObj } = matchedInsp;

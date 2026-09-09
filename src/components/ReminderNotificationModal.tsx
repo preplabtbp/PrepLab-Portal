@@ -26,24 +26,46 @@ export function ReminderNotificationModal({ userNik, onNavigateToInspection }: R
         ) : null;
 
         if (unreadReminder) {
-          // Check if inspection is already completed
+          let isCompletedAlready = false;
           try {
             const schedRes = await fetch(`/api/inspection-schedule?nik=${encodeURIComponent(userNik)}`);
             if (schedRes.ok) {
               const schedData = await schedRes.json();
               if (schedData.schedule?.isCompleted) {
-                // Auto mark as read in DB and suppress
-                fetch(`/api/notifications/${unreadReminder.id}/read`, { method: 'PUT' }).catch(console.error);
-                const currentReadIds = JSON.parse(localStorage.getItem(`notif_read_ids_${userNik}`) || '[]');
-                if (!currentReadIds.includes(unreadReminder.id)) {
-                  currentReadIds.push(unreadReminder.id);
-                  localStorage.setItem(`notif_read_ids_${userNik}`, JSON.stringify(currentReadIds));
-                }
-                setActiveReminder(null);
-                return;
+                isCompletedAlready = true;
               }
             }
           } catch (e) {}
+
+          if (!isCompletedAlready) {
+            try {
+              const rekapRes = await fetch('/api/rekap-inspeksi');
+              if (rekapRes.ok) {
+                const rData = await rekapRes.json();
+                if (Array.isArray(rData?.rekapList)) {
+                  const cleanNik = userNik.trim().toLowerCase();
+                  const found = rData.rekapList.find((e: any) => 
+                    (e.nik && e.nik.trim().toLowerCase() === cleanNik)
+                  );
+                  if (found && found.status === 'SUDAH') {
+                    isCompletedAlready = true;
+                  }
+                }
+              }
+            } catch (e) {}
+          }
+
+          if (isCompletedAlready) {
+            // Auto mark as read in DB and suppress
+            fetch(`/api/notifications/${unreadReminder.id}/read`, { method: 'PUT' }).catch(console.error);
+            const currentReadIds = JSON.parse(localStorage.getItem(`notif_read_ids_${userNik}`) || '[]');
+            if (!currentReadIds.includes(unreadReminder.id)) {
+              currentReadIds.push(unreadReminder.id);
+              localStorage.setItem(`notif_read_ids_${userNik}`, JSON.stringify(currentReadIds));
+            }
+            setActiveReminder(null);
+            return;
+          }
 
           setActiveReminder(unreadReminder);
         } else {

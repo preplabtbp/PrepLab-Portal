@@ -1,7 +1,7 @@
 import { toast } from 'sonner';
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Input, Select } from './ui';
-import { ClipboardCheck, Server, AlertTriangle, Eye, Wrench, ChevronLeft, Loader2, Users } from 'lucide-react';
+import { ClipboardCheck, Server, AlertTriangle, Eye, Wrench, ChevronLeft, Loader2, Users, CheckCircle2 } from 'lucide-react';
 import { getMasterPertanyaan, submitInspeksiUniversal, submitInspeksi } from '../sheets-api';
 import { FormUmum } from './inspection-forms/FormUmum';
 import { FormP3K } from './inspection-forms/FormP3K';
@@ -78,7 +78,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
         .then(d => {
           if (d.found && d.schedule && !d.schedule.isCuti) {
             setUserScheduledTask(d.schedule);
-            if (!preForm && d.schedule.formInfo?.formId) {
+            if (!preForm && d.schedule.formInfo?.formId && !d.schedule.isCompleted) {
               setSelectedForm(d.schedule.formInfo.formId);
             }
           }
@@ -357,18 +357,38 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
           </span>
         </h3>
         {userScheduledTask && (
-          <div className="mb-3.5 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className={`mb-3.5 p-3 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+            userScheduledTask.isCompleted 
+              ? 'bg-emerald-500/5 border-emerald-500/20' 
+              : 'bg-emerald-500/10 border-emerald-500/30'
+          }`}>
             <div className="flex items-start gap-2.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping mt-1 shrink-0" />
+              {userScheduledTask.isCompleted ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+              ) : (
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping mt-1 shrink-0" />
+              )}
               <div>
-                <span className="font-bold text-emerald-800 dark:text-emerald-300">
-                  Tugas Terjadwal Anda Minggu Ini:
-                </span>{' '}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                    Tugas Terjadwal Anda Minggu Ini:
+                  </span>
+                  {userScheduledTask.isCompleted && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold text-[10px] uppercase">
+                      ✓ Sudah Selesai
+                    </span>
+                  )}
+                </div>
                 <span className="font-black text-[var(--text-main)]">
                   {userScheduledTask.inspeksi}
                 </span>{' '}
                 <div className="text-[10px] text-[var(--text-muted)] font-medium mt-0.5">
                   Shift: <span className="font-bold text-emerald-600 dark:text-emerald-400">{userScheduledTask.shift}</span> • Peran: Inspektor {userScheduledTask.roleIndex} {userScheduledTask.roleIndex === 1 ? '(Utama)' : '(Pendamping)'}
+                  {userScheduledTask.isCompleted && userScheduledTask.completedFormTitle && (
+                    <span className="ml-1.5 text-emerald-600 dark:text-emerald-400 font-semibold">
+                      (Terlaksana: {userScheduledTask.completedFormTitle})
+                    </span>
+                  )}
                 </div>
                 {userScheduledTask.partners && userScheduledTask.partners.length > 0 && (
                   <div className="text-[11px] text-[var(--text-muted)] font-medium mt-1 flex flex-wrap items-center gap-1">
@@ -385,7 +405,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
                 )}
               </div>
             </div>
-            {selectedForm !== userScheduledTask.formInfo?.formId && userScheduledTask.formInfo?.formId && (
+            {!userScheduledTask.isCompleted && selectedForm !== userScheduledTask.formInfo?.formId && userScheduledTask.formInfo?.formId && (
               <button
                 type="button"
                 onClick={() => setSelectedForm(userScheduledTask.formInfo.formId)}

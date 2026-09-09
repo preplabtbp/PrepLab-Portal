@@ -28,6 +28,17 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - **Sanitasi Backend (`server/routes/inspections.ts`)**:
     - Menambahkan validasi dan sanitasi pada handler `/api/inspections/universal` sehingga data yang dikirim ke Google Apps Script / cetak PDF selalu dipastikan hanya 1 digit dan bernilai $\le$ poin maksimal.
 
+### 🔕 Supresi Cerdas Popup Pengingat Bagi yang Sudah Melaksanakan Inspeksi
+
+- **Optimasi Modal Pengingat**:
+  - Memperbarui `enrichSchedulesWithCompletion` pada endpoint `/api/inspection-schedule` agar mengenali penyelesaian inspeksi apa pun yang telah dilakukan personil pada minggu berjalan (`isPersonMatch`), bukan hanya jika judul area sama persis.
+  - Menambahkan pengecekan silang ke endpoint `/api/rekap-inspeksi` pada `InspectionNotificationModal`, `ReminderNotificationModal`, dan `SapDashboard`. Jika personil telah berstatus `SUDAH`, modal pengingat tidak akan ditampilkan lagi.
+  - Pada halaman form mingguan (`weekly-inspection-screen.tsx`), jika personil telah selesai melaksanakan inspeksi, banner jadwal mingguan menampilkan badge *"✓ Sudah Selesai"* (beserta nama formulir yang terlaksana) dan menghilangkan animasi kedip (*ping dot*) serta tidak lagi memaksa auto-select form.
+
+### 🛠️ Koreksi Nilai Poin Aktual Inspeksi Pak Roy Marten Bobrikit
+
+- Memperbaiki data nilai `aktual: "44"` menjadi `aktual: "4"` pada riwayat inspeksi perkakas portabel (ID 162, 163, 164) tanggal 9 September 2026 oleh Pak Roy Marten Bobrikit pada database sistem.
+
 ---
 
 ## [2.8.21] - 2026-09-09

@@ -164,13 +164,14 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
         if (rData && Array.isArray(rData.rekapList)) {
           setRekapList(rData.rekapList);
           
-          const cleanNik = (inspectorNik || '').trim();
+          const cleanNik = (inspectorNik || '').toLowerCase().trim();
           const cleanName = (inspectorName || '').toLowerCase().trim();
           
           const found = rData.rekapList.find((emp: any) => {
-            const empNik = (emp.nik || '').trim();
+            const empNik = (emp.nik || '').toLowerCase().trim();
             const empName = (emp.name || '').toLowerCase().trim();
-            return (cleanNik && empNik === cleanNik) || (cleanName && empName === cleanName);
+            return (cleanNik && empNik === cleanNik) || 
+                   (cleanName && (empName === cleanName || empName.includes(cleanName) || cleanName.includes(empName)));
           });
 
           if (found && found.status === 'BELUM' && !found.isCuti) {
@@ -181,6 +182,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
             }
           } else {
             setUserInspectionItem(null);
+            setShowInspectionReminder(false);
           }
         }
       })
@@ -260,13 +262,14 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
         if (Array.isArray(rekapResult.value.rekapList)) {
           setRekapList(rekapResult.value.rekapList);
           
-          const cleanNik = (inspectorNik || '').trim();
+          const cleanNik = (inspectorNik || '').toLowerCase().trim();
           const cleanName = (inspectorName || '').toLowerCase().trim();
           
           const found = rekapResult.value.rekapList.find((emp: any) => {
-            const empNik = (emp.nik || '').trim();
+            const empNik = (emp.nik || '').toLowerCase().trim();
             const empName = (emp.name || '').toLowerCase().trim();
-            return (cleanNik && empNik === cleanNik) || (cleanName && empName === cleanName);
+            return (cleanNik && empNik === cleanNik) || 
+                   (cleanName && (empName === cleanName || empName.includes(cleanName) || cleanName.includes(empName)));
           });
 
           if (found && found.status === 'BELUM' && !found.isCuti) {
@@ -277,6 +280,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
             }
           } else {
             setUserInspectionItem(null);
+            setShowInspectionReminder(false);
           }
         }
       }
