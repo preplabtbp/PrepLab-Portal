@@ -357,42 +357,48 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
           </span>
         </h3>
         {userScheduledTask && (
-          <div className={`mb-3.5 p-3 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+          <div className={`mb-3.5 p-3.5 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
             userScheduledTask.isCompleted 
-              ? 'bg-emerald-500/5 border-emerald-500/20' 
+              ? 'bg-emerald-500/10 border-emerald-500/40 text-[var(--text-main)]' 
               : 'bg-emerald-500/10 border-emerald-500/30'
           }`}>
-            <div className="flex items-start gap-2.5">
+            <div className="flex items-start gap-3">
               {userScheduledTask.isCompleted ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
               ) : (
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping mt-1 shrink-0" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping mt-1.5 shrink-0" />
               )}
-              <div>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-bold text-emerald-800 dark:text-emerald-300">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-emerald-900 dark:text-emerald-200">
                     Tugas Terjadwal Anda Minggu Ini:
                   </span>
-                  {userScheduledTask.isCompleted && (
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold text-[10px] uppercase">
-                      ✓ Sudah Selesai
+                  {userScheduledTask.isCompleted ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-extrabold text-[10px] uppercase tracking-wider shadow-xs">
+                      <CheckCircle2 className="w-3 h-3" /> SUDAH DILAKSANAKAN
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 font-extrabold text-[10px] uppercase border border-amber-500/25">
+                      BELUM DILAKSANAKAN
                     </span>
                   )}
                 </div>
-                <span className="font-black text-[var(--text-main)]">
+                <div className="font-black text-sm text-[var(--text-main)]">
                   {userScheduledTask.inspeksi}
-                </span>{' '}
-                <div className="text-[10px] text-[var(--text-muted)] font-medium mt-0.5">
+                </div>
+                <div className="text-[11px] text-[var(--text-muted)] font-medium">
                   Shift: <span className="font-bold text-emerald-600 dark:text-emerald-400">{userScheduledTask.shift}</span> • Peran: Inspektor {userScheduledTask.roleIndex} {userScheduledTask.roleIndex === 1 ? '(Utama)' : '(Pendamping)'}
-                  {userScheduledTask.isCompleted && userScheduledTask.completedFormTitle && (
-                    <span className="ml-1.5 text-emerald-600 dark:text-emerald-400 font-semibold">
-                      (Terlaksana: {userScheduledTask.completedFormTitle})
+                  {userScheduledTask.isCompleted && (
+                    <span className="ml-2 font-semibold text-emerald-700 dark:text-emerald-300">
+                      (Terlaksana: {userScheduledTask.completedFormTitle || 'Inspeksi Terencana'}{userScheduledTask.completedLocation ? ` - ${userScheduledTask.completedLocation}` : ''})
                     </span>
                   )}
                 </div>
                 {userScheduledTask.partners && userScheduledTask.partners.length > 0 && (
-                  <div className="text-[11px] text-[var(--text-muted)] font-medium mt-1 flex flex-wrap items-center gap-1">
-                    <span className="inline-flex items-center gap-1 font-bold text-teal-700 dark:text-teal-300 bg-teal-500/15 border border-teal-500/30 px-1.5 py-0.2 rounded-md text-[10px]">
+                  <div className="text-[11px] text-[var(--text-muted)] font-medium pt-0.5 flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 font-bold text-teal-700 dark:text-teal-300 bg-teal-500/15 border border-teal-500/30 px-2 py-0.5 rounded-md text-[10px]">
                       <Users className="w-3 h-3 text-teal-600 dark:text-teal-400" />
                       {userScheduledTask.partners.length === 1 ? 'Pasangan:' : 'Rekan Tim:'}
                     </span>
@@ -408,8 +414,13 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
             {!userScheduledTask.isCompleted && selectedForm !== userScheduledTask.formInfo?.formId && userScheduledTask.formInfo?.formId && (
               <button
                 type="button"
-                onClick={() => setSelectedForm(userScheduledTask.formInfo.formId)}
-                className="self-end sm:self-center px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shrink-0 transition-colors shadow-2xs cursor-pointer"
+                onClick={() => {
+                  setSelectedForm(userScheduledTask.formInfo.formId);
+                  if (userScheduledTask.formInfo?.subArea) {
+                    sessionStorage.setItem('preselected_sub_area', userScheduledTask.formInfo.subArea);
+                  }
+                }}
+                className="self-end sm:self-center px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shrink-0 transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
               >
                 Pilih Form Ini
               </button>
@@ -432,19 +443,37 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
               ))}
             </optgroup>
             
-            <optgroup label="[ KOTAK P3K ]">
+            <optgroup label="[ P3K ]">
               {uniqueForms.filter(f => f.tipe === "P3K").map(f => (
                 <option key={f.id} value={f.id}>{f.judul}</option>
               ))}
             </optgroup>
             
-            <optgroup label="[ ASSET & LAINNYA ]">
-              {uniqueForms.filter(f => !["UMUM", "P3K", "APD"].includes(f.tipe)).map(f => (
+            <optgroup label="[ SARANA ]">
+              {uniqueForms.filter(f => f.tipe === "SARANA").map(f => (
+                <option key={f.id} value={f.id}>{f.judul}</option>
+              ))}
+            </optgroup>
+            
+            <optgroup label="[ PERKAKAS ]">
+              {uniqueForms.filter(f => f.tipe === "PERKAKAS").map(f => (
+                <option key={f.id} value={f.id}>{f.judul}</option>
+              ))}
+            </optgroup>
+            
+            <optgroup label="[ TABUNG GAS ]">
+              {uniqueForms.filter(f => f.tipe === "TABUNG" || f.tipe === "TABUNG_MINGGUAN").map(f => (
+                <option key={f.id} value={f.id}>{f.judul}</option>
+              ))}
+            </optgroup>
+            
+            <optgroup label="[ TANGGA ]">
+              {uniqueForms.filter(f => f.tipe === "TANGGA").map(f => (
                 <option key={f.id} value={f.id}>{f.judul}</option>
               ))}
             </optgroup>
 
-            <optgroup label="[ ALAT PELINDUNG DIRI ]">
+            <optgroup label="[ KEPATUHAN APD ]">
                <option value="17">Inspeksi APD - Shift A Lab</option>
                <option value="18">Inspeksi APD - Shift B Lab</option>
                <option value="19">Inspeksi APD - Shift A Prep</option>
@@ -464,6 +493,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
           inspectorNik={inspectorNik}
           onSubmit={handleSubmitUniversal} 
           autoFillAllYa={autoFillTrigger}
+          defaultSubArea={userScheduledTask?.formInfo?.subArea || sessionStorage.getItem('preselected_sub_area') || ''}
         />
       )}
 

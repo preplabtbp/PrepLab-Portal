@@ -1119,19 +1119,57 @@ export function mapInspectionToFormInfo(name: string): { formId: string; tipe: s
     return { formId: '28. TBP-FR-SFT-04.15-01', tipe: 'TANGGA', formTitle: 'Inspeksi Tangga Portabel' };
   }
 
-  // Inspeksi Umum Terencana (Area)
+  // 1. Gudang dan Fasilitas Penunjang (MUST BE EVALUATED BEFORE PREPARASI so that 'Gudang Preparasi A & B' maps to Gudang)
+  if (
+    n.includes('gudang') || 
+    n.includes('kontainer') || 
+    n.includes('transit') || 
+    n.includes('carpenter') || 
+    n.includes('workshop') || 
+    n.includes('fasilitas penunjang')
+  ) {
+    let sub = name;
+    if (n.includes('chemical')) sub = 'Gudang Chemical';
+    else if (n.includes('laboratorium') || n.includes('lab')) sub = 'Gudang Laboratorium';
+    else if (n.includes('kontainer a')) sub = 'Gudang Kontainer A';
+    else if (n.includes('kontainer b')) sub = 'Gudang Kontainer B';
+    else if (n.includes('preparasi')) sub = 'Gudang Preparasi A & B';
+    else if (n.includes('arsip')) sub = 'Gudang Arsip';
+    else if (n.includes('transit') || n.includes('pantry')) sub = 'Gudang Transit - R. Pantry';
+    else if (n.includes('carpenter')) sub = 'Koridor - Depan Kontainer - Area Carpenter';
+    else if (n.includes('maintenance') || n.includes('workshop')) sub = 'Maintenance & Workshop';
+    return { formId: '03. GUDANG', tipe: 'UMUM', formTitle: 'Inspeksi Umum Terencana Area Gudang dan Fasilitas Penunjang', subArea: sub };
+  }
+
+  // 2. Inspeksi Umum Terencana Area Preparasi
   if (n.includes('preparasi')) {
-    let sub = 'Preparasi';
-    if (n.includes('basah')) sub = 'Preparasi Basah';
-    if (n.includes('kering')) sub = 'Preparasi Kering';
+    let sub = 'Preparasi Basah (Area Kerja)';
+    if (n.includes('basah')) {
+      if (n.includes('office') || n.includes('toilet') || n.includes('loker')) {
+        sub = 'Preparasi Basah (Office - Toilet - Loker)';
+      } else {
+        sub = 'Preparasi Basah (Area Kerja)';
+      }
+    } else if (n.includes('kering')) {
+      if (n.includes('office') || n.includes('dust') || n.includes('kompresor')) {
+        sub = 'Preparasi Kering (Office-Dust Collector-Kompresor)';
+      } else {
+        sub = 'Preparasi Kering (Area Kerja - Halte - Parkir)';
+      }
+    }
     return { formId: '01. PREP', tipe: 'UMUM', formTitle: 'Inspeksi Umum Terencana Area Preparasi', subArea: sub };
   }
 
-  if (n.includes('gudang') || n.includes('kontainer') || n.includes('transit') || n.includes('carpenter')) {
-    return { formId: '03. GUDANG', tipe: 'UMUM', formTitle: 'Inspeksi Umum Terencana Area Gudang dan Fasilitas Penunjang', subArea: name };
+  // 3. Inspeksi Umum Terencana Area Laboratorium
+  if (n.includes('laboratorium') || n.includes('lab')) {
+    let sub = 'R. Office - QAIC - Admin - Manager - Meeting';
+    if (n.includes('chiller') || n.includes('ups') || n.includes('xrf')) sub = 'R. Chiller - UPS - XRF';
+    else if (n.includes('fusion') || n.includes('timbang') || n.includes('scrubber')) sub = 'R. Fusion - Timbang - Scrubber';
+    else if (n.includes('press') || n.includes('koridor')) sub = 'R. Press - Koridor & Fasilitas Umum Lab';
+    else if (n.includes('office') || n.includes('qaic') || n.includes('meeting')) sub = 'R. Office - QAIC - Admin - Manager - Meeting';
+    return { formId: '02, LAB', tipe: 'UMUM', formTitle: 'Inspeksi Umum Terencana Area Laboratorium', subArea: sub };
   }
 
-  // Lab
   return { formId: '02, LAB', tipe: 'UMUM', formTitle: 'Inspeksi Umum Terencana Area Laboratorium', subArea: name };
 }
 
@@ -1323,27 +1361,29 @@ async function enrichSchedulesWithCompletion(schedules: any[]): Promise<any[]> {
           } catch (e) {}
         }
 
-        const insp1 = (dataFObj.insp1 || insp.inspectorName || '').toLowerCase();
-        const insp2 = (dataFObj.insp2 || '').toLowerCase();
-        const insp3 = (dataFObj.insp3 || '').toLowerCase();
+        const insp1 = (dataFObj.insp1 || insp.inspectorName || '').toLowerCase().trim();
+        const insp2 = (dataFObj.insp2 || '').toLowerCase().trim();
+        const insp3 = (dataFObj.insp3 || '').toLowerCase().trim();
         const rawDataF = typeof insp.dataF === 'string' ? insp.dataF.toLowerCase() : '';
         const location = (insp.location || dataFObj.lokasiUmum || '').toLowerCase();
         const judulForm = (insp.type || dataFObj.judulForm || '').toLowerCase();
 
         // 1. Check person match (by name or NIK)
         const isPersonMatch = personNames.some(pName => {
-          if (!pName) return false;
-          if (insp1.includes(pName) || pName.includes(insp1)) return true;
-          if (insp2.includes(pName) || pName.includes(insp2)) return true;
-          if (insp3.includes(pName) || pName.includes(insp3)) return true;
-          const parts = pName.split(/\s+/).filter(Boolean);
-          if (parts.length >= 2 && parts.every(part => insp1.includes(part) || insp2.includes(part) || insp3.includes(part))) {
+          if (!pName || pName.length < 3) return false;
+          const checkMatch = (target: string) => {
+            if (!target || target.length < 3) return false;
+            return target.includes(pName) || (target.length >= 5 && pName.includes(target));
+          };
+          if (checkMatch(insp1) || checkMatch(insp2) || checkMatch(insp3)) return true;
+          const parts = pName.split(/\s+/).filter(part => part.length >= 3);
+          if (parts.length >= 2 && parts.every(part => (insp1 && insp1.includes(part)) || (insp2 && insp2.includes(part)) || (insp3 && insp3.includes(part)))) {
             return true;
           }
           return false;
         }) || personNiks.some(nik => {
-          if (!nik) return false;
-          return insp1.includes(nik) || insp2.includes(nik) || insp3.includes(nik) || rawDataF.includes(nik);
+          if (!nik || nik.length < 4) return false;
+          return (insp1 && insp1.includes(nik)) || (insp2 && insp2.includes(nik)) || (insp3 && insp3.includes(nik)) || rawDataF.includes(nik);
         });
 
         // 2. Check area / form match

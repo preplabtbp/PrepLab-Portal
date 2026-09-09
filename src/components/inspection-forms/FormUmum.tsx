@@ -6,8 +6,8 @@ import { ChevronDown, PlusCircle, Trash2, Camera, ShieldAlert } from 'lucide-rea
 import { InspectorSignatures, SignatureData } from '../InspectorSignatures';
 import { TemuanItem, TemuanSection } from './TemuanSection';
 
-export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFillAllYa }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number }) {
-  const [subArea, setSubArea] = useState('');
+export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFillAllYa, defaultSubArea }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number, defaultSubArea?: string }) {
+  const [subArea, setSubArea] = useState(defaultSubArea || '');
   const [answers, setAnswers] = useState<Record<string, { jawaban: string, ket: string }>>({});
   const [temuan, setTemuan] = useState<TemuanItem[]>([]);
   
@@ -25,6 +25,20 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFill
     });
     return Array.from(areas).filter(Boolean).sort();
   }, [data]);
+
+  useEffect(() => {
+    const target = defaultSubArea || sessionStorage.getItem('preselected_sub_area');
+    if (target && subAreas.length > 0 && !subArea) {
+      const match = subAreas.find(s => 
+        s.toLowerCase() === target.toLowerCase() || 
+        s.toLowerCase().includes(target.toLowerCase()) || 
+        target.toLowerCase().includes(s.toLowerCase())
+      );
+      if (match) {
+        setSubArea(match);
+      }
+    }
+  }, [defaultSubArea, subAreas, subArea]);
 
   useEffect(() => {
     if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
