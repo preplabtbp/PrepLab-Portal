@@ -46,7 +46,7 @@ export function InspectionNotificationModal({ inspectorNik, inspectorName, onNav
         if (!res.ok) return;
         const data = await res.json();
 
-        if (data.found && data.schedule && !data.schedule.isCuti) {
+        if (data.found && data.schedule && !data.schedule.isCuti && !data.schedule.isCompleted) {
           const item = data.schedule;
           const weekStr = getISOWeekString();
           const storageKey = `insp_sched_ack_${weekStr}_${item.name}_${item.inspeksi}`;
@@ -56,6 +56,13 @@ export function InspectionNotificationModal({ inspectorNik, inspectorName, onNav
             setSchedule(item);
             setIsOpen(true);
           }
+        } else if (data.found && data.schedule?.isCompleted) {
+          // If already completed, ensure it is acknowledged so modal never opens
+          const item = data.schedule;
+          const weekStr = getISOWeekString();
+          const storageKey = `insp_sched_ack_${weekStr}_${item.name}_${item.inspeksi}`;
+          localStorage.setItem(storageKey, 'completed');
+          setIsOpen(false);
         }
       } catch (err) {
         console.error('Error checking inspection assignment:', err);

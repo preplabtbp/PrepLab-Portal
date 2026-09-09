@@ -67,7 +67,21 @@ export function invalidateRosterCache() {
 }
 
 async function computeRosterData() {
-  const allEmps = await db.select().from(employees);
+  const rawEmps = await db.select().from(employees);
+  const allEmps = rawEmps.filter(emp => {
+    const nik = (emp.nik || '').toUpperCase().trim();
+    const name = (emp.name || '').toLowerCase().trim();
+    const username = (emp.username || '').toLowerCase().trim();
+    if (
+      nik === 'DEMO123' || nik === 'DEMO' || nik.includes('DEMO') ||
+      name.includes('user demo') || name.includes('demo staging') || name.includes('staging') ||
+      username.includes('demo') || username.includes('staging')
+    ) {
+      return false;
+    }
+    return true;
+  });
+
   const allRoster = await db.select({
     nik: roster.nik,
     date: roster.date,

@@ -213,6 +213,15 @@ export function RosterAdminScreen() {
     }
 
     list = list.filter(emp => {
+      const nik = (emp.nik || '').toUpperCase().trim();
+      const name = (emp.name || '').toLowerCase().trim();
+      if (
+        nik === 'DEMO123' || nik === 'DEMO' || nik.includes('DEMO') ||
+        name.includes('user demo') || name.includes('demo staging') || name.includes('staging')
+      ) {
+        return false;
+      }
+
       const hasSchedule = (emp.fullSchedule && Object.keys(emp.fullSchedule).length > 0) || (emp.schedule && emp.schedule.length > 0);
       if (!hasSchedule) return false;
 

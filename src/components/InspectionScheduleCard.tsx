@@ -22,6 +22,12 @@ interface ScheduleItem {
   roleIndex: number;
   inspeksi: string;
   isCuti: boolean;
+  isCompleted?: boolean;
+  completedAt?: string;
+  completedPdfUrl?: string;
+  completedInspector?: string;
+  completedFormTitle?: string;
+  completedLocation?: string;
   partners?: SchedulePartner[];
   formInfo?: {
     formId: string;
@@ -203,6 +209,74 @@ export function InspectionScheduleCard({ inspectorName, inspectorNik, isAdminOrD
                   Bebas Tugas
                 </span>
               </div>
+            ) : mySchedule.isCompleted ? (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/5 border border-emerald-500/30 hover:border-emerald-500/50 transition-all shadow-xs">
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white flex items-center gap-1 shadow-xs">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                      <span>SUDAH DIINSPEKSI (SELESAI)</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)]">
+                      {mySchedule.shift} • Peran: Inspektor {mySchedule.roleIndex} {mySchedule.roleIndex === 1 ? '(Utama)' : '(Pendamping)'}
+                    </span>
+                  </div>
+
+                  <h4 className="font-black text-sm sm:text-base text-[var(--text-main)] leading-snug break-words flex items-center gap-1.5">
+                    <span className="text-emerald-600 dark:text-emerald-400">✓</span>
+                    <span>{mySchedule.inspeksi}</span>
+                  </h4>
+
+                  <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5 flex-wrap">
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">Status:</span>
+                    <span className="text-emerald-700 dark:text-emerald-300 font-bold">Laporan Terkirim & Terverifikasi</span>
+                    {mySchedule.completedInspector && (
+                      <span className="opacity-80">• Petugas: {mySchedule.completedInspector.split('|')[0].trim()}</span>
+                    )}
+                  </p>
+
+                  {mySchedule.partners && mySchedule.partners.length > 0 && (
+                    <div className="pt-2 mt-1.5 border-t border-[var(--border-main)] flex flex-wrap items-center gap-2 text-xs">
+                      <span className="inline-flex items-center gap-1 font-extrabold text-teal-700 dark:text-teal-300 bg-teal-500/15 border border-teal-500/30 px-2 py-0.5 rounded-lg text-[10px]">
+                        <Users className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                        {mySchedule.partners.length === 1 ? 'Pasangan:' : 'Rekan:'}
+                      </span>
+                      {mySchedule.partners.map((p, idx) => (
+                        <div key={idx} className="flex items-center gap-1 text-[var(--text-main)] font-semibold text-[11px]">
+                          <span className="text-teal-600 dark:text-teal-400 font-bold">{p.name}</span>
+                          <span className="text-[10px] text-[var(--text-muted)]">({p.roleLabel || (p.roleIndex === 1 ? 'Utama' : 'Pendamping')})</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  {mySchedule.completedPdfUrl && mySchedule.completedPdfUrl !== '#' && (
+                    <Button
+                      onClick={() => {
+                        const rawUrl = mySchedule.completedPdfUrl!;
+                        const fileIdMatch = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                        const viewUrl = fileIdMatch && fileIdMatch[1]
+                          ? `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`
+                          : rawUrl;
+                        window.open(viewUrl, '_blank');
+                      }}
+                      className="h-10 px-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 transition-all transform active:scale-95 cursor-pointer"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>Lihat Laporan PDF</span>
+                    </Button>
+                  )}
+                  <button
+                    onClick={handleStartInspection}
+                    className="text-[11px] text-[var(--text-muted)] hover:text-emerald-600 underline text-center py-1 transition-colors cursor-pointer"
+                    title="Klik jika perlu mengisi ulang atau revisi checklist"
+                  >
+                    Isi Ulang Form
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] hover:border-emerald-500/40 transition-all">
                 <div className="space-y-1.5 min-w-0">
@@ -321,19 +395,19 @@ export function InspectionScheduleCard({ inspectorName, inspectorNik, isAdminOrD
             </div>
 
             {/* Filter & Search Bar */}
-            <div className="p-3 sm:p-4 border-b border-[var(--border-main)] bg-[var(--input-bg)] flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0">
+            <div className="p-3 sm:p-4 border-b border-[var(--border-main)] bg-slate-50/80 dark:bg-slate-900/60 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
               <div className="relative w-full sm:w-80">
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-[var(--text-muted)]" />
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Cari nama, jabatan, atau jenis inspeksi..."
+                  placeholder="Cari nama personil, jabatan, atau area inspeksi..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-xs bg-[var(--card-bg)] border border-[var(--border-main)] rounded-xl text-[var(--text-main)] placeholder-[var(--text-muted)] outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                  className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all shadow-2xs"
                 />
               </div>
 
-              <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+              <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
                 {[
                   { id: 'all', label: 'Semua' },
                   { id: 'siang', label: 'Shift Siang' },
@@ -344,10 +418,10 @@ export function InspectionScheduleCard({ inspectorName, inspectorNik, isAdminOrD
                   <button
                     key={tab.id}
                     onClick={() => setFilterShift(tab.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
                       filterShift === tab.id
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                        ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                        : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50'
                     }`}
                   >
                     {tab.label}
@@ -357,85 +431,114 @@ export function InspectionScheduleCard({ inspectorName, inspectorNik, isAdminOrD
             </div>
 
             {/* Table Content */}
-            <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-2.5 sm:p-4 space-y-2 bg-slate-50/40 dark:bg-slate-950/20">
               {filteredAll.length === 0 ? (
-                <div className="py-12 text-center text-xs text-[var(--text-muted)]">
-                  Tidak ada jadwal yang cocok dengan filter pencarian.
+                <div className="py-16 text-center text-xs sm:text-sm text-slate-400 flex flex-col items-center gap-2">
+                  <Search className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                  <span>Tidak ada jadwal personil yang cocok dengan pencarian "{searchQuery}"</span>
                 </div>
               ) : (
-                <div className="divide-y divide-[var(--border-main)] rounded-2xl border border-[var(--border-main)] overflow-hidden bg-[var(--card-bg)]">
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900 shadow-xs">
                   {filteredAll.map((item, idx) => {
                     const isCurrentUser = 
                       inspectorName && item.name.toLowerCase().includes(inspectorName.toLowerCase());
 
+                    const shiftLower = (item.shift || '').toLowerCase();
+                    let shiftBadgeClass = 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
+                    if (item.isCuti) {
+                      shiftBadgeClass = 'bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800';
+                    } else if (shiftLower.includes('malam') || shiftLower.includes('shift a') || shiftLower.includes('shift b')) {
+                      shiftBadgeClass = 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800';
+                    } else if (shiftLower.includes('siang') || shiftLower.includes('shift r')) {
+                      shiftBadgeClass = 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800';
+                    }
+
                     return (
                       <div
                         key={idx}
-                        className={`p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-colors ${
+                        className={`p-3.5 sm:p-4 transition-all ${
                           isCurrentUser 
-                            ? 'bg-emerald-500/10 border-l-4 border-l-emerald-500' 
-                            : 'hover:bg-[var(--input-bg)]'
+                            ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-l-4 border-l-emerald-600 dark:border-l-emerald-400' 
+                            : 'hover:bg-slate-50/90 dark:hover:bg-slate-800/50'
                         }`}
                       >
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-[var(--text-muted)] w-5 text-center">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                          {/* Left Details */}
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
+                            {/* Number Chip */}
+                            <span className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
                               {item.no}
                             </span>
-                            <h5 className="text-xs sm:text-sm font-black text-[var(--text-main)] flex items-center gap-2 truncate">
-                              {item.name}
-                              {isCurrentUser && (
-                                <span className="text-[9px] font-black bg-emerald-600 text-white px-1.5 py-0.2 rounded-full">
-                                  Anda
-                                </span>
-                              )}
-                            </h5>
-                            <span className="text-[10px] text-[var(--text-muted)] truncate hidden sm:inline">
-                              • {item.jabatan}
-                            </span>
-                          </div>
 
-                          <div className="pl-7">
-                            {item.isCuti ? (
-                              <span className="text-xs text-sky-600 dark:text-sky-400 font-bold flex items-center gap-1">
-                                🏖️ Sedang Cuti
-                              </span>
-                            ) : (
-                              <div>
-                                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 leading-tight">
-                                  {item.inspeksi}
-                                </p>
-                                {item.partners && item.partners.length > 0 && (
-                                  <p className="text-[10px] text-[var(--text-muted)] flex items-center gap-1 mt-0.5">
-                                    <span className="font-semibold text-teal-600 dark:text-teal-400">
-                                      {item.partners.length === 1 ? 'Pasangan:' : 'Rekan Tim:'}
-                                    </span>{' '}
-                                    <span>
-                                      {item.partners.map(p => `${p.name} (${p.roleIndex === 1 ? 'Inspektor 1' : `Inspektor ${p.roleIndex}`})`).join(', ')}
+                            <div className="min-w-0 flex-1 space-y-1">
+                              {/* Name and Jabatan */}
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <h5 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                                  {item.name}
+                                  {isCurrentUser && (
+                                    <span className="text-[10px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full shadow-2xs">
+                                      Anda
                                     </span>
-                                  </p>
+                                  )}
+                                  {item.isCompleted && (
+                                    <span className="text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                                      ✓ Selesai
+                                    </span>
+                                  )}
+                                </h5>
+                                {item.jabatan && (
+                                  <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                    • {item.jabatan}
+                                  </span>
                                 )}
                               </div>
+
+                              {/* Inspection Assignment / Cuti */}
+                              {item.isCuti ? (
+                                <div className="inline-flex items-center gap-1.5 text-xs text-sky-700 dark:text-sky-300 font-semibold bg-sky-50 dark:bg-sky-950/40 px-2.5 py-1 rounded-lg border border-sky-200/60 dark:border-sky-800/50 mt-1">
+                                  <span>🏖️</span>
+                                  <span>Sedang Cuti / Bebas Tugas</span>
+                                </div>
+                              ) : (
+                                <div className="space-y-1 mt-0.5">
+                                  {/* Readable dark text with crisp contrast */}
+                                  <p className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 leading-snug">
+                                    {item.inspeksi}
+                                  </p>
+
+                                  {/* Partners / Rekan Tim */}
+                                  {item.partners && item.partners.length > 0 && (
+                                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 pt-0.5">
+                                      <span className="font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                                        <Users className="w-3.5 h-3.5" />
+                                        {item.partners.length === 1 ? 'Pasangan:' : 'Rekan Tim:'}
+                                      </span>
+                                      <span className="text-slate-700 dark:text-slate-300">
+                                        {item.partners.map(p => `${p.name} (${p.roleIndex === 1 ? 'Inspektor 1' : `Inspektor ${p.roleIndex}`})`).join(', ')}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Right Badges */}
+                          <div className="flex items-center gap-2 self-start sm:self-center shrink-0 pl-10 sm:pl-0">
+                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${shiftBadgeClass}`}>
+                              {item.shift}
+                            </span>
+
+                            {!item.isCuti && (
+                              <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${
+                                item.roleIndex === 1
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                  : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                              }`}>
+                                Peran {item.roleIndex}
+                              </span>
                             )}
                           </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 pl-7 sm:pl-0 shrink-0">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                            item.isCuti 
-                              ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
-                              : item.shift.toLowerCase().includes('malam')
-                              ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
-                              : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                          }`}>
-                            {item.shift}
-                          </span>
-
-                          {!item.isCuti && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[var(--input-bg)] border border-[var(--border-main)] text-[var(--text-main)]">
-                              Peran {item.roleIndex}
-                            </span>
-                          )}
                         </div>
                       </div>
                     );
@@ -445,14 +548,16 @@ export function InspectionScheduleCard({ inspectorName, inspectorNik, isAdminOrD
             </div>
 
             {/* Footer */}
-            <div className="p-3 sm:p-4 border-t border-[var(--border-main)] bg-[var(--card-bg)] flex items-center justify-between text-xs text-[var(--text-muted)] shrink-0">
-              <span>Menampilkan {filteredAll.length} dari {allSchedules.length} personil</span>
-              <Button
+            <div className="p-3.5 sm:p-4 border-t border-[var(--border-main)] bg-white dark:bg-slate-900 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 shrink-0">
+              <span className="font-medium">
+                Menampilkan <strong className="text-slate-800 dark:text-slate-200">{filteredAll.length}</strong> dari <strong>{allSchedules.length}</strong> personil
+              </span>
+              <button
                 onClick={() => setShowFullScheduleModal(false)}
-                className="h-8 px-4 text-xs font-bold rounded-xl bg-[var(--input-bg)] border border-[var(--border-main)] text-[var(--text-main)] hover:bg-[var(--border-main)] transition-colors cursor-pointer"
+                className="h-9 px-5 text-xs font-bold rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 transition-colors shadow-xs cursor-pointer"
               >
                 Tutup
-              </Button>
+              </button>
             </div>
           </div>
         </div>

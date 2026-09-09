@@ -908,20 +908,39 @@ export function GroupReportFloatingWidget({ inspectorName, inspectorNik, inspect
   isDeveloper?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [hasDismissedDot, setHasDismissedDot] = useState(() => {
+    try {
+      return sessionStorage.getItem('group_widget_dot_dismissed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggle = () => {
+    if (!isOpen) {
+      setHasDismissedDot(true);
+      try {
+        sessionStorage.setItem('group_widget_dot_dismissed', 'true');
+      } catch {}
+    }
+    setIsOpen(!isOpen);
+  };
 
   return (
     <>
       {/* FLOATING CHAT ICON BUTTON (POSITIONED ABOVE BOTTOM NAVBAR) */}
       <div className="fixed bottom-24 right-4 sm:bottom-24 sm:right-6 z-40">
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={handleToggle}
           className="group relative w-13 h-13 sm:w-14 sm:h-14 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-full shadow-2xl flex items-center justify-center transition-all transform hover:scale-110 active:scale-95 border-2 border-white/30 ring-4 ring-emerald-500/20"
           title="Grup Safety & Rekap PDF"
         >
           {/* Notification Badge */}
-          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-white shadow-md animate-bounce">
-            •
-          </span>
+          {!hasDismissedDot && !isOpen && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-white shadow-md animate-bounce">
+              •
+            </span>
+          )}
 
           <MessageCircle className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
         </button>

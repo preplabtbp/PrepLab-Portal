@@ -143,6 +143,37 @@ router.post("/api/inspections/universal", async (req, res) => {
         photoUrl: JSON.stringify({ fotoTemuanArray: finalFotoTemuanArray, fotoProses: finalFotoProses })
       }).returning();
       
+      // Auto-resolve any unread inspection reminder notifications for the inspectors
+      try {
+        const allInspectorsRaw = [finalData?.insp1, finalData?.insp2, finalData?.insp3].filter(Boolean);
+        const matchedEmps = await db.select().from(employees);
+        const targetNiks: string[] = [];
+        if (req.body.inspectorNik) targetNiks.push(req.body.inspectorNik);
+
+        allInspectorsRaw.forEach((rawStr: string) => {
+          const cleanStr = String(rawStr).toLowerCase();
+          matchedEmps.forEach(emp => {
+            const eName = (emp.name || '').toLowerCase();
+            if (eName && (cleanStr.includes(eName) || eName.includes(cleanStr))) {
+              targetNiks.push(emp.nik);
+            }
+            const nikMatch = cleanStr.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/i);
+            if (nikMatch) targetNiks.push(nikMatch[0].toUpperCase());
+          });
+        });
+
+        const uniqueNiks = [...new Set(targetNiks.filter(Boolean))];
+        if (uniqueNiks.length > 0) {
+          await db.update(notifications)
+            .set({ isRead: true })
+            .where(and(
+              eq(notifications.type, 'REMINDER_INSPECTION'),
+              inArray(notifications.userId, uniqueNiks)
+            ));
+        }
+      } catch (notifErr) {
+        console.error("Failed to auto-resolve reminder notifications:", notifErr);
+      }
       
       let waMessageText = `*==== LAPORAN INSPEKSI MINGGUAN ====*\n\n`;
       waMessageText += `*Formulir*: ${finalData.judulForm || 'Inspeksi Mingguan'}\n`;
@@ -500,6 +531,34 @@ router.post("/api/inspections", async (req, res) => {
           photoUrl: JSON.stringify({ fotoProses: finalFotoProses, fotoTemuanArray: finalFotoTemuanArray })
       }).returning();
       
+      // Auto-resolve any unread inspection reminder notifications for APD inspectors
+      try {
+        const apdInspector = (dataF && dataF.length > 0 && dataF[0][16]) || '';
+        const matchedEmps = await db.select().from(employees);
+        const targetNiks: string[] = [];
+        if (req.body.inspectorNik) targetNiks.push(req.body.inspectorNik);
+        if (apdInspector) {
+          const cleanStr = String(apdInspector).toLowerCase();
+          matchedEmps.forEach(emp => {
+            const eName = (emp.name || '').toLowerCase();
+            if (eName && (cleanStr.includes(eName) || eName.includes(cleanStr))) {
+              targetNiks.push(emp.nik);
+            }
+            const nikMatch = cleanStr.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/i);
+            if (nikMatch) targetNiks.push(nikMatch[0].toUpperCase());
+          });
+        }
+        const uniqueNiks = [...new Set(targetNiks.filter(Boolean))];
+        if (uniqueNiks.length > 0) {
+          await db.update(notifications)
+            .set({ isRead: true })
+            .where(and(
+              eq(notifications.type, 'REMINDER_INSPECTION'),
+              inArray(notifications.userId, uniqueNiks)
+            ));
+        }
+      } catch (e) {}
+
       let waMessageText = `*==== LAPORAN KEPATUHAN APD ====*\n\n`;
       if (dataF && dataF.length > 0) {
           const firstRow = dataF[0];
@@ -1185,6 +1244,105 @@ async function fetchInspectionScheduleFromSheet(forceRefresh = false) {
   return scheduleList;
 }
 
+function getISOWeekTagForSchedule(d: Date = new Date()): string {
+  const date = new Date(d.getTime());
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  const weekNum = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+  return `W${weekNum}`;
+}
+
+async function enrichSchedulesWithCompletion(schedules: any[]): Promise<any[]> {
+  try {
+    const currentWeekTag = getISOWeekTagForSchedule(new Date());
+    // Get recent inspections from DB (ordered by latest)
+    const recentInspections = await db.select().from(inspections).orderBy(desc(inspections.date)).limit(150);
+
+    // Filter inspections belonging to current ISO week
+    const currentWeekInspections = recentInspections.filter(insp => {
+      if (!insp.date) return false;
+      return getISOWeekTagForSchedule(new Date(insp.date)) === currentWeekTag;
+    });
+
+    for (const s of schedules) {
+      if (!s || s.isCuti) {
+        s.isCompleted = false;
+        continue;
+      }
+
+      const personNames = [s.name, ...(s.partners || []).map((p: any) => p.name)].filter(Boolean).map((n: string) => n.trim().toLowerCase());
+      const sInspeksi = (s.inspeksi || '').toLowerCase();
+      const sSubArea = (s.formInfo?.subArea || '').toLowerCase();
+      const sFormTitle = (s.formInfo?.formTitle || '').toLowerCase();
+
+      let matchedInsp: any = null;
+
+      for (const insp of currentWeekInspections) {
+        let dataFObj: any = {};
+        if (insp.dataF && typeof insp.dataF === 'string') {
+          try {
+            dataFObj = JSON.parse(insp.dataF);
+          } catch (e) {}
+        }
+
+        const insp1 = (dataFObj.insp1 || insp.inspectorName || '').toLowerCase();
+        const insp2 = (dataFObj.insp2 || '').toLowerCase();
+        const insp3 = (dataFObj.insp3 || '').toLowerCase();
+        const location = (insp.location || dataFObj.lokasiUmum || '').toLowerCase();
+        const judulForm = (insp.type || dataFObj.judulForm || '').toLowerCase();
+
+        // 1. Check person match
+        const isPersonMatch = personNames.some(pName => {
+          if (!pName) return false;
+          if (insp1.includes(pName) || pName.includes(insp1)) return true;
+          if (insp2.includes(pName) || pName.includes(insp2)) return true;
+          if (insp3.includes(pName) || pName.includes(insp3)) return true;
+          const parts = pName.split(/\s+/).filter(Boolean);
+          if (parts.length >= 2 && parts.every(part => insp1.includes(part) || insp2.includes(part) || insp3.includes(part))) {
+            return true;
+          }
+          return false;
+        });
+
+        // 2. Check area / form match
+        const isAreaMatch =
+          (sSubArea && (location.includes(sSubArea) || sSubArea.includes(location))) ||
+          (sInspeksi && (location.includes(sInspeksi) || sInspeksi.includes(location))) ||
+          (judulForm && sFormTitle && (judulForm.includes(sFormTitle) || sFormTitle.includes(judulForm)));
+
+        if (isPersonMatch && (isAreaMatch || !s.inspeksi)) {
+          matchedInsp = { insp, dataFObj };
+          break;
+        }
+      }
+
+      if (matchedInsp) {
+        const { insp, dataFObj } = matchedInsp;
+        let displayPdf = insp.pdfUrl;
+        if (displayPdf && typeof displayPdf === 'string' && displayPdf.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(displayPdf);
+            displayPdf = parsed.tbp || parsed.gps || (Object.values(parsed)[0] as string) || null;
+          } catch (e) {}
+        }
+
+        s.isCompleted = true;
+        s.completedAt = insp.date ? new Date(insp.date).toISOString() : new Date().toISOString();
+        s.completedPdfUrl = displayPdf || '#';
+        s.completedInspector = insp.inspectorName || dataFObj.insp1 || s.name;
+        s.completedFormTitle = insp.type || dataFObj.judulForm;
+        s.completedLocation = insp.location || dataFObj.lokasiUmum;
+      } else {
+        s.isCompleted = false;
+      }
+    }
+  } catch (err) {
+    console.error("Error enriching schedules with completion:", err);
+  }
+  return schedules;
+}
+
 router.get("/api/inspection-schedule", async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === 'true';
@@ -1192,6 +1350,7 @@ router.get("/api/inspection-schedule", async (req, res) => {
     const queryNik = typeof req.query.nik === 'string' ? req.query.nik.trim().toLowerCase() : '';
 
     const allSchedules = await fetchInspectionScheduleFromSheet(forceRefresh);
+    await enrichSchedulesWithCompletion(allSchedules);
 
     if (queryName || queryNik) {
       let searchNames = [queryName];
