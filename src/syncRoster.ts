@@ -238,12 +238,17 @@ async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; r
     const rawName = row[config.colName];
     if (!rawName || !rawName.trim()) continue;
     
-    const empData = {
+    const rawSection = config.colSection !== -1 ? (row[config.colSection] || '').trim() : '';
+    const isSectionNA = rawSection.includes('#N/A') || rawSection.toUpperCase() === 'N/A';
+    const isJobGradeNA = config.colJobGrade !== -1 && (row[config.colJobGrade] || '').includes('#N/A');
+    const isResigned = isSectionNA || isJobGradeNA || ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'].includes(nik);
+
+    const empData: any = {
       nik,
       name: rawName.trim(),
       jabatan: config.colJabatan !== -1 ? (row[config.colJabatan] || '').trim() : '',
       jobGrade: config.colJobGrade !== -1 ? (row[config.colJobGrade] || '').trim() : '',
-      section: config.colSection !== -1 ? (row[config.colSection] || '').trim() || currentSection : currentSection,
+      section: rawSection || currentSection,
       gol: config.colGol !== -1 ? (row[config.colGol] || '').trim() : '',
       shift: config.colShift !== -1 ? (row[config.colShift] || '').trim() : '',
       poh: config.colPoh !== -1 ? (row[config.colPoh] || '').trim() : '',
@@ -253,7 +258,8 @@ async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; r
       tanggalAwalBergabung: config.colTanggalAwalBergabung !== -1 ? (row[config.colTanggalAwalBergabung] || '').trim() : '',
       tanggalBergabungTerbaru: config.colTanggalBergabungTerbaru !== -1 ? (row[config.colTanggalBergabungTerbaru] || '').trim() : '',
       statusKontrak: config.colStatusKontrak !== -1 ? (row[config.colStatusKontrak] || '').trim() : '',
-      department: config.colSection !== -1 ? (row[config.colSection] || '').trim() || currentSection : currentSection, 
+      statusKaryawan: isResigned ? 'Resign' : 'Active',
+      department: rawSection || currentSection, 
       position: config.colJabatan !== -1 ? (row[config.colJabatan] || '').trim() : '',
     };
     

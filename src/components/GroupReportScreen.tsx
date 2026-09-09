@@ -341,7 +341,12 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   const filteredRekap = sourceList.filter(emp => {
     const rawNik = (emp.nik || '').toString().trim();
     const rawName = (emp.name || '').toString().trim();
+    const rawSection = (emp.section || '').toString().trim();
+    const rawStatus = (emp.statusKaryawan || '').toString().trim().toUpperCase();
     if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
+    if (rawSection.includes('#N/A') || rawSection.toUpperCase() === 'N/A') return false;
+    if (rawStatus.includes('RESIGN') || rawStatus.includes('PHK') || rawStatus.includes('KELUAR') || rawStatus.includes('INACTIVE')) return false;
+    if (['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'].includes(rawNik)) return false;
 
     const nikLower = rawNik.toLowerCase();
     const nameLower = rawName.toLowerCase();
@@ -908,20 +913,39 @@ export function GroupReportFloatingWidget({ inspectorName, inspectorNik, inspect
   isDeveloper?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [hasDismissedDot, setHasDismissedDot] = useState(() => {
+    try {
+      return sessionStorage.getItem('group_widget_dot_dismissed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggle = () => {
+    if (!isOpen) {
+      setHasDismissedDot(true);
+      try {
+        sessionStorage.setItem('group_widget_dot_dismissed', 'true');
+      } catch {}
+    }
+    setIsOpen(!isOpen);
+  };
 
   return (
     <>
       {/* FLOATING HAZARD SAFETY ICON BUTTON (POSITIONED ABOVE BOTTOM NAVBAR) */}
       <div className="fixed bottom-22 right-4 sm:bottom-24 sm:right-6 z-40">
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={handleToggle}
           className="group relative w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-full shadow-2xl flex items-center justify-center transition-all transform hover:scale-110 active:scale-95 border-2 border-white/40 ring-4 ring-amber-500/20 cursor-pointer"
           title="Pelaporan Hazard Safety & Rekap"
         >
           {/* Notification Badge */}
-          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-white shadow-md animate-bounce">
-            •
-          </span>
+          {!hasDismissedDot && !isOpen && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-white shadow-md animate-bounce">
+              •
+            </span>
+          )}
 
           <ShieldAlert className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
         </button>

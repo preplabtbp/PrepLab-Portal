@@ -49,7 +49,8 @@ export function CreateInternalTicketScreen({ inspectorName, inspectorNik, onBack
         location: formData.lokasi,
         description: formData.deskripsi,
         photoUrl: formData.fotoUrl,
-        status: 'Open'
+        status: 'Open',
+        source: 'internal'
       };
       
       const res = await createInternalTicket(payload);

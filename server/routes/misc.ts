@@ -37,17 +37,6 @@ router.get('/api/developers', async (req, res) => {
 const chatMessagesMemory: any[] = [];
 const groupReportsMemory: any[] = [];
 
-router.get('/api/chat/:room', async (req, res) => {
-  try {
-    const room = req.params.room;
-    const msgs = chatMessagesMemory.filter(m => m.room === room);
-    res.json(msgs);
-  } catch (err: any) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch messages", details: err.message });
-  }
-});
-
 function getISOWeekTag(d: Date = new Date()): string {
   const date = new Date(d.getTime());
   date.setHours(0, 0, 0, 0);
@@ -674,12 +663,62 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       return false;
     };
 
-    // Filter employees: ONLY GOL II KE ATAS (Exclude Gol I, Exclude GTS, Exclude System Admin, Exclude Cuti, Exclude #N/A)
+    const isResignedOrInactive = (emp: any): boolean => {
+      const rawStatus = String(emp.statusKaryawan || '').trim().toUpperCase();
+      const rawStatusMess = String(emp.statusMess || '').trim().toUpperCase();
+      const rawSection = String(emp.section || '').trim().toUpperCase();
+      const rawDept = String(emp.department || '').trim().toUpperCase();
+      const rawJabatan = String(emp.jabatan || emp.position || '').trim().toUpperCase();
+      const rawNik = String(emp.nik || '').trim();
+
+      // Explicit Resign / PHK / Inactive / Keluar
+      if (
+        rawStatus.includes('RESIGN') || 
+        rawStatus.includes('PHK') || 
+        rawStatus.includes('KELUAR') || 
+        rawStatus.includes('INACTIVE') ||
+        rawStatus.includes('NONAKTIF') ||
+        rawStatus.includes('NON AKTIF') ||
+        rawStatusMess.includes('RESIGN') ||
+        rawStatusMess.includes('KELUAR')
+      ) {
+        return true;
+      }
+
+      // Spreadsheet formula error / missing master record (#N/A)
+      if (
+        rawSection.includes('#N/A') || rawSection === 'N/A' ||
+        rawDept.includes('#N/A') || rawDept === 'N/A' ||
+        rawJabatan.includes('#N/A')
+      ) {
+        return true;
+      }
+
+      // Known resigned personnel safeguard
+      if (
+        rawNik === '04D24000052' || // Fikri Lisantri Fahmi
+        rawNik === '02D23000050' || // Kevin Gibran Mamoto
+        rawNik === '04D25000062' || // M. Bagus Ihza Ai Rizki
+        rawNik === '04D25000045' || // Kevin Murheza
+        rawNik === 'M0405240291' || // Ade Wijaya
+        rawNik === 'M0210190719'    // La Ode Ali Wara
+      ) {
+        return true;
+      }
+
+      return false;
+    };
+
+    // Filter employees: ONLY GOL II KE ATAS (Exclude Gol I, Exclude GTS, Exclude System Admin, Exclude Cuti, Exclude Resigned & #N/A)
     const targetEmployees = allEmployees.filter(emp => {
-      // 0. Exclude broken / spreadsheet formula error rows (#N/A)
+      // 0. Exclude broken / spreadsheet formula error rows (#N/A) and Resigned / Inactive personnel
       const rawNik = (emp.nik || '').toString().trim();
       const rawName = (emp.name || '').toString().trim();
       if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) {
+        return false;
+      }
+
+      if (isResignedOrInactive(emp)) {
         return false;
       }
 
@@ -900,6 +939,7 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       const cleanNik = (emp.nik || '').trim();
       const rawName = (emp.name || '').trim();
       if (!cleanNik || cleanNik.includes('#N/A') || cleanNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
+      if (isResignedOrInactive(emp)) return false;
       const nikLower = cleanNik.toLowerCase();
       const nameLower = rawName.toLowerCase();
       const usernameLower = (emp.username || '').toString().trim().toLowerCase();

@@ -26,6 +26,25 @@ export function ReminderNotificationModal({ userNik, onNavigateToInspection }: R
         ) : null;
 
         if (unreadReminder) {
+          // Check if inspection is already completed
+          try {
+            const schedRes = await fetch(`/api/inspection-schedule?nik=${encodeURIComponent(userNik)}`);
+            if (schedRes.ok) {
+              const schedData = await schedRes.json();
+              if (schedData.schedule?.isCompleted) {
+                // Auto mark as read in DB and suppress
+                fetch(`/api/notifications/${unreadReminder.id}/read`, { method: 'PUT' }).catch(console.error);
+                const currentReadIds = JSON.parse(localStorage.getItem(`notif_read_ids_${userNik}`) || '[]');
+                if (!currentReadIds.includes(unreadReminder.id)) {
+                  currentReadIds.push(unreadReminder.id);
+                  localStorage.setItem(`notif_read_ids_${userNik}`, JSON.stringify(currentReadIds));
+                }
+                setActiveReminder(null);
+                return;
+              }
+            }
+          } catch (e) {}
+
           setActiveReminder(unreadReminder);
         } else {
           setActiveReminder(null);

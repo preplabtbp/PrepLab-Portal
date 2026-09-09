@@ -36,12 +36,15 @@ employeesRouter.get("/", async (req, res) => {
           return ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
         });
       } else {
-        // TBP & GPS -> Strictly exclude GTS employees (check pt AND NIK prefix 03/M03)
+        // TBP & GPS -> Strictly exclude GTS employees (check pt AND NIK prefix 03/M03) and resigned personnel
         data = data.filter(e => {
           const ptStr = (e.pt || '').toString().trim().toUpperCase();
           const nikStr = (e.nik || '').toString().trim().toUpperCase();
           const isGts = ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
-          return !isGts;
+          const stStr = (e.statusKaryawan || '').toString().trim().toUpperCase();
+          const secStr = (e.section || '').toString().trim().toUpperCase();
+          const isResigned = stStr.includes('RESIGN') || stStr.includes('PHK') || secStr.includes('#N/A') || ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'].includes(nikStr);
+          return !isGts && !isResigned;
         });
       }
     }

@@ -567,7 +567,6 @@ export const rekapManualOverrides = pgTable('rekap_manual_overrides', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
-
 // Define 'finance_transactions' table (Catat Keuangan & Struk AI)
 export const financeTransactions = pgTable('finance_transactions', {
   id: serial('id').primaryKey(),
@@ -586,4 +585,3 @@ export const financeTransactions = pgTable('finance_transactions', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
-

@@ -2,6 +2,46 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.22] - 2026-09-10
+
+### 🚫 Pembersihan Personil Resign dari Rekapitulasi Pelaporan Hazard Safety
+
+- **Penyebab Masalah**:
+  - Personil yang telah berstatus *Resign* (seperti Fikri Lisantri Fahmi, Kevin Gibran Mamoto, M. Bagus Ihza Ai Rizki, dan Kevin Murheza) sebelumnya masih muncul pada tab **Belum** dan **Semua** di modal Pelaporan Hazard Safety dengan identitas `• #N/A • Gol II`.
+  - Hal ini terjadi karena rumus VLOOKUP pada Google Spreadsheet *Rooster_Staff* menghasilkan `#N/A` pada kolom Section/Department saat personil dihapus dari master aktif, namun sistem backend sebelumnya hanya memfilter kolom NIK/Name sehingga baris tersebut tetap lolos dan menggelembungkan total target inspeksi serta menurunkan persentase capaian.
+- **Penyelesaian & Filter Berlapis**:
+  - **Scanner Backend (`server/routes/misc.ts`)**: Menambahkan fungsi proteksi `isResignedOrInactive()` pada endpoint `/api/rekap-inspeksi` yang secara ketat menyaring personil berstatus `Resign`, `PHK`, `Keluar`, `Inactive`, serta baris yang memiliki nilai `#N/A` pada Section, Department, atau Jabatan.
+  - **Sinkronisasi Roster Otomatis (`src/syncRoster.ts`)**: Mendeteksi baris dengan Section `#N/A` saat mengambil data dari spreadsheet dan secara otomatis menandai status personil sebagai `Resign`.
+  - **Database Update**: Memperbarui status personil yang telah resign pada tabel database `employees` menjadi `Resign`.
+  - **Filter Frontend Tambahan (`GroupReportScreen.tsx`)**: Menerapkan filter defensif pada `filteredRekap` agar personil resign maupun personil dengan section `#N/A` tidak pernah dirender ke daftar personil wajib inspeksi.
+  - **Penyesuaian Roster & Master Karyawan (`server/routes/roster.ts` & `server/routes/employees.ts`)**: Memastikan personil yang sudah resign tidak lagi dimasukkan ke dalam perhitungan roster aktif maupun daftar karyawan aktif.
+
+---
+
+## [2.8.21] - 2026-09-09
+
+### 🔔 Sistem Pengingat Temuan K3 Terbuka (Open Action Items) Berbasis 29 Agenda Inspeksi
+
+- **Pemetaan Komprehensif 29 Agenda Inspeksi ke 4 PIC Supervisor**:
+  - Memetakan 100% dari 29 agenda inspeksi terencana laboratorium & preparasi secara presisi:
+    - **Laboratory Maintenance Supervisor** (4 Agenda): *Area Maintenance & Workshop, APD Maintenance, Perkakas Tangan Portabel, Tangga Portabel*.
+    - **Inventory Control Supervisor** (5 Agenda): *Gudang Chemical, Gudang Laboratorium, Gudang Kontainer A, Gudang Kontainer B, Gudang Preparasi A & B*.
+    - **Laboratory Supervisor** (9 Agenda): *R. Chiller/UPS/XRF, R. Fusion/Timbang/Scrubber, R. Office-QAIC-Admin-Manager-Meeting, APD Shift A Lab, APD Shift B Lab, R. Press/Koridor Lab, Checklist P3K Lab, Kelengkapan Saranaprasarana Unit, Pra Pakai Tabung Gas Bertekanan*.
+    - **Preparation Supervisor (Wet & Dry)** (11 Agenda): *Preparasi Basah (Area Kerja), Preparasi Basah (Office/Toilet/Loker), Preparasi Kering (Area Kerja/Halte/Parkir), Preparasi Kering (Office/Dust Collector/Kompresor), APD Shift A Prep, APD Shift B Prep, Gudang Arsip, Gudang Transit & Pantry, Koridor & Area Carpenter, Checklist P3K Prep Kering, Checklist P3K Prep Basah*.
+- **Modul Deteksi Temuan Cerdas (`inspection-pic-matcher.ts`)**:
+  - Mengklasifikasikan tiket temuan K3 ke PIC Supervisor yang tepat secara otomatis berdasarkan prioritas nama area spesifik, judul formulir, dan kata kunci temuan.
+- **Komponen Popup Pengingat Temuan K3 (`OpenFindingsReminderModal.tsx`)**:
+  - Menampilkan modal peringatan interaktif saat supervisor login atau membuka dashboard: detail PIC yang bertugas, jumlah temuan belum ditutup, rincian mini-card tiket temuan, dan tombol *"Lihat & Tangani Temuan Sekarang"* yang mengarahkan langsung ke tabel temuan.
+  - Dilengkapi kontrol penutupan berbasis `sessionStorage` per sesi agar tidak mengganggu aktivitas rutin pengguna.
+- **Integrasi Menyeluruh di Portal (`App.tsx` & `sap-dashboard.tsx`)**:
+  - Terintegrasi baik di level global aplikasi (begitu login di halaman utama) maupun di modul SAP Dashboard.
+
+### 🛠️ Pemurnian Data Tiket & Pemisahan WO Permintaan dari Temuan Inspeksi
+
+- **Pemisahan Sumber Tiket Internal dari Temuan Inspeksi K3**:
+  - Memperbaiki klasifikasi tiket `RWO-1788573371183` dan `RWO-1787636647332` dari `source: 'inspeksi'` menjadi `source: 'internal'`.
+  - Memperbarui filter `getTickets()` dan endpoint `/api/tickets` agar tiket WO Permintaan (RWO) tidak lagi tercampur masuk ke dalam Daftar Temuan Inspeksi K3 di SAP Dashboard.
+
 ---
 
 ## [2.8.21] - 2026-09-04

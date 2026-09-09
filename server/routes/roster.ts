@@ -67,7 +67,27 @@ export function invalidateRosterCache() {
 }
 
 async function computeRosterData() {
-  const allEmps = await db.select().from(employees);
+  const rawEmps = await db.select().from(employees);
+  const allEmps = rawEmps.filter(emp => {
+    const nik = (emp.nik || '').toUpperCase().trim();
+    const name = (emp.name || '').toLowerCase().trim();
+    const username = (emp.username || '').toLowerCase().trim();
+    const sec = (emp.section || '').toUpperCase().trim();
+    const st = (emp.statusKaryawan || '').toUpperCase().trim();
+    const sm = (emp.statusMess || '').toUpperCase().trim();
+    if (
+      nik === 'DEMO123' || nik === 'DEMO' || nik.includes('DEMO') ||
+      name.includes('user demo') || name.includes('demo staging') || name.includes('staging') ||
+      username.includes('demo') || username.includes('staging') ||
+      nik === 'PREPLABADMIN' || nik.includes('#N/A') || name.includes('#N/A') ||
+      sec.includes('#N/A') || st.includes('RESIGN') || st.includes('PHK') || st.includes('KELUAR') ||
+      sm.includes('RESIGN') || ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'].includes(nik)
+    ) {
+      return false;
+    }
+    return true;
+  });
+
   const allRoster = await db.select({
     nik: roster.nik,
     date: roster.date,

@@ -31,6 +31,7 @@ import { router as rosterRouter } from "./server/routes/roster.js";
 import { router as adminRouter } from "./server/routes/admin.js";
 import { router as agendaRouter } from "./server/routes/agenda.js";
 import { router as feedbackRouter } from "./server/routes/feedback.js";
+import { router as chatRouter } from "./server/routes/chat.js";
 import webpush from 'web-push';
 import { generatePdfFromTemplate, drive } from './google-services.js';
 import path from "path";
@@ -116,6 +117,16 @@ async function initDbSchema() {
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );`);
+
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS chat_messages (
+      id SERIAL PRIMARY KEY,
+      room TEXT NOT NULL,
+      sender_nik TEXT NOT NULL,
+      sender_name TEXT NOT NULL,
+      text TEXT NOT NULL,
+      timestamp TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(room);`);
     
     // Auto seed questions if table is empty
     const qCount = await db.select().from(questions).limit(1);
@@ -245,47 +256,129 @@ const app = express();
     cors: { origin: "*" }
   });
 
-  // Socket.IO logic
-  const onlineUsers = new Map(); // socket.id -> { nik, name, department, room }
+  // Teams Chat & System Socket.IO state
+  const onlineSockets = new Map(); // socket.id -> { nik, name, department, avatar, room, isQuiz, node }
+
+  const broadcastOnlineNiks = () => {
+    const onlineNiks = Array.from(
+      new Set(
+        Array.from(onlineSockets.values())
+          .map((u: any) => u.nik)
+          .filter(Boolean)
+      )
+    );
+    io.emit("presence:update", { onlineNiks });
+  };
 
   io.on('connection', (socket) => {
+    // 1. Teams Chat: User announces online presence
+    socket.on('user:online', (user) => {
+      if (!user?.nik) return;
+      const existing = onlineSockets.get(socket.id) || {};
+      onlineSockets.set(socket.id, { ...existing, ...user });
+      broadcastOnlineNiks();
+      // Send immediate snapshot back to caller
+      const onlineNiks = Array.from(
+        new Set(
+          Array.from(onlineSockets.values())
+            .map((u: any) => u.nik)
+            .filter(Boolean)
+        )
+      );
+      socket.emit('presence:sync', { onlineNiks });
+    });
+
+    // 2. Teams Chat: Room joining / leaving
+    socket.on('join_room', (room: string) => {
+      if (room) {
+        socket.join(room);
+      }
+    });
+
+    socket.on('leave_room', (room: string) => {
+      if (room) {
+        socket.leave(room);
+      }
+    });
+
+    // Legacy join handler for backward compatibility
     socket.on('join', (user) => {
-      // user: { nik, name, department, room }
       const room = user.room || 'global';
       socket.join(room);
-      onlineUsers.set(socket.id, { ...user, room });
-      
-      const usersInRoom = Array.from(onlineUsers.values()).filter(u => u.room === room);
+      onlineSockets.set(socket.id, { ...user, room });
+      broadcastOnlineNiks();
+      const usersInRoom = Array.from(onlineSockets.values()).filter((u: any) => u.room === room);
       io.to(room).emit('online_users', usersInRoom);
     });
 
+    // 3. Typing indicator
+    socket.on('typing', (data: { room: string; name: string; nik: string }) => {
+      if (data?.room) {
+        socket.to(data.room).emit('user_typing', data);
+      }
+    });
+
+    socket.on('stop_typing', (data: { room: string; nik: string }) => {
+      if (data?.room) {
+        socket.to(data.room).emit('user_stop_typing', data);
+      }
+    });
+
+    // 4. Sending message (Teams Chat & Room message)
     socket.on('send_message', async (msg) => {
       try {
-        const room = msg.room || 'global';
-        const newMsg = {
-          id: Date.now(),
+        const room = msg.room || 'group_all';
+        const senderNik = msg.senderNik || 'UNKNOWN';
+        const senderName = msg.senderName || 'Anonymous';
+        const text = (msg.text || '').trim();
+
+        if (!text) return;
+
+        // Persist message to database
+        const [saved] = await db.insert(chatMessages).values({
           room,
-          senderNik: msg.senderNik,
-          senderName: msg.senderName,
-          text: msg.text,
-          timestamp: new Date().toISOString()
-        };
-        chatMessagesMemory.push(newMsg);
-        io.to(room).emit('new_message', newMsg);
-        
-        // Push notification
-        const title = room === 'global' ? 'Global Chat' : `Chat - ${room}`;
+          senderNik,
+          senderName,
+          text,
+          timestamp: new Date()
+        }).returning();
+
+        // Broadcast to the target room
+        io.to(room).emit('new_message', saved);
+
+        // Push notification handling
+        const isGroup = room.startsWith('group_');
+        const title = isGroup ? `Chat - ${room.replace('group_', '').toUpperCase()}` : `Pesan dari ${senderName}`;
         try {
-          const _n = await db.insert(notifications).values({
-            userId: null,
-            role: room === 'global' ? null : room,
-            title,
-            message: `${msg.senderName}: ${msg.text}`,
-            type: 'info',
-            link: '/chat'
-          }).returning();
-          sendWebPush(_n);
-        } catch(e) { console.error('Chat push error:', e); }
+          if (isGroup) {
+            const role = room === 'group_all' ? null : room.replace('group_', '');
+            const _n = await db.insert(notifications).values({
+              userId: null,
+              role: role,
+              title,
+              message: `${senderName}: ${text.slice(0, 80)}`,
+              type: 'info',
+              link: '/teams-chat'
+            }).returning();
+            sendWebPush(_n);
+          } else if (room.startsWith('direct_')) {
+            const parts = room.replace('direct_', '').split('_');
+            const targetNik = parts.find((n: string) => n !== senderNik);
+            if (targetNik) {
+              const _n = await db.insert(notifications).values({
+                userId: targetNik,
+                role: null,
+                title,
+                message: `${senderName}: ${text.slice(0, 80)}`,
+                type: 'info',
+                link: '/teams-chat'
+              }).returning();
+              sendWebPush(_n);
+            }
+          }
+        } catch (pushErr) {
+          // Non-fatal push notification error
+        }
       } catch (err) {
         console.error("Chat save error:", err);
       }
@@ -293,18 +386,19 @@ const app = express();
 
     // --- QUIZ GAME LOGIC ---
     socket.on('quiz:join', (playerInfo) => {
-      const player = { ...playerInfo, node: 0, isQuiz: true };
+      const existing = onlineSockets.get(socket.id) || {};
+      const player = { ...existing, ...playerInfo, node: 0, isQuiz: true };
       socket.join('quiz_room');
-      onlineUsers.set(socket.id, player);
-      const quizPlayers = Array.from(onlineUsers.values()).filter(u => u.isQuiz);
+      onlineSockets.set(socket.id, player);
+      const quizPlayers = Array.from(onlineSockets.values()).filter((u: any) => u.isQuiz);
       io.to('quiz_room').emit('quiz:state', quizPlayers);
     });
 
     socket.on('quiz:progress', async (nodeIndex) => {
-      const user = onlineUsers.get(socket.id);
+      const user = onlineSockets.get(socket.id);
       if (user && user.isQuiz) {
         user.node = nodeIndex;
-        onlineUsers.set(socket.id, user);
+        onlineSockets.set(socket.id, user);
 
         // Update progress in database if user has NIK
         if (user.nik) {
@@ -321,32 +415,33 @@ const app = express();
           }
         }
 
-        const quizPlayers = Array.from(onlineUsers.values()).filter(u => u.isQuiz);
+        const quizPlayers = Array.from(onlineSockets.values()).filter((u: any) => u.isQuiz);
         io.to('quiz_room').emit('quiz:state', quizPlayers);
       }
     });
 
     socket.on('quiz:leave', () => {
       socket.leave('quiz_room');
-      const user = onlineUsers.get(socket.id);
+      const user = onlineSockets.get(socket.id);
       if (user) {
         user.isQuiz = false;
-        onlineUsers.set(socket.id, user);
-        const quizPlayers = Array.from(onlineUsers.values()).filter(u => u.isQuiz);
+        onlineSockets.set(socket.id, user);
+        const quizPlayers = Array.from(onlineSockets.values()).filter((u: any) => u.isQuiz);
         io.to('quiz_room').emit('quiz:state', quizPlayers);
       }
     });
 
     socket.on('disconnect', () => {
-      const user = onlineUsers.get(socket.id);
+      const user = onlineSockets.get(socket.id);
       if (user) {
-        onlineUsers.delete(socket.id);
+        onlineSockets.delete(socket.id);
+        broadcastOnlineNiks();
         if (user.room) {
-          const usersInRoom = Array.from(onlineUsers.values()).filter(u => u.room === user.room);
+          const usersInRoom = Array.from(onlineSockets.values()).filter((u: any) => u.room === user.room);
           io.to(user.room).emit('online_users', usersInRoom);
         }
         if (user.isQuiz) {
-          const quizPlayers = Array.from(onlineUsers.values()).filter(u => u.isQuiz);
+          const quizPlayers = Array.from(onlineSockets.values()).filter((u: any) => u.isQuiz);
           io.to('quiz_room').emit('quiz:state', quizPlayers);
         }
       }
@@ -423,6 +518,7 @@ const app = express();
   }
   app.use("/api/employees", employeesRouter);
   app.use("/api/p5m", p5mRouter);
+  app.use(chatRouter);
   app.use(miscRouter);
   app.use(bulletinRouter);
   app.use(quizRouter);

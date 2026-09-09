@@ -31,6 +31,8 @@ import {
 } from 'chart.js';
 import { toast } from 'sonner';
 import { ImageModal } from './image-modal';
+import { OpenFindingsReminderModal } from './OpenFindingsReminderModal';
+import { getOpenFindingsForSupervisor } from '../utils/inspection-pic-matcher';
 
 ChartJS.register(
   CategoryScale,
@@ -67,6 +69,9 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
   const [showInspectionReminder, setShowInspectionReminder] = useState(false);
   const [userInspectionItem, setUserInspectionItem] = useState<any | null>(null);
 
+  // Open findings reminder popup for assigned Supervisor PIC
+  const [showOpenFindingsReminder, setShowOpenFindingsReminder] = useState(false);
+
   // Close ticket modal state
   const [closingTicket, setClosingTicket] = useState<any | null>(null);
   const [closingPic, setClosingPic] = useState('');
@@ -92,6 +97,37 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
     }
     return inspectorName || inspectorNik || '';
   }, [inspectorNik, inspectorName, employeesList]);
+
+  // Current logged in user profile match
+  const currentEmployeeProfile = useMemo(() => {
+    if (!inspectorNik && !inspectorName) return null;
+    return employeesList.find((e: any) => 
+      (e.nik && inspectorNik && e.nik.toUpperCase().trim() === inspectorNik.toUpperCase().trim()) ||
+      (e.name && inspectorName && e.name.toLowerCase().trim() === inspectorName.toLowerCase().trim())
+    ) || null;
+  }, [inspectorNik, inspectorName, employeesList]);
+
+  // Open inspection findings assigned to this supervisor's role
+  const userOpenFindings = useMemo(() => {
+    const jabatan = currentEmployeeProfile?.jabatan;
+    if (!jabatan || allTickets.length === 0) return [];
+    const res = getOpenFindingsForSupervisor(jabatan, allTickets);
+    return res.openFindings;
+  }, [currentEmployeeProfile, allTickets]);
+
+  // Trigger open findings reminder popup when findings exist and haven't been dismissed
+  useEffect(() => {
+    if (!userOpenFindings || userOpenFindings.length === 0) {
+      setShowOpenFindingsReminder(false);
+      return;
+    }
+    const cleanNik = (inspectorNik || 'supervisor').trim();
+    const dismissedKey = `dismissed_open_findings_${cleanNik}_${userOpenFindings.length}`;
+    const isDismissed = sessionStorage.getItem(dismissedKey);
+    if (!isDismissed) {
+      setShowOpenFindingsReminder(true);
+    }
+  }, [userOpenFindings, inspectorNik]);
 
   const isoWeeksList = useMemo(() => getYearISOWeeksList(new Date().getFullYear()), []);
   const currentWeekNumber = getISOWeek(new Date());
@@ -1638,6 +1674,27 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
           </div>
         </div>
       )}
+
+      {/* Popup Pengingat Temuan Terbuka (Open Action Items) untuk PIC Terkait */}
+      <OpenFindingsReminderModal
+        isOpen={showOpenFindingsReminder}
+        onClose={() => {
+          setShowOpenFindingsReminder(false);
+          const cleanNik = (inspectorNik || 'supervisor').trim();
+          sessionStorage.setItem(`dismissed_open_findings_${cleanNik}_${userOpenFindings.length}`, 'true');
+        }}
+        onNavigateToFindings={() => {
+          setShowOpenFindingsReminder(false);
+          setStatusTab('OPEN');
+          setTimeout(() => {
+            document.getElementById('action-items-section')?.scrollIntoView({ behavior: 'smooth' });
+          }, 150);
+        }}
+        inspectorName={currentEmployeeProfile?.name || inspectorName}
+        inspectorNik={currentEmployeeProfile?.nik || inspectorNik}
+        inspectorJabatan={currentEmployeeProfile?.jabatan}
+        openFindings={userOpenFindings}
+      />
 
       {/* Image Preview Modal */}
       <ImageModal 
