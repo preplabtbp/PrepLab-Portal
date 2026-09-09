@@ -47,6 +47,37 @@ export function InspectionNotificationModal({ inspectorNik, inspectorName, onNav
         const data = await res.json();
 
         if (data.found && data.schedule && !data.schedule.isCuti && !data.schedule.isCompleted) {
+          // Double check against rekap-inspeksi to confirm person hasn't done another inspection
+          let alreadyCompletedInRekap = false;
+          try {
+            const rekapRes = await fetch('/api/rekap-inspeksi');
+            if (rekapRes.ok) {
+              const rData = await rekapRes.json();
+              if (Array.isArray(rData.rekapList)) {
+                const cleanNik = (inspectorNik || '').toLowerCase().trim();
+                const cleanName = (inspectorName || '').toLowerCase().trim();
+                const foundInRekap = rData.rekapList.find((emp: any) => {
+                  const empNik = (emp.nik || '').toLowerCase().trim();
+                  const empName = (emp.name || '').toLowerCase().trim();
+                  return (cleanNik && empNik === cleanNik) || 
+                         (cleanName && (empName.includes(cleanName) || cleanName.includes(empName)));
+                });
+                if (foundInRekap && foundInRekap.status === 'SUDAH') {
+                  alreadyCompletedInRekap = true;
+                }
+              }
+            }
+          } catch (e) {}
+
+          if (alreadyCompletedInRekap) {
+            const item = data.schedule;
+            const weekStr = getISOWeekString();
+            const storageKey = `insp_sched_ack_${weekStr}_${item.name}_${item.inspeksi}`;
+            localStorage.setItem(storageKey, 'completed_rekap');
+            setIsOpen(false);
+            return;
+          }
+
           const item = data.schedule;
           const weekStr = getISOWeekString();
           const storageKey = `insp_sched_ack_${weekStr}_${item.name}_${item.inspeksi}`;
@@ -56,8 +87,8 @@ export function InspectionNotificationModal({ inspectorNik, inspectorName, onNav
             setSchedule(item);
             setIsOpen(true);
           }
-        } else if (data.found && data.schedule?.isCompleted) {
-          // If already completed, ensure it is acknowledged so modal never opens
+        } else if (data.found && (data.schedule?.isCompleted || data.schedule?.isCuti)) {
+          // If already completed or on leave, ensure it is acknowledged so modal never opens
           const item = data.schedule;
           const weekStr = getISOWeekString();
           const storageKey = `insp_sched_ack_${weekStr}_${item.name}_${item.inspeksi}`;
