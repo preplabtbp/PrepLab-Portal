@@ -1023,17 +1023,64 @@ async function syncBulletinToAgenda(post: any) {
   } else {
     // Mode Production: Express langsung melayani file statis dari folder dist/
     const distPath = path.join(process.cwd(), "dist");
+
+    // Explicit root routes for critical PWA files to guarantee correct MIME types and cache headers
+    app.get('/manifest.json', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Content-Type', 'application/manifest+json');
+      res.sendFile(path.join(distPath, 'manifest.json'));
+    });
+    app.get('/favicon.ico', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Content-Type', 'image/x-icon');
+      res.sendFile(path.join(distPath, 'favicon.ico'));
+    });
+    app.get('/logo.png', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Content-Type', 'image/png');
+      res.sendFile(path.join(distPath, 'logo.png'));
+    });
+    app.get('/preplab-logo.png', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Content-Type', 'image/png');
+      res.sendFile(path.join(distPath, 'preplab-logo.png'));
+    });
+    app.get('/icon-192.png', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Content-Type', 'image/png');
+      res.sendFile(path.join(distPath, 'icon-192.png'));
+    });
+    app.get('/icon-512.png', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Content-Type', 'image/png');
+      res.sendFile(path.join(distPath, 'icon-512.png'));
+    });
+    app.get('/sw.js', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Content-Type', 'application/javascript');
+      res.sendFile(path.join(distPath, 'sw.js'));
+    });
+
     app.use(express.static(distPath, {
       maxAge: '1y',
       immutable: true,
       setHeaders: (res, filePath) => {
-        if (filePath.endsWith('index.html')) {
-          res.setHeader('Cache-Control', 'no-cache');
+        const normalized = filePath.replace(/\\/g, '/');
+        // Only hashed files in /assets/ get 1y cache. Root HTML, json, icons, and sw get no-cache
+        if (
+          !normalized.includes('/assets/') ||
+          normalized.endsWith('.html') ||
+          normalized.endsWith('.json') ||
+          normalized.endsWith('sw.js') ||
+          normalized.endsWith('.ico') ||
+          normalized.endsWith('.png')
+        ) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
       }
     }));
-    app.get("*", (req, res) => {
-      res.setHeader('Cache-Control', 'no-cache');
+    app.get("*", (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
