@@ -16,6 +16,7 @@ import {
 interface SectionHubDashboardProps {
   post: any;
   posts: any[];
+  activePt?: string;
   onSelectPost: (post: any) => void;
   onGoHome: () => void;
 }
@@ -30,10 +31,18 @@ interface HubItem {
 export function SectionHubDashboard({
   post,
   posts,
+  activePt,
   onSelectPost,
   onGoHome
 }: SectionHubDashboardProps) {
   const sectionTitle = (post.title || '').toUpperCase().trim();
+
+  // Strict PT universe isolation: GTS vs TBP/GPS
+  const currentUniverse = (activePt === 'GTS' || post.pt === 'GTS') ? 'GTS' : 'TBP';
+  const eligiblePosts = posts.filter(p => {
+    const pUniverse = p.pt === 'GTS' ? 'GTS' : 'TBP';
+    return pUniverse === currentUniverse;
+  });
 
   // Helper to find target post from database by keywords or title
   const findPost = (keywords: string[] | string): any => {
@@ -41,14 +50,14 @@ export function SectionHubDashboard({
     for (const kw of list) {
       const q = kw.toLowerCase().trim();
       
-      // Look for candidates that match by numeric ID
+      // Look for candidates that match by numeric ID strictly in the same PT universe
       if (/^\d+$/.test(q)) {
-        const idMatch = posts.find((p) => p.id === parseInt(q, 10));
+        const idMatch = eligiblePosts.find((p) => p.id === parseInt(q, 10));
         if (idMatch) return idMatch;
       }
 
       // 1. Exact matches (prioritize table posts)
-      const exactMatches = posts.filter(
+      const exactMatches = eligiblePosts.filter(
         (p) => (p.title || '').toLowerCase().trim() === q
       );
       if (exactMatches.length > 0) {
@@ -57,7 +66,7 @@ export function SectionHubDashboard({
       }
 
       // 2. Exact match with section prefix or suffix (e.g. "Daily Laboratorium" or "Daily")
-      const sectionMatches = posts.filter((p) => {
+      const sectionMatches = eligiblePosts.filter((p) => {
         const t = (p.title || '').toLowerCase();
         return t === `${q} ${sectionTitle.toLowerCase()}` || t === `${sectionTitle.toLowerCase()} ${q}`;
       });
@@ -67,7 +76,7 @@ export function SectionHubDashboard({
       }
 
       // 3. Match containing both keyword and section
-      const bothMatches = posts.filter((p) => {
+      const bothMatches = eligiblePosts.filter((p) => {
         const t = (p.title || '').toLowerCase();
         return t.includes(q) && (t.includes(sectionTitle.toLowerCase()) || sectionTitle.toLowerCase().includes(t));
       });
@@ -76,8 +85,8 @@ export function SectionHubDashboard({
         return tableMatch || bothMatches[0];
       }
 
-      // 4. General match
-      const generalMatches = posts.filter((p) => (p.title || '').toLowerCase().includes(q));
+      // 4. General match within same PT
+      const generalMatches = eligiblePosts.filter((p) => (p.title || '').toLowerCase().includes(q));
       if (generalMatches.length > 0) {
         const tableMatch = generalMatches.find((p) => p.content && p.content.includes('|'));
         return tableMatch || generalMatches[0];
@@ -356,7 +365,7 @@ export function SectionHubDashboard({
             className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#252525] hover:bg-[#2f2f2f] text-slate-200 hover:text-teal-300 text-xs font-bold border border-[#383838] hover:border-teal-500/50 shadow-md transition-all group cursor-pointer"
           >
             <Home className="w-3.5 h-3.5 text-teal-400 group-hover:scale-110 transition-transform" />
-            <span>HOME TBP & GPS</span>
+            <span>{currentUniverse === 'GTS' ? 'HOME GTS' : 'HOME TBP & GPS'}</span>
           </button>
         </div>
       </div>

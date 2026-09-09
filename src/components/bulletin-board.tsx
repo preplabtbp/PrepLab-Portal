@@ -73,7 +73,22 @@ export function BulletinBoard({
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarTab, setSidebarTab] = useState<"all" | "folders">("all");
   const [showAllPostsView, setShowAllPostsView] = useState(false);
-  const [selectedPtFilter, setSelectedPtFilter] = useState<string>("ALL");
+
+  // Helper to determine active PT universe from route parameter (default TBP for TBP/GPS, GTS for GTS)
+  const resolvePtFilter = useCallback((paramPt?: string): string => {
+    if (paramPt === 'GTS') return 'GTS';
+    if (paramPt === 'TBP' || paramPt === 'GPS') return 'TBP';
+    if (paramPt === 'ALL') return 'ALL';
+    return 'TBP';
+  }, []);
+
+  const [selectedPtFilter, setSelectedPtFilter] = useState<string>(() => resolvePtFilter(pt));
+
+  useEffect(() => {
+    if (pt) {
+      setSelectedPtFilter(resolvePtFilter(pt));
+    }
+  }, [pt, resolvePtFilter]);
 
   // Agenda & Meetings State
   const [agendaEventsList, setAgendaEventsList] = useState<any[]>([]);
@@ -280,17 +295,20 @@ export function BulletinBoard({
     return false;
   }, []);
 
-  // Find parent post dynamically only for true subpages
+  // Find parent post dynamically only for true subpages within the same PT universe
   const findParentPost = useCallback(
     (currentPost: any): any | null => {
       if (!currentPost) return null;
       if (isSectionHubPost(currentPost)) return null;
 
+      const currentUniverse = currentPost.pt === "GTS" ? "GTS" : "TBP";
+      const samePtPosts = posts.filter((p) => (p.pt === "GTS" ? "GTS" : "TBP") === currentUniverse);
+
       const currentTitle = getPostTitle(currentPost).toLowerCase();
       const currentCategory = (currentPost.category || currentPost.section || "").toLowerCase().trim();
 
-      // 1. Match against known Section Hubs by category or title
-      const sectionHub = posts.find((p) => {
+      // 1. Match against known Section Hubs by category or title within same PT
+      const sectionHub = samePtPosts.find((p) => {
         if (p.id === currentPost.id) return false;
         if (!isSectionHubPost(p)) return false;
         const pTitle = getPostTitle(p).toLowerCase().trim();
@@ -301,8 +319,8 @@ export function BulletinBoard({
       });
       if (sectionHub) return sectionHub;
 
-      // 2. Check if a parent post explicitly links to this markdown title (e.g. ## Title)
-      for (const p of posts) {
+      // 2. Check if a parent post explicitly links to this markdown title (e.g. ## Title) within same PT
+      for (const p of samePtPosts) {
         if (p.id === currentPost.id) continue;
         if (!isSectionHubPost(p) && !isFolderPost(p)) continue;
         if (
@@ -502,8 +520,8 @@ export function BulletinBoard({
   // Filter posts by search query, universe and tab
   const filteredPosts = useMemo(() => {
     let list = posts;
-    if (isSuperAdmin && selectedPtFilter !== "ALL") {
-      list = list.filter((p) => p.pt === selectedPtFilter);
+    if (selectedPtFilter !== "ALL") {
+      list = list.filter((p) => (p.pt === "GTS" ? "GTS" : "TBP") === selectedPtFilter);
     }
     if (sidebarTab === "folders") {
       list = list.filter(isFolderPost);
@@ -514,11 +532,14 @@ export function BulletinBoard({
       const title = (p.title || "").toLowerCase();
       return title.includes(q);
     });
-  }, [posts, searchQuery, sidebarTab, isFolderPost, isSuperAdmin, selectedPtFilter]);
+  }, [posts, searchQuery, sidebarTab, isFolderPost, selectedPtFilter]);
 
   const folderCount = useMemo(() => {
-    return posts.filter(isFolderPost).length;
-  }, [posts, isFolderPost]);
+    const list = selectedPtFilter !== "ALL"
+      ? posts.filter((p) => (p.pt === "GTS" ? "GTS" : "TBP") === selectedPtFilter)
+      : posts;
+    return list.filter(isFolderPost).length;
+  }, [posts, isFolderPost, selectedPtFilter]);
 
   // Determine immediate parent title for "Kembali" label
   const immediateParentTitle = useMemo(() => {
@@ -662,21 +683,26 @@ export function BulletinBoard({
     );
   };
 
-  // Compute recent posts list
+  // Compute recent posts list restricted to the active PT universe
   const recentPostsList = useMemo(() => {
     if (posts.length === 0) return [];
     
+    const targetUniverse = selectedPtFilter !== "ALL" ? selectedPtFilter : null;
+    const basePosts = targetUniverse 
+      ? posts.filter((p) => (p.pt === "GTS" ? "GTS" : "TBP") === targetUniverse)
+      : posts;
+
     // First, map saved recent IDs
     const matched = recentPostIds
-      .map((id) => posts.find((p) => p.id === id))
+      .map((id) => basePosts.find((p) => p.id === id))
       .filter(Boolean);
 
-    // If fewer than 10, fill with top posts so it looks populated like screenshot
-    const matchedIds = new Set(matched.map((p) => p.id));
-    const fallbackPosts = posts.filter((p) => !matchedIds.has(p.id)).slice(0, 10 - matched.length);
+    // If fewer than 10, fill with top posts
+    const matchedIds = new Set(matched.map((p: any) => p.id));
+    const fallbackPosts = basePosts.filter((p) => !matchedIds.has(p.id)).slice(0, 10 - matched.length);
 
     return [...matched, ...fallbackPosts];
-  }, [posts, recentPostIds]);
+  }, [posts, recentPostIds, selectedPtFilter]);
 
   // AI Meeting Note Generator using local formatting + intelligent summarizer
   const handleGenerateAiMeeting = () => {
@@ -870,7 +896,9 @@ ${aiMeetingNotes
                   }}
                 >
                   {(['ALL', 'TBP', 'GTS'] as const).map((ptKey) => {
-                    const count = ptKey === 'ALL' ? posts.length : posts.filter(p => p.pt === ptKey).length;
+                    const count = ptKey === 'ALL' 
+                      ? posts.length 
+                      : posts.filter(p => (p.pt === 'GTS' ? 'GTS' : 'TBP') === ptKey).length;
                     const isActive = selectedPtFilter === ptKey;
                     return (
                       <button
@@ -878,6 +906,12 @@ ${aiMeetingNotes
                         onClick={() => {
                           setSelectedPtFilter(ptKey);
                           setShowAllPostsView(true);
+                          if (selectedPost && ptKey !== 'ALL') {
+                            const postUniverse = selectedPost.pt === 'GTS' ? 'GTS' : 'TBP';
+                            if (postUniverse !== ptKey) {
+                              navigateToPost(null);
+                            }
+                          }
                         }}
                         className={`flex items-center justify-center gap-1 py-1 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
                           isActive ? 'shadow-xs scale-[1.02]' : 'hover:opacity-80 opacity-70'
@@ -1331,6 +1365,7 @@ ${aiMeetingNotes
               <SectionHubDashboard
                 post={selectedPost}
                 posts={posts}
+                activePt={selectedPtFilter !== 'ALL' ? selectedPtFilter : (selectedPost.pt || 'TBP')}
                 onSelectPost={(p) => navigateToPost(p)}
                 onGoHome={() => navigateToPost(null)}
               />

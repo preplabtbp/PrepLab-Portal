@@ -26,18 +26,14 @@ router.get("/api/bulletin", async (req, res) => {
       
       let query: any = db.select().from(bulletinPosts);
       
-      // If super user (account 02D24000043) or pt === 'ALL', return all bulletin posts without PT filtering!
-      if (isSuperUser || pt === 'ALL') {
+      // If pt === 'ALL' or (isSuperUser and no pt specified), return all bulletin posts
+      if (pt === 'ALL' || (isSuperUser && !pt)) {
         console.log('[Bulletin API] Unrestricted access granted for user:', nik, 'pt:', pt);
       } else {
         // GPS and TBP share the same universe (TBP_GPS)
         // so GPS users see TBP data
-        if (pt === 'GPS') pt = 'TBP';
-        if (pt) {
-          query = query.where(eq(bulletinPosts.pt, pt));
-        } else {
-          query = query.where(eq(bulletinPosts.pt, 'TBP'));
-        }
+        const targetPt = (pt === 'GPS' || !pt) ? 'TBP' : pt;
+        query = query.where(eq(bulletinPosts.pt, targetPt));
       }
       query = query.orderBy(bulletinPosts.createdAt);
       
@@ -59,11 +55,10 @@ router.get("/api/bulletin/search", async (req, res) => {
       
       const qLower = String(q).toLowerCase();
       const pt = req.query.pt as string || 'TBP';
-      const isSuperUser = nik === '02D24000043' || nik === '02D25000055' || nik === 'preplabadmin';
       
-      // Get all posts for department
+      // Get all posts for department and target PT
       let conditions: any[] = [];
-      if (!isSuperUser && pt !== 'ALL') {
+      if (pt !== 'ALL') {
         conditions.push(eq(bulletinPosts.pt, pt === 'GPS' ? 'TBP' : pt));
       }
       if (department) {
