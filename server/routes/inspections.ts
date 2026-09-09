@@ -25,6 +25,33 @@ router.post("/api/inspections/universal", async (req, res) => {
       let pdfUrl = null;
       let linkPdf2 = null;
       
+      // Sanitize single-digit scores for PERKAKAS and TANGGA (prevent errors like 44 instead of 4)
+      if (finalData && finalData.tipe === "PERKAKAS" && Array.isArray(finalData.payload)) {
+        finalData.payload.forEach((item: any) => {
+          if (item.aktual !== undefined && item.aktual !== null) {
+            const cleanDigits = String(item.aktual).replace(/\D/g, '');
+            if (cleanDigits.length > 0) {
+              const maxLimit = parseInt(item.max || '4', 10) || 4;
+              const num = parseInt(cleanDigits.slice(-1), 10);
+              item.aktual = String(num > maxLimit ? maxLimit : num);
+            } else {
+              item.aktual = '0';
+            }
+          }
+        });
+      }
+      if (finalData && finalData.tipe === "TANGGA" && Array.isArray(finalData.payload)) {
+        finalData.payload.forEach((item: any) => {
+          if (Array.isArray(item.checks)) {
+            item.checks = item.checks.map((c: any) => {
+              const cleanDigits = String(c).replace(/\D/g, '');
+              const num = cleanDigits.length > 0 ? parseInt(cleanDigits.slice(-1), 10) : 4;
+              return num > 4 ? 4 : (num < 1 ? 1 : num);
+            });
+          }
+        });
+      }
+      
       // Load GAS URL from settings
       const settingsObj: any = {};
       const allSettings = await db.select().from(appSettings);

@@ -16,6 +16,18 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - **Filter Frontend Tambahan (`GroupReportScreen.tsx`)**: Menerapkan filter defensif pada `filteredRekap` agar personil resign maupun personil dengan section `#N/A` tidak pernah dirender ke daftar personil wajib inspeksi.
   - **Penyesuaian Roster & Master Karyawan (`server/routes/roster.ts` & `server/routes/employees.ts`)**: Memastikan personil yang sudah resign tidak lagi dimasukkan ke dalam perhitungan roster aktif maupun daftar karyawan aktif.
 
+### 🔢 Pembatasan Input Nilai Point Aktual Inspeksi Hanya 1 Digit (0-4)
+
+- **Masalah**:
+  - Pada formulir inspeksi (seperti *Inspeksi Perkakas Tangan Portabel* dan *Inspeksi Tangga*), input poin aktual sebelumnya menggunakan `<input type="number">` standar tanpa pembatasan jumlah digit.
+  - Hal ini menyebabkan kesalahan input pengguna saat mengetik (misalnya mengetik angka `44` yang seharusnya bernilai `4`), sehingga laporan PDF mencatat poin aktual `44` dari maksimal `4`.
+- **Solusi & Validasi Berlapis**:
+  - **Formulir Frontend (`FormPerkakas.tsx` & `FormTangga.tsx`)**:
+    - Mengubah input menjadi `maxLength={1}`, `inputMode="numeric"`, dan `pattern="[0-9]*"`.
+    - Menambahkan filter otomatis pada handler `onChange` yang hanya mengambil 1 digit angka terakhir dan secara otomatis membatasi nilai agar tidak dapat melebihi nilai poin maksimal (`maxP`). Jika pengguna mengetik dua kali atau paste angka berlebih, nilai otomatis disanitasi menjadi 1 digit yang valid.
+  - **Sanitasi Backend (`server/routes/inspections.ts`)**:
+    - Menambahkan validasi dan sanitasi pada handler `/api/inspections/universal` sehingga data yang dikirim ke Google Apps Script / cetak PDF selalu dipastikan hanya 1 digit dan bernilai $\le$ poin maksimal.
+
 ---
 
 ## [2.8.21] - 2026-09-09
