@@ -53,7 +53,19 @@ export function FormTangga({ data, inspectorName, inspectorNik, onSubmit, autoFi
   const lokasiSekarang = pilihan ? dbLokasi[pilihan] || '-' : '';
 
   const handleCheckChange = (idx: number, val: string) => {
-    const num = parseInt(val) || 0;
+    const digits = val.replace(/\D/g, '');
+    if (!digits) {
+      setChecks(prev => {
+        const n = [...prev];
+        n[idx] = 0;
+        return n;
+      });
+      return;
+    }
+    const lastDigit = digits.slice(-1);
+    let num = parseInt(lastDigit, 10);
+    if (num > 4) num = 4;
+    if (num < 1) num = 1;
     setChecks(prev => {
       const n = [...prev];
       n[idx] = num;
@@ -198,11 +210,13 @@ export function FormTangga({ data, inspectorName, inspectorNik, onSubmit, autoFi
                   </label>
                   <div className="w-24 shrink-0">
                     <input 
-                      type="number" 
-                      min="1" 
-                      max="4"
+                      type="text" 
+                      inputMode="numeric"
+                      pattern="[1-4]*"
+                      maxLength={1}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-center font-bold text-primary focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
-                      value={checks[idx]}
+                      value={checks[idx] === 0 ? '' : checks[idx]}
+                      placeholder="4"
                       onChange={e => handleCheckChange(idx, e.target.value)}
                     />
                   </div>

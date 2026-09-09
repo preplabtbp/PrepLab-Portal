@@ -32,6 +32,20 @@ export function FormPerkakas({ data, inspectorName, inspectorNik, onSubmit, auto
     }));
   };
 
+  const handlePointChange = (qId: string, val: string, maxPStr: string = "4") => {
+    const digits = val.replace(/\D/g, '');
+    if (!digits) {
+      handleAnswer(qId, 'aktual', '');
+      return;
+    }
+    // Batasi hanya 1 angka saja (ambil digit terakhir yang diketik)
+    const lastDigit = digits.slice(-1);
+    const num = parseInt(lastDigit, 10);
+    const maxLimit = parseInt(maxPStr, 10) || 4;
+    const finalVal = num > maxLimit ? String(maxLimit) : String(num);
+    handleAnswer(qId, 'aktual', finalVal);
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -142,12 +156,14 @@ export function FormPerkakas({ data, inspectorName, inspectorNik, onSubmit, auto
                 <label className="text-xs font-semibold text-primary block mb-1">Point Aktual</label>
                 <div className="flex bg-white rounded-lg overflow-hidden border border-primary/20">
                   <input 
-                    type="number" 
+                    type="text" 
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={1}
                     className="w-full bg-transparent px-2 py-2 text-sm focus:outline-none font-bold text-primary text-center" 
                     placeholder="0"
-                    max={maxP}
                     value={ans.aktual || ''}
-                    onChange={e => handleAnswer(q.item, 'aktual', e.target.value)}
+                    onChange={e => handlePointChange(q.item, e.target.value, maxP)}
                   />
                   <span className="text-sm font-bold text-slate-400 flex items-center px-3 border-l border-slate-100 bg-slate-50">
                     / {maxP}
