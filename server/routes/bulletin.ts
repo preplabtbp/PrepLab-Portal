@@ -20,25 +20,31 @@ export const router = Router();
 
 router.get("/api/bulletin", async (req, res) => {
     try {
-      let { pt } = req.query as { pt?: string };
+      let { pt, nik } = req.query as { pt?: string; nik?: string };
       
-      // GPS and TBP share the same universe (TBP_GPS)
-      // so GPS users see TBP data
-      if (pt === 'GPS') pt = 'TBP';
+      const isSuperUser = nik === '02D24000043' || nik === '02D25000055' || nik === 'preplabadmin';
       
-      console.log('[Bulletin API] GET request, resolved pt:', pt);
       let query: any = db.select().from(bulletinPosts);
-      if (pt) {
-        query = query.where(eq(bulletinPosts.pt, pt));
+      
+      // If super user (account 02D24000043) or pt === 'ALL', return all bulletin posts without PT filtering!
+      if (isSuperUser || pt === 'ALL') {
+        console.log('[Bulletin API] Unrestricted access granted for user:', nik, 'pt:', pt);
       } else {
-        query = query.where(eq(bulletinPosts.pt, 'TBP'));
+        // GPS and TBP share the same universe (TBP_GPS)
+        // so GPS users see TBP data
+        if (pt === 'GPS') pt = 'TBP';
+        if (pt) {
+          query = query.where(eq(bulletinPosts.pt, pt));
+        } else {
+          query = query.where(eq(bulletinPosts.pt, 'TBP'));
+        }
       }
       query = query.orderBy(bulletinPosts.createdAt);
       
       const data = await query;
-      console.log('[Bulletin API] Returning', data.length, 'posts for pt:', pt);
+      console.log('[Bulletin API] Returning', data.length, 'posts for pt:', pt, 'nik:', nik);
       res.json({ status: "success", data });
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Bulletin API] Error:', error.message);
       res.status(500).json({ status: "error", message: error.message });
     }
@@ -46,21 +52,26 @@ router.get("/api/bulletin", async (req, res) => {
 
 router.get("/api/bulletin/search", async (req, res) => {
     try {
-      const { q, department } = req.query;
+      const { q, department, nik } = req.query as { q?: string; department?: string; nik?: string; pt?: string };
       if (!q) {
         return res.json({ status: "success", data: [] });
       }
       
       const qLower = String(q).toLowerCase();
-      
       const pt = req.query.pt as string || 'TBP';
+      const isSuperUser = nik === '02D24000043' || nik === '02D25000055' || nik === 'preplabadmin';
       
       // Get all posts for department
-      let conditions = [eq(bulletinPosts.pt, pt)];
+      let conditions: any[] = [];
+      if (!isSuperUser && pt !== 'ALL') {
+        conditions.push(eq(bulletinPosts.pt, pt === 'GPS' ? 'TBP' : pt));
+      }
       if (department) {
         conditions.push(eq(bulletinPosts.department, String(department)));
       }
-      const allPosts = await db.select().from(bulletinPosts).where(and(...conditions));
+      const allPosts = conditions.length > 0 
+        ? await db.select().from(bulletinPosts).where(and(...conditions))
+        : await db.select().from(bulletinPosts);
       const postIds = allPosts.map(p => p.id);
       const allComments = postIds.length > 0 ? await db.select().from(bulletinComments).where(inArray(bulletinComments.postId, postIds)) : [];
       

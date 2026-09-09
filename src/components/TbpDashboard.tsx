@@ -13,14 +13,45 @@ import {
   RotateCcw as ResetIcon, 
   X, 
   Check, 
-  Loader2 
+  Loader2,
+  ChevronRight,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  FlaskConical,
+  Hammer,
+  Wrench,
+  Package,
+  Award,
+  AlertTriangle,
+  FileText,
+  Info,
+  BookOpen,
+  Clock,
+  Music,
+  Volume2,
+  Wind,
+  Droplets,
+  MapPin,
+  FolderOpen,
+  ExternalLink,
+  Calendar,
+  Compass,
+  Layers,
+  Radio,
+  Sliders,
+  SkipForward,
+  SkipBack,
+  Bookmark,
+  CheckCircle2,
+  Activity
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 
 const WeatherIcon = ({ code, className }: { code: number, className?: string }) => {
-  if (code < 3) return <Sun className={`text-yellow-400 ${className}`} />;
-  if (code < 50) return <Cloud className={`text-slate-300 ${className}`} />;
+  if (code < 3) return <Sun className={`text-amber-400 ${className}`} />;
+  if (code < 50) return <Cloud className={`text-sky-300 ${className}`} />;
   return <CloudRain className={`text-blue-400 ${className}`} />;
 };
 
@@ -282,42 +313,192 @@ export function TbpDashboard({ posts, onSelectPost }: TbpDashboardProps) {
     reader.readAsDataURL(file);
   };
 
-  const sections = [
-    { title: 'Information' },
-    { title: 'Administrasi' },
-    { title: 'Laboratorium' },
-    { title: 'Preparasi' },
-    { title: 'Maintenance' },
-    { title: 'Inventory' },
-    { title: 'Manajemen Mutu' },
-    { title: 'General Issue' },
-    { title: 'Prosedur' }
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const sectionItems = [
+    {
+      title: 'Information',
+      subtitle: 'Pengumuman resmi, memo internal & update site',
+      badge: 'INFO',
+      icon: Info,
+      colorClass: 'text-sky-500 dark:text-sky-400',
+      bgClass: 'bg-sky-500/10 dark:bg-sky-500/20',
+      borderClass: 'border-sky-500/20 group-hover:border-sky-500/40',
+      badgeBg: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20'
+    },
+    {
+      title: 'Administrasi',
+      subtitle: 'Tata kelola kantor, surat menyurat & kepegawaian',
+      badge: 'OFFICE',
+      icon: FileText,
+      colorClass: 'text-indigo-500 dark:text-indigo-400',
+      bgClass: 'bg-indigo-500/10 dark:bg-indigo-500/20',
+      borderClass: 'border-indigo-500/20 group-hover:border-indigo-500/40',
+      badgeBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'
+    },
+    {
+      title: 'Laboratorium',
+      subtitle: 'Analisa AAS, XRF, titrasi basah & instrumen analitik',
+      badge: 'LAB',
+      icon: FlaskConical,
+      colorClass: 'text-emerald-500 dark:text-emerald-400',
+      bgClass: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+      borderClass: 'border-emerald-500/20 group-hover:border-emerald-500/40',
+      badgeBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+    },
+    {
+      title: 'Preparasi',
+      subtitle: 'Crushing bijih nikel, drying, pulverizing & sampling',
+      badge: 'PLANT',
+      icon: Hammer,
+      colorClass: 'text-amber-500 dark:text-amber-400',
+      bgClass: 'bg-amber-500/10 dark:bg-amber-500/20',
+      borderClass: 'border-amber-500/20 group-hover:border-amber-500/40',
+      badgeBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+    },
+    {
+      title: 'Maintenance',
+      subtitle: 'Perawatan mesin, kalibrasi sensor & perbaikan teknis',
+      badge: 'TEKNIK',
+      icon: Wrench,
+      colorClass: 'text-orange-500 dark:text-orange-400',
+      bgClass: 'bg-orange-500/10 dark:bg-orange-500/20',
+      borderClass: 'border-orange-500/20 group-hover:border-orange-500/40',
+      badgeBg: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20'
+    },
+    {
+      title: 'Inventory',
+      subtitle: 'Stok reagen kimia, consumables & suku cadang mesin',
+      badge: 'LOGISTIK',
+      icon: Package,
+      colorClass: 'text-cyan-500 dark:text-cyan-400',
+      bgClass: 'bg-cyan-500/10 dark:bg-cyan-500/20',
+      borderClass: 'border-cyan-500/20 group-hover:border-cyan-500/40',
+      badgeBg: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
+    },
+    {
+      title: 'Manajemen Mutu',
+      subtitle: 'Standar akreditasi ISO 17025, QA/QC & compliance',
+      badge: 'ISO 17025',
+      icon: Award,
+      colorClass: 'text-purple-500 dark:text-purple-400',
+      bgClass: 'bg-purple-500/10 dark:bg-purple-500/20',
+      borderClass: 'border-purple-500/20 group-hover:border-purple-500/40',
+      badgeBg: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
+    },
+    {
+      title: 'General Issue',
+      subtitle: 'Pusat troubleshooting, kendala shift & tindak lanjut',
+      badge: 'ISSUES',
+      icon: AlertTriangle,
+      colorClass: 'text-rose-500 dark:text-rose-400',
+      bgClass: 'bg-rose-500/10 dark:bg-rose-500/20',
+      borderClass: 'border-rose-500/20 group-hover:border-rose-500/40',
+      badgeBg: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+    },
+    {
+      title: 'Prosedur',
+      subtitle: 'Instruksi Kerja (IK), SOP & panduan teknis operasional',
+      badge: 'SOP',
+      icon: BookOpen,
+      colorClass: 'text-teal-500 dark:text-teal-400',
+      bgClass: 'bg-teal-500/10 dark:bg-teal-500/20',
+      borderClass: 'border-teal-500/20 group-hover:border-teal-500/40',
+      badgeBg: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20'
+    }
   ];
 
-  const rules = [
-    { title: 'Administrasi' },
-    { title: 'Laboratorium' },
-    { title: 'Manajemen Mutu' },
-    { title: 'Preparasi' },
-    { title: 'Maintenance' }
+  const ruleItems = [
+    {
+      target: 'Administrasi',
+      title: 'Administrasi',
+      subtitle: 'Regulasi kepatuhan administrasi & pelaporan data',
+      badge: 'REG-01',
+      icon: FileText,
+      colorClass: 'text-indigo-400',
+      bgClass: 'bg-indigo-500/10',
+      borderClass: 'border-indigo-500/20'
+    },
+    {
+      target: 'Laboratorium',
+      title: 'Laboratorium',
+      subtitle: 'Protokol K3LL kimia, penanganan B3 & fuming hood',
+      badge: 'K3LL LAB',
+      icon: ShieldAlert,
+      colorClass: 'text-rose-400',
+      bgClass: 'bg-rose-500/10',
+      borderClass: 'border-rose-500/20'
+    },
+    {
+      target: 'Manajemen Mutu',
+      title: 'Manajemen Mutu',
+      subtitle: 'Validasi analisa, integritas data & akreditasi ISO 17025',
+      badge: 'ISO 17025',
+      icon: ShieldCheck,
+      colorClass: 'text-emerald-400',
+      bgClass: 'bg-emerald-500/10',
+      borderClass: 'border-emerald-500/20'
+    },
+    {
+      target: 'Preparasi',
+      title: 'Preparasi',
+      subtitle: 'Kepatuhan APD lengkap, dust collector & crusher',
+      badge: 'APD WAJIB',
+      icon: Shield,
+      colorClass: 'text-amber-400',
+      bgClass: 'bg-amber-500/10',
+      borderClass: 'border-amber-500/20'
+    },
+    {
+      target: 'Maintenance',
+      title: 'Maintenance',
+      subtitle: 'Lockout-Tagout (LOTO), isolasi energi & perbaikan alat',
+      badge: 'LOTO SAFETY',
+      icon: Wrench,
+      colorClass: 'text-orange-400',
+      bgClass: 'bg-orange-500/10',
+      borderClass: 'border-orange-500/20'
+    }
   ];
 
   return (
-    <div className="w-full h-full bg-[#1e1e1e] overflow-y-auto text-slate-200">
+    <div 
+      className="w-full h-full overflow-y-auto transition-colors"
+      style={{
+        backgroundColor: 'var(--bg-main, #1e1e1e)',
+        color: 'var(--text-main, #e2e8f0)'
+      }}
+    >
       {/* 1. Header Banner Canvas */}
       <div className="w-full h-48 md:h-64 lg:h-80 relative overflow-hidden group">
         <img 
           src={mediaSettings.banner || DEFAULT_MEDIA.banner} 
           alt="Banner" 
-          className="w-full h-full object-cover object-center brightness-75 transition-all duration-700" 
+          className="w-full h-full object-cover object-center brightness-90 group-hover:scale-102 transition-all duration-700" 
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-transparent to-black/30" />
+        <div 
+          className="absolute inset-0 pointer-events-none" 
+          style={{
+            background: 'linear-gradient(to top, var(--bg-main, #1e1e1e) 0%, transparent 60%, rgba(0,0,0,0.3) 100%)'
+          }}
+        />
         
+        {/* Floating Site Badge over Banner */}
+        <div className="absolute bottom-4 left-6 md:left-12 flex items-center gap-2">
+          <div className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-xs font-semibold flex items-center gap-2 shadow-lg">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Site Kawasi • Pulau Obi</span>
+          </div>
+          <div className="hidden sm:flex px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white/80 text-xs font-mono">
+            Prep & Analytical Lab Portal
+          </div>
+        </div>
+
         {/* Change Banner Button */}
         <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={() => setActiveSlot({ key: 'banner', label: 'Header Banner Utama' })}
-            className="px-3.5 py-1.5 rounded-xl bg-black/60 hover:bg-black/80 backdrop-blur-md text-white text-xs font-semibold border border-white/20 shadow-lg flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl bg-black/70 hover:bg-black/90 backdrop-blur-md text-white text-xs font-semibold border border-white/30 shadow-lg flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
           >
             <Camera className="w-3.5 h-3.5 text-teal-400" />
             <span>Ganti Banner</span>
@@ -326,11 +507,54 @@ export function TbpDashboard({ posts, onSelectPost }: TbpDashboardProps) {
       </div>
 
       <div className="px-6 md:px-12 py-8 w-full space-y-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-black text-white tracking-wider">PT. TBP & GPS</h1>
-          <span className="text-xs text-slate-400 font-mono hidden sm:inline">
-            ✨ Homepage Canvas Customizable
-          </span>
+        {/* Title Bar with Status Pills */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div 
+              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-md font-bold"
+              style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
+            >
+              <Compass className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl md:text-3xl font-display font-extrabold tracking-tight" style={{ color: 'var(--text-main, #ffffff)' }}>
+                  PT. TBP & GPS
+                </h1>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-teal-500/10 text-teal-500 border-teal-500/30">
+                  VERIFIED SITE
+                </span>
+              </div>
+              <p className="text-xs tracking-wide" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                Preparation & Analytical Laboratory Information Center • Harita Nickel
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div 
+              className="px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-2 shadow-xs"
+              style={{
+                backgroundColor: 'var(--card-bg, rgba(255, 255, 255, 0.6))',
+                borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))',
+                color: 'var(--text-muted, #94a3b8)'
+              }}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              <span>281 Dokumen Tersedia</span>
+            </div>
+            <div 
+              className="hidden md:flex px-3 py-1.5 rounded-xl border text-xs font-medium items-center gap-2 shadow-xs"
+              style={{
+                backgroundColor: 'var(--card-bg, rgba(255, 255, 255, 0.6))',
+                borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))',
+                color: 'var(--text-muted, #94a3b8)'
+              }}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Canvas Customizable</span>
+            </div>
+          </div>
         </div>
 
         {/* 2. Gallery Canvas Cards (4 Slots) */}
@@ -338,20 +562,40 @@ export function TbpDashboard({ posts, onSelectPost }: TbpDashboardProps) {
           {([1, 2, 3, 4] as const).map((num) => {
             const slotKey = `gallery_${num}` as keyof DashboardMediaSettings;
             const imgSrc = mediaSettings[slotKey] || DEFAULT_MEDIA[slotKey];
+            const labels = [
+              '🔬 Analytical Lab',
+              '⛏ Mining & Prep',
+              '⚙ Maintenance Unit',
+              '📋 QA/QC Center'
+            ];
 
             return (
               <div 
                 key={num} 
-                className="aspect-video rounded-xl overflow-hidden shadow-lg border border-slate-700/50 relative group bg-[#161616]"
+                className="aspect-video rounded-2xl overflow-hidden shadow-lg border relative group transition-all duration-300 hover:shadow-2xl hover:scale-[1.02]"
+                style={{
+                  backgroundColor: 'var(--card-bg, #161616)',
+                  borderColor: 'var(--border-main, rgba(51, 65, 85, 0.5))'
+                }}
               >
                 <img 
                   src={imgSrc} 
                   alt={`Gallery ${num}`} 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                  className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-700" 
                 />
                 
+                {/* Subtle dark gradient overlay at bottom */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent pointer-events-none" />
+
+                {/* Bottom label */}
+                <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
+                  <span className="px-2 py-0.5 rounded-lg bg-black/60 backdrop-blur-md text-white/90 text-[10px] font-semibold border border-white/20 shadow-md">
+                    {labels[num - 1]}
+                  </span>
+                </div>
+
                 {/* Overlay with Change Photo Button */}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
                   <button
                     onClick={() => setActiveSlot({ key: slotKey, label: `Gallery Canvas #${num}` })}
                     className="px-3 py-1.5 rounded-xl bg-black/80 hover:bg-teal-900/90 text-white text-[11px] font-bold border border-teal-500/50 shadow-xl flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-sm"
@@ -365,102 +609,520 @@ export function TbpDashboard({ posts, onSelectPost }: TbpDashboardProps) {
           })}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pt-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pt-2">
           {/* Left Column: Sections & Rules */}
           <div className="lg:col-span-5 space-y-6">
-            <div className="bg-[#2a2a2a] rounded-lg overflow-hidden border border-[#333]">
-              <div className="bg-[#1e3c2f] px-4 py-2 font-bold text-slate-100 tracking-wider">SECTION</div>
-              <div className="flex flex-col">
-                {sections.map((item, idx) => (
-                  <button key={idx} onClick={() => handleNav(item.title)} className="flex items-center text-sm px-4 py-2 hover:bg-[#333] transition-colors border-b border-[#333] last:border-0 text-left text-slate-300">
-                    <span className="mr-2 text-xs opacity-70">📄</span> {item.title.toUpperCase()}
-                  </button>
-                ))}
+            {/* WORKSTATION SECTIONS CARD */}
+            <div 
+              className="rounded-2xl border shadow-xl backdrop-blur-xl overflow-hidden transition-all duration-300"
+              style={{
+                backgroundColor: 'var(--card-bg, rgba(255, 255, 255, 0.7))',
+                borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+              }}
+            >
+              {/* Header */}
+              <div 
+                className="px-5 py-3.5 flex items-center justify-between border-b"
+                style={{
+                  borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))',
+                  background: 'linear-gradient(to right, rgba(42, 157, 143, 0.08), transparent)'
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-9 h-9 rounded-xl flex items-center justify-center shadow-xs text-white"
+                    style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
+                  >
+                    <Layers className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-display font-bold text-sm tracking-wide uppercase" style={{ color: 'var(--text-main, #0f172a)' }}>
+                      Workstation Sections
+                    </h2>
+                    <p className="text-[11px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                      Pusat dokumentasi & modul operasional departemen
+                    </p>
+                  </div>
+                </div>
+                <span 
+                  className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase border"
+                  style={{
+                    backgroundColor: 'var(--input-bg, rgba(0,0,0,0.04))',
+                    borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))',
+                    color: 'var(--text-muted, #64748b)'
+                  }}
+                >
+                  9 Modul
+                </span>
+              </div>
+
+              {/* Items List */}
+              <div className="p-2 space-y-1">
+                {sectionItems.map((item, idx) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => handleNav(item.title)}
+                      className="w-full flex items-center justify-between p-2.5 rounded-xl transition-all duration-200 group text-left cursor-pointer border border-transparent hover:scale-[1.008] active:scale-[0.995]"
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--input-bg, rgba(0, 0, 0, 0.03))';
+                        e.currentTarget.style.borderColor = 'var(--border-main, rgba(148, 163, 184, 0.3))';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.borderColor = 'transparent';
+                      }}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-9 h-9 rounded-xl ${item.bgClass} ${item.colorClass} flex items-center justify-center flex-shrink-0 transition-transform duration-200 group-hover:scale-110 shadow-xs border ${item.borderClass}`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-xs tracking-tight truncate group-hover:text-[var(--primary)] transition-colors" style={{ color: 'var(--text-main, #0f172a)' }}>
+                              {item.title}
+                            </span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${item.badgeBg}`}>
+                              {item.badge}
+                            </span>
+                          </div>
+                          <p className="text-[10px] truncate max-w-[240px] sm:max-w-[320px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                            {item.subtitle}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all flex-shrink-0" style={{ color: 'var(--text-muted, #64748b)' }} />
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="bg-[#2a2a2a] rounded-lg overflow-hidden border border-[#333]">
-              <div className="bg-[#1f3044] px-4 py-2 font-bold text-slate-100 tracking-wider">RULES</div>
-              <div className="flex flex-col">
-                {rules.map((item, idx) => (
-                  <button key={idx} onClick={() => handleNav(`Rules ${item.title}`)} className="flex items-center text-sm px-4 py-2 hover:bg-[#333] transition-colors border-b border-[#333] last:border-0 text-left text-slate-300">
-                    <span className="mr-2 text-xs opacity-70">▶</span> {item.title.toUpperCase()}
-                  </button>
-                ))}
+            {/* GOLDEN RULES & KEPATUHAN CARD */}
+            <div 
+              className="rounded-2xl border shadow-xl backdrop-blur-xl overflow-hidden transition-all duration-300"
+              style={{
+                backgroundColor: 'var(--card-bg, rgba(255, 255, 255, 0.7))',
+                borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+              }}
+            >
+              <div 
+                className="px-5 py-3.5 flex items-center justify-between border-b"
+                style={{
+                  borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))',
+                  background: 'linear-gradient(to right, rgba(233, 147, 13, 0.08), transparent)'
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-9 h-9 rounded-xl flex items-center justify-center shadow-xs text-white"
+                    style={{ backgroundColor: 'var(--accent, #E9930D)' }}
+                  >
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-display font-bold text-sm tracking-wide uppercase" style={{ color: 'var(--text-main, #0f172a)' }}>
+                      Golden Rules & Kepatuhan
+                    </h2>
+                    <p className="text-[11px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                      Standar keselamatan kerja & kepatuhan regulasi wajib
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                  Wajib Patuh
+                </span>
+              </div>
+
+              <div className="p-2 space-y-1">
+                {ruleItems.map((item, idx) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => handleNav(`Rules ${item.target}`)}
+                      className="w-full flex items-center justify-between p-2.5 rounded-xl transition-all duration-200 group text-left cursor-pointer border border-transparent hover:scale-[1.008] active:scale-[0.995]"
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--input-bg, rgba(0, 0, 0, 0.03))';
+                        e.currentTarget.style.borderColor = 'var(--border-main, rgba(148, 163, 184, 0.3))';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.borderColor = 'transparent';
+                      }}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-9 h-9 rounded-xl ${item.bgClass} ${item.colorClass} flex items-center justify-center flex-shrink-0 transition-transform duration-200 group-hover:scale-110 shadow-xs border ${item.borderClass}`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-xs tracking-tight truncate group-hover:text-[var(--accent)] transition-colors" style={{ color: 'var(--text-main, #0f172a)' }}>
+                              {item.title}
+                            </span>
+                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                              {item.badge}
+                            </span>
+                          </div>
+                          <p className="text-[10px] truncate max-w-[240px] sm:max-w-[320px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                            {item.subtitle}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all flex-shrink-0" style={{ color: 'var(--text-muted, #64748b)' }} />
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
 
           {/* Right Column: Weather & Widget Cards */}
           <div className="lg:col-span-7 space-y-6">
-            <div className="bg-transparent text-center pt-2 pb-6">
-              <h3 className="text-sm font-semibold tracking-wider mb-6 text-slate-300 uppercase">Kawasi Weather</h3>
-              <div className="flex items-center justify-center mb-6">
-                <Cloud className="w-8 h-8 text-slate-400 mr-3" />
-                <div className="text-left">
-                  <div className="text-2xl font-bold">24°C</div>
-                  <div className="text-xs text-slate-400">overcast clouds</div>
+            {/* KAWASI WEATHER FROSTED GLASS CARD */}
+            <div 
+              className="rounded-2xl border shadow-xl backdrop-blur-xl p-5 transition-all duration-300 relative overflow-hidden"
+              style={{
+                backgroundColor: 'var(--card-bg, rgba(255, 255, 255, 0.7))',
+                borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+              }}
+            >
+              {/* Ambient background glow */}
+              <div 
+                className="absolute -top-12 -right-12 w-48 h-48 rounded-full pointer-events-none opacity-20 blur-3xl"
+                style={{ background: 'radial-gradient(circle, var(--primary, #2A9D8F), transparent 70%)' }}
+              />
+
+              {/* Weather Card Header */}
+              <div className="flex items-center justify-between mb-4 relative z-10">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center">
+                    <MapPin className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs tracking-tight flex items-center gap-1.5" style={{ color: 'var(--text-main, #0f172a)' }}>
+                      <span>Kawasi, Pulau Obi</span>
+                      <span className="text-[10px] font-normal px-1.5 py-0.2 rounded-full bg-slate-500/10" style={{ color: 'var(--text-muted, #64748b)' }}>
+                        Halmahera Selatan
+                      </span>
+                    </div>
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                      Stasiun Cuaca Operasional Tambang & Lab
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                  <span>LIVE WIT</span>
                 </div>
               </div>
-              <div className="flex justify-between items-center max-w-sm mx-auto text-sm">
-                {['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day, i) => (
-                  <div key={day} className="flex flex-col items-center">
-                    <span className="mb-2 font-medium">{day}</span>
-                    <WeatherIcon code={i % 3 === 0 ? 0 : 50} className="w-5 h-5 mb-2" />
-                    <span className="text-xs">29°</span>
-                    <span className="text-xs text-slate-500">23°</span>
+
+              {/* Current Weather Display */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center mb-5 relative z-10">
+                <div className="sm:col-span-6 flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-400/20 to-indigo-500/10 border border-sky-400/30 flex items-center justify-center shadow-inner">
+                    <Cloud className="w-9 h-9 text-sky-400 animate-pulse" />
                   </div>
-                ))}
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-display font-black text-4xl tracking-tight" style={{ color: 'var(--text-main, #0f172a)' }}>
+                        24°
+                      </span>
+                      <span className="text-base font-semibold" style={{ color: 'var(--text-muted, #64748b)' }}>C</span>
+                    </div>
+                    <div className="text-xs font-semibold capitalize" style={{ color: 'var(--text-main, #0f172a)' }}>
+                      Overcast Clouds
+                    </div>
+                    <div className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                      Terasa seperti 26°C • Siang hari
+                    </div>
+                  </div>
+                </div>
+
+                {/* Weather Metrics */}
+                <div className="sm:col-span-6 grid grid-cols-3 gap-2">
+                  <div 
+                    className="p-2.5 rounded-xl border text-center flex flex-col items-center justify-center"
+                    style={{
+                      backgroundColor: 'var(--input-bg, rgba(0,0,0,0.02))',
+                      borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+                    }}
+                  >
+                    <Droplets className="w-4 h-4 text-sky-500 mb-1" />
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>Lembab</span>
+                    <span className="font-bold text-xs" style={{ color: 'var(--text-main, #0f172a)' }}>78%</span>
+                  </div>
+
+                  <div 
+                    className="p-2.5 rounded-xl border text-center flex flex-col items-center justify-center"
+                    style={{
+                      backgroundColor: 'var(--input-bg, rgba(0,0,0,0.02))',
+                      borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+                    }}
+                  >
+                    <Wind className="w-4 h-4 text-teal-500 mb-1" />
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>Angin</span>
+                    <span className="font-bold text-xs" style={{ color: 'var(--text-main, #0f172a)' }}>12 km/h</span>
+                  </div>
+
+                  <div 
+                    className="p-2.5 rounded-xl border text-center flex flex-col items-center justify-center"
+                    style={{
+                      backgroundColor: 'var(--input-bg, rgba(0,0,0,0.02))',
+                      borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+                    }}
+                  >
+                    <Sun className="w-4 h-4 text-amber-500 mb-1" />
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>Indeks UV</span>
+                    <span className="font-bold text-xs" style={{ color: 'var(--text-main, #0f172a)' }}>3 Mod</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 7-Day Forecast Strip */}
+              <div className="relative z-10 pt-3 border-t" style={{ borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted, #64748b)' }}>
+                    Prakiraan 7 Hari Ke Depan
+                  </span>
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                    Kondisi Tropis Pesisir
+                  </span>
+                </div>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {['Sab', 'Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum'].map((day, i) => {
+                    const isToday = i === 4; // Wednesday
+                    return (
+                      <div 
+                        key={day} 
+                        className={`flex flex-col items-center py-2 px-1 rounded-xl border transition-all duration-200 hover:scale-105 cursor-default ${
+                          isToday ? 'border-teal-500/50 bg-teal-500/10 shadow-xs' : 'border-transparent hover:border-[var(--border-main)]'
+                        }`}
+                        style={{
+                          backgroundColor: isToday ? undefined : 'var(--input-bg, rgba(0,0,0,0.02))'
+                        }}
+                      >
+                        <span className={`text-[10px] font-bold ${isToday ? 'text-teal-600 dark:text-teal-400 font-extrabold' : ''}`} style={{ color: isToday ? undefined : 'var(--text-main, #0f172a)' }}>
+                          {day}
+                        </span>
+                        <WeatherIcon code={i % 3 === 0 ? 0 : 50} className="w-4 h-4 my-1.5" />
+                        <span className="text-[11px] font-bold" style={{ color: 'var(--text-main, #0f172a)' }}>29°</span>
+                        <span className="text-[9px] opacity-60" style={{ color: 'var(--text-muted, #64748b)' }}>23°</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Digital Clock Card */}
-              <div className="bg-white rounded-xl overflow-hidden flex flex-col items-center justify-center p-6 shadow-md">
-                <div className="flex items-center gap-1 mb-2">
-                  <div className="bg-slate-900 text-white font-mono text-4xl px-3 py-2 rounded-lg font-bold">{time.getHours().toString().padStart(2, '0')}</div>
-                  <span className="text-slate-800 text-3xl font-bold">:</span>
-                  <div className="bg-slate-900 text-white font-mono text-4xl px-3 py-2 rounded-lg font-bold">{time.getMinutes().toString().padStart(2, '0')}</div>
-                  <span className="text-slate-800 text-3xl font-bold">:</span>
-                  <div className="bg-slate-900 text-white font-mono text-4xl px-3 py-2 rounded-lg font-bold">{time.getSeconds().toString().padStart(2, '0')}</div>
+              {/* DIGITAL CLOCK CARD */}
+              <div 
+                className="rounded-2xl border shadow-xl backdrop-blur-xl p-5 flex flex-col justify-between transition-all duration-300"
+                style={{
+                  backgroundColor: 'var(--card-bg, rgba(255, 255, 255, 0.7))',
+                  borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+                }}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-teal-500/10 text-teal-500 flex items-center justify-center">
+                      <Clock className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-xs tracking-tight" style={{ color: 'var(--text-main, #0f172a)' }}>
+                        Waktu Operasional Site
+                      </span>
+                      <div className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                        Stasiun Kawasi (UTC +09:00)
+                      </div>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20">
+                    WIT
+                  </span>
                 </div>
-                <div className="text-slate-600 font-semibold tracking-wide text-sm mt-2">
-                  {time.toLocaleDateString('en-US', { weekday: 'long' })} | {time.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                </div>
-              </div>
 
-              {/* 3. Lofi / Media Card Canvas */}
-              <div className="bg-white rounded-xl p-3 shadow-md">
-                <div className="relative rounded-lg overflow-hidden h-32 mb-3 group bg-slate-900">
-                  <img 
-                    src={mediaSettings.lofi || DEFAULT_MEDIA.lofi} 
-                    alt="Lofi Widget" 
-                    className="w-full h-full object-cover" 
-                  />
-                  <div className="absolute top-2 right-2 w-3 h-3 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]"></div>
-                  
-                  {/* Change Lofi Image Button */}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <button
-                      onClick={() => setActiveSlot({ key: 'lofi', label: 'Widget Canvas Cover' })}
-                      className="px-2.5 py-1 rounded-lg bg-black/80 hover:bg-teal-900 text-white text-[10px] font-bold border border-teal-500/50 flex items-center gap-1 cursor-pointer backdrop-blur-sm"
+                {/* Digital Digits Display */}
+                <div className="my-auto py-2 flex flex-col items-center">
+                  <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+                    <div 
+                      className="px-3 py-2 rounded-xl font-mono text-3xl font-black tracking-tight shadow-md border"
+                      style={{
+                        backgroundColor: 'var(--input-bg, #0f172a)',
+                        borderColor: 'var(--border-main, rgba(148, 163, 184, 0.3))',
+                        color: 'var(--text-main, #f8fafc)'
+                      }}
                     >
-                      <Camera className="w-3 h-3 text-teal-300" />
-                      <span>Ganti Cover</span>
-                    </button>
+                      {time.getHours().toString().padStart(2, '0')}
+                    </div>
+                    <span className="text-2xl font-black animate-pulse opacity-70" style={{ color: 'var(--text-muted, #64748b)' }}>:</span>
+                    <div 
+                      className="px-3 py-2 rounded-xl font-mono text-3xl font-black tracking-tight shadow-md border"
+                      style={{
+                        backgroundColor: 'var(--input-bg, #0f172a)',
+                        borderColor: 'var(--border-main, rgba(148, 163, 184, 0.3))',
+                        color: 'var(--text-main, #f8fafc)'
+                      }}
+                    >
+                      {time.getMinutes().toString().padStart(2, '0')}
+                    </div>
+                    <span className="text-2xl font-black animate-pulse opacity-70" style={{ color: 'var(--text-muted, #64748b)' }}>:</span>
+                    <div 
+                      className="px-3 py-2 rounded-xl font-mono text-3xl font-black tracking-tight shadow-md border"
+                      style={{
+                        backgroundColor: 'var(--input-bg, #0f172a)',
+                        borderColor: 'var(--border-main, rgba(148, 163, 184, 0.3))',
+                        color: 'var(--accent, #E9930D)'
+                      }}
+                    >
+                      {time.getSeconds().toString().padStart(2, '0')}
+                    </div>
+                  </div>
+
+                  {/* Date Bar */}
+                  <div className="mt-4 flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-semibold"
+                    style={{
+                      backgroundColor: 'var(--input-bg, rgba(0,0,0,0.02))',
+                      borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))',
+                      color: 'var(--text-main, #0f172a)'
+                    }}
+                  >
+                    <Calendar className="w-3.5 h-3.5 opacity-70" />
+                    <span>
+                      {time.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    </span>
                   </div>
                 </div>
 
-                <div className="text-slate-800 text-xs font-bold mb-2 px-1">
-                  {time.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}<br/>
-                  {time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                {/* Footer Shift Status */}
+                <div className="pt-3 border-t flex items-center justify-between text-[11px]" style={{ borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))' }}>
+                  <span className="flex items-center gap-1.5" style={{ color: 'var(--text-muted, #64748b)' }}>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>Shift Operasional:</span>
+                  </span>
+                  <span className="font-bold font-mono" style={{ color: 'var(--primary, #2A9D8F)' }}>
+                    {time.getHours() >= 7 && time.getHours() < 19 ? 'SHIFT 1 (DAY)' : 'SHIFT 2 (NIGHT)'}
+                  </span>
                 </div>
-                <div className="bg-teal-500/20 rounded-full px-4 py-2 flex items-center justify-between mt-1">
-                  <button className="text-teal-600 hover:text-teal-800"><Pause className="w-4 h-4 fill-current" /></button>
-                  <button className="text-teal-600 hover:text-teal-800"><Play className="w-4 h-4 fill-current" /></button>
-                  <button className="text-teal-600 hover:text-teal-800"><RotateCcw className="w-4 h-4" /></button>
-                  <div className="w-16 h-1 bg-teal-600/30 rounded-full relative overflow-hidden">
-                    <div className="absolute top-0 left-0 h-full w-2/3 bg-teal-600 rounded-full"></div>
+              </div>
+
+              {/* FOCUS LOFI / AUDIO PLAYER WIDGET */}
+              <div 
+                className="rounded-2xl border shadow-xl backdrop-blur-xl p-5 flex flex-col justify-between transition-all duration-300 relative overflow-hidden"
+                style={{
+                  backgroundColor: 'var(--card-bg, rgba(255, 255, 255, 0.7))',
+                  borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+                }}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-pink-500/10 text-pink-500 flex items-center justify-center">
+                      <Music className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-xs tracking-tight" style={{ color: 'var(--text-main, #0f172a)' }}>
+                        Lab Focus & Ambient
+                      </span>
+                      <div className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                        Lofi Beats untuk Konsentrasi Kerja
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Animated Sound Waveform (bounces when playing) */}
+                  <div className="flex items-center gap-0.5 h-4 px-2 py-1 rounded-md bg-slate-500/10">
+                    <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-300 ${isPlaying ? 'h-3 animate-pulse' : 'h-1'}`} />
+                    <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-200 ${isPlaying ? 'h-4 animate-bounce' : 'h-2'}`} />
+                    <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-350 ${isPlaying ? 'h-2.5 animate-pulse' : 'h-1'}`} />
+                    <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-150 ${isPlaying ? 'h-4 animate-bounce' : 'h-1.5'}`} />
+                    <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-300 ${isPlaying ? 'h-3 animate-pulse' : 'h-1'}`} />
+                  </div>
+                </div>
+
+                {/* Album Cover & Track Details */}
+                <div className="flex items-center gap-3.5 mb-3 p-2 rounded-xl border"
+                  style={{
+                    backgroundColor: 'var(--input-bg, rgba(0,0,0,0.02))',
+                    borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+                  }}
+                >
+                  <div className="relative w-14 h-14 rounded-xl overflow-hidden shadow-md flex-shrink-0 group">
+                    <img 
+                      src={mediaSettings.lofi || DEFAULT_MEDIA.lofi} 
+                      alt="Lofi Widget" 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <button
+                        onClick={() => setActiveSlot({ key: 'lofi', label: 'Widget Canvas Cover' })}
+                        className="p-1 rounded-lg bg-black/80 hover:bg-teal-900 text-white text-[9px] border border-teal-500/50 cursor-pointer"
+                        title="Ganti cover"
+                      >
+                        <Camera className="w-3 h-3 text-teal-300" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-xs truncate" style={{ color: 'var(--text-main, #0f172a)' }}>
+                      Kawasi Station Lofi Beats
+                    </div>
+                    <div className="text-[10px] truncate" style={{ color: 'var(--text-muted, #64748b)' }}>
+                      Deep Focus & Analytical Chill
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5 text-[9px] font-mono text-teal-600 dark:text-teal-400 font-semibold">
+                      <Radio className="w-2.5 h-2.5" />
+                      <span>320kbps • High Quality Audio</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Player Controls */}
+                <div className="space-y-2 pt-1">
+                  {/* Progress Bar */}
+                  <div className="w-full h-1.5 rounded-full overflow-hidden bg-slate-300/30 dark:bg-slate-700/50 relative cursor-pointer group">
+                    <div 
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: isPlaying ? '65%' : '35%',
+                        backgroundColor: 'var(--primary, #2A9D8F)'
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => setIsPlaying(!isPlaying)}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                        style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
+                        title={isPlaying ? 'Pause' : 'Play'}
+                      >
+                        {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+                      </button>
+
+                      <button 
+                        onClick={() => toast.info('Memuat ulang audio stream...')}
+                        className="p-1.5 rounded-lg hover:opacity-80 transition-colors cursor-pointer"
+                        style={{ color: 'var(--text-muted, #64748b)' }}
+                        title="Restart Stream"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Volume2 className="w-3.5 h-3.5" style={{ color: 'var(--text-muted, #64748b)' }} />
+                      <div className="w-16 h-1 rounded-full bg-slate-300/40 dark:bg-slate-700/50 overflow-hidden">
+                        <div className="w-3/4 h-full bg-teal-500 rounded-full" />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

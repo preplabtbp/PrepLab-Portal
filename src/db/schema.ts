@@ -567,4 +567,3 @@ export const rekapManualOverrides = pgTable('rekap_manual_overrides', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
-

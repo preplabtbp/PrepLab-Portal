@@ -17,6 +17,7 @@ import { GroupReportScreen, GroupReportFloatingWidget } from './components/Group
 import { ReminderNotificationModal } from './components/ReminderNotificationModal';
 import { InspectionNotificationModal } from './components/InspectionNotificationModal';
 import { GlobalOpenFindingsReminder } from './components/OpenFindingsReminderModal';
+import { LogoutConfirmModal } from './components/LogoutConfirmModal';
 
 
 
@@ -67,6 +68,7 @@ const RosterAdminScreen = lazyWithRetry(() => import('./components/roster-admin-
 const MonitoringDashboard = lazyWithRetry(() => import('./components/monitoring-dashboard').then(m => ({ default: m.MonitoringDashboard })));
 const WeeklyInspectionScreen = lazyWithRetry(() => import('./components/weekly-inspection-screen').then(m => ({ default: m.WeeklyInspectionScreen })));
 const ChatScreen = lazyWithRetry(() => import('./components/ChatScreen').then(m => ({ default: m.default })));
+const TeamsChatScreen = lazyWithRetry(() => import('./components/chat/TeamsChatScreen').then(m => ({ default: m.default })));
 const ApdInputScreen = lazyWithRetry(() => import('./components/apd-input-screen').then(m => ({ default: m.ApdInputScreen })));
 const ApdSettingsScreen = lazyWithRetry(() => import('./components/apd-settings-screen').then(m => ({ default: m.ApdSettingsScreen })));
 const ApdMonitoringScreen = lazyWithRetry(() => import('./components/apd-monitoring-screen').then(m => ({ default: m.ApdMonitoringScreen })));
@@ -678,16 +680,27 @@ export default function App() {
 
 
 
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
   const handleLogoutKaryawan = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogoutKaryawan = () => {
+    setShowLogoutConfirm(false);
+    setShowProfileScreen(false);
     setInspectorName(null);
     setInspectorNik(null);
     setNikInput('');
+    localStorage.removeItem('p2h_token');
+    localStorage.removeItem('token');
     localStorage.removeItem('p2h_inspector_name');
     localStorage.removeItem('p2h_inspector_nik');
     localStorage.removeItem('p2h_inspector_username');
     localStorage.removeItem('p2h_inspector_jabatan');
     localStorage.removeItem('p2h_inspector_profile');
     sessionStorage.removeItem('username_prompted');
+    toast.success('Sesi berhasil diakhiri.');
     handleNav('home');
   };
 
@@ -1010,10 +1023,10 @@ export default function App() {
 
 
   return (
-    <div className="flex w-full min-h-[100dvh] overflow-hidden" style={{ backgroundColor: isBulletin ? '#1e1e1e' : 'var(--bg-main, #F4F7F6)' }}>
+    <div className="flex w-full min-h-[100dvh] overflow-hidden" style={{ backgroundColor: 'var(--bg-main, #F4F7F6)' }}>
       <div 
         className={`flex-1 relative transition-all duration-300 overflow-x-hidden overflow-y-auto h-[100dvh] ${showProfileScreen ? 'md:mr-[400px] lg:mr-[480px]' : ''}`}
-        style={{ backgroundColor: isBulletin ? '#1e1e1e' : 'var(--bg-main, #F4F7F6)', color: isBulletin ? '#e2e8f0' : 'var(--text-main, #333)' }}
+        style={{ backgroundColor: 'var(--bg-main, #F4F7F6)', color: 'var(--text-main, #333)' }}
       >
         {appEnv === 'staging' && (
           <div className="w-full bg-orange-500 text-white text-xs font-bold py-1 px-4 text-center z-[100] relative tracking-widest uppercase">
@@ -1044,10 +1057,10 @@ export default function App() {
       
       {/* Header */}
       <header 
-        className={`px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-50 backdrop-blur-md border-b w-full flex justify-center transition-colors ${isBulletin ? 'bg-[#1e1e1e]/80 border-slate-800' : ''}`}
+        className="px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-50 backdrop-blur-md border-b w-full flex justify-center transition-colors"
         style={{
-          backgroundColor: isBulletin ? undefined : 'var(--header-bg, var(--card-bg, #FFFFFF))',
-          borderColor: isBulletin ? undefined : 'var(--border-main, #E2E8F0)'
+          backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
+          borderColor: 'var(--border-main, #E2E8F0)'
         }}
       >
         <div className="flex justify-between items-center w-full">
@@ -1055,11 +1068,11 @@ export default function App() {
           {activeTab !== 'home' && (
             <button 
               onClick={handleBack} 
-              className={`w-8 h-8 rounded-full border flex items-center justify-center shadow-sm active:scale-95 transition-transform ${isBulletin ? 'bg-[#2a2a2a] border-slate-700 text-slate-300' : 'border-slate-200'}`}
+              className="w-8 h-8 rounded-full border flex items-center justify-center shadow-sm active:scale-95 transition-transform"
               style={{
-                backgroundColor: isBulletin ? undefined : 'var(--input-bg, #ffffff)',
-                borderColor: isBulletin ? undefined : 'var(--border-main, #e2e8f0)',
-                color: isBulletin ? undefined : 'var(--text-main, #334155)'
+                backgroundColor: 'var(--input-bg, #ffffff)',
+                borderColor: 'var(--border-main, #e2e8f0)',
+                color: 'var(--text-main, #334155)'
               }}
               title="Kembali"
             >
@@ -1079,9 +1092,9 @@ export default function App() {
             </div>
             <div className="flex flex-col">
               <span 
-                className={`font-black font-display tracking-tight text-sm leading-tight group-hover:text-teal-500 transition-colors whitespace-nowrap ${isBulletin ? 'text-slate-100' : ''}`}
+                className="font-black font-display tracking-tight text-sm leading-tight group-hover:text-teal-500 transition-colors whitespace-nowrap"
                 style={{
-                  color: isBulletin ? undefined : 'var(--header-text, var(--text-main, #0f172a))'
+                  color: 'var(--header-text, var(--text-main, #0f172a))'
                 }}
               >
                 PREP &amp; LAB
@@ -1119,7 +1132,8 @@ export default function App() {
               <AnimatePresence mode="wait">
 <Routes location={location} key={location.pathname}>
   <Route path="/" element={<HomeScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} userPt={userProfile?.pt} />} />
-  <Route path="/chat" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
+  <Route path="/teams-chat" element={<TeamsChatScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
+  <Route path="/chat" element={<TeamsChatScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
   <Route path="/group-reports" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
   <Route path="/inspect" element={<InspectionScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} equipmentCategories={equipmentCategories || []} reloadData={fetchMasterData} loading={loadingEquipments} />} />
   <Route path="/downtime" element={<DowntimePage inspectorNik={inspectorNik!} equipmentCategories={equipmentCategories || []} />} />
@@ -1306,7 +1320,7 @@ export default function App() {
             inspectorName={inspectorName}
             inspectorNik={inspectorNik}
             onBack={() => setShowProfileScreen(false)}
-            onLogout={() => { setShowProfileScreen(false); handleLogoutKaryawan(); }}
+            onLogout={handleLogoutKaryawan}
           />
         )}
       </AnimatePresence>
@@ -1367,6 +1381,15 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Global Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        isOpen={showLogoutConfirm}
+        userName={inspectorName}
+        userNik={inspectorNik}
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={confirmLogoutKaryawan}
+      />
 
     </div>
   );

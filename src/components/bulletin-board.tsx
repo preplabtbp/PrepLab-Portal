@@ -62,6 +62,7 @@ export function BulletinBoard({
   inspectorNik: string;
 }) {
   const { pt } = useParams();
+  const isSuperAdmin = inspectorNik === '02D24000043' || inspectorNik === '02D25000055' || inspectorNik === 'preplabadmin';
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
@@ -72,6 +73,7 @@ export function BulletinBoard({
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarTab, setSidebarTab] = useState<"all" | "folders">("all");
   const [showAllPostsView, setShowAllPostsView] = useState(false);
+  const [selectedPtFilter, setSelectedPtFilter] = useState<string>("ALL");
 
   // Agenda & Meetings State
   const [agendaEventsList, setAgendaEventsList] = useState<any[]>([]);
@@ -115,7 +117,7 @@ export function BulletinBoard({
     fetchPosts();
     fetchAgenda();
     fetchNotifications();
-  }, [pt]);
+  }, [pt, inspectorNik]);
 
   const fetchAgenda = async () => {
     try {
@@ -159,9 +161,11 @@ export function BulletinBoard({
   const fetchPosts = async () => {
     setLoading(true);
     try {
+      // If user is 02D24000043 / SuperAdmin, load ALL bulletin posts across all PTs!
+      const targetPt = isSuperAdmin ? "ALL" : (pt || "TBP");
       const fetchUrl =
-        "/api/bulletin?pt=" + (pt || "TBP") + "&_t=" + Date.now();
-      console.log("[Bulletin] Fetching:", fetchUrl, "pt param:", pt);
+        `/api/bulletin?pt=${targetPt}&nik=${encodeURIComponent(inspectorNik || "")}&_t=${Date.now()}`;
+      console.log("[Bulletin] Fetching:", fetchUrl, "isSuperAdmin:", isSuperAdmin);
       const res = await fetch(fetchUrl, {
         cache: "no-store",
         headers: {
@@ -495,9 +499,12 @@ export function BulletinBoard({
     return post.content;
   };
 
-  // Filter posts by search query and tab
+  // Filter posts by search query, universe and tab
   const filteredPosts = useMemo(() => {
     let list = posts;
+    if (isSuperAdmin && selectedPtFilter !== "ALL") {
+      list = list.filter((p) => p.pt === selectedPtFilter);
+    }
     if (sidebarTab === "folders") {
       list = list.filter(isFolderPost);
     }
@@ -507,7 +514,7 @@ export function BulletinBoard({
       const title = (p.title || "").toLowerCase();
       return title.includes(q);
     });
-  }, [posts, searchQuery, sidebarTab, isFolderPost]);
+  }, [posts, searchQuery, sidebarTab, isFolderPost, isSuperAdmin, selectedPtFilter]);
 
   const folderCount = useMemo(() => {
     return posts.filter(isFolderPost).length;
@@ -614,21 +621,45 @@ export function BulletinBoard({
   const getNotionIcon = (post: any) => {
     const titleLower = (post.title || "").toLowerCase();
     if (titleLower.includes("pt. tbp") || titleLower.includes("workspace") || titleLower.includes("perusahaan")) {
-      return <div className="w-3.5 h-3.5 rounded bg-white/10 flex items-center justify-center text-[10px] text-white">🏢</div>;
+      return (
+        <div className="w-4 h-4 rounded-md bg-blue-500/15 text-blue-400 flex items-center justify-center flex-shrink-0">
+          <Building2 className="w-2.5 h-2.5" />
+        </div>
+      );
     }
-    if (titleLower.includes("im ") || titleLower.includes("memo")) {
-      return <div className="w-3.5 h-3.5 rounded bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-[10px] text-emerald-400">📗</div>;
+    if (titleLower.includes("im ") || titleLower.includes("memo") || titleLower.includes("informasi")) {
+      return (
+        <div className="w-4 h-4 rounded-md bg-emerald-500/15 text-emerald-400 flex items-center justify-center flex-shrink-0">
+          <BadgeInfo className="w-2.5 h-2.5" />
+        </div>
+      );
     }
     if (titleLower.includes("golden rules") || titleLower.includes("safety") || titleLower.includes("k3")) {
-      return <FileText className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />;
+      return (
+        <div className="w-4 h-4 rounded-md bg-rose-500/15 text-rose-400 flex items-center justify-center flex-shrink-0">
+          <ShieldAlert className="w-2.5 h-2.5" />
+        </div>
+      );
     }
     if (titleLower.includes("weekly") || titleLower.includes("rekap") || titleLower.includes("tabel")) {
-      return <Table className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />;
+      return (
+        <div className="w-4 h-4 rounded-md bg-purple-500/15 text-purple-400 flex items-center justify-center flex-shrink-0">
+          <Table className="w-2.5 h-2.5" />
+        </div>
+      );
     }
     if (isFolderPost(post)) {
-      return <Folder className="w-3.5 h-3.5 text-amber-400/80 flex-shrink-0" />;
+      return (
+        <div className="w-4 h-4 rounded-md bg-amber-500/15 text-amber-400 flex items-center justify-center flex-shrink-0">
+          <Folder className="w-2.5 h-2.5" />
+        </div>
+      );
     }
-    return <File className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />;
+    return (
+      <div className="w-4 h-4 rounded-md bg-slate-500/10 text-slate-400 flex items-center justify-center flex-shrink-0">
+        <File className="w-2.5 h-2.5" />
+      </div>
+    );
   };
 
   // Compute recent posts list
@@ -768,7 +799,14 @@ ${aiMeetingNotes
   }, []);
 
   return (
-    <div className="flex h-[calc(100vh-80px)] bg-[#191919] rounded-xl shadow-lg border border-[#2d2d2d] overflow-hidden text-slate-200 select-none">
+    <div 
+      className="flex h-[calc(100vh-80px)] rounded-xl shadow-lg border overflow-hidden select-none transition-colors"
+      style={{
+        backgroundColor: 'var(--card-bg, #191919)',
+        borderColor: 'var(--border-main, #2d2d2d)',
+        color: 'var(--text-main, #e2e8f0)'
+      }}
+    >
       {/* Notion Sidebar */}
       <AnimatePresence initial={false}>
         {sidebarOpen && (
@@ -776,10 +814,21 @@ ${aiMeetingNotes
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 250, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            className="flex-shrink-0 border-r border-[#262626] bg-[#191919] overflow-y-auto flex flex-col font-sans select-none"
+            className="flex-shrink-0 border-r overflow-y-auto flex flex-col font-sans select-none transition-colors"
+            style={{
+              backgroundColor: 'var(--card-bg, #191919)',
+              borderColor: 'var(--border-main, #262626)',
+              color: 'var(--text-main, #e2e8f0)'
+            }}
           >
             {/* Header: Preparation & Lab Notion */}
-            <div className="px-3 py-3 flex items-center justify-between text-slate-200 hover:bg-[#202020] cursor-pointer transition-colors border-b border-[#242424]">
+            <div 
+              className="px-3 py-3 flex items-center justify-between cursor-pointer transition-colors border-b"
+              style={{
+                borderColor: 'var(--border-main, #242424)',
+                color: 'var(--text-main, #f1f5f9)'
+              }}
+            >
               <div
                 onClick={() => navigateToPost(null)}
                 className="flex items-center gap-2 min-w-0 flex-1"
@@ -788,26 +837,87 @@ ${aiMeetingNotes
                 <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 font-bold text-[10px] flex-shrink-0 shadow-inner">
                   ☢
                 </div>
-                <span className="font-bold text-xs text-slate-100 truncate tracking-tight">
-                  Prep & Lab Bulletin
-                </span>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-xs truncate tracking-tight" style={{ color: 'var(--text-main, #f1f5f9)' }}>
+                    Prep & Lab Bulletin
+                  </span>
+                  {isSuperAdmin && (
+                    <span className="text-[9px] font-mono text-teal-400 font-semibold tracking-wider">
+                      ★ ALL ACCESS
+                    </span>
+                  )}
+                </div>
               </div>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+              <ChevronDown className="w-3.5 h-3.5 opacity-60 flex-shrink-0" />
             </div>
 
+            {/* SuperAdmin Universe Filter Selector */}
+            {isSuperAdmin && (
+              <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-main, #242424)' }}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                    Workspace Universe
+                  </span>
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-teal-500/10 text-teal-400 font-bold border border-teal-500/20">
+                    {posts.length} Dokumen
+                  </span>
+                </div>
+                <div 
+                  className="grid grid-cols-3 gap-1 p-1 rounded-xl border"
+                  style={{
+                    backgroundColor: 'var(--input-bg, rgba(0,0,0,0.2))',
+                    borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+                  }}
+                >
+                  {(['ALL', 'TBP', 'GTS'] as const).map((ptKey) => {
+                    const count = ptKey === 'ALL' ? posts.length : posts.filter(p => p.pt === ptKey).length;
+                    const isActive = selectedPtFilter === ptKey;
+                    return (
+                      <button
+                        key={ptKey}
+                        onClick={() => {
+                          setSelectedPtFilter(ptKey);
+                          setShowAllPostsView(true);
+                        }}
+                        className={`flex items-center justify-center gap-1 py-1 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                          isActive ? 'shadow-xs scale-[1.02]' : 'hover:opacity-80 opacity-70'
+                        }`}
+                        style={{
+                          backgroundColor: isActive ? 'var(--primary, #2A9D8F)' : 'transparent',
+                          color: isActive ? '#ffffff' : 'var(--text-main, #cbd5e1)'
+                        }}
+                        title={`Tampilkan buletin ${ptKey}`}
+                      >
+                        <span>{ptKey === 'ALL' ? 'Semua' : ptKey}</span>
+                        <span className={`text-[9px] font-mono ${isActive ? 'text-white/90' : 'opacity-60'}`}>
+                          ({count})
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Top Action Pill Bar (Home, Chat, AI Note/Mic, Inbox 99+, Search) */}
-            <div className="px-3 py-2.5 flex items-center justify-between gap-1 text-slate-400 border-b border-[#242424]">
+            <div 
+              className="px-3 py-2.5 flex items-center justify-between gap-1 border-b"
+              style={{
+                borderColor: 'var(--border-main, #242424)',
+                color: 'var(--text-muted, #94a3b8)'
+              }}
+            >
               {/* Home Pill */}
               <button
                 onClick={() => navigateToPost(null)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                  !selectedPost && !isEditing
-                    ? "bg-[#2e2e2e] text-white shadow-xs"
-                    : "bg-[#222222] text-slate-300 hover:bg-[#2c2c2c] hover:text-white"
-                }`}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer"
+                style={{
+                  backgroundColor: (!selectedPost && !isEditing) ? 'var(--primary, #2A9D8F)' : 'var(--input-bg, #222222)',
+                  color: (!selectedPost && !isEditing) ? '#ffffff' : 'var(--text-main, #cbd5e1)'
+                }}
                 title="Beranda Dashboard"
               >
-                <Home className="w-3.5 h-3.5 text-slate-300" />
+                <Home className="w-3.5 h-3.5" />
                 <span>Home</span>
               </button>
 
@@ -816,7 +926,8 @@ ${aiMeetingNotes
                 onClick={() => {
                   toast.info("Membuka kanal komunikasi tim Prep & Lab");
                 }}
-                className="p-1.5 rounded-lg hover:bg-[#272727] text-slate-400 hover:text-slate-200 transition-colors"
+                className="p-1.5 rounded-lg hover:opacity-80 transition-colors cursor-pointer"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
                 title="Pesan / Chat Tim"
               >
                 <MessageSquare className="w-4 h-4" />
@@ -825,7 +936,8 @@ ${aiMeetingNotes
               {/* AI Meeting Note (Mic) */}
               <button
                 onClick={() => setShowAiMeetingModal(true)}
-                className="p-1.5 rounded-lg hover:bg-[#272727] text-slate-400 hover:text-teal-400 transition-colors"
+                className="p-1.5 rounded-lg hover:opacity-80 transition-colors cursor-pointer"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
                 title="Catatan Rapat AI Baru"
               >
                 <Mic className="w-4 h-4" />
@@ -834,7 +946,8 @@ ${aiMeetingNotes
               {/* Inbox / Notification Badge 99+ */}
               <button
                 onClick={() => setShowNotifModal(true)}
-                className="p-1.5 rounded-lg hover:bg-[#272727] text-slate-400 hover:text-slate-200 transition-colors relative"
+                className="p-1.5 rounded-lg hover:opacity-80 transition-colors relative cursor-pointer"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
                 title="Inbox & Notifikasi"
               >
                 <Inbox className="w-4 h-4" />
@@ -846,7 +959,8 @@ ${aiMeetingNotes
               {/* Search Icon */}
               <button
                 onClick={() => setShowSearchModal(true)}
-                className="p-1.5 rounded-lg hover:bg-[#272727] text-slate-400 hover:text-slate-200 transition-colors"
+                className="p-1.5 rounded-lg hover:opacity-80 transition-colors cursor-pointer"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
                 title="Cari Dokumen (Ctrl + K)"
               >
                 <Search className="w-4 h-4" />
@@ -854,16 +968,16 @@ ${aiMeetingNotes
             </div>
 
             {/* Meetings Section (Integrated with Agenda Module) */}
-            <div className="px-3 pt-3 pb-2 border-b border-[#242424]">
-              <div className="text-[11px] font-semibold text-slate-400 mb-1.5 tracking-wide">
+            <div className="px-3 pt-3 pb-2 border-b" style={{ borderColor: 'var(--border-main, #242424)' }}>
+              <div className="text-[11px] font-semibold mb-1.5 tracking-wide" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                 Meetings
               </div>
 
               <div className="space-y-0.5">
                 {/* Upcoming Events or No upcoming events */}
                 {upcomingMeetings.length === 0 ? (
-                  <div className="flex items-center gap-2.5 px-2 py-1.5 text-xs text-slate-400 rounded-md">
-                    <Calendar className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                  <div className="flex items-center gap-2.5 px-2 py-1.5 text-xs rounded-md" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                    <Calendar className="w-3.5 h-3.5 opacity-60 flex-shrink-0" />
                     <span className="truncate">No upcoming events</span>
                   </div>
                 ) : (
@@ -874,7 +988,8 @@ ${aiMeetingNotes
                         setSelectedAgendaEventId(evt.id);
                         setShowFullAgendaModal(true);
                       }}
-                      className="flex items-center gap-2.5 px-2 py-1.5 text-xs text-slate-300 hover:bg-[#242424] hover:text-teal-300 rounded-md cursor-pointer transition-colors group"
+                      className="flex items-center gap-2.5 px-2 py-1.5 text-xs rounded-md cursor-pointer transition-colors group hover:opacity-80"
+                      style={{ color: 'var(--text-main, #cbd5e1)' }}
                       title={evt.title}
                     >
                       <Clock className="w-3.5 h-3.5 text-teal-400 group-hover:scale-110 transition-transform flex-shrink-0" />
@@ -888,9 +1003,10 @@ ${aiMeetingNotes
                 {/* + New AI meeting note */}
                 <button
                   onClick={() => setShowAiMeetingModal(true)}
-                  className="w-full flex items-center gap-2.5 px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-[#242424] rounded-md transition-colors text-left group"
+                  className="w-full flex items-center gap-2.5 px-2 py-1.5 text-xs rounded-md transition-colors text-left group cursor-pointer hover:opacity-80"
+                  style={{ color: 'var(--text-muted, #94a3b8)' }}
                 >
-                  <Plus className="w-3.5 h-3.5 text-slate-500 group-hover:text-teal-400 transition-colors flex-shrink-0" />
+                  <Plus className="w-3.5 h-3.5 opacity-60 group-hover:text-teal-400 transition-colors flex-shrink-0" />
                   <span className="truncate">New AI meeting note</span>
                 </button>
 
@@ -900,9 +1016,10 @@ ${aiMeetingNotes
                     setSelectedAgendaEventId(null);
                     setShowFullAgendaModal(true);
                   }}
-                  className="w-full flex items-center gap-2.5 px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-[#242424] rounded-md transition-colors text-left group"
+                  className="w-full flex items-center gap-2.5 px-2 py-1.5 text-xs rounded-md transition-colors text-left group cursor-pointer hover:opacity-80"
+                  style={{ color: 'var(--text-muted, #94a3b8)' }}
                 >
-                  <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-teal-400 transition-colors flex-shrink-0" />
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-60 group-hover:text-teal-400 transition-colors flex-shrink-0" />
                   <span className="truncate">View all</span>
                 </button>
               </div>
@@ -910,16 +1027,14 @@ ${aiMeetingNotes
 
             {/* Recents Section */}
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 custom-scrollbar">
-              <div className="text-[11px] font-semibold text-slate-400 mb-1.5 tracking-wide flex items-center justify-between">
-                <span>{showAllPostsView ? "Semua Dokumen" : "Recents"}</span>
-                {showAllPostsView && (
-                  <button
-                    onClick={() => setShowAllPostsView(false)}
-                    className="text-[10px] text-teal-400 hover:underline"
-                  >
-                    Kembali
-                  </button>
-                )}
+              <div className="text-[11px] font-semibold mb-1.5 tracking-wide flex items-center justify-between" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                <span>{showAllPostsView ? `Semua Dokumen (${(isSuperAdmin && selectedPtFilter !== "ALL") ? filteredPosts.length : posts.length})` : "Recents"}</span>
+                <button
+                  onClick={() => setShowAllPostsView(!showAllPostsView)}
+                  className="text-[10px] text-teal-400 hover:underline cursor-pointer font-medium"
+                >
+                  {showAllPostsView ? "Lihat Recents" : `Buka Semua (${posts.length})`}
+                </button>
               </div>
 
               {/* List of Recent / All Posts */}
@@ -938,13 +1053,28 @@ ${aiMeetingNotes
                       }}
                       className={`flex items-center gap-2.5 px-2 py-1.5 text-xs rounded-md cursor-pointer transition-all ${
                         isSelected
-                          ? "bg-[#2a2a2a] text-white font-medium shadow-xs"
-                          : "text-slate-300 hover:bg-[#232323] hover:text-slate-100"
+                          ? "font-medium shadow-xs"
+                          : "hover:opacity-80"
                       }`}
+                      style={{
+                        backgroundColor: isSelected ? 'var(--primary, #2A9D8F)' : 'transparent',
+                        color: isSelected ? '#ffffff' : 'var(--text-main, #cbd5e1)'
+                      }}
                       title={title}
                     >
                       {icon}
                       <span className="truncate flex-1">{title}</span>
+                      {post.pt && isSuperAdmin && (
+                        <span 
+                          className="text-[9px] px-1 py-0.2 rounded font-mono font-bold"
+                          style={{
+                            backgroundColor: 'var(--input-bg, #333)',
+                            color: post.pt === 'GTS' ? '#f59e0b' : '#14b8a6'
+                          }}
+                        >
+                          {post.pt}
+                        </span>
+                      )}
                       {post.category === "TEMPLATE" && (
                         <span className="text-[9px] px-1 py-0.2 rounded bg-slate-700/60 text-slate-400 font-mono">
                           Template
@@ -958,10 +1088,11 @@ ${aiMeetingNotes
                 {!showAllPostsView && (
                   <button
                     onClick={() => setShowAllPostsView(true)}
-                    className="w-full flex items-center gap-2.5 px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-[#242424] rounded-md transition-colors text-left group"
+                    className="w-full flex items-center gap-2.5 px-2 py-1.5 text-xs rounded-md transition-colors text-left group cursor-pointer hover:opacity-80"
+                    style={{ color: 'var(--text-muted, #94a3b8)' }}
                   >
-                    <MoreHorizontal className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 flex-shrink-0" />
-                    <span>More ({posts.length})</span>
+                    <MoreHorizontal className="w-3.5 h-3.5 opacity-60 flex-shrink-0" />
+                    <span>Buka Semua ({posts.length})</span>
                   </button>
                 )}
               </div>
@@ -971,14 +1102,28 @@ ${aiMeetingNotes
       </AnimatePresence>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full bg-[#1b1b1b] relative overflow-y-auto">
+      <div 
+        className="flex-1 flex flex-col h-full relative overflow-y-auto transition-colors"
+        style={{
+          backgroundColor: 'var(--bg-main, #1b1b1b)',
+          color: 'var(--text-main, #e2e8f0)'
+        }}
+      >
         {/* Topbar with Hierarchical Navigation */}
-        <div className="h-12 border-b border-slate-800 flex items-center px-4 justify-between sticky top-0 bg-[#1b1b1b]/90 backdrop-blur-md z-10">
+        <div 
+          className="h-12 border-b flex items-center px-4 justify-between sticky top-0 backdrop-blur-md z-10 transition-colors"
+          style={{
+            backgroundColor: 'var(--card-bg, #1b1b1b)',
+            borderColor: 'var(--border-main, #334155)',
+            color: 'var(--text-main, #e2e8f0)'
+          }}
+        >
           <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
             {/* Toggle Sidebar Button */}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+              className="p-1.5 rounded-lg hover:opacity-80 transition-colors cursor-pointer"
+              style={{ color: 'var(--text-muted, #94a3b8)' }}
               title="Toggle Sidebar"
             >
               <Menu className="w-4 h-4" />
@@ -988,7 +1133,12 @@ ${aiMeetingNotes
             {(selectedPost || isEditing) && (
               <button
                 onClick={goBack}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#282828] hover:bg-teal-950/60 text-slate-300 hover:text-teal-300 text-xs font-medium border border-slate-700 hover:border-teal-600/50 transition-all shadow-xs group"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-all shadow-xs group cursor-pointer"
+                style={{
+                  backgroundColor: 'var(--input-bg, #282828)',
+                  borderColor: 'var(--border-main, #334155)',
+                  color: 'var(--text-main, #cbd5e1)'
+                }}
                 title={`Kembali ke ${immediateParentTitle} (Esc / Alt+←)`}
               >
                 <ArrowLeft className="w-3.5 h-3.5 text-teal-400 group-hover:-translate-x-0.5 transition-transform" />
@@ -999,16 +1149,17 @@ ${aiMeetingNotes
             {/* Interactive Breadcrumb Hierarchy */}
             <nav
               aria-label="Breadcrumb"
-              className="flex items-center text-xs text-slate-400 gap-1 overflow-x-auto no-scrollbar py-1"
+              className="flex items-center text-xs gap-1 overflow-x-auto no-scrollbar py-1"
+              style={{ color: 'var(--text-muted, #94a3b8)' }}
             >
               {/* Root Dashboard Link */}
               <button
                 onClick={() => navigateToPost(null)}
-                className={`flex items-center gap-1 px-1.5 py-1 rounded-md transition-colors hover:bg-slate-800 hover:text-slate-100 flex-shrink-0 ${
-                  !selectedPost && !isEditing
-                    ? "text-teal-400 font-semibold"
-                    : "text-slate-400"
-                }`}
+                className="flex items-center gap-1 px-1.5 py-1 rounded-md transition-colors flex-shrink-0 cursor-pointer hover:opacity-80"
+                style={{
+                  color: (!selectedPost && !isEditing) ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
+                  fontWeight: (!selectedPost && !isEditing) ? 'bold' : 'normal'
+                }}
               >
                 <Home className="w-3.5 h-3.5" />
                 <span>Dashboard</span>
@@ -1021,15 +1172,18 @@ ${aiMeetingNotes
 
                 return (
                   <React.Fragment key={crumb.id || idx}>
-                    <ChevronRight className="w-3 h-3 text-slate-600 flex-shrink-0" />
+                    <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
                     <button
                       onClick={() => navigateToPost(crumb)}
                       disabled={isLast}
-                      className={`px-1.5 py-1 rounded-md truncate max-w-[160px] transition-colors ${
-                        isLast
-                          ? "text-teal-300 font-semibold cursor-default bg-[#1e3c2f]/40 border border-teal-600/30"
-                          : "text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer"
-                      }`}
+                      className="px-1.5 py-1 rounded-md truncate max-w-[160px] transition-colors"
+                      style={{
+                        color: isLast ? 'var(--primary, #2dd4bf)' : 'var(--text-muted, #94a3b8)',
+                        fontWeight: isLast ? '600' : 'normal',
+                        backgroundColor: isLast ? 'var(--input-bg, rgba(30, 60, 47, 0.4))' : 'transparent',
+                        border: isLast ? '1px solid var(--border-main, rgba(20, 184, 166, 0.3))' : 'none',
+                        cursor: isLast ? 'default' : 'pointer'
+                      }}
                       title={crumbTitle}
                     >
                       {crumbTitle}
@@ -1040,7 +1194,7 @@ ${aiMeetingNotes
 
               {isEditing && (
                 <>
-                  <ChevronRight className="w-3 h-3 text-slate-600 flex-shrink-0" />
+                  <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
                   <span className="text-amber-300 font-medium px-1.5 py-0.5 bg-amber-950/40 rounded border border-amber-600/30">
                     {selectedPost ? "Edit Mode" : "New Page"}
                   </span>
@@ -1101,7 +1255,7 @@ ${aiMeetingNotes
         <div className="flex-1 p-4 md:p-6 lg:p-8 w-full pb-32">
           {!selectedPost && !isEditing ? (
             <TbpDashboard
-              posts={posts}
+              posts={isSuperAdmin && selectedPtFilter !== "ALL" ? posts.filter((p) => p.pt === selectedPtFilter) : posts}
               onSelectPost={(post) => navigateToPost(post)}
             />
           ) : isEditing ? (
@@ -1112,17 +1266,26 @@ ${aiMeetingNotes
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
                 placeholder="Judul Halaman..."
-                className="w-full text-3xl md:text-4xl font-black text-slate-100 outline-none placeholder:text-slate-600 bg-transparent border-b border-slate-800 pb-3"
+                className="w-full text-3xl md:text-4xl font-black outline-none bg-transparent border-b pb-3 transition-colors"
+                style={{
+                  color: 'var(--text-main, #f8fafc)',
+                  borderColor: 'var(--border-main, #334155)'
+                }}
               />
 
               <div className="flex items-center gap-2 mb-6">
-                <span className="text-xs font-semibold text-slate-400">
+                <span className="text-xs font-semibold" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                   Kategori:
                 </span>
                 <select
                   value={editCategory}
                   onChange={(e) => setEditCategory(e.target.value)}
-                  className="text-xs border-slate-700 bg-[#2a2a2a] rounded-lg px-2.5 py-1.5 outline-none text-slate-300 border focus:border-teal-500"
+                  className="text-xs rounded-lg px-2.5 py-1.5 outline-none border focus:border-teal-500 transition-colors"
+                  style={{
+                    backgroundColor: 'var(--card-bg, #2a2a2a)',
+                    color: 'var(--text-main, #cbd5e1)',
+                    borderColor: 'var(--border-main, #334155)'
+                  }}
                 >
                   <option value="PAGE">Page</option>
                   <option value="INFO::1">Info</option>
@@ -1133,19 +1296,29 @@ ${aiMeetingNotes
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
                 placeholder="Tulis dokumen dalam format Markdown (Gunakan ## untuk membuat link sub-menu)..."
-                className="w-full min-h-[500px] text-slate-300 text-base outline-none resize-y placeholder:text-slate-600 bg-[#222] p-4 rounded-xl border border-slate-800 focus:border-slate-700 leading-relaxed font-mono"
+                className="w-full min-h-[500px] text-base outline-none resize-y p-4 rounded-xl border leading-relaxed font-mono transition-colors"
+                style={{
+                  backgroundColor: 'var(--input-bg, #222)',
+                  color: 'var(--text-main, #cbd5e1)',
+                  borderColor: 'var(--border-main, #334155)'
+                }}
               />
             </div>
           ) : isSectionHubPost(selectedPost) ? (
             <div className="space-y-6 w-full max-w-none animate-in fade-in duration-200">
               {/* View Mode Contextual Header Bar */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
                 <button
                   onClick={goBack}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#242424] hover:bg-[#2f2f2f] text-slate-300 hover:text-white text-xs font-medium transition-all shadow-xs border border-slate-700 hover:border-teal-600/60 group cursor-pointer"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-xs border group cursor-pointer hover:opacity-80"
+                  style={{
+                    backgroundColor: 'var(--card-bg, #242424)',
+                    borderColor: 'var(--border-main, #334155)',
+                    color: 'var(--text-main, #cbd5e1)'
+                  }}
                 >
                   <ArrowLeft className="w-3.5 h-3.5 text-teal-400 group-hover:-translate-x-0.5 transition-transform" />
-                  <span>Kembali ke <strong className="text-teal-300 font-semibold">{immediateParentTitle}</strong></span>
+                  <span>Kembali ke <strong className="text-teal-400 font-semibold">{immediateParentTitle}</strong></span>
                 </button>
 
                 <div className="flex items-center gap-2">

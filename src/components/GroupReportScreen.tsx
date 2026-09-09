@@ -341,7 +341,12 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   const filteredRekap = sourceList.filter(emp => {
     const rawNik = (emp.nik || '').toString().trim();
     const rawName = (emp.name || '').toString().trim();
+    const rawSection = (emp.section || '').toString().trim();
+    const rawStatus = (emp.statusKaryawan || '').toString().trim().toUpperCase();
     if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
+    if (rawSection.includes('#N/A') || rawSection.toUpperCase() === 'N/A') return false;
+    if (rawStatus.includes('RESIGN') || rawStatus.includes('PHK') || rawStatus.includes('KELUAR') || rawStatus.includes('INACTIVE')) return false;
+    if (['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'].includes(rawNik)) return false;
 
     const nikLower = rawNik.toLowerCase();
     const nameLower = rawName.toLowerCase();

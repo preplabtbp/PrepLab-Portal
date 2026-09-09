@@ -2,6 +2,22 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.22] - 2026-09-10
+
+### 🚫 Pembersihan Personil Resign dari Rekapitulasi Pelaporan Hazard Safety
+
+- **Penyebab Masalah**:
+  - Personil yang telah berstatus *Resign* (seperti Fikri Lisantri Fahmi, Kevin Gibran Mamoto, M. Bagus Ihza Ai Rizki, dan Kevin Murheza) sebelumnya masih muncul pada tab **Belum** dan **Semua** di modal Pelaporan Hazard Safety dengan identitas `• #N/A • Gol II`.
+  - Hal ini terjadi karena rumus VLOOKUP pada Google Spreadsheet *Rooster_Staff* menghasilkan `#N/A` pada kolom Section/Department saat personil dihapus dari master aktif, namun sistem backend sebelumnya hanya memfilter kolom NIK/Name sehingga baris tersebut tetap lolos dan menggelembungkan total target inspeksi serta menurunkan persentase capaian.
+- **Penyelesaian & Filter Berlapis**:
+  - **Scanner Backend (`server/routes/misc.ts`)**: Menambahkan fungsi proteksi `isResignedOrInactive()` pada endpoint `/api/rekap-inspeksi` yang secara ketat menyaring personil berstatus `Resign`, `PHK`, `Keluar`, `Inactive`, serta baris yang memiliki nilai `#N/A` pada Section, Department, atau Jabatan.
+  - **Sinkronisasi Roster Otomatis (`src/syncRoster.ts`)**: Mendeteksi baris dengan Section `#N/A` saat mengambil data dari spreadsheet dan secara otomatis menandai status personil sebagai `Resign`.
+  - **Database Update**: Memperbarui status personil yang telah resign pada tabel database `employees` menjadi `Resign`.
+  - **Filter Frontend Tambahan (`GroupReportScreen.tsx`)**: Menerapkan filter defensif pada `filteredRekap` agar personil resign maupun personil dengan section `#N/A` tidak pernah dirender ke daftar personil wajib inspeksi.
+  - **Penyesuaian Roster & Master Karyawan (`server/routes/roster.ts` & `server/routes/employees.ts`)**: Memastikan personil yang sudah resign tidak lagi dimasukkan ke dalam perhitungan roster aktif maupun daftar karyawan aktif.
+
+---
+
 ## [2.8.21] - 2026-09-09
 
 ### 🔔 Sistem Pengingat Temuan K3 Terbuka (Open Action Items) Berbasis 29 Agenda Inspeksi
