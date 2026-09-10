@@ -1,11 +1,12 @@
 import { toast } from 'sonner';
 import React, { useState, useEffect, useMemo } from 'react';
+import JSZip from 'jszip';
 import { Card, Button, Input, Textarea, Select } from './ui';
 import { getTickets, closeTicket, getGalleryPhotos } from '../sheets-api';
 import { 
   Loader2, AlertTriangle, CheckCircle2, ShieldCheck, Image as ImageIcon, 
   Camera, User, Calendar as CalendarIcon, Tag, ZoomIn, Filter, Layers, 
-  ChevronRight, ArrowLeft, RefreshCw, ChevronDown 
+  ChevronRight, ArrowLeft, RefreshCw, ChevronDown, Download, FileText, Archive 
 } from 'lucide-react';
 import { ImageModal } from './image-modal';
 import { WhatsAppModal } from './whatsapp-modal';
@@ -24,6 +25,58 @@ const formatImageUrl = (url: string) => {
   }
   return url;
 };
+
+export function extractDriveFileId(url: string): string | null {
+  if (!url) return null;
+  const match1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (match1) return match1[1];
+  const match2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (match2) return match2[1];
+  return null;
+}
+
+export function getPhotoFetchUrl(photoUrl: string): string {
+  const fileId = extractDriveFileId(photoUrl);
+  if (fileId) {
+    return `/api/drive/view/${fileId}`;
+  }
+  return `/api/gallery/image-proxy?url=${encodeURIComponent(photoUrl)}`;
+}
+
+export function getInspectionPhotoFileName(photo: any, duplicateCount?: number): string {
+  const clean = (s: string) => (s || '')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // 1. Extract Week XX (e.g. "Minggu ke-37 (2026)" -> "Week 37", "W35" -> "Week 35")
+  let weekStr = 'Week';
+  const matchWk = (photo.week || '').match(/(?:Minggu ke-|W)(\d+)/i);
+  if (matchWk) {
+    weekStr = `Week ${matchWk[1]}`;
+  } else if (photo.week) {
+    weekStr = clean(photo.week);
+  }
+
+  // 2. Extract Nama Form
+  const formName = clean(photo.sumber || 'Inspeksi');
+
+  // 3. Extract Area (strip duplicate form name prefix if present)
+  let rawArea = photo.area || 'Area';
+  const prefixRegex = new RegExp(`^${formName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\-:_]+`, 'i');
+  if (prefixRegex.test(rawArea)) {
+    rawArea = rawArea.replace(prefixRegex, '');
+  }
+  const areaName = clean(rawArea) || 'Area';
+
+  const suffix = duplicateCount && duplicateCount > 1 ? ` (${duplicateCount})` : '';
+
+  // Format: Week XX_Nama Form_Area.jpg
+  return `${weekStr}_${formName}_${areaName}${suffix}.jpg`
+    .replace(/_{2,}/g, '_')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
 
 export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: string, inspectorNik: string }) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -45,6 +98,8 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
   const [loadingGallery, setLoadingGallery] = useState(false);
   const [selectedGalleryWeek, setSelectedGalleryWeek] = useState<string>('Minggu ke-35 (2026)');
   const [selectedGalleryCategory, setSelectedGalleryCategory] = useState<string>('ALL');
+  const [isZipping, setIsZipping] = useState(false);
+  const [zipProgress, setZipProgress] = useState('');
 
   const fallbackWeeks = useMemo(() => {
     const list: string[] = [];
@@ -184,6 +239,94 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
     }, {});
   }, [filteredGalleryPhotos]);
 
+  const handleDownloadAllZip = async () => {
+    if (!filteredGalleryPhotos.length) {
+      toast.error("Tidak ada foto untuk diunduh.");
+      return;
+    }
+    setIsZipping(true);
+    setZipProgress(`0 / ${filteredGalleryPhotos.length}`);
+    try {
+      const zip = new JSZip();
+      const rawWeek = (selectedGalleryWeek || 'Semua_Minggu').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const zipBaseName = `Dokumentasi_Inspeksi_${rawWeek}`;
+      const folder = zip.folder(zipBaseName) || zip;
+
+      const usedFileNames = new Map<string, number>();
+      let successCount = 0;
+      for (let i = 0; i < filteredGalleryPhotos.length; i++) {
+        const photo = filteredGalleryPhotos[i];
+        setZipProgress(`${i + 1} / ${filteredGalleryPhotos.length}`);
+        try {
+          const fetchUrl = getPhotoFetchUrl(photo.url);
+          const res = await fetch(fetchUrl);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const blob = await res.blob();
+
+          const baseName = getInspectionPhotoFileName(photo);
+          const currentCount = (usedFileNames.get(baseName) || 0) + 1;
+          usedFileNames.set(baseName, currentCount);
+
+          const fileName = currentCount > 1 
+            ? getInspectionPhotoFileName(photo, currentCount) 
+            : baseName;
+
+          folder.file(fileName, blob);
+          successCount++;
+        } catch (err) {
+          console.warn(`Gagal fetch foto ${i + 1}:`, err);
+        }
+      }
+
+      if (successCount === 0) {
+        toast.error("Gagal mengunduh foto dokumentasi. Pastikan koneksi server atau Google Drive aktif.");
+        setIsZipping(false);
+        setZipProgress('');
+        return;
+      }
+
+      setZipProgress("Mengompresi file ZIP...");
+      const content = await zip.generateAsync({ type: 'blob' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(content);
+      link.download = `${zipBaseName}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+
+      toast.success(`Berhasil mengunduh ${successCount} foto dalam arsip ZIP!`);
+    } catch (err) {
+      console.error("Gagal membuat zip:", err);
+      toast.error("Terjadi kesalahan saat memproses unduhan ZIP.");
+    } finally {
+      setIsZipping(false);
+      setZipProgress('');
+    }
+  };
+
+  const handleDownloadSinglePhoto = async (photo: any) => {
+    const fileName = getInspectionPhotoFileName(photo);
+    try {
+      toast.info(`Mengunduh: ${fileName}...`);
+      const fetchUrl = getPhotoFetchUrl(photo.url);
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+      toast.success(`Foto ${fileName} berhasil diunduh!`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal mengunduh foto. Anda dapat membuka di Drive.");
+    }
+  };
+
   if (showGallery) {
     return (
       <div className="space-y-6 animate-in fade-in pb-20 max-w-7xl mx-auto px-4 sm:px-6 pt-6">
@@ -192,20 +335,40 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
           description="Koleksi foto dokumentasi proses & temuan inspeksi per minggu"
           icon={<ImageIcon className="w-6 h-6 text-teal-600" />}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <button
+              onClick={handleDownloadAllZip}
+              disabled={isZipping || filteredGalleryPhotos.length === 0}
+              className={`flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer ${
+                isZipping ? 'opacity-75 cursor-not-allowed' : ''
+              }`}
+              title="Unduh semua foto yang tampil sebagai file ZIP dengan nama file rapi"
+            >
+              {isZipping ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>ZIP ({zipProgress})...</span>
+                </>
+              ) : (
+                <>
+                  <Archive className="w-3.5 h-3.5" />
+                  <span>Unduh Semua Foto (ZIP)</span>
+                </>
+              )}
+            </button>
             <button
               onClick={() => {
                 fetchWeekGallery(selectedGalleryWeek, true);
                 toast.success("Galeri berhasil diperbarui");
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loadingGallery ? 'animate-spin' : ''}`} />
               <span>Refresh</span>
             </button>
             <button
               onClick={() => setShowGallery(false)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Kembali ke Tiket</span>
@@ -226,11 +389,11 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
             </div>
             <h3 className="text-lg font-bold text-white">Dokumentasi Visual Hasil Inspeksi</h3>
             <p className="text-xs text-slate-300">
-              Gunakan tombol <span className="font-semibold text-teal-300">Salin Link</span> untuk menyalin URL foto beresolusi tinggi langsung ke slide presentasi PowerPoint / Google Slides Anda.
+              Gunakan tombol <span className="font-semibold text-teal-300">Unduh Foto</span> atau <span className="font-semibold text-teal-300">Download ZIP</span> untuk merekap foto dengan nama file standar inspeksi.
             </p>
           </div>
           
-          <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/10 shrink-0">
+          <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/10 shrink-0 flex-wrap sm:flex-nowrap">
             <div className="text-center px-2">
               <p className="text-2xl font-black text-teal-400">{filteredGalleryPhotos.length}</p>
               <p className="text-[10px] uppercase font-bold text-slate-300 tracking-wider">Total Foto</p>
@@ -240,6 +403,25 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
               <p className="text-2xl font-black text-amber-400">{Object.keys(galleryGroupedByCategory).length}</p>
               <p className="text-[10px] uppercase font-bold text-slate-300 tracking-wider">Kategori Form</p>
             </div>
+            <div className="w-[1px] h-8 bg-white/20" />
+            <button
+              type="button"
+              onClick={handleDownloadAllZip}
+              disabled={isZipping || filteredGalleryPhotos.length === 0}
+              className="px-3.5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-teal-500/20 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {isZipping ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>{zipProgress}</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Download ZIP ({filteredGalleryPhotos.length})</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
@@ -394,6 +576,10 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
                               )}
                             </div>
                             <div className="p-3.5 space-y-2">
+                              <div className="flex items-center gap-1.5 text-[10px] font-mono text-teal-800 bg-teal-50/80 border border-teal-200/80 px-2 py-1 rounded-lg truncate" title={getInspectionPhotoFileName(photo)}>
+                                <FileText className="w-3 h-3 shrink-0 text-teal-600" />
+                                <span className="truncate">{getInspectionPhotoFileName(photo)}</span>
+                              </div>
                               <p className="font-semibold text-xs text-slate-800 line-clamp-2 leading-relaxed" title={photo.area}>
                                 {photo.area}
                               </p>
@@ -412,17 +598,27 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
 
                           {/* QA Presentation Action Buttons */}
                           <div className="p-3 pt-0">
-                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadSinglePhoto(photo)}
+                                className="flex-1 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 py-1.5 px-2 rounded-md transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                title="Unduh foto dengan format Week XX_Nama Form_Area"
+                              >
+                                <Download className="w-3 h-3" />
+                                <span>Unduh</span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => {
                                   navigator.clipboard.writeText(imgUrl);
-                                  toast.success("Link foto disalin ke clipboard! Siap ditempel di slide presentasi.");
+                                  toast.success("Link foto disalin ke clipboard!");
                                 }}
-                                className="flex-1 text-[11px] font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 py-1.5 px-2 rounded-md transition-colors flex items-center justify-center gap-1"
+                                className="text-[11px] font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 py-1.5 px-2 rounded-md transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                title="Salin link foto beresolusi tinggi"
                               >
                                 <Tag className="w-3 h-3" />
-                                Salin Link
+                                <span>Salin Link</span>
                               </button>
                               <a
                                 href={photo.url}
@@ -431,7 +627,8 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
                                 className="text-[11px] font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 py-1.5 px-2 rounded-md transition-colors flex items-center justify-center gap-1"
                                 title="Buka File di Google Drive"
                               >
-                                Drive <ChevronRight className="w-3 h-3" />
+                                <span>Drive</span>
+                                <ChevronRight className="w-3 h-3" />
                               </a>
                             </div>
                           </div>

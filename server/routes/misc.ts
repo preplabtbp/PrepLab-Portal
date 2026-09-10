@@ -1054,6 +1054,33 @@ router.post("/api/settings", async (req, res) => {
     }
   });
 
+router.get("/api/gallery/image-proxy", async (req, res) => {
+  try {
+    const targetUrl = req.query.url as string;
+    if (!targetUrl) return res.status(400).send("URL parameter required");
+
+    // Extract file ID if Google Drive URL
+    const driveMatch = targetUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || targetUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (driveMatch) {
+      return res.redirect(`/api/drive/view/${driveMatch[1]}`);
+    }
+
+    const response = await fetch(targetUrl);
+    if (!response.ok) {
+      return res.status(response.status).send("Failed to fetch image");
+    }
+
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    const arrayBuffer = await response.arrayBuffer();
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (err: any) {
+    console.error("[Image Proxy Error]", err.message);
+    return res.status(500).send("Proxy error: " + err.message);
+  }
+});
+
 let galleryCache: { data: any[], timestamp: number } = { data: [], timestamp: 0 };
 
 router.get("/api/gallery", async (req, res) => {
