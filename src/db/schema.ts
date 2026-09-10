@@ -585,3 +585,43 @@ export const financeTransactions = pgTable('finance_transactions', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+// Define 'kta_reports' table (Pelaporan KTA / TTA Bukti Screenshot Mingguan)
+export const ktaReports = pgTable('kta_reports', {
+  id: serial('id').primaryKey(),
+  nik: text('nik').notNull(),
+  name: text('name').notNull(),
+  section: text('section'),
+  reportType: text('report_type').notNull().default('KTA'), // 'KTA' | 'TTA'
+  date: text('date'), // YYYY-MM-DD
+  week: text('week').notNull(), // e.g. 'W36'
+  imageUrl: text('image_url').notNull(),
+  description: text('description'),
+  location: text('location'),
+  status: text('status').default('SUBMITTED'), // 'SUBMITTED', 'VERIFIED'
+  verifiedBy: text('verified_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  index('idx_kta_reports_week').on(t.week),
+  index('idx_kta_reports_nik').on(t.nik),
+]);
+
+// Define 'inspection_proofs' table (Bukti Screenshot Form General Inspeksi Mingguan)
+export const inspectionProofs = pgTable('inspection_proofs', {
+  id: serial('id').primaryKey(),
+  nik: text('nik').notNull(),
+  name: text('name').notNull(),
+  section: text('section'),
+  date: text('date'), // YYYY-MM-DD
+  week: text('week').notNull(), // e.g. 'W36', 'W37'
+  imageUrl: text('image_url').notNull(),
+  description: text('description').default('Bukti Screenshot Form General Inspeksi'),
+  status: text('status').default('SUBMITTED'), // 'SUBMITTED', 'VERIFIED'
+  verifiedBy: text('verified_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  index('idx_inspection_proofs_week').on(t.week),
+  index('idx_inspection_proofs_nik').on(t.nik),
+]);

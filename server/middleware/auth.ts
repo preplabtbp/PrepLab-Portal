@@ -58,6 +58,11 @@ export async function checkIsAdminOrDeveloper(nik?: string, section?: string, ja
     return { isAdmin: true, isDeveloper: true };
   }
 
+  // SPV Demo account (Admin role without developer privileges)
+  if (cleanNik === 'SPVDEMO' || cleanNik === 'DEMOSPV' || cleanNik.includes('SPVDEMO')) {
+    return { isAdmin: true, isDeveloper: false };
+  }
+
   // Check Developer Users table
   try {
     const dev = await db.select().from(developerUsers).where(eq(developerUsers.nik, cleanNik)).limit(1);

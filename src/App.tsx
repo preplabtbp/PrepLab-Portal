@@ -17,6 +17,7 @@ import { GroupReportScreen, GroupReportFloatingWidget } from './components/Group
 import { ReminderNotificationModal } from './components/ReminderNotificationModal';
 import { InspectionNotificationModal } from './components/InspectionNotificationModal';
 import { GlobalOpenFindingsReminder } from './components/OpenFindingsReminderModal';
+import { GlobalKtaPartialReminderModal } from './components/GlobalKtaPartialReminderModal';
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
 
 
@@ -1374,6 +1375,7 @@ export default function App() {
         <ReminderNotificationModal
           userNik={inspectorNik}
           onNavigateToInspection={() => navigate('/weekly-inspection')}
+          onNavigateToKta={() => navigate('/group-reports')}
         />
       )}
 
@@ -1391,6 +1393,20 @@ export default function App() {
           inspectorJabatan={userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan')}
           onNavigateToDashboard={() => {
             navigate('/sap-dashboard');
+          }}
+        />
+      )}
+
+      {/* Global KTA/TTA 1x Partial Reminder Modal on Page Load / Refresh */}
+      {inspectorNik && (
+        <GlobalKtaPartialReminderModal
+          inspectorNik={inspectorNik}
+          inspectorName={inspectorName}
+          inspectorJabatan={userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan')}
+          inspectorSection={userProfile?.section}
+          onOpenKtaUpload={() => {
+            navigate('/group-reports?action=upload-kta');
+            window.dispatchEvent(new CustomEvent('open-kta-upload-modal'));
           }}
         />
       )}
