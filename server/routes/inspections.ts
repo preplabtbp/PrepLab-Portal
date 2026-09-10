@@ -81,7 +81,8 @@ router.post("/api/inspections/universal", async (req, res) => {
               const gasRes = await fetch(gasUrl, {
                   method: 'POST',
                   headers: { 'Content-Type': 'text/plain' },
-                  body: JSON.stringify(payloadToGas)
+                  body: JSON.stringify(payloadToGas),
+                  signal: AbortSignal.timeout(90000)
               });
               
               const gasText = await gasRes.text();
@@ -431,12 +432,133 @@ router.post("/api/inspections/universal", async (req, res) => {
         waMessageText += `\n*Dokumen Laporan GPS*:\n${driveGpsUrl}\n`;
       }
 
+      if ((!storedPdfVal || storedPdfVal === '#') && driveTbpUrl) {
+        storedPdfVal = (driveTbpUrl && driveGpsUrl) ? JSON.stringify({ tbp: driveTbpUrl, gps: driveGpsUrl }) : driveTbpUrl;
+        await db.update(inspections as any).set({ pdfUrl: storedPdfVal }).where(eq(inspections.id, result[0].id));
+      }
+
       res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl: driveTbpUrl, linkPdf2: driveGpsUrl, waMessageText });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: "Failed to save universal inspection: " + (error.message || String(error)) });
     }
   });
+
+// Helper function to call GAS for inspection PDF regeneration
+export async function generateGasPdfForInspection(inspRecord: any) {
+  const allSettings = await db.select().from(appSettings);
+  const settingsObj: any = {};
+  allSettings.forEach((s: any) => { settingsObj[s.settingKey] = s.settingValue || ''; });
+  const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
+  if (!gasUrl) throw new Error("GAS_WEB_APP_URL tidak ditemukan di pengaturan database.");
+
+  let parsedDataF: any = {};
+  try {
+    parsedDataF = typeof inspRecord.dataF === 'string' ? JSON.parse(inspRecord.dataF) : (inspRecord.dataF || {});
+  } catch(e) {
+    parsedDataF = inspRecord.dataF || {};
+  }
+
+  let ttd1 = '', ttd2 = '', ttd3 = '';
+  if (inspRecord.signature) {
+    try {
+      const sig = JSON.parse(inspRecord.signature);
+      ttd1 = sig.ttd1 || '';
+      ttd2 = sig.ttd2 || '';
+      ttd3 = sig.ttd3 || '';
+    } catch(e) {}
+  }
+
+  let fotoProses = '', fotoTemuanArray: any[] = [];
+  if (inspRecord.photoUrl) {
+    try {
+      const ph = JSON.parse(inspRecord.photoUrl);
+      fotoProses = ph.fotoProses || '';
+      fotoTemuanArray = ph.fotoTemuanArray || [];
+    } catch(e) {}
+  }
+
+  const isApd = Array.isArray(parsedDataF) || (inspRecord.type && inspRecord.type.includes('APD'));
+
+  let payloadToGas: any = {};
+  if (isApd) {
+    payloadToGas = {
+      action: "submitInspeksi",
+      dataF: parsedDataF,
+      devOptions: { isDev: true, db: true, pdf: true, verboseLog: true },
+      ttd1, ttd2, ttd3, fotoProses
+    };
+  } else {
+    payloadToGas = {
+      action: "submitInspeksiUniversal",
+      finalData: {
+        ...parsedDataF,
+        devOptions: { isDev: true, db: true, pdf: true, verboseLog: true }
+      },
+      ttd1, ttd2, ttd3, fotoTemuanArray, fotoProses
+    };
+  }
+
+  const gasRes = await fetch(gasUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(payloadToGas),
+    signal: AbortSignal.timeout(90000)
+  });
+
+  const gasText = await gasRes.text();
+  const gasData = JSON.parse(gasText);
+  if (!gasData.success || !gasData.data) {
+    throw new Error(gasData.error || "Google Apps Script tidak mengembalikan data PDF.");
+  }
+
+  let parsedData = gasData.data;
+  if (typeof parsedData === 'string' && parsedData.startsWith('{')) {
+    parsedData = JSON.parse(parsedData);
+  }
+
+  let pdfUrl = parsedData.pdfUrl || parsedData.linkPdf1 || parsedData.linkPdf || parsedData.fileUrl || null;
+  let linkPdf2 = parsedData.linkPdf2 || parsedData.pdfUrl2 || parsedData.gpsUrl || parsedData.linkGps || null;
+
+  if (pdfUrl === '-') pdfUrl = null;
+  if (linkPdf2 === '-') linkPdf2 = null;
+
+  return { pdfUrl, linkPdf2, parsedData };
+}
+
+router.post("/api/inspections/:id/regenerate-pdf", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id || isNaN(id)) return res.status(400).json({ error: "ID inspeksi tidak valid" });
+
+    const [insp] = await db.select().from(inspections).where(eq(inspections.id, id));
+    if (!insp) return res.status(404).json({ error: "Data inspeksi tidak ditemukan" });
+
+    const { pdfUrl, linkPdf2 } = await generateGasPdfForInspection(insp);
+
+    let storedPdfVal: string | null = null;
+    if (pdfUrl && linkPdf2 && pdfUrl !== linkPdf2 && pdfUrl.startsWith('http') && linkPdf2.startsWith('http')) {
+      storedPdfVal = JSON.stringify({ tbp: pdfUrl, gps: linkPdf2 });
+    } else if (pdfUrl && pdfUrl.startsWith('http')) {
+      storedPdfVal = pdfUrl;
+    }
+
+    if (!storedPdfVal) {
+      return res.status(500).json({ error: "Gagal: URL PDF tidak dihasilkan oleh GAS." });
+    }
+
+    await db.update(inspections).set({ pdfUrl: storedPdfVal }).where(eq(inspections.id, id));
+
+    res.json({
+      success: true,
+      message: "PDF berhasil dibuat ulang dan ditautkan ke laporan!",
+      pdfUrl: storedPdfVal
+    });
+  } catch (err: any) {
+    console.error("Error regenerating inspection PDF:", err);
+    res.status(500).json({ error: err.message || "Gagal membuat ulang dokumen PDF." });
+  }
+});
 
 router.post("/api/inspections", async (req, res) => {
     try {
@@ -481,7 +603,8 @@ router.post("/api/inspections", async (req, res) => {
               const gasRes = await fetch(gasUrl, {
                   method: 'POST',
                   headers: { 'Content-Type': 'text/plain' },
-                  body: JSON.stringify(payloadToGas)
+                  body: JSON.stringify(payloadToGas),
+                  signal: AbortSignal.timeout(90000)
               });
               
               const gasText = await gasRes.text();

@@ -240,6 +240,30 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     setPdfModal({ isOpen: false, url: '', title: '', senderName: '' });
   };
 
+  const [regeneratingPdfId, setRegeneratingPdfId] = useState<string | null>(null);
+
+  const handleRegeneratePdf = async (msgId: string) => {
+    const inspId = msgId.replace('db-', '');
+    try {
+      setRegeneratingPdfId(msgId);
+      toast.loading('Sedang membuat dokumen PDF di Google Drive (memerlukan ~30 detik)...', { id: 'regen-pdf' });
+      const res = await fetch(`/api/inspections/${inspId}/regenerate-pdf`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok && data.pdfUrl) {
+        toast.success('PDF berhasil dibuat dan disimpan!', { id: 'regen-pdf' });
+        await fetchGroupFeed(selectedWeek);
+      } else {
+        toast.error(data.error || 'Gagal membuat PDF.', { id: 'regen-pdf' });
+      }
+    } catch (err: any) {
+      toast.error('Gagal terhubung ke server: ' + err.message, { id: 'regen-pdf' });
+    } finally {
+      setRegeneratingPdfId(null);
+    }
+  };
+
   const getPdfEmbedUrl = (rawUrl: string) => {
     if (!rawUrl) return '';
     
@@ -528,12 +552,24 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                           </div>
 
                           <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--border-main)]">
-                            <button
-                              onClick={() => openPdfModal(msg.pdfUrl, msg.pdfTitle, msg.senderName)}
-                              className="flex-1 py-1 px-2.5 rounded-lg bg-[var(--primary)] text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-xs hover:opacity-90 transition-opacity"
-                            >
-                              <Eye className="w-3.5 h-3.5" /> Pratinjau PDF
-                            </button>
+                            {(!msg.pdfUrl || msg.pdfUrl === '#' || msg.pdfUrl === 'null') && msg.id?.startsWith('db-') ? (
+                              <button
+                                disabled={regeneratingPdfId === msg.id}
+                                onClick={() => handleRegeneratePdf(msg.id)}
+                                className="flex-1 py-1 px-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                                title="Buat ulang dokumen PDF via Google Apps Script"
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${regeneratingPdfId === msg.id ? 'animate-spin' : ''}`} />
+                                <span>{regeneratingPdfId === msg.id ? 'Memproses PDF...' : 'Buat Ulang PDF'}</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => openPdfModal(msg.pdfUrl, msg.pdfTitle, msg.senderName)}
+                                className="flex-1 py-1 px-2.5 rounded-lg bg-[var(--primary)] text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> Pratinjau PDF
+                              </button>
+                            )}
 
                             {msg.pdfUrl && msg.pdfUrl !== '#' && (
                               <a
