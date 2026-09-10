@@ -68,7 +68,6 @@ const RosterAdminScreen = lazyWithRetry(() => import('./components/roster-admin-
 const MonitoringDashboard = lazyWithRetry(() => import('./components/monitoring-dashboard').then(m => ({ default: m.MonitoringDashboard })));
 const WeeklyInspectionScreen = lazyWithRetry(() => import('./components/weekly-inspection-screen').then(m => ({ default: m.WeeklyInspectionScreen })));
 const ChatScreen = lazyWithRetry(() => import('./components/ChatScreen').then(m => ({ default: m.default })));
-const TeamsChatScreen = lazyWithRetry(() => import('./components/chat/TeamsChatScreen').then(m => ({ default: m.default })));
 const ApdInputScreen = lazyWithRetry(() => import('./components/apd-input-screen').then(m => ({ default: m.ApdInputScreen })));
 const ApdSettingsScreen = lazyWithRetry(() => import('./components/apd-settings-screen').then(m => ({ default: m.ApdSettingsScreen })));
 const ApdMonitoringScreen = lazyWithRetry(() => import('./components/apd-monitoring-screen').then(m => ({ default: m.ApdMonitoringScreen })));
@@ -1134,8 +1133,7 @@ export default function App() {
               <AnimatePresence mode="wait">
 <Routes location={location} key={location.pathname}>
   <Route path="/" element={<HomeScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} userPt={userProfile?.pt} />} />
-  <Route path="/teams-chat" element={<TeamsChatScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
-  <Route path="/chat" element={<TeamsChatScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
+  <Route path="/chat" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
   <Route path="/group-reports" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
   <Route path="/inspect" element={<InspectionScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} equipmentCategories={equipmentCategories || []} reloadData={fetchMasterData} loading={loadingEquipments} />} />
   <Route path="/downtime" element={<DowntimePage inspectorNik={inspectorNik!} equipmentCategories={equipmentCategories || []} />} />
