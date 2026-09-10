@@ -5,6 +5,7 @@ import { Cloud,
   User, X, Calendar, AlertTriangle, FileText, Utensils, CheckCircle2, 
   ThermometerSun, LineChart, LayoutDashboard, Wrench, CheckSquare, 
   ShieldCheck, Eye, Activity, Folder, Info, Package, History, 
+  PlusCircle, Settings, ArrowRight, Clock, Box, ClipboardList, Briefcase, Users,
   BookOpen, Sparkles, Edit2, ClipboardCheck, MessageSquarePlus, MessageSquare, Receipt, UploadCloud, ExternalLink } from 'lucide-react';
 import { Button } from './ui';
 import { getKtaUrl } from '../sheets-api';

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 import { 
+  FileText, Send, Paperclip, Download, Eye, CheckCircle2, Clock,
   Users, AlertTriangle, ShieldCheck, ShieldAlert, Filter, Search, Sparkles, Pin, 
   MessageSquare, ChevronRight, Share2, RefreshCw, ExternalLink, UserCheck, UserX, MessageCircle, X, Trash2, RotateCcw, Calendar, Bell, Check,
   Camera, UploadCloud, Image as ImageIcon, Plus, ZoomIn, ArrowRight, Layers
