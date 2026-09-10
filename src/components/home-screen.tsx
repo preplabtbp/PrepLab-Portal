@@ -144,7 +144,6 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       color: 'indigo' as const,
       bgIcon: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20',
       items: [
-        { id: 'teams-chat', title: "Teams Chat", desc: "Obrolan grup & private", icon: <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('teams-chat') },
         { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('induksi') },
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('employee-database') },
         ...(isQA ? [{ id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('p5m') }] : []),
@@ -186,7 +185,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
   if (isCrew) {
 
     allowedSections = sections.map(s => {
-      let allowedItemIds = ['quiz', 'food-report', 'manual', 'teams-chat'];
+      let allowedItemIds = ['quiz', 'food-report', 'manual'];
       if (isQA) {
         allowedItemIds.push('quiz-admin');
       }
