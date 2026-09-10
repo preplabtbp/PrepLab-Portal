@@ -106,6 +106,42 @@ async function initDbSchema() {
       timestamp TIMESTAMP DEFAULT NOW()
     );`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(room);`);
+
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS kta_reports (
+      id SERIAL PRIMARY KEY,
+      nik TEXT NOT NULL,
+      name TEXT NOT NULL,
+      section TEXT,
+      report_type TEXT NOT NULL DEFAULT 'KTA',
+      date TEXT,
+      week TEXT NOT NULL,
+      image_url TEXT NOT NULL,
+      description TEXT,
+      location TEXT,
+      status TEXT DEFAULT 'SUBMITTED',
+      verified_by TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_kta_reports_week ON kta_reports(week);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_kta_reports_nik ON kta_reports(nik);`);
+
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS inspection_proofs (
+      id SERIAL PRIMARY KEY,
+      nik TEXT NOT NULL,
+      name TEXT NOT NULL,
+      section TEXT,
+      date TEXT,
+      week TEXT NOT NULL,
+      image_url TEXT NOT NULL,
+      description TEXT DEFAULT 'Bukti Screenshot Form General Inspeksi',
+      status TEXT DEFAULT 'SUBMITTED',
+      verified_by TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_inspection_proofs_week ON inspection_proofs(week);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_inspection_proofs_nik ON inspection_proofs(nik);`);
     
     // Auto seed questions if table is empty
     const qCount = await db.select().from(questions).limit(1);

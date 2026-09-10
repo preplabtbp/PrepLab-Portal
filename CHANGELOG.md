@@ -4,6 +4,132 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ## [2.8.22] - 2026-09-10
 
+### 🛡️ Rekap Status Laporan Inspeksi: Syarat Wajib Bukti Screenshot (SS) Form General & Ceklis Ganda (PDF + SS)
+
+- **Penegakan Prasyarat Ganda Kelengkapan Inspeksi (Dual Requirement 2/2)**:
+  - Rekapan status laporan inspeksi kini mewajibkan **dua prasyarat** terpenuhi sebelum seorang personil dinyatakan berstatus **`SUDAH`** (`✓ LENGKAP (2/2)`):
+    1. **Dokumen PDF Inspeksi**: Otomatis terkirim dan terekap di server saat formulir inspeksi disubmit di sistem.
+    2. **Bukti Screenshot (SS) Pengisian Form General Inspeksi**: Tangkapan layar bukti pengisian formulir General Inspection yang diunggah oleh karyawan.
+  - **Aturan Tegas**: Jika personil baru memiliki dokumen PDF namun belum mengunggah bukti SS formulir general inspeksi, status personil **TIDAK dijadikan `SUDAH`**, melainkan tetap **`BELUM`** dengan badge peringatan **`⚠️ KURANG SS (1/2)`**.
+- **Tampilan Ceklis Ganda Interaktif pada Kartu Rekap**:
+  - Setiap kartu personil di Rekap Inspeksi menyajikan dua indikator ceklis:
+    - **`[✅ PDF Inspeksi]`** (atau `[○ PDF Belum]`): Terhubung langsung dengan modal penampil PDF (PDF viewer) dan tautan Google Drive / tab baru.
+    - **`[✅ SS General]`** (atau `[○ SS General Belum]`): Terhubung langsung dengan lightbox resolusi tinggi untuk memverifikasi screenshot formulir.
+- **Penyempurnaan Proporsi & Keterbacaan Banner Status Personal (`GroupReportScreen.tsx`)**:
+  - Mengubah tata letak banner status personal dari model flex horizontal yang sempit menjadi tata letak blok berjenjang yang proporsional dan seimbang:
+    - **Header**: Judul status inspeksi berdampingan dengan badge status solid kontras tinggi berlatar warna tegas dengan teks putih tebal (**`bg-amber-600 text-white font-black`**) sehingga 100% terbaca jelas.
+    - **Status Ceklis Ganda**: Grid 2 kolom seimbang (*50% / 50%*) menampilkan status `Syarat 1 (PDF): Terekap Server` dan `Syarat 2 (Bukti SS): Wajib Upload` secara visual dan informatif.
+    - **Tipografi & Kontras Tinggi**: Teks penjelasan menggunakan lebar penuh (*100% card width*) dengan warna solid `text-slate-800 dark:text-slate-200 font-semibold` tanpa efek opacity pudar, menjamin keterbacaan optimal di tema terang maupun gelap.
+    - **Tombol Aksi Proporsional**: Tombol **`[Buka Form ↗]`** dan **`[Upload Bukti SS]`** ditata rapi dalam grid 2 kolom di bagian bawah kartu.
+  - **Optimalisasi Kartu Ringkasan & Lebar Drawer Floating**:
+    - Kartu ringkasan (*Total Wajib, Sudah, Belum, Cuti, %*) pada jendela drawer popup diubah menjadi grid 3 kolom responsif sehingga label kartu tidak lagi terhimpit atau patah baris per kata.
+    - Dimensi jendela popup diperlebar menjadi `480px` dengan tinggi `600px` agar tampilan rekap terasa lega, nyaman, dan estetis.
+- **Modal Upload Bukti SS Form General Inspeksi (`showSsModal`)**:
+  - Modal khusus untuk mengunggah tangkapan layar bukti pengisian Google Form General Inspeksi.
+  - Mendukung penempelan gambar langsung dari clipboard (**`Ctrl + V`**) serta pemilihan file (PNG, JPG, WebP).
+  - Dilengkapi tautan langsung ke Google Form Inspeksi serta pratinjau foto sebelum dikirim.
+  - Tersedia pula tombol aksi kontekstual di Feed saat filter **Inspeksi K3** dipilih.
+- **Smart Push Notification Reminder**:
+  - Tombol **`[Ingatkan (Kurang SS)]`** otomatis menyesuaikan teks dan pesan notifikasi secara spesifik mengingatkan personil untuk mengunggah screenshot form general inspeksi bila PDF-nya sudah tercatat namun SS-nya belum ada.
+- **Skema Database & API Backend (`inspection_proofs`)**:
+  - Menambahkan tabel database `inspection_proofs` dengan indexing `week` dan `nik` untuk menyimpan arsip bukti tangkapan layar inspeksi.
+  - Menambahkan endpoint `POST /api/inspection-proofs`, `GET /api/inspection-proofs`, dan `DELETE /api/inspection-proofs/:id`.
+  - Memperbarui algoritma kalkulasi `/api/rekap-inspeksi` agar memadukan data DB `inspections` (PDF) dan `inspection_proofs` (SS) secara presisi.
+
+### 📸 Penamaan File Dokumentasi Inspeksi & Fitur Unduh Massal (Bulk ZIP Download)
+
+- **Format Nama File Standar Inspeksi (`ticket-screen.tsx`)**:
+  - Nama file dokumentasi foto inspeksi disesuaikan menjadi format ringkas dan terstandar: `Week XX_Nama Form_Area.jpg` tanpa nama inspektor dan tanggal (contoh: `Week 37_Kepatuhan APD_Laboratory (Shift B).jpg`).
+  - Label nama file tersebut ditampilkan langsung pada setiap kartu foto dokumentasi di galeri inspeksi.
+- **Unduh Massal Seluruh Foto per Minggu (Bulk ZIP)**:
+  - Menambahkan tombol **`[Unduh Semua Foto (ZIP)]`** pada banner galeri dan header halaman inspeksi.
+  - Sistem mengemas seluruh foto dokumentasi minggu berjalan ke dalam satu berkas `.zip` (misal: `Dokumentasi_Inspeksi_Minggu_ke_37__2026_.zip`) untuk memudahkan perekapan mingguan QA / Safety.
+  - Dilengkapi indikator progres proses kompresi dan pengunduhan realtime.
+- **Tombol Unduh Per Foto (`Unduh`)**:
+  - Tombol aksi pada setiap kartu foto diperkaya dengan tombol **`[Unduh]`** individual bersanding dengan tombol **`[Salin Link]`** dan **`[Drive]`**.
+- **Backend Image Proxy (`server/routes/misc.ts`)**:
+  - Menambahkan endpoint `/api/gallery/image-proxy` dan routing `/api/drive/view/:fileId` guna mengunduh aset gambar resolusi tinggi tanpa kendala Cross-Origin (CORS).
+
+### ⚡ Restrukturisasi Tampilan Pelaporan Hazard Report Safety & Proporsionalitas Filter
+
+- **Pembersihan Header & Pemulihan Judul (`GroupReportScreen.tsx`)**:
+  - Menghapus tombol upload bukti dari header atas agar judul **"Pelaporan Hazard Report Safety"** tampil utuh dan tidak terpotong (*"Pe..."*).
+- **Proporsionalitas Filter Kategori Segmen (Grid 3 Kolom Seimbang)**:
+  - Mengubah segmen filter kategori feed menjadi tata letak grid 3 kolom yang seimbang dan proporsional: **`[Semua (xx)]`**, **`[Inspeksi K3 (xx)]`**, dan **`[KTA/TTA (xx)]`**.
+- **Aksi Kontekstual Upload Bukti KTA/TTA**:
+  - Tombol **`[Upload Bukti]`** diletakkan secara kontekstual di dalam tampilan tab KTA/TTA, menyederhanakan alur unggah tangkapan layar form KTA/TTA 1 langkah (otomatis tanggal dan minggu aktif berjalan).
+- **Penyesuaian Istilah & Proporsi Drawer**:
+  - Mengubah label tab dari yang semula **"Rekap Kepatuhan"** menjadi **"Rekap Status Laporan"** agar terdengar lebih profesional dan cocok dengan alur kerja departemen.
+  - Merapikan proporsi dan dimensi jendela popup laci (*floating drawer widget*) menjadi `440px` dengan tinggi dinamis `max-h-[82vh]` agar tata letak feed dan rekap tidak terasa sesak.
+
+### 🔄 Rekonsiliasi Otomatis Data Karyawan & Roster Sinkronisasi Google Sheets
+
+- **Latar Belakang Masalah**:
+  - Total personil di Roster Admin sebelumnya masih menampilkan 199 (atau ~196) personil, padahal di Google Spreadsheet terbaru hanya ada **188 personil** aktif (63 Staff + 125 Crew).
+  - Mekanisme sinkronisasi sebelumnya hanya melakukan *UPSERT* (memperbarui/menambah personil yang ada di Sheet), tetapi **tidak menandai personil yang sudah dihapus dari Sheet sebagai `Resign`**, dan jadwal lama mereka di tabel database `roster` tidak terhapus.
+  - Akibatnya, 11 personil (termasuk Faisal Bakri, M Tarmizi, Taufik Mulyadi, Nazar, Darwan Alimudin, Fasrul La Udi, Salim Hi. Hasan, dll.) yang sudah tidak lagi berada di spreadsheet tetap berstatus `Active` dan terhitung di tabel Roster Admin.
+- **Solusi & Perbaikan (`src/syncRoster.ts`)**:
+  - Menambahkan mekanisme rekonsiliasi otomatis: Setiap kali sinkronisasi dijalankan, sistem mengumpulkan seluruh NIK yang aktif dari sheet Staff dan Crew.
+  - Setiap personil di database yang tidak lagi terdaftar di Google Spreadsheet secara otomatis diperbarui statusnya menjadi `statusKaryawan = 'Resign'`.
+  - Entri tanggal jadwal lama di tabel `roster` untuk personil yang telah keluar tersebut otomatis dibersihkan.
+  - Total personil di Roster Admin kini **tepat 188 orang**, sesuai 100% dengan Google Spreadsheet.
+
+### 🛡️ Integrasi Pelaporan KTA / TTA & Perekapan Otomatis Mingguan via Portal
+
+- **Latar Belakang & Tujuan**:
+  - Mengurangi ketergantungan pada pengiriman bukti laporan ke grup WhatsApp (*"Pelaporan Hazard Report Safety Prep & Lab"*).
+  - Mengintegrasikan alur pelaporan **KTA (Kondisi Tidak Aman)** dan **TTA (Tindakan Tidak Aman)** langsung ke dalam portal dengan bukti tangkapan layar (*screenshot*) formulir, yang secara otomatis terekap ke dalam laporan kepatuhan keselamatan kerja mingguan (seperti halnya inspeksi terpadu).
+- **Skema Database & Persistence (`src/db/schema.ts` & `server.ts`)**:
+  - Menambahkan tabel PostgreSQL `kta_reports` lengkap dengan indeks `week` dan `nik` yang menyimpan: NIK pelapor, nama, section, jenis laporan (`KTA` atau `TTA`), tanggal temuan, tag minggu ISO (misal: `W36`), tautan gambar screenshot bukti (`image_url`), deskripsi temuan bahaya, lokasi area kerja, dan status verifikasi.
+  - Auto-initialization skema database melalui query DDL di `initDbSchema()`.
+- **Backend API Routes (`server/routes/misc.ts`)**:
+  - `POST /api/kta-reports`: Endpoint pengiriman bukti screenshot formulir KTA/TTA personil yang secara otomatis tersimpan ke database dan mempublikasikan notifikasi laporan langsung ke feed grup keselamatan kerja.
+  - `GET /api/kta-reports?week=...`: Mengambil daftar laporan KTA/TTA tersimpan per minggu.
+  - `DELETE /api/kta-reports/:id`: Fitur penghapusan laporan KTA/TTA bagi Admin / Developer.
+  - `GET /api/rekap-kta?week=...`: Kalkulasi otomatis kepatuhan KTA/TTA mingguan seluruh personil aktif (dengan proteksi ketat menyaring personil resign, pensiun, `#N/A`, dan personil yang sedang cuti berdasarkan jadwal roster aktif). Menghasilkan ringkasan KPI: Total Wajib, Sudah Lapor KTA/TTA, Belum Lapor, Sedang Cuti, serta % Capaian Kepatuhan.
+  - `POST /api/rekap-kta/override-status`: Fitur verifikasi manual status KTA personil oleh Admin/Pengawas (Set Sudah / Reset).
+  - `fetchAllGroupReports`: Menggabungkan laporan inspeksi PDF dan kiriman bukti screenshot KTA/TTA ke dalam satu aliran feed terpadu dengan identifikasi kategori `inspeksi` dan `kta_tta`.
+- **Perekapan Kepatuhan Terpadu (Dua Sub-Tab Rekap)**:
+  - **`[📋 Rekap Inspeksi]`**: Menampilkan rekapan kepatuhan inspeksi K3 mingguan (persentase capaian, status Sudah/Belum/Cuti, tombol pratinjau PDF, dan pengingat).
+  - **`[⚠️ Rekap KTA / TTA]`**: Menampilkan rekapan kepatuhan KTA/TTA mingguan secara terpisah lengkap dengan indikator ceklis pemenuhan kewajiban berbasis jabatan:
+    - **`🎯 1 KTA/TTA`**: Wajib 1 laporan bebas (KTA atau TTA) untuk jabatan `Preparation & Laboratory Manager`, `Laboratory Superintendent`, `Preparation Superintendent`.
+    - **`🎯 1 KTA & 1 TTA`**: Wajib minimal 1 KTA dan 1 TTA untuk jabatan `Laboratory Supervisor`, `Preparation Supervisor`, `Laboratory Foreman`, `Dry Preparation Foreman`, `Wet Preparation Foreman`, `Preparation Foreman, Wet`.
+    - **`🎯 2 TTA`**: Wajib 2 laporan TTA untuk jabatan `Laboratory Maintenance Supervisor`, `Quality Assurance Supervisor`, `Laboratory Maintenance Foreman`, `Quality Assurance Officer`, `Admin, Preparation & Laboratory`, `Admin, Inventory Control`, serta **revisi khusus untuk NIK `02D24000043` (Muhamad Alvin Febriansyah) dan `M0403190701` (Murti Tamisari Harun)**.
+    - **Ceklis Interaktif & Integritas Pilihan Karyawan (Tanpa Auto-Ceklis 2)**:
+      - Modal kirim bukti KTA/TTA secara default hanya memilih 1 butir ceklis yang belum terpenuhi (misal `TTA 1`), memberikan kontrol penuh kepada karyawan.
+      - Memperbaiki deduplikasi data backend (`server/routes/misc.ts` dengan `seenReportDbIds`) sehingga pengunggahan 1 laporan tidak pernah lagi dihitung ganda atau otomatis menceklis 2 butir kewajiban.
+      - Jika karyawan hanya memilih 1 ceklis, tombol kirim secara transparan menampilkan label `[Kirim Bukti (1 Ceklis: ...)]`, dan hanya 1 rekaman laporan yang diterbitkan ke database dan rekapitulasi.
+      - Karyawan tetap dapat mencentang 2 ceklis sekaligus jika ingin memenuhi kedua kewajiban dengan 1 foto yang sama.
+      - **Popup Peringatan Global Saat Refresh Halaman (`GlobalKtaPartialReminderModal`)**:
+        - Saat personil dengan kewajiban 2 laporan membuka atau me-refresh halaman portal, sistem secara otomatis mengecek status kepatuhan KTA/TTA mingguan.
+        - Jika baru mengunggah 1x (status `1/2`), popup dialog pengingat interaktif beranimasi langsung muncul di layar utama: *"Halo [Nama], Anda baru mengunggah 1x dari total kewajiban [label] pada minggu [week]. Status kepatuhan Anda saat ini masih 1/2 (Kurang [laporan ke-2]). Mohon segera melengkapi 1 bukti laporan lagi sebelum batas waktu minggu ini berakhir."*
+        - Tombol **`[Upload Laporan ke-2 (TTA 2 / KTA)]`** langsung mengarahkan dan membuka modal kirim bukti dengan ceklis yang belum terpenuhi otomatis tercentang.
+        - **Penyelarasan Tema Desain Portal**: Desain modal diselaraskan 100% dengan tema visual portal PrepLab (menggunakan token CSS `var(--card-bg)`, `var(--border-main)`, `var(--text-main)`, dan `var(--text-muted)`, kartu detail target dan progres 1/2 kontras tinggi, glowing amber accent, serta animasi motion spring yang halus dan elegan).
+      - **Popup Dialog Peringatan Langsung Setelah Submit (`SingleUploadReminderModal`)**: Jika karyawan hanya mengunggah 1 laporan dari kewajiban 2 laporannya, sistem langsung memunculkan popup dialog peringatan dengan tombol aksi **`[Upload 1 Laporan Lagi Sekarang]`**.
+      - **Toast Peringatan Langsung**: Begitu karyawan dengan kewajiban 2 laporan mengunggah laporan pertamanya, sistem juga menampilkan notifikasi toast peringatan di pojok layar.
+      - **Banner Peringatan di Dalam Modal**: Saat membuka kembali modal unggah bukti, ditampilkan banner pengingat kuning di bagian atas formulir yang memberitahukan bahwa personil baru mengunggah 1x dan mengingatkan untuk melengkapi 1 laporan lagi pada minggu berjalan.
+      - **Badge & Tombol Notifikasi pada Rekap KTA**: Pada tabel rekapitulasi KTA, personil yang baru mengunggah 1x ditandai dengan badge khusus `[⚠️ Baru 1x (Kurang 1)]` serta tombol aksi `[🔔 Ingatkan (Baru 1x)]`.
+      - **Modal Popup Notifikasi Pengingat (`ReminderNotificationModal.tsx`)**: Mengintegrasikan tipe notifikasi `REMINDER_KTA` pada popup global portal sehingga ketika personil diingatkan oleh pengawas, modal interaktif bertema keselamatan kerja akan muncul di layar mereka dan menyediakan tombol pintas `[Unggah Bukti KTA / TTA Sekarang]`.
+      - **Pengecualian Manager & Superintendent**: Seluruh pengingat *"baru 1x"* ini secara otomatis **dikecualikan** untuk Manager dan Superintendent, karena kewajiban mereka memang hanya 1x KTA/TTA (langsung tercatat berstatus Lengkap / Sudah).
+- **Integrasi Menu Beranda (`home-screen.tsx`)**:
+  - Memperbarui dialog kartu menu **KTA / TTA** pada halaman utama sehingga menyediakan dua pilihan aksi langsung:
+    1. **`Kirim Bukti SS ke Portal (Terekap)`** (mengarahkan langsung ke Pelaporan Hazard Report Safety).
+    2. **`Buka Form KTA/TTA Safety ↗`** (membuka Google Form resmi).
+
+### 📐 Perbaikan Tampilan Kartu Bertumpuk & Logika Status Rekap KTA (`GroupReportScreen.tsx` & `server/routes/misc.ts`)
+
+- **Penyebab Elemen Bertumpuk (*Overlap*)**:
+  - Pada popup drawer laci floating widget (`w-[440px]`), breakpoint Tailwind `sm:flex-row` pada kartu personil tetap aktif di layar desktop karena membaca ukuran layar monitor (`window.innerWidth > 640px`), bukan lebar kontainer drawer.
+  - Akibatnya, kelompok tombol aksi kanan (`Set Sudah`, `Baru 1x`, `Ingatkan`) yang membutuhkan lebar ~360px memadatkan kolom profil kiri personil sehingga nama karyawan terpotong per baris dan badge target `🎯 1 KTA/TTA` saling bertumpuk langsung di atas tombol `✅ Set Sudah`.
+- **Solusi Tata Letak (*Layout Separation*)**:
+  - Menghapus paksaan `sm:flex-row` saat mode floating widget (`isFloating ? '' : 'sm:flex-row'`) sehingga kartu selalu mempertahankan tata letak kolom bersih yang proporsional di dalam drawer.
+  - Memisahkan baris tombol aksi ke bagian bawah kartu dengan garis pembatas halus (`pt-2 border-t border-[var(--border-main)]/40 w-full`), memberi ruang 100% penuh untuk nama, jabatan, golongan, dan badge ceklis pemenuhan laporan.
+- **Koreksi Logika Kepatuhan Manager & Superintendent**:
+  - Memperbaiki bug backend di mana personil `1_KTA_OR_TTA` (Manager & Superintendent) memiliki `check2Done = true` secara default, sehingga memicu kondisi `isPartial = true` dan secara keliru menampilkan badge `[⚠️ Baru 1x (Kurang 1)]` serta tombol `[🔔 Ingatkan (Baru 1x)]` padahal mereka belum mengunggah laporan sama sekali (0/1).
+  - `check2Done` kini dipastikan `false` dan `isPartial` secara tegas dinonaktifkan untuk kategori `1_KTA_OR_TTA` (Manager & Superintendent hanya berstatus `Belum (0/1)` atau `Sudah (1/1)`).
+- **Pencegahan Pemotongan Sub-Tab Header Drawer**:
+  - Menambahkan `z-10`, `border-b`, dan `shrink-0` pada kartu sub-tab pemilih rekapitulasi agar saat daftar kartu discroll, judul dan tab sub-menu tidak terpotong atau terselip di bawah bilah tab navigasi.
+
 ### 🚫 Pembersihan Personil Resign dari Rekapitulasi Pelaporan Hazard Safety
 
 - **Penyebab Masalah**:
@@ -38,6 +164,15 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 ### 🛠️ Koreksi Nilai Poin Aktual Inspeksi Pak Roy Marten Bobrikit
 
 - Memperbaiki data nilai `aktual: "44"` menjadi `aktual: "4"` pada riwayat inspeksi perkakas portabel (ID 162, 163, 164) tanggal 9 September 2026 oleh Pak Roy Marten Bobrikit pada database sistem.
+
+### 🎨 Standarisasi Istilah "Screenshot" & Penyelarasan Tema UI Inspeksi (`GroupReportScreen.tsx`)
+
+- **Penggantian Istilah "SS" Menjadi "Screenshot"**:
+  - Mengubah seluruh penyebutan singkatan `SS` menjadi istilah formal `Screenshot` pada tombol (`Upload Bukti Screenshot`, `Upload Screenshot`), badge (`KURANG SCREENSHOT (1/2)`, `Screenshot Form`, `Screenshot Belum`), label dropzone, dan modal unggah.
+- **Penyederhanaan Info Personil & Tata Letak Tombol Sejajar**:
+  - Menghapus informasi NIK, section, dan golongan di bawah nama personil sehingga hanya menampilkan nama dan jabatan secara ringkas dan bersih.
+  - Menata ulang posisi tombol aksi (`Set Sudah`, `Set Cuti`, `Ingatkan`, `PDF`, `Screenshot`) agar berada langsung di sisi kanan sejajar di samping nama karyawan tanpa pemisah garis bawah.
+
 
 ---
 
@@ -75,6 +210,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Menghapus input dan validasi tanggal lahir pada proses inisialisasi password akun baru.
   - Personil kini dapat langsung mengaktifkan akun dan membuat password baru secara cepat hanya dengan NIK, Email, dan Password Baru tanpa hambatan kecocokan format tanggal lahir HR.
 
+
 ---
 
 ## [2.8.19] - 2026-09-02
@@ -84,6 +220,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Penyelarasan Tata Letak Kartu Personil & Pencegahan Pemotongan Nama**:
   - Menghapus pembatasan *truncate* paksa pada nama personil dan menerapkan *responsive wrap* (`flex-col sm:flex-row`), sehingga seluruh nama panjang personil tampil utuh 100% tanpa terpotong.
   - Mengoptimalkan penempatan tombol aksi: tombol **`Set Sudah`** kini hanya muncul secara cerdas untuk personil yang **Belum Inspeksi**, serta tombol **`Reset`** untuk personil yang diverifikasi secara manual.
+
 
 ---
 
@@ -96,6 +233,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Menambahkan tombol **`↩️ Reset`** untuk mengembalikan status personil ke hasil pemindaian otomatis sistem.
   - Perubahan disimpan secara persisten di database tabel `rekap_manual_overrides` sesuai minggu yang dipilih (*Week-based override*), sehingga statistik rekapitulasi langsung terupdate akurat dan permanen.
 
+
 ---
 
 ## [2.8.17] - 2026-09-02
@@ -105,6 +243,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Penyederhanaan Argumen Deploy Cloud Build**:
   - Menghapus argumen redundan yang memicu bentrok tipe variabel `SQL_PASSWORD` antara environment variable teks biasa dan Secret Manager di Cloud Run.
   - Mempertahankan argumen esensial `--update-secrets JWT_SECRET=JWT_SECRET:latest` sehingga proses build dan deploy otomatis melalui Cloud Build Trigger berjalan mulus tanpa error.
+
 
 ---
 
@@ -116,6 +255,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Mengintegrasikan berkas master questions fallback (`src/data/master-questions.json`) langsung ke dalam state awal komponen `WeeklyInspectionScreen`.
   - Menjamin seluruh kategori dropdown (*[ AREA ]*, *[ KOTAK P3K ]*, *[ ASSET & LAINNYA ]*, *[ ALAT PELINDUNG DIRI ]*) langsung muncul seketika (0ms delay) tanpa tergantung kecepatan atau latency koneksi database/API.
 
+
 ---
 
 ## [2.8.15] - 2026-09-02
@@ -125,6 +265,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Sinkronisasi Otomatis 228 Bank Pertanyaan Inspeksi Terpadu**:
   - Menambahkan mekanisme *auto-seed / auto-sync* pada `/api/questions` dan `initDbSchema()` yang secara cerdas mendeteksi jika tabel database kosong, lalu mengunduh dan menyinkronkan seluruh 228 pertanyaan master formulir inspeksi (*Area*, *P3K*, *Tabung Gas*, *Perkakas*, dll.) dari Google Sheet resmi secara otomatis.
   - Memastikan seluruh kelompok dropdown (*AREA*, *KOTAK P3K*, *ASSET & LAINNYA*) pada halaman `/weekly-inspection` selalu terisi lengkap dan berfungsi sempurna di Server Main maupun Localhost.
+
 
 ---
 
@@ -136,6 +277,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Menerapkan deduplikasi cerdas pada kalkulasi target 29 inspeksi berdasarkan kombinasi unik agenda dan area kerja (misal: *Gudang Preparasi*, *Gudang Kontainer*, *APD Lab*, *P3K*, dll.).
   - Pengiriman laporan inspeksi berulang untuk area atau agenda yang sama dalam 1 pekan kini dihitung tepat **1 kali** terhadap target pemenuhan 29 agenda K3 terencana, mencegah penggelembungan persentase (*duplicate inflation*).
 
+
 ---
 
 ## [2.8.13] - 2026-09-02
@@ -146,6 +288,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Mengembalikan validasi ketat `server/config/env.ts` agar melempar error fatal jika `JWT_SECRET` tidak disetel atau kurang dari 32 karakter saat `NODE_ENV === 'production'`.
   - Meniadakan seluruh *hardcoded fallback* di lingkungan production guna menjamin token otentikasi tidak dapat dipalsukan oleh pihak luar.
   - Mempertahankan pesan diagnostik startup yang jelas dan terstruktur pada `server.ts`.
+
 
 ---
 
@@ -161,6 +304,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Penyempurnaan Pesan Log Startup Error `server.ts`**:
   - Menyediakan output diagnostik jelas di Cloud Logging jika terjadi kegagalan konfigurasi environment pada level proses.
 
+
 ---
 
 ## [2.8.11] - 2026-09-02
@@ -170,6 +314,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Peniadaan Fatal Exception Startup pada `server/config/env.ts`**:
   - Mengubah penanganan konfigurasi environment variabel agar menggunakan nilai *fallback* yang aman dan mencatat *warning log* alih-alih melempar *fatal unhandled exception* yang mematikan proses Node.js sebelum server HTTP mengikat port `$PORT` (8080).
   - Menjamin Cloud Run menerima respons `HTTP 200` pada pemeriksaan kesehatan (*health check container*) secara instan sejak detik pertama container dihidupkan.
+
 
 ---
 
@@ -181,6 +326,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Menambahkan argumen `--update-env-vars` eksplisit pada `cloudbuild.yaml` (`SQL_HOST`, `SQL_USER`, `SQL_DB_NAME`, `VAPID_PUBLIC_KEY`, dll.) agar tidak gagal validasi startup saat deploy ke production.
   - Mengubah `--set-secrets` menjadi `--update-secrets` pada `cloudbuild.yaml` dan `cloudbuild-staging.yaml` untuk mencegah terhapusnya variabel rahasia lain yang terpasang di Cloud Run.
   - Memasang pengaman *try-catch* pada inisialisasi modul `web-push` di `server.ts` agar server backend dapat mengikat port `$PORT` (8080) secara instan tanpa terhalang inisialisasi library pihak ketiga.
+
 
 ---
 
@@ -194,6 +340,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Validasi Sesi Otomatis & Pemulihan Dashboard**:
   - Menambahkan pengecekan `/api/auth/me` pada startup aplikasi di `src/App.tsx`. Jika token kedaluwarsa/hilang setelah server restart, sistem akan mengarahkan pengguna untuk login ulang alih-alih membiarkan dashboard kosong/gagal memuat data.
 
+
 ---
 
 ## [2.8.8] - 2026-09-02
@@ -204,6 +351,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Memperbarui scanner inspeksi di `server/routes/misc.ts` (`fetchAllGroupReports` dan `/api/rekap-inspeksi`) agar memproses data JSON array / matriks APD secara komprehensif.
   - Sistem kini membaca seluruh co-inspector dari kolom inspektor (`insp1`, `insp2`, `insp3`, serta baris matriks APD kolom 16, 18, 20) dan memetakan NIK/nama karyawan ke seluruh anggota tim yang bertugas.
   - Personil yang melakukan inspeksi bersama (misal: **Muhamad Alvin Febriansyah** dan **Muhammad Atha Ghali**) kini **100% otomatis terekap dengan status `SUDAH`** lengkap dengan tautan PDF laporannya pada rekap mingguan aktif (W36).
+
 
 ---
 
@@ -218,6 +366,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Penyempurnaan Proporsi Modal Pengingat SAP**:
   - Memperbaiki tata letak, hierarki tipografi, padding, dan tombol aksi pada modal pengingat target inspeksi K3 mingguan.
 
+
 ---
 
 ## [2.8.6] - 2026-09-02
@@ -228,6 +377,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Memasang kembali middleware pengaman `requireAuth` terpusat pada seluruh rute `/api/*` di `server.ts` dengan allowlist ketat (`PUBLIC_API_PREFIXES`: `/login`, `/check-nik`, `/setup`, `/reset-password`, `/health`, dan `/drive/view`).
   - Seluruh endpoint data sensitif dan operasional (`/api/employees`, `/api/tickets`, `/api/roster`, `/api/inspections`, `/api/notifications`, `/api/admin/*`, dll.) kini 100% menolak akses tanpa token dengan status `HTTP 401 Unauthorized`.
   - Akses dengan token JWT yang sah terverifikasi berjalan lancar (`HTTP 200 OK`).
+
 
 ---
 
@@ -241,6 +391,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Mengintegrasikan konfigurasi `.gitattributes` untuk memastikan konversi otomatis line-ending (`* text=auto eol=lf`) dan proteksi berkas biner (`.xlsx`, `.pdf`, `.png`, `.jpg`, `.zip`).
   - Menghilangkan anomali 111 file "modified" palsu akibat perbedaan CRLF ↔ LF antara lingkungan Windows dan Linux/Cloud Build, menjaga `git status` dan *code review* tetap bersih.
 
+
 ---
 
 ## [2.8.4] - 2026-09-02
@@ -252,6 +403,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Perbaikan Isolasi Notifikasi Personal**:
   - Mengisolasi notifikasi privat perorangan (`REMINDER_INSPECTION`, dll.) agar hanya dikirimkan secara eksklusif ke NIK penerima dan tidak lagi terdistribusi ke rekan kerja di seksi yang sama.
   - Menambahkan verifikasi ganda di sisi komponen modal frontend (`ReminderNotificationModal.tsx`).
+
 
 ---
 
@@ -268,6 +420,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - `npm run lint` kini selesai dalam waktu **~10 detik dengan 0 error dan 0 peringatan**.
 - **Optimalisasi `.gcloudignore` & `.gitignore` (P1)**:
   - Menambahkan aturan pengecualian berkas backup, arsip, dan berkas biner `.xlsx` dari konteks deploy Cloud Build untuk mempercepat proses deployment secara signifikan.
+
 
 ---
 
@@ -292,6 +445,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Memperbaiki tag `<meta name="viewport">` di `index.html` agar pengguna di lapangan dapat melakukan pinch-zoom.
   - Meningkatkan pool koneksi database PostgreSQL di `src/db/index.ts` ke `max: 20` dan `idleTimeoutMillis: 30000`.
 
+
 ---
 
 ## [2.8.1] - 2026-09-02
@@ -306,6 +460,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Menghadirkan tampilan **Mobile WO Cards** interaktif khusus layar smartphone dengan tata letak lencana ISO Week, badge status berwarna pekat, dan tombol aksi detail yang mudah diakses.
 - **Proporsionalitas Modal Pengingat SAP Inspection**:
   - Merapikan tata letak tombol dan informasi pada pop-up pengingat inspeksi SAP agar lebih proporsional dan dilengkapi tombol dismiss `X`.
+
 
 ---
 
@@ -338,6 +493,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Mengoptimalkan penyaringan target notifikasi dengan query langsung SQL `WHERE` di database.
   - Membersihkan file backup database lokal dari pelacakan git serta memperketat aturan `.gitignore`.
 
+
 ---
 
 ## [2.7.0] - 2026-09-01
@@ -362,6 +518,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Optimasi Koneksi Database Cloud SQL**: Menyesuaikan konfigurasi koneksi pool PostgreSQL agar mencegah batas koneksi habis (*connection slot saturation / error 53300*).
 - **Penanganan Format Tanggal Aman (`safeDateDay`)**: Mencegah kesalahan parsing tanggal `Invalid time value` pada pembuatan tiket dan penarikan laporan berkala.
 - **Pembersihan Konflik Komponen JSX**: Memperbaiki benturan nama ikon peta dengan konstruktor Javascript bawaan.
+
 
 ---
 
@@ -420,6 +577,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Tampilan Layar Penuh Section Hub**: Menghapus pembatasan lebar tengah layar agar halaman ruang kerja section tampil penuh (*full-width*) dan leluasa di monitor kerja.
 - **Keamanan Data Baris Teratas**: Memperbaiki validasi penghapusan baris pada tabel agar tidak menghapus kegiatan utama lainnya secara tidak sengaja.
 
+
 ---
 
 ## [2.5.0] - 2026-08-23
@@ -440,6 +598,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Penyelarasan Warna Matriks Jadwal P5M**:
   - Memperbarui skema warna untuk membedakan Shift Siang (kuning/oranye cerah) vs Shift Malam (biru tua/gelap) serta area Preparasi (oranye) vs Laboratorium (hijau zamrud) agar jadwal mudah dibaca dalam sekejap.
   - Menambahkan penanda garis batas khusus bagi personil yang mendapat penugasan briefing 2 kali dalam satu minggu.
+
 
 ---
 

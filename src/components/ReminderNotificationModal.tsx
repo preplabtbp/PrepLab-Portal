@@ -5,9 +5,10 @@ import { Button } from './ui';
 interface ReminderNotificationModalProps {
   userNik?: string;
   onNavigateToInspection?: () => void;
+  onNavigateToKta?: () => void;
 }
 
-export function ReminderNotificationModal({ userNik, onNavigateToInspection }: ReminderNotificationModalProps) {
+export function ReminderNotificationModal({ userNik, onNavigateToInspection, onNavigateToKta }: ReminderNotificationModalProps) {
   const [activeReminder, setActiveReminder] = useState<any | null>(null);
 
   const checkReminders = async () => {
@@ -16,10 +17,10 @@ export function ReminderNotificationModal({ userNik, onNavigateToInspection }: R
       const res = await fetch(`/api/notifications?userId=${userNik}`);
       if (res.ok) {
         const data = await res.json();
-        // Find unread inspection reminder targeted specifically to this logged-in user
+        // Find unread inspection or KTA reminder targeted specifically to this logged-in user
         const readIds = JSON.parse(localStorage.getItem(`notif_read_ids_${userNik}`) || '[]');
         const unreadReminder = Array.isArray(data) ? data.find((n: any) => 
-          n.type === 'REMINDER_INSPECTION' && 
+          (n.type === 'REMINDER_INSPECTION' || n.type === 'REMINDER_KTA') && 
           (!n.userId || n.userId === userNik) &&
           !n.isRead && 
           !readIds.includes(n.id)
@@ -27,24 +28,15 @@ export function ReminderNotificationModal({ userNik, onNavigateToInspection }: R
 
         if (unreadReminder) {
           let isCompletedAlready = false;
-          try {
-            const schedRes = await fetch(`/api/inspection-schedule?nik=${encodeURIComponent(userNik)}`);
-            if (schedRes.ok) {
-              const schedData = await schedRes.json();
-              if (schedData.schedule?.isCompleted) {
-                isCompletedAlready = true;
-              }
-            }
-          } catch (e) {}
 
-          if (!isCompletedAlready) {
+          if (unreadReminder.type === 'REMINDER_KTA') {
             try {
-              const rekapRes = await fetch('/api/rekap-inspeksi');
-              if (rekapRes.ok) {
-                const rData = await rekapRes.json();
-                if (Array.isArray(rData?.rekapList)) {
+              const ktaRes = await fetch('/api/rekap-kta');
+              if (ktaRes.ok) {
+                const kData = await ktaRes.json();
+                if (Array.isArray(kData?.rekapList)) {
                   const cleanNik = userNik.trim().toLowerCase();
-                  const found = rData.rekapList.find((e: any) => 
+                  const found = kData.rekapList.find((e: any) => 
                     (e.nik && e.nik.trim().toLowerCase() === cleanNik)
                   );
                   if (found && found.status === 'SUDAH') {
@@ -53,6 +45,34 @@ export function ReminderNotificationModal({ userNik, onNavigateToInspection }: R
                 }
               }
             } catch (e) {}
+          } else {
+            try {
+              const schedRes = await fetch(`/api/inspection-schedule?nik=${encodeURIComponent(userNik)}`);
+              if (schedRes.ok) {
+                const schedData = await schedRes.json();
+                if (schedData.schedule?.isCompleted) {
+                  isCompletedAlready = true;
+                }
+              }
+            } catch (e) {}
+
+            if (!isCompletedAlready) {
+              try {
+                const rekapRes = await fetch('/api/rekap-inspeksi');
+                if (rekapRes.ok) {
+                  const rData = await rekapRes.json();
+                  if (Array.isArray(rData?.rekapList)) {
+                    const cleanNik = userNik.trim().toLowerCase();
+                    const found = rData.rekapList.find((e: any) => 
+                      (e.nik && e.nik.trim().toLowerCase() === cleanNik)
+                    );
+                    if (found && found.status === 'SUDAH') {
+                      isCompletedAlready = true;
+                    }
+                  }
+                }
+              } catch (e) {}
+            }
           }
 
           if (isCompletedAlready) {
@@ -102,19 +122,30 @@ export function ReminderNotificationModal({ userNik, onNavigateToInspection }: R
       console.error(e);
     }
 
+    const reminderType = activeReminder.type;
     setActiveReminder(null);
 
-    if (shouldNavigate && onNavigateToInspection) {
-      onNavigateToInspection();
+    if (shouldNavigate) {
+      if (reminderType === 'REMINDER_KTA' && onNavigateToKta) {
+        onNavigateToKta();
+      } else if (onNavigateToInspection) {
+        onNavigateToInspection();
+      }
     }
   };
+
+  const isKtaType = activeReminder.type === 'REMINDER_KTA';
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
       <div className="relative w-full max-w-md bg-[var(--card-bg, #ffffff)] border border-[var(--border-main, #e2e8f0)] rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         
         {/* Glowing Top Banner */}
-        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 p-6 text-white text-center relative overflow-hidden">
+        <div className={`p-6 text-white text-center relative overflow-hidden ${
+          isKtaType 
+            ? 'bg-gradient-to-r from-amber-600 via-orange-500 to-rose-600'
+            : 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500'
+        }`}>
           <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
           
           <div className="w-14 h-14 mx-auto mb-3 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/30 shadow-lg animate-bounce">
@@ -123,21 +154,23 @@ export function ReminderNotificationModal({ userNik, onNavigateToInspection }: R
 
           <h3 className="text-lg font-black tracking-tight flex items-center justify-center gap-2">
             <Sparkles className="w-5 h-5 text-amber-200" />
-            PENGINGAT INSPEKSI TERPADU
+            {isKtaType ? 'PENGINGAT LAPORAN KTA / TTA' : 'PENGINGAT INSPEKSI TERPADU'}
           </h3>
           <p className="text-xs text-amber-100 mt-1 font-medium">
-            Notifikasi Resmi Admin Safety & Lab PrepLab
+            Notifikasi Resmi Kepatuhan Keselamatan Kerja
           </p>
         </div>
 
         {/* Content Body */}
         <div className="p-6 space-y-4 text-center">
           <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-sm font-semibold leading-relaxed">
-            {activeReminder.message || 'Anda diingatkan untuk segera mengisi Laporan Inspeksi Terpadu Mingguan.'}
+            {activeReminder.message || (isKtaType ? 'Anda diingatkan untuk melengkapi laporan KTA/TTA mingguan.' : 'Anda diingatkan untuk segera mengisi Laporan Inspeksi Terpadu Mingguan.')}
           </div>
 
           <p className="text-xs text-[var(--text-muted, #64748b)]">
-            Mohon lakukan inspeksi area kerja Anda dan unggah laporan sebelum batas waktu periode minggu ini berakhir.
+            {isKtaType 
+              ? 'Pastikan seluruh kewajiban KTA/TTA Anda telah diisi dan bukti screenshot diunggah sebelum akhir pekan.'
+              : 'Mohon lakukan inspeksi area kerja Anda dan unggah laporan sebelum batas waktu periode minggu ini berakhir.'}
           </p>
 
           {/* Action Buttons */}
@@ -147,7 +180,7 @@ export function ReminderNotificationModal({ userNik, onNavigateToInspection }: R
               className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm transition-all transform active:scale-95"
             >
               <ClipboardCheck className="w-4 h-4" />
-              Isi Inspeksi Sekarang
+              {isKtaType ? 'Unggah Bukti KTA / TTA Sekarang' : 'Isi Inspeksi Sekarang'}
             </Button>
 
             <button

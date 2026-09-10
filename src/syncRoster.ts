@@ -147,11 +147,12 @@ export async function syncCutiTahunan(): Promise<{ updatedCount: number; message
   }
 }
 
-export async function syncRosterData(): Promise<{ success: boolean; staffCount: number; crewCount: number; totalRosterEntries: number; cutiCount?: number; message: string }> {
+export async function syncRosterData(): Promise<{ success: boolean; staffCount: number; crewCount: number; totalRosterEntries: number; cutiCount?: number; resignedCount?: number; message: string }> {
   console.log("Memulai sinkronisasi Roster dari Google Spreadsheet...");
   let totalStaff = 0;
   let totalCrew = 0;
   let totalRoster = 0;
+  const allActiveSheetNiks = new Set<string>();
 
   try {
     for (const conf of CONFIGS) {
@@ -160,13 +161,52 @@ export async function syncRosterData(): Promise<{ success: boolean; staffCount: 
         if (conf.type === 'Staff') totalStaff = res.empCount;
         if (conf.type === 'Crew') totalCrew = res.empCount;
         totalRoster += res.rosterCount;
+        res.niks.forEach(nik => allActiveSheetNiks.add(nik));
       }
     }
+
+    // Reconcile: Tandai karyawan yang ada di DB tapi SUDAH TIDAK ADA di sheet sebagai 'Resign'
+    let resignedCount = 0;
+    if (allActiveSheetNiks.size > 0) {
+      const allDbEmps = await db.select().from(employees);
+      const ghostNiks: string[] = [];
+
+      for (const emp of allDbEmps) {
+        const nik = (emp.nik || '').toUpperCase().trim();
+        const st = (emp.statusKaryawan || '').toUpperCase().trim();
+        const pt = (emp.pt || '').toUpperCase().trim();
+
+        // Kecualikan akun sistem, GTS, dan yang memang sudah Resign
+        if (
+          !nik || nik.includes('DEMO') || nik === 'PREPLABADMIN' ||
+          pt === 'GTS' || st.includes('RESIGN') || st.includes('PHK') || st.includes('KELUAR')
+        ) {
+          continue;
+        }
+
+        if (!allActiveSheetNiks.has(emp.nik)) {
+          ghostNiks.push(emp.nik);
+        }
+      }
+
+      if (ghostNiks.length > 0) {
+        console.log(`Menemukan ${ghostNiks.length} karyawan tidak lagi terdaftar di Sheet. Menandai sebagai Resign...`, ghostNiks);
+        // Update status karyawan menjadi Resign
+        await db.update(employees)
+          .set({ statusKaryawan: 'Resign' })
+          .where(inArray(employees.nik, ghostNiks));
+
+        // Hapus roster entri untuk karyawan yang sudah keluar
+        await db.delete(roster).where(inArray(roster.nik, ghostNiks));
+        resignedCount = ghostNiks.length;
+      }
+    }
+
     const cutiRes = await syncCutiTahunan();
 
-    const msg = `Sinkronisasi Roster berhasil: ${totalStaff} Staff, ${totalCrew} Crew, ${totalRoster} entri tanggal roster, ${cutiRes.updatedCount} Cuti Tahunan.`;
+    const msg = `Sinkronisasi Roster berhasil: ${totalStaff} Staff, ${totalCrew} Crew, ${totalRoster} entri tanggal roster, ${resignedCount} karyawan Resign/keluar dari sheet, ${cutiRes.updatedCount} Cuti Tahunan.`;
     console.log(msg);
-    return { success: true, staffCount: totalStaff, crewCount: totalCrew, totalRosterEntries: totalRoster, cutiCount: cutiRes.updatedCount, message: msg };
+    return { success: true, staffCount: totalStaff, crewCount: totalCrew, totalRosterEntries: totalRoster, cutiCount: cutiRes.updatedCount, resignedCount, message: msg };
   } catch (err: any) {
     console.error("Gagal sinkronisasi roster:", err);
     return { success: false, staffCount: 0, crewCount: 0, totalRosterEntries: 0, message: err.message || "Gagal sinkronisasi roster" };
@@ -199,19 +239,19 @@ function normalizeDateStr(d: string): string {
   return trimmed;
 }
 
-async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; rosterCount: number }> {
+async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; rosterCount: number; niks: string[] }> {
   console.log(`Fetching roster for ${config.type}...`);
   const res = await fetch(config.url);
   if (!res.ok) {
     console.error(`Gagal fetch CSV untuk ${config.type}: ${res.statusText}`);
-    return { empCount: 0, rosterCount: 0 };
+    return { empCount: 0, rosterCount: 0, niks: [] };
   }
   const csvText = await res.text();
   
   const parsed = Papa.parse(csvText, { skipEmptyLines: true });
   const rows = parsed.data as string[][];
   
-  if (rows.length < 2) return { empCount: 0, rosterCount: 0 };
+  if (rows.length < 2) return { empCount: 0, rosterCount: 0, niks: [] };
   
   const dateHeaders = rows[config.dateRowIndex];
   
@@ -316,7 +356,7 @@ async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; r
   }
 
   console.log(`Synced ${uniqueEmps.length} employees and ${allRosterData.length} roster entries for ${config.type}.`);
-  return { empCount: uniqueEmps.length, rosterCount: allRosterData.length };
+  return { empCount: uniqueEmps.length, rosterCount: allRosterData.length, niks: allNiks };
 }
 
 export function initRosterCron() {

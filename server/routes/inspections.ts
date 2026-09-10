@@ -6,7 +6,8 @@ import {
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
   pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, 
   notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, 
-  mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi
+  mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi,
+  inspectionProofs
 } from "../../src/db/schema.js";
 import { generatePdfFromTemplate, drive } from '../../google-services.js';
 import { 
@@ -1583,6 +1584,23 @@ router.get("/api/inspection-schedule", async (req, res) => {
           return false;
         });
       });
+
+      if (matched) {
+        try {
+          const currentWeekTag = getISOWeekTagForSchedule(new Date());
+          const proofs = await db.select().from(inspectionProofs).where(eq(inspectionProofs.week, currentWeekTag));
+          const pMatch = proofs.find(p => {
+            const pNik = (p.nik || '').trim().toLowerCase();
+            const pName = (p.name || '').trim().toLowerCase();
+            return searchNames.some(target => pNik === target || pName.includes(target) || target.includes(pName));
+          });
+          matched.hasSsProof = !!pMatch;
+          matched.ssProofUrl = pMatch?.imageUrl || null;
+          matched.ssProofDate = pMatch?.date || null;
+        } catch (proofErr) {
+          console.warn('Error attaching SS proof to schedule:', proofErr);
+        }
+      }
 
       return res.json({
         found: !!matched,

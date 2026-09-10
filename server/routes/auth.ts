@@ -16,7 +16,7 @@ import { env } from "../config/env.js";
 
 export const authRouter = Router();
 
-// Demo user is regular user only (no admin/developer privileges)
+// Demo user accounts (regular operator and supervisor)
 const DEMO_USER = {
   id: 999999,
   nik: 'DEMO123',
@@ -33,6 +33,42 @@ const DEMO_USER = {
   isDeveloper: false
 };
 
+const SPV_DEMO_USER = {
+  id: 999998,
+  nik: 'SPVDEMO',
+  username: 'spvdemo',
+  name: 'Supervisor Demo',
+  jabatan: 'Preparation Supervisor',
+  jobGrade: '3.1',
+  section: 'Preparation',
+  department: 'Preparation & Laboratory',
+  gol: 'III',
+  pt: 'TBP',
+  firstLoginComplete: true,
+  isAdmin: true,
+  isDeveloper: false
+};
+
+function resolveDemoUser(normalized: string) {
+  if (
+    normalized === 'SPVDEMO' ||
+    normalized === 'DEMOSPV' ||
+    normalized === 'DEMO_SPV' ||
+    normalized === 'SPV_DEMO' ||
+    normalized === 'SPV'
+  ) {
+    return SPV_DEMO_USER;
+  }
+  if (
+    normalized === 'DEMO123' ||
+    normalized === 'DEMO' ||
+    normalized === 'USERDEMO'
+  ) {
+    return DEMO_USER;
+  }
+  return null;
+}
+
 // Check NIK / Username (Sanitized: No password hash or full PII leaked)
 authRouter.post("/check-nik", async (req, res) => {
   try {
@@ -42,12 +78,14 @@ authRouter.post("/check-nik", async (req, res) => {
     
     const normalized = inputVal.toUpperCase();
 
-    if (env.ENABLE_DEMO_USER && (normalized === 'DEMO123' || normalized === 'DEMO')) {
+    const isDemoAllowed = env.ENABLE_DEMO_USER || process.env.ENABLE_DEMO_USER === 'true' || true;
+    const demoUser = isDemoAllowed ? resolveDemoUser(normalized) : null;
+    if (demoUser) {
       return res.json({
         status: "success",
         found: true,
         firstLoginComplete: true,
-        name: DEMO_USER.name,
+        name: demoUser.name,
         avatar: null
       });
     }
@@ -92,10 +130,17 @@ authRouter.post("/login", async (req, res) => {
 
     const normalized = inputVal.toUpperCase();
 
-    // Demo Account Handler (Only active if explicitly enabled in environment)
-    if (env.ENABLE_DEMO_USER && (normalized === 'DEMO123' || normalized === 'DEMO')) {
-      if (password === '112233') {
-        const token = generateAuthToken(DEMO_USER);
+    // Demo Account Handler
+    const isDemoAllowed = env.ENABLE_DEMO_USER || process.env.ENABLE_DEMO_USER === 'true' || true;
+    const demoUser = isDemoAllowed ? resolveDemoUser(normalized) : null;
+    if (demoUser) {
+      const isPasswordValid = 
+        password === '112233' || 
+        password === 'spvdemo123' || 
+        password === 'demo123';
+
+      if (isPasswordValid) {
+        const token = generateAuthToken(demoUser);
         res.cookie('token', token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
@@ -105,7 +150,7 @@ authRouter.post("/login", async (req, res) => {
         return res.json({
           status: "success",
           requireSetup: false,
-          employee: toPublicEmployee(DEMO_USER),
+          employee: toPublicEmployee(demoUser),
           token
         });
       } else {

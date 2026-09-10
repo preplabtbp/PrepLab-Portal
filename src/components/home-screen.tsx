@@ -6,7 +6,7 @@ import { Cloud,
   ThermometerSun, LineChart, LayoutDashboard, Wrench, CheckSquare, 
   ShieldCheck, Eye, Activity, Folder, Info, Package, History, 
   PlusCircle, Settings, ArrowRight, Clock, Box, ClipboardList, Briefcase, Users,
-  BookOpen, Sparkles, Edit2, ClipboardCheck, MessageSquarePlus, MessageSquare } from 'lucide-react';
+  BookOpen, Sparkles, Edit2, ClipboardCheck, MessageSquarePlus, MessageSquare, UploadCloud, ExternalLink } from 'lucide-react';
 import { Button } from './ui';
 import { getKtaUrl } from '../sheets-api';
 import { FoodReportModal } from './food-report-modal';
@@ -331,33 +331,44 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl"
+            className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800"
           >
-            <div className="p-8 text-center">
-              <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 shadow-inner">
-                <ShieldCheck className="w-10 h-10" />
+            <div className="p-6 sm:p-8 text-center">
+              <div className="w-16 h-16 bg-amber-500/15 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner border border-amber-500/30">
+                <AlertTriangle className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-display font-bold text-slate-800 mb-3">Konfirmasi Pengalihan</h3>
-              <p className="text-slate-500 mb-8 leading-relaxed text-sm">
-                Anda akan dialihkan ke tab baru untuk mengisi formulir Laporan KTA / TTA milik Tim Safety.
+              <h3 className="text-lg sm:text-xl font-display font-bold text-slate-800 dark:text-slate-100 mb-2">Pelaporan KTA / TTA</h3>
+              <p className="text-slate-500 dark:text-slate-400 mb-6 leading-relaxed text-xs sm:text-sm">
+                Laporkan kondisi atau tindakan tidak aman ke form Safety, lalu kirimkan bukti screenshot tanggapan formulir per minggu agar otomatis terekap di portal.
               </p>
               
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 <Button 
-                  className="w-full h-12 text-base font-semibold shadow-md bg-amber-500 hover:bg-amber-600 text-white"
+                  className="w-full h-11 text-xs sm:text-sm font-bold shadow-md bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white flex items-center justify-center gap-2 cursor-pointer"
                   onClick={() => {
                     setShowKtaConfirmation(false);
+                    onNav('group-reports');
+                  }}
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  Kirim Bukti SS ke Portal (Terekap)
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="w-full h-11 text-xs sm:text-sm font-bold border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 flex items-center justify-center gap-2 cursor-pointer"
+                  onClick={() => {
                     window.open(getKtaUrl(), '_blank');
                   }}
                 >
-                  Lanjutkan ke Form
+                  <ExternalLink className="w-4 h-4" />
+                  Buka Form KTA/TTA Safety ↗
                 </Button>
                 <Button 
                   variant="secondary"
-                  className="w-full h-12 text-base font-semibold text-slate-600 border-slate-200"
+                  className="w-full h-10 text-xs font-semibold text-slate-500 border-slate-200 dark:border-slate-800 cursor-pointer"
                   onClick={() => setShowKtaConfirmation(false)}
                 >
-                  Batal
+                  Tutup
                 </Button>
               </div>
             </div>

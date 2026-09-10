@@ -8,7 +8,7 @@ import {
   pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, 
   notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, 
   mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi,
-  developerUsers, communityQuotes, rekapManualOverrides
+  developerUsers, communityQuotes, rekapManualOverrides, ktaReports, inspectionProofs
 } from "../../src/db/schema.js";
 import { generatePdfFromTemplate, drive } from '../../google-services.js';
 import { 
@@ -287,6 +287,7 @@ async function fetchAllGroupReports(filterWeek?: string) {
 
       const dbReportMsg = {
         id: dbMsgId,
+        category: 'inspeksi',
         senderNik,
         senderName,
         senderRole,
@@ -308,6 +309,75 @@ async function fetchAllGroupReports(filterWeek?: string) {
     console.error('Error reading DB inspections for group reports:', err);
   }
 
+  // 3. DB kta_reports
+  try {
+    const dbKta = await db.select().from(ktaReports);
+    dbKta.forEach((kta: any) => {
+      const dbKtaId = `kta-db-${kta.id}`;
+      if (deletedReportIds.has(dbKtaId)) return;
+      const ktaWeek = kta.week || extractWeekTag(kta.description, '', kta.createdAt);
+      if (!isWeekAllowed(ktaWeek)) return;
+
+      if (seenIds.has(dbKtaId)) return;
+      seenIds.add(dbKtaId);
+
+      const dbKtaMsg = {
+        id: dbKtaId,
+        category: 'kta_tta',
+        reportType: kta.reportType || 'KTA',
+        senderNik: kta.nik,
+        senderName: kta.name,
+        senderRole: kta.section || 'Staff',
+        allInspectorNiks: [kta.nik],
+        text: kta.description || (kta.reportType === 'TTA' ? 'Laporan Tindakan Tidak Aman (TTA)' : 'Laporan Kondisi Tidak Aman (KTA)'),
+        type: 'kta_tta',
+        imageUrl: kta.imageUrl,
+        location: kta.location || '-',
+        week: ktaWeek,
+        timestamp: kta.createdAt ? new Date(kta.createdAt).toISOString() : new Date().toISOString()
+      };
+
+      reportsList.push(dbKtaMsg);
+    });
+  } catch (err) {
+    console.error('Error reading DB kta_reports for group reports:', err);
+  }
+
+  // 4. DB inspection_proofs (Bukti Screenshot Form General Inspeksi)
+  try {
+    const dbProofs = await db.select().from(inspectionProofs);
+    dbProofs.forEach((proof: any) => {
+      const dbProofId = `insp-proof-db-${proof.id}`;
+      if (deletedReportIds.has(dbProofId)) return;
+      const proofWeek = proof.week || extractWeekTag(proof.description, '', proof.createdAt);
+      if (!isWeekAllowed(proofWeek)) return;
+
+      if (seenIds.has(dbProofId)) return;
+      seenIds.add(dbProofId);
+
+      const dbProofMsg = {
+        id: dbProofId,
+        category: 'inspeksi',
+        reportType: 'SS_GENERAL',
+        senderNik: proof.nik,
+        senderName: proof.name,
+        senderRole: proof.section || 'Staff',
+        allInspectorNiks: [proof.nik],
+        text: proof.description || 'Bukti Screenshot Form General Inspeksi',
+        type: 'ss_general',
+        imageUrl: proof.imageUrl,
+        pdfTitle: 'BUKTI SS GENERAL INSPEKSI',
+        pdfSubTitle: `Bukti Screenshot - ${proof.name}`,
+        week: proofWeek,
+        timestamp: proof.createdAt ? new Date(proof.createdAt).toISOString() : new Date().toISOString()
+      };
+
+      reportsList.push(dbProofMsg);
+    });
+  } catch (err) {
+    console.error('Error reading DB inspection_proofs for group reports:', err);
+  }
+
   reportsList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   return reportsList;
 }
@@ -325,7 +395,7 @@ router.get('/api/group-reports', async (req, res) => {
 
 router.post('/api/group-reports', async (req, res) => {
   try {
-    const { senderNik, senderName, senderRole, text, type, pdfTitle, pdfSubTitle, pdfUrl, pdfFileName, photos, inspectorNiks } = req.body;
+    const { senderNik, senderName, senderRole, text, type, category, reportType, imageUrl, pdfTitle, pdfSubTitle, pdfUrl, pdfFileName, photos, inspectorNiks } = req.body;
     
     // Extract week tag (e.g. W35, W34, etc.)
     const weekTag = extractWeekTag(pdfTitle || text, pdfFileName);
@@ -354,16 +424,21 @@ router.post('/api/group-reports', async (req, res) => {
       });
     }
 
+    const reportCategory = category || (type === 'kta_tta' ? 'kta_tta' : 'inspeksi');
+
     const newMsg = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      category: reportCategory,
+      reportType: reportType || (reportCategory === 'kta_tta' ? 'KTA' : undefined),
+      imageUrl: imageUrl || null,
       senderNik: senderNik || '02D000000',
       senderName: senderName || 'Anonim Inspektor',
       senderRole: senderRole || 'Staff',
       allInspectorNiks: Array.from(niksSet),
       text: text || '',
-      type: type || (pdfUrl ? 'pdf_report' : 'text'),
-      pdfTitle: pdfTitle || 'LAPORAN INSPEKSI TERPADU',
-      pdfSubTitle: pdfSubTitle || 'PDF Terlampir',
+      type: type || (pdfUrl ? 'pdf_report' : (imageUrl ? 'kta_tta' : 'text')),
+      pdfTitle: pdfTitle || (reportCategory === 'kta_tta' ? 'LAPORAN KTA / TTA' : 'LAPORAN INSPEKSI TERPADU'),
+      pdfSubTitle: pdfSubTitle || (reportCategory === 'kta_tta' ? 'Bukti Formulir Terlampir' : 'PDF Terlampir'),
       pdfUrl: pdfUrl || null,
       pdfFileName: pdfFileName || 'Laporan_Inspeksi_PrepLab.pdf',
       photos: photos || [],
@@ -496,265 +571,277 @@ router.post('/api/rekap-inspeksi/override-status', async (req, res) => {
   }
 });
 
+export const isExplicitCutiCode = (st?: string) => {
+  if (!st) return false;
+  const s = st.trim().toUpperCase();
+  // OFF, LS, OS, D, N, NS, WORK, P are NOT Cuti! OFF remains INCLUDED!
+  if (s === 'OFF' || s === 'LS' || s === 'OS' || s === 'D' || s === 'N' || s === 'NS' || s === 'WORK' || s === 'P') {
+    return false;
+  }
+  if (
+    s === 'C' || s === 'CUTI' || s === 'UL' || s === 'DL' || s === 'CR' || s === 'SL' || s === 'IA' || s === 'IK' || s === 'XP' ||
+    s.startsWith('CT') || s.startsWith('CE') || s.startsWith('CI') || s.startsWith('CS') || s.startsWith('TRV')
+  ) {
+    return true;
+  }
+  return false;
+};
+
+export const getDateStringsForWeek = (weekTag: string, year: number = 2026): string[] => {
+  const weekNum = parseWeekNumber(weekTag);
+  if (weekNum <= 0) return [];
+
+  const simple = new Date(year, 0, 4);
+  const dayOfWeek = (simple.getDay() + 6) % 7;
+  const week1Monday = new Date(year, 0, 4 - dayOfWeek);
+  
+  const monday = new Date(week1Monday.getTime() + (weekNum - 1) * 7 * 86400000);
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const monthNamesEng = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  const list: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const cur = new Date(monday.getTime() + i * 86400000);
+    const d = cur.getDate();
+    const m = cur.getMonth();
+    const yr = cur.getFullYear() % 100;
+    
+    list.push(`${d} ${monthNamesEng[m]} ${yr}`);
+    list.push(`${d.toString().padStart(2, '0')} ${monthNamesEng[m]} ${yr}`);
+    list.push(`${d} ${monthNames[m]} ${yr}`);
+    list.push(`${d.toString().padStart(2, '0')} ${monthNames[m]} ${yr}`);
+  }
+  return list;
+};
+
+export const isGolonganI = (emp: any): boolean => {
+  const golStr = String(emp.gol || '').trim().toUpperCase();
+  const jgStr = String(emp.jobGrade || '').trim().toUpperCase();
+  const posStr = String(emp.jabatan || emp.position || '').trim().toLowerCase();
+
+  // Broken / error spreadsheet rows (#N/A) are treated as Gol I / excluded
+  if (golStr === '#N/A' || jgStr === '#N/A' || posStr.includes('#n/a')) {
+    return true;
+  }
+
+  // 1. Check explicit Golongan I in gol column
+  if (
+    golStr === 'I' || golStr === '1' ||
+    golStr.startsWith('I.') || golStr.startsWith('1.') ||
+    golStr.startsWith('I-') || golStr.startsWith('1-') ||
+    golStr.startsWith('I/') || golStr.startsWith('1/') ||
+    golStr.startsWith('I ') || golStr.startsWith('1 ') ||
+    golStr === 'IA' || golStr === 'IB' || golStr === 'IC' || golStr === 'ID' || golStr === 'IE'
+  ) {
+    return true;
+  }
+
+  // 2. Check Job Grade for Crew Golongan I (S1.1, S1.2, S1.3, 1.1, 1.2, 1.3, S1, etc.)
+  if (
+    jgStr.startsWith('S1') || jgStr.startsWith('1.') || jgStr === '1' || 
+    jgStr.startsWith('I.') || jgStr.startsWith('I-')
+  ) {
+    return true;
+  }
+
+  // 3. Crew position without leadership title (Foreman/Supervisor/Admin/Officer/Manager/Superintendent/Specialist)
+  const isLeader = 
+    posStr.includes('foreman') || posStr.includes('supervisor') || posStr.includes('admin') || 
+    posStr.includes('officer') || posStr.includes('manager') || posStr.includes('superintendent') || 
+    posStr.includes('specialist') || posStr.includes('analyst') || posStr.includes('technician') || posStr.includes('chemist');
+
+  if (!golStr && !jgStr && !isLeader) {
+    return true;
+  }
+
+  return false;
+};
+
+export const isResignedOrInactive = (emp: any): boolean => {
+  const rawStatus = String(emp.statusKaryawan || '').trim().toUpperCase();
+  const rawStatusMess = String(emp.statusMess || '').trim().toUpperCase();
+  const rawSection = String(emp.section || '').trim().toUpperCase();
+  const rawDept = String(emp.department || '').trim().toUpperCase();
+  const rawJabatan = String(emp.jabatan || emp.position || '').trim().toUpperCase();
+  const rawNik = String(emp.nik || '').trim();
+
+  // Explicit Resign / PHK / Inactive / Keluar
+  if (
+    rawStatus.includes('RESIGN') || 
+    rawStatus.includes('PHK') || 
+    rawStatus.includes('KELUAR') || 
+    rawStatus.includes('INACTIVE') ||
+    rawStatus.includes('NONAKTIF') ||
+    rawStatus.includes('NON AKTIF') ||
+    rawStatusMess.includes('RESIGN') ||
+    rawStatusMess.includes('KELUAR')
+  ) {
+    return true;
+  }
+
+  // Spreadsheet formula error / missing master record (#N/A)
+  if (
+    rawSection.includes('#N/A') || rawSection === 'N/A' ||
+    rawDept.includes('#N/A') || rawDept === 'N/A' ||
+    rawJabatan.includes('#N/A')
+  ) {
+    return true;
+  }
+
+  // Known resigned personnel safeguard
+  if (
+    rawNik === '04D24000052' || // Fikri Lisantri Fahmi
+    rawNik === '02D23000050' || // Kevin Gibran Mamoto
+    rawNik === '04D25000062' || // M. Bagus Ihza Ai Rizki
+    rawNik === '04D25000045' || // Kevin Murheza
+    rawNik === 'M0405240291' || // Ade Wijaya
+    rawNik === 'M0210190719'    // La Ode Ali Wara
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+export async function getRekapPersonnelClassification(
+  selectedWeek: string,
+  allEmployees: any[],
+  allRoster: any[]
+) {
+  const onCutiSet = new Set<string>();
+  
+  const rosterMap = new Map<string, any[]>();
+  allRoster.forEach(r => {
+    if (r.nik) {
+      if (!rosterMap.has(r.nik)) rosterMap.set(r.nik, []);
+      rosterMap.get(r.nik)!.push(r);
+    }
+  });
+
+  const targetWeekDates = getDateStringsForWeek(selectedWeek);
+
+  // Load persistent manual overrides for this week
+  let manualOverrides: any[] = [];
+  try {
+    manualOverrides = await db.select().from(rekapManualOverrides)
+      .where(selectedWeek === 'ALL' ? undefined : eq(rekapManualOverrides.week, selectedWeek));
+  } catch (e) {}
+
+  const manualOverrideMap = new Map<string, any>();
+  manualOverrides.forEach(ov => {
+    if (ov.nik) manualOverrideMap.set(ov.nik.toLowerCase().trim(), ov);
+  });
+
+  allEmployees.forEach(emp => {
+    if (!emp.nik) return;
+    
+    const cleanNik = emp.nik.trim();
+    const nikLower = cleanNik.toLowerCase();
+
+    // 1. Check persistent manual override first
+    if (manualOverrideMap.has(nikLower)) {
+      const ov = manualOverrideMap.get(nikLower);
+      if (ov.status === 'CUTI') {
+        onCutiSet.add(cleanNik);
+        return;
+      } else if (ov.status === 'SUDAH' || ov.status === 'BELUM') {
+        // Explicitly active / not on cuti
+        return;
+      }
+    }
+
+    // Check temporary in-memory override
+    if (manualCutiOverridesMap.has(cleanNik)) {
+      if (manualCutiOverridesMap.get(cleanNik) === true) {
+        onCutiSet.add(cleanNik);
+      }
+      return;
+    }
+
+    // 2. Check employee profile status explicitly marked as CUTI
+    const sm = (emp.statusMess || '').toString().trim().toUpperCase();
+    const sk = (emp.statusKaryawan || '').toString().trim().toUpperCase();
+    
+    if (sm === 'CUTI' || sk === 'CUTI') {
+      onCutiSet.add(cleanNik);
+      return;
+    }
+
+    // 3. Check roster ONLY for target dates in selectedWeek
+    const empRosters = rosterMap.get(cleanNik);
+    if (empRosters && empRosters.length > 0 && targetWeekDates.length > 0) {
+      const weekEntries = empRosters.filter(r => targetWeekDates.includes((r.date || '').trim()));
+      if (weekEntries.length > 0) {
+        const cutiDays = weekEntries.filter(r => isExplicitCutiCode(r.status));
+        // If employee has ANY cuti day during this week, mark as Cuti!
+        if (cutiDays.length > 0) {
+          onCutiSet.add(cleanNik);
+        }
+      }
+    }
+  });
+
+  const isEligibleStaff = (emp: any) => {
+    const rawNik = (emp.nik || '').toString().trim();
+    const rawName = (emp.name || '').toString().trim();
+    if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) {
+      return false;
+    }
+
+    if (isResignedOrInactive(emp)) {
+      return false;
+    }
+
+    const nikLower = rawNik.toLowerCase();
+    const nameLower = rawName.toLowerCase();
+    const usernameLower = (emp.username || '').toString().trim().toLowerCase();
+    if (
+      nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || 
+      nikLower.includes('admin') || usernameLower.includes('admin') || nameLower.includes('admin') ||
+      nikLower === 'demo123' || nikLower === 'demo' || nikLower.includes('demo') ||
+      nameLower.includes('demo') || nameLower.includes('staging') || nameLower.includes('test') ||
+      usernameLower.includes('demo') || usernameLower.includes('staging') || usernameLower.includes('test')
+    ) {
+      return false;
+    }
+
+    const ptUpper = (emp.pt || '').toString().trim().toUpperCase();
+    const nikUpper = rawNik.toUpperCase();
+    if (ptUpper === 'GTS' || nikUpper.startsWith('03') || nikUpper.startsWith('M03') || ptUpper.includes('#N/A')) {
+      return false;
+    }
+
+    if (isGolonganI(emp)) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const targetEmployees = allEmployees.filter(emp => isEligibleStaff(emp) && !onCutiSet.has(emp.nik));
+  const cutiEmployees = allEmployees.filter(emp => isEligibleStaff(emp) && onCutiSet.has(emp.nik));
+
+  return {
+    onCutiSet,
+    manualOverrideMap,
+    targetEmployees,
+    cutiEmployees,
+  };
+}
+
 router.get('/api/rekap-inspeksi', async (req, res) => {
   try {
     const selectedWeek = (req.query.week as string) || getISOWeekTag();
     const allEmployees = await db.select().from(employees);
     const allRoster = await db.select().from(roster);
 
-    // Build Cuti Set for employees on leave based on Roster & Employee profile
-    const onCutiSet = new Set<string>();
-    
-    const rosterMap = new Map<string, any[]>();
-    allRoster.forEach(r => {
-      if (r.nik) {
-        if (!rosterMap.has(r.nik)) rosterMap.set(r.nik, []);
-        rosterMap.get(r.nik)!.push(r);
-      }
-    });
-
-    const isExplicitCutiCode = (st?: string) => {
-      if (!st) return false;
-      const s = st.trim().toUpperCase();
-      // OFF, LS, OS, D, N, NS, WORK, P are NOT Cuti! OFF remains INCLUDED!
-      if (s === 'OFF' || s === 'LS' || s === 'OS' || s === 'D' || s === 'N' || s === 'NS' || s === 'WORK' || s === 'P') {
-        return false;
-      }
-      if (
-        s === 'C' || s === 'CUTI' || s === 'UL' || s === 'DL' || s === 'CR' || s === 'SL' || s === 'IA' || s === 'IK' || s === 'XP' ||
-        s.startsWith('CT') || s.startsWith('CE') || s.startsWith('CI') || s.startsWith('CS') || s.startsWith('TRV')
-      ) {
-        return true;
-      }
-      return false;
-    };
-
-    const getDateStringsForWeek = (weekTag: string, year: number = 2026): string[] => {
-      const weekNum = parseWeekNumber(weekTag);
-      if (weekNum <= 0) return [];
-
-      const simple = new Date(year, 0, 4);
-      const dayOfWeek = (simple.getDay() + 6) % 7;
-      const week1Monday = new Date(year, 0, 4 - dayOfWeek);
-      
-      const monday = new Date(week1Monday.getTime() + (weekNum - 1) * 7 * 86400000);
-
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-      const monthNamesEng = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      
-      const list: string[] = [];
-      for (let i = 0; i < 7; i++) {
-        const cur = new Date(monday.getTime() + i * 86400000);
-        const d = cur.getDate();
-        const m = cur.getMonth();
-        const yr = cur.getFullYear() % 100;
-        
-        list.push(`${d} ${monthNamesEng[m]} ${yr}`);
-        list.push(`${d.toString().padStart(2, '0')} ${monthNamesEng[m]} ${yr}`);
-        list.push(`${d} ${monthNames[m]} ${yr}`);
-        list.push(`${d.toString().padStart(2, '0')} ${monthNames[m]} ${yr}`);
-      }
-      return list;
-    };
-
-    const targetWeekDates = getDateStringsForWeek(selectedWeek);
-
-    // Load persistent manual overrides for this week
-    let manualOverrides: any[] = [];
-    try {
-      manualOverrides = await db.select().from(rekapManualOverrides)
-        .where(selectedWeek === 'ALL' ? undefined : eq(rekapManualOverrides.week, selectedWeek));
-    } catch (e) {}
-
-    const manualOverrideMap = new Map<string, any>();
-    manualOverrides.forEach(ov => {
-      if (ov.nik) manualOverrideMap.set(ov.nik.toLowerCase().trim(), ov);
-    });
-
-    allEmployees.forEach(emp => {
-      if (!emp.nik) return;
-      
-      const cleanNik = emp.nik.trim();
-      const nikLower = cleanNik.toLowerCase();
-
-      // 1. Check persistent manual override first
-      if (manualOverrideMap.has(nikLower)) {
-        const ov = manualOverrideMap.get(nikLower);
-        if (ov.status === 'CUTI') {
-          onCutiSet.add(cleanNik);
-          return;
-        } else if (ov.status === 'SUDAH' || ov.status === 'BELUM') {
-          // Explicitly active / not on cuti
-          return;
-        }
-      }
-
-      // Check temporary in-memory override
-      if (manualCutiOverridesMap.has(cleanNik)) {
-        if (manualCutiOverridesMap.get(cleanNik) === true) {
-          onCutiSet.add(cleanNik);
-        }
-        return;
-      }
-
-      // 2. Check employee profile status explicitly marked as CUTI
-      const sm = (emp.statusMess || '').toString().trim().toUpperCase();
-      const sk = (emp.statusKaryawan || '').toString().trim().toUpperCase();
-      
-      if (sm === 'CUTI' || sk === 'CUTI') {
-        onCutiSet.add(cleanNik);
-        return;
-      }
-
-      // 3. Check roster ONLY for target dates in selectedWeek
-      const empRosters = rosterMap.get(cleanNik);
-      if (empRosters && empRosters.length > 0 && targetWeekDates.length > 0) {
-        const weekEntries = empRosters.filter(r => targetWeekDates.includes((r.date || '').trim()));
-        if (weekEntries.length > 0) {
-          const cutiDays = weekEntries.filter(r => isExplicitCutiCode(r.status));
-          // If employee has ANY cuti day during this week, mark as Cuti!
-          if (cutiDays.length > 0) {
-            onCutiSet.add(cleanNik);
-          }
-        }
-      }
-    });
-
-    const isGolonganI = (emp: any): boolean => {
-      const golStr = String(emp.gol || '').trim().toUpperCase();
-      const jgStr = String(emp.jobGrade || '').trim().toUpperCase();
-      const posStr = String(emp.jabatan || emp.position || '').trim().toLowerCase();
-
-      // Broken / error spreadsheet rows (#N/A) are treated as Gol I / excluded
-      if (golStr === '#N/A' || jgStr === '#N/A' || posStr.includes('#n/a')) {
-        return true;
-      }
-
-      // 1. Check explicit Golongan I in gol column
-      if (
-        golStr === 'I' || golStr === '1' ||
-        golStr.startsWith('I.') || golStr.startsWith('1.') ||
-        golStr.startsWith('I-') || golStr.startsWith('1-') ||
-        golStr.startsWith('I/') || golStr.startsWith('1/') ||
-        golStr.startsWith('I ') || golStr.startsWith('1 ') ||
-        golStr === 'IA' || golStr === 'IB' || golStr === 'IC' || golStr === 'ID' || golStr === 'IE'
-      ) {
-        return true;
-      }
-
-      // 2. Check Job Grade for Crew Golongan I (S1.1, S1.2, S1.3, 1.1, 1.2, 1.3, S1, etc.)
-      if (
-        jgStr.startsWith('S1') || jgStr.startsWith('1.') || jgStr === '1' || 
-        jgStr.startsWith('I.') || jgStr.startsWith('I-')
-      ) {
-        return true;
-      }
-
-      // 3. Crew position without leadership title (Foreman/Supervisor/Admin/Officer/Manager/Superintendent/Specialist)
-      const isLeader = 
-        posStr.includes('foreman') || posStr.includes('supervisor') || posStr.includes('admin') || 
-        posStr.includes('officer') || posStr.includes('manager') || posStr.includes('superintendent') || 
-        posStr.includes('specialist') || posStr.includes('analyst') || posStr.includes('technician') || posStr.includes('chemist');
-
-      if (!golStr && !jgStr && !isLeader) {
-        return true;
-      }
-
-      return false;
-    };
-
-    const isResignedOrInactive = (emp: any): boolean => {
-      const rawStatus = String(emp.statusKaryawan || '').trim().toUpperCase();
-      const rawStatusMess = String(emp.statusMess || '').trim().toUpperCase();
-      const rawSection = String(emp.section || '').trim().toUpperCase();
-      const rawDept = String(emp.department || '').trim().toUpperCase();
-      const rawJabatan = String(emp.jabatan || emp.position || '').trim().toUpperCase();
-      const rawNik = String(emp.nik || '').trim();
-
-      // Explicit Resign / PHK / Inactive / Keluar
-      if (
-        rawStatus.includes('RESIGN') || 
-        rawStatus.includes('PHK') || 
-        rawStatus.includes('KELUAR') || 
-        rawStatus.includes('INACTIVE') ||
-        rawStatus.includes('NONAKTIF') ||
-        rawStatus.includes('NON AKTIF') ||
-        rawStatusMess.includes('RESIGN') ||
-        rawStatusMess.includes('KELUAR')
-      ) {
-        return true;
-      }
-
-      // Spreadsheet formula error / missing master record (#N/A)
-      if (
-        rawSection.includes('#N/A') || rawSection === 'N/A' ||
-        rawDept.includes('#N/A') || rawDept === 'N/A' ||
-        rawJabatan.includes('#N/A')
-      ) {
-        return true;
-      }
-
-      // Known resigned personnel safeguard
-      if (
-        rawNik === '04D24000052' || // Fikri Lisantri Fahmi
-        rawNik === '02D23000050' || // Kevin Gibran Mamoto
-        rawNik === '04D25000062' || // M. Bagus Ihza Ai Rizki
-        rawNik === '04D25000045' || // Kevin Murheza
-        rawNik === 'M0405240291' || // Ade Wijaya
-        rawNik === 'M0210190719'    // La Ode Ali Wara
-      ) {
-        return true;
-      }
-
-      return false;
-    };
-
-    // Filter employees: ONLY GOL II KE ATAS (Exclude Gol I, Exclude GTS, Exclude System Admin, Exclude Cuti, Exclude Resigned & #N/A)
-    const targetEmployees = allEmployees.filter(emp => {
-      // 0. Exclude broken / spreadsheet formula error rows (#N/A) and Resigned / Inactive personnel
-      const rawNik = (emp.nik || '').toString().trim();
-      const rawName = (emp.name || '').toString().trim();
-      if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) {
-        return false;
-      }
-
-      if (isResignedOrInactive(emp)) {
-        return false;
-      }
-
-      // 1. Exclude System/Admin/Demo/Staging accounts
-      const nikLower = rawNik.toLowerCase();
-      const nameLower = rawName.toLowerCase();
-      const usernameLower = (emp.username || '').toString().trim().toLowerCase();
-      if (
-        nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || 
-        nikLower.includes('admin') || usernameLower.includes('admin') || nameLower.includes('admin') ||
-        nikLower === 'demo123' || nikLower === 'demo' || nikLower.includes('demo') ||
-        nameLower.includes('demo') || nameLower.includes('staging') || nameLower.includes('test') ||
-        usernameLower.includes('demo') || usernameLower.includes('staging') || usernameLower.includes('test')
-      ) {
-        return false;
-      }
-
-      // 2. Exclude GTS Employees ONLY (pt === GTS or NIK starts with 03 / M03). KEEP M04 / M0 (TBP & GPS)!
-      const ptUpper = (emp.pt || '').toString().trim().toUpperCase();
-      const nikUpper = rawNik.toUpperCase();
-      if (ptUpper === 'GTS' || nikUpper.startsWith('03') || nikUpper.startsWith('M03') || ptUpper.includes('#N/A')) {
-        return false;
-      }
-
-      // 3. Exclude Gol I (STRICTLY KEEP GOL II KE ATAS ONLY)
-      if (isGolonganI(emp)) {
-        return false;
-      }
-
-      // 4. Exclude Employees currently ON CUTI / LEAVE
-      if (onCutiSet.has(emp.nik)) {
-        return false;
-      }
-
-      return true;
-    });
+    const {
+      onCutiSet,
+      manualOverrideMap,
+      targetEmployees,
+      cutiEmployees
+    } = await getRekapPersonnelClassification(selectedWeek, allEmployees, allRoster);
 
     // Find all users who completed inspection for the selected week
     const completedSet = new Map<string, any>();
@@ -891,28 +978,92 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       console.error('Error scanning DB inspections for rekap:', dbErr);
     }
 
+    // 3. Scan DB `inspection_proofs` (Bukti Screenshot Form General Inspeksi)
+    const userInspectionProofsMap = new Map<string, any>();
+    const registerProof = (key: string, info: any) => {
+      if (!key) return;
+      const cleanKey = key.toString().trim().toLowerCase();
+      if (!userInspectionProofsMap.has(cleanKey)) {
+        userInspectionProofsMap.set(cleanKey, info);
+      }
+    };
+
+    try {
+      const proofsQuery = selectedWeek === 'ALL'
+        ? await db.select().from(inspectionProofs)
+        : await db.select().from(inspectionProofs).where(eq(inspectionProofs.week, selectedWeek));
+
+      proofsQuery.forEach(p => {
+        const info = {
+          id: p.id,
+          imageUrl: p.imageUrl,
+          description: p.description,
+          week: p.week,
+          timestamp: p.createdAt ? new Date(p.createdAt).toISOString() : new Date().toISOString()
+        };
+        if (p.nik) registerProof(p.nik, info);
+        if (p.name) registerProof(p.name, info);
+      });
+    } catch (proofErr) {
+      console.error('Error scanning DB inspection_proofs for rekap:', proofErr);
+    }
+
+    // Also check memory for any newly submitted SS in this session
+    groupReportsMemory.forEach(m => {
+      if (m.category === 'inspeksi' && (m.imageUrl || m.type === 'ss_general')) {
+        const msgWeek = m.week;
+        if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
+          const info = {
+            id: m.id,
+            imageUrl: m.imageUrl,
+            description: m.text || 'Bukti Screenshot Form General Inspeksi',
+            week: msgWeek,
+            timestamp: m.timestamp
+          };
+          if (m.senderNik) registerProof(m.senderNik, info);
+          if (m.senderName) registerProof(m.senderName, info);
+        }
+      }
+    });
+
     const rekapList = targetEmployees.map(emp => {
       const nikClean = (emp.nik || '').trim().toLowerCase();
       const nameClean = (emp.name || '').trim().toLowerCase();
       const override = manualOverrideMap.get(nikClean);
 
-      let isDone = completedSet.has(nikClean) || completedSet.has(nameClean);
-      let info = completedSet.get(nikClean) || completedSet.get(nameClean);
+      const hasPdf = completedSet.has(nikClean) || completedSet.has(nameClean);
+      const pdfInfo = completedSet.get(nikClean) || completedSet.get(nameClean);
+
+      const hasSs = userInspectionProofsMap.has(nikClean) || userInspectionProofsMap.has(nameClean);
+      const ssInfo = userInspectionProofsMap.get(nikClean) || userInspectionProofsMap.get(nameClean);
+
+      let isDone = false;
       let isManualOverride = false;
+
+      let checkDetails = {
+        pdfDone: hasPdf,
+        pdfUrl: pdfInfo?.pdfUrl || null,
+        pdfTitle: pdfInfo?.pdfTitle || null,
+        ssDone: hasSs,
+        ssUrl: ssInfo?.imageUrl || null,
+        ssProof: ssInfo?.imageUrl || null,
+        summaryProgress: `${(hasPdf ? 1 : 0) + (hasSs ? 1 : 0)}/2`
+      };
 
       if (override) {
         isManualOverride = true;
         if (override.status === 'SUDAH') {
           isDone = true;
-          info = {
-            timestamp: override.createdAt ? override.createdAt.toISOString() : new Date().toISOString(),
-            pdfUrl: override.pdfUrl || '#',
-            pdfTitle: override.pdfTitle || 'Diverifikasi Manual (Admin)',
-            week: selectedWeek
-          };
+          checkDetails.pdfDone = true;
+          checkDetails.ssDone = true;
+          checkDetails.summaryProgress = '2/2';
         } else if (override.status === 'BELUM') {
           isDone = false;
         }
+      } else {
+        // Kedua syarat (PDF dan Bukti SS General Inspeksi) wajib terpenuhi!
+        // Jika belum menyertakan bukti SS, statusnya belum selesai (tidak dijadikan SUDAH).
+        isDone = hasPdf && hasSs;
       }
 
       return {
@@ -927,38 +1078,16 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         status: isDone ? 'SUDAH' : 'BELUM',
         isManualOverride,
         isCuti: false,
-        completedAt: isDone ? info?.timestamp : null,
-        pdfUrl: isDone ? info?.pdfUrl : null,
-        pdfTitle: isDone ? info?.pdfTitle : null,
-        week: isDone ? info?.week : selectedWeek
+        checkDetails,
+        completedAt: isDone ? (ssInfo?.timestamp || pdfInfo?.timestamp) : null,
+        pdfUrl: pdfInfo?.pdfUrl || null,
+        pdfTitle: pdfInfo?.pdfTitle || null,
+        ssUrl: ssInfo?.imageUrl || null,
+        week: isDone ? (pdfInfo?.week || selectedWeek) : selectedWeek
       };
     });
 
     // Build Cuti list
-    const cutiEmployees = allEmployees.filter(emp => {
-      const cleanNik = (emp.nik || '').trim();
-      const rawName = (emp.name || '').trim();
-      if (!cleanNik || cleanNik.includes('#N/A') || cleanNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
-      if (isResignedOrInactive(emp)) return false;
-      const nikLower = cleanNik.toLowerCase();
-      const nameLower = rawName.toLowerCase();
-      const usernameLower = (emp.username || '').toString().trim().toLowerCase();
-      if (
-        nikLower === 'preplabadmin' || nikLower === 'admin' || nikLower === '02d000000' || 
-        nikLower.includes('admin') || usernameLower.includes('admin') || nameLower.includes('admin') ||
-        nikLower === 'demo123' || nikLower === 'demo' || nikLower.includes('demo') ||
-        nameLower.includes('demo') || nameLower.includes('staging') || nameLower.includes('test') ||
-        usernameLower.includes('demo') || usernameLower.includes('staging') || usernameLower.includes('test')
-      ) {
-        return false;
-      }
-      const ptUpper = (emp.pt || '').toString().trim().toUpperCase();
-      if (ptUpper === 'GTS' || cleanNik.toUpperCase().startsWith('03') || cleanNik.toUpperCase().startsWith('M03') || ptUpper.includes('#N/A')) return false;
-      if (isGolonganI(emp)) return false;
-
-      return onCutiSet.has(cleanNik);
-    });
-
     const cutiList = cutiEmployees.map(emp => ({
       nik: emp.nik,
       name: emp.name,
@@ -988,6 +1117,441 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     });
   } catch (err: any) {
     console.error('Error fetching rekap:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- KTA / TTA REPORT ENDPOINTS ---
+router.get('/api/kta-reports', async (req, res) => {
+  try {
+    const rawWeek = (req.query.week as string) || '';
+    if (rawWeek && rawWeek !== 'ALL') {
+      const reports = await db.select().from(ktaReports).where(eq(ktaReports.week, rawWeek)).orderBy(desc(ktaReports.createdAt));
+      return res.json(reports);
+    }
+    const reports = await db.select().from(ktaReports).orderBy(desc(ktaReports.createdAt));
+    res.json(reports);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/kta-reports', async (req, res) => {
+  try {
+    const { nik, name, section, reportType, date, week, imageUrl, description, location } = req.body;
+    if (!nik || !name || !imageUrl) {
+      return res.status(400).json({ error: 'NIK, Nama, dan Bukti Screenshot formulir wajib dilampirkan!' });
+    }
+
+    const reportWeek = week || getISOWeekTag(date ? new Date(date) : new Date());
+    const cleanType = (reportType || 'KTA').toUpperCase() === 'TTA' ? 'TTA' : 'KTA';
+    const reportDate = date || new Date().toISOString().split('T')[0];
+
+    const inserted = await db.insert(ktaReports).values({
+      nik: String(nik).trim(),
+      name: String(name).trim(),
+      section: section || 'Staff',
+      reportType: cleanType,
+      date: reportDate,
+      week: reportWeek,
+      imageUrl: String(imageUrl).trim(),
+      description: description ? String(description).trim() : '',
+      location: location ? String(location).trim() : '',
+      status: 'SUBMITTED'
+    }).returning();
+
+    const created = inserted[0];
+
+    // Push into group feed memory so it appears live in the chat/feed immediately
+    const feedMsg = {
+      id: `kta-db-${created.id}`,
+      category: 'kta_tta',
+      reportType: cleanType,
+      senderNik: created.nik,
+      senderName: created.name,
+      senderRole: created.section || 'Staff',
+      allInspectorNiks: [created.nik],
+      text: created.description || (cleanType === 'TTA' ? 'Laporan Tindakan Tidak Aman (TTA)' : 'Laporan Kondisi Tidak Aman (KTA)'),
+      type: 'kta_tta',
+      imageUrl: created.imageUrl,
+      location: created.location || '-',
+      week: created.week,
+      timestamp: created.createdAt ? new Date(created.createdAt).toISOString() : new Date().toISOString()
+    };
+    groupReportsMemory.unshift(feedMsg);
+
+    res.status(201).json(created);
+  } catch (err: any) {
+    console.error('Error submitting KTA report:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/api/kta-reports/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const numId = parseInt(id, 10);
+    if (!isNaN(numId)) {
+      await db.delete(ktaReports).where(eq(ktaReports.id, numId));
+    }
+    const memId = `kta-db-${id}`;
+    deletedReportIds.add(memId);
+    deletedReportIds.add(id);
+    const idx = groupReportsMemory.findIndex(m => m.id === memId || m.id === id);
+    if (idx !== -1) {
+      groupReportsMemory.splice(idx, 1);
+    }
+    res.json({ success: true, message: 'Laporan KTA/TTA berhasil dihapus.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/inspection-proofs', async (req, res) => {
+  try {
+    const { nik, name, section, date, week, imageUrl, description } = req.body;
+    if (!nik || !name || !imageUrl) {
+      return res.status(400).json({ error: 'NIK, Nama, dan Bukti Screenshot Form General Inspeksi wajib dilampirkan!' });
+    }
+
+    const reportWeek = week || getISOWeekTag(date ? new Date(date) : new Date());
+    const reportDate = date || new Date().toISOString().split('T')[0];
+
+    const inserted = await db.insert(inspectionProofs).values({
+      nik: String(nik).trim(),
+      name: String(name).trim(),
+      section: section || 'Preparasi & Lab',
+      date: reportDate,
+      week: reportWeek,
+      imageUrl: String(imageUrl).trim(),
+      description: description ? String(description).trim() : 'Bukti Screenshot Form General Inspeksi',
+      status: 'SUBMITTED'
+    }).returning();
+
+    const created = inserted[0];
+
+    // Push into group feed memory so it appears live in the chat/feed immediately
+    const feedMsg = {
+      id: `insp-proof-db-${created.id}`,
+      category: 'inspeksi',
+      reportType: 'SS_GENERAL',
+      senderNik: created.nik,
+      senderName: created.name,
+      senderRole: created.section || 'Staff',
+      allInspectorNiks: [created.nik],
+      text: created.description || 'Bukti Screenshot Form General Inspeksi',
+      type: 'ss_general',
+      imageUrl: created.imageUrl,
+      pdfTitle: 'BUKTI SS GENERAL INSPEKSI',
+      pdfSubTitle: `Bukti Screenshot - ${created.name}`,
+      week: created.week,
+      timestamp: created.createdAt ? new Date(created.createdAt).toISOString() : new Date().toISOString()
+    };
+    groupReportsMemory.unshift(feedMsg);
+
+    res.status(201).json(created);
+  } catch (err: any) {
+    console.error('Error submitting inspection proof:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/inspection-proofs', async (req, res) => {
+  try {
+    const selectedWeek = (req.query.week as string) || getISOWeekTag();
+    const proofs = selectedWeek === 'ALL'
+      ? await db.select().from(inspectionProofs).orderBy(desc(inspectionProofs.createdAt))
+      : await db.select().from(inspectionProofs).where(eq(inspectionProofs.week, selectedWeek)).orderBy(desc(inspectionProofs.createdAt));
+    res.json(proofs);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/api/inspection-proofs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const numId = parseInt(id, 10);
+    if (!isNaN(numId)) {
+      await db.delete(inspectionProofs).where(eq(inspectionProofs.id, numId));
+    }
+    const memId = `insp-proof-db-${id}`;
+    deletedReportIds.add(memId);
+    deletedReportIds.add(id);
+    const idx = groupReportsMemory.findIndex(m => m.id === memId || m.id === id);
+    if (idx !== -1) {
+      groupReportsMemory.splice(idx, 1);
+    }
+    res.json({ success: true, message: 'Bukti SS General Inspeksi berhasil dihapus.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- REKAPITULASI KTA / TTA MINGGUAN ---
+router.get('/api/rekap-kta', async (req, res) => {
+  try {
+    const selectedWeek = (req.query.week as string) || getISOWeekTag();
+    const allEmployees = await db.select().from(employees);
+    const allRoster = await db.select().from(roster);
+
+    const {
+      onCutiSet,
+      manualOverrideMap,
+      targetEmployees,
+      cutiEmployees
+    } = await getRekapPersonnelClassification(selectedWeek, allEmployees, allRoster);
+
+    // Query KTA reports for selected week
+    const ktaQuery = selectedWeek === 'ALL'
+      ? await db.select().from(ktaReports)
+      : await db.select().from(ktaReports).where(eq(ktaReports.week, selectedWeek));
+
+    // Map completed by NIK & Name - supports multiple reports per person
+    const userReportsMap = new Map<string, any[]>();
+    const seenReportDbIds = new Set<string>();
+
+    const addReport = (key: string, info: any) => {
+      if (!key) return;
+      const cleanKey = key.toString().trim().toLowerCase();
+      const arr = userReportsMap.get(cleanKey) || [];
+      const cleanId = String(info.id).replace('kta-db-', '');
+      if (!arr.some(r => String(r.id).replace('kta-db-', '') === cleanId)) {
+        arr.push(info);
+      }
+      userReportsMap.set(cleanKey, arr);
+    };
+
+    ktaQuery.forEach(kta => {
+      const cleanNik = (kta.nik || '').trim().toLowerCase();
+      const cleanName = (kta.name || '').trim().toLowerCase();
+      seenReportDbIds.add(String(kta.id));
+      const info = {
+        id: String(kta.id),
+        reportType: (kta.reportType || 'KTA').toUpperCase(),
+        imageUrl: kta.imageUrl,
+        description: kta.description,
+        location: kta.location,
+        status: kta.status,
+        date: kta.date,
+        week: kta.week,
+        timestamp: kta.createdAt ? new Date(kta.createdAt).toISOString() : new Date().toISOString()
+      };
+      addReport(cleanNik, info);
+      addReport(cleanName, info);
+    });
+
+    // Also check memory for newly submitted items in this session NOT yet in DB
+    groupReportsMemory.forEach(m => {
+      if (m.category === 'kta_tta' || m.type === 'kta_tta') {
+        const rawDbId = String(m.id).replace('kta-db-', '');
+        if (seenReportDbIds.has(rawDbId)) return; // Avoid counting DB reports twice!
+        const msgWeek = m.week;
+        if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
+          const info = {
+            id: String(m.id),
+            reportType: (m.reportType || 'KTA').toUpperCase(),
+            imageUrl: m.imageUrl,
+            description: m.text,
+            location: m.location,
+            status: 'SUBMITTED',
+            date: m.timestamp?.split('T')[0],
+            week: msgWeek,
+            timestamp: m.timestamp
+          };
+          if (m.senderNik) addReport(m.senderNik.toLowerCase().trim(), info);
+          if (m.senderName) addReport(m.senderName.toLowerCase().trim(), info);
+        }
+      }
+    });
+
+    function getKtaObligationServer(empNik?: string | null, jabatanRaw?: string | null, sectionRaw?: string | null) {
+      const cleanNik = (empNik || '').trim().toUpperCase();
+      // Khusus NIK revisi: 02D24000043 & M0403190701 diwajibkan 2 TTA
+      if (cleanNik === '02D24000043' || cleanNik === 'M0403190701') {
+        return { type: '2_TTA', label: '2 TTA', targetCount: 2 };
+      }
+      const j = (jabatanRaw || sectionRaw || '').toLowerCase().trim();
+      // Kategori 1: 1 KTA/TTA (Manager & Superintendent)
+      if (j.includes('manager') || j.includes('superintendent')) {
+        return { type: '1_KTA_OR_TTA', label: '1 KTA/TTA', targetCount: 1 };
+      }
+      // Kategori 3: 2 TTA (Maintenance, QA, Admin, Inventory Control)
+      if (
+        j.includes('maintenance') || 
+        j.includes('assurance') || 
+        j.includes('quality') || 
+        j.includes('quaility') || 
+        j.includes('admin') || 
+        j.includes('inventory control')
+      ) {
+        return { type: '2_TTA', label: '2 TTA', targetCount: 2 };
+      }
+      // Kategori 2: 1 KTA & 1 TTA (Laboratory & Preparation Foremen & Supervisors)
+      return { type: '1_KTA_AND_1_TTA', label: '1 KTA & 1 TTA', targetCount: 2 };
+    }
+
+    const rekapList = targetEmployees.map(emp => {
+      const nikClean = (emp.nik || '').trim().toLowerCase();
+      const nameClean = (emp.name || '').trim().toLowerCase();
+      const reports = userReportsMap.get(nikClean) || userReportsMap.get(nameClean) || [];
+      const ktaList = reports.filter(r => r.reportType === 'KTA');
+      const ttaList = reports.filter(r => r.reportType === 'TTA');
+
+      const obligation = getKtaObligationServer(emp.nik, emp.jabatan || emp.position, emp.section);
+      let isDone = false;
+      let checkDetails = {
+        check1Label: '',
+        check1Done: false,
+        check1Proof: null as string | null,
+        check2Label: '',
+        check2Done: false,
+        check2Proof: null as string | null,
+        summaryProgress: ''
+      };
+
+      if (obligation.type === '1_KTA_OR_TTA') {
+        const total = reports.length;
+        isDone = total >= 1;
+        const first = reports[0];
+        checkDetails = {
+          check1Label: first ? `${first.reportType}` : 'KTA/TTA',
+          check1Done: isDone,
+          check1Proof: first?.imageUrl || null,
+          check2Label: '',
+          check2Done: false,
+          check2Proof: null,
+          summaryProgress: isDone ? '1/1' : '0/1'
+        };
+      } else if (obligation.type === '1_KTA_AND_1_TTA') {
+        const hasKta = ktaList.length >= 1;
+        const hasTta = ttaList.length >= 1;
+        isDone = hasKta && hasTta;
+        const count = (hasKta ? 1 : 0) + (hasTta ? 1 : 0);
+        checkDetails = {
+          check1Label: 'KTA',
+          check1Done: hasKta,
+          check1Proof: ktaList[0]?.imageUrl || null,
+          check2Label: 'TTA',
+          check2Done: hasTta,
+          check2Proof: ttaList[0]?.imageUrl || null,
+          summaryProgress: `${count}/2`
+        };
+      } else if (obligation.type === '2_TTA') {
+        const count = ttaList.length;
+        isDone = count >= 2;
+        checkDetails = {
+          check1Label: 'TTA 1',
+          check1Done: count >= 1,
+          check1Proof: ttaList[0]?.imageUrl || null,
+          check2Label: 'TTA 2',
+          check2Done: count >= 2,
+          check2Proof: ttaList[1]?.imageUrl || null,
+          summaryProgress: `${Math.min(count, 2)}/2`
+        };
+      }
+
+      const isManual = reports.some(r => r.status === 'VERIFIED' || r.imageUrl === '#manual') || manualOverrideMap.get(nikClean)?.status === 'SUDAH';
+      if (isManual) {
+        isDone = true;
+        checkDetails.check1Done = true;
+        checkDetails.check2Done = true;
+        checkDetails.summaryProgress = obligation.type === '1_KTA_OR_TTA' ? '1/1' : '2/2';
+      }
+
+      return {
+        nik: emp.nik,
+        name: emp.name,
+        gol: emp.gol || 'II',
+        jobGrade: emp.jobGrade || '-',
+        section: emp.section || 'General',
+        pt: emp.pt || 'TBP',
+        jabatan: emp.jabatan || emp.position || 'Personil',
+        shift: emp.shift || 'Nonshift',
+        status: isDone ? 'SUDAH' : 'BELUM',
+        obligation,
+        checkDetails,
+        reports,
+        isManualOverride: isManual,
+        isCuti: false,
+        reportType: reports[0]?.reportType || null,
+        imageUrl: reports[0]?.imageUrl || null,
+        description: reports[0]?.description || null,
+        location: reports[0]?.location || null,
+        completedAt: isDone ? reports[0]?.timestamp : null,
+        week: selectedWeek
+      };
+    });
+
+    const cutiList = cutiEmployees.map(emp => ({
+      nik: emp.nik,
+      name: emp.name,
+      gol: emp.gol || 'II',
+      jobGrade: emp.jobGrade || '-',
+      section: emp.section || 'General',
+      pt: emp.pt || 'TBP',
+      jabatan: emp.jabatan || emp.position || 'Personil',
+      shift: emp.shift || 'Nonshift',
+      status: 'CUTI',
+      isCuti: true,
+      reportType: null,
+      imageUrl: null,
+      description: null,
+      location: null,
+      completedAt: null,
+      week: selectedWeek
+    }));
+
+    const total = rekapList.length;
+    const sudah = rekapList.filter(r => r.status === 'SUDAH').length;
+    const belum = total - sudah;
+    const percentage = total > 0 ? Math.round((sudah / total) * 100) : 0;
+
+    res.json({
+      summary: { total, sudah, belum, percentage, selectedWeek, cutiCount: cutiList.length },
+      rekapList,
+      cutiList
+    });
+  } catch (err: any) {
+    console.error('Error fetching rekap KTA:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/rekap-kta/override-status', async (req, res) => {
+  try {
+    const { week, nik, status, updatedBy } = req.body;
+    if (!nik || !week) return res.status(400).json({ error: 'NIK dan Week wajib diisi!' });
+    const cleanNik = String(nik).trim();
+    const cleanWeek = String(week).trim().toUpperCase();
+
+    const allEmployees = await db.select().from(employees);
+    const emp = allEmployees.find(e => e.nik?.trim().toLowerCase() === cleanNik.toLowerCase());
+
+    if (status === 'SUDAH') {
+      const existing = await db.select().from(ktaReports)
+        .where(and(eq(ktaReports.week, cleanWeek), eq(ktaReports.nik, cleanNik)));
+      if (existing.length === 0) {
+        await db.insert(ktaReports).values({
+          nik: cleanNik,
+          name: emp ? emp.name : 'Personil',
+          section: emp ? emp.section : 'Staff',
+          reportType: 'KTA',
+          date: new Date().toISOString().split('T')[0],
+          week: cleanWeek,
+          imageUrl: '#manual',
+          description: `Diverifikasi Manual (${updatedBy || 'Admin'})`,
+          location: '-',
+          status: 'VERIFIED',
+          verifiedBy: updatedBy || 'Admin'
+        });
+      }
+    } else if (status === 'RESET' || status === 'BELUM') {
+      await db.delete(ktaReports)
+        .where(and(eq(ktaReports.week, cleanWeek), eq(ktaReports.nik, cleanNik), eq(ktaReports.imageUrl, '#manual')));
+    }
+    res.json({ success: true, message: `Status KTA personil ${cleanNik} berhasil diubah.` });
+  } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });

@@ -40,7 +40,7 @@ export function OpenFindingsReminderModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          className="absolute top-4 right-4 p-2 rounded-full text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#0f172a)] hover:bg-[var(--input-bg,#f1f5f9)] transition-colors cursor-pointer"
           aria-label="Tutup Pengingat"
         >
           <X className="w-5 h-5" />
@@ -50,11 +50,11 @@ export function OpenFindingsReminderModal({
           {/* Header Info */}
           <div className="flex items-start gap-3.5 pr-8">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500/15 to-amber-500/15 border border-rose-500/30 flex items-center justify-center shrink-0 shadow-inner">
-              <ShieldAlert className="w-6 h-6 text-rose-600 dark:text-rose-400 animate-pulse" />
+              <ShieldAlert className="w-6 h-6 text-rose-500 animate-pulse" />
             </div>
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-extrabold uppercase tracking-wider border border-rose-500/20">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 text-[10px] font-extrabold uppercase tracking-wider border border-rose-500/25">
                   <AlertTriangle className="w-3 h-3" />
                   Action Items K3
                 </span>
@@ -68,7 +68,7 @@ export function OpenFindingsReminderModal({
                 Pengingat Temuan Terbuka (Open)
               </h3>
               <p className="text-xs text-[var(--text-muted,#64748b)]">
-                Terdapat <strong className="text-rose-600 dark:text-rose-400 font-bold">{totalItems} temuan inspeksi</strong> yang memerlukan tindakan dan penutupan tiket di area tanggung jawab Anda.
+                Terdapat <strong className="text-rose-600 font-bold">{totalItems} temuan inspeksi</strong> yang memerlukan tindakan dan penutupan tiket di area tanggung jawab Anda.
               </p>
             </div>
           </div>
@@ -79,14 +79,14 @@ export function OpenFindingsReminderModal({
               <span className="text-[10px] text-[var(--text-muted,#64748b)] uppercase font-bold tracking-wider block">
                 Penanggung Jawab (PIC Area):
               </span>
-              <span className="font-extrabold truncate block text-slate-800 dark:text-slate-100">
+              <span className="font-extrabold truncate block text-[var(--text-main,#0f172a)]">
                 {inspectorName || 'Supervisor PIC'}
               </span>
-              <span className="text-[11px] font-medium text-teal-600 dark:text-teal-400 truncate block">
+              <span className="text-[11px] font-medium text-[var(--primary,#2a9d8f)] truncate block">
                 {inspectorJabatan || 'Supervisor Area'}
               </span>
             </div>
-            <span className="px-3 py-1 rounded-full bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 font-black text-xs shrink-0 border border-rose-200 dark:border-rose-900">
+            <span className="px-3 py-1 rounded-full bg-rose-500/12 text-rose-600 font-black text-xs shrink-0 border border-rose-500/30">
               {totalItems} Open
             </span>
           </div>
@@ -108,20 +108,20 @@ export function OpenFindingsReminderModal({
               return (
                 <div
                   key={item.id || item.ticketId || idx}
-                  className="p-3 rounded-xl bg-[var(--card-bg,#ffffff)] border border-[var(--border-main,#e2e8f0)] hover:border-slate-300 dark:hover:border-slate-700 transition-all space-y-1.5 shadow-xs"
+                  className="p-3 rounded-xl bg-[var(--input-bg,#f8fafc)] border border-[var(--border-main,#e2e8f0)] hover:border-[var(--primary,#2a9d8f)] transition-all space-y-1.5 shadow-xs"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-bold font-mono text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                    <span className="text-[10px] font-bold font-mono text-[var(--text-muted,#64748b)] bg-[var(--card-bg,#ffffff)] border border-[var(--border-main,#e2e8f0)] px-2 py-0.5 rounded-md">
                       {item.ticketId || `TKT-${idx+1}`}
                     </span>
                     <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                      isHigh ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                      isHigh ? 'bg-rose-500/12 text-rose-600 border border-rose-500/30' : 'bg-amber-500/15 text-amber-700 border border-amber-500/35'
                     }`}>
                       {item.risk || item.priority || 'Medium'}
                     </span>
                   </div>
 
-                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-2 leading-snug">
+                  <p className="text-xs font-bold text-[var(--text-main,#0f172a)] line-clamp-2 leading-snug">
                     {item.description || item.finding || 'Temuan ketidaksesuaian inspeksi'}
                   </p>
 
@@ -131,7 +131,7 @@ export function OpenFindingsReminderModal({
                       <span className="truncate">{item.location || item.area || 'Area Inspeksi'}</span>
                     </span>
                     <span className="flex items-center gap-1 shrink-0 ml-auto">
-                      <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                      <Clock className="w-3 h-3 text-[var(--text-muted,#64748b)] shrink-0" />
                       {formattedDate}
                     </span>
                   </div>
@@ -140,7 +140,7 @@ export function OpenFindingsReminderModal({
             })}
 
             {totalItems > 5 && (
-              <p className="text-[11px] text-center text-slate-500 italic pt-1">
+              <p className="text-[11px] text-center text-[var(--text-muted,#64748b)] italic pt-1">
                 ... dan {totalItems - 5} temuan lainnya di area Anda
               </p>
             )}
