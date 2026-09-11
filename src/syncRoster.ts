@@ -165,41 +165,36 @@ export async function syncRosterData(): Promise<{ success: boolean; staffCount: 
       }
     }
 
-    // Reconcile: Tandai karyawan yang ada di DB tapi SUDAH TIDAK ADA di sheet sebagai 'Resign'
+    // Reconcile: Hapus bersih karyawan yang sudah Resign atau SUDAH TIDAK ADA di sheet
     let resignedCount = 0;
-    if (allActiveSheetNiks.size > 0) {
-      const allDbEmps = await db.select().from(employees);
-      const ghostNiks: string[] = [];
+    const allDbEmps = await db.select().from(employees);
+    const ghostNiks: string[] = [];
 
-      for (const emp of allDbEmps) {
-        const nik = (emp.nik || '').toUpperCase().trim();
-        const st = (emp.statusKaryawan || '').toUpperCase().trim();
-        const pt = (emp.pt || '').toUpperCase().trim();
+    for (const emp of allDbEmps) {
+      const nik = (emp.nik || '').toUpperCase().trim();
+      const st = (emp.statusKaryawan || '').toUpperCase().trim();
+      const sec = (emp.section || '').toUpperCase().trim();
+      const pt = (emp.pt || '').toUpperCase().trim();
 
-        // Kecualikan akun sistem, GTS, dan yang memang sudah Resign
-        if (
-          !nik || nik.includes('DEMO') || nik === 'PREPLABADMIN' ||
-          pt === 'GTS' || st.includes('RESIGN') || st.includes('PHK') || st.includes('KELUAR')
-        ) {
-          continue;
-        }
-
-        if (!allActiveSheetNiks.has(emp.nik)) {
-          ghostNiks.push(emp.nik);
-        }
+      // Kecualikan akun sistem dan GTS
+      if (!nik || nik.includes('DEMO') || nik === 'PREPLABADMIN' || pt === 'GTS') {
+        continue;
       }
 
-      if (ghostNiks.length > 0) {
-        console.log(`Menemukan ${ghostNiks.length} karyawan tidak lagi terdaftar di Sheet. Menandai sebagai Resign...`, ghostNiks);
-        // Update status karyawan menjadi Resign
-        await db.update(employees)
-          .set({ statusKaryawan: 'Resign' })
-          .where(inArray(employees.nik, ghostNiks));
+      const isKnownResigned = ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356'].includes(nik);
+      const isResignMark = st.includes('RESIGN') || st.includes('PHK') || st.includes('KELUAR') || sec.includes('#N/A');
+      const notInActiveSheet = allActiveSheetNiks.size > 0 && !allActiveSheetNiks.has(emp.nik);
 
-        // Hapus roster entri untuk karyawan yang sudah keluar
-        await db.delete(roster).where(inArray(roster.nik, ghostNiks));
-        resignedCount = ghostNiks.length;
+      if (isKnownResigned || isResignMark || notInActiveSheet) {
+        ghostNiks.push(emp.nik);
       }
+    }
+
+    if (ghostNiks.length > 0) {
+      console.log(`Menghapus ${ghostNiks.length} karyawan resign/keluar dari database:`, ghostNiks);
+      await db.delete(employees).where(inArray(employees.nik, ghostNiks));
+      await db.delete(roster).where(inArray(roster.nik, ghostNiks));
+      resignedCount = ghostNiks.length;
     }
 
     const cutiRes = await syncCutiTahunan();
@@ -281,7 +276,18 @@ async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; r
     const rawSection = config.colSection !== -1 ? (row[config.colSection] || '').trim() : '';
     const isSectionNA = rawSection.includes('#N/A') || rawSection.toUpperCase() === 'N/A';
     const isJobGradeNA = config.colJobGrade !== -1 && (row[config.colJobGrade] || '').includes('#N/A');
-    const isResigned = isSectionNA || isJobGradeNA || ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'].includes(nik);
+    const isJabatanNA = config.colJabatan !== -1 && (row[config.colJabatan] || '').includes('#N/A');
+    const isNameNA = rawName.includes('#N/A') || rawName.toUpperCase() === 'N/A';
+    const rawStatusKontrak = config.colStatusKontrak !== -1 ? (row[config.colStatusKontrak] || '').trim().toUpperCase() : '';
+    const rawStatusMess = config.colStatusMess !== -1 ? (row[config.colStatusMess] || '').trim().toUpperCase() : '';
+    const isResignedSheet = rawStatusKontrak.includes('RESIGN') || rawStatusMess.includes('RESIGN');
+    const isKnownResigned = ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356'].includes(nik);
+
+    const isResigned = isSectionNA || isJobGradeNA || isJabatanNA || isNameNA || isResignedSheet || isKnownResigned;
+    if (isResigned) {
+      // JANGAN masukkan karyawan resign ke dalam DB meskipun ada di dalam spreadsheet
+      continue;
+    }
 
     const empData: any = {
       nik,
@@ -298,7 +304,7 @@ async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; r
       tanggalAwalBergabung: config.colTanggalAwalBergabung !== -1 ? (row[config.colTanggalAwalBergabung] || '').trim() : '',
       tanggalBergabungTerbaru: config.colTanggalBergabungTerbaru !== -1 ? (row[config.colTanggalBergabungTerbaru] || '').trim() : '',
       statusKontrak: config.colStatusKontrak !== -1 ? (row[config.colStatusKontrak] || '').trim() : '',
-      statusKaryawan: isResigned ? 'Resign' : 'Active',
+      statusKaryawan: 'Active',
       department: rawSection || currentSection, 
       position: config.colJabatan !== -1 ? (row[config.colJabatan] || '').trim() : '',
     };

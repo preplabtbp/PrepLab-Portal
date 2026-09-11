@@ -67,11 +67,15 @@ router.get("/api/admin/tables/:name", async (req, res) => {
           const nik = (row.nik || '').toString().toUpperCase();
           const name = (row.name || '').toString().toLowerCase();
           const username = (row.username || '').toString().toLowerCase();
+          const stStr = (row.statusKaryawan || '').toString().toUpperCase();
+          const secStr = (row.section || '').toString().toUpperCase();
+          const isResigned = stStr.includes('RESIGN') || stStr.includes('PHK') || stStr.includes('KELUAR') ||
+            secStr.includes('#N/A') || ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356'].includes(nik);
           if (
             nik === 'DEMO123' || nik === 'DEMO' || nik.includes('DEMO') ||
             name.includes('user demo') || name.includes('demo staging') || name.includes('staging') ||
             username.includes('demo') || username.includes('staging') ||
-            nik === 'PREPLABADMIN' || nik.includes('#N/A') || name.includes('#N/A')
+            nik === 'PREPLABADMIN' || nik.includes('#N/A') || name.includes('#N/A') || isResigned
           ) {
             return false;
           }
@@ -188,9 +192,11 @@ router.delete("/api/admin/tables/:name/:id", async (req, res) => {
 router.post("/api/admin/sync-roster", async (req, res) => {
   try {
     const { syncRosterData } = await import("../../src/syncRoster.js");
-    await syncRosterData();
-    res.json({ message: "Sync berhasil" });
-  } catch (e) {
-    res.status(500).json({ error: "Gagal sync" });
+    const result = await syncRosterData();
+    invalidateAdminTableCache('employees');
+    invalidateAdminTableCache('roster');
+    res.json({ message: "Sync berhasil", ...result });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "Gagal sync" });
   }
 });

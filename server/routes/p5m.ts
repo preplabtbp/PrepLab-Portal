@@ -797,6 +797,16 @@ p5mRouter.get("/pool", async (req, res) => {
         return null;
       }
 
+      // Strictly exclude resigned employees
+      const stStr = (emp.statusKaryawan || '').toUpperCase().trim();
+      const secStr = (emp.section || '').toUpperCase().trim();
+      const jgStr = (emp.jobGrade || '').toUpperCase().trim();
+      const empNik = (emp.nik || '').toUpperCase().trim();
+      const isResigned = stStr.includes('RESIGN') || stStr.includes('PHK') || stStr.includes('KELUAR') ||
+        secStr.includes('#N/A') || jgStr.includes('#N/A') ||
+        ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356'].includes(empNik);
+      if (isResigned) return null;
+
       // 2. STRICT PT FILTERING RULE:
       const empPt = (emp.pt || '').toUpperCase().trim();
       if (userPt === 'TBP' || userPt === 'GPS' || userPt === 'TBP_GPS') {
@@ -894,6 +904,16 @@ p5mRouter.post("/randomize", async (req, res) => {
     const poolKaryawan = allEmps.map(emp => {
       // 1. Strict Golongan 2 & 3
       if (!isGolongan2or3(emp)) return null;
+
+      // Strictly exclude resigned employees
+      const stStr = (emp.statusKaryawan || '').toUpperCase().trim();
+      const secStr = (emp.section || '').toUpperCase().trim();
+      const jgStr = (emp.jobGrade || '').toUpperCase().trim();
+      const empNik = (emp.nik || '').toUpperCase().trim();
+      const isResigned = stStr.includes('RESIGN') || stStr.includes('PHK') || stStr.includes('KELUAR') ||
+        secStr.includes('#N/A') || jgStr.includes('#N/A') ||
+        ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356'].includes(empNik);
+      if (isResigned) return null;
 
       // 2. Strict PT Filter
       const empPt = (emp.pt || '').toUpperCase().trim();

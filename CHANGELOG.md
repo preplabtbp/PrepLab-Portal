@@ -2,6 +2,19 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.25] - 2026-09-12
+
+### 🚫 Penegakan Mutlak: Larangan Masuk Karyawan Resign ke Database & Pembersihan Otomatis
+
+- **Pencegahan Insert Baris Resign dari Spreadsheet (`src/syncRoster.ts`)**:
+  - Baris karyawan pada Google Spreadsheet yang memiliki indikator `#N/A` (Section, JobGrade, Jabatan), status kontrak/mess `Resign`, atau terdaftar dalam daftar NIK resign kini **DIPERLAKUKAN SEBAGAI SKIP MUTLAK**.
+  - Baris tersebut sama sekali **TIDAK AKAN dimasukkan atau di-upsert ulang ke tabel `employees`**, sehingga karyawan yang telah dihapus admin tidak akan pernah muncul kembali di database.
+- **Pembersihan Bersih (Hard Delete) Karyawan Resign**:
+  - Logika rekonsiliasi sinkronisasi roster diperbarui dari yang sebelumnya hanya mengubah status menjadi `Resign` kini secara langsung **MENGHAPUS (Delete)** karyawan resign beserta entri jadwal rosternya dari database.
+  - Telah dilakukan pembersihan database secara menyeluruh terhadap 19 record karyawan berstatus resign/keluar.
+- **Pencegahan Karyawan Resign Terpilih di Jadwal P5M (`server/routes/p5m.ts`)**:
+  - Filter pada rute `/api/p5m/pool` dan `/api/p5m/randomize` diperketat dengan validasi karyawan resign, menjamin generator acak P5M tidak akan pernah menugaskan materi/senam kepada mantan karyawan.
+
 ## [2.8.24] - 2026-09-12
 
 ### 🔄 Sinkronisasi Jadwal Multi-Sheet Google Sheets & Transisi Roster Pekan Baru (Week 38)
