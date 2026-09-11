@@ -2,6 +2,21 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.24] - 2026-09-12
+
+### 🔄 Sinkronisasi Jadwal Multi-Sheet Google Sheets & Transisi Roster Pekan Baru (Week 38)
+
+- **Penargetan Eksplisit Sheet `CurrentWeek`**:
+  - Mengubah URL GViz penarik data dari `&gid=0` menjadi penargetan eksplisit nama sheet `&sheet=CurrentWeek`.
+  - Memastikan jadwal aktif selalu terbaca tepat dari tab `CurrentWeek` meskipun pengguna menduplikasi, membuat tab baru, atau memindahkan urutan sheet di Google Spreadsheet.
+- **Dukungan Sheet Rekapan Riwayat (Misal: `Week 37`)**:
+  - Backend `/api/inspection-schedule` kini menerima parameter `?sheet=...` dan `?week=...`, dilengkapi cache terpisah per sheet (`scheduleCacheMap` dan `enrichedScheduleCacheMap`).
+  - Modal **Matriks Jadwal Inspeksi Terpadu** kini dilengkapi tombol pemilihan sheet interaktif:
+    - **`[⚡ CurrentWeek (W38 Aktif)]`**: Memuat roster pekan aktif berjalan.
+    - **`[⏮️ Week 37 (Rekapan Lalu)]`**: Memuat lembar arsip rekapan jadwal minggu sebelumnya.
+- **Transisi Roster Akhir Pekan (Weekend Advance to W38)**:
+  - Penjadwalan mingguan yang diperbarui pada akhir pekan (Sabtu & Minggu) otomatis dihitung sebagai pekan yang dituju (**Week 38**), sehingga personil yang mengecek jadwal langsung melihat label periode yang tepat (**W38**) dan pencocokan inspeksi/bukti SS tersinkronisasi akurat tanpa menunggu pergantian hari Senin.
+
 ## [2.8.23] - 2026-09-11
 
 ### ✨ Tampilan Kartu Home Screen: Mode Ringkas (Minimize) Estetis & Terpadu

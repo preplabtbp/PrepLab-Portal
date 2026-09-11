@@ -53,8 +53,12 @@ interface InspectionScheduleCardProps {
   onNavigateToKta?: () => void;
 }
 
-function getLocalISOWeekTag(d: Date = new Date()): string {
+function getLocalISOWeekTag(d: Date = new Date(), advanceOnWeekend = true): string {
   const date = new Date(d.getTime());
+  if (advanceOnWeekend && (date.getDay() === 0 || date.getDay() === 6)) {
+    const daysToAdd = date.getDay() === 6 ? 2 : 1;
+    date.setDate(date.getDate() + daysToAdd);
+  }
   date.setHours(0, 0, 0, 0);
   date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
   const week1 = new Date(date.getFullYear(), 0, 4);
@@ -72,7 +76,7 @@ export function InspectionScheduleCard({
   onNavigateToInspection,
   onNavigateToKta 
 }: InspectionScheduleCardProps) {
-  const currentWeekTag = useMemo(() => getLocalISOWeekTag(new Date()), []);
+  const [currentWeekTag, setCurrentWeekTag] = useState<string>(() => getLocalISOWeekTag(new Date(), true));
 
   // Instant SWR Hydration: Render immediately from cache if available (0ms load time)
   const [mySchedule, setMySchedule] = useState<ScheduleItem | null>(() => {
@@ -102,6 +106,8 @@ export function InspectionScheduleCard({
   const [showFullScheduleModal, setShowFullScheduleModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterShift, setFilterShift] = useState<string>('all');
+  const [selectedSheet, setSelectedSheet] = useState<string>('CurrentWeek');
+  const [loadingSheet, setLoadingSheet] = useState<boolean>(false);
 
   // Status Bukti SS General Inspeksi (Cached)
   const [hasSsProof, setHasSsProof] = useState<boolean>(() => {
@@ -321,6 +327,9 @@ export function InspectionScheduleCard({
       const res = await fetch(`/api/inspection-schedule?${q.toString()}`);
       if (res.ok) {
         const json = await res.json();
+        if (json.week && json.week !== currentWeekTag) {
+          setCurrentWeekTag(json.week);
+        }
         if (json.found && json.schedule) {
           setMySchedule(json.schedule);
           try { localStorage.setItem('p2h_cached_my_schedule', JSON.stringify(json.schedule)); } catch {}
@@ -358,6 +367,25 @@ export function InspectionScheduleCard({
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const handleSwitchModalSheet = async (sheet: string) => {
+    if (sheet === selectedSheet && !loadingSheet) return;
+    setSelectedSheet(sheet);
+    setLoadingSheet(true);
+    try {
+      const res = await fetch(`/api/inspection-schedule?sheet=${encodeURIComponent(sheet)}&refresh=true`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.data) {
+          setAllSchedules(json.data);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to switch sheet:', err);
+    } finally {
+      setLoadingSheet(false);
     }
   };
 
@@ -1924,20 +1952,51 @@ export function InspectionScheduleCard({
               </div>
             </div>
 
-            {/* Filter & Search Bar */}
-            <div className="p-3 sm:p-4 border-b border-[var(--border-main)] bg-slate-50/80 dark:bg-slate-900/60 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-              <div className="relative w-full sm:w-80">
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Cari nama personil, jabatan, atau area inspeksi..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all shadow-2xs"
-                />
+            {/* Sheet & Filter Bar */}
+            <div className="p-3 sm:p-4 border-b border-[var(--border-main)] bg-slate-50/80 dark:bg-slate-900/60 flex flex-col gap-2.5 shrink-0">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="relative w-full sm:w-80">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama personil, jabatan, atau area inspeksi..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all shadow-2xs"
+                  />
+                </div>
+
+                {/* Tab Week / Sheet Selector */}
+                <div className="flex items-center gap-1 p-1 bg-slate-200/70 dark:bg-slate-800/80 rounded-xl w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchModalSheet('CurrentWeek')}
+                    disabled={loadingSheet}
+                    className={`flex-1 sm:flex-initial px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      selectedSheet === 'CurrentWeek'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <span>⚡ CurrentWeek (W38 Aktif)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchModalSheet('Week 37')}
+                    disabled={loadingSheet}
+                    className={`flex-1 sm:flex-initial px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      selectedSheet === 'Week 37'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <span>⏮️ Week 37 (Rekapan Lalu)</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+              {/* Shift Tabs */}
+              <div className="flex items-center gap-1.5 w-full overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
                 {[
                   { id: 'all', label: 'Semua' },
                   { id: 'siang', label: 'Shift Siang' },
