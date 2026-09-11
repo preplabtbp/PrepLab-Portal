@@ -103,20 +103,22 @@ export function InspectionScheduleCard({
   const [ktaImagePreview, setKtaImagePreview] = useState<string | null>(null);
   const [isSubmittingKta, setIsSubmittingKta] = useState(false);
 
-  // Minimize / Compact Mode States (Persisted in localStorage)
+  // Minimize / Compact Mode States (Persisted in localStorage, default: ringkas / true)
   const [isScheduleMinimized, setIsScheduleMinimized] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('p2h_schedule_card_minimized') === 'true';
+      const saved = localStorage.getItem('p2h_schedule_card_minimized');
+      return saved !== null ? saved === 'true' : true;
     } catch {
-      return false;
+      return true;
     }
   });
 
   const [isKtaMinimized, setIsKtaMinimized] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('p2h_kta_card_minimized') === 'true';
+      const saved = localStorage.getItem('p2h_kta_card_minimized');
+      return saved !== null ? saved === 'true' : true;
     } catch {
-      return false;
+      return true;
     }
   });
 
