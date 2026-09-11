@@ -74,21 +74,67 @@ export function InspectionScheduleCard({
 }: InspectionScheduleCardProps) {
   const currentWeekTag = useMemo(() => getLocalISOWeekTag(new Date()), []);
 
-  const [loading, setLoading] = useState(true);
+  // Instant SWR Hydration: Render immediately from cache if available (0ms load time)
+  const [mySchedule, setMySchedule] = useState<ScheduleItem | null>(() => {
+    try {
+      const saved = localStorage.getItem('p2h_cached_my_schedule');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem('p2h_cached_my_schedule');
+    } catch {
+      return true;
+    }
+  });
   const [refreshing, setRefreshing] = useState(false);
-  const [mySchedule, setMySchedule] = useState<ScheduleItem | null>(null);
-  const [allSchedules, setAllSchedules] = useState<ScheduleItem[]>([]);
+  const [allSchedules, setAllSchedules] = useState<ScheduleItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('p2h_cached_all_schedules');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [showFullScheduleModal, setShowFullScheduleModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterShift, setFilterShift] = useState<string>('all');
 
-  // Status Bukti SS General Inspeksi
-  const [hasSsProof, setHasSsProof] = useState<boolean>(false);
-  const [ssProofUrl, setSsProofUrl] = useState<string | null>(null);
+  // Status Bukti SS General Inspeksi (Cached)
+  const [hasSsProof, setHasSsProof] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('p2h_cached_has_ss_proof') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [ssProofUrl, setSsProofUrl] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('p2h_cached_ss_proof_url') || null;
+    } catch {
+      return null;
+    }
+  });
 
-  // Status Rekap KTA / TTA
-  const [ktaLoading, setKtaLoading] = useState(true);
-  const [myKtaRecord, setMyKtaRecord] = useState<any | null>(null);
+  // Status Rekap KTA / TTA (Cached)
+  const [ktaLoading, setKtaLoading] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem('p2h_cached_kta_record');
+    } catch {
+      return true;
+    }
+  });
+  const [myKtaRecord, setMyKtaRecord] = useState<any | null>(() => {
+    try {
+      const saved = localStorage.getItem('p2h_cached_kta_record');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   // Modal Upload Bukti SS State
   const [showSsModal, setShowSsModal] = useState(false);
@@ -198,9 +244,17 @@ export function InspectionScheduleCard({
         if (found) {
           setHasSsProof(true);
           setSsProofUrl(found.imageUrl || null);
+          try {
+            localStorage.setItem('p2h_cached_has_ss_proof', 'true');
+            if (found.imageUrl) localStorage.setItem('p2h_cached_ss_proof_url', found.imageUrl);
+          } catch {}
         } else {
           setHasSsProof(false);
           setSsProofUrl(null);
+          try {
+            localStorage.setItem('p2h_cached_has_ss_proof', 'false');
+            localStorage.removeItem('p2h_cached_ss_proof_url');
+          } catch {}
         }
       }
     } catch (e) {
@@ -208,11 +262,11 @@ export function InspectionScheduleCard({
     }
   };
 
-  // Fetch KTA Status from /api/rekap-kta
-  const fetchKtaStatus = async () => {
-    setKtaLoading(true);
+  // Fetch KTA Status from /api/rekap-kta with silent background update
+  const fetchKtaStatus = async (force = false) => {
+    if (!myKtaRecord && !force) setKtaLoading(true);
     try {
-      const res = await fetch(`/api/rekap-kta?week=${currentWeekTag}`);
+      const res = await fetch(`/api/rekap-kta?week=${currentWeekTag}${force ? '&refresh=true' : ''}`);
       if (res.ok) {
         const json = await res.json();
         const cleanNik = (inspectorNik || '').trim().toLowerCase();
@@ -230,13 +284,21 @@ export function InspectionScheduleCard({
           return (cleanNik && cNik === cleanNik) || (cleanName && (cName.includes(cleanName) || cleanName.includes(cName)));
         });
 
+        let targetRecord: any = null;
         if (cutiMatch) {
-          setMyKtaRecord({ ...cutiMatch, isCuti: true, status: 'CUTI' });
+          targetRecord = { ...cutiMatch, isCuti: true, status: 'CUTI' };
         } else if (match) {
-          setMyKtaRecord(match);
-        } else {
-          setMyKtaRecord(null);
+          targetRecord = match;
         }
+
+        setMyKtaRecord(targetRecord);
+        try {
+          if (targetRecord) {
+            localStorage.setItem('p2h_cached_kta_record', JSON.stringify(targetRecord));
+          } else {
+            localStorage.removeItem('p2h_cached_kta_record');
+          }
+        } catch {}
       }
     } catch (e) {
       console.warn('Failed to fetch KTA status:', e);
@@ -247,7 +309,7 @@ export function InspectionScheduleCard({
 
   const fetchSchedule = async (forceRefresh = false) => {
     if (forceRefresh) setRefreshing(true);
-    else setLoading(true);
+    else if (!mySchedule) setLoading(true);
 
     try {
       const q = new URLSearchParams();
@@ -261,24 +323,35 @@ export function InspectionScheduleCard({
         const json = await res.json();
         if (json.found && json.schedule) {
           setMySchedule(json.schedule);
+          try { localStorage.setItem('p2h_cached_my_schedule', JSON.stringify(json.schedule)); } catch {}
           if (json.schedule.hasSsProof) {
             setHasSsProof(true);
-            if (json.schedule.ssProofUrl) setSsProofUrl(json.schedule.ssProofUrl);
+            try { localStorage.setItem('p2h_cached_has_ss_proof', 'true'); } catch {}
+            if (json.schedule.ssProofUrl) {
+              setSsProofUrl(json.schedule.ssProofUrl);
+              try { localStorage.setItem('p2h_cached_ss_proof_url', json.schedule.ssProofUrl); } catch {}
+            }
           }
         } else {
           setMySchedule(null);
+          try { localStorage.removeItem('p2h_cached_my_schedule'); } catch {}
         }
       }
 
-      // Pre-fetch all schedules for modal viewer if user is admin or dev
+      // Immediately unblock personal card UI
+      setLoading(false);
+
+      // Pre-fetch all schedules for modal viewer in background WITHOUT blocking UI
       if (hasAdminAccess) {
-        const resAll = await fetch(`/api/inspection-schedule${forceRefresh ? '?refresh=true' : ''}`);
-        if (resAll.ok) {
-          const jsonAll = await resAll.json();
-          if (jsonAll.data) {
-            setAllSchedules(jsonAll.data);
-          }
-        }
+        fetch(`/api/inspection-schedule${forceRefresh ? '?refresh=true' : ''}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(jsonAll => {
+            if (jsonAll?.data) {
+              setAllSchedules(jsonAll.data);
+              try { localStorage.setItem('p2h_cached_all_schedules', JSON.stringify(jsonAll.data)); } catch {}
+            }
+          })
+          .catch(() => {});
       }
     } catch (e) {
       console.error('Failed to fetch inspection schedule:', e);

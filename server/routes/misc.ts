@@ -17,6 +17,7 @@ import {
 } from "../utils.js";
 import webpush from 'web-push';
 import path from "path";
+import { invalidateScheduleCache } from "./inspections.js";
 
 export const router = Router();
 
@@ -1180,6 +1181,7 @@ router.post('/api/kta-reports', async (req, res) => {
     };
     groupReportsMemory.unshift(feedMsg);
 
+    invalidateRekapKtaCache();
     res.status(201).json(created);
   } catch (err: any) {
     console.error('Error submitting KTA report:', err);
@@ -1201,6 +1203,7 @@ router.delete('/api/kta-reports/:id', async (req, res) => {
     if (idx !== -1) {
       groupReportsMemory.splice(idx, 1);
     }
+    invalidateRekapKtaCache();
     res.json({ success: true, message: 'Laporan KTA/TTA berhasil dihapus.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1249,6 +1252,7 @@ router.post('/api/inspection-proofs', async (req, res) => {
     };
     groupReportsMemory.unshift(feedMsg);
 
+    invalidateScheduleCache();
     res.status(201).json(created);
   } catch (err: any) {
     console.error('Error submitting inspection proof:', err);
@@ -1282,16 +1286,36 @@ router.delete('/api/inspection-proofs/:id', async (req, res) => {
     if (idx !== -1) {
       groupReportsMemory.splice(idx, 1);
     }
+    invalidateScheduleCache();
     res.json({ success: true, message: 'Bukti SS General Inspeksi berhasil dihapus.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// --- CACHING REKAP KTA ---
+interface RekapKtaCacheEntry {
+  data: any;
+  timestamp: number;
+}
+const rekapKtaCache = new Map<string, RekapKtaCacheEntry>();
+const REKAP_KTA_CACHE_TTL = 60 * 1000; // 60 seconds
+
+export function invalidateRekapKtaCache() {
+  rekapKtaCache.clear();
+}
+
 // --- REKAPITULASI KTA / TTA MINGGUAN ---
 router.get('/api/rekap-kta', async (req, res) => {
   try {
     const selectedWeek = (req.query.week as string) || getISOWeekTag();
+    const forceRefresh = req.query.refresh === 'true';
+
+    const cached = rekapKtaCache.get(selectedWeek);
+    if (!forceRefresh && cached && (Date.now() - cached.timestamp < REKAP_KTA_CACHE_TTL)) {
+      return res.json(cached.data);
+    }
+
     const allEmployees = await db.select().from(employees);
     const allRoster = await db.select().from(roster);
 
@@ -1507,11 +1531,14 @@ router.get('/api/rekap-kta', async (req, res) => {
     const belum = total - sudah;
     const percentage = total > 0 ? Math.round((sudah / total) * 100) : 0;
 
-    res.json({
+    const responsePayload = {
       summary: { total, sudah, belum, percentage, selectedWeek, cutiCount: cutiList.length },
       rekapList,
       cutiList
-    });
+    };
+    rekapKtaCache.set(selectedWeek, { data: responsePayload, timestamp: Date.now() });
+
+    res.json(responsePayload);
   } catch (err: any) {
     console.error('Error fetching rekap KTA:', err);
     res.status(500).json({ error: err.message });
@@ -1550,6 +1577,7 @@ router.post('/api/rekap-kta/override-status', async (req, res) => {
       await db.delete(ktaReports)
         .where(and(eq(ktaReports.week, cleanWeek), eq(ktaReports.nik, cleanNik), eq(ktaReports.imageUrl, '#manual')));
     }
+    invalidateRekapKtaCache();
     res.json({ success: true, message: `Status KTA personil ${cleanNik} berhasil diubah.` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

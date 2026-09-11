@@ -438,6 +438,7 @@ router.post("/api/inspections/universal", async (req, res) => {
         await db.update(inspections as any).set({ pdfUrl: storedPdfVal }).where(eq(inspections.id, result[0].id));
       }
 
+      invalidateScheduleCache();
       res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl: driveTbpUrl, linkPdf2: driveGpsUrl, waMessageText });
     } catch (error: any) {
       console.error(error);
@@ -1299,7 +1300,18 @@ export function mapInspectionToFormInfo(name: string): { formId: string; tipe: s
 
 let cachedSchedule: any[] | null = null;
 let lastScheduleFetchTime = 0;
-const SCHEDULE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+const SCHEDULE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+let cachedEnrichedSchedule: any[] | null = null;
+let lastEnrichedFetchTime = 0;
+const ENRICHED_CACHE_TTL = 60 * 1000; // 60 seconds
+
+export function invalidateScheduleCache() {
+  cachedSchedule = null;
+  lastScheduleFetchTime = 0;
+  cachedEnrichedSchedule = null;
+  lastEnrichedFetchTime = 0;
+}
 
 async function fetchInspectionScheduleFromSheet(forceRefresh = false) {
   const now = Date.now();
@@ -1442,11 +1454,31 @@ function getISOWeekTagForSchedule(d: Date = new Date()): string {
   return `W${weekNum}`;
 }
 
+let cachedAllEmployees: any[] | null = null;
+let lastAllEmployeesTime = 0;
+const EMPLOYEES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+export async function getAllEmployeesCached(force = false): Promise<any[]> {
+  const now = Date.now();
+  if (!force && cachedAllEmployees && (now - lastAllEmployeesTime < EMPLOYEES_CACHE_TTL)) {
+    return cachedAllEmployees;
+  }
+  const emps = await db.select().from(employees);
+  cachedAllEmployees = emps;
+  lastAllEmployeesTime = now;
+  return emps;
+}
+
 async function enrichSchedulesWithCompletion(schedules: any[]): Promise<any[]> {
   try {
     const currentWeekTag = getISOWeekTagForSchedule(new Date());
-    // Get recent inspections from DB (ordered by latest)
-    const recentInspections = await db.select().from(inspections).orderBy(desc(inspections.date)).limit(150);
+
+    // Execute queries in parallel for high performance over remote SQL
+    const [recentInspections, allEmps, allProofs] = await Promise.all([
+      db.select().from(inspections).orderBy(desc(inspections.date)).limit(150),
+      getAllEmployeesCached(),
+      db.select().from(inspectionProofs).where(eq(inspectionProofs.week, currentWeekTag))
+    ]);
 
     // Filter inspections belonging to current ISO week
     const currentWeekInspections = recentInspections.filter(insp => {
@@ -1454,7 +1486,6 @@ async function enrichSchedulesWithCompletion(schedules: any[]): Promise<any[]> {
       return getISOWeekTagForSchedule(new Date(insp.date)) === currentWeekTag;
     });
 
-    const allEmps = await db.select().from(employees);
     const empNameToNik = new Map<string, string>();
     allEmps.forEach(e => {
       if (e.name && e.nik) {
@@ -1465,6 +1496,8 @@ async function enrichSchedulesWithCompletion(schedules: any[]): Promise<any[]> {
     for (const s of schedules) {
       if (!s || s.isCuti) {
         s.isCompleted = false;
+        s.hasSsProof = false;
+        s.ssProofUrl = null;
         continue;
       }
 
@@ -1473,6 +1506,17 @@ async function enrichSchedulesWithCompletion(schedules: any[]): Promise<any[]> {
       const sInspeksi = (s.inspeksi || '').toLowerCase();
       const sSubArea = (s.formInfo?.subArea || '').toLowerCase();
       const sFormTitle = (s.formInfo?.formTitle || '').toLowerCase();
+
+      // Attach SS proof info for this person
+      const pMatch = allProofs.find(p => {
+        const pNik = (p.nik || '').trim().toLowerCase();
+        const pName = (p.name || '').trim().toLowerCase();
+        return personNames.some(target => pNik === target || pName.includes(target) || target.includes(pName)) ||
+               personNiks.some(target => pNik === target);
+      });
+      s.hasSsProof = !!pMatch;
+      s.ssProofUrl = pMatch?.imageUrl || null;
+      s.ssProofDate = pMatch?.date || null;
 
       let matchedStrict: any = null;
       let matchedAny: any = null;
@@ -1561,13 +1605,24 @@ router.get("/api/inspection-schedule", async (req, res) => {
     const queryName = typeof req.query.name === 'string' ? req.query.name.trim().toLowerCase() : '';
     const queryNik = typeof req.query.nik === 'string' ? req.query.nik.trim().toLowerCase() : '';
 
-    const allSchedules = await fetchInspectionScheduleFromSheet(forceRefresh);
-    await enrichSchedulesWithCompletion(allSchedules);
+    const now = Date.now();
+    let allSchedules: any[];
+    if (!forceRefresh && cachedEnrichedSchedule && (now - lastEnrichedFetchTime < ENRICHED_CACHE_TTL)) {
+      allSchedules = cachedEnrichedSchedule;
+    } else {
+      const rawSchedules = await fetchInspectionScheduleFromSheet(forceRefresh);
+      const cloned = JSON.parse(JSON.stringify(rawSchedules));
+      allSchedules = await enrichSchedulesWithCompletion(cloned);
+      cachedEnrichedSchedule = allSchedules;
+      lastEnrichedFetchTime = now;
+    }
 
     if (queryName || queryNik) {
       let searchNames = [queryName];
       if (queryNik) {
-        const [emp] = await db.select().from(employees).where(eq(employees.nik, queryNik)).limit(1);
+        const allEmps = await getAllEmployeesCached();
+        const cleanNik = queryNik.toLowerCase().trim();
+        const emp = allEmps.find(e => e.nik?.toLowerCase().trim() === cleanNik);
         if (emp && emp.name) {
           searchNames.push(emp.name.toLowerCase());
         }
@@ -1584,23 +1639,6 @@ router.get("/api/inspection-schedule", async (req, res) => {
           return false;
         });
       });
-
-      if (matched) {
-        try {
-          const currentWeekTag = getISOWeekTagForSchedule(new Date());
-          const proofs = await db.select().from(inspectionProofs).where(eq(inspectionProofs.week, currentWeekTag));
-          const pMatch = proofs.find(p => {
-            const pNik = (p.nik || '').trim().toLowerCase();
-            const pName = (p.name || '').trim().toLowerCase();
-            return searchNames.some(target => pNik === target || pName.includes(target) || target.includes(pName));
-          });
-          matched.hasSsProof = !!pMatch;
-          matched.ssProofUrl = pMatch?.imageUrl || null;
-          matched.ssProofDate = pMatch?.date || null;
-        } catch (proofErr) {
-          console.warn('Error attaching SS proof to schedule:', proofErr);
-        }
-      }
 
       return res.json({
         found: !!matched,
