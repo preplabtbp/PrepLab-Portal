@@ -2,6 +2,19 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.23] - 2026-09-11
+
+### ✨ Tampilan Kartu Home Screen: Mode Ringkas (Minimize) Estetis & Terpadu
+
+- **Fitur Perkecil/Perluas (Minimize/Expand Toggle)**:
+  - Kartu **Jadwal Inspeksi Terjadwal** dan kartu **Kewajiban KTA / TTA Minggu Ini** kini dilengkapi tombol toggle **`[Ringkas / Detail]`** dengan ikon panah di bagian header kartu.
+  - Pilihan pengguna disimpan otomatis di `localStorage` (`p2h_schedule_card_minimized` & `p2h_kta_card_minimized`), sehingga preferensi tampilan tetap terjaga saat me-refresh halaman atau membuka portal kembali.
+- **Tampilan Mode Ringkas (Aesthetic Compact View)**:
+  - Mengurangi tinggi kartu secara signifikan agar halaman utama terasa lega dan minimalis, tanpa menghilangkan informasi penting:
+    - **Kartu Inspeksi (Ringkas)**: Tetap menampilkan status inspeksi (`✓ Selesai` / `Shift`), judul penugasan inspeksi, peran/rekan kerja, tombol aksi instan (`PDF Laporan` / `Isi Form`), serta status bukti screenshot (*SS General Inspeksi*) dengan tombol upload langsung.
+    - **Kartu KTA / TTA (Ringkas)**: Tetap menyajikan status kelengkapan target (`✓ Lengkap (2/2)` / `⏳ Belum (0/2)`), judul target K3L, rincian per item (*TTA 1, TTA 2 / KTA*), serta tombol aksi cepat pelaporan (`+ Lapor Lagi` / `Laporkan KTA/TTA`).
+  - Animasi transisi lembut (*fade-in / scale*) dengan palet warna dan styling CSS variables tema (`var(--card-bg)`, `var(--input-bg)`, `var(--border-main)`).
+
 ## [2.8.22] - 2026-09-10
 
 ### 🛡️ Rekap Status Laporan Inspeksi: Syarat Wajib Bukti Screenshot (SS) Form General & Ceklis Ganda (PDF + SS)

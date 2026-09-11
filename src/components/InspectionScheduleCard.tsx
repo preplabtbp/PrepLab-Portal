@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ClipboardCheck, Clock, ShieldCheck, UserCheck, ChevronRight, 
   ExternalLink, Search, X, RefreshCw, Sparkles, CheckCircle2, AlertCircle, 
-  Users, Camera, ShieldAlert, AlertTriangle, Image as ImageIcon, Send, Trash2, Check
+  Users, Camera, ShieldAlert, AlertTriangle, Image as ImageIcon, Send, Trash2, Check,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import { Button } from './ui';
 import { toast } from 'sonner';
@@ -101,6 +102,39 @@ export function InspectionScheduleCard({
   const [ktaImageFile, setKtaImageFile] = useState<File | null>(null);
   const [ktaImagePreview, setKtaImagePreview] = useState<string | null>(null);
   const [isSubmittingKta, setIsSubmittingKta] = useState(false);
+
+  // Minimize / Compact Mode States (Persisted in localStorage)
+  const [isScheduleMinimized, setIsScheduleMinimized] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('p2h_schedule_card_minimized') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [isKtaMinimized, setIsKtaMinimized] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('p2h_kta_card_minimized') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleScheduleMinimize = () => {
+    setIsScheduleMinimized(prev => {
+      const next = !prev;
+      try { localStorage.setItem('p2h_schedule_card_minimized', String(next)); } catch {}
+      return next;
+    });
+  };
+
+  const toggleKtaMinimize = () => {
+    setIsKtaMinimized(prev => {
+      const next = !prev;
+      try { localStorage.setItem('p2h_kta_card_minimized', String(next)); } catch {}
+      return next;
+    });
+  };
 
   // Lightbox Preview
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -531,6 +565,20 @@ export function InspectionScheduleCard({
 
               <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
                 <button
+                  onClick={toggleScheduleMinimize}
+                  className="p-1.5 px-2 rounded-xl border border-[var(--border-main)] hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer text-xs flex items-center gap-1 shadow-2xs"
+                  title={isScheduleMinimized ? "Perluas Tampilan (Detail)" : "Perkecil Tampilan (Ringkas)"}
+                >
+                  {isScheduleMinimized ? (
+                    <ChevronDown className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  )}
+                  <span className="text-[10px] font-medium hidden sm:inline">
+                    {isScheduleMinimized ? 'Detail' : 'Ringkas'}
+                  </span>
+                </button>
+                <button
                   onClick={handleRefreshAll}
                   disabled={refreshing}
                   className="p-1.5 px-2 rounded-xl border border-[var(--border-main)] hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer text-xs flex items-center gap-1"
@@ -573,6 +621,107 @@ export function InspectionScheduleCard({
                     <span className="text-[10px] px-2 py-1 rounded-lg bg-sky-500/20 font-bold">
                       Bebas Tugas
                     </span>
+                  </div>
+                ) : isScheduleMinimized ? (
+                  /* ── COMPACT / MINIMIZED ESTHETIC VIEW (TETAP MENAMPILKAN INFO PENTING) ── */
+                  <div className="space-y-2 animate-in fade-in duration-200">
+                    <div className="p-2.5 px-3 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        {mySchedule.isCompleted ? (
+                          <span className="w-6 h-6 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          </span>
+                        ) : (
+                          <span className="w-6 h-6 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs font-bold text-[10px]">
+                            ⏳
+                          </span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h5 className="font-extrabold text-xs text-[var(--text-main)] truncate max-w-[280px]">
+                              {mySchedule.inspeksi}
+                            </h5>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md uppercase ${
+                              mySchedule.isCompleted 
+                                ? 'bg-emerald-500/20 text-emerald-700' 
+                                : 'bg-amber-500/20 text-amber-700'
+                            }`}>
+                              {mySchedule.isCompleted ? '✓ Selesai' : mySchedule.shift}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">
+                            Peran {mySchedule.roleIndex} {mySchedule.partners && mySchedule.partners.length > 0 ? `• Rekan: ${mySchedule.partners[0].name}` : ''}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                        {mySchedule.isCompleted && mySchedule.completedPdfUrl && mySchedule.completedPdfUrl !== '#' && (
+                          <button
+                            onClick={() => {
+                              const rawUrl = mySchedule.completedPdfUrl!;
+                              const fileIdMatch = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                              const viewUrl = fileIdMatch && fileIdMatch[1]
+                                ? `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`
+                                : rawUrl;
+                              window.open(viewUrl, '_blank');
+                            }}
+                            className="h-7 px-2.5 rounded-lg bg-[var(--card-bg)] border border-[var(--border-main)] hover:bg-[var(--input-bg)] text-[var(--text-main)] text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                            title="Lihat Laporan PDF"
+                          >
+                            <ExternalLink className="w-3 h-3 text-emerald-600" />
+                            <span>PDF Laporan</span>
+                          </button>
+                        )}
+                        {!mySchedule.isCompleted && (
+                          <button
+                            onClick={handleStartInspection}
+                            className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                          >
+                            <span>Isi Form</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Compact Bar Status Bukti SS General */}
+                    <div className="p-2 px-3 rounded-xl bg-[var(--card-bg)] border border-[var(--border-main)] flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {hasSsProof ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        ) : (
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        )}
+                        <span className="text-[10.5px] font-semibold text-[var(--text-main)] truncate">
+                          {hasSsProof ? '✓ Bukti SS General Terunggah' : '⚠️ Belum Upload Bukti SS General'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {hasSsProof ? (
+                          ssProofUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setLightboxUrl(formatKtaImageUrl(ssProofUrl))}
+                              className="text-[10px] text-emerald-600 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <ImageIcon className="w-3 h-3" />
+                              <span>Lihat</span>
+                            </button>
+                          )
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShowSsModal(true)}
+                            className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-700 text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1"
+                          >
+                            <Camera className="w-3 h-3" />
+                            <span>Upload SS</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <>
@@ -818,6 +967,20 @@ export function InspectionScheduleCard({
               </div>
 
               <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                <button
+                  onClick={toggleKtaMinimize}
+                  className="p-1.5 px-2 rounded-xl border border-[var(--border-main)] hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer text-xs flex items-center gap-1 shadow-2xs"
+                  title={isKtaMinimized ? "Perluas Tampilan (Detail)" : "Perkecil Tampilan (Ringkas)"}
+                >
+                  {isKtaMinimized ? (
+                    <ChevronDown className="w-3.5 h-3.5 text-amber-600" />
+                  ) : (
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  )}
+                  <span className="text-[10px] font-medium hidden sm:inline">
+                    {isKtaMinimized ? 'Detail' : 'Ringkas'}
+                  </span>
+                </button>
                 <a
                   href={SAFETY_KTA_FORM_URL}
                   target="_blank"
@@ -852,6 +1015,134 @@ export function InspectionScheduleCard({
                   <span className="text-[10px] px-2 py-1 rounded-lg bg-sky-500/20 font-bold shrink-0">
                     Bebas Laporan
                   </span>
+                </div>
+              ) : isKtaMinimized ? (
+                /* ── COMPACT / MINIMIZED ESTHETIC VIEW (KTA/TTA) ── */
+                <div className="space-y-2 animate-in fade-in duration-200">
+                  <div className="p-2.5 px-3 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      {myKtaRecord?.status === 'SUDAH' ? (
+                        <span className="w-6 h-6 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        </span>
+                      ) : (
+                        <span className="w-6 h-6 rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h5 className="font-extrabold text-xs text-[var(--text-main)] truncate max-w-[280px]">
+                            {myKtaRecord?.status === 'SUDAH' ? 'Target K3L Terpenuhi' : `Kewajiban: ${myObligation.label}`}
+                          </h5>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md uppercase ${
+                            myKtaRecord?.status === 'SUDAH'
+                              ? 'bg-emerald-500/20 text-emerald-700'
+                              : 'bg-rose-500/20 text-rose-700'
+                          }`}>
+                            {myKtaRecord?.status === 'SUDAH'
+                              ? `✓ Lengkap (${myKtaRecord.checkDetails?.summaryProgress || '2/2'})`
+                              : `⏳ Belum (${myKtaRecord?.checkDetails?.summaryProgress || '0/2'})`}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">
+                          {myKtaRecord?.status === 'SUDAH'
+                            ? `Seluruh laporan ${myObligation.label} minggu ${currentWeekTag} selesai`
+                            : `Harap laporkan ${myObligation.label} untuk periode minggu ${currentWeekTag}`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={() => setShowKtaModal(true)}
+                        className={`h-7 px-2.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs ${
+                          myKtaRecord?.status === 'SUDAH'
+                            ? 'bg-[var(--card-bg)] border border-[var(--border-main)] hover:bg-[var(--input-bg)] text-emerald-600'
+                            : 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white'
+                        }`}
+                      >
+                        <Camera className="w-3 h-3" />
+                        <span>{myKtaRecord?.status === 'SUDAH' ? '+ Lapor Lagi' : 'Laporkan KTA/TTA'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Compact Bar Status Breakdown KTA / TTA */}
+                  <div className="p-2 px-3 rounded-xl bg-[var(--card-bg)] border border-[var(--border-main)] flex items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                      {myObligation.type === '1_KTA_OR_TTA' ? (
+                        <div className="flex items-center gap-1 text-[10.5px]">
+                          {myKtaRecord?.checkDetails?.check1Done ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          ) : (
+                            <span className="w-3.5 h-3.5 rounded-full border border-amber-500 shrink-0 inline-block" />
+                          )}
+                          <span className={myKtaRecord?.checkDetails?.check1Done ? "text-emerald-700 font-bold" : "text-[var(--text-muted)] font-medium"}>
+                            1 Laporan KTA/TTA: {myKtaRecord?.checkDetails?.check1Done ? '✓ Ada' : 'Belum'}
+                          </span>
+                        </div>
+                      ) : myObligation.type === '2_TTA' ? (
+                        <>
+                          <div className="flex items-center gap-1 text-[10.5px]">
+                            {myKtaRecord?.checkDetails?.check1Done ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            ) : (
+                              <span className="w-3.5 h-3.5 rounded-full border border-amber-500 shrink-0 inline-block" />
+                            )}
+                            <span className={myKtaRecord?.checkDetails?.check1Done ? "text-emerald-700 font-bold" : "text-[var(--text-muted)] font-medium"}>
+                              TTA 1: {myKtaRecord?.checkDetails?.check1Done ? '✓ Ada' : 'Belum'}
+                            </span>
+                          </div>
+                          <span className="text-[var(--border-main)]">•</span>
+                          <div className="flex items-center gap-1 text-[10.5px]">
+                            {myKtaRecord?.checkDetails?.check2Done ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            ) : (
+                              <span className="w-3.5 h-3.5 rounded-full border border-amber-500 shrink-0 inline-block" />
+                            )}
+                            <span className={myKtaRecord?.checkDetails?.check2Done ? "text-emerald-700 font-bold" : "text-[var(--text-muted)] font-medium"}>
+                              TTA 2: {myKtaRecord?.checkDetails?.check2Done ? '✓ Ada' : 'Belum'}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1 text-[10.5px]">
+                            {myKtaRecord?.checkDetails?.check1Done ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            ) : (
+                              <span className="w-3.5 h-3.5 rounded-full border border-amber-500 shrink-0 inline-block" />
+                            )}
+                            <span className={myKtaRecord?.checkDetails?.check1Done ? "text-emerald-700 font-bold" : "text-[var(--text-muted)] font-medium"}>
+                              KTA: {myKtaRecord?.checkDetails?.check1Done ? '✓ Ada' : 'Belum'}
+                            </span>
+                          </div>
+                          <span className="text-[var(--border-main)]">•</span>
+                          <div className="flex items-center gap-1 text-[10.5px]">
+                            {myKtaRecord?.checkDetails?.check2Done ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            ) : (
+                              <span className="w-3.5 h-3.5 rounded-full border border-amber-500 shrink-0 inline-block" />
+                            )}
+                            <span className={myKtaRecord?.checkDetails?.check2Done ? "text-emerald-700 font-bold" : "text-[var(--text-muted)] font-medium"}>
+                              TTA: {myKtaRecord?.checkDetails?.check2Done ? '✓ Ada' : 'Belum'}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    <a
+                      href={SAFETY_KTA_FORM_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] text-[var(--text-muted)] hover:text-amber-600 underline font-semibold shrink-0"
+                    >
+                      Form Safety ↗
+                    </a>
+                  </div>
                 </div>
               ) : myKtaRecord?.status === 'SUDAH' ? (
                 /* SUDAH LENGKAP: Tampilan Sukses & Ceklis Tenang */
