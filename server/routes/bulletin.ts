@@ -401,7 +401,15 @@ router.get("/api/drive/view/:fileId", async (req, res) => {
       try {
         const meta = await drive.files.get({ fileId, fields: 'mimeType, name, size', supportsAllDrives: true });
         if (meta?.data?.mimeType) mimeType = meta.data.mimeType;
+        if (meta?.data?.name?.toLowerCase().endsWith('.pdf')) mimeType = 'application/pdf';
       } catch (e) {}
+
+      // Auto ensure file is public
+      drive.permissions.create({
+        fileId,
+        supportsAllDrives: true,
+        requestBody: { role: 'reader', type: 'anyone' }
+      }).catch(() => {});
 
       res.setHeader('Content-Type', mimeType);
       res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
@@ -424,11 +432,15 @@ router.get("/api/drive/view/:fileId", async (req, res) => {
         try {
           const fetchRes = await fetch(pUrl);
           if (fetchRes.ok) {
-            const contentType = fetchRes.headers.get('content-type') || 'image/jpeg';
+            let contentType = fetchRes.headers.get('content-type') || 'image/jpeg';
+            const arrayBuf = await fetchRes.arrayBuffer();
+            const buf = Buffer.from(arrayBuf);
+            if (buf.subarray(0, 5).toString('ascii') === '%PDF-') {
+              contentType = 'application/pdf';
+            }
             res.setHeader('Content-Type', contentType);
             res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
-            const arrayBuf = await fetchRes.arrayBuffer();
-            return res.send(Buffer.from(arrayBuf));
+            return res.send(buf);
           }
         } catch (e) {}
       }

@@ -11,7 +11,8 @@ import {
   X, 
   FileText, 
   Sparkles, 
-  Eye
+  Eye,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from './ui';
 import { getFlyerInfo } from '../lib/p5m-flyer';
@@ -25,6 +26,7 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
   const [isOpen, setIsOpen] = useState(false);
   const [assignment, setAssignment] = useState<any | null>(null);
   const [previewFlyer, setPreviewFlyer] = useState<{ url: string; title: string } | null>(null);
+  const [pdfViewerMode, setPdfViewerMode] = useState<'drive' | 'stream'>('drive');
 
   useEffect(() => {
     if (!inspectorNik && !inspectorName) return;
@@ -256,7 +258,7 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
               {info.isPdf ? (
                 <div className="bg-[var(--input-bg)] rounded-xl overflow-hidden flex flex-col items-center justify-center h-[65vh] border border-[var(--border-main)] relative">
                   <iframe 
-                    src={info.embedUrl} 
+                    src={pdfViewerMode === 'stream' ? info.streamUrl : info.embedUrl} 
                     title={previewFlyer.title}
                     className="w-full h-full rounded-lg"
                     allow="autoplay"
@@ -280,9 +282,19 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
 
               <div className="flex items-center justify-between gap-2 pt-1 border-t border-[var(--border-main)] flex-wrap">
                 <div className="text-[10px] text-[var(--text-muted)] font-mono">
-                  {info.isPdf ? '📄 Dokumen Prosedur Standar (IK/SOP)' : '🖼️ Flyer Briefing Keselamatan'}
+                  {info.isPdf ? `📄 Dokumen (${pdfViewerMode === 'drive' ? 'Google Drive' : 'Stream Server'})` : '🖼️ Flyer Briefing Keselamatan'}
                 </div>
                 <div className="flex items-center gap-2">
+                  {info.isPdf && (
+                    <Button
+                      onClick={() => setPdfViewerMode(prev => prev === 'drive' ? 'stream' : 'drive')}
+                      className="bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-indigo-700/60 flex items-center gap-1 shadow-xs"
+                      title="Ganti Mode Viewer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      {pdfViewerMode === 'drive' ? 'Stream Server' : 'Google Drive'}
+                    </Button>
+                  )}
                   <Button
                     onClick={() => window.open(info.viewUrl, '_blank')}
                     className="bg-[var(--input-bg)] hover:bg-[var(--card-bg)] text-[var(--text-main)] text-xs font-semibold px-3 py-1.5 rounded-xl border border-[var(--border-main)] flex items-center gap-1 shadow-xs"
