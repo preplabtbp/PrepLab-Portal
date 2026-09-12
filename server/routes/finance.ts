@@ -60,7 +60,7 @@ Aturan parsing:
 
     // Scan using AI Vision API (routr.cloud)
     const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, '');
-    const apiKey = process.env.OPENAI_API_KEY || 'sk-npv_ABLQuruepV8_gUcbdTltCoaoGTNblXPRqbp7o5gFGw';
+    const apiKey = process.env.OPENAI_API_KEY || 'sk-ngw_ABLQuruepV8_gUcbdTltCoaoGTnbHaXPRqbp7o5gF6w';
     const models = ['deepseek-v4-flash-vision-exp', 'kimi-k3', 'qwen-vl-max', 'qwen-vl-plus'];
     const imgDataUrl = `data:${mimeType || 'image/jpeg'};base64,${cleanBase64}`;
 

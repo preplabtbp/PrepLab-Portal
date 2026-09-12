@@ -39,7 +39,7 @@ labbotRouter.post('/api/labbot/chat', async (req, res) => {
     }
 
     const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, '');
-    const apiKey = process.env.OPENAI_API_KEY || 'sk-npv_ABLQuruepV8_gUcbdTltCoaoGTNblXPRqbp7o5gFGw';
+    const apiKey = process.env.OPENAI_API_KEY || 'sk-ngw_ABLQuruepV8_gUcbdTltCoaoGTnbHaXPRqbp7o5gF6w';
 
     // Fast and reasoning text models on user proxy
     const models = ['deepseek-v4-flash', 'glm-5.3-flash', 'deepseek-v4-pro', 'kimi-k2.7-code', 'hy3'];
