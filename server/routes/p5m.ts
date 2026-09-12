@@ -1911,9 +1911,22 @@ p5mRouter.get("/flyer", async (req, res) => {
           supportsAllDrives: true
         });
         const mimeType = meta.data.mimeType || 'image/png';
-        const isPdf = mimeType.includes('pdf') || targetJudul.startsWith('IK ') || targetJudul.startsWith('SOP ');
+        const isPdf = mimeType.includes('pdf') || 
+                      meta.data.name?.toLowerCase().endsWith('.pdf') ||
+                      targetJudul.toLowerCase().includes('.pdf') || 
+                      targetJudul.startsWith('IK ') || 
+                      targetJudul.startsWith('SOP ') || 
+                      targetJudul.startsWith('JSA ') ||
+                      targetJudul.startsWith('JSA -');
         const ext = isPdf ? '.pdf' : '.png';
         const finalFilename = `P5M_${targetJudul.replace(/[^a-zA-Z0-9_-]/g, '_')}${ext}`;
+
+        // Auto ensure anyone with the link can view so Google Drive embedded viewer never shows 'No preview available'
+        drive.permissions.create({
+          fileId: driveFileId,
+          supportsAllDrives: true,
+          requestBody: { role: 'reader', type: 'anyone' }
+        }).catch(() => {});
 
         const driveStream = await drive.files.get({
           fileId: driveFileId,
@@ -1921,7 +1934,7 @@ p5mRouter.get("/flyer", async (req, res) => {
           supportsAllDrives: true
         }, { responseType: 'stream' });
 
-        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Type', isPdf ? 'application/pdf' : mimeType);
         if (isDownload) {
           res.setHeader('Content-Disposition', `attachment; filename="${finalFilename}"`);
         } else {
@@ -1944,14 +1957,15 @@ p5mRouter.get("/flyer", async (req, res) => {
 
         for (const cUrl of candidateUrls) {
           try {
-            const fetchRes = await fetch(cUrl);
-            if (fetchRes.ok) {
-              const contentType = fetchRes.headers.get('content-type') || 'image/png';
-              res.setHeader('Content-Type', contentType);
-              res.setHeader('Cache-Control', 'public, max-age=86400');
-              const arrayBuf = await fetchRes.arrayBuffer();
-              return res.send(Buffer.from(arrayBuf));
+            let contentType = fetchRes.headers.get('content-type') || 'image/png';
+            const arrayBuf = await fetchRes.arrayBuffer();
+            const buf = Buffer.from(arrayBuf);
+            if (buf.subarray(0, 5).toString('ascii') === '%PDF-') {
+              contentType = 'application/pdf';
             }
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            return res.send(buf);
           } catch (err) {}
         }
 

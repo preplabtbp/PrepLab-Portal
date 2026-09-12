@@ -360,6 +360,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
   // Preview Image Modal
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+  const [pdfViewerMode, setPdfViewerMode] = useState<'drive' | 'stream'>('drive');
 
   // Archive History State
   const [archiveList, setArchiveList] = useState<any[]>([]);
@@ -2402,6 +2403,18 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  {hasValidUrl && info.isPdf && (
+                    <button
+                      onClick={() => setPdfViewerMode(prev => prev === 'drive' ? 'stream' : 'drive')}
+                      className="px-2.5 py-1.5 bg-indigo-900/60 hover:bg-indigo-800/80 text-indigo-200 rounded-xl text-xs flex items-center gap-1.5 border border-indigo-700/60 font-semibold transition-colors"
+                      title="Ganti Mode Viewer (Server Stream / Google Drive)"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">
+                        {pdfViewerMode === 'drive' ? 'Mode Stream Server' : 'Mode Google Drive'}
+                      </span>
+                    </button>
+                  )}
                   {hasValidUrl && (
                     <a
                       href={info.viewUrl}
@@ -2439,7 +2452,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 {hasValidUrl ? (
                   info.isPdf ? (
                     <iframe 
-                      src={info.embedUrl} 
+                      src={pdfViewerMode === 'stream' ? info.streamUrl : info.embedUrl} 
                       title={previewImage.title}
                       className="w-full h-full rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
                       allow="autoplay; encrypted-media; fullscreen"
@@ -2482,7 +2495,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               {/* Footer */}
               <div className="bg-slate-900 border-t border-slate-800 px-4 py-2.5 flex items-center justify-between text-xs text-slate-400 shrink-0">
                 <span className="font-mono text-[11px]">
-                  {hasValidUrl ? '💡 Tip: Gunakan tombol zoom dan navigasi di dalam viewer untuk melihat detail dokumen.' : 'Status: Link materi kosong'}
+                  {hasValidUrl 
+                    ? `💡 Mode: ${pdfViewerMode === 'drive' ? 'Google Drive Embed' : 'Server Stream Langsung'}. Jika preview terhambat login, klik "Mode Stream Server" di atas.` 
+                    : 'Status: Link materi kosong'}
                 </span>
                 <Button
                   onClick={() => setPreviewImage(null)}

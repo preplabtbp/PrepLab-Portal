@@ -36,7 +36,9 @@ export function getFlyerInfo(rawUrl?: string | null, title?: string | null): Fly
     cleanTitle.toLowerCase().includes('.pdf') ||
     cleanTitle.startsWith('IK ') ||
     cleanTitle.startsWith('SOP ') ||
-    cleanTitle.startsWith('JSA ')
+    cleanTitle.startsWith('JSA ') ||
+    cleanTitle.startsWith('JSA -') ||
+    cleanTitle.includes('JSA')
   );
 
   const safeTitle = encodeURIComponent(cleanTitle || 'Dokumen_P5M');
@@ -48,7 +50,7 @@ export function getFlyerInfo(rawUrl?: string | null, title?: string | null): Fly
   if (fileId) {
     const drivePreviewUrl = `https://drive.google.com/file/d/${fileId}/preview`;
     const driveViewUrl = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`;
-    const driveDownloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    const driveDownloadUrl = `/api/p5m/flyer?download=true&title=${safeTitle}&url=${safeUrl}`;
     const driveImageUrl = `/api/drive/view/${fileId}`;
 
     return {
