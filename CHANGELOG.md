@@ -2,6 +2,34 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.25] - 2026-09-12
+
+### 🚫 Penegakan Mutlak: Larangan Masuk Karyawan Resign ke Database & Pembersihan Otomatis
+
+- **Pencegahan Insert Baris Resign dari Spreadsheet (`src/syncRoster.ts`)**:
+  - Baris karyawan pada Google Spreadsheet yang memiliki indikator `#N/A` (Section, JobGrade, Jabatan), status kontrak/mess `Resign`, atau terdaftar dalam daftar NIK resign kini **DIPERLAKUKAN SEBAGAI SKIP MUTLAK**.
+  - Baris tersebut sama sekali **TIDAK AKAN dimasukkan atau di-upsert ulang ke tabel `employees`**, sehingga karyawan yang telah dihapus admin tidak akan pernah muncul kembali di database.
+- **Pembersihan Bersih (Hard Delete) Karyawan Resign**:
+  - Logika rekonsiliasi sinkronisasi roster diperbarui dari yang sebelumnya hanya mengubah status menjadi `Resign` kini secara langsung **MENGHAPUS (Delete)** karyawan resign beserta entri jadwal rosternya dari database.
+  - Telah dilakukan pembersihan database secara menyeluruh terhadap 19 record karyawan berstatus resign/keluar.
+- **Pencegahan Karyawan Resign Terpilih di Jadwal P5M (`server/routes/p5m.ts`)**:
+  - Filter pada rute `/api/p5m/pool` dan `/api/p5m/randomize` diperketat dengan validasi karyawan resign, menjamin generator acak P5M tidak akan pernah menugaskan materi/senam kepada mantan karyawan.
+
+## [2.8.24] - 2026-09-12
+
+### 🔄 Sinkronisasi Jadwal Multi-Sheet Google Sheets & Transisi Roster Pekan Baru (Week 38)
+
+- **Penargetan Eksplisit Sheet `CurrentWeek`**:
+  - Mengubah URL GViz penarik data dari `&gid=0` menjadi penargetan eksplisit nama sheet `&sheet=CurrentWeek`.
+  - Memastikan jadwal aktif selalu terbaca tepat dari tab `CurrentWeek` meskipun pengguna menduplikasi, membuat tab baru, atau memindahkan urutan sheet di Google Spreadsheet.
+- **Dukungan Sheet Rekapan Riwayat (Misal: `Week 37`)**:
+  - Backend `/api/inspection-schedule` kini menerima parameter `?sheet=...` dan `?week=...`, dilengkapi cache terpisah per sheet (`scheduleCacheMap` dan `enrichedScheduleCacheMap`).
+  - Modal **Matriks Jadwal Inspeksi Terpadu** kini dilengkapi tombol pemilihan sheet interaktif:
+    - **`[⚡ CurrentWeek (W38 Aktif)]`**: Memuat roster pekan aktif berjalan.
+    - **`[⏮️ Week 37 (Rekapan Lalu)]`**: Memuat lembar arsip rekapan jadwal minggu sebelumnya.
+- **Transisi Roster Akhir Pekan (Weekend Advance to W38)**:
+  - Penjadwalan mingguan yang diperbarui pada akhir pekan (Sabtu & Minggu) otomatis dihitung sebagai pekan yang dituju (**Week 38**), sehingga personil yang mengecek jadwal langsung melihat label periode yang tepat (**W38**) dan pencocokan inspeksi/bukti SS tersinkronisasi akurat tanpa menunggu pergantian hari Senin.
+
 ## [2.8.23] - 2026-09-11
 
 ### ✨ Tampilan Kartu Home Screen: Mode Ringkas (Minimize) Estetis & Terpadu

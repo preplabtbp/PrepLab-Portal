@@ -1298,32 +1298,31 @@ export function mapInspectionToFormInfo(name: string): { formId: string; tipe: s
   return { formId: '02, LAB', tipe: 'UMUM', formTitle: 'Inspeksi Umum Terencana Area Laboratorium', subArea: name };
 }
 
-let cachedSchedule: any[] | null = null;
-let lastScheduleFetchTime = 0;
+const scheduleCacheMap = new Map<string, { data: any[]; timestamp: number }>();
 const SCHEDULE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-let cachedEnrichedSchedule: any[] | null = null;
-let lastEnrichedFetchTime = 0;
+const enrichedScheduleCacheMap = new Map<string, { data: any[]; timestamp: number }>();
 const ENRICHED_CACHE_TTL = 60 * 1000; // 60 seconds
 
 export function invalidateScheduleCache() {
-  cachedSchedule = null;
-  lastScheduleFetchTime = 0;
-  cachedEnrichedSchedule = null;
-  lastEnrichedFetchTime = 0;
+  scheduleCacheMap.clear();
+  enrichedScheduleCacheMap.clear();
 }
 
-async function fetchInspectionScheduleFromSheet(forceRefresh = false) {
+async function fetchInspectionScheduleFromSheet(forceRefresh = false, sheetName = 'CurrentWeek') {
+  const targetSheet = (sheetName || 'CurrentWeek').trim();
+  const cacheKey = targetSheet.toLowerCase();
   const now = Date.now();
-  if (!forceRefresh && cachedSchedule && (now - lastScheduleFetchTime < SCHEDULE_CACHE_TTL)) {
-    return cachedSchedule;
+  const cached = scheduleCacheMap.get(cacheKey);
+  if (!forceRefresh && cached && (now - cached.timestamp < SCHEDULE_CACHE_TTL)) {
+    return cached.data;
   }
 
   const SPREADSHEET_ID = "1hEcUnXhqvsKsIYxqfzZxIqiVaonshL-pSstEh2DdmIY";
-  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&gid=0`;
+  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(targetSheet)}`;
   
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch spreadsheet: ${res.status}`);
+  if (!res.ok) throw new Error(`Failed to fetch spreadsheet sheet "${targetSheet}": ${res.status}`);
   const text = await res.text();
 
   // CSV parser handling quoted cells
@@ -1440,13 +1439,16 @@ async function fetchInspectionScheduleFromSheet(forceRefresh = false) {
       }));
   }
 
-  cachedSchedule = scheduleList;
-  lastScheduleFetchTime = now;
+  scheduleCacheMap.set(cacheKey, { data: scheduleList, timestamp: Date.now() });
   return scheduleList;
 }
 
-function getISOWeekTagForSchedule(d: Date = new Date()): string {
+function getISOWeekTagForSchedule(d: Date = new Date(), advanceOnWeekend = false): string {
   const date = new Date(d.getTime());
+  if (advanceOnWeekend && (date.getDay() === 0 || date.getDay() === 6)) {
+    const daysToAdd = date.getDay() === 6 ? 2 : 1;
+    date.setDate(date.getDate() + daysToAdd);
+  }
   date.setHours(0, 0, 0, 0);
   date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
   const week1 = new Date(date.getFullYear(), 0, 4);
@@ -1469,9 +1471,9 @@ export async function getAllEmployeesCached(force = false): Promise<any[]> {
   return emps;
 }
 
-async function enrichSchedulesWithCompletion(schedules: any[]): Promise<any[]> {
+async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: string): Promise<any[]> {
   try {
-    const currentWeekTag = getISOWeekTagForSchedule(new Date());
+    const currentWeekTag = targetWeekTag || getISOWeekTagForSchedule(new Date(), true);
 
     // Execute queries in parallel for high performance over remote SQL
     const [recentInspections, allEmps, allProofs] = await Promise.all([
@@ -1604,17 +1606,48 @@ router.get("/api/inspection-schedule", async (req, res) => {
     const forceRefresh = req.query.refresh === 'true';
     const queryName = typeof req.query.name === 'string' ? req.query.name.trim().toLowerCase() : '';
     const queryNik = typeof req.query.nik === 'string' ? req.query.nik.trim().toLowerCase() : '';
+    const rawSheet = typeof req.query.sheet === 'string' ? req.query.sheet.trim() : '';
+    const rawWeek = typeof req.query.week === 'string' ? req.query.week.trim() : '';
 
+    // Determine target sheet and week tag
+    let targetSheet = rawSheet || 'CurrentWeek';
+    if (!rawSheet && rawWeek) {
+      if (rawWeek.toLowerCase().includes('37')) targetSheet = 'Week 37';
+      else if (rawWeek.toLowerCase().includes('38')) targetSheet = 'CurrentWeek';
+      else if (/^w?\d+$/i.test(rawWeek)) {
+        const num = rawWeek.replace(/\D/g, '');
+        targetSheet = `Week ${num}`;
+      }
+    }
+
+    let targetWeekTag = rawWeek;
+    if (!targetWeekTag) {
+      if (targetSheet.toLowerCase().includes('37')) {
+        targetWeekTag = 'W37';
+      } else if (targetSheet.toLowerCase().includes('currentweek')) {
+        targetWeekTag = getISOWeekTagForSchedule(new Date(), true);
+      } else {
+        const match = targetSheet.match(/\d+/);
+        targetWeekTag = match ? `W${match[0]}` : getISOWeekTagForSchedule(new Date(), true);
+      }
+    } else if (!targetWeekTag.startsWith('W') && !targetWeekTag.startsWith('w')) {
+      targetWeekTag = `W${targetWeekTag.replace(/\D/g, '')}`;
+    } else {
+      targetWeekTag = targetWeekTag.toUpperCase();
+    }
+
+    const cacheKey = `${targetSheet.toLowerCase()}_${targetWeekTag.toLowerCase()}`;
     const now = Date.now();
     let allSchedules: any[];
-    if (!forceRefresh && cachedEnrichedSchedule && (now - lastEnrichedFetchTime < ENRICHED_CACHE_TTL)) {
-      allSchedules = cachedEnrichedSchedule;
+    const cachedEnriched = enrichedScheduleCacheMap.get(cacheKey);
+
+    if (!forceRefresh && cachedEnriched && (now - cachedEnriched.timestamp < ENRICHED_CACHE_TTL)) {
+      allSchedules = cachedEnriched.data;
     } else {
-      const rawSchedules = await fetchInspectionScheduleFromSheet(forceRefresh);
+      const rawSchedules = await fetchInspectionScheduleFromSheet(forceRefresh, targetSheet);
       const cloned = JSON.parse(JSON.stringify(rawSchedules));
-      allSchedules = await enrichSchedulesWithCompletion(cloned);
-      cachedEnrichedSchedule = allSchedules;
-      lastEnrichedFetchTime = now;
+      allSchedules = await enrichSchedulesWithCompletion(cloned, targetWeekTag);
+      enrichedScheduleCacheMap.set(cacheKey, { data: allSchedules, timestamp: now });
     }
 
     if (queryName || queryNik) {
@@ -1643,12 +1676,16 @@ router.get("/api/inspection-schedule", async (req, res) => {
       return res.json({
         found: !!matched,
         schedule: matched || null,
+        sheet: targetSheet,
+        week: targetWeekTag,
         totalScheduled: allSchedules.length
       });
     }
 
     res.json({
       success: true,
+      sheet: targetSheet,
+      week: targetWeekTag,
       total: allSchedules.length,
       data: allSchedules
     });
