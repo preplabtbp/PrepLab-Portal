@@ -58,9 +58,9 @@ Aturan parsing:
 3. Jika metode pembayaran tidak tertulis, gunakan "Tunai".
 4. Kategori dipilih yang paling relevan dari pilihan: #Makanan, #Peralatan, #Operasional, #Transportasi, #Lainnya.`;
 
-    // Scan using Qwen/DeepSeek AI Vision API (bandelbanget.xyz)
-    const baseUrl = (process.env.OPENAI_BASE_URL || 'https://bandelbanget.xyz/v1').replace(/\/+$/, '');
-    const apiKey = process.env.OPENAI_API_KEY || 'sk-qwen-7d3d24c4664c4f39c0599090e73aed18a8eb37e2b582b98e';
+    // Scan using AI Vision API (routr.cloud)
+    const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, '');
+    const apiKey = process.env.OPENAI_API_KEY || 'sk-npv_ABLQuruepV8_gUcbdTltCoaoGTNblXPRqbp7o5gFGw';
     const models = ['deepseek-v4-flash-vision-exp', 'kimi-k3', 'qwen-vl-max', 'qwen-vl-plus'];
     const imgDataUrl = `data:${mimeType || 'image/jpeg'};base64,${cleanBase64}`;
 

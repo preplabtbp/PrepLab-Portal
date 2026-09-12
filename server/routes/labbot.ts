@@ -38,8 +38,8 @@ labbotRouter.post('/api/labbot/chat', async (req, res) => {
       return res.status(400).json({ error: 'Pesan chat wajib diisi!' });
     }
 
-    const baseUrl = (process.env.OPENAI_BASE_URL || 'https://bandelbanget.xyz/v1').replace(/\/+$/, '');
-    const apiKey = process.env.OPENAI_API_KEY || 'sk-qwen-7d3d24c4664c4f39c0599090e73aed18a8eb37e2b582b98e';
+    const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, '');
+    const apiKey = process.env.OPENAI_API_KEY || 'sk-npv_ABLQuruepV8_gUcbdTltCoaoGTNblXPRqbp7o5gFGw';
 
     // Fast and reasoning text models on user proxy
     const models = ['deepseek-v4-flash', 'glm-5.3-flash', 'deepseek-v4-pro', 'kimi-k2.7-code', 'hy3'];
