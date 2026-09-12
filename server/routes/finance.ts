@@ -58,62 +58,84 @@ Aturan parsing:
 3. Jika metode pembayaran tidak tertulis, gunakan "Tunai".
 4. Kategori dipilih yang paling relevan dari pilihan: #Makanan, #Peralatan, #Operasional, #Transportasi, #Lainnya.`;
 
-    // Scan using AI Vision API (routr.cloud)
-    const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, '');
-    const apiKey = process.env.OPENAI_API_KEY || 'sk-ngw_ABLQuruepV8_gUcbdTltCoaoGTnbHaXPRqbp7o5gF6w';
-    const models = ['claude-sonnet-4.6', 'kimi-k3', 'gpt-5.6-luna'];
+    // Racing Multi-Provider Vision AI (Bandelbanget & Routr Cloud)
+    // Mencari jalan tercepat secara paralel menggunakan Promise.any
     const imgDataUrl = `data:${mimeType || 'image/jpeg'};base64,${cleanBase64}`;
 
-    let responseText = '';
-    let lastError: any = null;
-
-    for (const m of models) {
-      try {
-        const aiRes = await fetch(`${baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: m,
-            messages: [
-              {
-                role: 'system',
-                content: 'Kamu adalah parser struk AI otomatis. Kamu HARUS SELALU mengembalikan respon HANYA dalam format JSON valid tanpa format markdown (```json), tanpa teks pembuka, dan tanpa teks penutup.'
-              },
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: prompt },
-                  {
-                    type: 'image_url',
-                    image_url: { url: imgDataUrl }
-                  }
-                ]
-              }
-            ]
-          })
-        });
-
-        const aiData: any = await aiRes.json();
-        if (aiRes.ok && aiData.choices?.[0]?.message?.content) {
-          responseText = aiData.choices[0].message.content;
-          console.log(`[Finance AI] Berhasil memindai struk dengan model: ${m}`);
-          break;
-        } else {
-          console.warn(`[Finance AI] Model ${m} gagal:`, aiData.error?.message || aiData);
-          lastError = aiData.error?.message || JSON.stringify(aiData);
-        }
-      } catch (openaiErr: any) {
-        console.warn(`[Finance AI] Error pada model ${m}:`, openaiErr.message);
-        lastError = openaiErr.message;
+    const candidateProviders = [
+      // 1. Routr Cloud Claude Sonnet (Prioritas Utama Vision, cepat ~4s & sangat akurat)
+      {
+        name: 'Routr Cloud (Claude Sonnet 4.6)',
+        baseUrl: (process.env.ROUTR_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, ''),
+        apiKey: process.env.ROUTR_API_KEY || process.env.OPENAI_API_KEY || 'sk-ngw_ABLQuruepV8_gUcbdTltCoaoGTnbHaXPRqbp7o5gF6w',
+        model: 'claude-sonnet-4.6'
+      },
+      // 2. Bandelbanget Qwen Vision (Jika aktif, respons kilat ~1.5s)
+      {
+        name: 'Bandelbanget (Qwen-VL)',
+        baseUrl: (process.env.BANDELBANGET_BASE_URL || 'https://bandelbanget.xyz/v1').replace(/\/+$/, ''),
+        apiKey: process.env.BANDELBANGET_API_KEY || 'sk-qwen-7d3d24c4664c4f39c0599090e73aed18a8eb37e2b582b98e',
+        model: 'qwen-vl-max'
+      },
+      // 3. Routr Cloud Fallback (Kimi K3)
+      {
+        name: 'Routr Cloud (Kimi K3)',
+        baseUrl: (process.env.ROUTR_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, ''),
+        apiKey: process.env.ROUTR_API_KEY || process.env.OPENAI_API_KEY || 'sk-ngw_ABLQuruepV8_gUcbdTltCoaoGTnbHaXPRqbp7o5gF6w',
+        model: 'kimi-k3'
       }
-    }
+    ];
 
-    if (!responseText) {
+    const executeCall = async (p: typeof candidateProviders[0]) => {
+      const startTime = Date.now();
+      const aiRes = await fetch(`${p.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${p.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: p.model,
+          messages: [
+            {
+              role: 'system',
+              content: 'Kamu adalah parser struk AI otomatis. Kamu HARUS SELALU mengembalikan respon HANYA dalam format JSON valid tanpa format markdown (```json), tanpa teks pembuka, dan tanpa teks penutup.'
+            },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: prompt },
+                {
+                  type: 'image_url',
+                  image_url: { url: imgDataUrl }
+                }
+              ]
+            }
+          ]
+        })
+      });
+
+      const aiData: any = await aiRes.json();
+      if (!aiRes.ok || !aiData.choices?.[0]?.message?.content) {
+        const errDetail = aiData.error?.message || JSON.stringify(aiData);
+        throw new Error(`[${p.name}] ${errDetail}`);
+      }
+
+      const elapsed = Date.now() - startTime;
+      console.log(`[Finance AI] ${p.name} selesai dalam ${elapsed}ms`);
+      return { provider: p.name, content: aiData.choices[0].message.content, elapsed };
+    };
+
+    let responseText = '';
+    try {
+      // Jalankan seluruh provider secara paralel, pemenang tercepat yang berhasil langsung diambil
+      const winner = await Promise.any(candidateProviders.map(p => executeCall(p)));
+      console.log(`[Finance AI] Pemenang balapan tercepat: ${winner.provider} (${winner.elapsed}ms)`);
+      responseText = winner.content;
+    } catch (aggregateErr: any) {
+      console.error('[Finance AI] Semua provider gagal:', aggregateErr.errors || aggregateErr);
       return res.status(500).json({ 
-        error: `Gagal memindai struk dengan AI Vision: ${lastError || 'Tidak ada respon dari server AI'}` 
+        error: `Gagal memindai struk dengan AI Vision: ${aggregateErr.errors?.[0]?.message || 'Semua endpoint AI gagal merespons'}` 
       });
     }
     

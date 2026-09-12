@@ -53,45 +53,65 @@ labbotRouter.post('/api/labbot/chat', async (req, res) => {
       { role: 'user', content: message }
     ];
 
+    // Dual Provider Racing (Routr Cloud & Bandelbanget)
+    // Dua engine dipanggil secara paralel, pemenang tercepat langsung ditampilkan ke user
+    const chatProviders = [
+      {
+        name: 'Routr Cloud',
+        baseUrl: (process.env.ROUTR_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, ''),
+        apiKey: process.env.ROUTR_API_KEY || process.env.OPENAI_API_KEY || 'sk-ngw_ABLQuruepV8_gUcbdTltCoaoGTnbHaXPRqbp7o5gF6w',
+        model: 'deepseek-v4-flash'
+      },
+      {
+        name: 'Bandelbanget',
+        baseUrl: (process.env.BANDELBANGET_BASE_URL || 'https://bandelbanget.xyz/v1').replace(/\/+$/, ''),
+        apiKey: process.env.BANDELBANGET_API_KEY || 'sk-qwen-7d3d24c4664c4f39c0599090e73aed18a8eb37e2b582b98e',
+        model: 'deepseek-chat'
+      }
+    ];
+
+    const executeChat = async (p: typeof chatProviders[0]) => {
+      const startTime = Date.now();
+      const aiRes = await fetch(`${p.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${p.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: p.model,
+          messages: formattedMessages,
+          temperature: 0.4,
+          max_tokens: 1500
+        })
+      });
+
+      const aiData: any = await aiRes.json();
+      if (!aiRes.ok || !aiData.choices?.[0]?.message?.content) {
+        throw new Error(`[${p.name}] ${aiData.error?.message || 'Gagal merespons'}`);
+      }
+
+      const elapsed = Date.now() - startTime;
+      console.log(`[LabBot AI] ${p.name} (${p.model}) selesai dalam ${elapsed}ms`);
+      return {
+        reply: aiData.choices[0].message.content,
+        model: `${p.name} (${p.model})`,
+        elapsed
+      };
+    };
+
     let replyText = '';
     let usedModel = '';
-    let lastError: any = null;
 
-    for (const m of models) {
-      try {
-        const aiRes = await fetch(`${baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: m,
-            messages: formattedMessages,
-            temperature: 0.4,
-            max_tokens: 1500
-          })
-        });
-
-        const aiData: any = await aiRes.json();
-        if (aiRes.ok && aiData.choices?.[0]?.message?.content) {
-          replyText = aiData.choices[0].message.content;
-          usedModel = m;
-          console.log(`[LabBot AI] Sukses menjawab pertanyaan dengan model: ${m}`);
-          break;
-        } else {
-          console.warn(`[LabBot AI] Model ${m} gagal:`, aiData.error?.message || aiData);
-          lastError = aiData.error?.message || JSON.stringify(aiData);
-        }
-      } catch (err: any) {
-        console.warn(`[LabBot AI] Error saat fetch model ${m}:`, err.message);
-        lastError = err.message;
-      }
-    }
-
-    if (!replyText) {
-      return res.status(500).json({
-        error: `Gagal mendapatkan respon AI dari LabBot: ${lastError || 'Server AI tidak merespon'}`
+    try {
+      const winner = await Promise.any(chatProviders.map(p => executeChat(p)));
+      console.log(`[LabBot AI] Pemenang balapan tercepat: ${winner.model} (${winner.elapsed}ms)`);
+      replyText = winner.reply;
+      usedModel = winner.model;
+    } catch (raceErr: any) {
+      console.error('[LabBot AI] Semua provider chat gagal:', raceErr.errors || raceErr);
+      return res.status(500).json({ 
+        error: `Gagal mendapatkan respon AI dari LabBot: ${raceErr.errors?.[0]?.message || 'Server AI tidak merespons'}` 
       });
     }
 
