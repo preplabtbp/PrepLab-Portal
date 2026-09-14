@@ -31,6 +31,9 @@ function formatTitle(rawTitle) {
   if (!cleaned.toUpperCase().startsWith('IK ')) {
     cleaned = `IK ${cleaned}`;
   }
+  if (!cleaned.toUpperCase().startsWith('PEMAHAMAN ')) {
+    cleaned = `Pemahaman ${cleaned}`;
+  }
   return cleaned;
 }
 
