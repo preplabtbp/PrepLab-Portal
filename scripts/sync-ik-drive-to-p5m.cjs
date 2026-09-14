@@ -29,6 +29,11 @@ function parseIKTitle(fileName) {
   if (!base.toUpperCase().startsWith('IK ')) {
     base = `IK ${base}`;
   }
+
+  if (!base.toUpperCase().startsWith('PEMAHAMAN ')) {
+    base = `Pemahaman ${base}`;
+  }
+
   return base;
 }
 
