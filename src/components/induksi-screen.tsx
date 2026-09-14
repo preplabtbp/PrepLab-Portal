@@ -42,39 +42,29 @@ export function InduksiScreen() {
     }
   });
 
-  const handleNamaPesertaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
+  const handlePesertaChange = (eOrName: React.ChangeEvent<HTMLInputElement> | string) => {
+    const val = typeof eOrName === 'string' ? eOrName : eOrName.target.value;
     setNamaPeserta(val);
-    const emp = employees.find((em: any) => em.name === val);
+    const emp = employees.find((e: any) => e.name.toLowerCase() === val.toLowerCase());
     if (emp) {
       if (emp.nik) setNikPeserta(emp.nik);
       if (emp.jabatan) setJabatanPeserta(emp.jabatan);
-      if (emp.section) {
-        // Map section to match options (Prep, Lab, Adm, QA, IC, MT)
-        const sec = emp.section.toLowerCase();
-        if (sec.includes('prep')) setDivisi('Prep');
-        else if (sec.includes('lab')) setDivisi('Lab');
-        else if (sec.includes('adm')) setDivisi('Adm');
-        else if (sec.includes('qa') || sec.includes('quality')) setDivisi('QA');
-        else if (sec.includes('ic') || sec.includes('inventory')) setDivisi('IC');
-        else if (sec.includes('mt') || sec.includes('maintenance')) setDivisi('MT');
-      }
-      if (emp.pt) {
-        if (emp.pt.includes('TBP')) setPerusahaan('PT. TBP');
-        else if (emp.pt.includes('GPS')) setPerusahaan('PT. GPS');
-      }
+      if (emp.pt) setPerusahaan(emp.pt);
+      if (emp.section) setDivisi(emp.section);
     }
   };
+  const handleNamaPesertaChange = handlePesertaChange;
 
-  const handleNamaInduktorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
+  const handleInduktorChange = (eOrName: React.ChangeEvent<HTMLInputElement> | string) => {
+    const val = typeof eOrName === 'string' ? eOrName : eOrName.target.value;
     setNamaInduktor(val);
-    const emp = employees.find((em: any) => em.name === val);
+    const emp = employees.find((e: any) => e.name.toLowerCase() === val.toLowerCase());
     if (emp) {
       if (emp.nik) setNikInduktor(emp.nik);
       if (emp.jabatan) setJabatanInduktor(emp.jabatan);
     }
   };
+  const handleNamaInduktorChange = handleInduktorChange;
 
   const compressImage = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
