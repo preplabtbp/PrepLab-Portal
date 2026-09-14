@@ -2,6 +2,24 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.29] - 2026-09-15
+
+### ✨ Sub-Menu Changelog & Manajemen Riwayat Pembaruan di Panel Developer
+
+- **Sub-Menu Terdedikasi di Panel Developer (`src/components/admin-dashboard.tsx`)**:
+  - Menambahkan modul **Changelog** ke dalam grid modul navigasi Developer Panel (`AdminDashboard`).
+  - Mendukung pembukaan langsung via parameter query URL: `/admin-dashboard?module=changelog`.
+- **Komponen Penampil Rilis Modern (`src/components/DeveloperChangelog.tsx`)**:
+  - **Default Rilis Terkini**: Otomatis memunculkan versi terbaru dengan badge status portal aktif (`LATEST RELEASE / AKTIF`) dan ringkasan metrik pembaruan.
+  - **Dua Mode Tampilan (Dual-View)**:
+    - **Mode Fokus (Detail Versi)**: Tampilan master-detail dengan daftar versi di sisi kiri dan detail rilis di sisi kanan, dilengkapi navigasi *stepper* versi sebelumnya/berikutnya.
+    - **Mode Akordion (Timeline Lengkap)**: Tampilan vertikal seluruh riwayat versi dengan mekanisme buka-tutup kartu serta tombol aksi *Buka Semua* dan *Tutup Semua*.
+  - **Pencarian Real-time & Filter Seri**: Fitur pencarian cepat seluruh isi rilis dan filter seri (`v2.8`, `v2.7`, `v2.6`, `v2.5`, `v2.4`).
+  - **Aksi Instan 1-Klik**: Tombol salin ringkasan rilis ke clipboard untuk broadcast ke grup komunikasi kerja.
+- **Endpoint API Terpusat (`server/routes/changelog.ts` & `server.ts`)**:
+  - Endpoint `GET /api/changelog` dan `GET /api/changelog/latest` dengan *in-memory caching* otomatis berbasis waktu modifikasi berkas (`mtime`).
+  - Didaftarkan ke `PUBLIC_API_PREFIXES` agar dapat diakses secara publik dan cepat tanpa hambatan autentikasi.
+
 ## [2.8.28] - 2026-09-15
 
 ### 🔐 Perbaikan Fitur Ganti Password: Endpoint Khusus `/api/auth/change-password` & Integrasi Menu Pengaturan

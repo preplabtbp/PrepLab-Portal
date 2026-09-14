@@ -2,10 +2,11 @@ import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, Button, Input } from './ui';
-import { Database, Plus, Trash2, Edit2, Save, X, RefreshCw, Users, Wrench, FileText, Activity, Shield, Search, ArrowUpDown, Settings2, Upload } from 'lucide-react';
+import { Database, Plus, Trash2, Edit2, Save, X, RefreshCw, Users, Wrench, FileText, Activity, Shield, Search, ArrowUpDown, Settings2, Upload, History } from 'lucide-react';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { PageHeader } from './PageHeader';
+import { DeveloperChangelog } from './DeveloperChangelog';
 
 const MODULES = [
   { id: 'hr', title: 'HR & Karyawan', icon: <Users className="w-5 h-5" />, tables: ['employees', 'roster', 'pelanggaran'] },
@@ -14,7 +15,8 @@ const MODULES = [
   { id: 'inspect', title: 'Inspeksi & Pantau', icon: <Activity className="w-5 h-5" />, tables: ['inspections', 'pemantauan', 'questions'] },
   { id: 'apd', title: 'Sistem APD', icon: <Shield className="w-5 h-5" />, tables: ['apdSettings', 'apdHistory', 'apdDocuments'] },
   { id: 'agenda', title: 'Agenda & Notes', icon: <FileText className="w-5 h-5" />, tables: ['agendaEvents', 'privateNotes', 'userThemes'] },
-  { id: 'system', title: 'System Settings', icon: <Settings2 className="w-5 h-5" />, tables: ['appSettings', 'developerUsers'] }
+  { id: 'system', title: 'System Settings', icon: <Settings2 className="w-5 h-5" />, tables: ['appSettings', 'developerUsers'] },
+  { id: 'changelog', title: 'Changelog', icon: <History className="w-5 h-5" />, tables: [] }
 ];
 
 export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
@@ -28,7 +30,13 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
     return mod;
   });
 
-  const [activeModule, setActiveModule] = useState<string>('hr');
+  const [activeModule, setActiveModule] = useState<string>(() => {
+    const param = new URLSearchParams(window.location.search).get('module');
+    if (param && ['hr', 'asset', 'wo', 'inspect', 'apd', 'agenda', 'system', 'changelog'].includes(param)) {
+      return param;
+    }
+    return 'hr';
+  });
   const [selectedTable, setSelectedTable] = useState<string>('');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -520,12 +528,12 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
         icon={<Database />}
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
         {visibleModules.map(mod => (
           <button
             key={mod.id}
             onClick={() => setActiveModule(mod.id)}
-            className={`p-3 flex flex-col items-center gap-2 rounded-xl border transition-all ${activeModule === mod.id ? 'bg-teal-50 border-teal-200 text-teal-700 shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+            className={`p-3 flex flex-col items-center gap-2 rounded-xl border transition-all cursor-pointer ${activeModule === mod.id ? 'bg-teal-50 border-teal-300 text-teal-700 shadow-xs ring-1 ring-teal-500' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
           >
             <div className={`p-2 rounded-full ${activeModule === mod.id ? 'bg-teal-100' : 'bg-slate-100'}`}>
               {mod.icon}
@@ -535,19 +543,25 @@ export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
         ))}
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2 border-b border-slate-200">
-        {currentMod?.tables.map(t => (
-          <button
-            key={t}
-            onClick={() => { setSelectedTable(t); setIsAdding(false); setEditingId(null); }}
-            className={`px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${selectedTable === t ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      {currentMod?.tables && currentMod.tables.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-2 border-b border-slate-200">
+          {currentMod.tables.map(t => (
+            <button
+              key={t}
+              onClick={() => { setSelectedTable(t); setIsAdding(false); setEditingId(null); }}
+              className={`px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${selectedTable === t ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {selectedTable && (
+      {activeModule === 'changelog' && (
+        <DeveloperChangelog />
+      )}
+
+      {selectedTable && activeModule !== 'changelog' && (
         <Card className="overflow-hidden shadow-sm border border-slate-200">
           <datalist id="employee-list">
           {employeesData.map(emp => (
