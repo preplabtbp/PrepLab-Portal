@@ -51,29 +51,27 @@ export function SettingsScreen({
 
   const handleUpdatePassword = async () => {
     if (!oldPassword || !newPassword) return toast.error('Isi password lama dan baru');
-    toast.loading('Menyimpan...', { id: 'pwd' });
+    if (newPassword.length < 8) return toast.error('Password baru minimal 8 karakter');
+    toast.loading('Menyimpan perubahan...', { id: 'pwd' });
     try {
-       const res = await fetch('/api/auth/login', {
+       const res = await fetch('/api/auth/change-password', {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ nik: inspectorNik, password: oldPassword })
+         body: JSON.stringify({ 
+           nik: inspectorNik, 
+           oldPassword, 
+           newPassword, 
+           email: email ? email.trim() : undefined 
+         })
        });
        const data = await res.json();
-       if (data.status !== 'success') throw new Error(data.message);
+       if (data.status !== 'success') throw new Error(data.message || 'Gagal memperbarui password');
        
-       const res2 = await fetch('/api/auth/setup', {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ nik: inspectorNik, password: newPassword, email: email })
-       });
-       const data2 = await res2.json();
-       if (data2.status !== 'success') throw new Error(data2.message);
-       
-       toast.success('Password dan profil diperbarui', { id: 'pwd' });
+       toast.success('Password dan profil berhasil diperbarui', { id: 'pwd' });
        setOldPassword('');
        setNewPassword('');
     } catch(e: any) {
-       toast.error(e.message, { id: 'pwd' });
+       toast.error(e.message || 'Gagal memperbarui password', { id: 'pwd' });
     }
   };
 

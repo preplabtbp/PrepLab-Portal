@@ -2,6 +2,68 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.28] - 2026-09-15
+
+### 🔐 Perbaikan Fitur Ganti Password: Endpoint Khusus `/api/auth/change-password` & Integrasi Menu Pengaturan
+
+- **Penyebab Masalah (Root Cause)**:
+  - Pada menu **Pengaturan** (`src/components/settings-screen.tsx`), alur penyimpanan password baru sebelumnya memanggil endpoint `/api/auth/setup`.
+  - Pasca pengetatan keamanan sistem (P1 Security Guard), endpoint `/api/auth/setup` secara ketat hanya diperuntukkan bagi aktivasi awal akun baru (`firstLoginComplete: false`).
+  - Akun karyawan yang telah aktif otomatis ditolak dengan pesan error: *"Akun ini sudah pernah diaktivasi dan aktif. Silakan login atau gunakan menu Lupa Password untuk mereset akun Anda."*
+- **Endpoint Terdedikasi `POST /api/auth/change-password` (`server/routes/auth.ts`)**:
+  - Menambahkan endpoint mandiri untuk penggantian password akun aktif.
+  - Memverifikasi keabsahan password lama secara kriptografis menggunakan `bcrypt.compare`.
+  - Memvalidasi batas minimum 8 karakter untuk password baru.
+  - Memperbarui hash password (`passwordHash`) dan email pemulihan ke database dalam satu transaksi aman.
+- **Pembaruan Formulir Pengaturan Akun (`src/components/settings-screen.tsx`)**:
+  - Menyederhanakan alur update password menjadi satu request langsung ke `/api/auth/change-password`.
+  - Menambahkan validasi dini panjang karakter di sisi browser serta pesan notifikasi status yang responsif dan informatif.
+
+## [2.8.27] - 2026-09-14
+
+### 📝 Peningkatan Formulir Induksi Karyawan: Kompresi Gambar Klien, Limit Payload 25MB & Penanganan Error JSON
+
+- **Kompresi Gambar Sisi Klien Otomatis (`src/components/induksi-screen.tsx`)**:
+  - Menambahkan fungsi kompresi gambar berbasis HTML5 Canvas (`compressImage`) sebelum foto dikonversi ke Base64 dan dikirim ke server.
+  - Resolusi foto dibatasi secara proporsional hingga maksimal 1200x1200px dengan kompresi JPEG kualitas 0.8, secara dramatis memangkas ukuran berkas tanpa mengurangi kejernihan dokumentasi visual.
+  - Dilengkapi indikator proses interaktif (*"Mengompres ukuran foto untuk upload cepat..."*) serta tombol **`[Hapus Foto]`** untuk memudahkan peserta mengganti dokumentasi jika diperlukan.
+  - Memperbaiki penanganan respons API agar secara tanggap mendeteksi status `413 (Payload Too Large)` atau pesan galat server lainnya dan menyajikannya dalam pesan notifikasi (*toast*) yang jelas bagi pengguna.
+- **Peningkatan Batas Ukuran Body Parser Server (`server.ts`)**:
+  - Menaikkan batas ukuran request body Express (`express.json` dan `express.urlencoded`) dari sebelumnya 10MB menjadi **`25MB`**.
+  - Memberikan ruang yang cukup untuk memproses dokumen formulir induksi keselamatan yang memuat tanda tangan digital ganda dan lampiran foto dokumentasi.
+  - Menambahkan rute `/api/induksi` ke dalam daftar rute yang dikecualikan dari middleware tertentu.
+- **Middleware Penanganan Error Global Server (Global JSON Error Handler, `server.ts`)**:
+  - Menambahkan middleware penanganan error terpusat yang selalu mengembalikan respons JSON terstruktur alih-alih halaman galat HTML baku saat terjadi kegagalan sistem.
+  - Secara spesifik menangani error `entity.too.large` / HTTP 413 dengan pesan ramah pengguna: *"Ukuran payload/foto terlalu besar (maksimal 25MB). Silakan gunakan foto yang telah dikompres."*
+- **Optimalisasi Inisialisasi Layanan Google Auth (`google-services.ts`)**:
+  - Menambahkan pemuatan konfigurasi `dotenv.config()` secara eksplisit dan melengkapi fallback aman untuk variabel lingkungan Google OAuth2 (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`).
+
+### 🏷️ Standardisasi Bank Materi P5M: Penambahan Prefiks 'Pemahaman' pada Judul SOP & IK
+
+- **Standardisasi Judul Prosedur Operasional Standar (SOP, `scripts/sync-sop-drive-to-p5m.cjs`, `scripts/test-sop-parser.cjs`)**:
+  - Seluruh judul dokumen SOP yang disinkronisasikan dari Google Drive ke bank materi P5M kini otomatis diawali dengan prefiks **`Pemahaman`** (misalnya: *"Pemahaman SOP Pengoperasian Jaw Crusher"*).
+  - Menyelaraskan format penamaan agar materi briefing harian berfokus pada pemahaman dan edukasi prosedur kerja aman di lapangan.
+- **Standardisasi Judul Instruksi Kerja (IK, `scripts/migrate-ik-preparasi-to-p5m.cjs`, `scripts/sync-ik-drive-to-p5m.cjs`)**:
+  - Seluruh skrip migrasi dan sinkronisasi berkas Instruksi Kerja Preparasi & Laboratorium kini otomatis menyematkan prefiks **`Pemahaman IK`** pada judul materi.
+  - Menjamin konsistensi penyajian topik pada jadwal acak P5M mingguan, pencarian bank materi, serta notifikasi penugasan personil.
+
+## [2.8.26] - 2026-09-12
+
+### 📄 Pratinjau Dokumen P5M: Auto-Sharing Google Drive & Mode Server Stream Bebas Hambatan
+
+- **Otomatisasi Hak Akses Google Drive (`ensureAnyoneCanReadDriveFile`, `server/routes/p5m.ts`, `server/routes/bulletin.ts`)**:
+  - Menambahkan fungsi otomatis via Google Drive API untuk menyetel izin berkas menjadi publik pembaca (*role: reader, type: anyone*) saat file dokumen P5M atau buletin diakses melalui sistem.
+  - Mencegah timbulnya pesan kendala login atau *"No preview available"* ketika karyawan membuka dokumen prosedur di perangkat yang tidak terhubung dengan akun Google perusahaan.
+- **Dukungan Mode Server Stream Langsung (Direct Binary Stream Viewer)**:
+  - Menyediakan penampil streaming langsung dari server (`/api/drive/view/:fileId` dan `/api/p5m/view-drive/:fileId`) yang mendeteksi berkas PDF melalui verifikasi header biner (`%PDF-`) dan menyajikan konten dengan `Content-Type: application/pdf` serta `Cache-Control: public, max-age=86400`.
+  - Berfungsi sebagai jalur alternatif handal apabila Google Drive Embed diblokir oleh ekstensi peramban, cookie pihak ketiga, atau pembatasan jaringan lokal.
+- **Toggle Mode Penampil Interaktif (`p5m-screen.tsx` & `p5m-notification-modal.tsx`)**:
+  - Menambahkan tombol pemilih mode penampil **`[Mode Stream Server / Mode Google Drive]`** dengan ikon `RefreshCw` pada modal notifikasi penugasan P5M dan modal pratinjau materi P5M.
+  - Memberikan fleksibilitas penuh kepada personil untuk beralih mode pratinjau hanya dengan satu kali klik bila salah satu metode mengalami kendala pemuatan.
+- **Optimalisasi Deteksi File Prosedur & Tautan Flyer (`src/lib/p5m-flyer.ts`)**:
+  - Memperluas deteksi tipe dokumen prosedur agar mencakup berkas yang mengandung penamaan `JSA`, `IK`, maupun `SOP`.
+  - Mengarahkan tautan unduh dokumen ke proxy backend terproteksi.
+
 ## [2.8.25] - 2026-09-12
 
 ### 🚫 Penegakan Mutlak: Larangan Masuk Karyawan Resign ke Database & Pembersihan Otomatis

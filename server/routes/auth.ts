@@ -350,11 +350,66 @@ authRouter.post("/setup", async (req, res) => {
       .where(eq(employees.id, user.id))
       .returning();
       
+      
     if(result.length === 0) return res.status(500).json({ status: "error", message: "Gagal menyimpan data setup" });
     
     return res.json({ status: "success", employee: toPublicEmployee(result[0]) });
   } catch(e: any) {
     res.status(500).json({ status: "error", message: "Gagal memproses setup akun awal" });
+  }
+});
+
+// Change Password for Active User (Requires old password verification)
+authRouter.post("/change-password", async (req, res) => {
+  try {
+    const { nik, oldPassword, newPassword, email } = req.body;
+    const cleanNik = (nik || "").trim().toUpperCase();
+    if (!cleanNik || !oldPassword || !newPassword) {
+      return res.status(400).json({ status: "error", message: "NIK, password lama, dan password baru harus diisi" });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ status: "error", message: "Password baru minimal 8 karakter" });
+    }
+
+    const userMatches = await db.select().from(employees).where(eq(employees.nik, cleanNik)).limit(1);
+    const user = userMatches[0];
+    if (!user) {
+      return res.status(404).json({ status: "error", message: "NIK tidak ditemukan" });
+    }
+
+    if (!user.passwordHash) {
+      return res.status(400).json({ status: "error", message: "Akun belum disetup. Silakan lakukan aktivasi awal akun terlebih dahulu." });
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, user.passwordHash);
+    if (!isMatch) {
+      return res.status(401).json({ status: "error", message: "Password lama yang Anda masukkan salah" });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    const updateData: any = { passwordHash: newHash };
+    if (email && typeof email === 'string') {
+      updateData.email = email.trim();
+    }
+
+    const result = await db.update(employees)
+      .set(updateData)
+      .where(eq(employees.id, user.id))
+      .returning();
+
+    if (result.length === 0) {
+      return res.status(500).json({ status: "error", message: "Gagal memperbarui password akun" });
+    }
+
+    return res.json({
+      status: "success",
+      message: "Password dan profil berhasil diperbarui",
+      employee: toPublicEmployee(result[0])
+    });
+  } catch (e: any) {
+    console.error("Change password error:", e);
+    return res.status(500).json({ status: "error", message: "Gagal memproses penggantian password" });
   }
 });
 
