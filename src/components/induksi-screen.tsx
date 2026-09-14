@@ -26,6 +26,7 @@ export function InduksiScreen() {
   const [fotoDokumentasi, setFotoDokumentasi] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
   const [waMessageText, setWaMessageText] = useState('');
 
   const padPeserta = useRef<any>(null);
@@ -41,48 +42,85 @@ export function InduksiScreen() {
     }
   });
 
-  const handleNamaPesertaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
+  const handlePesertaChange = (eOrName: React.ChangeEvent<HTMLInputElement> | string) => {
+    const val = typeof eOrName === 'string' ? eOrName : eOrName.target.value;
     setNamaPeserta(val);
-    const emp = employees.find((em: any) => em.name === val);
+    const emp = employees.find((e: any) => e.name.toLowerCase() === val.toLowerCase());
     if (emp) {
       if (emp.nik) setNikPeserta(emp.nik);
       if (emp.jabatan) setJabatanPeserta(emp.jabatan);
-      if (emp.section) {
-        // Map section to match options (Prep, Lab, Adm, QA, IC, MT)
-        const sec = emp.section.toLowerCase();
-        if (sec.includes('prep')) setDivisi('Prep');
-        else if (sec.includes('lab')) setDivisi('Lab');
-        else if (sec.includes('adm')) setDivisi('Adm');
-        else if (sec.includes('qa') || sec.includes('quality')) setDivisi('QA');
-        else if (sec.includes('ic') || sec.includes('inventory')) setDivisi('IC');
-        else if (sec.includes('mt') || sec.includes('maintenance')) setDivisi('MT');
-      }
-      if (emp.pt) {
-        if (emp.pt.includes('TBP')) setPerusahaan('PT. TBP');
-        else if (emp.pt.includes('GPS')) setPerusahaan('PT. GPS');
-      }
+      if (emp.pt) setPerusahaan(emp.pt);
+      if (emp.section) setDivisi(emp.section);
     }
   };
+  const handleNamaPesertaChange = handlePesertaChange;
 
-  const handleNamaInduktorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
+  const handleInduktorChange = (eOrName: React.ChangeEvent<HTMLInputElement> | string) => {
+    const val = typeof eOrName === 'string' ? eOrName : eOrName.target.value;
     setNamaInduktor(val);
-    const emp = employees.find((em: any) => em.name === val);
+    const emp = employees.find((e: any) => e.name.toLowerCase() === val.toLowerCase());
     if (emp) {
       if (emp.nik) setNikInduktor(emp.nik);
       if (emp.jabatan) setJabatanInduktor(emp.jabatan);
     }
   };
+  const handleNamaInduktorChange = handleInduktorChange;
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImage = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round((width * MAX_HEIGHT) / height);
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = () => resolve(e.target?.result as string);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFotoDokumentasi(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    setIsCompressingPhoto(true);
+    try {
+      const compressed = await compressImage(file);
+      setFotoDokumentasi(compressed);
+    } catch (err) {
+      console.error('Gagal mengompres gambar:', err);
+      toast.error('Gagal memproses foto dokumentasi.');
+    } finally {
+      setIsCompressingPhoto(false);
+    }
   };
 
   const onSubmit = async () => {
@@ -124,8 +162,20 @@ export function InduksiScreen() {
         body: JSON.stringify(payload)
       });
 
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Terjadi kesalahan saat memproses data');
+      const contentType = res.headers.get('content-type') || '';
+      let result: any = {};
+      if (contentType.includes('application/json')) {
+        result = await res.json();
+      } else {
+        const rawText = await res.text();
+        throw new Error(
+          res.status === 413 
+            ? 'Ukuran foto terlalu besar. Silakan gunakan foto yang lebih kecil.'
+            : (rawText.slice(0, 120) || `Gagal menghubungi server (${res.status})`)
+        );
+      }
+
+      if (!res.ok) throw new Error(result.error || result.message || 'Terjadi kesalahan saat memproses data');
       
       toast.success('Data berhasil di-submit!');
       
@@ -325,10 +375,29 @@ export function InduksiScreen() {
           <h2 className="text-lg font-semibold text-primary mb-4 border-b pb-2">5. Dokumentasi Inspeksi</h2>
           <div>
             <label className="block text-sm font-medium mb-2">Lampirkan Foto Proses (Opsional)</label>
-            <Input type="file" accept="image/*" onChange={handlePhotoUpload} />
+            <Input 
+              type="file" 
+              accept="image/*" 
+              onChange={handlePhotoUpload} 
+              disabled={isCompressingPhoto || isSubmitting}
+            />
+            {isCompressingPhoto && (
+              <p className="text-xs text-primary mt-2 flex items-center">
+                <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Mengompres ukuran foto untuk upload cepat...
+              </p>
+            )}
             {fotoDokumentasi && (
-              <div className="mt-4">
-                <img src={fotoDokumentasi} alt="Dokumentasi" className="max-h-64 rounded-md border shadow-sm mx-auto" />
+              <div className="mt-4 text-center space-y-2">
+                <img src={fotoDokumentasi} alt="Dokumentasi" className="max-h-64 rounded-md border shadow-sm mx-auto object-contain" />
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setFotoDokumentasi(null)}
+                  className="text-xs text-red-600 hover:bg-red-50"
+                >
+                  Hapus Foto
+                </Button>
               </div>
             )}
           </div>
