@@ -25,6 +25,10 @@ function parseSOPTitle(fileName) {
     base = `SOP ${base}`;
   }
 
+  if (!base.toUpperCase().startsWith('PEMAHAMAN ')) {
+    base = `Pemahaman ${base}`;
+  }
+
   return base;
 }
 
