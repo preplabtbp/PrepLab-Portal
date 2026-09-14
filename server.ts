@@ -423,8 +423,8 @@ const app = express();
   }));
 
   // Middleware to parse JSON bodies & Cookies (Restricted body size for DoS protection)
-  app.use(express.json({ limit: '10mb' })); 
-  app.use(express.urlencoded({ limit: '10mb', extended: true }));
+  app.use(express.json({ limit: '25mb' })); 
+  app.use(express.urlencoded({ limit: '25mb', extended: true }));
   app.use(cookieParser());
 
   // Rate Limiting (P1 Hardening)
@@ -462,7 +462,8 @@ const app = express();
     '/api/drive/view',
     '/api/labbot/chat',
     '/api/p5m/flyer',
-    '/api/inspection-schedule'
+    '/api/inspection-schedule',
+    '/api/induksi'
   ];
 
   app.use('/api', (req, res, next) => {
@@ -1048,6 +1049,24 @@ async function syncBulletinToAgenda(post: any) {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  // Centralized Error Handling Middleware (Always return JSON for API errors instead of HTML)
+  app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (res.headersSent) {
+      return next(err);
+    }
+    console.error("Express uncaught error:", err);
+    if (err.type === 'entity.too.large' || err.status === 413) {
+      return res.status(413).json({
+        success: false,
+        error: "Ukuran payload/foto terlalu besar (maksimal 25MB). Silakan gunakan foto yang telah dikompres."
+      });
+    }
+    return res.status(err.status || 500).json({
+      success: false,
+      error: err.message || "Terjadi kesalahan internal pada server."
+    });
+  });
 
   // Mulai pelayan (server) di port 3000
   initRosterCron();

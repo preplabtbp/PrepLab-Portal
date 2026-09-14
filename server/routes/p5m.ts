@@ -1957,6 +1957,8 @@ p5mRouter.get("/flyer", async (req, res) => {
 
         for (const cUrl of candidateUrls) {
           try {
+            const fetchRes = await fetch(cUrl);
+            if (!fetchRes.ok) continue;
             let contentType = fetchRes.headers.get('content-type') || 'image/png';
             const arrayBuf = await fetchRes.arrayBuffer();
             const buf = Buffer.from(arrayBuf);

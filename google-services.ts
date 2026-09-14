@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import { google } from 'googleapis';
 
 /**
@@ -10,12 +12,12 @@ const REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
 
 // Inisialisasi Auth Client menggunakan OAuth2
 const auth = new google.auth.OAuth2(
-  CLIENT_ID,
-  CLIENT_SECRET
+  CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
+  CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
 );
 
 auth.setCredentials({
-  refresh_token: REFRESH_TOKEN
+  refresh_token: REFRESH_TOKEN || process.env.GOOGLE_REFRESH_TOKEN
 });
 
 export const drive = google.drive({ version: 'v3', auth });
