@@ -1,6 +1,6 @@
 import express from "express";
 import { db } from "../../src/db/index.js";
-import { tickets, notifications, inspections } from "../../src/db/schema.js";
+import { tickets, notifications, inspections, employees } from "../../src/db/schema.js";
 import { ticketSchema } from "../../src/lib/zod.js";
 import { eq, desc } from "drizzle-orm";
 import { sendWebPush } from "../utils.js";
@@ -286,6 +286,39 @@ router.put("/api/tickets/:id", async (req, res) => {
         `*Waktu Penyelesaian:* ${endStr}\n` +
         `*Status:* CLOSED (Tuntas)\n` +
         (ticket.closingPhoto && ticket.closingPhoto !== '-' && !ticket.closingPhoto.startsWith('data:') ? `\n*Bukti Selesai:*\n${ticket.closingPhoto}` : '');
+
+      // Notifikasi in-app & Web Push ke inspektor pelapor temuan
+      try {
+        let targetNik: string | null = null;
+        if (ticket.requestorName) {
+          const rawName = ticket.requestorName.split('|')[0].trim();
+          const nikMatch = ticket.requestorName.match(/\b\d{4,}\b/);
+          if (nikMatch) {
+            targetNik = nikMatch[0];
+          } else {
+            const allEmps = await db.select().from(employees);
+            const found = allEmps.find(e => {
+              const eName = (e.name || '').toLowerCase().trim();
+              const rName = rawName.toLowerCase().trim();
+              return eName === rName || eName.includes(rName) || rName.includes(eName);
+            });
+            if (found) targetNik = found.nik;
+          }
+        }
+
+        const notifMsg = `Temuan Anda [${ticket.ticketId}] di ${ticket.location || 'Area'} telah diselesaikan oleh ${ticket.pic || 'PIC'}. Tindakan: ${ticket.actionTaken || '-'}`;
+        const _n = await db.insert(notifications).values({
+          userId: targetNik, // Langsung ke akun inspektor pelapor
+          role: targetNik ? null : 'Safety', // Fallback ke role Safety jika NIK tidak terdeteksi
+          title: `Temuan [${ticket.ticketId}] Telah Ditutup (Selesai)`,
+          message: notifMsg,
+          type: 'success',
+          link: '/ticket'
+        }).returning();
+        sendWebPush(_n);
+      } catch (notifErr) {
+        console.error("Gagal mengirim notifikasi closing tiket:", notifErr);
+      }
     }
 
     res.json({ ...(ticket || {}), waMessageText });

@@ -176,10 +176,6 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
 
           if (found && found.status === 'BELUM' && !found.isCuti) {
             setUserInspectionItem(found);
-            const dismissed = sessionStorage.getItem(`dismissed_sap_reminder_${targetWeekTag}_${cleanNik}`);
-            if (!dismissed) {
-              setShowInspectionReminder(true);
-            }
           } else {
             setUserInspectionItem(null);
             setShowInspectionReminder(false);
@@ -274,10 +270,6 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
 
           if (found && found.status === 'BELUM' && !found.isCuti) {
             setUserInspectionItem(found);
-            const dismissed = sessionStorage.getItem(`dismissed_sap_reminder_${targetWeekTag}_${cleanNik}`);
-            if (!dismissed) {
-              setShowInspectionReminder(true);
-            }
           } else {
             setUserInspectionItem(null);
             setShowInspectionReminder(false);

@@ -18,6 +18,20 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Menambahkan normalisasi otomatis pada endpoint `GET /api/tickets` agar tiket temuan P3K yang sebelumnya tersimpan dengan lokasi `'-'` otomatis menampilkan nama areanya.
   - Memperbarui 8 data tiket temuan P3K eksisting di database (termasuk tiket `TKT-W38Y26-155`) agar area dan deskripsinya langsung bersih dan rapi.
 
+### 🔔 Notifikasi Penyelesaian Temuan untuk Inspektor Pelapor (`server/routes/tickets.ts`)
+
+- **Notifikasi Otomatis Personil Pelapor saat Temuan CLOSED**:
+  - Saat suatu tiket temuan di-*closing* oleh PIC/teknisi, sistem kini otomatis menelusuri NIK atau nama inspektor pelapor (`requestorName`).
+  - Mengirimkan notifikasi in-app dan Web Push langsung ke akun inspektor yang bersangkutan (*"Temuan Anda [TKT-...] di Area ... telah diselesaikan oleh PIC"*).
+  - Melengkapi fallback ke role `Safety` jika NIK pelapor tidak terdeteksi, sehingga tim K3 selalu terpantau.
+
+### 🔕 Eliminasi Notifikasi Dobel di SAP Dashboard (`src/components/sap-dashboard.tsx`)
+
+- **Penyesuaian Alur Pengingat Target Inspeksi**:
+  - Menghilangkan *auto-popup* modal saat halaman SAP Dashboard pertama kali dibuka, sehingga pengguna tidak lagi melihat peringatan ganda (banner atas dan pop-up bersamaan).
+  - Banner peringatan di bagian atas dashboard tetap aktif dan responsif, sementara pop-up modal detail hanya akan terbuka jika pengguna sengaja mengklik tombol **`[Detail]`** pada banner.
+
+
 
 ### 🖼️ Perbaikan Pratinjau Foto Temuan K3: Pencegahan Salah Deteksi Base64 sebagai ID Google Drive
 
