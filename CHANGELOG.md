@@ -4,6 +4,21 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ## [2.8.30] - 2026-09-15
 
+### 🩹 Perbaikan Alokasi Area & Deskripsi Temuan Checklist Kotak P3K
+
+- **Penyebab Masalah (Root Cause)**:
+  - Pada formulir inspeksi Kotak P3K (`FormP3K.tsx`), tidak terdapat kolom input area manual karena nama area telah melekat pada judul formulir (misal *Checklist Isi Kotak P3K Preparasi Basah*).
+  - Hal ini menyebabkan `lokasiUmum` terkirim dengan nilai default `'-'`, sehingga kolom **Area / Lokasi** di kartu tiket temuan menjadi kosong (`-`).
+  - Selain itu, teks temuan sebelumnya menggabungkan seluruh judul formulir ke dalam deskripsi temuan (*"Checklist Isi Kotak P3K Preparasi Basah: Aquades..."*), sehingga nama area tercampur di dalam deskripsi.
+- **Ekstraksi Otomatis Area Formulir P3K (`src/components/weekly-inspection-screen.tsx` & `server/routes/inspections.ts`)**:
+  - Menambahkan deteksi otomatis nama area dari judul form P3K (*Preparasi Basah*, *Preparasi Kering*, atau *Laboratorium*) saat submit inspeksi.
+  - Memastikan field `location` pada tiket temuan otomatis terisi dengan nama area yang benar.
+  - Merapikan format teks temuan menjadi `Kekurangan Stok Item Kotak P3K: [daftar item kosong]` tanpa menduplikasi nama area di dalam deskripsi.
+- **Normalisasi API & Database Backfill (`server/routes/tickets.ts`)**:
+  - Menambahkan normalisasi otomatis pada endpoint `GET /api/tickets` agar tiket temuan P3K yang sebelumnya tersimpan dengan lokasi `'-'` otomatis menampilkan nama areanya.
+  - Memperbarui 8 data tiket temuan P3K eksisting di database (termasuk tiket `TKT-W38Y26-155`) agar area dan deskripsinya langsung bersih dan rapi.
+
+
 ### 🖼️ Perbaikan Pratinjau Foto Temuan K3: Pencegahan Salah Deteksi Base64 sebagai ID Google Drive
 
 - **Penyebab Masalah (Root Cause)**:

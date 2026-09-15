@@ -114,9 +114,18 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
     const isUmum = tipeFormActive === 'UMUM';
     const isTabung = tipeFormActive === 'TABUNG_MINGGUAN' || tipeFormActive === 'TABUNG';
 
+    const formJudul = uniqueForms.find(f => f.id === selectedForm)?.judul || '';
+    let resolvedLokasi = payload.lokasiUmum || '-';
+    if ((!resolvedLokasi || resolvedLokasi === '-') && tipeFormActive === 'P3K') {
+      if (/preparasi basah/i.test(formJudul)) resolvedLokasi = 'Preparasi Basah';
+      else if (/preparasi kering/i.test(formJudul)) resolvedLokasi = 'Preparasi Kering';
+      else if (/laboratorium|lab/i.test(formJudul)) resolvedLokasi = 'Laboratorium';
+      else resolvedLokasi = 'Kotak P3K';
+    }
+
     const finalData = {
       idForm: selectedForm,
-      judulForm: uniqueForms.find(f => f.id === selectedForm)?.judul || '',
+      judulForm: formJudul,
       tipe: tipeFormActive,
       wkt: '-',
       insp1: inspectorName + ' | ' + (inspectorJabatan || inspectorNik),
@@ -124,7 +133,7 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
       insp3: payload.signatures?.insp3Name ? `${payload.signatures.insp3Name} | ${payload.signatures.insp3Jabatan || payload.signatures.insp3Nik}` : '',
       catatanUmum: payload.catatanUmum || '-',
       temuanUmum: payload.temuanUmum || [],
-      lokasiUmum: payload.lokasiUmum || '-',
+      lokasiUmum: resolvedLokasi,
       payload: payload.payload,
       tabungMeta: payload.tabungMeta || {},
       devOptions: parsedDevOptions

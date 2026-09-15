@@ -33,6 +33,23 @@ router.get("/api/tickets", async (req, res) => {
       return null;
     }
 
+    // Normalize P3K ticket locations and descriptions if location is missing/dash
+    for (const t of dbData) {
+      const isP3k = (t.category || '').toLowerCase().includes('p3k') || (t.description || '').toLowerCase().includes('kotak p3k');
+      if (isP3k) {
+        if (!t.location || t.location === '-' || t.location.toLowerCase() === 'area') {
+          const combined = `${t.category || ''} ${t.description || ''}`.toLowerCase();
+          if (combined.includes('preparasi basah')) t.location = 'Preparasi Basah';
+          else if (combined.includes('preparasi kering')) t.location = 'Preparasi Kering';
+          else if (combined.includes('laboratorium') || combined.includes('lab')) t.location = 'Laboratorium';
+          else t.location = 'Kotak P3K';
+        }
+        if (t.description && /^checklist isi kotak p3k [^:]+:\s*/i.test(t.description)) {
+          t.description = t.description.replace(/^checklist isi kotak p3k [^:]+:\s*/i, 'Kekurangan Stok Item Kotak P3K: ');
+        }
+      }
+    }
+
     // Group / Consolidate APD tickets that belong to the same inspection
     const consolidated: any[] = [];
     const seenApdGroup = new Map<string, any>();

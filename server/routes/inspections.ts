@@ -334,11 +334,18 @@ router.post("/api/inspections/universal", async (req, res) => {
                       return `${item.item}: ${stok}${ket}`;
                   }).join(', ');
 
-                  const formTitle = finalData.judulForm || 'Kotak P3K';
-                  const lokasi = (finalData.lokasiUmum && finalData.lokasiUmum !== '-') ? ` (${finalData.lokasiUmum})` : '';
+                  let areaName = (finalData.lokasiUmum && finalData.lokasiUmum !== '-') ? finalData.lokasiUmum : '';
+                  if (!areaName) {
+                      const j = (finalData.judulForm || '').toLowerCase();
+                      if (j.includes('preparasi basah')) areaName = 'Preparasi Basah';
+                      else if (j.includes('preparasi kering')) areaName = 'Preparasi Kering';
+                      else if (j.includes('laboratorium') || j.includes('lab')) areaName = 'Laboratorium';
+                      else areaName = 'Kotak P3K';
+                  }
+                  finalData.lokasiUmum = areaName;
 
                   allTemuan.push({
-                      temuan: `${formTitle}${lokasi}: ${itemsList}`,
+                      temuan: `Kekurangan Stok Item Kotak P3K: ${itemsList}`,
                       risiko: 'Keterlambatan Pertolongan Pertama Medis',
                       pengendalian: 'Restok & Pembaruan Item P3K Sesuai Standar',
                       status: 'OPEN',
