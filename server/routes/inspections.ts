@@ -396,6 +396,24 @@ router.post("/api/inspections/universal", async (req, res) => {
               if (ticketValues.length > 0) {
                   await db.insert(tickets).values(ticketValues);
                   console.log(`Inserted ${ticketValues.length} separate temuan into tickets table.`);
+
+                  // Kirim Push Notification & In-App Notification untuk Temuan Inspeksi Baru
+                  try {
+                      const inspectorNameClean = (finalData.insp1 || 'Inspektor').split('-')[0].split('(')[0].trim();
+                      const notifTitle = `Temuan Baru: ${finalData.judulForm || 'Inspeksi Terpadu'}`;
+                      const notifMsg = `${inspectorNameClean} mencatat ${ticketValues.length} temuan di ${finalData.lokasiUmum || 'Area Kerja'}`;
+                      const _n = await db.insert(notifications).values({
+                          userId: null,
+                          role: 'Safety',
+                          title: notifTitle,
+                          message: notifMsg,
+                          type: 'warning',
+                          link: '/ticket'
+                      }).returning();
+                      sendWebPush(_n);
+                  } catch (pushErr) {
+                      console.error("Gagal mengirim push notifikasi temuan inspeksi universal:", pushErr);
+                  }
               }
           } catch(e) {
               console.error("Failed to insert temuan to tickets table:", e);
@@ -818,6 +836,24 @@ router.post("/api/inspections", async (req, res) => {
 
                       await db.insert(tickets).values([singleTicket]);
                       console.log(`Inserted 1 consolidated APD temuan ticket (${singleTicket.ticketId}) into tickets table.`);
+
+                      // Kirim Push Notification & In-App Notification untuk Temuan APD Baru
+                      try {
+                          const inspectorNameClean = (insp || 'Inspektor').split('-')[0].split('(')[0].trim();
+                          const notifTitle = 'Temuan Kepatuhan APD Baru';
+                          const notifMsg = `${inspectorNameClean} mencatat ketidakpatuhan APD di area ${area || 'Area Kerja'}`;
+                          const _n = await db.insert(notifications).values({
+                              userId: null,
+                              role: 'Safety',
+                              title: notifTitle,
+                              message: notifMsg,
+                              type: 'warning',
+                              link: '/ticket'
+                          }).returning();
+                          sendWebPush(_n);
+                      } catch (pushErr) {
+                          console.error("Gagal mengirim push notifikasi temuan APD:", pushErr);
+                      }
                   }
               } catch(e) {
                   console.error("Failed to insert APD temuan to tickets table:", e);

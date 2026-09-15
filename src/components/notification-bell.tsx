@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Check, X, BellRing, Wrench, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import { subscribeUserToPush } from '../push-notifications';
 import { WorkOrderDetailModal } from './WorkOrderDetailModal';
 
@@ -34,12 +35,12 @@ export function NotificationBell({ userNik, userName }: NotificationBellProps) {
     const success = await subscribeUserToPush(userNik);
     if (success) {
       setPushStatus('granted');
-      alert('Push notifications enabled!');
+      toast.success('Notifikasi push HP berhasil diaktifkan!');
     } else {
-      alert('Failed to enable push notifications. Check browser settings.');
       if ('Notification' in window) {
         setPushStatus(Notification.permission);
       }
+      toast.error('Gagal mengaktifkan notifikasi push. Periksa izin peramban/HP.');
     }
   };
 

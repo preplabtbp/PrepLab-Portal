@@ -19,6 +19,7 @@ import { InspectionNotificationModal } from './components/InspectionNotification
 import { GlobalOpenFindingsReminder } from './components/OpenFindingsReminderModal';
 import { GlobalKtaPartialReminderModal } from './components/GlobalKtaPartialReminderModal';
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
+import { PushNotificationPrompt } from './components/PushNotificationPrompt';
 
 
 
@@ -1403,6 +1404,12 @@ export default function App() {
         userNik={inspectorNik}
         onCancel={() => setShowLogoutConfirm(false)}
         onConfirm={confirmLogoutKaryawan}
+      />
+
+      {/* Push Notification Auto-Prompt for Mobile / PWA */}
+      <PushNotificationPrompt 
+        userNik={inspectorNik} 
+        userName={inspectorName} 
       />
 
     </div>

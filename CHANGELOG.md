@@ -2,6 +2,27 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.32] - 2026-09-15
+
+### 📲 Push Notifikasi Mobile & PWA Terpasang (Temuan Inspeksi K3, APD & KTA/TTA)
+
+- **Otomatisasi Langganan Push Notifikasi di HP (`src/push-notifications.ts` & `src/components/PushNotificationPrompt.tsx`)**:
+  - Menambahkan deteksi otomatis status aplikasi terpasang di HP (PWA standalone mode / Home Screen / peramban HP).
+  - Jika izin notifikasi telah diberikan (`granted`), sistem otomatis menghubungkan token Web Push HP ke NIK personil di latar belakang (*silent subscription*) tanpa perlu membuka lonceng manual.
+  - Jika izin belum diatur (`default`), menampilkan banner interaktif modern di layar HP untuk mengaktifkan notifikasi dengan 1 ketukan.
+  - Menangani event `appinstalled` ketika pengguna baru memasang aplikasi ke layar utama HP agar langsung menawarkan pengaktifan notifikasi.
+- **Pemberitahuan Temuan Inspeksi Terpadu (`server/routes/inspections.ts`)**:
+  - Saat form inspeksi terpadu/universal disubmit dengan temuan bahaya K3 (`ticketValues.length > 0`), sistem otomatis membuat notifikasi in-app dan memicu `sendWebPush` ke seluruh HP personil Safety, Pengawas, dan Tim Terkait.
+- **Pemberitahuan Temuan Ketidakpatuhan APD (`server/routes/inspections.ts`)**:
+  - Saat inspeksi kepatuhan APD menemukan personil yang melanggar/tidak lengkap APD, tiket temuan langsung mengirimkan Web Push ke HP tim terkait secara seketika (*real-time*).
+- **Pemberitahuan Laporan KTA & TTA (`server/routes/misc.ts`)**:
+  - Saat personil mengirim laporan Kondisi Tidak Aman (KTA) atau Tindakan Tidak Aman (TTA), sistem langsung mengirimkan notifikasi push ke tim K3 & pengawas.
+- **Penyempurnaan Penargetan Push Notification di Backend (`server/utils.ts`)**:
+  - Memperbaiki penargetan role: sebelumnya hanya memeriksa kecocokan string kaku pada `employees.department`. Kini mencakup `department`, `section`, dan `jabatan` (case-insensitive) dengan fallback broadcast cerdas agar temuan K3 tidak hilang jika ada variasi nama seksi.
+  - Menambahkan inisialisasi aman VAPID fallback dan deduplikasi endpoint langganan ganda.
+- **Penyempurnaan Klik Notifikasi Mobile (`public/sw.js`)**:
+  - Saat notifikasi di HP diketuk, Service Worker otomatis memfokuskan jendela aplikasi PWA yang sedang berjalan dan langsung menavigasi ke halaman tiket/temuan (`/ticket` atau `/bulletin`) tanpa membuka tab duplikat.
+
 ## [2.8.31] - 2026-09-15
 
 ### ⚖️ Penyelarasan Data KTA/TTA dengan Jadwal Inspeksi (Perbaikan Deteksi Cuti)

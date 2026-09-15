@@ -1244,6 +1244,24 @@ router.post('/api/kta-reports', async (req, res) => {
     groupReportsMemory.unshift(feedMsg);
 
     invalidateRekapKtaCache();
+
+    // Kirim Push Notification & In-App Notification untuk Laporan KTA/TTA
+    try {
+      const notifTitle = `Laporan ${cleanType} Baru (${created.name})`;
+      const notifMsg = `${created.name} melaporkan ${cleanType === 'TTA' ? 'Tindakan Tidak Aman' : 'Kondisi Tidak Aman'}${created.location && created.location !== '-' ? ' di ' + created.location : ''}`;
+      const _n = await db.insert(notifications).values({
+        userId: null,
+        role: 'Safety',
+        title: notifTitle,
+        message: notifMsg,
+        type: 'warning',
+        link: '/bulletin'
+      }).returning();
+      sendWebPush(_n);
+    } catch (pushErr) {
+      console.error("Gagal mengirim push notifikasi KTA/TTA:", pushErr);
+    }
+
     res.status(201).json(created);
   } catch (err: any) {
     console.error('Error submitting KTA report:', err);
