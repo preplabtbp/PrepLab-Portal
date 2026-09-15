@@ -2,7 +2,7 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
-## [2.8.28] - 2026-09-15
+## [2.8.32] - 2026-09-15
 
 ### 📲 Push Notifikasi Mobile & PWA Terpasang (Temuan Inspeksi K3, APD & KTA/TTA)
 
