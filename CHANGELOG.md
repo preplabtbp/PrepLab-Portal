@@ -2,7 +2,7 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
-## [2.8.32] - 2026-09-15
+## [2.8.28] - 2026-09-15
 
 ### 📲 Push Notifikasi Mobile & PWA Terpasang (Temuan Inspeksi K3, APD & KTA/TTA)
 
@@ -23,8 +23,6 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Penyempurnaan Klik Notifikasi Mobile (`public/sw.js`)**:
   - Saat notifikasi di HP diketuk, Service Worker otomatis memfokuskan jendela aplikasi PWA yang sedang berjalan dan langsung menavigasi ke halaman tiket/temuan (`/ticket` atau `/bulletin`) tanpa membuka tab duplikat.
 
-## [2.8.31] - 2026-09-15
-
 ### ⚖️ Penyelarasan Data KTA/TTA dengan Jadwal Inspeksi (Perbaikan Deteksi Cuti)
 
 - **Penyebab Masalah (Root Cause)**:
@@ -42,8 +40,6 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Akibatnya, jika salah satu personil (contoh Pak Muhammad Nova Herisandi) telah mengunggah SS form general inspeksi, pasangannya (Pak Mohamad Noer Syafi’i) ikut otomatis tercentang sudah mengunggah, padahal belum.
   - Memisahkan validasi bukti SS general inspeksi agar **hanya memeriksa NIK dan Nama personil yang bersangkutan secara individual**, sehingga bukti SS tidak lagi tertaut atau bocor antar rekan tim.
   - Menambahkan penanganan `else` pada `InspectionScheduleCard` agar kartu jadwal langsung mereset status SS dan menghapus cache lokal jika personil belum mengunggah SS.
-
-## [2.8.30] - 2026-09-15
 
 ### 🩹 Perbaikan Alokasi Area & Deskripsi Temuan Checklist Kotak P3K
 
@@ -72,8 +68,6 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Menghilangkan *auto-popup* modal saat halaman SAP Dashboard pertama kali dibuka, sehingga pengguna tidak lagi melihat peringatan ganda (banner atas dan pop-up bersamaan).
   - Banner peringatan di bagian atas dashboard tetap aktif dan responsif, sementara pop-up modal detail hanya akan terbuka jika pengguna sengaja mengklik tombol **`[Detail]`** pada banner.
 
-
-
 ### 🖼️ Perbaikan Pratinjau Foto Temuan K3: Pencegahan Salah Deteksi Base64 sebagai ID Google Drive
 
 - **Penyebab Masalah (Root Cause)**:
@@ -88,8 +82,6 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Memperbarui tombol *"Download"* agar dapat mengunduh gambar Base64 lokal secara langsung sebagai berkas `.jpg`.
 - **Perbaikan Sanitasi Tautan di Halaman Tiket (`src/components/ticket-screen.tsx`)**:
   - Menyelaraskan fungsi `formatImageUrl` dan `extractDriveFileId` agar tidak memanipulasi string Base64 dan memproses format URL Drive secara konsisten.
-
-## [2.8.29] - 2026-09-15
 
 ### ✨ Sub-Menu Changelog & Manajemen Riwayat Pembaruan di Panel Developer
 
@@ -106,8 +98,6 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 - **Endpoint API Terpusat (`server/routes/changelog.ts` & `server.ts`)**:
   - Endpoint `GET /api/changelog` dan `GET /api/changelog/latest` dengan *in-memory caching* otomatis berbasis waktu modifikasi berkas (`mtime`).
   - Didaftarkan ke `PUBLIC_API_PREFIXES` agar dapat diakses secara publik dan cepat tanpa hambatan autentikasi.
-
-## [2.8.28] - 2026-09-15
 
 ### 🔐 Perbaikan Fitur Ganti Password: Endpoint Khusus `/api/auth/change-password` & Integrasi Menu Pengaturan
 
