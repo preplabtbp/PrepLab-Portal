@@ -2,6 +2,23 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.30] - 2026-09-15
+
+### 🖼️ Perbaikan Pratinjau Foto Temuan K3: Pencegahan Salah Deteksi Base64 sebagai ID Google Drive
+
+- **Penyebab Masalah (Root Cause)**:
+  - Pada komponen penampil gambar (`src/components/image-modal.tsx`), logika deteksi ID Google Drive sebelumnya menggunakan ekspresi reguler umum `str.match(/\/d\/([a-zA-Z0-9_-]+)/)`.
+  - Foto temuan inspeksi yang tersimpan langsung dalam format data Base64 (`data:image/...`) memiliki puluhan ribu karakter acak yang sering kali mengandung deretan karakter `/d/...`.
+  - Hal ini menyebabkan sistem salah mengira potongan teks Base64 tersebut sebagai Google Drive File ID, mengganti tautan gambar asli menjadi thumbnail Google Drive palsu (`drive.google.com/thumbnail?id=...`), dan memunculkan tombol *"Buka di Drive"*.
+  - Akibatnya, pratinjau gambar menjadi layar hitam/kosong dan saat tombol *"Buka di Drive"* diklik, Google Drive menampilkan galat *"Halaman Tidak Ditemukan"* (404).
+- **Perbaikan Deteksi Berkas & URL Modal Gambar (`src/components/image-modal.tsx`)**:
+  - Menambahkan pengecualian dini untuk data gambar lokal / Base64 (`data:`) dan blob (`blob:`), sehingga tidak lagi diproses sebagai link Google Drive.
+  - Memperketat regex pencarian Google Drive ID agar hanya aktif pada URL domain resmi Google Drive dengan panjang ID minimal 25 karakter.
+  - Tombol *"Buka di Drive"* kini hanya muncul jika gambar memang tersimpan di Google Drive.
+  - Memperbarui tombol *"Download"* agar dapat mengunduh gambar Base64 lokal secara langsung sebagai berkas `.jpg`.
+- **Perbaikan Sanitasi Tautan di Halaman Tiket (`src/components/ticket-screen.tsx`)**:
+  - Menyelaraskan fungsi `formatImageUrl` dan `extractDriveFileId` agar tidak memanipulasi string Base64 dan memproses format URL Drive secara konsisten.
+
 ## [2.8.29] - 2026-09-15
 
 ### ✨ Sub-Menu Changelog & Manajemen Riwayat Pembaruan di Panel Developer

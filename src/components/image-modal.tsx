@@ -40,18 +40,25 @@ export function ImageModal({
   // Extract Google Drive ID if present
   const driveId = (() => {
     if (!imageUrl || imageUrl === '-') return null;
+    // Base64 and Blob images are inline data, not Google Drive URLs
+    if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) return null;
+
     const str = `${imageUrl} ${driveViewUrl || ''} ${driveDownloadUrl || ''}`;
+    // Must contain Google Drive related domain or explicit drive view pattern
+    if (!str.includes('drive.google.com') && !str.includes('docs.google.com') && !str.includes('googleusercontent.com')) {
+      return null;
+    }
+
     const match =
-      str.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
-      str.match(/\/d\/([a-zA-Z0-9_-]+)/) ||
-      str.match(/\/view\/([a-zA-Z0-9_-]+)/) ||
-      str.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      str.match(/\/file\/d\/([a-zA-Z0-9_-]{25,})/i) ||
+      str.match(/[?&]id=([a-zA-Z0-9_-]{25,})/i) ||
+      str.match(/\/d\/([a-zA-Z0-9_-]{25,})/i);
     return match ? match[1] : null;
   })();
 
   const highResUrl = driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w2500` : imageUrl;
   const directDriveView = driveViewUrl || (driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : null);
-  const directDriveDownload = driveDownloadUrl || (driveId ? `https://drive.google.com/uc?id=${driveId}&export=download` : null);
+  const directDownloadUrl = driveDownloadUrl || (driveId ? `https://drive.google.com/uc?id=${driveId}&export=download` : (imageUrl || null));
 
   // Reset zoom & pan when image changes
   useEffect(() => {
@@ -368,11 +375,12 @@ export function ImageModal({
             </a>
           )}
 
-          {directDriveDownload && (
+          {directDownloadUrl && (
             <a
-              href={directDriveDownload}
+              href={directDownloadUrl}
               target="_blank"
               rel="noopener noreferrer"
+              download={imageUrl.startsWith('data:') ? 'foto_temuan.jpg' : undefined}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold shadow-lg transition-all active:scale-95"
             >
               <Download className="w-3.5 h-3.5" /> Download
