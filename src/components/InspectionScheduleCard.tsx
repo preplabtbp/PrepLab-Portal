@@ -244,7 +244,15 @@ export function InspectionScheduleCard({
         const found = proofs.find(p => {
           const pNik = (p.nik || '').trim().toLowerCase();
           const pName = (p.name || '').trim().toLowerCase();
-          return (cleanNik && pNik === cleanNik) || (cleanName && (pName.includes(cleanName) || cleanName.includes(pName)));
+          if (cleanNik && pNik === cleanNik) return true;
+          if (cleanName && pName === cleanName) return true;
+          if (cleanName && pName) {
+            const selfParts = cleanName.split(/\s+/).filter(Boolean);
+            const pParts = pName.split(/\s+/).filter(Boolean);
+            if (selfParts.length >= 2 && pParts.length >= 2 && selfParts.every(part => pName.includes(part))) return true;
+            if (selfParts.length >= 2 && pParts.length >= 2 && pParts.every(part => cleanName.includes(part))) return true;
+          }
+          return false;
         });
 
         if (found) {
@@ -291,10 +299,13 @@ export function InspectionScheduleCard({
         });
 
         let targetRecord: any = null;
-        if (cutiMatch) {
+        if (cutiMatch && (!mySchedule || mySchedule.isCuti)) {
           targetRecord = { ...cutiMatch, isCuti: true, status: 'CUTI' };
         } else if (match) {
           targetRecord = match;
+        } else if (cutiMatch && mySchedule && !mySchedule.isCuti) {
+          // Penyelarasan: Jika personil memiliki jadwal inspeksi aktif, mereka tetap AKTIF untuk KTA/TTA
+          targetRecord = { ...cutiMatch, isCuti: false, status: cutiMatch.reports?.length ? 'SUDAH' : 'BELUM' };
         }
 
         setMyKtaRecord(targetRecord);
@@ -340,6 +351,13 @@ export function InspectionScheduleCard({
               setSsProofUrl(json.schedule.ssProofUrl);
               try { localStorage.setItem('p2h_cached_ss_proof_url', json.schedule.ssProofUrl); } catch {}
             }
+          } else {
+            setHasSsProof(false);
+            setSsProofUrl(null);
+            try {
+              localStorage.setItem('p2h_cached_has_ss_proof', 'false');
+              localStorage.removeItem('p2h_cached_ss_proof_url');
+            } catch {}
           }
         } else {
           setMySchedule(null);
@@ -392,7 +410,7 @@ export function InspectionScheduleCard({
   const handleRefreshAll = () => {
     fetchSchedule(true);
     fetchSsProof();
-    fetchKtaStatus();
+    fetchKtaStatus(true);
   };
 
   useEffect(() => {

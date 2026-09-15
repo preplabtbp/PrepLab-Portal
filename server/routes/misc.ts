@@ -16,8 +16,7 @@ import {
   getNotificationTargets, getTableObj, sanitizePayload 
 } from "../utils.js";
 import webpush from 'web-push';
-import path from "path";
-import { invalidateScheduleCache } from "./inspections.js";
+import { invalidateScheduleCache, fetchInspectionScheduleFromSheet } from "./inspections.js";
 
 export const router = Router();
 
@@ -515,9 +514,11 @@ router.post('/api/rekap-inspeksi/override-cuti', async (req, res) => {
       }
     }
 
+    invalidateRekapKtaCache();
+
     res.json({ 
       success: true, 
-      message: `Status personil NIK ${nik} berhasil diubah ke ${isCuti ? 'Cuti' : 'Aktif (Wajib Inspeksi)'}!` 
+      message: `Status personil NIK ${nik} berhasil diubah ke ${isCuti ? 'Cuti' : 'Aktif (Wajib Inspeksi & KTA/TTA)'}!` 
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -734,11 +735,57 @@ export async function getRekapPersonnelClassification(
     if (ov.nik) manualOverrideMap.set(ov.nik.toLowerCase().trim(), ov);
   });
 
+  // Fetch official inspection schedule sheet to synchronize KTA/TTA with Inspeksi
+  let targetSheet = 'CurrentWeek';
+  if (selectedWeek && selectedWeek !== 'ALL') {
+    if (selectedWeek.toLowerCase().includes('37')) targetSheet = 'Week 37';
+    else if (selectedWeek.toLowerCase().includes('38')) targetSheet = 'CurrentWeek';
+    else if (/^w?\d+$/i.test(selectedWeek)) {
+      const num = selectedWeek.replace(/\D/g, '');
+      targetSheet = `Week ${num}`;
+    }
+  }
+
+  const sheetActiveNames = new Set<string>();
+  const sheetCutiNames = new Set<string>();
+
+  try {
+    const sheetSchedules = await fetchInspectionScheduleFromSheet(false, targetSheet);
+    if (Array.isArray(sheetSchedules)) {
+      sheetSchedules.forEach((item: any) => {
+        if (!item?.name) return;
+        const cleanName = item.name.trim().toLowerCase();
+        if (item.isCuti || item.inspeksi?.toLowerCase() === 'cuti' || item.shift?.toLowerCase() === 'cuti') {
+          sheetCutiNames.add(cleanName);
+        } else if (item.inspeksi) {
+          sheetActiveNames.add(cleanName);
+        }
+      });
+    }
+  } catch (sheetErr) {
+    console.warn(`[Rekap] Failed to sync inspection schedule from sheet "${targetSheet}":`, sheetErr);
+  }
+
+  const matchesSheet = (empName: string, nameSet: Set<string>): boolean => {
+    if (!empName) return false;
+    const lower = empName.trim().toLowerCase();
+    if (nameSet.has(lower)) return true;
+    for (const sName of nameSet) {
+      if (sName === lower || lower.includes(sName) || sName.includes(lower)) return true;
+      const parts = lower.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2 && parts.every(p => sName.includes(p))) return true;
+      const sParts = sName.split(/\s+/).filter(Boolean);
+      if (sParts.length >= 2 && sParts.every(p => lower.includes(p))) return true;
+    }
+    return false;
+  };
+
   allEmployees.forEach(emp => {
     if (!emp.nik) return;
     
     const cleanNik = emp.nik.trim();
     const nikLower = cleanNik.toLowerCase();
+    const empName = (emp.name || '').trim();
 
     // 1. Check persistent manual override first
     if (manualOverrideMap.has(nikLower)) {
@@ -769,14 +816,29 @@ export async function getRekapPersonnelClassification(
       return;
     }
 
-    // 3. Check roster ONLY for target dates in selectedWeek
+    // 3. Check official Inspection Schedule Sheet (Primary alignment with Inspeksi)
+    // If person has an active inspection assigned in the schedule:
+    // They are on duty on site! They are NOT cuti, and are obligated for both Inspeksi and KTA/TTA!
+    if (matchesSheet(empName, sheetActiveNames)) {
+      return; // Do NOT add to onCutiSet -> stays active!
+    }
+
+    // If person is explicitly listed under the Cuti section in the schedule:
+    if (matchesSheet(empName, sheetCutiNames)) {
+      onCutiSet.add(cleanNik);
+      return;
+    }
+
+    // 4. Check roster ONLY for target dates in selectedWeek (Fallback / employees not in sheet)
     const empRosters = rosterMap.get(cleanNik);
     if (empRosters && empRosters.length > 0 && targetWeekDates.length > 0) {
       const weekEntries = empRosters.filter(r => targetWeekDates.includes((r.date || '').trim()));
       if (weekEntries.length > 0) {
         const cutiDays = weekEntries.filter(r => isExplicitCutiCode(r.status));
-        // If employee has ANY cuti day during this week, mark as Cuti!
-        if (cutiDays.length > 0) {
+        // An employee is considered on Cuti for the week ONLY IF majority of the week (>= 4 days or >= half) is cuti.
+        // Example: Ryan M Rusli cuti on Saturday, but works Mon-Fri -> NOT cuti for the week!
+        const isMajorityCuti = cutiDays.length >= 4 || cutiDays.length >= Math.ceil(weekEntries.length / 2);
+        if (isMajorityCuti) {
           onCutiSet.add(cleanNik);
         }
       }

@@ -1316,7 +1316,7 @@ export function invalidateScheduleCache() {
   enrichedScheduleCacheMap.clear();
 }
 
-async function fetchInspectionScheduleFromSheet(forceRefresh = false, sheetName = 'CurrentWeek') {
+export async function fetchInspectionScheduleFromSheet(forceRefresh = false, sheetName = 'CurrentWeek') {
   const targetSheet = (sheetName || 'CurrentWeek').trim();
   const cacheKey = targetSheet.toLowerCase();
   const now = Date.now();
@@ -1510,22 +1510,40 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
         continue;
       }
 
+      // Attach SS proof info ONLY for this specific individual inspector (each partner must upload their own SS!)
+      const selfName = (s.name || '').trim().toLowerCase();
+      let selfNik = (empNameToNik.get(selfName) || '').trim().toLowerCase();
+      if (!selfNik) {
+        for (const [eName, eNik] of empNameToNik.entries()) {
+          if (eName === selfName || eName.includes(selfName) || selfName.includes(eName)) {
+            selfNik = eNik;
+            break;
+          }
+        }
+      }
+
+      const pMatch = allProofs.find(p => {
+        const pNik = (p.nik || '').trim().toLowerCase();
+        const pName = (p.name || '').trim().toLowerCase();
+        if (selfNik && pNik === selfNik) return true;
+        if (selfName) {
+          if (pName === selfName) return true;
+          const selfParts = selfName.split(/\s+/).filter(Boolean);
+          const pParts = pName.split(/\s+/).filter(Boolean);
+          if (selfParts.length >= 2 && pParts.length >= 2 && selfParts.every(part => pName.includes(part))) return true;
+          if (selfParts.length >= 2 && pParts.length >= 2 && pParts.every(part => selfName.includes(part))) return true;
+        }
+        return false;
+      });
+      s.hasSsProof = !!pMatch;
+      s.ssProofUrl = pMatch?.imageUrl || null;
+      s.ssProofDate = pMatch?.date || null;
+
       const personNames = [s.name, ...(s.partners || []).map((p: any) => p.name)].filter(Boolean).map((n: string) => n.trim().toLowerCase());
       const personNiks = personNames.map(pName => empNameToNik.get(pName)).filter(Boolean) as string[];
       const sInspeksi = (s.inspeksi || '').toLowerCase();
       const sSubArea = (s.formInfo?.subArea || '').toLowerCase();
       const sFormTitle = (s.formInfo?.formTitle || '').toLowerCase();
-
-      // Attach SS proof info for this person
-      const pMatch = allProofs.find(p => {
-        const pNik = (p.nik || '').trim().toLowerCase();
-        const pName = (p.name || '').trim().toLowerCase();
-        return personNames.some(target => pNik === target || pName.includes(target) || target.includes(pName)) ||
-               personNiks.some(target => pNik === target);
-      });
-      s.hasSsProof = !!pMatch;
-      s.ssProofUrl = pMatch?.imageUrl || null;
-      s.ssProofDate = pMatch?.date || null;
 
       let matchedStrict: any = null;
       let matchedAny: any = null;

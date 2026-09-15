@@ -2,6 +2,26 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.31] - 2026-09-15
+
+### ⚖️ Penyelarasan Data KTA/TTA dengan Jadwal Inspeksi (Perbaikan Deteksi Cuti)
+
+- **Penyebab Masalah (Root Cause)**:
+  - Pada perhitungan status rekap (`getRekapPersonnelClassification` di `server/routes/misc.ts`), sistem sebelumnya menganggap personil sedang **Cuti** jika terdapat $\ge 1$ hari cuti di database roster pada minggu berjalan.
+  - Hal ini menyebabkan personil seperti **Ryan M Rusli** yang aktif bekerja dari Senin hingga Jumat dan hanya mengambil Cuti di hari Sabtu/Minggu langsung dikelompokkan ke `CUTI` untuk 1 minggu penuh pada modul KTA/TTA.
+  - Akibatnya, pada portal muncul status *"Cuti Aktif - Bebas dari kewajiban pelaporan KTA/TTA"*, padahal di Jadwal Inspeksi (Google Sheet `CurrentWeek`), ia aktif terdaftar dengan tugas inspeksi mingguan.
+- **Sinkronisasi Langsung dengan Jadwal Inspeksi (`server/routes/misc.ts` & `server/routes/inspections.ts`)**:
+  - Mengekspor dan menghubungkan parser `fetchInspectionScheduleFromSheet` ke `getRekapPersonnelClassification`.
+  - Jika seorang personil memiliki jadwal inspeksi aktif di Google Sheet minggu berjalan (`!item.isCuti`), sistem **menjamin status personil tersebut AKTIF (wajib inspeksi & wajib KTA/TTA)** dan tidak dimasukkan ke daftar Cuti.
+  - Personil yang secara eksplisit masuk dalam bagian Cuti pada lembar jadwal inspeksi tetap diposisikan sebagai `CUTI`.
+- **Penyempurnaan Ambang Batas Cuti Roster (Fallback)**:
+  - Mengubah aturan roster: personil hanya dianggap Cuti mingguan jika **mayoritas hari ($\ge 4$ hari atau $\ge$ separuh entri)** berstatus Cuti/TRV. Cuti 1–2 hari di akhir pekan tidak lagi menggugurkan kewajiban mingguan.
+- **Isolasi Bukti Unggah SS General Inspeksi per Individu (`server/routes/inspections.ts` & `src/components/InspectionScheduleCard.tsx`)**:
+  - Memperbaiki bug pada `enrichSchedulesWithCompletion`: sebelumnya pencocokan bukti SS general inspeksi (`hasSsProof`) menggunakan array gabungan `personNames` yang menyertakan nama rekan tim/pasangan (`partners`).
+  - Akibatnya, jika salah satu personil (contoh Pak Muhammad Nova Herisandi) telah mengunggah SS form general inspeksi, pasangannya (Pak Mohamad Noer Syafi’i) ikut otomatis tercentang sudah mengunggah, padahal belum.
+  - Memisahkan validasi bukti SS general inspeksi agar **hanya memeriksa NIK dan Nama personil yang bersangkutan secara individual**, sehingga bukti SS tidak lagi tertaut atau bocor antar rekan tim.
+  - Menambahkan penanganan `else` pada `InspectionScheduleCard` agar kartu jadwal langsung mereset status SS dan menghapus cache lokal jika personil belum mengunggah SS.
+
 ## [2.8.30] - 2026-09-15
 
 ### 🩹 Perbaikan Alokasi Area & Deskripsi Temuan Checklist Kotak P3K
