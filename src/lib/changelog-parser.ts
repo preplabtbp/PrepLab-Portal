@@ -1,9 +1,3 @@
-import { Router } from "express";
-import fs from "fs";
-import path from "path";
-
-export const router = Router();
-
 export interface ChangelogItem {
   title: string;
   description: string;
@@ -26,10 +20,8 @@ export interface ChangelogRelease {
   rawMarkdown: string;
 }
 
-let cachedReleases: ChangelogRelease[] | null = null;
-let lastMtime: number = 0;
-
-function parseMarkdownChangelog(content: string): ChangelogRelease[] {
+export function parseMarkdownChangelog(content: string): ChangelogRelease[] {
+  if (!content) return [];
   const lines = content.split(/\r?\n/);
   const releases: ChangelogRelease[] = [];
   let currentRelease: ChangelogRelease | null = null;
@@ -40,7 +32,7 @@ function parseMarkdownChangelog(content: string): ChangelogRelease[] {
     const rawLine = lines[i];
     const trimmed = rawLine.trim();
 
-    // Match Version Header: ## [2.8.28] - 2026-09-15
+    // Match Version Header: ## [2.8.29] - 2026-09-15
     const versionMatch = trimmed.match(/^##\s+\[(.*?)\](?:\s+-\s+(.*?))?$/);
     if (versionMatch) {
       currentRelease = {
@@ -151,66 +143,3 @@ function parseMarkdownChangelog(content: string): ChangelogRelease[] {
 
   return releases;
 }
-
-function getChangelogReleases(): { releases: ChangelogRelease[]; latestVersion: string; totalReleases: number } {
-  const possiblePaths = [
-    path.resolve(process.cwd(), "CHANGELOG.md"),
-    path.resolve(process.cwd(), "dist", "CHANGELOG.md"),
-    path.resolve(__dirname, "../../CHANGELOG.md"),
-    path.resolve(__dirname, "../CHANGELOG.md"),
-    path.resolve(__dirname, "CHANGELOG.md"),
-    "/app/CHANGELOG.md"
-  ];
-  
-  const changelogPath = possiblePaths.find(p => fs.existsSync(p));
-  
-  if (!changelogPath) {
-    return { releases: [], latestVersion: "0.0.0", totalReleases: 0 };
-  }
-
-  const stat = fs.statSync(changelogPath);
-  if (!cachedReleases || stat.mtimeMs !== lastMtime) {
-    const rawContent = fs.readFileSync(changelogPath, "utf8");
-    cachedReleases = parseMarkdownChangelog(rawContent);
-    lastMtime = stat.mtimeMs;
-  }
-
-  const latestVersion = cachedReleases.length > 0 ? cachedReleases[0].version : "0.0.0";
-  return {
-    releases: cachedReleases,
-    latestVersion,
-    totalReleases: cachedReleases.length
-  };
-}
-
-// GET /api/changelog
-router.get("/api/changelog", (_req, res) => {
-  try {
-    const data = getChangelogReleases();
-    res.json({
-      status: "success",
-      data
-    });
-  } catch (error: any) {
-    console.error("Error loading changelog:", error);
-    res.status(500).json({ status: "error", message: error.message });
-  }
-});
-
-// GET /api/changelog/latest
-router.get("/api/changelog/latest", (_req, res) => {
-  try {
-    const { releases, latestVersion } = getChangelogReleases();
-    const latestRelease = releases.length > 0 ? releases[0] : null;
-    res.json({
-      status: "success",
-      data: {
-        latestVersion,
-        release: latestRelease
-      }
-    });
-  } catch (error: any) {
-    console.error("Error loading latest changelog:", error);
-    res.status(500).json({ status: "error", message: error.message });
-  }
-});

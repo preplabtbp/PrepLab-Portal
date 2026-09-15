@@ -9,27 +9,12 @@ import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 
-export interface ChangelogItem {
-  title: string;
-  description: string;
-  subItems: string[];
-}
+import rawChangelog from '../../CHANGELOG.md?raw';
+import { parseMarkdownChangelog, ChangelogRelease, ChangelogSection, ChangelogItem } from '../lib/changelog-parser';
 
-export interface ChangelogSection {
-  title: string;
-  emoji: string;
-  cleanTitle: string;
-  category: 'feature' | 'security' | 'fix' | 'sync' | 'docs' | 'maintenance' | 'other';
-  items: ChangelogItem[];
-}
+export type { ChangelogItem, ChangelogSection, ChangelogRelease };
 
-export interface ChangelogRelease {
-  version: string;
-  date: string;
-  isLatest: boolean;
-  sections: ChangelogSection[];
-  rawMarkdown: string;
-}
+const BUNDLED_RELEASES = parseMarkdownChangelog(rawChangelog);
 
 const CATEGORY_CONFIG: Record<string, { label: string; icon: React.ReactNode; bg: string; text: string; border: string }> = {
   feature: {
@@ -84,46 +69,42 @@ const CATEGORY_CONFIG: Record<string, { label: string; icon: React.ReactNode; bg
 };
 
 export function DeveloperChangelog() {
-  const [releases, setReleases] = useState<ChangelogRelease[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [releases, setReleases] = useState<ChangelogRelease[]>(BUNDLED_RELEASES);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // View state: 'focus' (Single version detailed view) or 'accordion' (Timeline list view)
   const [viewMode, setViewMode] = useState<'focus' | 'accordion'>('focus');
-  const [selectedVersion, setSelectedVersion] = useState<string>('');
-  const [expandedVersions, setExpandedVersions] = useState<Record<string, boolean>>({});
+  const [selectedVersion, setSelectedVersion] = useState<string>(() => {
+    return BUNDLED_RELEASES.length > 0 ? BUNDLED_RELEASES[0].version : '';
+  });
+  const [expandedVersions, setExpandedVersions] = useState<Record<string, boolean>>(() => {
+    return BUNDLED_RELEASES.length > 0 ? { [BUNDLED_RELEASES[0].version]: true } : {};
+  });
   
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSeries, setSelectedSeries] = useState<string>('all');
   const [copiedVersion, setCopiedVersion] = useState<string | null>(null);
 
-  // Fetch changelog from API
+  // Fetch changelog from API with graceful fallback to bundled releases
   const fetchChangelog = async () => {
-    setLoading(true);
-    setError(null);
     try {
       const res = await fetch('/api/changelog');
       const json = await res.json();
-      if (json.status === 'success' && json.data?.releases) {
+      if (json.status === 'success' && json.data?.releases && json.data.releases.length > 0) {
         const fetchedReleases: ChangelogRelease[] = json.data.releases;
         setReleases(fetchedReleases);
         
-        // Default to latest version
-        if (fetchedReleases.length > 0) {
+        // Default to latest version if none selected
+        if (!selectedVersion && fetchedReleases.length > 0) {
           const latest = fetchedReleases[0].version;
           setSelectedVersion(latest);
-          // By default expand the latest version in accordion mode
-          setExpandedVersions({ [latest]: true });
+          setExpandedVersions(prev => ({ ...prev, [latest]: true }));
         }
-      } else {
-        throw new Error(json.message || 'Gagal memuat data changelog');
       }
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Terjadi kesalahan saat memuat changelog');
-    } finally {
-      setLoading(false);
+      console.warn('Network fetch for changelog failed, using bundled fallback:', err);
     }
   };
 
