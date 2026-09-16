@@ -6,6 +6,47 @@ import { ChevronDown, PlusCircle, Trash2, Camera, ShieldAlert } from 'lucide-rea
 import { InspectorSignatures, SignatureData } from '../InspectorSignatures';
 import { TemuanItem, TemuanSection } from './TemuanSection';
 
+function findMatchingSubArea(target: string, availableList: string[]): string | null {
+  if (!target || !availableList || availableList.length === 0) return null;
+  const cleanTarget = target.toLowerCase().trim();
+
+  // 1. Direct exact or substring match
+  const direct = availableList.find(s => {
+    const cleanS = s.toLowerCase().trim();
+    return cleanS === cleanTarget || cleanS.includes(cleanTarget) || cleanTarget.includes(cleanS);
+  });
+  if (direct) return direct;
+
+  // 2. Token overlap match (handles differences in punctuation like commas vs hyphens)
+  const targetWords = cleanTarget
+    .replace(/[^a-z0-9]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !['inspeksi', 'umum', 'terencana', 'area', 'kerja', 'ruang'].includes(w));
+
+  let bestMatch: string | null = null;
+  let maxMatches = 0;
+
+  for (const s of availableList) {
+    const sWords = s.toLowerCase()
+      .replace(/[^a-z0-9]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 2);
+
+    let matchCount = 0;
+    for (const tw of targetWords) {
+      if (sWords.some(sw => sw.includes(tw) || tw.includes(sw))) {
+        matchCount++;
+      }
+    }
+    if (matchCount > maxMatches) {
+      maxMatches = matchCount;
+      bestMatch = s;
+    }
+  }
+
+  return maxMatches > 0 ? bestMatch : null;
+}
+
 export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFillAllYa, defaultSubArea }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number, defaultSubArea?: string }) {
   const [subArea, setSubArea] = useState(defaultSubArea || '');
   const [answers, setAnswers] = useState<Record<string, { jawaban: string, ket: string }>>({});
@@ -15,6 +56,7 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFill
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [signatureData, setSignatureData] = useState<SignatureData | null>(null);
   const [catatan, setCatatan] = useState('');
+  const [isManualOverride, setIsManualOverride] = useState(false);
   
   const subAreas = useMemo(() => {
     const areas = new Set<string>();
@@ -28,17 +70,15 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFill
 
   useEffect(() => {
     const target = defaultSubArea || sessionStorage.getItem('preselected_sub_area');
-    if (target && subAreas.length > 0 && !subArea) {
-      const match = subAreas.find(s => 
-        s.toLowerCase() === target.toLowerCase() || 
-        s.toLowerCase().includes(target.toLowerCase()) || 
-        target.toLowerCase().includes(s.toLowerCase())
-      );
+    if (target && subAreas.length > 0) {
+      const match = findMatchingSubArea(target, subAreas);
       if (match) {
         setSubArea(match);
       }
+    } else if (!subArea && subAreas.length === 1) {
+      setSubArea(subAreas[0]);
     }
-  }, [defaultSubArea, subAreas, subArea]);
+  }, [defaultSubArea, subAreas]);
 
   useEffect(() => {
     if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
@@ -170,37 +210,83 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFill
 
   return (
     <div className="space-y-6">
-      <Card className="border-l-4 border-l-blue-500 bg-[var(--card-bg)] border-[var(--border-main)] shadow-sm">
-        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
-          <label className="text-sm font-bold text-[var(--text-main)] flex items-center gap-1.5">
-            <span className="text-base">📍</span>
-            <span>Pilih Lokasi Inspeksi Spesifik</span>
-            <span className="text-rose-500 font-bold">*</span>
-          </label>
-          {subArea ? (
-            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-700/60">
-              ✓ Lokasi Terpilih: {subArea}
-            </span>
-          ) : (
+      {/* Sub Area: Automatic locked assignment from admin vs manual fallback */}
+      {subArea ? (
+        <Card className="border-l-4 border-l-emerald-500 bg-[var(--card-bg)] border-[var(--border-main)] shadow-sm p-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg shrink-0">
+                📍
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                    Lokasi Inspeksi Ditugaskan
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-700/60">
+                    ✓ Otomatis Ditentukan Admin
+                  </span>
+                </div>
+                <h4 className="text-base font-bold text-[var(--text-main)] mt-0.5">{subArea}</h4>
+              </div>
+            </div>
+            {subAreas.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setIsManualOverride(!isManualOverride)}
+                className="text-xs font-semibold text-[var(--text-muted)] hover:text-emerald-600 transition-colors cursor-pointer"
+              >
+                {isManualOverride ? '▲ Tutup Pilihan Lokasi' : '▼ Ubah Lokasi (Opsional)'}
+              </button>
+            )}
+          </div>
+          {isManualOverride && (
+            <div className="mt-3 pt-3 border-t border-[var(--border-main)]">
+              <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
+                Pilih lokasi lain jika bertukar tugas:
+              </label>
+              <Select 
+                value={subArea} 
+                onChange={e => {
+                  setSubArea(e.target.value);
+                  setIsManualOverride(false);
+                }} 
+                className="w-full font-bold text-[var(--text-main)] shadow-sm bg-[var(--input-bg)] border-[var(--border-main)]"
+              >
+                {subAreas.map(area => (
+                  <option key={area} value={area}>{area}</option>
+                ))}
+              </Select>
+            </div>
+          )}
+        </Card>
+      ) : (
+        <Card className="border-l-4 border-l-amber-500 bg-[var(--card-bg)] border-[var(--border-main)] shadow-sm">
+          <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+            <label className="text-sm font-bold text-[var(--text-main)] flex items-center gap-1.5">
+              <span className="text-base">📍</span>
+              <span>Pilih Lokasi Inspeksi Spesifik</span>
+              <span className="text-rose-500 font-bold">*</span>
+            </label>
             <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700/60">
               Wajib Dipilih
             </span>
-          )}
-        </div>
-        <p className="text-xs text-[var(--text-muted)] mb-3">
-          Tentukan sub-area atau ruangan yang sedang diinspeksi untuk memuat butir checklist yang relevan.
-        </p>
-        <Select 
-          value={subArea} 
-          onChange={e => setSubArea(e.target.value)} 
-          className="w-full font-bold text-[var(--text-main)] shadow-sm bg-[var(--input-bg)] border-[var(--border-main)]"
-        >
-          <option value="">-- Pilih Lokasi / Sub-Area --</option>
-          {subAreas.map(area => (
-            <option key={area} value={area}>{area}</option>
-          ))}
-        </Select>
-      </Card>
+          </div>
+          <p className="text-xs text-[var(--text-muted)] mb-3">
+            Tentukan sub-area atau ruangan yang sedang diinspeksi untuk memuat butir checklist yang relevan.
+          </p>
+          <Select 
+            value={subArea} 
+            onChange={e => setSubArea(e.target.value)} 
+            className="w-full font-bold text-[var(--text-main)] shadow-sm bg-[var(--input-bg)] border-[var(--border-main)]"
+          >
+            <option value="">-- Pilih Lokasi / Sub-Area --</option>
+            {subAreas.map(area => (
+              <option key={area} value={area}>{area}</option>
+            ))}
+          </Select>
+        </Card>
+      )}
       
       {!subArea && (
         <div className="p-8 rounded-2xl border-2 border-dashed border-[var(--border-main)] bg-[var(--card-bg)] text-center text-xs text-[var(--text-muted)] flex flex-col items-center justify-center gap-2 animate-in fade-in duration-300">
