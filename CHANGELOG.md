@@ -2,6 +2,18 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.33] - 2026-09-16
+
+### 📑 Penyempurnaan Tautan WhatsApp & Auto-Generate PDF Inspeksi dengan Tanda Tangan & Foto
+
+- **Jaminan Tautan Pesan WhatsApp Inspeksi (`server/routes/inspections.ts`)**:
+  - Memperbaiki pembentukan pesan WhatsApp laporan inspeksi mingguan/universal dan APD agar tautan dokumen laporan PDF (`*Dokumen Laporan TBP*` & `*Dokumen Laporan GPS*`) selalu tercantum secara andal dan tidak lagi kosong jika Google Apps Script masih dalam proses *render*.
+  - Menyertakan **Nomor ID Tiket resmi** (contoh: `TKT-W38Y26-001`) pada setiap rincian temuan bahaya/kekurangan stok.
+  - Menambahkan tautan langsung tindak lanjut temuan ke portal (`/ticket`) pada bagian akhir daftar temuan pesan WhatsApp.
+- **On-Demand PDF Auto-Generation & Auto-Redirect (`server/routes/inspections.ts`)**:
+  - Mengoptimalkan endpoint `/api/inspections/:id/pdf` agar otomatis memicu pembuatan PDF resmi ke Google Drive jika belum tersedia, lengkap dengan penyematan tanda tangan inspektur (`ttd1`/`ttd2`/`ttd3`) dan foto dokumentasi proses inspeksi.
+  - Menyediakan tampilan loading interaktif dengan auto-refresh yang langsung mengarahkan (*auto-redirect*) ke berkas Google Drive setelah proses pembuatan dokumen selesai.
+
 ## [2.8.32] - 2026-09-15
 
 ### 📲 Push Notifikasi Mobile & PWA Terpasang (Temuan Inspeksi K3, APD & KTA/TTA)
