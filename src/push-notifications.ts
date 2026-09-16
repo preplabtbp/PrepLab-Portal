@@ -15,37 +15,76 @@ export function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
-export async function subscribeUserToPush(nik: string) {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.log('Push messaging is not supported');
-    return false;
-  }
+export function isPwaInstalled(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as any).standalone === true ||
+    document.referrer.includes('android-app://')
+  );
+}
 
+export function isMobileDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!('serviceWorker' in navigator)) return null;
   try {
-    
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      console.log('Notification permission denied');
-      return false;
-    }
-
-    
-    
     const registrations = await navigator.serviceWorker.getRegistrations();
     for (let reg of registrations) {
       const scriptURL = reg.active?.scriptURL || reg.waiting?.scriptURL || reg.installing?.scriptURL || '';
       if (scriptURL.includes('custom-sw')) {
-        console.log('Unregistering old custom-sw.js...');
         await reg.unregister();
       }
     }
-    
-    console.log('Registering service worker manually...');
-    await navigator.serviceWorker.register('/sw.js');
-    let registration = await navigator.serviceWorker.ready;
-  
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    return reg;
+  } catch (err) {
+    console.warn('[SW] Registration failed:', err);
+    return null;
+  }
+}
 
-    console.log('Service Worker registered for push');
+export async function autoSubscribeIfPermitted(nik: string): Promise<boolean> {
+  if (!nik || typeof window === 'undefined') return false;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    return false;
+  }
+  if (Notification.permission === 'granted') {
+    return subscribeUserToPush(nik, true);
+  }
+  return false;
+}
+
+export async function subscribeUserToPush(nik: string, silent: boolean = false): Promise<boolean> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    if (!silent) console.log('Push messaging is not supported on this browser / device');
+    return false;
+  }
+
+  try {
+    let permission = Notification.permission;
+    if (permission !== 'granted') {
+      if (silent) {
+        // Jangan tampilkan prompt browser jika silent/background
+        return false;
+      }
+      permission = await Notification.requestPermission();
+    }
+
+    if (permission !== 'granted') {
+      if (!silent) console.log('Notification permission not granted');
+      return false;
+    }
+
+    const registration = await registerServiceWorker();
+    if (!registration) {
+      if (!silent) console.warn('Could not register service worker for push');
+      return false;
+    }
 
     let subscription = await registration.pushManager.getSubscription();
     if (!subscription) {
@@ -67,9 +106,10 @@ export async function subscribeUserToPush(nik: string) {
       })
     });
 
+    console.log('[WebPush] Subscribed successfully for NIK:', nik);
     return true;
-  } catch (error) {
-    console.error('Error subscribing to push:', error); alert('Error: ' + error.message);
+  } catch (error: any) {
+    console.warn('Error subscribing to push:', error);
     return false;
   }
 }

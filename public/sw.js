@@ -26,16 +26,21 @@ self.addEventListener('push', function(event) {
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '/';
   event.waitUntil(
-    clients.matchAll({ type: 'window' }).then(windowClients => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
       for (let i = 0; i < windowClients.length; i++) {
         let client = windowClients[i];
-        if (client.url === event.notification.data.url && 'focus' in client) {
-          return client.focus();
+        if ('focus' in client) {
+          client.focus();
+          if ('navigate' in client && targetUrl && targetUrl !== '/') {
+            client.navigate(targetUrl);
+          }
+          return;
         }
       }
       if (clients.openWindow) {
-        return clients.openWindow(event.notification.data.url);
+        return clients.openWindow(targetUrl);
       }
     })
   );

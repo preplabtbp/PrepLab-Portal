@@ -28,9 +28,9 @@ async function databaseToMarkdown(dbId, dbTitle) {
 
   const propNames = Object.keys(dbInfo.properties || {});
   const priorityOrder = [
-    'number', 'no', 'jenis kegiatan', 'kegiatan', 'title', 'nama', 
-    'status', 'status 1', 'priority', 'prioritas', 'pic', 
-    'kategori', 'period', 'aktivitas', 'target selesai', 'aktual selesai', 
+    'number', 'no', 'jenis kegiatan', 'kegiatan', 'title', 'nama',
+    'status', 'status 1', 'priority', 'prioritas', 'pic',
+    'kategori', 'period', 'aktivitas', 'target selesai', 'aktual selesai',
     'created time', 'date', 'keterangan', 'content'
   ];
 

@@ -10,34 +10,73 @@ import {
 import { eq, inArray, or, sql } from "drizzle-orm";
 import webpush from 'web-push';
 
+import { env } from "./config/env.js";
+
 export async function sendWebPush(notifs: any | any[]) {
   try {
+    if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {
+      try {
+        webpush.setVapidDetails(
+          'mailto:prep.lab.tbp@gmail.com',
+          env.VAPID_PUBLIC_KEY,
+          env.VAPID_PRIVATE_KEY
+        );
+      } catch (vapidErr) {}
+    }
+
     const notificationsArray = Array.isArray(notifs) ? notifs : [notifs];
     for (const notif of notificationsArray) {
+      if (!notif) continue;
       let subs: any[] = [];
+
       if (notif.userId) {
-         subs = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.nik, notif.userId));
-      } else if (notif.role) {
-         const targetEmployees = await db.select().from(employees).where(eq(employees.department, notif.role));
-         const niks = targetEmployees.map((e: any) => e.nik);
-         if (niks.length > 0) {
-            subs = await db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.nik, niks));
-         }
+        subs = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.nik, notif.userId));
+      } else if (notif.role && notif.role !== 'ALL' && notif.role !== 'all' && notif.role !== 'Semua') {
+        const roleLower = String(notif.role).toLowerCase().trim();
+        const allEmployees = await db.select().from(employees);
+        const targetNiks = allEmployees.filter((e: any) => {
+          const d = (e.department || '').toLowerCase();
+          const s = (e.section || '').toLowerCase();
+          const j = (e.jabatan || '').toLowerCase();
+          if (roleLower === 'safety' || roleLower === 'k3' || roleLower === 'hse') {
+            return d.includes('safety') || s.includes('safety') || j.includes('safety') ||
+                   d.includes('qa') || s.includes('qa') || j.includes('supervisor') ||
+                   j.includes('manager') || j.includes('superintendent') || j.includes('admin') ||
+                   d.includes('admin') || s.includes('admin');
+          }
+          return d.includes(roleLower) || s.includes(roleLower) || j.includes(roleLower);
+        }).map((e: any) => e.nik);
+
+        if (targetNiks.length > 0) {
+          subs = await db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.nik, targetNiks));
+        }
+        // Fallback: if targeted role currently has no registered devices, broadcast to all subscribers so critical alerts aren't lost
+        if (subs.length === 0) {
+          subs = await db.select().from(pushSubscriptions);
+        }
       } else {
-         subs = await db.select().from(pushSubscriptions);
+        subs = await db.select().from(pushSubscriptions);
       }
-      
+
+      // Deduplicate push subscriptions by endpoint to avoid sending multiple notifications to the same device
+      const seenEndpoints = new Set<string>();
       for (const sub of subs) {
         try {
           const pushSub = JSON.parse(sub.subscription);
+          if (!pushSub || !pushSub.endpoint) continue;
+          if (seenEndpoints.has(pushSub.endpoint)) continue;
+          seenEndpoints.add(pushSub.endpoint);
+
           await webpush.sendNotification(pushSub, JSON.stringify({
             title: notif.title,
             body: notif.message,
             url: notif.link || '/'
           }));
         } catch (e: any) {
-          if (e.statusCode === 410) {
+          if (e.statusCode === 410 || e.statusCode === 404) {
             await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
+          } else {
+            console.warn(`[WebPush] Failed sending to sub ${sub.id}:`, e.message);
           }
         }
       }

@@ -334,11 +334,18 @@ router.post("/api/inspections/universal", async (req, res) => {
                       return `${item.item}: ${stok}${ket}`;
                   }).join(', ');
 
-                  const formTitle = finalData.judulForm || 'Kotak P3K';
-                  const lokasi = (finalData.lokasiUmum && finalData.lokasiUmum !== '-') ? ` (${finalData.lokasiUmum})` : '';
+                  let areaName = (finalData.lokasiUmum && finalData.lokasiUmum !== '-') ? finalData.lokasiUmum : '';
+                  if (!areaName) {
+                      const j = (finalData.judulForm || '').toLowerCase();
+                      if (j.includes('preparasi basah')) areaName = 'Preparasi Basah';
+                      else if (j.includes('preparasi kering')) areaName = 'Preparasi Kering';
+                      else if (j.includes('laboratorium') || j.includes('lab')) areaName = 'Laboratorium';
+                      else areaName = 'Kotak P3K';
+                  }
+                  finalData.lokasiUmum = areaName;
 
                   allTemuan.push({
-                      temuan: `${formTitle}${lokasi}: ${itemsList}`,
+                      temuan: `Kekurangan Stok Item Kotak P3K: ${itemsList}`,
                       risiko: 'Keterlambatan Pertolongan Pertama Medis',
                       pengendalian: 'Restok & Pembaruan Item P3K Sesuai Standar',
                       status: 'OPEN',
@@ -348,24 +355,25 @@ router.post("/api/inspections/universal", async (req, res) => {
           }
       }
 
+      // --- BEGIN INSERT REKAP TEMUAN KE DATABASE TICKETS & FORMAT WA ---
+      const host = req.headers['x-forwarded-host'] || req.get('host');
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      const baseUrl = process.env.APP_URL || (host ? `${protocol}://${host}` : 'https://preplab-portal-staging-753907727409.asia-southeast2.run.app');
+
       if (allTemuan.length > 0) {
-          waMessageText += `\n*DAFTAR TEMUAN:*\n`;
-          allTemuan.forEach((t: any, i: number) => {
-              waMessageText += `${i + 1}. ${t.temuan}\n`;
-              if (t.risiko) waMessageText += `   - Risiko: ${t.risiko}\n`;
-              if (t.pengendalian) waMessageText += `   - Pengendalian: ${t.pengendalian}\n`;
-          });
-          
-          // --- BEGIN INSERT REKAP TEMUAN KE DATABASE TICKETS ---
           try {
               const allExistingTickets = await db.select().from(tickets);
               const currentTicketCount = allExistingTickets.length;
               const inspNameOnly = (finalData.insp1 || 'Inspector').split(' | ')[0].trim();
 
+              allTemuan.forEach((t: any, i: number) => {
+                  t.ticketId = generateTicketId(i, currentTicketCount);
+              });
+
               const ticketValues = allTemuan.map((t: any, i: number) => {
                   const isClosed = t.status === 'CLOSED';
                   return {
-                      ticketId: generateTicketId(i, currentTicketCount),
+                      ticketId: t.ticketId || generateTicketId(i, currentTicketCount),
                       requestorName: finalData.insp1 || 'Inspector',
                       category: finalData.judulForm || 'Inspeksi Mingguan',
                       location: finalData.lokasiUmum || 'Area',
@@ -389,12 +397,37 @@ router.post("/api/inspections/universal", async (req, res) => {
               if (ticketValues.length > 0) {
                   await db.insert(tickets).values(ticketValues);
                   console.log(`Inserted ${ticketValues.length} separate temuan into tickets table.`);
+
+                  // Kirim Push Notification & In-App Notification untuk Temuan Inspeksi Baru
+                  try {
+                      const inspectorNameClean = (finalData.insp1 || 'Inspektor').split('-')[0].split('(')[0].trim();
+                      const notifTitle = `Temuan Baru: ${finalData.judulForm || 'Inspeksi Terpadu'}`;
+                      const notifMsg = `${inspectorNameClean} mencatat ${ticketValues.length} temuan di ${finalData.lokasiUmum || 'Area Kerja'}`;
+                      const _n = await db.insert(notifications).values({
+                          userId: null,
+                          role: 'Safety',
+                          title: notifTitle,
+                          message: notifMsg,
+                          type: 'warning',
+                          link: '/ticket'
+                      }).returning();
+                      sendWebPush(_n);
+                  } catch (pushErr) {
+                      console.error("Gagal mengirim push notifikasi temuan inspeksi universal:", pushErr);
+                  }
               }
           } catch(e) {
               console.error("Failed to insert temuan to tickets table:", e);
           }
-          // --- END INSERT REKAP TEMUAN KE DATABASE TICKETS ---
-          
+
+          waMessageText += `\n*DAFTAR TEMUAN:*\n`;
+          allTemuan.forEach((t: any, i: number) => {
+              waMessageText += `${i + 1}. ${t.temuan}\n`;
+              if (t.ticketId) waMessageText += `   - No. Tiket: *${t.ticketId}*\n`;
+              if (t.risiko) waMessageText += `   - Risiko: ${t.risiko}\n`;
+              if (t.pengendalian) waMessageText += `   - Pengendalian: ${t.pengendalian}\n`;
+          });
+          waMessageText += `\n*Tindak Lanjut / Buka Tiket*:\n${baseUrl}/ticket\n`;
       } else {
           waMessageText += `\n*DAFTAR TEMUAN*: Nihil\n`;
       }
@@ -402,44 +435,38 @@ router.post("/api/inspections/universal", async (req, res) => {
       let driveTbpUrl = (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) ? pdfUrl : null;
       let driveGpsUrl = (linkPdf2 && linkPdf2.startsWith('http') && !linkPdf2.includes('/api/inspections/')) ? linkPdf2 : null;
 
-      // Fallback: If GAS didn't return a direct HTTP URL, generate PDF immediately on Google Drive
-      if (!driveTbpUrl) {
-        try {
-          const generatedPdf = await generatePdfFromTemplate(
-            '1YMympG3aA-8l978aAlRJFSoi-SVQAKiS7KmJjNRfuBI',
-            '1JE6EusixbK7saIzboKNOk9aMiAqEX-zF',
-            {
-              '<<JUDUL_FORM>>': finalData.judulForm || 'LAPORAN INSPEKSI TERPADU',
-              '<<LOKASI>>': finalData.lokasiUmum || '-',
-              '<<INSPEKTOR_UTAMA>>': finalData.insp1 || '-',
-              '<<INSPEKTOR_2>>': finalData.insp2 || '-',
-              '<<CATATAN>>': finalData.catatanUmum || '-'
-            },
-            `Laporan_Inspeksi_${finalData.idForm || Date.now()}.pdf`,
-            {}
-          );
-          if (generatedPdf?.pdfUrl) {
-            driveTbpUrl = generatedPdf.pdfUrl;
-          }
-        } catch(e) {
-          console.error("Fallback PDF creation error:", e);
-        }
-      }
+      // Link laporan PDF: prioritaskan direct Drive URL jika sudah siap, atau link URL portal resmi yang otomatis merender
+      const finalTbpLink = driveTbpUrl || `${baseUrl}/api/inspections/${result[0].id}/pdf?pt=tbp`;
+      const finalGpsLink = driveGpsUrl || `${baseUrl}/api/inspections/${result[0].id}/pdf?pt=gps`;
 
-      if (driveTbpUrl) {
-        waMessageText += `\n*Dokumen Laporan TBP*:\n${driveTbpUrl}\n`;
-      }
-      if (driveGpsUrl) {
-        waMessageText += `\n*Dokumen Laporan GPS*:\n${driveGpsUrl}\n`;
-      }
+      waMessageText += `\n*Dokumen Laporan TBP*:\n${finalTbpLink}\n`;
+      waMessageText += `\n*Dokumen Laporan GPS*:\n${finalGpsLink}\n`;
 
       if ((!storedPdfVal || storedPdfVal === '#') && driveTbpUrl) {
         storedPdfVal = (driveTbpUrl && driveGpsUrl) ? JSON.stringify({ tbp: driveTbpUrl, gps: driveGpsUrl }) : driveTbpUrl;
         await db.update(inspections as any).set({ pdfUrl: storedPdfVal }).where(eq(inspections.id, result[0].id));
       }
 
+      // Background fallback: Jika GAS belum mengembalikan URL pada saat request, trigger pembuatan di background
+      if (!driveTbpUrl) {
+        generateGasPdfForInspection({
+          ...result[0],
+          dataF: JSON.stringify(finalData),
+          signature: JSON.stringify({ ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3 }),
+          photoUrl: JSON.stringify({ fotoTemuanArray: finalFotoTemuanArray, fotoProses: finalFotoProses })
+        }).then(async ({ pdfUrl: newTbp, linkPdf2: newGps }) => {
+          if (newTbp || newGps) {
+            const val = (newTbp && newGps) ? JSON.stringify({ tbp: newTbp, gps: newGps }) : (newTbp || newGps);
+            await db.update(inspections as any).set({ pdfUrl: val }).where(eq(inspections.id, result[0].id));
+            console.log(`[Auto-PDF] Inspeksi #${result[0].id} berhasil dibuat di background: ${val}`);
+          }
+        }).catch(err => {
+          console.error(`[Auto-PDF] Gagal membuat background PDF untuk inspeksi #${result[0].id}:`, err);
+        });
+      }
+
       invalidateScheduleCache();
-      res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl: driveTbpUrl, linkPdf2: driveGpsUrl, waMessageText });
+      res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl: finalTbpLink, linkPdf2: finalGpsLink, waMessageText });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: "Failed to save universal inspection: " + (error.message || String(error)) });
@@ -712,6 +739,7 @@ router.post("/api/inspections", async (req, res) => {
       } catch (e) {}
 
       let waMessageText = `*==== LAPORAN KEPATUHAN APD ====*\n\n`;
+      let tidakLengkap = 0;
       if (dataF && dataF.length > 0) {
           const firstRow = dataF[0];
           const jam = firstRow[0] || '-';
@@ -728,7 +756,6 @@ router.post("/api/inspections", async (req, res) => {
 
           let hadir = 0;
           let absen = 0;
-          let tidakLengkap = 0;
 
           dataF.forEach((row: any) => {
               const kehadiran = row[8];
@@ -811,6 +838,24 @@ router.post("/api/inspections", async (req, res) => {
 
                       await db.insert(tickets).values([singleTicket]);
                       console.log(`Inserted 1 consolidated APD temuan ticket (${singleTicket.ticketId}) into tickets table.`);
+
+                      // Kirim Push Notification & In-App Notification untuk Temuan APD Baru
+                      try {
+                          const inspectorNameClean = (insp || 'Inspektor').split('-')[0].split('(')[0].trim();
+                          const notifTitle = 'Temuan Kepatuhan APD Baru';
+                          const notifMsg = `${inspectorNameClean} mencatat ketidakpatuhan APD di area ${area || 'Area Kerja'}`;
+                          const _n = await db.insert(notifications).values({
+                              userId: null,
+                              role: 'Safety',
+                              title: notifTitle,
+                              message: notifMsg,
+                              type: 'warning',
+                              link: '/ticket'
+                          }).returning();
+                          sendWebPush(_n);
+                      } catch (pushErr) {
+                          console.error("Gagal mengirim push notifikasi temuan APD:", pushErr);
+                      }
                   }
               } catch(e) {
                   console.error("Failed to insert APD temuan to tickets table:", e);
@@ -819,22 +864,42 @@ router.post("/api/inspections", async (req, res) => {
           }
       }
 
+      const host = req.headers['x-forwarded-host'] || req.get('host');
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      const baseUrl = process.env.APP_URL || (host ? `${protocol}://${host}` : 'https://preplab-portal-staging-753907727409.asia-southeast2.run.app');
+
       const driveTbpUrl = (pdfUrl && pdfUrl.startsWith('http') && !pdfUrl.includes('/api/inspections/')) ? pdfUrl : null;
       const driveGpsUrl = (linkPdf2 && linkPdf2.startsWith('http') && !linkPdf2.includes('/api/inspections/')) ? linkPdf2 : null;
 
-      if (driveTbpUrl) {
-        waMessageText += `\n*Dokumen Laporan TBP*:\n${driveTbpUrl}\n`;
-      } else {
-        waMessageText += `\n*Dokumen Laporan TBP*:\n(Tautan Google Drive sedang diproses / dibuat)\n`;
+      const finalTbpLink = driveTbpUrl || `${baseUrl}/api/inspections/${result[0].id}/pdf?pt=tbp`;
+      const finalGpsLink = driveGpsUrl || `${baseUrl}/api/inspections/${result[0].id}/pdf?pt=gps`;
+
+      waMessageText += `\n*Dokumen Laporan TBP*:\n${finalTbpLink}\n`;
+      waMessageText += `\n*Dokumen Laporan GPS*:\n${finalGpsLink}\n`;
+
+      if (tidakLengkap > 0) {
+        waMessageText += `\n*Tindak Lanjut / Buka Tiket*:\n${baseUrl}/ticket\n`;
       }
 
-      if (driveGpsUrl) {
-        waMessageText += `\n*Dokumen Laporan GPS*:\n${driveGpsUrl}\n`;
-      } else {
-        waMessageText += `\n*Dokumen Laporan GPS*:\n(Tautan Google Drive sedang diproses / dibuat)\n`;
+      // Background fallback jika GAS belum selesai saat request
+      if (!driveTbpUrl) {
+        generateGasPdfForInspection({
+          ...result[0],
+          dataF: JSON.stringify(dataF),
+          signature: JSON.stringify({ ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3 }),
+          photoUrl: JSON.stringify({ fotoTemuanArray: finalFotoTemuanArray, fotoProses: finalFotoProses })
+        }).then(async ({ pdfUrl: newTbp, linkPdf2: newGps }) => {
+          if (newTbp || newGps) {
+            const val = (newTbp && newGps) ? JSON.stringify({ tbp: newTbp, gps: newGps }) : (newTbp || newGps);
+            await db.update(inspections as any).set({ pdfUrl: val }).where(eq(inspections.id, result[0].id));
+            console.log(`[Auto-PDF] Inspeksi APD #${result[0].id} berhasil dibuat di background: ${val}`);
+          }
+        }).catch(err => {
+          console.error(`[Auto-PDF] Gagal membuat background PDF untuk APD #${result[0].id}:`, err);
+        });
       }
 
-      res.status(201).json({ ...result[0], pdfUrl: driveTbpUrl, linkPdf2: driveGpsUrl, waMessageText });
+      res.status(201).json({ ...result[0], pdfUrl: finalTbpLink, linkPdf2: finalGpsLink, waMessageText });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: "Failed to save inspection" });
@@ -868,13 +933,44 @@ router.get("/api/inspections/:id/pdf", async (req, res) => {
       } catch(e) {}
     }
 
+    // Auto-generate if not available yet
+    const lockKey = `${id}`;
+    if (!pdfGenerationLocks.has(lockKey)) {
+      pdfGenerationLocks.add(lockKey);
+      generateGasPdfForInspection(record)
+        .then(async ({ pdfUrl: newTbp, linkPdf2: newGps }) => {
+          if (newTbp || newGps) {
+            const val = (newTbp && newGps) ? JSON.stringify({ tbp: newTbp, gps: newGps }) : (newTbp || newGps);
+            await db.update(inspections as any).set({ pdfUrl: val }).where(eq(inspections.id, id));
+            console.log(`[Auto-PDF] On-demand PDF untuk #${id} selesai dibuat.`);
+          }
+        })
+        .catch(err => {
+          console.error(`Error on-demand generating PDF for inspection #${id}:`, err);
+        })
+        .finally(() => {
+          pdfGenerationLocks.delete(lockKey);
+        });
+    }
+
     return res.status(200).send(`
-      <div style="font-family:system-ui,sans-serif;padding:3rem 1.5rem;text-align:center;max-width:500px;margin:50px auto;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,0.05);">
-        <div style="font-size:3rem;margin-bottom:1rem;">⏳</div>
-        <h2 style="color:#0f172a;margin-bottom:0.5rem;font-size:20px;">Dokumen PDF Sedang Diproses</h2>
-        <p style="color:#64748b;font-size:14px;line-height:1.5;">Dokumen laporan inspeksi sedang diproses oleh Google Drive. Silakan muat ulang halaman ini dalam beberapa saat.</p>
-        <button onclick="location.reload()" style="margin-top:1.5rem;padding:0.6rem 1.4rem;background:#0d9488;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px;">Segarkan Halaman</button>
-      </div>
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta http-equiv="refresh" content="3">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Memproses Dokumen Laporan</title>
+      </head>
+      <body style="margin:0;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui,-apple-system,sans-serif;">
+        <div style="padding:2.5rem 2rem;text-align:center;max-width:440px;margin:20px;background:white;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.05);">
+          <div style="font-size:3rem;margin-bottom:1rem;">⏳</div>
+          <h2 style="color:#0f172a;margin-bottom:0.5rem;font-size:20px;font-weight:700;">Dokumen PDF Sedang Dibuat</h2>
+          <p style="color:#64748b;font-size:14px;line-height:1.6;margin-bottom:1.5rem;">Sistem sedang menyematkan tanda tangan dan foto dokumentasi ke dokumen resmi Google Drive. Halaman ini akan terbuka otomatis dalam beberapa saat.</p>
+          <div style="display:inline-block;padding:0.5rem 1rem;background:#f1f5f9;color:#475569;border-radius:20px;font-size:12px;font-weight:600;">Memuat otomatis...</div>
+        </div>
+      </body>
+      </html>
     `);
   } catch (err: any) {
     res.status(500).send("Error: " + err.message);
@@ -1309,7 +1405,7 @@ export function invalidateScheduleCache() {
   enrichedScheduleCacheMap.clear();
 }
 
-async function fetchInspectionScheduleFromSheet(forceRefresh = false, sheetName = 'CurrentWeek') {
+export async function fetchInspectionScheduleFromSheet(forceRefresh = false, sheetName = 'CurrentWeek') {
   const targetSheet = (sheetName || 'CurrentWeek').trim();
   const cacheKey = targetSheet.toLowerCase();
   const now = Date.now();
@@ -1503,22 +1599,40 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
         continue;
       }
 
+      // Attach SS proof info ONLY for this specific individual inspector (each partner must upload their own SS!)
+      const selfName = (s.name || '').trim().toLowerCase();
+      let selfNik = (empNameToNik.get(selfName) || '').trim().toLowerCase();
+      if (!selfNik) {
+        for (const [eName, eNik] of empNameToNik.entries()) {
+          if (eName === selfName || eName.includes(selfName) || selfName.includes(eName)) {
+            selfNik = eNik;
+            break;
+          }
+        }
+      }
+
+      const pMatch = allProofs.find(p => {
+        const pNik = (p.nik || '').trim().toLowerCase();
+        const pName = (p.name || '').trim().toLowerCase();
+        if (selfNik && pNik === selfNik) return true;
+        if (selfName) {
+          if (pName === selfName) return true;
+          const selfParts = selfName.split(/\s+/).filter(Boolean);
+          const pParts = pName.split(/\s+/).filter(Boolean);
+          if (selfParts.length >= 2 && pParts.length >= 2 && selfParts.every(part => pName.includes(part))) return true;
+          if (selfParts.length >= 2 && pParts.length >= 2 && pParts.every(part => selfName.includes(part))) return true;
+        }
+        return false;
+      });
+      s.hasSsProof = !!pMatch;
+      s.ssProofUrl = pMatch?.imageUrl || null;
+      s.ssProofDate = pMatch?.date || null;
+
       const personNames = [s.name, ...(s.partners || []).map((p: any) => p.name)].filter(Boolean).map((n: string) => n.trim().toLowerCase());
       const personNiks = personNames.map(pName => empNameToNik.get(pName)).filter(Boolean) as string[];
       const sInspeksi = (s.inspeksi || '').toLowerCase();
       const sSubArea = (s.formInfo?.subArea || '').toLowerCase();
       const sFormTitle = (s.formInfo?.formTitle || '').toLowerCase();
-
-      // Attach SS proof info for this person
-      const pMatch = allProofs.find(p => {
-        const pNik = (p.nik || '').trim().toLowerCase();
-        const pName = (p.name || '').trim().toLowerCase();
-        return personNames.some(target => pNik === target || pName.includes(target) || target.includes(pName)) ||
-               personNiks.some(target => pNik === target);
-      });
-      s.hasSsProof = !!pMatch;
-      s.ssProofUrl = pMatch?.imageUrl || null;
-      s.ssProofDate = pMatch?.date || null;
 
       let matchedStrict: any = null;
       let matchedAny: any = null;

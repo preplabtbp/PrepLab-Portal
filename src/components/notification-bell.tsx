@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, X, BellRing, Wrench, ChevronRight } from 'lucide-react';
+import { Bell, Check, X, BellRing, Wrench, ChevronRight, Megaphone } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import { subscribeUserToPush } from '../push-notifications';
 import { WorkOrderDetailModal } from './WorkOrderDetailModal';
 
 interface NotificationBellProps {
   userNik?: string;
   userName?: string;
+  onOpenP5mModal?: (notif?: any) => void;
 }
 
-export function NotificationBell({ userNik, userName }: NotificationBellProps) {
+export function NotificationBell({ userNik, userName, onOpenP5mModal }: NotificationBellProps) {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -34,12 +36,12 @@ export function NotificationBell({ userNik, userName }: NotificationBellProps) {
     const success = await subscribeUserToPush(userNik);
     if (success) {
       setPushStatus('granted');
-      alert('Push notifications enabled!');
+      toast.success('Notifikasi push HP berhasil diaktifkan!');
     } else {
-      alert('Failed to enable push notifications. Check browser settings.');
       if ('Notification' in window) {
         setPushStatus(Notification.permission);
       }
+      toast.error('Gagal mengaktifkan notifikasi push. Periksa izin peramban/HP.');
     }
   };
 
@@ -147,6 +149,20 @@ export function NotificationBell({ userNik, userName }: NotificationBellProps) {
     );
   };
 
+  const isP5mNotification = (notif: any): boolean => {
+    const title = (notif.title || '').toLowerCase();
+    const message = (notif.message || '').toLowerCase();
+    const link = (notif.link || '').toLowerCase();
+    return (
+      title.includes('p5m') || 
+      message.includes('p5m') || 
+      link.includes('p5m') ||
+      title.includes('pembawa materi') ||
+      message.includes('pembawa materi') ||
+      title.includes('briefing alert')
+    );
+  };
+
   const handleNotificationClick = (notif: any) => {
     if (!notif.isRead) {
       markAsRead(notif.id);
@@ -161,6 +177,19 @@ export function NotificationBell({ userNik, userName }: NotificationBellProps) {
       setSelectedWoId('LATEST_OPEN_WO');
       setShowWoModal(true);
       setIsOpen(false);
+    } else if (isP5mNotification(notif)) {
+      setIsOpen(false);
+      if (onOpenP5mModal) {
+        onOpenP5mModal(notif);
+      }
+      // Broadcast event so P5MNotificationModal opens even if acknowledged / skipped previously
+      window.dispatchEvent(new CustomEvent('open-p5m-modal', {
+        detail: {
+          notif,
+          userNik,
+          userName
+        }
+      }));
     }
   };
 
@@ -289,6 +318,7 @@ export function NotificationBell({ userNik, userName }: NotificationBellProps) {
               ) : (
                 filteredNotifs.map((notif) => {
                   const isWO = isWoNotification(notif);
+                  const isP5M = isP5mNotification(notif);
                   return (
                     <div 
                       key={notif.id} 
@@ -297,14 +327,14 @@ export function NotificationBell({ userNik, userName }: NotificationBellProps) {
                       }`}
                       style={{
                         backgroundColor: notif.isRead ? 'var(--card-bg)' : 'var(--input-bg)',
-                        borderColor: 'var(--border-main)'
+                        borderColor: isP5M && !notif.isRead ? 'rgba(245, 158, 11, 0.4)' : 'var(--border-main)'
                       }}
                       onClick={() => handleNotificationClick(notif)}
                     >
                       {!notif.isRead && (
                         <div 
                           className="absolute top-3.5 right-3 w-2 h-2 rounded-full"
-                          style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
+                          style={{ backgroundColor: isP5M ? '#F59E0B' : 'var(--primary, #2A9D8F)' }}
                         />
                       )}
                       
@@ -318,6 +348,13 @@ export function NotificationBell({ userNik, userName }: NotificationBellProps) {
                             }}
                           >
                             <Wrench className="w-3 h-3" /> WO
+                          </span>
+                        )}
+                        {isP5M && (
+                          <span 
+                            className="p-1 rounded-md text-[10px] font-bold inline-flex items-center gap-1 shadow-2xs bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                          >
+                            <Megaphone className="w-3 h-3" /> P5M
                           </span>
                         )}
                         <h4 className="font-bold text-xs truncate pr-3" style={{ color: 'var(--text-main)' }}>
@@ -338,6 +375,17 @@ export function NotificationBell({ userNik, userName }: NotificationBellProps) {
                             <Wrench className="w-3 h-3" /> Buka Detail & Selesaikan WO
                           </span>
                           <ChevronRight className="w-3.5 h-3.5" />
+                        </div>
+                      )}
+
+                      {isP5M && (
+                        <div 
+                          className="mt-2 pt-1.5 border-t flex items-center justify-between text-[11px] font-bold border-amber-500/20 text-amber-600 dark:text-amber-400"
+                        >
+                          <span className="flex items-center gap-1">
+                            <Megaphone className="w-3 h-3" /> Buka Pemberitahuan &amp; Unduh Materi P5M
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5 text-amber-500" />
                         </div>
                       )}
 

@@ -2,6 +2,175 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.33] - 2026-09-16
+
+### 📑 Penyempurnaan Tautan WhatsApp & Auto-Generate PDF Inspeksi dengan Tanda Tangan & Foto
+
+- **Jaminan Tautan Pesan WhatsApp Inspeksi (`server/routes/inspections.ts`)**:
+  - Memperbaiki pembentukan pesan WhatsApp laporan inspeksi mingguan/universal dan APD agar tautan dokumen laporan PDF (`*Dokumen Laporan TBP*` & `*Dokumen Laporan GPS*`) selalu tercantum secara andal dan tidak lagi kosong jika Google Apps Script masih dalam proses *render*.
+  - Menyertakan **Nomor ID Tiket resmi** (contoh: `TKT-W38Y26-001`) pada setiap rincian temuan bahaya/kekurangan stok.
+  - Menambahkan tautan langsung tindak lanjut temuan ke portal (`/ticket`) pada bagian akhir daftar temuan pesan WhatsApp.
+- **On-Demand PDF Auto-Generation & Auto-Redirect (`server/routes/inspections.ts`)**:
+  - Mengoptimalkan endpoint `/api/inspections/:id/pdf` agar otomatis memicu pembuatan PDF resmi ke Google Drive jika belum tersedia, lengkap dengan penyematan tanda tangan inspektur (`ttd1`/`ttd2`/`ttd3`) dan foto dokumentasi proses inspeksi.
+  - Menyediakan tampilan loading interaktif dengan auto-refresh yang langsung mengarahkan (*auto-redirect*) ke berkas Google Drive setelah proses pembuatan dokumen selesai.
+
+## [2.8.32] - 2026-09-15
+
+### 📲 Push Notifikasi Mobile & PWA Terpasang (Temuan Inspeksi K3, APD & KTA/TTA)
+
+- **Otomatisasi Langganan Push Notifikasi di HP (`src/push-notifications.ts` & `src/components/PushNotificationPrompt.tsx`)**:
+  - Menambahkan deteksi otomatis status aplikasi terpasang di HP (PWA standalone mode / Home Screen / peramban HP).
+  - Jika izin notifikasi telah diberikan (`granted`), sistem otomatis menghubungkan token Web Push HP ke NIK personil di latar belakang (*silent subscription*) tanpa perlu membuka lonceng manual.
+  - Jika izin belum diatur (`default`), menampilkan banner interaktif modern di layar HP untuk mengaktifkan notifikasi dengan 1 ketukan.
+  - Menangani event `appinstalled` ketika pengguna baru memasang aplikasi ke layar utama HP agar langsung menawarkan pengaktifan notifikasi.
+- **Pemberitahuan Temuan Inspeksi Terpadu (`server/routes/inspections.ts`)**:
+  - Saat form inspeksi terpadu/universal disubmit dengan temuan bahaya K3 (`ticketValues.length > 0`), sistem otomatis membuat notifikasi in-app dan memicu `sendWebPush` ke seluruh HP personil Safety, Pengawas, dan Tim Terkait.
+- **Pemberitahuan Temuan Ketidakpatuhan APD (`server/routes/inspections.ts`)**:
+  - Saat inspeksi kepatuhan APD menemukan personil yang melanggar/tidak lengkap APD, tiket temuan langsung mengirimkan Web Push ke HP tim terkait secara seketika (*real-time*).
+- **Pemberitahuan Laporan KTA & TTA (`server/routes/misc.ts`)**:
+  - Saat personil mengirim laporan Kondisi Tidak Aman (KTA) atau Tindakan Tidak Aman (TTA), sistem langsung mengirimkan notifikasi push ke tim K3 & pengawas.
+- **Penyempurnaan Penargetan Push Notification di Backend (`server/utils.ts`)**:
+  - Memperbaiki penargetan role: sebelumnya hanya memeriksa kecocokan string kaku pada `employees.department`. Kini mencakup `department`, `section`, dan `jabatan` (case-insensitive) dengan fallback broadcast cerdas agar temuan K3 tidak hilang jika ada variasi nama seksi.
+  - Menambahkan inisialisasi aman VAPID fallback dan deduplikasi endpoint langganan ganda.
+- **Penyempurnaan Klik Notifikasi Mobile (`public/sw.js`)**:
+  - Saat notifikasi di HP diketuk, Service Worker otomatis memfokuskan jendela aplikasi PWA yang sedang berjalan dan langsung menavigasi ke halaman tiket/temuan (`/ticket` atau `/bulletin`) tanpa membuka tab duplikat.
+
+### ⚖️ Penyelarasan Data KTA/TTA dengan Jadwal Inspeksi (Perbaikan Deteksi Cuti)
+
+- **Penyebab Masalah (Root Cause)**:
+  - Pada perhitungan status rekap (`getRekapPersonnelClassification` di `server/routes/misc.ts`), sistem sebelumnya menganggap personil sedang **Cuti** jika terdapat $\ge 1$ hari cuti di database roster pada minggu berjalan.
+  - Hal ini menyebabkan personil seperti **Ryan M Rusli** yang aktif bekerja dari Senin hingga Jumat dan hanya mengambil Cuti di hari Sabtu/Minggu langsung dikelompokkan ke `CUTI` untuk 1 minggu penuh pada modul KTA/TTA.
+  - Akibatnya, pada portal muncul status *"Cuti Aktif - Bebas dari kewajiban pelaporan KTA/TTA"*, padahal di Jadwal Inspeksi (Google Sheet `CurrentWeek`), ia aktif terdaftar dengan tugas inspeksi mingguan.
+- **Sinkronisasi Langsung dengan Jadwal Inspeksi (`server/routes/misc.ts` & `server/routes/inspections.ts`)**:
+  - Mengekspor dan menghubungkan parser `fetchInspectionScheduleFromSheet` ke `getRekapPersonnelClassification`.
+  - Jika seorang personil memiliki jadwal inspeksi aktif di Google Sheet minggu berjalan (`!item.isCuti`), sistem **menjamin status personil tersebut AKTIF (wajib inspeksi & wajib KTA/TTA)** dan tidak dimasukkan ke daftar Cuti.
+  - Personil yang secara eksplisit masuk dalam bagian Cuti pada lembar jadwal inspeksi tetap diposisikan sebagai `CUTI`.
+- **Penyempurnaan Ambang Batas Cuti Roster (Fallback)**:
+  - Mengubah aturan roster: personil hanya dianggap Cuti mingguan jika **mayoritas hari ($\ge 4$ hari atau $\ge$ separuh entri)** berstatus Cuti/TRV. Cuti 1–2 hari di akhir pekan tidak lagi menggugurkan kewajiban mingguan.
+- **Isolasi Bukti Unggah SS General Inspeksi per Individu (`server/routes/inspections.ts` & `src/components/InspectionScheduleCard.tsx`)**:
+  - Memperbaiki bug pada `enrichSchedulesWithCompletion`: sebelumnya pencocokan bukti SS general inspeksi (`hasSsProof`) menggunakan array gabungan `personNames` yang menyertakan nama rekan tim/pasangan (`partners`).
+  - Akibatnya, jika salah satu personil (contoh Pak Muhammad Nova Herisandi) telah mengunggah SS form general inspeksi, pasangannya (Pak Mohamad Noer Syafi’i) ikut otomatis tercentang sudah mengunggah, padahal belum.
+  - Memisahkan validasi bukti SS general inspeksi agar **hanya memeriksa NIK dan Nama personil yang bersangkutan secara individual**, sehingga bukti SS tidak lagi tertaut atau bocor antar rekan tim.
+  - Menambahkan penanganan `else` pada `InspectionScheduleCard` agar kartu jadwal langsung mereset status SS dan menghapus cache lokal jika personil belum mengunggah SS.
+
+### 🩹 Perbaikan Alokasi Area & Deskripsi Temuan Checklist Kotak P3K
+
+- **Penyebab Masalah (Root Cause)**:
+  - Pada formulir inspeksi Kotak P3K (`FormP3K.tsx`), tidak terdapat kolom input area manual karena nama area telah melekat pada judul formulir (misal *Checklist Isi Kotak P3K Preparasi Basah*).
+  - Hal ini menyebabkan `lokasiUmum` terkirim dengan nilai default `'-'`, sehingga kolom **Area / Lokasi** di kartu tiket temuan menjadi kosong (`-`).
+  - Selain itu, teks temuan sebelumnya menggabungkan seluruh judul formulir ke dalam deskripsi temuan (*"Checklist Isi Kotak P3K Preparasi Basah: Aquades..."*), sehingga nama area tercampur di dalam deskripsi.
+- **Ekstraksi Otomatis Area Formulir P3K (`src/components/weekly-inspection-screen.tsx` & `server/routes/inspections.ts`)**:
+  - Menambahkan deteksi otomatis nama area dari judul form P3K (*Preparasi Basah*, *Preparasi Kering*, atau *Laboratorium*) saat submit inspeksi.
+  - Memastikan field `location` pada tiket temuan otomatis terisi dengan nama area yang benar.
+  - Merapikan format teks temuan menjadi `Kekurangan Stok Item Kotak P3K: [daftar item kosong]` tanpa menduplikasi nama area di dalam deskripsi.
+- **Normalisasi API & Database Backfill (`server/routes/tickets.ts`)**:
+  - Menambahkan normalisasi otomatis pada endpoint `GET /api/tickets` agar tiket temuan P3K yang sebelumnya tersimpan dengan lokasi `'-'` otomatis menampilkan nama areanya.
+  - Memperbarui 8 data tiket temuan P3K eksisting di database (termasuk tiket `TKT-W38Y26-155`) agar area dan deskripsinya langsung bersih dan rapi.
+
+### 🔔 Notifikasi Penyelesaian Temuan untuk Inspektor Pelapor (`server/routes/tickets.ts`)
+
+- **Notifikasi Otomatis Personil Pelapor saat Temuan CLOSED**:
+  - Saat suatu tiket temuan di-*closing* oleh PIC/teknisi, sistem kini otomatis menelusuri NIK atau nama inspektor pelapor (`requestorName`).
+  - Mengirimkan notifikasi in-app dan Web Push langsung ke akun inspektor yang bersangkutan (*"Temuan Anda [TKT-...] di Area ... telah diselesaikan oleh PIC"*).
+  - Melengkapi fallback ke role `Safety` jika NIK pelapor tidak terdeteksi, sehingga tim K3 selalu terpantau.
+
+### 🔕 Eliminasi Notifikasi Dobel di SAP Dashboard (`src/components/sap-dashboard.tsx`)
+
+- **Penyesuaian Alur Pengingat Target Inspeksi**:
+  - Menghilangkan *auto-popup* modal saat halaman SAP Dashboard pertama kali dibuka, sehingga pengguna tidak lagi melihat peringatan ganda (banner atas dan pop-up bersamaan).
+  - Banner peringatan di bagian atas dashboard tetap aktif dan responsif, sementara pop-up modal detail hanya akan terbuka jika pengguna sengaja mengklik tombol **`[Detail]`** pada banner.
+
+### 🖼️ Perbaikan Pratinjau Foto Temuan K3: Pencegahan Salah Deteksi Base64 sebagai ID Google Drive
+
+- **Penyebab Masalah (Root Cause)**:
+  - Pada komponen penampil gambar (`src/components/image-modal.tsx`), logika deteksi ID Google Drive sebelumnya menggunakan ekspresi reguler umum `str.match(/\/d\/([a-zA-Z0-9_-]+)/)`.
+  - Foto temuan inspeksi yang tersimpan langsung dalam format data Base64 (`data:image/...`) memiliki puluhan ribu karakter acak yang sering kali mengandung deretan karakter `/d/...`.
+  - Hal ini menyebabkan sistem salah mengira potongan teks Base64 tersebut sebagai Google Drive File ID, mengganti tautan gambar asli menjadi thumbnail Google Drive palsu (`drive.google.com/thumbnail?id=...`), dan memunculkan tombol *"Buka di Drive"*.
+  - Akibatnya, pratinjau gambar menjadi layar hitam/kosong dan saat tombol *"Buka di Drive"* diklik, Google Drive menampilkan galat *"Halaman Tidak Ditemukan"* (404).
+- **Perbaikan Deteksi Berkas & URL Modal Gambar (`src/components/image-modal.tsx`)**:
+  - Menambahkan pengecualian dini untuk data gambar lokal / Base64 (`data:`) dan blob (`blob:`), sehingga tidak lagi diproses sebagai link Google Drive.
+  - Memperketat regex pencarian Google Drive ID agar hanya aktif pada URL domain resmi Google Drive dengan panjang ID minimal 25 karakter.
+  - Tombol *"Buka di Drive"* kini hanya muncul jika gambar memang tersimpan di Google Drive.
+  - Memperbarui tombol *"Download"* agar dapat mengunduh gambar Base64 lokal secara langsung sebagai berkas `.jpg`.
+- **Perbaikan Sanitasi Tautan di Halaman Tiket (`src/components/ticket-screen.tsx`)**:
+  - Menyelaraskan fungsi `formatImageUrl` dan `extractDriveFileId` agar tidak memanipulasi string Base64 dan memproses format URL Drive secara konsisten.
+
+### ✨ Sub-Menu Changelog & Manajemen Riwayat Pembaruan di Panel Developer
+
+- **Sub-Menu Terdedikasi di Panel Developer (`src/components/admin-dashboard.tsx`)**:
+  - Menambahkan modul **Changelog** ke dalam grid modul navigasi Developer Panel (`AdminDashboard`).
+  - Mendukung pembukaan langsung via parameter query URL: `/admin-dashboard?module=changelog`.
+- **Komponen Penampil Rilis Modern (`src/components/DeveloperChangelog.tsx`)**:
+  - **Default Rilis Terkini**: Otomatis memunculkan versi terbaru dengan badge status portal aktif (`LATEST RELEASE / AKTIF`) dan ringkasan metrik pembaruan.
+  - **Dua Mode Tampilan (Dual-View)**:
+    - **Mode Fokus (Detail Versi)**: Tampilan master-detail dengan daftar versi di sisi kiri dan detail rilis di sisi kanan, dilengkapi navigasi *stepper* versi sebelumnya/berikutnya.
+    - **Mode Akordion (Timeline Lengkap)**: Tampilan vertikal seluruh riwayat versi dengan mekanisme buka-tutup kartu serta tombol aksi *Buka Semua* dan *Tutup Semua*.
+  - **Pencarian Real-time & Filter Seri**: Fitur pencarian cepat seluruh isi rilis dan filter seri (`v2.8`, `v2.7`, `v2.6`, `v2.5`, `v2.4`).
+  - **Aksi Instan 1-Klik**: Tombol salin ringkasan rilis ke clipboard untuk broadcast ke grup komunikasi kerja.
+- **Endpoint API Terpusat (`server/routes/changelog.ts` & `server.ts`)**:
+  - Endpoint `GET /api/changelog` dan `GET /api/changelog/latest` dengan *in-memory caching* otomatis berbasis waktu modifikasi berkas (`mtime`).
+  - Didaftarkan ke `PUBLIC_API_PREFIXES` agar dapat diakses secara publik dan cepat tanpa hambatan autentikasi.
+
+### 🔐 Perbaikan Fitur Ganti Password: Endpoint Khusus `/api/auth/change-password` & Integrasi Menu Pengaturan
+
+- **Penyebab Masalah (Root Cause)**:
+  - Pada menu **Pengaturan** (`src/components/settings-screen.tsx`), alur penyimpanan password baru sebelumnya memanggil endpoint `/api/auth/setup`.
+  - Pasca pengetatan keamanan sistem (P1 Security Guard), endpoint `/api/auth/setup` secara ketat hanya diperuntukkan bagi aktivasi awal akun baru (`firstLoginComplete: false`).
+  - Akun karyawan yang telah aktif otomatis ditolak dengan pesan error: *"Akun ini sudah pernah diaktivasi dan aktif. Silakan login atau gunakan menu Lupa Password untuk mereset akun Anda."*
+- **Endpoint Terdedikasi `POST /api/auth/change-password` (`server/routes/auth.ts`)**:
+  - Menambahkan endpoint mandiri untuk penggantian password akun aktif.
+  - Memverifikasi keabsahan password lama secara kriptografis menggunakan `bcrypt.compare`.
+  - Memvalidasi batas minimum 8 karakter untuk password baru.
+  - Memperbarui hash password (`passwordHash`) dan email pemulihan ke database dalam satu transaksi aman.
+- **Pembaruan Formulir Pengaturan Akun (`src/components/settings-screen.tsx`)**:
+  - Menyederhanakan alur update password menjadi satu request langsung ke `/api/auth/change-password`.
+  - Menambahkan validasi dini panjang karakter di sisi browser serta pesan notifikasi status yang responsif dan informatif.
+
+## [2.8.27] - 2026-09-14
+
+### 📝 Peningkatan Formulir Induksi Karyawan: Kompresi Gambar Klien, Limit Payload 25MB & Penanganan Error JSON
+
+- **Kompresi Gambar Sisi Klien Otomatis (`src/components/induksi-screen.tsx`)**:
+  - Menambahkan fungsi kompresi gambar berbasis HTML5 Canvas (`compressImage`) sebelum foto dikonversi ke Base64 dan dikirim ke server.
+  - Resolusi foto dibatasi secara proporsional hingga maksimal 1200x1200px dengan kompresi JPEG kualitas 0.8, secara dramatis memangkas ukuran berkas tanpa mengurangi kejernihan dokumentasi visual.
+  - Dilengkapi indikator proses interaktif (*"Mengompres ukuran foto untuk upload cepat..."*) serta tombol **`[Hapus Foto]`** untuk memudahkan peserta mengganti dokumentasi jika diperlukan.
+  - Memperbaiki penanganan respons API agar secara tanggap mendeteksi status `413 (Payload Too Large)` atau pesan galat server lainnya dan menyajikannya dalam pesan notifikasi (*toast*) yang jelas bagi pengguna.
+- **Peningkatan Batas Ukuran Body Parser Server (`server.ts`)**:
+  - Menaikkan batas ukuran request body Express (`express.json` dan `express.urlencoded`) dari sebelumnya 10MB menjadi **`25MB`**.
+  - Memberikan ruang yang cukup untuk memproses dokumen formulir induksi keselamatan yang memuat tanda tangan digital ganda dan lampiran foto dokumentasi.
+  - Menambahkan rute `/api/induksi` ke dalam daftar rute yang dikecualikan dari middleware tertentu.
+- **Middleware Penanganan Error Global Server (Global JSON Error Handler, `server.ts`)**:
+  - Menambahkan middleware penanganan error terpusat yang selalu mengembalikan respons JSON terstruktur alih-alih halaman galat HTML baku saat terjadi kegagalan sistem.
+  - Secara spesifik menangani error `entity.too.large` / HTTP 413 dengan pesan ramah pengguna: *"Ukuran payload/foto terlalu besar (maksimal 25MB). Silakan gunakan foto yang telah dikompres."*
+- **Optimalisasi Inisialisasi Layanan Google Auth (`google-services.ts`)**:
+  - Menambahkan pemuatan konfigurasi `dotenv.config()` secara eksplisit dan melengkapi fallback aman untuk variabel lingkungan Google OAuth2 (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`).
+
+### 🏷️ Standardisasi Bank Materi P5M: Penambahan Prefiks 'Pemahaman' pada Judul SOP & IK
+
+- **Standardisasi Judul Prosedur Operasional Standar (SOP, `scripts/sync-sop-drive-to-p5m.cjs`, `scripts/test-sop-parser.cjs`)**:
+  - Seluruh judul dokumen SOP yang disinkronisasikan dari Google Drive ke bank materi P5M kini otomatis diawali dengan prefiks **`Pemahaman`** (misalnya: *"Pemahaman SOP Pengoperasian Jaw Crusher"*).
+  - Menyelaraskan format penamaan agar materi briefing harian berfokus pada pemahaman dan edukasi prosedur kerja aman di lapangan.
+- **Standardisasi Judul Instruksi Kerja (IK, `scripts/migrate-ik-preparasi-to-p5m.cjs`, `scripts/sync-ik-drive-to-p5m.cjs`)**:
+  - Seluruh skrip migrasi dan sinkronisasi berkas Instruksi Kerja Preparasi & Laboratorium kini otomatis menyematkan prefiks **`Pemahaman IK`** pada judul materi.
+  - Menjamin konsistensi penyajian topik pada jadwal acak P5M mingguan, pencarian bank materi, serta notifikasi penugasan personil.
+
+## [2.8.26] - 2026-09-12
+
+### 📄 Pratinjau Dokumen P5M: Auto-Sharing Google Drive & Mode Server Stream Bebas Hambatan
+
+- **Otomatisasi Hak Akses Google Drive (`ensureAnyoneCanReadDriveFile`, `server/routes/p5m.ts`, `server/routes/bulletin.ts`)**:
+  - Menambahkan fungsi otomatis via Google Drive API untuk menyetel izin berkas menjadi publik pembaca (*role: reader, type: anyone*) saat file dokumen P5M atau buletin diakses melalui sistem.
+  - Mencegah timbulnya pesan kendala login atau *"No preview available"* ketika karyawan membuka dokumen prosedur di perangkat yang tidak terhubung dengan akun Google perusahaan.
+- **Dukungan Mode Server Stream Langsung (Direct Binary Stream Viewer)**:
+  - Menyediakan penampil streaming langsung dari server (`/api/drive/view/:fileId` dan `/api/p5m/view-drive/:fileId`) yang mendeteksi berkas PDF melalui verifikasi header biner (`%PDF-`) dan menyajikan konten dengan `Content-Type: application/pdf` serta `Cache-Control: public, max-age=86400`.
+  - Berfungsi sebagai jalur alternatif handal apabila Google Drive Embed diblokir oleh ekstensi peramban, cookie pihak ketiga, atau pembatasan jaringan lokal.
+- **Toggle Mode Penampil Interaktif (`p5m-screen.tsx` & `p5m-notification-modal.tsx`)**:
+  - Menambahkan tombol pemilih mode penampil **`[Mode Stream Server / Mode Google Drive]`** dengan ikon `RefreshCw` pada modal notifikasi penugasan P5M dan modal pratinjau materi P5M.
+  - Memberikan fleksibilitas penuh kepada personil untuk beralih mode pratinjau hanya dengan satu kali klik bila salah satu metode mengalami kendala pemuatan.
+- **Optimalisasi Deteksi File Prosedur & Tautan Flyer (`src/lib/p5m-flyer.ts`)**:
+  - Memperluas deteksi tipe dokumen prosedur agar mencakup berkas yang mengandung penamaan `JSA`, `IK`, maupun `SOP`.
+  - Mengarahkan tautan unduh dokumen ke proxy backend terproteksi.
+
 ## [2.8.25] - 2026-09-12
 
 ### 🚫 Penegakan Mutlak: Larangan Masuk Karyawan Resign ke Database & Pembersihan Otomatis

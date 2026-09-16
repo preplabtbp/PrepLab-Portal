@@ -12,6 +12,7 @@ import ThemeModal from './components/ThemeModal';
 import { Palette } from 'lucide-react';
 import { initAuth, googleSignIn } from './google-auth';
 import { WhatsAppModal } from './components/whatsapp-modal';
+import { InspectionCompletionModal, InspectionCompletionData } from './components/InspectionCompletionModal';
 import { P5MNotificationModal } from './components/p5m-notification-modal';
 import { GroupReportScreen, GroupReportFloatingWidget } from './components/GroupReportScreen';
 import { ReminderNotificationModal } from './components/ReminderNotificationModal';
@@ -19,6 +20,7 @@ import { InspectionNotificationModal } from './components/InspectionNotification
 import { GlobalOpenFindingsReminder } from './components/OpenFindingsReminderModal';
 import { GlobalKtaPartialReminderModal } from './components/GlobalKtaPartialReminderModal';
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
+import { PushNotificationPrompt } from './components/PushNotificationPrompt';
 
 
 
@@ -97,8 +99,9 @@ import { LabBotWidget } from './components/LabBotWidget';
 
 export default function App() {
 
-  // Global WhatsApp modal state — lifted here so it survives route changes
+  // Global WhatsApp & Inspection Completion modal state — lifted here so it survives route changes
   const [globalWaMessage, setGlobalWaMessage] = useState('');
+  const [inspectionCompletionData, setInspectionCompletionData] = useState<InspectionCompletionData | null>(null);
 
   // Listen for SW messages (push received)
   useEffect(() => {
@@ -1109,7 +1112,13 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-3">
-          <NotificationBell userNik={inspectorNik || undefined} userName={inspectorName || undefined} />
+          <NotificationBell 
+            userNik={inspectorNik || undefined} 
+            userName={inspectorName || undefined}
+            onOpenP5mModal={() => {
+              window.dispatchEvent(new CustomEvent('open-p5m-modal'));
+            }}
+          />
           <button 
             onClick={() => setShowProfileScreen(true)}
             className="w-8 h-8 rounded-full overflow-hidden border flex items-center justify-center shadow-sm active:scale-95 transition-transform"
@@ -1142,7 +1151,25 @@ export default function App() {
   <Route path="/create-internal-ticket" element={<CreateInternalTicketScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
   <Route path="/wo-list" element={<WOListScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} />} />
   <Route path="/ticket" element={<TicketScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} />} />
-  <Route path="/weekly-inspection" element={<WeeklyInspectionScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorJabatan={userProfile?.jabatan || ""} onInspectionComplete={(msg) => setGlobalWaMessage(msg)} />} />
+  <Route 
+    path="/weekly-inspection" 
+    element={
+      <WeeklyInspectionScreen 
+        inspectorName={inspectorName!} 
+        inspectorNik={inspectorNik!} 
+        inspectorJabatan={userProfile?.jabatan || ""} 
+        onInspectionComplete={(result) => {
+          if (typeof result === 'string') {
+            setInspectionCompletionData({ isOpen: true, waMessageText: result });
+            setGlobalWaMessage(result);
+          } else {
+            setInspectionCompletionData({ isOpen: true, ...result });
+            if (result.waMessageText) setGlobalWaMessage(result.waMessageText);
+          }
+        }} 
+      />
+    } 
+  />
   <Route path="/pemantauan" element={<PemantauanScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} />} />
   <Route path="/monitoring" element={<MonitoringDashboard inspectorNik={inspectorNik!} />} />
   <Route path="/quiz-admin" element={<QuizAdminScreen userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
@@ -1333,19 +1360,21 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Global WhatsApp Modal — survives navigation */}
-      <WhatsAppModal
-        isOpen={!!globalWaMessage}
-        onClose={() => setGlobalWaMessage('')}
-        messageText={globalWaMessage}
-        title="Laporan Inspeksi Berhasil"
-        description="Kirim laporan ke supervisor via WhatsApp."
+      {/* Global Inspection Completion Modal (Download PDF, Buka General Submit Safety, WhatsApp) */}
+      <InspectionCompletionModal
+        isOpen={Boolean(inspectionCompletionData?.isOpen)}
+        onClose={() => {
+          setInspectionCompletionData(null);
+          setGlobalWaMessage('');
+        }}
+        data={inspectionCompletionData}
       />
 
       {/* Global P5M Assignment Notification Modal */}
       <P5MNotificationModal
         inspectorNik={inspectorNik}
         inspectorName={inspectorName}
+        onNavigateToP5M={() => navigate('/p5m')}
       />
 
       {/* Global Weekly Inspection Assignment Notification Modal (Google Sheet Live) */}
@@ -1418,6 +1447,12 @@ export default function App() {
         userNik={inspectorNik}
         onCancel={() => setShowLogoutConfirm(false)}
         onConfirm={confirmLogoutKaryawan}
+      />
+
+      {/* Push Notification Auto-Prompt for Mobile / PWA */}
+      <PushNotificationPrompt 
+        userNik={inspectorNik} 
+        userName={inspectorName} 
       />
 
     </div>

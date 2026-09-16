@@ -31,6 +31,7 @@ COPY drizzle ./drizzle
 
 # Optional: copy any static assets if they are served outside of dist
 COPY firebase-applet-config.json* ./
+COPY CHANGELOG.md ./CHANGELOG.md
 
 ENV NODE_ENV=production
 ENV PORT=8080

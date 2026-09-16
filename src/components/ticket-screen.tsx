@@ -15,11 +15,12 @@ import { PageHeader } from './PageHeader';
 
 const formatImageUrl = (url: string) => {
   if (!url || url === '-') return null;
-  let match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)\//);
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+  let match = url.match(/\/file\/d\/([a-zA-Z0-9_-]{25,})/);
   if (match) {
     return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
   }
-  match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  match = url.match(/[?&]id=([a-zA-Z0-9_-]{25,})/);
   if (match) {
     return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
   }
@@ -27,10 +28,10 @@ const formatImageUrl = (url: string) => {
 };
 
 export function extractDriveFileId(url: string): string | null {
-  if (!url) return null;
-  const match1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (!url || url.startsWith('data:') || url.startsWith('blob:')) return null;
+  const match1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]{25,})/);
   if (match1) return match1[1];
-  const match2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  const match2 = url.match(/[?&]id=([a-zA-Z0-9_-]{25,})/);
   if (match2) return match2[1];
   return null;
 }

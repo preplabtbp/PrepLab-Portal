@@ -1,14 +1,15 @@
 import { toast } from 'sonner';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, Button, Input, Select } from '../ui';
 import { Camera, Users, AlertTriangle, Search } from 'lucide-react';
-import { getEmployees, uploadPhotoToDrive } from '../../sheets-api';
+import { getEmployees, getRosterData, uploadPhotoToDrive } from '../../sheets-api';
 import { InspectorSignatures, SignatureData } from '../InspectorSignatures';
 
 const APD_ITEMS = ['Seragam', 'Helm', 'Sepatu', 'Masker', 'Ear Plug', 'Kacamata'];
 
 export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit, autoFillAllYa }: { formId: string, inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number }) {
   const [employees, setEmployees] = useState<any[]>([]);
+  const [rosterData, setRosterData] = useState<any[]>([]);
   const [manualEmployees, setManualEmployees] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [waktuKerja, setWaktuKerja] = useState('');
@@ -25,14 +26,82 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit, autoFil
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      const data = await getEmployees();
-      setEmployees(data);
+      const [empData, rData] = await Promise.all([
+        getEmployees(),
+        getRosterData()
+      ]);
+      setEmployees(empData || []);
+      const rList = Array.isArray(rData) ? rData : ((rData as any)?.roster || []);
+      setRosterData(rList);
     } catch (e) {
-      console.error(e);
+      console.error("Gagal memuat data personil & roster:", e);
     } finally {
       setLoading(false);
     }
   };
+
+  // Map data roster terintegrasi berdasarkan NIK dan Nama
+  const rosterMap = useMemo(() => {
+    const map = new Map<string, any>();
+    rosterData.forEach(r => {
+      if (r.nik) map.set((r.nik || '').toString().trim().toUpperCase(), r);
+      if (r.name) map.set((r.name || '').toString().trim().toLowerCase(), r);
+    });
+    return map;
+  }, [rosterData]);
+
+  // Filter personil aktif: personil dengan data roster kosong (e.g. resign) tidak muncul
+  const hasActiveRoster = useCallback((emp: any) => {
+    if (!rosterData || rosterData.length === 0) {
+      return true; // Jika data roster belum/gagal dimuat, jangan blokir
+    }
+    const nikKey = (emp.nik || '').toString().trim().toUpperCase();
+    const nameKey = (emp.nama || emp.name || '').toString().trim().toLowerCase();
+    const r = rosterMap.get(nikKey) || rosterMap.get(nameKey);
+    
+    // Jika tidak ditemukan sama sekali di data roster
+    if (!r) return false;
+
+    // Periksa jadwal 7 hari ke depan (schedule)
+    if (Array.isArray(r.schedule)) {
+      const hasUpcoming = r.schedule.some((s: any) => {
+        const code = (s?.shiftCode || s?.status || '').toString().trim();
+        return code !== '' && code !== '-';
+      });
+      if (hasUpcoming) return true;
+    }
+
+    // Periksa fullSchedule untuk memastikan memiliki jadwal aktif bulan ini atau seterusnya
+    if (r.fullSchedule && typeof r.fullSchedule === 'object') {
+      const entries = Object.entries(r.fullSchedule);
+      if (entries.length === 0) return false;
+
+      const now = new Date();
+      const currentYear = now.getFullYear() % 100;
+      const currentMonthIdx = now.getMonth();
+
+      const hasValidFutureShift = entries.some(([dateStr, status]) => {
+        const s = (status as string || '').toString().trim();
+        if (!s || s === '-') return false;
+
+        const parts = dateStr.split(' ');
+        if (parts.length >= 3) {
+          const yr = parseInt(parts[2], 10);
+          if (yr > currentYear) return true;
+          if (yr === currentYear) {
+            const mStr = parts[1].toLowerCase();
+            const mIdx = ['jan', 'feb', 'mar', 'apr', 'may', 'mei', 'jun', 'jul', 'aug', 'agu', 'ags', 'sep', 'oct', 'okt', 'nov', 'des', 'dec'].findIndex(m => mStr.startsWith(m.slice(0, 3)));
+            if (mIdx >= currentMonthIdx) return true;
+          }
+        }
+        return false;
+      });
+
+      return hasValidFutureShift;
+    }
+
+    return false;
+  }, [rosterData, rosterMap]);
 
   const { filteredEmployees } = useMemo(() => {
     let div = '';
@@ -47,6 +116,9 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit, autoFil
     let list = [];
     if (waktuKerja) {
       list = employees.filter(e => {
+        // Sinkronisasi data roster: personil dengan data roster kosong otomatis tidak muncul
+        if (!hasActiveRoster(e)) return false;
+
         const ptStr = (e.pt || '').toString().trim().toUpperCase();
         const nikStr = (e.nik || '').toString().trim().toUpperCase();
         const isGts = ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
@@ -71,25 +143,40 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit, autoFil
     }
 
     return { filteredEmployees: list, div, grp };
-  }, [employees, formId, waktuKerja]);
+  }, [employees, formId, waktuKerja, hasActiveRoster]);
 
   useEffect(() => {
     // initialize table data when employees change
     const initialData: Record<string, any> = { ...tabelData };
     [...filteredEmployees, ...manualEmployees].forEach(e => {
       if (!initialData[e.nama]) {
+        const nikKey = (e.nik || '').toString().trim().toUpperCase();
+        const nameKey = (e.nama || e.name || '').toString().trim().toLowerCase();
+        const r = rosterMap.get(nikKey) || rosterMap.get(nameKey);
+
+        let initialKehadiran = 'Hadir';
+        let initialKet = '';
+
+        if (r && Array.isArray(r.schedule) && r.schedule[0]) {
+          const todayCode = (r.schedule[0].shiftCode || '').toString().trim().toUpperCase();
+          if (todayCode === 'C' || todayCode.startsWith('CT') || todayCode.startsWith('CE') || todayCode.startsWith('CS') || todayCode.startsWith('CI') || todayCode.startsWith('CR')) {
+            initialKehadiran = 'Cuti';
+            initialKet = 'Cuti';
+          }
+        }
+
         initialData[e.nama] = {
           nama: e.nama,
           jabatan: e.jabatan,
-          kehadiran: 'Hadir',
+          kehadiran: initialKehadiran,
           apd: [false, false, false, false, false, false], // false = OK, true = Rusak/Tidak Pakai
-          ket: ''
+          ket: initialKet
         };
       }
     });
     setTabelData(initialData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredEmployees, manualEmployees]);
+  }, [filteredEmployees, manualEmployees, rosterMap]);
 
   useEffect(() => {
     if (autoFillAllYa && autoFillAllYa > 0) {
@@ -111,10 +198,23 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit, autoFil
   }, [autoFillAllYa, filteredEmployees, manualEmployees]);
 
   const handleRowChange = (nama: string, field: string, value: any) => {
-    setTabelData(prev => ({
-      ...prev,
-      [nama]: { ...prev[nama], [field]: value }
-    }));
+    setTabelData(prev => {
+      const currentRow = prev[nama] || {};
+      const updatedRow = { ...currentRow, [field]: value };
+
+      if (field === 'kehadiran') {
+        if (value === 'Cuti') {
+          updatedRow.ket = 'Cuti';
+        } else if (currentRow.kehadiran === 'Cuti' && (currentRow.ket === 'Cuti' || !currentRow.ket)) {
+          updatedRow.ket = '';
+        }
+      }
+
+      return {
+        ...prev,
+        [nama]: updatedRow
+      };
+    });
   };
 
   const handleApdChange = (nama: string, index: number, isChecked: boolean) => {
@@ -367,6 +467,7 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit, autoFil
                 <div className="absolute top-full left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-xl z-50">
                   {employees
                     .filter(e => 
+                      hasActiveRoster(e) &&
                       !filteredEmployees.some(fe => fe.nama === e.nama) && 
                       !manualEmployees.some(me => me.nama === e.nama) &&
                       e.nama.toLowerCase().includes(searchQuery.toLowerCase())
@@ -386,6 +487,7 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit, autoFil
                       </div>
                     ))}
                   {employees.filter(e => 
+                      hasActiveRoster(e) &&
                       !filteredEmployees.some(fe => fe.nama === e.nama) && 
                       !manualEmployees.some(me => me.nama === e.nama) &&
                       e.nama.toLowerCase().includes(searchQuery.toLowerCase())

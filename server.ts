@@ -31,6 +31,7 @@ import { router as rosterRouter } from "./server/routes/roster.js";
 import { router as adminRouter } from "./server/routes/admin.js";
 import { router as agendaRouter } from "./server/routes/agenda.js";
 import { router as feedbackRouter } from "./server/routes/feedback.js";
+import { router as changelogRouter } from "./server/routes/changelog.js";
 import webpush from 'web-push';
 import { generatePdfFromTemplate, drive } from './google-services.js';
 import path from "path";
@@ -463,7 +464,8 @@ const app = express();
     '/api/labbot/chat',
     '/api/p5m/flyer',
     '/api/inspection-schedule',
-    '/api/induksi'
+    '/api/induksi',
+    '/api/changelog'
   ];
 
   app.use('/api', (req, res, next) => {
@@ -499,6 +501,7 @@ const app = express();
   app.use(feedbackRouter);
   app.use(financeRouter);
   app.use(labbotRouter);
+  app.use(changelogRouter);
 
   // In-memory chat storage as fallback since DB is disconnected
   const chatMessagesMemory: any[] = [];
