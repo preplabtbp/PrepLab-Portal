@@ -74,11 +74,14 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFill
       const match = findMatchingSubArea(target, subAreas);
       if (match) {
         setSubArea(match);
+        return;
       }
-    } else if (!subArea && subAreas.length === 1) {
+    }
+    // If no target match or subArea invalid, auto-select first sub-area
+    if (subAreas.length > 0 && (!subArea || !subAreas.includes(subArea))) {
       setSubArea(subAreas[0]);
     }
-  }, [defaultSubArea, subAreas]);
+  }, [defaultSubArea, subAreas, subArea]);
 
   useEffect(() => {
     if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
@@ -96,11 +99,13 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFill
     }
   }, [autoFillAllYa, data, subArea, subAreas]);
 
+  const activeSubArea = subArea || (subAreas.length > 0 ? subAreas[0] : '');
+
   const isQuestionRelevant = (q: any) => {
-    if (!subArea) return true; // Show all if none selected, or maybe return false? But UI hides questions if !subArea anyway.
+    if (!activeSubArea) return true;
     if (!q.info1 || q.info1.toUpperCase() === "ALL") return true;
     const areas = q.info1.split(',').map((s: string) => s.trim());
-    return areas.includes(subArea);
+    return areas.includes(activeSubArea);
   };
   
   const handleAnswer = (qId: string, ans: string) => {
@@ -159,7 +164,8 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFill
   };
 
   const handleSubmit = () => {
-    if (!subArea) {
+    const finalSubArea = subArea || (subAreas.length > 0 ? subAreas[0] : '-');
+    if (!finalSubArea || finalSubArea === '-') {
       toast("Pilih Lokasi Spesifik / Sub-Area terlebih dahulu!");
       return;
     }
@@ -198,7 +204,7 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFill
     const fotoTemuanArray = finalTemuan.map(t => t.foto || '').slice(0, 3);
 
     onSubmit({
-      lokasiUmum: subArea,
+      lokasiUmum: finalSubArea,
       payload,
       temuanUmum: finalTemuan,
       catatanUmum: catatan,
@@ -210,97 +216,62 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFill
 
   return (
     <div className="space-y-6">
-      {/* Sub Area: Automatic locked assignment from admin vs manual fallback */}
-      {subArea ? (
-        <Card className="border-l-4 border-l-emerald-500 bg-[var(--card-bg)] border-[var(--border-main)] shadow-sm p-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg shrink-0">
-                📍
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                    Lokasi Inspeksi Ditugaskan
-                  </span>
-                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-700/60">
-                    ✓ Otomatis Ditentukan Admin
-                  </span>
-                </div>
-                <h4 className="text-base font-bold text-[var(--text-main)] mt-0.5">{subArea}</h4>
-              </div>
+      {/* Sub Area: Locked assignment card with collapsible manual selector (matching jenis inspeksi) */}
+      <Card className="border-[var(--border-main)] bg-[var(--card-bg)] shadow-sm p-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center text-base shrink-0">
+              📍
             </div>
-            {subAreas.length > 1 && (
-              <button
-                type="button"
-                onClick={() => setIsManualOverride(!isManualOverride)}
-                className="text-xs font-semibold text-[var(--text-muted)] hover:text-emerald-600 transition-colors cursor-pointer"
-              >
-                {isManualOverride ? '▲ Tutup Pilihan Lokasi' : '▼ Ubah Lokasi (Opsional)'}
-              </button>
-            )}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                  Lokasi / Sub-Area Inspeksi
+                </span>
+                <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  ✓ Otomatis Ditentukan
+                </span>
+              </div>
+              <h4 className="text-sm sm:text-base font-bold text-[var(--text-main)] mt-0.5">
+                {activeSubArea || 'Semua Sub-Area'}
+              </h4>
+            </div>
           </div>
-          {isManualOverride && (
-            <div className="mt-3 pt-3 border-t border-[var(--border-main)]">
-              <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
-                Pilih lokasi lain jika bertukar tugas:
-              </label>
-              <Select 
-                value={subArea} 
-                onChange={e => {
-                  setSubArea(e.target.value);
-                  setIsManualOverride(false);
-                }} 
-                className="w-full font-bold text-[var(--text-main)] shadow-sm bg-[var(--input-bg)] border-[var(--border-main)]"
-              >
-                {subAreas.map(area => (
-                  <option key={area} value={area}>{area}</option>
-                ))}
-              </Select>
-            </div>
+
+          {subAreas.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setIsManualOverride(!isManualOverride)}
+              className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-teal-600 flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <span>{isManualOverride ? '▲ Sembunyikan Pilihan Manual' : '▼ Butuh ganti lokasi? (Opsional / Manual)'}</span>
+            </button>
           )}
-        </Card>
-      ) : (
-        <Card className="border-l-4 border-l-amber-500 bg-[var(--card-bg)] border-[var(--border-main)] shadow-sm">
-          <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
-            <label className="text-sm font-bold text-[var(--text-main)] flex items-center gap-1.5">
-              <span className="text-base">📍</span>
-              <span>Pilih Lokasi Inspeksi Spesifik</span>
-              <span className="text-rose-500 font-bold">*</span>
-            </label>
-            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700/60">
-              Wajib Dipilih
-            </span>
-          </div>
-          <p className="text-xs text-[var(--text-muted)] mb-3">
-            Tentukan sub-area atau ruangan yang sedang diinspeksi untuk memuat butir checklist yang relevan.
-          </p>
-          <Select 
-            value={subArea} 
-            onChange={e => setSubArea(e.target.value)} 
-            className="w-full font-bold text-[var(--text-main)] shadow-sm bg-[var(--input-bg)] border-[var(--border-main)]"
-          >
-            <option value="">-- Pilih Lokasi / Sub-Area --</option>
-            {subAreas.map(area => (
-              <option key={area} value={area}>{area}</option>
-            ))}
-          </Select>
-        </Card>
-      )}
-      
-      {!subArea && (
-        <div className="p-8 rounded-2xl border-2 border-dashed border-[var(--border-main)] bg-[var(--card-bg)] text-center text-xs text-[var(--text-muted)] flex flex-col items-center justify-center gap-2 animate-in fade-in duration-300">
-          <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-600 text-xl">
-            📍
-          </div>
-          <p className="font-bold text-sm text-[var(--text-main)]">Silakan Pilih Lokasi Inspeksi di Atas</p>
-          <p className="max-w-md text-[11.5px] leading-relaxed">
-            Daftar checklist pertanyaan inspeksi akan otomatis ditampilkan setelah Anda memilih lokasi / sub-area spesifik di atas.
-          </p>
         </div>
-      )}
+
+        {/* Collapsible Manual Selector (Hidden by default, matching jenis inspeksi accordion) */}
+        {isManualOverride && subAreas.length > 1 && (
+          <div className="mt-3 pt-3 border-t border-[var(--border-main)] animate-in fade-in duration-200">
+            <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
+              Pilih sub-area atau ruangan lain (Manual):
+            </label>
+            <Select 
+              value={activeSubArea} 
+              onChange={e => {
+                setSubArea(e.target.value);
+                setIsManualOverride(false);
+              }} 
+              className="w-full font-bold text-[var(--text-main)] shadow-sm bg-[var(--input-bg)] border-[var(--border-main)] text-xs"
+            >
+              {subAreas.map(area => (
+                <option key={area} value={area}>{area}</option>
+              ))}
+            </Select>
+          </div>
+        )}
+      </Card>
       
-      {subArea && (
+      {(subArea || activeSubArea) && (
         <div className="space-y-6 animate-in fade-in duration-300">
           {Object.entries(groupedData)
             .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
