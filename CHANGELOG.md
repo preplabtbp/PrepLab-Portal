@@ -4,6 +4,18 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ## [2.8.34] - 2026-09-16 (Baru Teraplikasi di Staging)
 
+### 📍 Otomatisasi Kunci Lokasi / Sub-Area Inspeksi Umum Tanpa Input Manual
+
+- **Penghapusan Isian Dropdown Lokasi yang Redundan (`src/components/inspection-forms/FormUmum.tsx`)**:
+  - Menggantikan elemen isian dropdown `-- Pilih Lokasi / Sub-Area --` ("Wajib Dipilih") dengan kartu informasi status resmi: **"Lokasi Inspeksi Ditugaskan"** berlabel **"✓ Otomatis Ditentukan Admin"**.
+  - Personil tidak lagi perlu memilih lokasi secara manual karena tugas sub-area/ruangan sudah ditentukan sepenuhnya dari sistem jadwal admin.
+  - Menghilangkan kotak blokir *"Silakan Pilih Lokasi Inspeksi di Atas"*; daftar checklist pertanyaan inspeksi kini langsung terbuka dan siap diisi.
+  - Dilengkapi algoritma pencocokan cerdas (*token-overlap matching*) yang secara otomatis menjembatani perbedaan tanda baca (koma vs tanda hubung/spasi) antara agenda Google Sheets dan master pertanyaan.
+  - Tetap menyertakan opsi aman *"Ubah Lokasi (Opsional)"* yang dapat dibuka jika sewaktu-waktu terjadi pertukaran area kerja antar inspektur di lapangan.
+- **Penyelarasan Pemetaan Agenda Jadwal & Banner Pemberitahuan (`server/routes/inspections.ts` & `src/components/weekly-inspection-screen.tsx`)**:
+  - Memperbarui fungsi `mapInspectionToFormInfo` agar seluruh 64 variasi agenda Google Sheets (seperti *R. Chiller, R. UPS, R. XRF*, *R. Fusion, R. Timbang & R. Scrubber*, *Preparasi Basah/Kering*, *Gudang*, dll.) secara presisi memetakan sub-area yang ditugaskan.
+  - Menyesuaikan banner pemberitahuan pada layar inspeksi mingguan agar mengonfirmasi lokasi yang telah terkunci sesuai jadwal personil aktif.
+
 ### 🦺 Otomatisasi Keterangan "Cuti" & Sinkronisasi Personil Roster pada Inspeksi APD
 
 - **Otomatisasi Pengisian Keterangan "Cuti" (`src/components/inspection-forms/FormAPD.tsx` & `src/components/weekly-inspection-screen.tsx`)**:

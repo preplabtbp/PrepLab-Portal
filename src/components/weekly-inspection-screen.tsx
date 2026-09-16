@@ -120,12 +120,12 @@ export function WeeklyInspectionScreen({
           setLoadingSchedule(false);
           if (d.found && d.schedule && !d.schedule.isCuti) {
             setUserScheduledTask(d.schedule);
+            if (d.schedule.formInfo?.subArea) {
+              sessionStorage.setItem('preselected_sub_area', d.schedule.formInfo.subArea);
+            }
             // Otomatis tentukan formulir inspeksi sesuai jadwal (personil tidak perlu memilih form manual)
             if (!urlFormId && d.schedule.formInfo?.formId) {
               setSelectedForm(d.schedule.formInfo.formId);
-              if (d.schedule.formInfo.subArea && !sessionStorage.getItem('preselected_sub_area')) {
-                sessionStorage.setItem('preselected_sub_area', d.schedule.formInfo.subArea);
-              }
             }
           }
         })
@@ -558,7 +558,15 @@ export function WeeklyInspectionScreen({
               <MapPin className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             </div>
             <p className="leading-relaxed">
-              <strong>Penentuan Lokasi:</strong> Formulir inspeksi telah dikunci otomatis. Silakan tentukan / pilih lokasi kerja atau sub-area spesifik pada bagian bawah sebelum mengisi checklist.
+              {userScheduledTask?.formInfo?.subArea ? (
+                <>
+                  <strong>Formulir & Lokasi Terkunci:</strong> Formulir dan lokasi inspeksi (<strong>{userScheduledTask.formInfo.subArea}</strong>) telah ditentukan otomatis oleh tim admin sesuai jadwal. Anda dapat langsung mengisi checklist di bawah.
+                </>
+              ) : (
+                <>
+                  <strong>Penentuan Formulir:</strong> Formulir inspeksi telah dikunci otomatis sesuai jadwal. Lokasi sub-area akan otomatis dimuat pada formulir di bawah.
+                </>
+              )}
             </p>
           </div>
         )}

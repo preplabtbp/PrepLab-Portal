@@ -1363,7 +1363,7 @@ export function mapInspectionToFormInfo(name: string): { formId: string; tipe: s
   }
 
   // 2. Inspeksi Umum Terencana Area Preparasi
-  if (n.includes('preparasi')) {
+  if (n.includes('preparasi') || n.includes('prep')) {
     let sub = 'Preparasi Basah (Area Kerja)';
     if (n.includes('basah')) {
       if (n.includes('office') || n.includes('toilet') || n.includes('loker')) {
@@ -1375,19 +1375,25 @@ export function mapInspectionToFormInfo(name: string): { formId: string; tipe: s
       if (n.includes('office') || n.includes('dust') || n.includes('kompresor')) {
         sub = 'Preparasi Kering (Office-Dust Collector-Kompresor)';
       } else {
-        sub = 'Preparasi Kering (Area Kerja - Halte - Parkir)';
+        sub = 'Preparasi Kering (Area Kerja-Halte-Parkiran)';
       }
     }
     return { formId: '01. PREP', tipe: 'UMUM', formTitle: 'Inspeksi Umum Terencana Area Preparasi', subArea: sub };
   }
 
   // 3. Inspeksi Umum Terencana Area Laboratorium
-  if (n.includes('laboratorium') || n.includes('lab')) {
+  if (
+    n.includes('laboratorium') || n.includes('lab') ||
+    n.includes('chiller') || n.includes('ups') || n.includes('xrf') ||
+    n.includes('fusion') || n.includes('timbang') || n.includes('scrubber') ||
+    n.includes('press') || n.includes('koridor') ||
+    n.includes('office') || n.includes('qaic') || n.includes('meeting')
+  ) {
     let sub = 'R. Office - QAIC - Admin - Manager - Meeting';
     if (n.includes('chiller') || n.includes('ups') || n.includes('xrf')) sub = 'R. Chiller - UPS - XRF';
     else if (n.includes('fusion') || n.includes('timbang') || n.includes('scrubber')) sub = 'R. Fusion - Timbang - Scrubber';
-    else if (n.includes('press') || n.includes('koridor')) sub = 'R. Press - Koridor & Fasilitas Umum Lab';
-    else if (n.includes('office') || n.includes('qaic') || n.includes('meeting')) sub = 'R. Office - QAIC - Admin - Manager - Meeting';
+    else if (n.includes('press') || n.includes('koridor') || n.includes('fasilitas umum')) sub = 'R. Press - Koridor & Fasilitas Umum Lab';
+    else if (n.includes('office') || n.includes('qaic') || n.includes('meeting') || n.includes('admin') || n.includes('manager')) sub = 'R. Office - QAIC - Admin - Manager - Meeting';
     return { formId: '02, LAB', tipe: 'UMUM', formTitle: 'Inspeksi Umum Terencana Area Laboratorium', subArea: sub };
   }
 
