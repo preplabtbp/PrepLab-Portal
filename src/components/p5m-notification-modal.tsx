@@ -20,46 +20,138 @@ import { getFlyerInfo } from '../lib/p5m-flyer';
 interface P5MNotificationModalProps {
   inspectorNik?: string;
   inspectorName?: string;
+  onNavigateToP5M?: () => void;
 }
 
-export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotificationModalProps) {
+function parseAssignmentFromNotification(notif: any, fallbackNik?: string, fallbackName?: string) {
+  if (!notif) return null;
+  const msg = notif.message || '';
+  const title = notif.title || '';
+
+  // Match: Halo [nama], Anda dijadwalkan membawakan materi P5M "[materi]" untuk hari [day] ([shift]) ...
+  const nameMatch = msg.match(/Halo\s+([^,]+),/i);
+  const materiMatch = msg.match(/materi\s+P5M\s+"([^"]+)"/i) || msg.match(/"([^"]+)"/);
+  const dayMatch = msg.match(/hari\s+([a-zA-Z]+)/i);
+  const shiftMatch = msg.match(/\((Day Shift|Night Shift|Pagi|Malam)[^)]*\)/i);
+  const dateMatch = msg.match(/tgl\s+([0-9-]+)/i);
+
+  const nama = (nameMatch ? nameMatch[1].trim() : fallbackName) || 'Personil Prep & Lab';
+  const materi = materiMatch ? materiMatch[1].trim() : (title || 'Materi P5M Mingguan');
+  const day = dayMatch ? dayMatch[1].trim() : 'Sesuai Jadwal';
+  const shift = shiftMatch ? shiftMatch[1].trim() : 'Shift Kerja';
+  const assignmentDate = dateMatch ? dateMatch[1].trim() : '';
+
+  return {
+    scheduleId: notif.id ? `notif_${notif.id}` : 'manual_open',
+    day,
+    assignmentDate,
+    shift,
+    zone: 'Plant',
+    nama,
+    nik: notif.userId || fallbackNik || '',
+    materi,
+    kategori: 'Briefing Keselamatan Kerja',
+    fileUrl: `/api/p5m/flyer?title=${encodeURIComponent(materi)}`,
+    isFromNotification: true
+  };
+}
+
+export function P5MNotificationModal({ inspectorNik, inspectorName, onNavigateToP5M }: P5MNotificationModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [assignment, setAssignment] = useState<any | null>(null);
   const [previewFlyer, setPreviewFlyer] = useState<{ url: string; title: string } | null>(null);
   const [pdfViewerMode, setPdfViewerMode] = useState<'drive' | 'stream'>('drive');
 
-  useEffect(() => {
-    if (!inspectorNik && !inspectorName) return;
+  const checkAssignment = async (forceOpen = false, overrideNik?: string, overrideName?: string, notifData?: any) => {
+    const nik = overrideNik || inspectorNik;
+    const name = overrideName || inspectorName;
 
-    const checkAssignment = async () => {
-      try {
+    try {
+      if (nik || name) {
         const queryParams = new URLSearchParams();
-        if (inspectorNik) queryParams.set('nik', inspectorNik);
-        if (inspectorName) queryParams.set('name', inspectorName);
+        if (nik) queryParams.set('nik', nik);
+        if (name) queryParams.set('name', name);
 
         const res = await fetch(`/api/p5m/schedules/user-assignment?${queryParams.toString()}`);
-        if (!res.ok) return;
-        const data = await res.json();
-
-        if (data.success && data.assignment) {
-          const ass = data.assignment;
-          const storageKey = `p5m_ack_${ass.scheduleId}_${ass.nik || ass.nama}`;
-          const isAcknowledged = localStorage.getItem(storageKey);
-
-          if (!isAcknowledged) {
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.assignment) {
+            const ass = data.assignment;
             setAssignment(ass);
-            setIsOpen(true);
+
+            if (forceOpen) {
+              setIsOpen(true);
+              return;
+            }
+
+            const storageKey = `p5m_ack_${ass.scheduleId}_${ass.nik || ass.nama}`;
+            const isAcknowledged = localStorage.getItem(storageKey);
+
+            if (!isAcknowledged) {
+              setIsOpen(true);
+            }
+            return;
           }
         }
-      } catch (err) {
-        console.error('Error checking P5M assignment:', err);
       }
+
+      // If forceOpen is requested and API did not return personal assignment, fallback to notification content
+      if (forceOpen) {
+        if (notifData) {
+          const fallback = parseAssignmentFromNotification(notifData, nik, name);
+          if (fallback) {
+            setAssignment(fallback);
+            setIsOpen(true);
+            return;
+          }
+        }
+        if (assignment) {
+          setIsOpen(true);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking P5M assignment:', err);
+      if (forceOpen && assignment) {
+        setIsOpen(true);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const shouldForceOpen = 
+      sessionStorage.getItem('open_p5m_modal') === 'true' ||
+      new URLSearchParams(window.location.search).get('openP5mModal') === 'true';
+
+    if (shouldForceOpen) {
+      sessionStorage.removeItem('open_p5m_modal');
+      checkAssignment(true);
+    } else {
+      const timer = setTimeout(() => checkAssignment(false), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [inspectorNik, inspectorName]);
+
+  // Listen to open-p5m-modal custom events (e.g. from NotificationBell clicks)
+  useEffect(() => {
+    const handleOpenModal = (event: any) => {
+      const detail = event?.detail;
+      const notif = detail?.notif;
+      const targetNik = detail?.userNik || inspectorNik;
+      const targetName = detail?.userName || inspectorName;
+
+      if (assignment) {
+        if (!notif || !notif.message || notif.message.includes(assignment.materi)) {
+          setIsOpen(true);
+          return;
+        }
+      }
+
+      checkAssignment(true, targetNik, targetName, notif);
     };
 
-    // Small timeout so it opens smoothly after portal load
-    const timer = setTimeout(checkAssignment, 1200);
-    return () => clearTimeout(timer);
-  }, [inspectorNik, inspectorName]);
+    window.addEventListener('open-p5m-modal', handleOpenModal);
+    return () => window.removeEventListener('open-p5m-modal', handleOpenModal);
+  }, [assignment, inspectorNik, inspectorName]);
 
   const handleAcknowledge = () => {
     if (assignment) {
@@ -71,10 +163,11 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
 
   const handleDownloadFlyer = () => {
     if (!assignment?.fileUrl && !assignment?.materi) return;
-    const downloadUrl = `/api/p5m/flyer?download=true&title=${encodeURIComponent(assignment.materi)}`;
+    const targetUrl = assignment.fileUrl || `/api/p5m/flyer?title=${encodeURIComponent(assignment.materi)}`;
+    const info = getFlyerInfo(targetUrl, assignment.materi);
     const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.setAttribute('download', `Flyer_P5M_${(assignment.materi || '').replace(/[^a-zA-Z0-9_-]/g, '_')}.png`);
+    link.href = info.downloadUrl;
+    link.setAttribute('download', `Flyer_P5M_${(assignment.materi || '').replace(/[^a-zA-Z0-9_-]/g, '_')}${info.isPdf ? '.pdf' : '.png'}`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -168,7 +261,7 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
               </div>
 
               {/* Flyer Download Action if Available */}
-              {assignment.fileUrl ? (
+              {assignment.fileUrl || (assignment.materi && !assignment.isSenam && !assignment.materi.toLowerCase().includes('senam')) ? (
                 <div className="bg-emerald-500/10 p-3.5 rounded-2xl border border-emerald-500/30 flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
@@ -182,16 +275,16 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     <Button
-                      onClick={() => setPreviewFlyer({ url: assignment.fileUrl, title: assignment.materi })}
+                      onClick={() => setPreviewFlyer({ url: assignment.fileUrl || `/api/p5m/flyer?title=${encodeURIComponent(assignment.materi)}`, title: assignment.materi })}
                       size="sm"
-                      className="bg-[var(--card-bg)] hover:bg-[var(--input-bg)] text-[var(--text-main)] text-xs px-2.5 py-1.5 rounded-xl border border-[var(--border-main)] flex items-center gap-1 shadow-xs"
+                      className="bg-[var(--card-bg)] hover:bg-[var(--input-bg)] text-[var(--text-main)] text-xs px-2.5 py-1.5 rounded-xl border border-[var(--border-main)] flex items-center gap-1 shadow-xs cursor-pointer"
                     >
                       <Eye className="w-3.5 h-3.5" /> Lihat
                     </Button>
                     <Button
                       onClick={handleDownloadFlyer}
                       size="sm"
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-xl font-bold shadow-md flex items-center gap-1"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-xl font-bold shadow-md flex items-center gap-1 cursor-pointer"
                     >
                       <Download className="w-3.5 h-3.5" /> Buka / Unduh
                     </Button>
@@ -205,21 +298,36 @@ export function P5MNotificationModal({ inspectorNik, inspectorName }: P5MNotific
             </div>
 
             {/* Footer */}
-            <div className="p-4 bg-[var(--card-bg)] border-t border-[var(--border-main)] flex items-center justify-end gap-3 flex-wrap sm:flex-nowrap">
-              <Button
-                variant="ghost"
-                onClick={() => setIsOpen(false)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-main)] text-xs px-3 py-2"
-              >
-                Nanti Saja
-              </Button>
-              <Button
-                onClick={handleAcknowledge}
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 py-2 rounded-xl shadow-md flex items-center gap-1.5 whitespace-nowrap shrink-0"
-              >
-                <CheckCircle2 className="w-4 h-4 text-slate-950 shrink-0" />
-                <span>Saya Sudah Paham &amp; Siap</span>
-              </Button>
+            <div className="p-4 bg-[var(--card-bg)] border-t border-[var(--border-main)] flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+              {onNavigateToP5M ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    onNavigateToP5M();
+                  }}
+                  className="text-xs text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+                >
+                  Lihat Jadwal Lengkap <ExternalLink className="w-3 h-3" />
+                </button>
+              ) : <div />}
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => setIsOpen(false)}
+                  className="text-[var(--text-muted)] hover:text-[var(--text-main)] text-xs px-3 py-2 cursor-pointer"
+                >
+                  Tutup
+                </Button>
+                <Button
+                  onClick={handleAcknowledge}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 py-2 rounded-xl shadow-md flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-slate-950 shrink-0" />
+                  <span>Saya Sudah Paham &amp; Siap</span>
+                </Button>
+              </div>
             </div>
           </motion.div>
         </div>

@@ -170,15 +170,49 @@ export function FormUmum({ data, inspectorName, inspectorNik, onSubmit, autoFill
 
   return (
     <div className="space-y-6">
-      <Card className="border-l-4 border-l-blue-500">
-        <label className="text-sm font-bold text-[var(--text-main)] mb-2 block">Pilih Lokasi Spesifik <span className="text-rose-500">*</span></label>
-        <Select value={subArea} onChange={e => setSubArea(e.target.value)} className="w-full">
+      <Card className="border-l-4 border-l-blue-500 bg-[var(--card-bg)] border-[var(--border-main)] shadow-sm">
+        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+          <label className="text-sm font-bold text-[var(--text-main)] flex items-center gap-1.5">
+            <span className="text-base">📍</span>
+            <span>Pilih Lokasi Inspeksi Spesifik</span>
+            <span className="text-rose-500 font-bold">*</span>
+          </label>
+          {subArea ? (
+            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-700/60">
+              ✓ Lokasi Terpilih: {subArea}
+            </span>
+          ) : (
+            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700/60">
+              Wajib Dipilih
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-[var(--text-muted)] mb-3">
+          Tentukan sub-area atau ruangan yang sedang diinspeksi untuk memuat butir checklist yang relevan.
+        </p>
+        <Select 
+          value={subArea} 
+          onChange={e => setSubArea(e.target.value)} 
+          className="w-full font-bold text-[var(--text-main)] shadow-sm bg-[var(--input-bg)] border-[var(--border-main)]"
+        >
           <option value="">-- Pilih Lokasi / Sub-Area --</option>
           {subAreas.map(area => (
             <option key={area} value={area}>{area}</option>
           ))}
         </Select>
       </Card>
+      
+      {!subArea && (
+        <div className="p-8 rounded-2xl border-2 border-dashed border-[var(--border-main)] bg-[var(--card-bg)] text-center text-xs text-[var(--text-muted)] flex flex-col items-center justify-center gap-2 animate-in fade-in duration-300">
+          <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-600 text-xl">
+            📍
+          </div>
+          <p className="font-bold text-sm text-[var(--text-main)]">Silakan Pilih Lokasi Inspeksi di Atas</p>
+          <p className="max-w-md text-[11.5px] leading-relaxed">
+            Daftar checklist pertanyaan inspeksi akan otomatis ditampilkan setelah Anda memilih lokasi / sub-area spesifik di atas.
+          </p>
+        </div>
+      )}
       
       {subArea && (
         <div className="space-y-6 animate-in fade-in duration-300">

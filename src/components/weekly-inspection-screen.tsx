@@ -1,7 +1,7 @@
 import { toast } from 'sonner';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Button, Input, Select } from './ui';
-import { ClipboardCheck, Server, AlertTriangle, Eye, Wrench, ChevronLeft, Loader2, Users, CheckCircle2 } from 'lucide-react';
+import { ClipboardCheck, Server, AlertTriangle, Eye, Wrench, ChevronLeft, Loader2, Users, CheckCircle2, MapPin } from 'lucide-react';
 import { getMasterPertanyaan, submitInspeksiUniversal, submitInspeksi } from '../sheets-api';
 import { FormUmum } from './inspection-forms/FormUmum';
 import { FormP3K } from './inspection-forms/FormP3K';
@@ -13,8 +13,19 @@ import { FormAPD } from './inspection-forms/FormAPD';
 import { DevModeAccordion, useDevOptions } from './dev-mode-accordion';
 import { PageHeader } from './PageHeader';
 import fallbackQuestions from '../data/master-questions.json';
+import { InspectionCompletionData } from './InspectionCompletionModal';
 
-export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJabatan, onInspectionComplete }: { inspectorName: string, inspectorNik: string, inspectorJabatan?: string, onInspectionComplete?: (message: string) => void }) {
+export function WeeklyInspectionScreen({ 
+  inspectorName, 
+  inspectorNik, 
+  inspectorJabatan, 
+  onInspectionComplete 
+}: { 
+  inspectorName: string, 
+  inspectorNik: string, 
+  inspectorJabatan?: string, 
+  onInspectionComplete?: (result: InspectionCompletionData | string) => void 
+}) {
   const [loading, setLoading] = useState(true);
   const [masterForms, setMasterForms] = useState<any[]>(fallbackQuestions);
   const [selectedForm, setSelectedForm] = useState<string>('');
@@ -57,33 +68,73 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
 
   const [uniqueForms, setUniqueForms] = useState<{id: string, judul: string, tipe: string}[]>(() => extractUniqueForms(fallbackQuestions));
   const [userScheduledTask, setUserScheduledTask] = useState<any | null>(null);
+  const [loadingSchedule, setLoadingSchedule] = useState(true);
+  const [showManualFormSelector, setShowManualFormSelector] = useState(false);
+
+  const refreshSchedule = () => {
+    if (inspectorName || inspectorNik) {
+      const q = new URLSearchParams();
+      if (inspectorName) q.append('name', inspectorName);
+      if (inspectorNik) q.append('nik', inspectorNik);
+      fetch(`/api/inspection-schedule?${q.toString()}&refresh=true`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.found && d.schedule) {
+            setUserScheduledTask(d.schedule);
+          }
+        })
+        .catch(console.error);
+    }
+  };
 
   useEffect(() => {
     fetchMasterData();
 
-    // Check preselected form from sessionStorage
+    // 1. Check URL query parameters first
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlFormId = urlParams.get('formId');
+    const urlSubArea = urlParams.get('subArea');
+    if (urlSubArea) {
+      sessionStorage.setItem('preselected_sub_area', urlSubArea);
+    }
+    if (urlFormId) {
+      setSelectedForm(urlFormId);
+    }
+
+    // 2. Check preselected form from sessionStorage
     const preForm = sessionStorage.getItem('preselected_form_id');
-    if (preForm) {
+    if (preForm && !urlFormId) {
       setSelectedForm(preForm);
       sessionStorage.removeItem('preselected_form_id');
     }
 
-    // Live sync personal schedule from Google Sheet
+    // 3. Live sync personal schedule from Google Sheet (otomatis kunci form terjadwal)
     if (inspectorName || inspectorNik) {
+      setLoadingSchedule(true);
       const q = new URLSearchParams();
       if (inspectorName) q.append('name', inspectorName);
       if (inspectorNik) q.append('nik', inspectorNik);
       fetch(`/api/inspection-schedule?${q.toString()}`)
         .then(r => r.json())
         .then(d => {
+          setLoadingSchedule(false);
           if (d.found && d.schedule && !d.schedule.isCuti) {
             setUserScheduledTask(d.schedule);
-            if (!preForm && d.schedule.formInfo?.formId && !d.schedule.isCompleted) {
+            // Otomatis tentukan formulir inspeksi sesuai jadwal (personil tidak perlu memilih form manual)
+            if (!urlFormId && d.schedule.formInfo?.formId) {
               setSelectedForm(d.schedule.formInfo.formId);
+              if (d.schedule.formInfo.subArea && !sessionStorage.getItem('preselected_sub_area')) {
+                sessionStorage.setItem('preselected_sub_area', d.schedule.formInfo.subArea);
+              }
             }
           }
         })
-        .catch(console.error);
+        .catch(err => {
+          console.error(err);
+          setLoadingSchedule(false);
+        });
+    } else {
+      setLoadingSchedule(false);
     }
   }, [inspectorName, inspectorNik]);
 
@@ -150,7 +201,10 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
 
     promise.then((data) => {
       setIsSubmitting(false);
-      setSelectedForm('');
+      refreshSchedule();
+      if (userScheduledTask?.formInfo?.formId) {
+        setSelectedForm(userScheduledTask.formInfo.formId);
+      }
 
       // Auto-post PDF report to Safety Group Feed (with multi-inspector NIKs support)
       const allNiks = [
@@ -183,9 +237,18 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
         })
       }).catch(err => console.error('Failed auto posting to group', err));
 
-      if (data?.waMessageText) {
+      if (onInspectionComplete) {
         // Lift to App-level modal so navigating away doesn't lose it
-        onInspectionComplete?.(data.waMessageText);
+        onInspectionComplete({
+          waMessageText: data?.waMessageText || '',
+          pdfUrl: data?.pdfUrl,
+          linkPdf2: data?.linkPdf2,
+          formTitle: finalData.judulForm || 'Inspeksi Rutin Mingguan',
+          location: finalData.lokasiUmum || (finalData as any).subArea || '',
+          id: data?.data?.id || data?.id,
+          inspectorName,
+          inspectorNik
+        });
       }
     }).catch(() => {
       setIsSubmitting(false);
@@ -250,9 +313,11 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
          const ear = isHadir ? (r.apd[4] ? "❌" : "✔") : "-"; 
          const kcm = isHadir ? (r.apd[5] ? "❌" : "✔") : "-";
 
+         const ket = (r.kehadiran === "Cuti" && (!r.ket || r.ket.trim() === "-" || !r.ket.trim())) ? "Cuti" : (r.ket || "-");
+
          dataF.push([
            jamWIT, today, bgn, payload.waktuKerja, bgn, num, r.nama, r.jabatan, r.kehadiran,
-           ser, hlm, spt, msk, ear, kcm, r.ket || "-", 
+           ser, hlm, spt, msk, ear, kcm, ket, 
            inspectorName, inspectorJabatan || inspectorNik, 
            payload.signatures?.insp2Name || "-", 
            payload.signatures?.insp2Jabatan || payload.signatures?.insp2Nik || "-", 
@@ -273,9 +338,21 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
 
       promise.then((data) => {
         setIsSubmitting(false);
-        setSelectedForm('');
-        if (data?.waMessageText) {
-            onInspectionComplete?.(data.waMessageText);
+        refreshSchedule();
+        if (userScheduledTask?.formInfo?.formId) {
+          setSelectedForm(userScheduledTask.formInfo.formId);
+        }
+        if (onInspectionComplete) {
+          onInspectionComplete({
+            waMessageText: data?.waMessageText || '',
+            pdfUrl: data?.pdfUrl,
+            linkPdf2: data?.linkPdf2,
+            formTitle: `Inspeksi APD - ${bgn}`,
+            location: bgn,
+            id: data?.id,
+            inspectorName,
+            inspectorNik
+          });
         }
       }).catch(() => {
         setIsSubmitting(false);
@@ -321,7 +398,29 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
     }
   };
 
-  const tipeFormActive = uniqueForms.find(f => f.id === selectedForm)?.tipe;
+  const tipeFormActive = useMemo(() => {
+    const found = uniqueForms.find(f => f.id === selectedForm);
+    if (found) return found.tipe;
+    if (['17', '18', '19', '20', '21'].includes(selectedForm)) return 'APD';
+    if (userScheduledTask?.formInfo?.tipe) return userScheduledTask.formInfo.tipe;
+    return undefined;
+  }, [uniqueForms, selectedForm, userScheduledTask]);
+
+  const activeFormTitle = useMemo(() => {
+    const found = uniqueForms.find(f => f.id === selectedForm);
+    if (found) return found.judul;
+    const apdMap: Record<string, string> = {
+      '17': 'Inspeksi APD - Shift A Lab',
+      '18': 'Inspeksi APD - Shift B Lab',
+      '19': 'Inspeksi APD - Shift A Prep',
+      '20': 'Inspeksi APD - Shift B Prep',
+      '21': 'Inspeksi APD - Maintenance'
+    };
+    if (apdMap[selectedForm]) return apdMap[selectedForm];
+    if (userScheduledTask?.formInfo?.formTitle) return userScheduledTask.formInfo.formTitle;
+    if (userScheduledTask?.inspeksi) return userScheduledTask.inspeksi;
+    return selectedForm || '';
+  }, [uniqueForms, selectedForm, userScheduledTask]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full max-w-3xl mx-auto px-4 sm:px-0">
@@ -351,12 +450,26 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
         onTriggerAutoFill={handleJsaClickDirect}
       />
 
-      <Card className="border-t-4 border-t-[var(--primary)] bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)]">
-        <h3 className="text-sm font-bold text-[var(--text-main)] mb-4 flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <ClipboardCheck className="w-4 h-4 text-[var(--primary)]" />
-            Pilih Jenis Inspeksi
-          </span>
+      {/* Form & Schedule Card (Auto-determined, no form selection needed) */}
+      <Card className="border-t-4 border-t-[var(--primary)] bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)] shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-600">
+              <ClipboardCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2 flex-wrap">
+                <span>Formulir Inspeksi Terjadwal</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-extrabold border border-emerald-500/25">
+                  <CheckCircle2 className="w-3 h-3" /> Otomatis Ditentukan
+                </span>
+              </h3>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                Formulir telah ditentukan otomatis sesuai jadwal kerja personil tanpa perlu memilih form secara manual.
+              </p>
+            </div>
+          </div>
+
           <span 
             onClick={handleJsaClick}
             className="text-[10px] text-[var(--text-muted)] cursor-pointer select-none font-bold px-2 py-0.5 rounded-full bg-[var(--input-bg)] hover:bg-[var(--primary)] hover:text-white transition-colors"
@@ -364,133 +477,172 @@ export function WeeklyInspectionScreen({ inspectorName, inspectorNik, inspectorJ
           >
             Mingguan
           </span>
-        </h3>
-        {userScheduledTask && (
-          <div className={`mb-3.5 p-3.5 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+        </div>
+
+        {/* Task Details Banner */}
+        {userScheduledTask ? (
+          <div className={`p-3.5 rounded-2xl border text-xs flex flex-col gap-2.5 transition-all ${
             userScheduledTask.isCompleted 
               ? 'bg-emerald-500/10 border-emerald-500/40 text-[var(--text-main)]' 
               : 'bg-emerald-500/10 border-emerald-500/30'
           }`}>
-            <div className="flex items-start gap-3">
-              {userScheduledTask.isCompleted ? (
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                </div>
-              ) : (
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping mt-1.5 shrink-0" />
-              )}
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-emerald-900 dark:text-emerald-200">
-                    Tugas Terjadwal Anda Minggu Ini:
-                  </span>
-                  {userScheduledTask.isCompleted ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-extrabold text-[10px] uppercase tracking-wider shadow-xs">
-                      <CheckCircle2 className="w-3 h-3" /> SUDAH DILAKSANAKAN
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 font-extrabold text-[10px] uppercase border border-amber-500/25">
-                      BELUM DILAKSANAKAN
-                    </span>
-                  )}
-                </div>
-                <div className="font-black text-sm text-[var(--text-main)]">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-extrabold tracking-wider uppercase text-emerald-800 dark:text-emerald-200">
+                  Tugas Terjadwal Anda:
+                </span>
+                <h4 className="font-black text-sm sm:text-base text-[var(--text-main)]">
                   {userScheduledTask.inspeksi}
-                </div>
-                <div className="text-[11px] text-[var(--text-muted)] font-medium">
-                  Shift: <span className="font-bold text-emerald-600 dark:text-emerald-400">{userScheduledTask.shift}</span> • Peran: Inspektor {userScheduledTask.roleIndex} {userScheduledTask.roleIndex === 1 ? '(Utama)' : '(Pendamping)'}
-                  {userScheduledTask.isCompleted && (
-                    <span className="ml-2 font-semibold text-emerald-700 dark:text-emerald-300">
-                      (Terlaksana: {userScheduledTask.completedFormTitle || 'Inspeksi Terencana'}{userScheduledTask.completedLocation ? ` - ${userScheduledTask.completedLocation}` : ''})
-                    </span>
-                  )}
-                </div>
-                {userScheduledTask.partners && userScheduledTask.partners.length > 0 && (
-                  <div className="text-[11px] text-[var(--text-muted)] font-medium pt-0.5 flex flex-wrap items-center gap-1.5">
-                    <span className="inline-flex items-center gap-1 font-bold text-teal-700 dark:text-teal-300 bg-teal-500/15 border border-teal-500/30 px-2 py-0.5 rounded-md text-[10px]">
-                      <Users className="w-3 h-3 text-teal-600 dark:text-teal-400" />
-                      {userScheduledTask.partners.length === 1 ? 'Pasangan:' : 'Rekan Tim:'}
-                    </span>
-                    {userScheduledTask.partners.map((p: any, idx: number) => (
-                      <span key={idx} className="font-bold text-[var(--text-main)]">
-                        {p.name} <span className="text-[10px] text-[var(--text-muted)] font-normal">({p.roleIndex === 1 ? 'Inspektor 1' : `Inspektor ${p.roleIndex}`} • {p.jabatan})</span>{idx < userScheduledTask.partners.length - 1 ? ', ' : ''}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                </h4>
               </div>
+
+              {userScheduledTask.isCompleted ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-600 text-white font-extrabold text-[10.5px] uppercase tracking-wider shadow-xs">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> SUDAH DILAKSANAKAN
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 font-extrabold text-[10.5px] uppercase border border-amber-500/30">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  SIAP DILAKSANAKAN
+                </span>
+              )}
             </div>
-            {!userScheduledTask.isCompleted && selectedForm !== userScheduledTask.formInfo?.formId && userScheduledTask.formInfo?.formId && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedForm(userScheduledTask.formInfo.formId);
-                  if (userScheduledTask.formInfo?.subArea) {
-                    sessionStorage.setItem('preselected_sub_area', userScheduledTask.formInfo.subArea);
-                  }
-                }}
-                className="self-end sm:self-center px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shrink-0 transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
-              >
-                Pilih Form Ini
-              </button>
+
+            <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-[11px] text-[var(--text-muted)] font-medium pt-1 border-t border-emerald-500/20">
+              <div>
+                Shift: <span className="font-bold text-emerald-700 dark:text-emerald-300">{userScheduledTask.shift}</span>
+              </div>
+              <div>•</div>
+              <div>
+                Peran: <span className="font-bold text-emerald-700 dark:text-emerald-300">Inspektor {userScheduledTask.roleIndex} {userScheduledTask.roleIndex === 1 ? '(Utama)' : '(Pendamping)'}</span>
+              </div>
+              {activeFormTitle && (
+                <>
+                  <div>•</div>
+                  <div className="truncate max-w-xs">
+                    Form: <span className="font-bold text-[var(--text-main)]">{activeFormTitle}</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {userScheduledTask.partners && userScheduledTask.partners.length > 0 && (
+              <div className="text-[11px] text-[var(--text-muted)] font-medium pt-1 flex flex-wrap items-center gap-1.5 border-t border-emerald-500/15">
+                <span className="inline-flex items-center gap-1 font-bold text-teal-700 dark:text-teal-300 bg-teal-500/15 border border-teal-500/30 px-2 py-0.5 rounded-md text-[10px]">
+                  <Users className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                  {userScheduledTask.partners.length === 1 ? 'Pasangan:' : 'Rekan Tim:'}
+                </span>
+                {userScheduledTask.partners.map((p: any, idx: number) => (
+                  <span key={idx} className="font-bold text-[var(--text-main)]">
+                    {p.name} <span className="text-[10px] text-[var(--text-muted)] font-normal">({p.roleIndex === 1 ? 'Inspektor 1' : `Inspektor ${p.roleIndex}`} • {p.jabatan})</span>{idx < userScheduledTask.partners.length - 1 ? ', ' : ''}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
-        )}
-
-        {loading ? (
-          <div className="text-center py-6 text-[var(--text-muted)] text-sm flex items-center justify-center gap-2">
-             <div className="w-4 h-4 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin"></div>
-             Memuat Form dari Server...
+        ) : loadingSchedule ? (
+          <div className="p-4 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] flex items-center justify-center gap-2 text-xs text-[var(--text-muted)]">
+            <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
+            <span>Menghubungkan ke jadwal inspeksi personil...</span>
           </div>
         ) : (
-          <Select value={selectedForm} onChange={(e) => setSelectedForm(e.target.value)} className="font-bold text-[var(--text-main)] shadow-sm border-[var(--border-main)] bg-[var(--input-bg)]">
-            <option value="">-- Sedang Memuat Form / Pilih --</option>
-            
-            <optgroup label="[ AREA ]">
-              {uniqueForms.filter(f => f.tipe === "UMUM").map(f => (
-                <option key={f.id} value={f.id}>{f.judul}</option>
-              ))}
-            </optgroup>
-            
-            <optgroup label="[ P3K ]">
-              {uniqueForms.filter(f => f.tipe === "P3K").map(f => (
-                <option key={f.id} value={f.id}>{f.judul}</option>
-              ))}
-            </optgroup>
-            
-            <optgroup label="[ SARANA ]">
-              {uniqueForms.filter(f => f.tipe === "SARANA").map(f => (
-                <option key={f.id} value={f.id}>{f.judul}</option>
-              ))}
-            </optgroup>
-            
-            <optgroup label="[ PERKAKAS ]">
-              {uniqueForms.filter(f => f.tipe === "PERKAKAS").map(f => (
-                <option key={f.id} value={f.id}>{f.judul}</option>
-              ))}
-            </optgroup>
-            
-            <optgroup label="[ TABUNG GAS ]">
-              {uniqueForms.filter(f => f.tipe === "TABUNG" || f.tipe === "TABUNG_MINGGUAN").map(f => (
-                <option key={f.id} value={f.id}>{f.judul}</option>
-              ))}
-            </optgroup>
-            
-            <optgroup label="[ TANGGA ]">
-              {uniqueForms.filter(f => f.tipe === "TANGGA").map(f => (
-                <option key={f.id} value={f.id}>{f.judul}</option>
-              ))}
-            </optgroup>
-
-            <optgroup label="[ KEPATUHAN APD ]">
-               <option value="17">Inspeksi APD - Shift A Lab</option>
-               <option value="18">Inspeksi APD - Shift B Lab</option>
-               <option value="19">Inspeksi APD - Shift A Prep</option>
-               <option value="20">Inspeksi APD - Shift B Prep</option>
-               <option value="21">Inspeksi APD - Maintenance</option>
-            </optgroup>
-          </Select>
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
+            <span>⚠️ Jadwal otomatis tidak terdeteksi untuk akun ini. Anda dapat memilih formulir inspeksi secara manual di bawah.</span>
+          </div>
         )}
+
+        {/* Location Notice for Form Umum */}
+        {tipeFormActive === "UMUM" && (
+          <div className="mt-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center gap-2.5 text-xs text-blue-700 dark:text-blue-300">
+            <div className="w-7 h-7 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
+              <MapPin className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            </div>
+            <p className="leading-relaxed">
+              <strong>Penentuan Lokasi:</strong> Formulir inspeksi telah dikunci otomatis. Silakan tentukan / pilih lokasi kerja atau sub-area spesifik pada bagian bawah sebelum mengisi checklist.
+            </p>
+          </div>
+        )}
+
+        {/* Collapsible Manual Selector (For dev / admin / special override) */}
+        <div className="mt-3 pt-2 border-t border-[var(--border-main)] flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setShowManualFormSelector(!showManualFormSelector)}
+              className="text-[11px] text-[var(--text-muted)] hover:text-teal-600 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <span>{showManualFormSelector ? '▲ Sembunyikan Pilihan Manual' : '▼ Butuh ganti formulir lain? (Opsional / Manual)'}</span>
+            </button>
+            {selectedForm && (
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                Form ID: {selectedForm}
+              </span>
+            )}
+          </div>
+
+          {(showManualFormSelector || (!userScheduledTask && !loadingSchedule)) && (
+            <div className="pt-2 animate-in fade-in duration-200">
+              {loading ? (
+                <div className="text-center py-3 text-[var(--text-muted)] text-xs flex items-center justify-center gap-2">
+                   <div className="w-3.5 h-3.5 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin"></div>
+                   Memuat Form dari Server...
+                </div>
+              ) : (
+                <Select 
+                  value={selectedForm} 
+                  onChange={(e) => setSelectedForm(e.target.value)} 
+                  className="font-bold text-[var(--text-main)] shadow-sm border-[var(--border-main)] bg-[var(--input-bg)] w-full text-xs"
+                >
+                  <option value="">-- Pilih Formulir Inspeksi Lain --</option>
+                  
+                  <optgroup label="[ AREA ]">
+                    {uniqueForms.filter(f => f.tipe === "UMUM").map(f => (
+                      <option key={f.id} value={f.id}>{f.judul}</option>
+                    ))}
+                  </optgroup>
+                  
+                  <optgroup label="[ P3K ]">
+                    {uniqueForms.filter(f => f.tipe === "P3K").map(f => (
+                      <option key={f.id} value={f.id}>{f.judul}</option>
+                    ))}
+                  </optgroup>
+                  
+                  <optgroup label="[ SARANA ]">
+                    {uniqueForms.filter(f => f.tipe === "SARANA").map(f => (
+                      <option key={f.id} value={f.id}>{f.judul}</option>
+                    ))}
+                  </optgroup>
+                  
+                  <optgroup label="[ PERKAKAS ]">
+                    {uniqueForms.filter(f => f.tipe === "PERKAKAS").map(f => (
+                      <option key={f.id} value={f.id}>{f.judul}</option>
+                    ))}
+                  </optgroup>
+                  
+                  <optgroup label="[ TABUNG GAS ]">
+                    {uniqueForms.filter(f => f.tipe === "TABUNG" || f.tipe === "TABUNG_MINGGUAN").map(f => (
+                      <option key={f.id} value={f.id}>{f.judul}</option>
+                    ))}
+                  </optgroup>
+                  
+                  <optgroup label="[ TANGGA ]">
+                    {uniqueForms.filter(f => f.tipe === "TANGGA").map(f => (
+                      <option key={f.id} value={f.id}>{f.judul}</option>
+                    ))}
+                  </optgroup>
+
+                  <optgroup label="[ KEPATUHAN APD ]">
+                     <option value="17">Inspeksi APD - Shift A Lab</option>
+                     <option value="18">Inspeksi APD - Shift B Lab</option>
+                     <option value="19">Inspeksi APD - Shift A Prep</option>
+                     <option value="20">Inspeksi APD - Shift B Prep</option>
+                     <option value="21">Inspeksi APD - Maintenance</option>
+                  </optgroup>
+                </Select>
+              )}
+            </div>
+          )}
+        </div>
       </Card>
 
       

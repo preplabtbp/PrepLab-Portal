@@ -43,7 +43,10 @@ employeesRouter.get("/", async (req, res) => {
           const isGts = ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
           const stStr = (e.statusKaryawan || '').toString().trim().toUpperCase();
           const secStr = (e.section || '').toString().trim().toUpperCase();
-          const isResigned = stStr.includes('RESIGN') || stStr.includes('PHK') || secStr.includes('#N/A') || ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'].includes(nikStr);
+          const isResigned = stStr.includes('RESIGN') || stStr.includes('PHK') || secStr.includes('#N/A') || [
+            '04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356',
+            'M0206250825', 'M0203220107', 'M0402240107', 'M0402230177', 'M0205250595', 'M0201250027', 'M0206250798', 'M0403240137', 'M0404220419'
+          ].includes(nikStr);
           return !isGts && !isResigned;
         });
       }

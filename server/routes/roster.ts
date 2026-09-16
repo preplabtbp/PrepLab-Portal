@@ -66,7 +66,7 @@ export function invalidateRosterCache() {
   lastCacheTime = 0;
 }
 
-async function computeRosterData() {
+export async function computeRosterData() {
   const rawEmps = await db.select().from(employees);
   const allEmps = rawEmps.filter(emp => {
     const nik = (emp.nik || '').toUpperCase().trim();
@@ -81,7 +81,10 @@ async function computeRosterData() {
       username.includes('demo') || username.includes('staging') ||
       nik === 'PREPLABADMIN' || nik.includes('#N/A') || name.includes('#N/A') ||
       sec.includes('#N/A') || st.includes('RESIGN') || st.includes('PHK') || st.includes('KELUAR') ||
-      sm.includes('RESIGN') || ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'].includes(nik)
+      sm.includes('RESIGN') || [
+        '04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356',
+        'M0206250825', 'M0203220107', 'M0402240107', 'M0402230177', 'M0205250595', 'M0201250027', 'M0206250798', 'M0403240137', 'M0404220419'
+      ].includes(nik)
     ) {
       return false;
     }

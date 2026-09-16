@@ -181,7 +181,10 @@ export async function syncRosterData(): Promise<{ success: boolean; staffCount: 
         continue;
       }
 
-      const isKnownResigned = ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356'].includes(nik);
+      const isKnownResigned = [
+        '04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356',
+        'M0206250825', 'M0203220107', 'M0402240107', 'M0402230177', 'M0205250595', 'M0201250027', 'M0206250798', 'M0403240137', 'M0404220419'
+      ].includes(nik);
       const isResignMark = st.includes('RESIGN') || st.includes('PHK') || st.includes('KELUAR') || sec.includes('#N/A');
       const notInActiveSheet = allActiveSheetNiks.size > 0 && !allActiveSheetNiks.has(emp.nik);
 
@@ -281,7 +284,10 @@ async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; r
     const rawStatusKontrak = config.colStatusKontrak !== -1 ? (row[config.colStatusKontrak] || '').trim().toUpperCase() : '';
     const rawStatusMess = config.colStatusMess !== -1 ? (row[config.colStatusMess] || '').trim().toUpperCase() : '';
     const isResignedSheet = rawStatusKontrak.includes('RESIGN') || rawStatusMess.includes('RESIGN');
-    const isKnownResigned = ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356'].includes(nik);
+    const isKnownResigned = [
+      '04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356',
+      'M0206250825', 'M0203220107', 'M0402240107', 'M0402230177', 'M0205250595', 'M0201250027', 'M0206250798', 'M0403240137', 'M0404220419'
+    ].includes(nik);
 
     const isResigned = isSectionNA || isJobGradeNA || isJabatanNA || isNameNA || isResignedSheet || isKnownResigned;
     if (isResigned) {
