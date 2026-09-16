@@ -2,6 +2,38 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.34] - 2026-09-16 (Baru Teraplikasi di Staging)
+
+### 🦺 Otomatisasi Keterangan "Cuti" & Sinkronisasi Personil Roster pada Inspeksi APD
+
+- **Otomatisasi Pengisian Keterangan "Cuti" (`src/components/inspection-forms/FormAPD.tsx` & `src/components/weekly-inspection-screen.tsx`)**:
+  - Saat personil memilih status kehadiran **"Cuti"** pada formulir inspeksi APD, kolom keterangan kini secara otomatis langsung terisi teks **"Cuti"** (sebelumnya hanya tanda strip `"-"` dan input dalam keadaan terkunci/disabled).
+  - Ketika status kehadiran dialihkan kembali ke status selain Cuti, keterangan otomatis dikosongkan untuk mencegah residu data.
+  - Pada pengiriman data formulir (`handleSubmitAPD`), ditambahkan pengamanan ganda sehingga jika kehadiran berstatus Cuti dan keterangan kosong atau `"-"`, sistem otomatis menetapkan nilai keterangan menjadi `"Cuti"` sebelum dikirim ke server.
+  - Sistem juga otomatis mendeteksi jadwal roster hari ini: jika personil memang berstatus Cuti (`C`, `CT`, dsb.), baris personil langsung diinisialisasi dengan status `Cuti` dan keterangan `Cuti`.
+- **Sinkronisasi Personil Aktif ke Data Roster Terintegrasi (`src/components/inspection-forms/FormAPD.tsx`)**:
+  - Formulir APD kini langsung mengintegrasikan data dari endpoint roster (`getRosterData()`).
+  - Diterapkan fungsi validasi `hasActiveRoster`: hanya personil yang memiliki data roster aktif (jadwal 7 hari ke depan maupun jadwal bulan berjalan ke depan terisi status kerja/cuti yang valid dan bukan kosong/strip `'-'`) yang akan ditampilkan di daftar inspeksi.
+  - Personil yang sudah resign dan tidak lagi memiliki jadwal aktif di sistem roster secara otomatis **tidak muncul lagi** pada daftar personil inspeksi maupun pada kolom pencarian *"Tambah Personil Lain"*.
+- **Pembersihan Data Personil Resign di Backend & Roster Sync (`server/routes/employees.ts`, `server/routes/roster.ts`, `src/syncRoster.ts`)**:
+  - Mendaftarkan 9 NIK personil yang telah resign (`M0206250825`, `M0203220107`, `M0402240107`, `M0402230177`, `M0205250595`, `M0201250027`, `M0206250798`, `M0403240137`, `M0404220419`) ke daftar pengecualian permanen pada master karyawan dan modul roster.
+  - Memperbarui status database ke `Resign` untuk ke-9 personil tersebut agar data konsisten di seluruh modul portal.
+
+### 📥 Modal Pasca-Inspeksi: Unduh Laporan PDF & Akses General Submit Safety
+
+- **Modal Interaktif Pasca-Submit Inspeksi Rutin Mingguan (`src/components/InspectionCompletionModal.tsx` & `src/App.tsx`)**:
+  - Setelah inspeksi rutin mingguan (baik APD, Umum, Tangga, maupun P3K) berhasil dikirim ke server, sistem langsung menampilkan modal penyelesaian inspeksi yang persisten.
+  - Menyediakan tombol langsung untuk **mengunduh / membuka pratinjau berkas Laporan PDF** hasil inspeksi.
+  - Menyediakan tombol akses cepat **"Buka Halaman General Submit Safety"** yang mengarahkan personil langsung ke formulir pelaporan resmi milik tim Safety.
+- **Otomatisasi Pemilihan Formulir Sesuai Jadwal Personil (`src/components/weekly-inspection-screen.tsx`)**:
+  - Personil tidak perlu lagi bingung memilih formulir inspeksi secara manual; sistem langsung mengunci dan memilihkan formulir serta lokasi inspeksi yang ditugaskan berdasarkan jadwal mingguan aktif personil.
+
+### 🔔 Pembukaan Kembali Modal Jadwal P5M dari Lonceng Notifikasi
+
+- **Akses Fleksibel Materi & Jadwal P5M (`src/components/notification-bell.tsx` & `src/App.tsx`)**:
+  - Mengatasi kendala personil yang sebelumnya tidak sengaja melewati (*skip*) pop-up pembaruan jadwal P5M.
+  - Item notifikasi jadwal P5M pada lonceng notifikasi kini dapat diklik kapan saja untuk memunculkan kembali pop-up modal jadwal P5M lengkap, sehingga personil tetap dapat melihat materi presentasi atau mengunduh dokumen lampiran P5M jika terlewat.
+
 ## [2.8.33] - 2026-09-16
 
 ### 📑 Penyempurnaan Tautan WhatsApp & Auto-Generate PDF Inspeksi dengan Tanda Tangan & Foto
