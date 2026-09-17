@@ -1122,9 +1122,11 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         pdfDone: hasPdf,
         pdfUrl: pdfInfo?.pdfUrl || null,
         pdfTitle: pdfInfo?.pdfTitle || null,
+        pdfTimestamp: pdfInfo?.timestamp || null,
         ssDone: hasSs,
         ssUrl: ssInfo?.imageUrl || null,
         ssProof: ssInfo?.imageUrl || null,
+        ssTimestamp: ssInfo?.timestamp || null,
         summaryProgress: `${(hasPdf ? 1 : 0) + (hasSs ? 1 : 0)}/2`
       };
 
@@ -1157,7 +1159,7 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         isManualOverride,
         isCuti: false,
         checkDetails,
-        completedAt: isDone ? (ssInfo?.timestamp || pdfInfo?.timestamp) : null,
+        completedAt: ssInfo?.timestamp || pdfInfo?.timestamp || null,
         pdfUrl: pdfInfo?.pdfUrl || null,
         pdfTitle: pdfInfo?.pdfTitle || null,
         ssUrl: ssInfo?.imageUrl || null,
@@ -1581,9 +1583,11 @@ router.get('/api/rekap-kta', async (req, res) => {
           check1Label: first ? `${first.reportType}` : 'KTA/TTA',
           check1Done: isDone,
           check1Proof: first?.imageUrl || null,
+          check1Timestamp: first?.timestamp || null,
           check2Label: '',
           check2Done: false,
           check2Proof: null,
+          check2Timestamp: null,
           summaryProgress: isDone ? '1/1' : '0/1'
         };
       } else if (obligation.type === '1_KTA_AND_1_TTA') {
@@ -1595,9 +1599,11 @@ router.get('/api/rekap-kta', async (req, res) => {
           check1Label: 'KTA',
           check1Done: hasKta,
           check1Proof: ktaList[0]?.imageUrl || null,
+          check1Timestamp: ktaList[0]?.timestamp || null,
           check2Label: 'TTA',
           check2Done: hasTta,
           check2Proof: ttaList[0]?.imageUrl || null,
+          check2Timestamp: ttaList[0]?.timestamp || null,
           summaryProgress: `${count}/2`
         };
       } else if (obligation.type === '2_TTA') {
@@ -1607,9 +1613,11 @@ router.get('/api/rekap-kta', async (req, res) => {
           check1Label: 'TTA 1',
           check1Done: count >= 1,
           check1Proof: ttaList[0]?.imageUrl || null,
+          check1Timestamp: ttaList[0]?.timestamp || null,
           check2Label: 'TTA 2',
           check2Done: count >= 2,
           check2Proof: ttaList[1]?.imageUrl || null,
+          check2Timestamp: ttaList[1]?.timestamp || null,
           summaryProgress: `${Math.min(count, 2)}/2`
         };
       }
@@ -1641,7 +1649,7 @@ router.get('/api/rekap-kta', async (req, res) => {
         imageUrl: reports[0]?.imageUrl || null,
         description: reports[0]?.description || null,
         location: reports[0]?.location || null,
-        completedAt: isDone ? reports[0]?.timestamp : null,
+        completedAt: reports[0]?.timestamp || null,
         week: selectedWeek
       };
     });

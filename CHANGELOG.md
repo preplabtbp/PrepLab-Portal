@@ -2,6 +2,29 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.35] - 2026-09-17
+
+### 📅 Penambahan Informasi Tanggal & Jam pada Kartu Modul SAP Management
+
+- **Informasi Tanggal & Jam pada Kartu Feed Aktivitas (`src/components/GroupReportScreen.tsx`)**:
+  - Menambahkan keterangan tanggal pelaporan pada header kartu (`📅 dd MMM yyyy`) berdampingan dengan badge periode minggu.
+  - Memperbaiki footer kartu: yang sebelumnya hanya menampilkan waktu tanpa tanggal (`14:30`), kini menampilkan tanggal lengkap di sisi kiri (`📅 dd MMM yyyy`) serta jam dan ikon status terkirim di sisi kanan (`🕒 HH:mm ✓`).
+  - Menyertakan tanggal kirim pada kartu lampiran dokumen PDF inspeksi dan kartu bukti tanggapan screenshot KTA/TTA.
+- **Keterangan Tanggal Penyelesaian pada Kartu Rekap Inspeksi Terpadu (`src/components/GroupReportScreen.tsx` & `server/routes/misc.ts`)**:
+  - Setiap kartu personil pada tab Rekap Inspeksi kini memiliki baris keterangan tanggal status:
+    - Status Selesai (`SUDAH`): menampilkan tanggal dan jam penyelesaian lengkap (`📅 Tgl Selesai: dd MMM yyyy, HH:mm`).
+    - Status Parsial (kurang PDF atau kurang screenshot): menampilkan tanggal unggahan dokumen yang sudah masuk (`📅 Tgl Lapor: dd MMM yyyy, HH:mm`).
+    - Status Belum Lapor: menampilkan keterangan periode aktif (`📅 Belum ada laporan (Week X)`).
+    - Status Cuti: menampilkan keterangan cuti (`📅 Status Cuti (Week X)`).
+  - Menambahkan tooltip tanggal laporan pada tombol ceklis interaktif PDF Inspeksi dan Screenshot Form.
+  - Memperbarui endpoint backend `/api/rekap-inspeksi` agar menyertakan `pdfTimestamp` dan `ssTimestamp` pada rincian pemeriksaan.
+- **Keterangan Tanggal Penyelesaian pada Kartu Rekap KTA / TTA (`src/components/GroupReportScreen.tsx` & `server/routes/misc.ts`)**:
+  - Setiap kartu personil pada tab Rekap KTA/TTA kini menampilkan tanggal penyelesaian laporan atau tanggal unggah bukti pertama/kedua secara transparan (`📅 Tgl Selesai / Tgl Unggah: dd MMM yyyy, HH:mm`).
+  - Menambahkan tooltip tanggal pada tombol bukti observasi per item ceklis.
+  - Memperbarui endpoint backend `/api/rekap-kta` agar menyertakan `check1Timestamp` dan `check2Timestamp`.
+- **Informasi Tanggal pada Modal Lightbox & Viewer PDF (`src/components/GroupReportScreen.tsx`)**:
+  - Header lightbox bukti screenshot KTA/TTA dan modal penampil PDF kini menyertakan tanggal dan jam pelaporan yang bersangkutan.
+
 ## [2.8.34] - 2026-09-16 (Baru Teraplikasi di Staging)
 
 ### 📍 Otomatisasi Kunci Lokasi / Sub-Area Inspeksi Umum Tanpa Input Manual

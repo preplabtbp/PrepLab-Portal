@@ -116,6 +116,55 @@ export function getKtaObligation(nikRaw?: string | null, jabatanRaw?: string | n
   return { type: '1_KTA_AND_1_TTA' as const, label: '1 KTA & 1 TTA', targetCount: 2, desc: 'Wajib 1 KTA & 1 TTA' };
 }
 
+export function formatReportDate(timestamp?: string | number | Date | null): string {
+  if (!timestamp || timestamp === '-' || timestamp === 'null') return '-';
+  try {
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return String(timestamp);
+    return d.toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch {
+    return String(timestamp);
+  }
+}
+
+export function formatReportTime(timestamp?: string | number | Date | null): string {
+  if (!timestamp || timestamp === '-' || timestamp === 'null') return '';
+  try {
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return '';
+  }
+}
+
+export function formatReportDateTime(timestamp?: string | number | Date | null): string {
+  if (!timestamp || timestamp === '-' || timestamp === 'null') return '-';
+  try {
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return String(timestamp);
+    const dateStr = d.toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+    const timeStr = d.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    return `${dateStr}, ${timeStr}`;
+  } catch {
+    return String(timestamp);
+  }
+}
+
 export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, inspectorSection, onClose, isFloating = false, isDeveloper = false }: GroupReportProps) {
   // Main view state: 'feed' or 'rekap'
   const [activeTab, setActiveTab] = useState<'feed' | 'rekap'>('feed');
@@ -292,11 +341,13 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     url: string;
     title: string;
     senderName?: string;
+    timestamp?: string;
   }>({
     isOpen: false,
     url: '',
     title: '',
-    senderName: ''
+    senderName: '',
+    timestamp: ''
   });
 
   // Lightbox Image Preview Modal (untuk bukti screenshot KTA/TTA)
@@ -616,7 +667,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     }
   };
 
-  const openPdfModal = (url: string, title: string, senderName?: string) => {
+  const openPdfModal = (url: string, title: string, senderName?: string, timestamp?: string) => {
     if (!url || url === '#') {
       toast.error('Tautan dokumen PDF belum tersedia.');
       return;
@@ -625,12 +676,13 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
       isOpen: true,
       url,
       title: title || 'Dokumen Laporan Inspeksi',
-      senderName
+      senderName,
+      timestamp
     });
   };
 
   const closePdfModal = () => {
-    setPdfModal({ isOpen: false, url: '', title: '', senderName: '' });
+    setPdfModal({ isOpen: false, url: '', title: '', senderName: '', timestamp: '' });
   };
 
   const openImageLightbox = (url: string, title: string, senderName?: string, reportType?: string, week?: string, timestamp?: string, description?: string, rawUrl?: string) => {
@@ -1294,11 +1346,17 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                             </span>
                           )}
                         </div>
-                        {msg.week && (
-                          <span className="ml-1 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/30 shrink-0">
-                            {msg.week}
+                        <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                          <span className="text-[9px] font-medium text-[var(--text-muted)] flex items-center gap-0.5" title="Tanggal Laporan">
+                            <Calendar className="w-2.5 h-2.5 text-[var(--primary)]" />
+                            {formatReportDate(msg.timestamp)}
                           </span>
-                        )}
+                          {msg.week && (
+                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/30 shrink-0">
+                              {msg.week}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className={`w-full h-full flex flex-col justify-between rounded-2xl p-3 sm:p-3.5 shadow-sm border relative group transition-all duration-200 hover:shadow-md ${
@@ -1355,7 +1413,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                       BUKTI SCREENSHOT {msg.reportType || 'KTA / TTA'}
                                     </h4>
                                     <p className="text-[10px] text-[var(--text-muted)] truncate">
-                                      Formulir {msg.week || selectedWeek} - {msg.senderName}
+                                      Formulir {msg.week || selectedWeek} • {msg.senderName} • {formatReportDate(msg.timestamp)}
                                     </p>
                                   </div>
                                 </div>
@@ -1408,7 +1466,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                       {msg.pdfTitle || 'CHECKLIST INSPEKSI TERPADU'}
                                     </h4>
                                     <p className="text-[10px] text-[var(--text-muted)] truncate">
-                                      {msg.pdfSubTitle || msg.pdfFileName || 'Dokumen PDF Laporan'}
+                                      {msg.pdfSubTitle || msg.pdfFileName || 'Dokumen PDF Laporan'} • {formatReportDate(msg.timestamp)}
                                     </p>
                                   </div>
                                 </div>
@@ -1426,7 +1484,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                     </button>
                                   ) : (
                                     <button
-                                      onClick={() => openPdfModal(msg.pdfUrl, msg.pdfTitle, msg.senderName)}
+                                      onClick={() => openPdfModal(msg.pdfUrl, msg.pdfTitle, msg.senderName, msg.timestamp)}
                                       className="flex-1 py-1 px-2.5 rounded-lg bg-[var(--primary)] text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
                                     >
                                       <Eye className="w-3.5 h-3.5" /> Pratinjau PDF
@@ -1460,9 +1518,16 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                           </div>
                         )}
 
-                        <div className="flex items-center justify-end gap-1 mt-1.5 text-[9px] text-[var(--text-muted)]">
-                          <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--border-main)]/50 text-[10px] text-[var(--text-muted)]">
+                          <div className="flex items-center gap-1 font-medium">
+                            <Calendar className="w-3 h-3 text-[var(--primary)] shrink-0" />
+                            <span>{formatReportDate(msg.timestamp)}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[9px] font-mono">
+                            <Clock className="w-2.5 h-2.5 text-[var(--text-muted)] shrink-0" />
+                            <span>{formatReportTime(msg.timestamp)}</span>
+                            <CheckCircle2 className="w-3 h-3 text-emerald-500 ml-0.5 shrink-0" />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1795,9 +1860,11 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                       pdfDone: isDone,
                       pdfUrl: emp.pdfUrl,
                       pdfTitle: emp.pdfTitle,
+                      pdfTimestamp: emp.completedAt,
                       ssDone: isDone,
                       ssUrl: emp.ssUrl,
                       ssProof: emp.ssUrl,
+                      ssTimestamp: emp.completedAt,
                       summaryProgress: isDone ? '2/2' : '0/2'
                     };
 
@@ -1874,6 +1941,31 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                               {emp.jabatan || 'Personil'}
                             </p>
 
+                            {/* Line 3.5: Keterangan Tanggal Lapor / Selesai */}
+                            <div className="flex items-center gap-1.5 text-[10px] pt-0.5 flex-wrap">
+                              {isCutiPerson ? (
+                                <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-semibold">
+                                  <Calendar className="w-3 h-3 shrink-0" />
+                                  <span>Status Cuti ({selectedWeek})</span>
+                                </span>
+                              ) : isDone ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold" title={emp.completedAt ? new Date(emp.completedAt).toLocaleString('id-ID') : undefined}>
+                                  <Calendar className="w-3 h-3 shrink-0" />
+                                  <span>Tgl Selesai: {formatReportDateTime(emp.completedAt || checkDetails.ssTimestamp || checkDetails.pdfTimestamp)}</span>
+                                </span>
+                              ) : isPartial ? (
+                                <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold" title={(emp.completedAt || checkDetails.ssTimestamp || checkDetails.pdfTimestamp) ? new Date(emp.completedAt || checkDetails.ssTimestamp || checkDetails.pdfTimestamp).toLocaleString('id-ID') : undefined}>
+                                  <Calendar className="w-3 h-3 shrink-0" />
+                                  <span>Tgl Lapor: {formatReportDateTime(emp.completedAt || checkDetails.ssTimestamp || checkDetails.pdfTimestamp)}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[var(--text-muted)] opacity-70">
+                                  <Calendar className="w-3 h-3 shrink-0" />
+                                  <span>Belum ada laporan ({selectedWeek})</span>
+                                </span>
+                              )}
+                            </div>
+
                             {/* Line 4: Ceklis interaktif (PDF & Screenshot) */}
                             {!isCutiPerson && (
                               <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
@@ -1883,13 +1975,13 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                     type="button"
                                     onClick={() => {
                                       if (checkDetails.pdfUrl) {
-                                        openPdfModal(checkDetails.pdfUrl, checkDetails.pdfTitle || `Laporan Inspeksi - ${emp.name}`, emp.name);
+                                        openPdfModal(checkDetails.pdfUrl, checkDetails.pdfTitle || `Laporan Inspeksi - ${emp.name}`, emp.name, checkDetails.pdfTimestamp || emp.completedAt);
                                       } else {
                                         toast.info(`Dokumen PDF inspeksi untuk ${emp.name} telah terekap.`);
                                       }
                                     }}
                                     className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 font-bold text-[10px] flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-                                    title="Klik untuk membuka dokumen PDF Inspeksi"
+                                    title={`Klik untuk membuka dokumen PDF Inspeksi ${checkDetails.pdfTimestamp ? `(${formatReportDateTime(checkDetails.pdfTimestamp)})` : ''}`}
                                   >
                                     <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                                     <span>PDF Inspeksi</span>
@@ -1914,7 +2006,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                           emp.name,
                                           'INSPEKSI',
                                           emp.week || selectedWeek,
-                                          emp.completedAt,
+                                          checkDetails.ssTimestamp || emp.completedAt,
                                           'Bukti Screenshot Form General Inspeksi',
                                           checkDetails.ssUrl
                                         );
@@ -1923,7 +2015,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                       }
                                     }}
                                     className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 font-bold text-[10px] flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-                                    title="Klik untuk melihat bukti screenshot form general inspeksi"
+                                    title={`Klik untuk melihat bukti screenshot form general inspeksi ${checkDetails.ssTimestamp ? `(${formatReportDateTime(checkDetails.ssTimestamp)})` : ''}`}
                                   >
                                     <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                                     <span>Screenshot Form</span>
@@ -1980,7 +2072,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                             <>
                               {checkDetails.pdfUrl && checkDetails.pdfUrl !== '#' && (
                                 <button
-                                  onClick={() => openPdfModal(checkDetails.pdfUrl, `Laporan Inspeksi - ${emp.name}`, emp.name)}
+                                  onClick={() => openPdfModal(checkDetails.pdfUrl, `Laporan Inspeksi - ${emp.name}`, emp.name, checkDetails.pdfTimestamp || emp.completedAt)}
                                   className={btnNeutral}
                                   title="Lihat Dokumen PDF Inspeksi"
                                 >
@@ -1995,7 +2087,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                     emp.name,
                                     'INSPEKSI',
                                     emp.week || selectedWeek,
-                                    emp.completedAt,
+                                    checkDetails.ssTimestamp || emp.completedAt,
                                     'Bukti Screenshot Form General Inspeksi',
                                     checkDetails.ssUrl
                                   )}
@@ -2155,9 +2247,11 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                       check1Label: obligation.type === '2_TTA' ? 'TTA 1' : (obligation.type === '1_KTA_OR_TTA' ? 'KTA/TTA' : 'KTA'),
                       check1Done: emp.status === 'SUDAH',
                       check1Proof: emp.imageUrl,
+                      check1Timestamp: emp.completedAt,
                       check2Label: obligation.type === '2_TTA' ? 'TTA 2' : 'TTA',
                       check2Done: emp.status === 'SUDAH' && obligation.type !== '1_KTA_OR_TTA',
                       check2Proof: emp.imageUrl,
+                      check2Timestamp: emp.completedAt,
                       summaryProgress: emp.status === 'SUDAH' ? (obligation.type === '1_KTA_OR_TTA' ? '1/1' : '2/2') : (obligation.type === '1_KTA_OR_TTA' ? '0/1' : '0/2')
                     };
                     const isDone = emp.status === 'SUDAH';
@@ -2225,6 +2319,31 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                               {emp.jabatan || 'Personil'}
                             </p>
 
+                            {/* Line 3.5: Keterangan Tanggal KTA / TTA */}
+                            <div className="flex items-center gap-1.5 text-[10px] pt-0.5 flex-wrap">
+                              {isCutiPerson ? (
+                                <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-semibold">
+                                  <Calendar className="w-3 h-3 shrink-0" />
+                                  <span>Status Cuti ({selectedWeek})</span>
+                                </span>
+                              ) : isDone ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold" title={emp.completedAt ? new Date(emp.completedAt).toLocaleString('id-ID') : undefined}>
+                                  <Calendar className="w-3 h-3 shrink-0" />
+                                  <span>Tgl Selesai: {formatReportDateTime(emp.completedAt || emp.reports?.[0]?.timestamp)}</span>
+                                </span>
+                              ) : isPartial ? (
+                                <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold" title={(emp.completedAt || emp.reports?.[0]?.timestamp) ? new Date(emp.completedAt || emp.reports?.[0]?.timestamp).toLocaleString('id-ID') : undefined}>
+                                  <Calendar className="w-3 h-3 shrink-0" />
+                                  <span>Tgl Unggah: {formatReportDateTime(emp.completedAt || emp.reports?.[0]?.timestamp)}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[var(--text-muted)] opacity-70">
+                                  <Calendar className="w-3 h-3 shrink-0" />
+                                  <span>Belum ada laporan ({selectedWeek})</span>
+                                </span>
+                              )}
+                            </div>
+
                             {/* Line 4: Ceklis interaktif kewajiban KTA/TTA */}
                             {!isCutiPerson && (
                               <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
@@ -2240,7 +2359,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                           emp.name,
                                           checkDetails.check1Label?.includes('TTA') ? 'TTA' : 'KTA',
                                           emp.week || selectedWeek,
-                                          emp.completedAt,
+                                          checkDetails.check1Timestamp || emp.completedAt,
                                           undefined,
                                           checkDetails.check1Proof
                                         );
@@ -2249,7 +2368,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                       }
                                     }}
                                     className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 font-bold text-[10px] flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-                                    title={`Klik untuk melihat bukti screenshot ${checkDetails.check1Label}`}
+                                    title={`Klik untuk melihat bukti screenshot ${checkDetails.check1Label} ${checkDetails.check1Timestamp ? `(${formatReportDateTime(checkDetails.check1Timestamp)})` : ''}`}
                                   >
                                     <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                                     <span>{checkDetails.check1Label || 'Check 1'}</span>
@@ -2275,7 +2394,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                             emp.name,
                                             checkDetails.check2Label?.includes('KTA') ? 'KTA' : 'TTA',
                                             emp.week || selectedWeek,
-                                            emp.completedAt,
+                                            checkDetails.check2Timestamp || emp.completedAt,
                                             undefined,
                                             checkDetails.check2Proof
                                           );
@@ -2284,7 +2403,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                         }
                                       }}
                                       className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 font-bold text-[10px] flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-                                      title={`Klik untuk melihat bukti screenshot ${checkDetails.check2Label}`}
+                                      title={`Klik untuk melihat bukti screenshot ${checkDetails.check2Label} ${checkDetails.check2Timestamp ? `(${formatReportDateTime(checkDetails.check2Timestamp)})` : ''}`}
                                     >
                                       <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                                       <span>{checkDetails.check2Label || 'Check 2'}</span>
@@ -2402,9 +2521,17 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                     {pdfModal.title}
                   </h3>
                   {pdfModal.senderName && (
-                    <p className="text-[10px] text-[var(--text-muted)] truncate">
-                      Inspektor: {pdfModal.senderName}
-                    </p>
+                    <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)] truncate">
+                      <span>Inspektor: {pdfModal.senderName}</span>
+                      {pdfModal.timestamp && (
+                        <>
+                          <span>•</span>
+                          <span className="font-semibold text-[var(--primary)] flex items-center gap-0.5">
+                            <Calendar className="w-2.5 h-2.5 inline" /> {formatReportDateTime(pdfModal.timestamp)}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -2466,9 +2593,17 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-[var(--text-muted)] truncate">
-                    Pelapor: {imageLightbox.senderName || 'Staff'} • Periode {imageLightbox.week || selectedWeek}
-                  </p>
+                  <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)] truncate">
+                    <span>Pelapor: {imageLightbox.senderName || 'Staff'} • Periode {imageLightbox.week || selectedWeek}</span>
+                    {imageLightbox.timestamp && (
+                      <>
+                        <span>•</span>
+                        <span className="font-semibold text-[var(--primary)] flex items-center gap-0.5">
+                          <Calendar className="w-2.5 h-2.5 inline" /> {formatReportDateTime(imageLightbox.timestamp)}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
