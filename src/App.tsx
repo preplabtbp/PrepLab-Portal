@@ -96,6 +96,7 @@ const FeedbackSupportScreen = lazyWithRetry(() => import('./components/feedback-
 const EasterEggGame = lazyWithRetry(() => import('./components/easter-egg-game').then(m => ({ default: m.EasterEggGame })));
 const FinanceScreen = lazyWithRetry(() => import('./components/FinanceScreen').then(m => ({ default: m.FinanceScreen || m.default })));
 const ModulesScreen = lazyWithRetry(() => import('./components/modules-screen').then(m => ({ default: m.ModulesScreen })));
+const LeaderboardScreen = lazyWithRetry(() => import('./components/LeaderboardScreen').then(m => ({ default: m.LeaderboardScreen })));
 import { ModulesDrawer } from './components/ModulesDrawer';
 import { LabBotWidget } from './components/LabBotWidget';
 
@@ -1390,6 +1391,7 @@ export default function App() {
   <Route path="/p5m" element={<P5MScreen onBack={() => handleNav('home')} userProfile={userProfile} />} />
   <Route path="/feedback-support" element={<FeedbackSupportScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/finance" element={<FinanceScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
+  <Route path="/leaderboard" element={<LeaderboardScreen onBack={() => handleNav('home')} inspectorNik={inspectorNik} inspectorName={inspectorName} userProfile={userProfile} />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
   </AnimatePresence>
@@ -1547,70 +1549,90 @@ export default function App() {
       </AnimatePresence>
       {!isCrewRole && (
         <nav 
-          className="fixed bottom-0 w-full md:hidden backdrop-blur-xl border-t z-40 flex items-center justify-around h-[4.5rem] pb-safe transition-colors" 
+          className="fixed bottom-0 w-full md:hidden backdrop-blur-xl border-t z-40 flex items-center justify-between h-[4.5rem] pb-safe px-1 sm:px-2 transition-colors select-none" 
           style={{ 
             backgroundColor: 'var(--card-bg, var(--bg-main, #FFFFFF))',
             borderColor: 'var(--border-main, #E2E8F0)'
           }}
         >
-          <NavItem 
-            icon={<Home className="w-5 h-5" />}
-            label="Home" 
-            active={activeTab === 'home'} 
-            onClick={() => handleNav('home')} 
-          />
-          <NavItem 
-            icon={<FileText className="w-5 h-5" />} 
-            label="Buletin" 
-            active={activeTab.startsWith('bulletin')} 
-            onClick={() => { 
-              if (userDept === 'ALL') {
-                setShowBulletinMenu(true);
-              } else {
-                handleNav(`bulletin/${userProfile?.pt || 'TBP'}`);
-              }
-            }} 
-          />
-
-          {/* Center All Menu Button on Mobile */}
-          <button
-            onClick={() => setShowModulesDrawer(true)}
-            className="flex flex-col items-center justify-center -mt-3.5 group cursor-pointer active:scale-95 transition-transform"
-            title="Buka Semua Menu"
-          >
-            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-md transition-all duration-200 ${
-              showModulesDrawer || activeTab === 'modules'
-                ? 'bg-gradient-to-tr from-teal-500 to-emerald-600 text-white shadow-teal-500/40 scale-105 ring-2 ring-teal-400/50'
-                : 'bg-gradient-to-tr from-teal-600 to-emerald-700 text-white shadow-teal-600/25'
-            }`}>
-              <LayoutGrid className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 mt-1 whitespace-nowrap leading-none">
-              Semua Menu
-            </span>
-          </button>
-
-          <NavItem 
-            icon={<Cloud className="w-5 h-5" />} 
-            label="Cloud" 
-            active={activeTab === 'preplab-cloud'} 
-            onClick={() => handleNav('preplab-cloud')} 
-          />
-
-          <NavItem 
-            icon={<Settings className="w-5 h-5" />} 
-            label="Settings" 
-            active={activeTab === 'settings'} 
-            onClick={() => handleNav('settings')} 
-          />
-          {isDeveloper && (
+          {/* Left Wing (3 items: Home, Buletin, Chat) - exactly 50% minus center button */}
+          <div className="flex-1 flex items-center justify-around h-full">
             <NavItem 
-              icon={<Code2 className="w-5 h-5" />} 
-              label="Dev" 
-              active={activeTab === 'admin-dashboard'} 
-              onClick={() => handleNav('admin-dashboard')} 
+              icon={<Home className="w-4.5 h-4.5" />}
+              label="Home" 
+              active={activeTab === 'home' && !showChatDrawer && !showProfileScreen} 
+              onClick={() => handleNav('home')} 
             />
-          )}
+            <NavItem 
+              icon={<FileText className="w-4.5 h-4.5" />} 
+              label="Buletin" 
+              active={activeTab.startsWith('bulletin') && !showChatDrawer && !showProfileScreen} 
+              onClick={() => { 
+                if (userDept === 'ALL') {
+                  setShowBulletinMenu(true);
+                } else {
+                  handleNav(`bulletin/${userProfile?.pt || 'TBP'}`);
+                }
+              }} 
+            />
+            <NavItem 
+              icon={<MessageSquare className="w-4.5 h-4.5" />} 
+              label="Chat" 
+              active={showChatDrawer} 
+              onClick={() => setShowChatDrawer(true)} 
+            />
+          </div>
+
+          {/* Center All Menu Button on Mobile - Strictly situated at exact 50% viewport center */}
+          <div className="shrink-0 flex flex-col items-center justify-center px-1">
+            <button
+              onClick={() => setShowModulesDrawer(true)}
+              className="flex flex-col items-center justify-center -mt-3.5 group cursor-pointer active:scale-95 transition-transform"
+              title="Buka Semua Menu"
+            >
+              <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shadow-md transition-all duration-200 ${
+                showModulesDrawer || activeTab === 'modules'
+                  ? 'bg-gradient-to-tr from-teal-500 to-emerald-600 text-white shadow-teal-500/40 scale-105 ring-2 ring-teal-400/50'
+                  : 'bg-gradient-to-tr from-teal-600 to-emerald-700 text-white shadow-teal-600/25'
+              }`}>
+                <LayoutGrid className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-[9.5px] font-bold text-teal-600 dark:text-teal-400 mt-1 whitespace-nowrap leading-none">
+                Semua Menu
+              </span>
+            </button>
+          </div>
+
+          {/* Right Wing (3 items: Cloud, Settings, Dev/Profil) - exactly 50% minus center button */}
+          <div className="flex-1 flex items-center justify-around h-full">
+            <NavItem 
+              icon={<Cloud className="w-4.5 h-4.5" />} 
+              label="Cloud" 
+              active={activeTab === 'preplab-cloud' && !showChatDrawer && !showProfileScreen} 
+              onClick={() => handleNav('preplab-cloud')} 
+            />
+            <NavItem 
+              icon={<Settings className="w-4.5 h-4.5" />} 
+              label="Settings" 
+              active={activeTab === 'settings' && !showChatDrawer && !showProfileScreen} 
+              onClick={() => handleNav('settings')} 
+            />
+            {isDeveloper ? (
+              <NavItem 
+                icon={<Code2 className="w-4.5 h-4.5" />} 
+                label="Dev" 
+                active={activeTab === 'admin-dashboard' && !showChatDrawer && !showProfileScreen} 
+                onClick={() => handleNav('admin-dashboard')} 
+              />
+            ) : (
+              <NavItem 
+                icon={<User className="w-4.5 h-4.5" />} 
+                label="Profil" 
+                active={showProfileScreen} 
+                onClick={() => setShowProfileScreen(true)} 
+              />
+            )}
+          </div>
         </nav>
       )}
       {/* Profile Drawer */}
@@ -1817,13 +1839,17 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center justify-center w-16 h-full transition-all ${active ? 'font-semibold' : 'opacity-60 hover:opacity-100'}`}
+      className={`flex flex-col items-center justify-center flex-1 max-w-[58px] h-full transition-all cursor-pointer select-none ${
+        active ? 'font-semibold' : 'opacity-65 hover:opacity-100'
+      }`}
       style={{
         color: active ? 'var(--footer-selected, var(--primary, #2A9D8F))' : 'var(--text-muted, #94A3B8)'
       }}
     >
-      <div className={`${active ? 'scale-110 mb-1' : 'scale-100 mb-1'} transition-transform`}>{icon}</div>
-      <span className="text-[10px] whitespace-nowrap">{label}</span>
+      <div className={`${active ? 'scale-110 mb-0.5 text-teal-600 dark:text-teal-400' : 'scale-100 mb-0.5'} transition-transform`}>
+        {icon}
+      </div>
+      <span className="text-[9px] sm:text-[9.5px] leading-tight whitespace-nowrap tracking-tight">{label}</span>
     </button>
   );
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, User, Users, Globe, Building2, X, Sparkles, 
-  ShieldCheck, CheckCheck, MessageSquare, Flame, Filter, ChevronDown, AtSign
+  ShieldCheck, CheckCheck, MessageSquare, Flame, Filter, ChevronDown, AtSign, Trash2
 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
@@ -32,6 +32,10 @@ function getSectionDisplayName(sectionId: string): string {
   return found ? found.name : 'General';
 }
 
+function escapeRegExp(string: string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 interface ChatScreenProps {
   inspectorName: string;
   inspectorNik: string;
@@ -49,6 +53,14 @@ export default function ChatScreen({
 }: ChatScreenProps) {
   const [activeTab, setActiveTab] = useState<'global' | 'section'>('global');
   
+  // Developer status check
+  const isDev = isDeveloper || 
+    inspectorNik === '02D25000055' || 
+    inspectorNik === '02D24000043' || 
+    inspectorNik === 'preplabadmin' ||
+    userProfile?.role === 'developer' ||
+    userProfile?.isDeveloper === true;
+
   // User's own section
   const userSectionId = useMemo(() => {
     return normalizeSection(userProfile?.section || userProfile?.department);
@@ -112,10 +124,22 @@ export default function ChatScreen({
       }
     });
 
+    // Handle real-time message deletion without trace
+    socket.on('message_deleted', (data) => {
+      if (data && data.room === activeRoom) {
+        setMessages(prev => prev.filter(m => m.id !== data.id));
+      }
+    });
+
+    // Real-time mention alert
     socket.on('chat:mention', (data) => {
       toast.info(`💬 ${data.senderName} menyebut Anda di chat: "${data.text?.slice(0, 80)}"`, {
         duration: 4500
       });
+    });
+
+    socket.on('chat:error', (data) => {
+      toast.error(data?.message || 'Operasi chat gagal.');
     });
 
     return () => {
@@ -157,6 +181,19 @@ export default function ChatScreen({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Unique list of all full employee names, sorted by length descending so longest names match first
+  const candidateNames = useMemo(() => {
+    const names = new Set<string>();
+    names.add('Semua (All)');
+    names.add('Semua');
+    names.add('All');
+    employeesList.forEach(e => {
+      const n = (e.name || e.nama || '').trim();
+      if (n) names.add(n);
+    });
+    return Array.from(names).sort((a, b) => b.length - a.length);
+  }, [employeesList]);
+
   // Filter mention candidates based on mentionQuery
   const filteredMentionCandidates = useMemo(() => {
     const q = mentionQuery.toLowerCase().trim();
@@ -192,7 +229,7 @@ export default function ChatScreen({
     });
 
     results.push(...matches.slice(0, 8).map(emp => ({
-      name: emp.name || emp.nama,
+      name: (emp.name || emp.nama || '').trim(),
       nik: emp.nik,
       department: emp.department || emp.section || emp.divisi,
       jabatan: emp.jabatan || emp.position
@@ -212,8 +249,8 @@ export default function ChatScreen({
 
     if (atIndex !== -1) {
       const query = textBeforeCursor.slice(atIndex + 1);
-      // Allow mention query if no newline and doesn't contain space before cursor
-      if (!query.includes('\n') && !query.includes(' ') && query.length < 25) {
+      // Allow mention query if no newline and length under 35 chars
+      if (!query.includes('\n') && query.length < 35) {
         setMentionQuery(query);
         setMentionCursorIndex(atIndex);
         setShowMentionPopup(true);
@@ -289,7 +326,7 @@ export default function ChatScreen({
   const handleMentionUser = (targetName: string, targetNik?: string) => {
     setText(prev => {
       const prefix = prev.endsWith(' ') || prev.length === 0 ? prev : `${prev} `;
-      return `${prefix}@${targetName} `;
+      return `${prefix}@${targetName.trim()} `;
     });
     if (targetNik) {
       setMentionedNiks(prev => new Set(prev).add(targetNik));
@@ -297,45 +334,114 @@ export default function ChatScreen({
     inputRef.current?.focus();
   };
 
+  // Extract all mentioned NIKs by checking current full text against employeesList
+  const extractMentionedNiksFromText = (messageText: string, emps: any[]) => {
+    const textLower = messageText.toLowerCase();
+    const resultNiks = new Set<string>();
+
+    if (textLower.includes('@all') || textLower.includes('@semua')) {
+      resultNiks.add('all');
+    }
+
+    emps.forEach(emp => {
+      const name = (emp.name || emp.nama || '').trim().toLowerCase();
+      const nik = (emp.nik || '').trim().toLowerCase();
+      if (emp.nik === inspectorNik) return;
+
+      if (name && textLower.includes(`@${name}`)) {
+        resultNiks.add(emp.nik);
+      } else if (nik && textLower.includes(`@${nik}`)) {
+        resultNiks.add(emp.nik);
+      }
+    });
+
+    mentionedNiks.forEach(n => {
+      if (n && n !== inspectorNik) resultNiks.add(n);
+    });
+
+    return Array.from(resultNiks);
+  };
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!text.trim() || !socketRef.current) return;
+
+    const detectedNiks = extractMentionedNiksFromText(text, employeesList);
 
     socketRef.current.emit('send_message', {
       room: activeRoom,
       senderNik: inspectorNik,
       senderName: inspectorName,
       text: text.trim(),
-      mentionedNiks: Array.from(mentionedNiks)
+      mentionedNiks: detectedNiks
     });
     setText('');
     setMentionedNiks(new Set());
     setShowMentionPopup(false);
   };
 
-  // Helper to render text with formatted mention pills
+  // Developer hard delete message without trace
+  const handleDeleteMessage = async (msgId: number) => {
+    if (!isDev) return;
+    if (!confirm('Hapus chat ini secara permanen tanpa jejak?')) return;
+
+    // Immediate optimistic local removal
+    setMessages(prev => prev.filter(m => m.id !== msgId));
+
+    // Emit socket event to delete and notify all in room
+    if (socketRef.current) {
+      socketRef.current.emit('delete_message', {
+        messageId: msgId,
+        room: activeRoom,
+        requesterNik: inspectorNik
+      });
+    }
+
+    // REST fallback for persistence guarantee
+    try {
+      await fetch(`/api/chat/messages/${msgId}?requesterNik=${encodeURIComponent(inspectorNik)}&room=${encodeURIComponent(activeRoom)}`, {
+        method: 'DELETE'
+      });
+      toast.success('Pesan dihapus tanpa jejak.');
+    } catch (err) {
+      console.error('Failed to delete message via REST:', err);
+    }
+  };
+
+  // Helper to render text with FULL NAME formatted mention pills
   const renderFormattedText = (content: string, currentName: string, currentNik: string, isMeMessage: boolean) => {
     if (!content) return null;
 
-    const parts = content.split(/(@[a-zA-Z0-9_\u00C0-\u017F]+(?:\s+[a-zA-Z0-9_\u00C0-\u017F]+)?)/g);
+    let regex: RegExp;
+    if (candidateNames.length > 0) {
+      const escaped = candidateNames.map(escapeRegExp).join('|');
+      // Matches @Full Name followed by punctuation, space, or end of line; or word tag fallback
+      regex = new RegExp(`(@(?:${escaped}))(?=[\\s.,!?:;]|$)|(@[a-zA-Z0-9_\\u00C0-\\u017F]+(?:\\s+[a-zA-Z0-9_\\u00C0-\\u017F]+)*)`, 'gi');
+    } else {
+      regex = /(@[a-zA-Z0-9_\u00C0-\u017F]+(?:\s+[a-zA-Z0-9_\u00C0-\u017F]+)*)/g;
+    }
+
+    const parts = content.split(regex).filter(p => p !== undefined && p !== '');
 
     return parts.map((part, i) => {
       if (part.startsWith('@')) {
         const rawTarget = part.slice(1).trim().toLowerCase();
-        const isAll = rawTarget === 'all' || rawTarget === 'semua';
+        const isAll = rawTarget === 'all' || rawTarget === 'semua' || rawTarget === 'semua (all)';
+        const cleanCurrentName = (currentName || '').toLowerCase().trim();
         const isMeTarget = isAll || 
           rawTarget === currentNik.toLowerCase() || 
-          (currentName && rawTarget.includes(currentName.toLowerCase().split(' ')[0])) ||
-          (currentName && currentName.toLowerCase().includes(rawTarget));
+          (cleanCurrentName && rawTarget === cleanCurrentName) ||
+          (cleanCurrentName && rawTarget.includes(cleanCurrentName)) ||
+          (cleanCurrentName && cleanCurrentName.includes(rawTarget));
 
         return (
           <span
             key={i}
-            className={`inline-flex items-center gap-0.5 px-1.5 py-0.2 mx-0.5 rounded-md font-bold text-[11px] sm:text-xs transition-all ${
+            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded-md font-bold text-[11px] sm:text-xs transition-all ${
               isMeMessage
                 ? 'bg-white/25 text-white border border-white/40 shadow-2xs'
                 : isMeTarget
-                ? 'bg-amber-500/25 text-amber-800 dark:text-amber-200 border border-amber-500/50 shadow-2xs font-black'
+                ? 'bg-amber-500/30 text-amber-900 dark:text-amber-200 border border-amber-500/50 shadow-2xs font-black'
                 : 'bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/30'
             }`}
           >
@@ -549,7 +655,7 @@ export default function ChatScreen({
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18 }}
-                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                className={`flex flex-col group ${isMe ? 'items-end' : 'items-start'}`}
               >
                 {!isMe && (
                   <div className="flex items-center gap-1.5 mb-1 px-1">
@@ -570,7 +676,7 @@ export default function ChatScreen({
                 )}
 
                 <div
-                  className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed shadow-xs transition-all ${
+                  className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed shadow-xs transition-all relative ${
                     isMe
                       ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-br-xs'
                       : isMentioned
@@ -589,12 +695,28 @@ export default function ChatScreen({
                     {renderFormattedText(msg.text, inspectorName, inspectorNik, isMe)}
                   </p>
 
-                  <div
-                    className={`text-[9px] mt-1 text-right font-mono select-none ${
-                      isMe ? 'text-teal-100/80' : 'text-[var(--text-muted)]'
-                    }`}
-                  >
-                    {timeStr}
+                  <div className="flex items-center justify-end gap-1.5 mt-1 text-[9px] font-mono select-none">
+                    {/* Developer Delete Button: Hard delete without trace */}
+                    {isDev && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteMessage(msg.id);
+                        }}
+                        className={`p-0.5 rounded transition-all cursor-pointer opacity-60 hover:opacity-100 ${
+                          isMe
+                            ? 'hover:bg-white/25 text-teal-100 hover:text-white'
+                            : 'hover:bg-rose-500/20 text-slate-400 hover:text-rose-500'
+                        }`}
+                        title="Hapus Pesan Tanpa Jejak (Khusus Developer)"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                    <span className={isMe ? 'text-teal-100/80' : 'text-[var(--text-muted)]'}>
+                      {timeStr}
+                    </span>
                   </div>
                 </div>
               </motion.div>

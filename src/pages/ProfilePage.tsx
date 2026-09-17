@@ -3,7 +3,8 @@ import { Card, Button } from '../components/ui';
 import { 
   LogOut, Briefcase, MapPin, Building, Hash, CalendarIcon, 
   Users, UserCircle2, ArrowLeft, Plane, Info, X, Camera, 
-  Trash2, Image as ImageIcon, Calendar, Sparkles, Check, Upload, RefreshCw
+  Trash2, Image as ImageIcon, Calendar, Sparkles, Check, Upload, RefreshCw,
+  Trophy, Award
 } from 'lucide-react';
 import { getRosterData } from '../sheets-api';
 import { motion, useDragControls } from 'motion/react';
@@ -809,6 +810,80 @@ export function ProfilePage({
 
           {profile && (
             <div className="space-y-4">
+              {/* Card Prestasi & Lencana Gamifikasi */}
+              <Card 
+                className="p-5 shadow-xs space-y-4 border relative overflow-hidden"
+                style={{
+                  backgroundColor: 'var(--card-bg, #FFFFFF)',
+                  borderColor: 'var(--border-main, #E2E8F0)'
+                }}
+              >
+                <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--border-main)' }}>
+                  <h3 
+                    className="font-bold text-sm flex items-center gap-2 font-display"
+                    style={{ color: 'var(--text-main, #1E293B)' }}
+                  >
+                    <Trophy className="w-4 h-4 text-amber-500" />
+                    Lencana &amp; Prestasi K3
+                  </h3>
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    Level 18 · 1,190 XP
+                  </span>
+                </div>
+
+                <div className="space-y-3 pt-1">
+                  {/* Equipped Title */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-850 border" style={{ borderColor: 'var(--border-main)' }}>
+                    <div className="text-xs">
+                      <span className="text-[10px] text-[var(--text-muted)] block font-semibold">Gelar Aktif</span>
+                      <span className="font-bold text-teal-600 dark:text-teal-400">
+                        {localStorage.getItem('preplab_equipped_title') || 'Safety Vanguard'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-teal-500/10 text-teal-600 font-bold">
+                      Terpasang
+                    </span>
+                  </div>
+
+                  {/* 3 Showcase Badges */}
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block mb-1.5">
+                      Lencana Pilihan (Showcase)
+                    </span>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="p-2 rounded-xl border flex flex-col items-center text-center bg-slate-50 dark:bg-slate-800/60" style={{ borderColor: 'var(--border-main)' }}>
+                        <span className="text-2xl mb-1">🛡️</span>
+                        <span className="text-[10px] font-bold text-[var(--text-main)] truncate w-full">Sentinel</span>
+                        <span className="text-[8px] text-blue-500 font-black uppercase">Rare</span>
+                      </div>
+                      <div className="p-2 rounded-xl border flex flex-col items-center text-center bg-slate-50 dark:bg-slate-800/60" style={{ borderColor: 'var(--border-main)' }}>
+                        <span className="text-2xl mb-1">🔬</span>
+                        <span className="text-[10px] font-bold text-[var(--text-main)] truncate w-full">Precision</span>
+                        <span className="text-[8px] text-purple-500 font-black uppercase">Epic</span>
+                      </div>
+                      <div className="p-2 rounded-xl border flex flex-col items-center text-center bg-slate-50 dark:bg-slate-800/60" style={{ borderColor: 'var(--border-main)' }}>
+                        <span className="text-2xl mb-1">🌅</span>
+                        <span className="text-[10px] font-bold text-[var(--text-main)] truncate w-full">Dawn Patrol</span>
+                        <span className="text-[8px] text-blue-500 font-black uppercase">Rare</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Button to Leaderboard */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onBack();
+                      window.location.href = '/leaderboard';
+                    }}
+                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-2xs mt-2"
+                  >
+                    <Trophy className="w-4 h-4 text-amber-500" />
+                    <span>Buka Hall of Fame &amp; Klasemen Lengkap</span>
+                  </button>
+                </div>
+              </Card>
+
               {/* Card Informasi Pekerjaan */}
               <Card 
                 className="p-5 shadow-xs space-y-4 border"

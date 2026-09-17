@@ -2,6 +2,26 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.35] - 2026-09-17 (Baru Teraplikasi di Staging)
+
+### 🏆 Skema Leaderboard, Collectible Badges & Kustomisasi Profil (PrepLab Hall of Fame)
+- **Layar Hall of Fame & Leaderboard Baru (`src/components/LeaderboardScreen.tsx` & `/leaderboard`)**:
+  - Menghadirkan modul papan peringkat gamifikasi interaktif untuk presentasi manajemen/atasan yang mengapresiasi kedisiplinan K3 (Inspeksi, KTA, P5M) dan keunggulan operasional.
+  - **Podium Juara 1, 2, 3**: Kartu podium dinamis beraksen Emas, Perak, Perunggu dengan mahkota juara, bingkai avatar bercahaya, gelar kehormatan, dan metrik pencapaian lengkap.
+  - **Tab Klasemen Antar-Section**: Menampilkan peringkat section (*Laboratory vs Preparation vs Maintenance vs QA vs Admin*) berdasarkan rata-rata poin per personil dan rasio kepatuhan keselamatan (safety compliance rate).
+  - **Galeri Lencana Penghargaan (*Collectible Badges*)**: Showcase lencana digital interaktif dengan 4 tingkatan kelangkaan (*Common, Rare, Epic, Legendary*) seperti *Hazard Sentinel*, *Master of Precision*, *The Dawn Patrol*, *Zero Downtime Hero*, dan *PrepLab Champion*.
+  - **Studio Kustomisasi & Hidden Item (Easter Egg)**: Memungkinkan karyawan memilih gelar kehormatan (*Title*), bingkai avatar dinamis (*Golden Halo, Cyber Teal, Emerald Aurora*), dan tombol uji coba simulator penemuan item rahasia (*Nocturnal Operator*).
+- **Integrasi Pintasan & Showcase di Seluruh Portal**:
+  - **Beranda (`src/components/home-screen.tsx`)**: Menambahkan kartu banner cepat *"PrepLab Hall of Fame · Season 1"* tepat di bawah jadwal inspeksi untuk akses langsung.
+  - **Menu Semua Modul (`src/components/ModulesDrawer.tsx`)**: Menambahkan menu *"Hall of Fame & Leaderboard"* di kategori Dashboards.
+  - **Laci Profil Karyawan (`src/pages/ProfilePage.tsx`)**: Menambahkan kartu *"Lencana & Prestasi K3"* yang menampilkan gelar aktif terpasang, level, XP, dan 3 slot showcase lencana favorit.
+
+### 📱 Penambahan Shortcut Chat di Bottom Navigation Bar Mobile & Penjagaan Posisi Tengah Tombol "Semua Menu"
+- **Navigasi Bawah Mobile yang Seimbang & Simetris (`src/App.tsx`)**:
+  - Menambahkan tombol **Ruang Chat** langsung ke dalam Bottom Navigation Bar mobile view (lebar layar `< 768px`) sehingga pengguna dapat membuka obrolan global/section dari halaman mana pun tanpa kembali ke beranda.
+  - Menata ulang arsitektur flexbox menggunakan kontainer `flex-1` (sisi kiri 3 item) – `shrink-0` (tombol tengah) – `flex-1` (sisi kanan 3 item), menjamin tombol mengambang **"Semua Menu"** berada **100% presisi di tengah viewport**.
+  - Responsif dengan `max-w-[58px]` dan penyesuaian tipografi agar tidak saling bertumpukan pada smartphone berlayar ringkas.
+
 ## [2.8.34] - 2026-09-16 (Baru Teraplikasi di Staging)
 
 ### 📍 Otomatisasi Kunci Lokasi / Sub-Area Inspeksi Umum Tanpa Input Manual

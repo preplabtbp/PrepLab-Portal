@@ -4,7 +4,8 @@ import {
   Activity, ThermometerSun, Wrench, PlusCircle, LineChart, ShieldCheck, 
   CheckSquare, Eye, AlertTriangle, ClipboardCheck, Package, Box, FileText, 
   Settings, BookOpen, Info, Briefcase, Users, Calendar, Clock, Utensils, 
-  LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink
+  LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink,
+  MessageSquare, Trophy
 } from 'lucide-react';
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
@@ -144,6 +145,8 @@ export function ModulesDrawer({
       color: 'indigo' as const,
       bgIcon: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20',
       items: [
+        { id: 'chat', title: "Ruang Chat", desc: "Global & Section Chat", icon: <MessageSquare className="w-5 h-5" />, color: 'teal', action: () => { onClose(); window.dispatchEvent(new CustomEvent('open-chat-drawer')); } },
+        { id: 'preplab-cloud', title: "PrepLab Cloud", desc: "Penyimpanan berkas & SOP", icon: <UploadCloud className="w-5 h-5" />, color: 'sky', action: () => handleItemClick(() => onNav('preplab-cloud')) },
         { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('induksi')) },
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('employee-database')) },
         ...(isQA ? [{ id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('p5m')) }] : []),
@@ -159,6 +162,7 @@ export function ModulesDrawer({
       color: 'rose' as const,
       bgIcon: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20',
       items: [
+        { id: 'leaderboard', title: "Hall of Fame & Leaderboard", desc: "Papan Peringkat K3 & Lencana", icon: <Trophy className="w-5 h-5" />, color: 'amber', action: () => handleItemClick(() => onNav('leaderboard')) },
         { id: 'wo-maintenance-dashboard', title: "WO Maintenance", desc: "Downtime & sparepart", icon: <Wrench className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('wo-maintenance-dashboard')) },
         { id: 'adm-dashboard', title: "Administrasi", desc: "Kehadiran personel", icon: <User className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('adm-dashboard')) },
         { id: 'pelanggaran-dashboard', title: "Pelanggaran", desc: "SP & Konseling aktif", icon: <AlertTriangle className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('pelanggaran-dashboard')) },

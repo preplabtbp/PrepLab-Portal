@@ -183,7 +183,14 @@ async function sendWebPush(notifs: any | any[]) {
     for (const notif of notificationsArray) {
       let subs: any[] = [];
       if (notif.userId) {
-         subs = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.nik, notif.userId));
+         const cleanUid = String(notif.userId).trim();
+         subs = await db.select().from(pushSubscriptions).where(
+           or(
+             eq(pushSubscriptions.nik, cleanUid),
+             eq(pushSubscriptions.nik, cleanUid.toUpperCase()),
+             eq(pushSubscriptions.nik, cleanUid.toLowerCase())
+           )
+         );
       } else if (notif.role) {
          const targetEmployees = await db.select().from(employees).where(eq(employees.department, notif.role));
          const niks = targetEmployees.map((e: any) => e.nik);
@@ -352,21 +359,50 @@ const app = express();
         const targetMentionNiks = new Set<string>();
         if (Array.isArray(msg.mentionedNiks)) {
           msg.mentionedNiks.forEach((n: string) => {
-            if (n && n !== msg.senderNik && n !== 'all') targetMentionNiks.add(n);
+            if (n && n !== msg.senderNik && n !== 'all') {
+              targetMentionNiks.add(String(n).trim());
+            }
           });
         }
 
         const textContent = (msg.text || '').toLowerCase();
+        const hasMentionAll = textContent.includes('@all') || textContent.includes('@semua');
+
         try {
-          const allEmps = await db.select({ nik: employees.nik, name: employees.name }).from(employees);
+          const allEmps = await db.select({
+            nik: employees.nik,
+            name: employees.name,
+            section: employees.section,
+            department: employees.department
+          }).from(employees);
+
+          if (hasMentionAll) {
+            for (const emp of allEmps) {
+              if (emp.nik && emp.nik !== msg.senderNik) {
+                if (room === 'global') {
+                  targetMentionNiks.add(String(emp.nik).trim());
+                } else if (room.startsWith('section_')) {
+                  const targetSec = room.replace('section_', '');
+                  const secStr = (emp.section || emp.department || '').toLowerCase();
+                  if (secStr.includes(targetSec) || targetSec.includes(secStr)) {
+                    targetMentionNiks.add(String(emp.nik).trim());
+                  }
+                }
+              }
+            }
+          }
+
           for (const emp of allEmps) {
             if (emp.nik && emp.nik !== msg.senderNik) {
-              const empName = (emp.name || '').toLowerCase();
-              const empNik = (emp.nik || '').toLowerCase();
-              if (empName && (textContent.includes(`@${empName}`) || (empName.split(' ')[0].length >= 3 && textContent.includes(`@${empName.split(' ')[0]}`)))) {
-                targetMentionNiks.add(emp.nik);
+              const empName = (emp.name || '').trim().toLowerCase();
+              const empNik = (emp.nik || '').trim().toLowerCase();
+              // Clean name of extra punctuation for comparison
+              const cleanEmpName = empName.replace(/[,()]/g, ' ').replace(/\s+/g, ' ').trim();
+
+              if (cleanEmpName && textContent.includes(`@${cleanEmpName}`)) {
+                targetMentionNiks.add(String(emp.nik).trim());
               } else if (empNik && textContent.includes(`@${empNik}`)) {
-                targetMentionNiks.add(emp.nik);
+                targetMentionNiks.add(String(emp.nik).trim());
               }
             }
           }
@@ -374,48 +410,77 @@ const app = express();
           console.warn('Mention auto-discovery error:', scanErr);
         }
 
-        // Targeted notification & web push for mentioned personnel
+        // Targeted in-app notification & web push exclusively for mentioned personnel
         for (const targetNik of targetMentionNiks) {
+          const cleanTargetNik = String(targetNik).trim();
           try {
-            const _mentionNotif = await db.insert(notifications).values({
-              userId: targetNik,
+            const [insertedNotif] = await db.insert(notifications).values({
+              userId: cleanTargetNik,
               role: null,
               title: `💬 ${msg.senderName} menyebut Anda`,
-              message: `${msg.text.slice(0, 120)}`,
+              message: `${room === 'global' ? 'Global Chat' : 'Section Chat'}: "${msg.text.slice(0, 100)}"`,
               type: 'info',
               link: '/chat'
             }).returning();
-            sendWebPush(_mentionNotif);
-          } catch(e) { console.error('Mention push error:', e); }
 
-          // Emit direct socket event if target is online
-          for (const [sockId, sockUser] of onlineSockets.entries()) {
-            if (sockUser.nik === targetNik) {
-              io.to(sockId).emit('chat:mention', {
-                senderName: msg.senderName,
-                senderNik: msg.senderNik,
-                text: msg.text,
-                room
-              });
+            if (insertedNotif) {
+              sendWebPush(insertedNotif);
             }
+
+            // Real-time delivery to target user socket if online
+            for (const [sockId, sockUser] of onlineSockets.entries()) {
+              if (sockUser.nik && String(sockUser.nik).trim().toUpperCase() === cleanTargetNik.toUpperCase()) {
+                io.to(sockId).emit('chat:mention', {
+                  senderName: msg.senderName,
+                  senderNik: msg.senderNik,
+                  text: msg.text,
+                  room
+                });
+                if (insertedNotif) {
+                  io.to(sockId).emit('notification:new', insertedNotif);
+                }
+              }
+            }
+          } catch(e) { console.error('Mention notification error:', e); }
+        }
+      } catch (err) {
+        console.error("Chat save error:", err);
+      }
+    });
+
+    // --- DEVELOPER DELETE MESSAGE (HARD DELETE WITHOUT TRACE) ---
+    socket.on('delete_message', async (data) => {
+      try {
+        const reqNik = (data.requesterNik || '').toString().trim().toUpperCase();
+        const isDev = ['02D25000055', '02D24000043', 'PREPLABADMIN'].includes(reqNik);
+        
+        if (!isDev) {
+          const devUser = await db.select().from(developerUsers).where(eq(developerUsers.nik, reqNik)).limit(1);
+          if (devUser.length === 0) {
+            return socket.emit('chat:error', { message: 'Hanya developer yang berhak menghapus chat.' });
           }
         }
 
-        // General push notification for room members
-        const title = room === 'global' ? 'Global Chat' : `Chat - ${room}`;
+        const msgId = Number(data.messageId);
+        const room = data.room || 'global';
+
+        // 1. Delete from database (hard delete)
         try {
-          const _n = await db.insert(notifications).values({
-            userId: null,
-            role: room === 'global' ? null : room,
-            title,
-            message: `${msg.senderName}: ${msg.text}`,
-            type: 'info',
-            link: '/chat'
-          }).returning();
-          sendWebPush(_n);
-        } catch(e) { console.error('Chat push error:', e); }
+          await db.delete(chatMessages).where(eq(chatMessages.id, msgId));
+        } catch (dbErr) {
+          console.warn('DB delete message error:', dbErr);
+        }
+
+        // 2. Delete from in-memory array (hard delete)
+        const memIdx = chatMessagesMemory.findIndex(m => m.id === msgId);
+        if (memIdx !== -1) {
+          chatMessagesMemory.splice(memIdx, 1);
+        }
+
+        // 3. Broadcast real-time removal to all clients in room
+        io.to(room).emit('message_deleted', { id: msgId, room });
       } catch (err) {
-        console.error("Chat save error:", err);
+        console.error("Delete message error:", err);
       }
     });
 
@@ -598,6 +663,33 @@ const app = express();
     } catch (err) {
       console.error('Failed to get chat messages:', err);
       res.status(500).json({ error: 'Failed to fetch chat messages' });
+    }
+  });
+
+  app.delete('/api/chat/messages/:id', async (req, res) => {
+    try {
+      const msgId = Number(req.params.id);
+      const requesterNik = ((req.query.requesterNik as string) || req.body?.requesterNik || '').trim().toUpperCase();
+      const isDev = ['02D25000055', '02D24000043', 'PREPLABADMIN'].includes(requesterNik);
+      
+      if (!isDev) {
+        const devUser = await db.select().from(developerUsers).where(eq(developerUsers.nik, requesterNik)).limit(1);
+        if (devUser.length === 0) {
+          return res.status(403).json({ error: 'Hanya developer yang berhak menghapus chat' });
+        }
+      }
+
+      await db.delete(chatMessages).where(eq(chatMessages.id, msgId));
+      const memIdx = chatMessagesMemory.findIndex(m => m.id === msgId);
+      if (memIdx !== -1) chatMessagesMemory.splice(memIdx, 1);
+
+      const room = (req.query.room as string) || req.body?.room || 'global';
+      io.to(room).emit('message_deleted', { id: msgId, room });
+
+      res.json({ success: true, id: msgId });
+    } catch (err) {
+      console.error('Failed to delete chat message:', err);
+      res.status(500).json({ error: 'Failed to delete message' });
     }
   });
 

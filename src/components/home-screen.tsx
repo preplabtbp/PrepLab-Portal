@@ -6,7 +6,7 @@ import {
   Wrench, CheckSquare, ShieldCheck, Eye, Activity, Info, 
   ArrowRight, Clock, ClipboardList, Briefcase, Users,
   Sparkles, ExternalLink, UploadCloud, LayoutGrid, Check, ChevronRight,
-  ShieldAlert, BarChart2, MessageSquare
+  ShieldAlert, BarChart2, MessageSquare, Trophy
 } from 'lucide-react';
 import { Button } from './ui';
 import { getKtaUrl } from '../sheets-api';
@@ -125,6 +125,45 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
           onNavigateToP2h={() => onNav('inspect')}
           onNavigateToPemantauan={() => onNav('pemantauan')}
         />
+      </section>
+
+      {/* Hall of Fame & Leaderboard Quick Banner (Season 1) */}
+      <section className="w-full">
+        <div 
+          onClick={() => onNav('leaderboard')}
+          className="group relative overflow-hidden rounded-3xl p-4 sm:p-5 border transition-all duration-300 shadow-md hover:shadow-xl cursor-pointer hover:border-amber-500/50 bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 text-white"
+        >
+          <div className="absolute top-0 right-0 -mt-6 -mr-6 w-36 h-36 rounded-full bg-amber-500/15 blur-2xl pointer-events-none group-hover:scale-125 transition-transform" />
+          <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/30 shrink-0 group-hover:scale-105 transition-transform">
+                <Trophy className="w-6 h-6 fill-slate-950" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-400">
+                    PrepLab Hall of Fame · Season 1
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 text-[10px] font-bold border border-teal-500/30">
+                    Papan Peringkat K3
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-bold font-display text-white mt-0.5 group-hover:text-teal-200 transition-colors">
+                  Klasemen Kepatuhan &amp; Prestasi Personil
+                </h3>
+                <p className="text-xs text-slate-300 mt-0.5 line-clamp-1">
+                  Peringkat 1: Rahmat Hidayat (1,420 XP) · Cek posisi Anda, koleksi lencana &amp; buka item profil!
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
+              <span className="text-xs font-bold text-teal-300 group-hover:text-white flex items-center gap-1 transition-colors">
+                Buka Leaderboard <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </span>
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* Quick Shift Utilities (Non-duplicated) */}
