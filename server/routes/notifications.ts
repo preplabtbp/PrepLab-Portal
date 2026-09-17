@@ -23,15 +23,59 @@ router.get("/api/notifications", async (req, res) => {
       let data = [];
       const userId = req.query.userId as string;
       if (userId) {
+        const isDev = userId === '02D25000055' || userId === '02D24000043' || userId === 'preplabadmin';
+        if (isDev) {
+          data = await db.select().from(notifications).orderBy(desc(notifications.createdAt));
+          return res.json(data);
+        }
+
         let roles: string[] = [];
         const emp = await db.select().from(employees).where(eq(employees.nik, userId)).limit(1);
         if (emp.length > 0) {
           const dept = emp[0].department;
-          if (dept) roles.push(dept);
+          if (dept) {
+            roles.push(dept, dept.toLowerCase(), dept.toUpperCase());
+          }
           const sect = emp[0].section;
-          if (sect) roles.push(sect);
+          if (sect) {
+            roles.push(sect, sect.toLowerCase(), sect.toUpperCase());
+          }
           const pos = emp[0].position || emp[0].jabatan;
-          if (pos) roles.push(pos);
+          if (pos) {
+            roles.push(pos, pos.toLowerCase());
+          }
+
+          // Smart detection for SPV Up (Supervisor, Superintendent, Manager, Lead, Admin)
+          const posLower = (pos || '').toLowerCase();
+          const isSpvUp = posLower.includes('supervisor') || 
+            posLower.includes('superintendent') || 
+            posLower.includes('manager') || 
+            posLower.includes('lead') || 
+            posLower.includes('admin') || 
+            posLower.includes('foreman');
+
+          if (isSpvUp) {
+            roles.push('SPV', 'spv', 'Supervisor');
+            // Check specific section implied by job title or employee section
+            if (posLower.includes('prep')) roles.push('Preparation', 'preparation', 'Preparasi');
+            if (posLower.includes('lab') && !posLower.includes('preplab')) roles.push('Laboratory', 'laboratory', 'Laboratorium');
+            if (posLower.includes('maint')) roles.push('Maintenance', 'maintenance');
+            if (posLower.includes('qa')) roles.push('QA', 'qa', 'Quality Assurance');
+            if (posLower.includes('inv')) roles.push('Inventory Control', 'inventory control', 'Inventory', 'inventory');
+            if (posLower.includes('admin')) roles.push('Administration', 'administration', 'admin');
+
+            // Superintendent & Manager oversee all operational sections
+            if (posLower.includes('manager') || posLower.includes('superintendent')) {
+              roles.push(
+                'Preparation', 'preparation',
+                'Laboratory', 'laboratory',
+                'Maintenance', 'maintenance',
+                'QA', 'qa',
+                'Administration', 'administration',
+                'Inventory Control', 'inventory control', 'Inventory'
+              );
+            }
+          }
         }
 
         // Direct personal notifications for this user OR broadcast notifications (where userId IS NULL)

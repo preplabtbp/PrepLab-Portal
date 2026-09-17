@@ -157,7 +157,7 @@ export function ReminderNotificationModal({ userNik, onNavigateToInspection, onN
             {isKtaType ? 'PENGINGAT LAPORAN KTA / TTA' : 'PENGINGAT INSPEKSI TERPADU'}
           </h3>
           <p className="text-xs text-amber-100 mt-1 font-medium">
-            Notifikasi Resmi Kepatuhan Keselamatan Kerja
+            Notifikasi Resmi Laporan Observasi (KTA/TTA)
           </p>
         </div>
 

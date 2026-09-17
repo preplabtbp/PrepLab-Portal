@@ -4,7 +4,8 @@ import { Button, Input, Textarea } from './ui';
 import { 
   X, Wrench, CheckCircle2, Clock, Users, Camera, Upload, 
   Trash2, FileText, Check, AlertCircle, ExternalLink, MapPin, 
-  Tag, User, ChevronDown, ChevronUp, Loader2, Sparkles, Send
+  Tag, User, ChevronDown, ChevronUp, Loader2, Sparkles, Send,
+  Layers, Info
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { updateWOStatus, getSpareparts } from '../sheets-api';
@@ -348,8 +349,33 @@ export function WorkOrderDetailModal({
                       <span className="flex items-center gap-1 font-semibold">
                         <User className="w-3.5 h-3.5 opacity-60" /> Pelapor: {wo.requestorName || '-'} {wo.shift ? `(Shift ${wo.shift})` : ''}
                       </span>
+                      {(wo.section || wo.department) && (
+                        <span className="flex items-center gap-1 font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/30">
+                          <Layers className="w-3.5 h-3.5" /> Section: {wo.section || wo.department}
+                        </span>
+                      )}
                     </div>
                   </div>
+                </div>
+
+                {/* Section Context Info Banner */}
+                <div 
+                  className="p-3 rounded-xl border flex items-center justify-between gap-3 text-xs"
+                  style={{
+                    backgroundColor: 'rgba(42, 157, 143, 0.08)',
+                    borderColor: 'rgba(42, 157, 143, 0.25)',
+                    color: 'var(--text-main)'
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Info className="w-4 h-4 shrink-0 text-teal-600 dark:text-teal-400" />
+                    <span>
+                      Laporan WO dibuat oleh section <strong className="text-teal-700 dark:text-teal-300">{wo.section || wo.department || 'Section Pemohon'}</strong> dan diteruskan ke tim Maintenance.
+                    </span>
+                  </div>
+                  <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-white dark:bg-slate-800 border shrink-0" style={{ borderColor: 'var(--border-main)' }}>
+                    {wo.woId}
+                  </span>
                 </div>
 
                 {/* Deskripsi Masalah */}

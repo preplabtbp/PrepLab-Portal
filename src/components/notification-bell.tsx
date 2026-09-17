@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, X, BellRing, Wrench, ChevronRight, Megaphone } from 'lucide-react';
+import { Bell, Check, X, BellRing, Wrench, ChevronRight, Megaphone, ClipboardCheck, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { subscribeUserToPush } from '../push-notifications';
@@ -23,6 +23,22 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
   const [showWoModal, setShowWoModal] = useState(false);
 
   const isDev = userNik === '02D25000055' || userNik === '02D24000043' || userNik === 'preplabadmin';
+  const userJabatan = (() => {
+    try {
+      const p = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
+      return (p.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+    } catch {
+      return (localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+    }
+  })();
+  const isSpvUp = isDev || 
+    userJabatan.includes('supervisor') || 
+    userJabatan.includes('superintendent') || 
+    userJabatan.includes('manager') || 
+    userJabatan.includes('lead') || 
+    userJabatan.includes('admin') ||
+    userJabatan.includes('foreman');
+
   const [pushStatus, setPushStatus] = useState<string>('default');
 
   useEffect(() => {
@@ -163,6 +179,15 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     );
   };
 
+  const isInspectionCompletedNotification = (notif: any): boolean => {
+    const type = (notif.type || '').toUpperCase();
+    const title = (notif.title || '').toLowerCase();
+    return (
+      type === 'INSPECTION_COMPLETED' ||
+      title.includes('inspeksi selesai')
+    );
+  };
+
   const handleNotificationClick = (notif: any) => {
     if (!notif.isRead) {
       markAsRead(notif.id);
@@ -190,6 +215,28 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
           userName
         }
       }));
+    } else if (isInspectionCompletedNotification(notif)) {
+      setIsOpen(false);
+      try {
+        let payload: any = {};
+        if (typeof notif.link === 'string' && notif.link.startsWith('{')) {
+          payload = JSON.parse(notif.link);
+        } else {
+          payload = {
+            pdfUrl: notif.link,
+            formTitle: notif.title,
+            waMessageText: notif.message
+          };
+        }
+        window.dispatchEvent(new CustomEvent('open-inspection-completion-modal', {
+          detail: payload
+        }));
+      } catch (err) {
+        console.error('Failed to parse inspection completion notif:', err);
+      }
+    } else if (notif.link === '/chat' || notif.title?.includes('Chat') || notif.title?.includes('menyebut Anda')) {
+      setIsOpen(false);
+      window.dispatchEvent(new CustomEvent('open-chat-drawer'));
     }
   };
 
@@ -264,7 +311,7 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                 )}
               </div>
 
-              {isDev && (
+              {(isDev || isSpvUp) && (
                 <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
                   {['Semua', 'Maintenance', 'Laboratory', 'Preparation', 'QA', 'Inventory Control', 'Administration', 'Sistem'].map(tab => (
                     <button
@@ -319,6 +366,7 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                 filteredNotifs.map((notif) => {
                   const isWO = isWoNotification(notif);
                   const isP5M = isP5mNotification(notif);
+                  const isInspection = isInspectionCompletedNotification(notif);
                   return (
                     <div 
                       key={notif.id} 
@@ -327,14 +375,14 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                       }`}
                       style={{
                         backgroundColor: notif.isRead ? 'var(--card-bg)' : 'var(--input-bg)',
-                        borderColor: isP5M && !notif.isRead ? 'rgba(245, 158, 11, 0.4)' : 'var(--border-main)'
+                        borderColor: isP5M && !notif.isRead ? 'rgba(245, 158, 11, 0.4)' : (isInspection && !notif.isRead ? 'rgba(16, 185, 129, 0.4)' : 'var(--border-main)')
                       }}
                       onClick={() => handleNotificationClick(notif)}
                     >
                       {!notif.isRead && (
                         <div 
                           className="absolute top-3.5 right-3 w-2 h-2 rounded-full"
-                          style={{ backgroundColor: isP5M ? '#F59E0B' : 'var(--primary, #2A9D8F)' }}
+                          style={{ backgroundColor: isP5M ? '#F59E0B' : (isInspection ? '#10B981' : 'var(--primary, #2A9D8F)') }}
                         />
                       )}
                       
@@ -357,6 +405,13 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                             <Megaphone className="w-3 h-3" /> P5M
                           </span>
                         )}
+                        {isInspection && (
+                          <span 
+                            className="p-1 rounded-md text-[10px] font-bold inline-flex items-center gap-1 shadow-2xs bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                          >
+                            <ClipboardCheck className="w-3 h-3" /> Selesai
+                          </span>
+                        )}
                         <h4 className="font-bold text-xs truncate pr-3" style={{ color: 'var(--text-main)' }}>
                           {notif.title}
                         </h4>
@@ -372,7 +427,7 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                           style={{ borderColor: 'var(--border-main)', color: 'var(--primary, #2A9D8F)' }}
                         >
                           <span className="flex items-center gap-1">
-                            <Wrench className="w-3 h-3" /> Buka Detail & Selesaikan WO
+                            <Wrench className="w-3 h-3" /> {isSpvUp ? 'Lihat Detail Work Order Section' : 'Buka Detail & Selesaikan WO'}
                           </span>
                           <ChevronRight className="w-3.5 h-3.5" />
                         </div>
@@ -386,6 +441,17 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                             <Megaphone className="w-3 h-3" /> Buka Pemberitahuan &amp; Unduh Materi P5M
                           </span>
                           <ChevronRight className="w-3.5 h-3.5 text-amber-500" />
+                        </div>
+                      )}
+
+                      {isInspection && (
+                        <div 
+                          className="mt-2 pt-1.5 border-t flex items-center justify-between text-[11px] font-bold border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                        >
+                          <span className="flex items-center gap-1">
+                            <Download className="w-3 h-3" /> Unduh PDF &amp; General Submit Safety
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5 text-emerald-500" />
                         </div>
                       )}
 

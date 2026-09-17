@@ -55,7 +55,7 @@ if (vapidPublicKey && vapidPrivateKey) {
   }
 }
 import { ticketSchema, workOrderSchema } from "./src/lib/zod.js";
-import { eq, desc, or, inArray, isNull, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, asc, or, inArray, isNull, and, gte, lte, sql } from "drizzle-orm";
 import { authRouter } from "./server/routes/auth.js";
 import { debugRouter } from "./server/routes/debug.js";
 import { employeesRouter } from "./server/routes/employees.js";
@@ -294,6 +294,7 @@ const app = express();
 
   // Teams Chat & System Socket.IO state
   const onlineSockets = new Map(); // socket.id -> { nik, name, department, avatar, room, isQuiz, node }
+  const chatMessagesMemory: any[] = [];
 
   const broadcastOnlineNiks = () => {
     const onlineNiks = Array.from(
@@ -327,12 +328,80 @@ const app = express();
           senderNik: msg.senderNik,
           senderName: msg.senderName,
           text: msg.text,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          mentionedNiks: msg.mentionedNiks || []
         };
         chatMessagesMemory.push(newMsg);
+        if (chatMessagesMemory.length > 250) chatMessagesMemory.shift();
+
+        // Persist to database if available
+        try {
+          await db.insert(chatMessages).values({
+            room,
+            senderNik: msg.senderNik,
+            senderName: msg.senderName,
+            text: msg.text
+          });
+        } catch (dbErr) {
+          // silently keep in-memory
+        }
+
         io.to(room).emit('new_message', newMsg);
         
-        // Push notification
+        // --- PROCESS MENTIONS ---
+        const targetMentionNiks = new Set<string>();
+        if (Array.isArray(msg.mentionedNiks)) {
+          msg.mentionedNiks.forEach((n: string) => {
+            if (n && n !== msg.senderNik && n !== 'all') targetMentionNiks.add(n);
+          });
+        }
+
+        const textContent = (msg.text || '').toLowerCase();
+        try {
+          const allEmps = await db.select({ nik: employees.nik, name: employees.name }).from(employees);
+          for (const emp of allEmps) {
+            if (emp.nik && emp.nik !== msg.senderNik) {
+              const empName = (emp.name || '').toLowerCase();
+              const empNik = (emp.nik || '').toLowerCase();
+              if (empName && (textContent.includes(`@${empName}`) || (empName.split(' ')[0].length >= 3 && textContent.includes(`@${empName.split(' ')[0]}`)))) {
+                targetMentionNiks.add(emp.nik);
+              } else if (empNik && textContent.includes(`@${empNik}`)) {
+                targetMentionNiks.add(emp.nik);
+              }
+            }
+          }
+        } catch (scanErr) {
+          console.warn('Mention auto-discovery error:', scanErr);
+        }
+
+        // Targeted notification & web push for mentioned personnel
+        for (const targetNik of targetMentionNiks) {
+          try {
+            const _mentionNotif = await db.insert(notifications).values({
+              userId: targetNik,
+              role: null,
+              title: `💬 ${msg.senderName} menyebut Anda`,
+              message: `${msg.text.slice(0, 120)}`,
+              type: 'info',
+              link: '/chat'
+            }).returning();
+            sendWebPush(_mentionNotif);
+          } catch(e) { console.error('Mention push error:', e); }
+
+          // Emit direct socket event if target is online
+          for (const [sockId, sockUser] of onlineSockets.entries()) {
+            if (sockUser.nik === targetNik) {
+              io.to(sockId).emit('chat:mention', {
+                senderName: msg.senderName,
+                senderNik: msg.senderNik,
+                text: msg.text,
+                room
+              });
+            }
+          }
+        }
+
+        // General push notification for room members
         const title = room === 'global' ? 'Global Chat' : `Chat - ${room}`;
         try {
           const _n = await db.insert(notifications).values({
@@ -463,7 +532,9 @@ const app = express();
     '/api/drive/view',
     '/api/labbot/chat',
     '/api/p5m/flyer',
+    '/api/p5m/schedules/user-assignment',
     '/api/inspection-schedule',
+    '/api/daily-tasks-status',
     '/api/induksi',
     '/api/changelog'
   ];
@@ -503,10 +574,32 @@ const app = express();
   app.use(labbotRouter);
   app.use(changelogRouter);
 
-  // In-memory chat storage as fallback since DB is disconnected
-  const chatMessagesMemory: any[] = [];
-  
   // --- CHAT ROUTES ---
+  app.get('/api/chat/:room', async (req, res) => {
+    try {
+      const room = req.params.room || 'global';
+      try {
+        const msgs = await db.select().from(chatMessages).where(eq(chatMessages.room, room)).orderBy(asc(chatMessages.id)).limit(100);
+        if (msgs && msgs.length > 0) {
+          return res.json(msgs.map(m => ({
+            id: m.id,
+            room: m.room,
+            senderNik: m.senderNik,
+            senderName: m.senderName,
+            text: m.text,
+            timestamp: m.timestamp ? new Date(m.timestamp).toISOString() : new Date().toISOString()
+          })));
+        }
+      } catch (e) {
+        console.warn('Chat DB query fallback to memory:', e);
+      }
+      const filtered = chatMessagesMemory.filter(m => m.room === room);
+      res.json(filtered);
+    } catch (err) {
+      console.error('Failed to get chat messages:', err);
+      res.status(500).json({ error: 'Failed to fetch chat messages' });
+    }
+  });
 
   // --- WEB PUSH ROUTES ---
 

@@ -258,7 +258,19 @@ router.get("/api/work-orders", async (req, res) => {
       }
       // TBP and GPS are unified as 1 dataset: return all records for TBP, GPS, ALL, or no param
       const data = await query;
-      res.json(data);
+      
+      // Enrich with employee section info for clear section visibility
+      try {
+        const allEmps = await db.select({ nik: employees.nik, section: employees.section, department: employees.department }).from(employees);
+        const empMap = new Map(allEmps.map(e => [e.nik, e.section || e.department || '']));
+        const enriched = data.map((item: any) => ({
+          ...item,
+          section: item.section || (item.requestorNik ? empMap.get(item.requestorNik) || null : null)
+        }));
+        return res.json(enriched);
+      } catch {
+        return res.json(data);
+      }
     } catch (error) {
       console.error("Error fetching work orders:", error);
       res.status(500).json({ error: "Failed to fetch work orders" });
@@ -272,7 +284,19 @@ router.get("/api/work-orders/:woId", async (req, res) => {
       if (data.length === 0) {
         return res.status(404).json({ error: "Work order not found" });
       }
-      res.json(data[0]);
+      const wo = data[0];
+      let section = (wo as any).section || null;
+      let department = null;
+      if (!section && wo.requestorNik) {
+        try {
+          const emp = await db.select().from(employees).where(eq(employees.nik, wo.requestorNik)).limit(1);
+          if (emp.length > 0) {
+            section = emp[0].section || emp[0].department || null;
+            department = emp[0].department || null;
+          }
+        } catch (e) {}
+      }
+      res.json({ ...wo, section, department });
     } catch (error) {
       console.error("Error fetching work order by ID:", error);
       res.status(500).json({ error: "Failed to fetch work order" });
@@ -389,17 +413,37 @@ router.post("/api/work-orders", async (req, res) => {
         console.error(`Gagal generate PDF WO for ${createdWO.woId}:`, pdfErr.message);
         waMessageText += `\n\n*Dokumen Kerusakan*:\n(Sedang offline / Kredensial tidak valid)`;
       }
-            // Push Notification
+      // Push Notification to Maintenance and Requestor Section (SPV Up)
       try {
         const _n = await db.insert(notifications).values({
           userId: null,
           role: 'Maintenance',
           title: 'Work Order Baru',
-          message: `${createdWO.requestorName} membuat WO ${createdWO.woId}`,
+          message: `${createdWO.requestorName} membuat WO ${createdWO.woId}: ${createdWO.equipmentName || ''}`,
           type: 'info',
-          link: '/adm-dashboard'
+          link: `/wo-detail/${createdWO.woId}`
         }).returning();
         sendWebPush(_n);
+
+        // Notify requestor's section so SPV Up and section members are aware
+        let requestorSection: string | null = (createdWO as any).section || null;
+        if (!requestorSection && createdWO.requestorNik) {
+          const empRes = await db.select().from(employees).where(eq(employees.nik, createdWO.requestorNik)).limit(1);
+          if (empRes.length > 0) {
+            requestorSection = empRes[0].section || empRes[0].department || null;
+          }
+        }
+        if (requestorSection && requestorSection.toLowerCase() !== 'maintenance') {
+          const _nSec = await db.insert(notifications).values({
+            userId: null,
+            role: requestorSection,
+            title: `Work Order Baru (${requestorSection})`,
+            message: `${createdWO.requestorName} membuat WO ${createdWO.woId}: ${createdWO.equipmentName || ''}`,
+            type: 'info',
+            link: `/wo-detail/${createdWO.woId}`
+          }).returning();
+          sendWebPush(_nSec);
+        }
       } catch(e) { console.error('WO push error:', e); }
       res.status(201).json({ ...createdWO, pdfUrl, waMessageText });
     } catch (error) {

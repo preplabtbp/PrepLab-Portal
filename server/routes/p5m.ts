@@ -1744,6 +1744,7 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
   try {
     const nik = (req.query.nik as string || '').trim().toLowerCase();
     const name = (req.query.name as string || '').trim().toLowerCase();
+    const includePast = req.query.includePast === 'true' || req.query.forCard === 'true';
 
     if (!nik && !name) {
       return res.json({ success: true, assignment: null });
@@ -1766,6 +1767,7 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
 
     const URUTAN_HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
     let foundAssignment: any = null;
+    let fallbackPastAssignment: any = null;
 
     for (const [day, dayData] of Object.entries(sch)) {
       if (!dayData) continue;
@@ -1782,8 +1784,9 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
         assignmentDateIso = `${aY}-${aM}-${aD}`;
       }
 
-      // 2. If the briefing day has already passed today, DO NOT show pop-up notification
-      if (assignmentDateIso && todayIso > assignmentDateIso) {
+      // 2. Check if the briefing day has already passed
+      const isPast = Boolean(assignmentDateIso && todayIso > assignmentDateIso);
+      if (!includePast && isPast) {
         continue;
       }
 
@@ -1822,12 +1825,13 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
               }
             }
 
-            foundAssignment = {
+            const candidate = {
               scheduleId: schedule.id,
               dateStart,
               dateEnd,
               day,
               assignmentDate: assignmentDateIso,
+              isPast,
               shift: shift === 'pagi' ? 'Day Shift (Pagi)' : 'Night Shift (Malam)',
               zone: slot.zone,
               nama: slot.nama,
@@ -1838,7 +1842,13 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
               fileUrl: freshFileUrl,
               isSenam: slot.isSenam
             };
-            break;
+
+            if (!isPast) {
+              foundAssignment = candidate;
+              break;
+            } else if (!fallbackPastAssignment) {
+              fallbackPastAssignment = candidate;
+            }
           }
         }
         if (foundAssignment) break;
@@ -1846,7 +1856,8 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
       if (foundAssignment) break;
     }
 
-    res.json({ success: true, assignment: foundAssignment });
+    const finalAssignment = foundAssignment || fallbackPastAssignment;
+    res.json({ success: true, assignment: finalAssignment });
   } catch (error: any) {
     console.error("Error checking user P5M assignment:", error);
     res.status(500).json({ success: false, message: error.message });

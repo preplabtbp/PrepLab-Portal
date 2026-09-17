@@ -140,6 +140,7 @@ async function fetchAllGroupReports(filterWeek?: string) {
   const reportsList: any[] = [];
   const seenIds = new Set<string>();
   const seenPdfUrls = new Set<string>();
+  const seenContentKeys = new Set<string>();
 
   const isWeekAllowed = (weekTag: string) => {
     if (!filterWeek || filterWeek === 'ALL') return true;
@@ -164,6 +165,12 @@ async function fetchAllGroupReports(filterWeek?: string) {
 
     if (msg.id) seenIds.add(msg.id);
     if (msg.pdfUrl) seenPdfUrls.add(msg.pdfUrl);
+
+    // Deduplication by content
+    const cKey = `${msg.category || 'all'}_${msg.senderNik || ''}_${msgWeek}_${(msg.text || '').trim().toLowerCase()}`;
+    if (seenContentKeys.has(cKey)) return;
+    seenContentKeys.add(cKey);
+
     reportsList.push(msg);
   });
 
@@ -321,6 +328,10 @@ async function fetchAllGroupReports(filterWeek?: string) {
       if (seenIds.has(dbKtaId)) return;
       seenIds.add(dbKtaId);
 
+      const cKey = `kta_tta_${kta.nik}_${ktaWeek}_${(kta.description || '').trim().toLowerCase()}`;
+      if (seenContentKeys.has(cKey)) return;
+      seenContentKeys.add(cKey);
+
       const dbKtaMsg = {
         id: dbKtaId,
         category: 'kta_tta',
@@ -354,6 +365,10 @@ async function fetchAllGroupReports(filterWeek?: string) {
 
       if (seenIds.has(dbProofId)) return;
       seenIds.add(dbProofId);
+
+      const cKey = `inspeksi_${proof.nik}_${proofWeek}_${(proof.description || '').trim().toLowerCase()}`;
+      if (seenContentKeys.has(cKey)) return;
+      seenContentKeys.add(cKey);
 
       const dbProofMsg = {
         id: dbProofId,
@@ -1209,16 +1224,39 @@ router.post('/api/kta-reports', async (req, res) => {
     const reportWeek = week || getISOWeekTag(date ? new Date(date) : new Date());
     const cleanType = (reportType || 'KTA').toUpperCase() === 'TTA' ? 'TTA' : 'KTA';
     const reportDate = date || new Date().toISOString().split('T')[0];
+    const cleanNik = String(nik).trim();
+    const cleanDesc = description ? String(description).trim() : '';
+    const cleanImg = String(imageUrl).trim();
+
+    // Idempotency / Deduplication check:
+    // Prevent duplicate entries if the exact same submission was already recorded
+    const existingReports = await db.select().from(ktaReports).where(
+      and(
+        eq(ktaReports.nik, cleanNik),
+        eq(ktaReports.week, reportWeek),
+        eq(ktaReports.reportType, cleanType)
+      )
+    );
+
+    const duplicate = existingReports.find(r => 
+      (cleanDesc && r.description && r.description.trim().toLowerCase() === cleanDesc.toLowerCase()) ||
+      (r.imageUrl && r.imageUrl.trim() === cleanImg)
+    );
+
+    if (duplicate) {
+      console.log(`[Deduplication] Prevented duplicate KTA report for NIK ${cleanNik} (${reportWeek}): id ${duplicate.id}`);
+      return res.status(200).json(duplicate);
+    }
 
     const inserted = await db.insert(ktaReports).values({
-      nik: String(nik).trim(),
+      nik: cleanNik,
       name: String(name).trim(),
       section: section || 'Staff',
       reportType: cleanType,
       date: reportDate,
       week: reportWeek,
-      imageUrl: String(imageUrl).trim(),
-      description: description ? String(description).trim() : '',
+      imageUrl: cleanImg,
+      description: cleanDesc,
       location: location ? String(location).trim() : '',
       status: 'SUBMITTED'
     }).returning();
@@ -1299,15 +1337,36 @@ router.post('/api/inspection-proofs', async (req, res) => {
 
     const reportWeek = week || getISOWeekTag(date ? new Date(date) : new Date());
     const reportDate = date || new Date().toISOString().split('T')[0];
+    const cleanNik = String(nik).trim();
+    const cleanDesc = description ? String(description).trim() : 'Bukti Screenshot Form General Inspeksi';
+    const cleanImg = String(imageUrl).trim();
+
+    // Idempotency check for Inspection Proofs
+    const existingProofs = await db.select().from(inspectionProofs).where(
+      and(
+        eq(inspectionProofs.nik, cleanNik),
+        eq(inspectionProofs.week, reportWeek)
+      )
+    );
+
+    const duplicateProof = existingProofs.find(p => 
+      (p.imageUrl && p.imageUrl.trim() === cleanImg) ||
+      (cleanDesc && p.description && p.description.trim().toLowerCase() === cleanDesc.toLowerCase())
+    );
+
+    if (duplicateProof) {
+      console.log(`[Deduplication] Prevented duplicate SS inspection proof for NIK ${cleanNik} (${reportWeek}): id ${duplicateProof.id}`);
+      return res.status(200).json(duplicateProof);
+    }
 
     const inserted = await db.insert(inspectionProofs).values({
-      nik: String(nik).trim(),
+      nik: cleanNik,
       name: String(name).trim(),
       section: section || 'Preparasi & Lab',
       date: reportDate,
       week: reportWeek,
-      imageUrl: String(imageUrl).trim(),
-      description: description ? String(description).trim() : 'Bukti Screenshot Form General Inspeksi',
+      imageUrl: cleanImg,
+      description: cleanDesc,
       status: 'SUBMITTED'
     }).returning();
 

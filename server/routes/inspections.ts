@@ -172,6 +172,7 @@ router.post("/api/inspections/universal", async (req, res) => {
         photoUrl: JSON.stringify({ fotoTemuanArray: finalFotoTemuanArray, fotoProses: finalFotoProses })
       }).returning();
       
+      let uniqueInspectorNiks: string[] = [];
       // Auto-resolve any unread inspection reminder notifications for the inspectors
       try {
         const allInspectorsRaw = [finalData?.insp1, finalData?.insp2, finalData?.insp3].filter(Boolean);
@@ -192,6 +193,7 @@ router.post("/api/inspections/universal", async (req, res) => {
         });
 
         const uniqueNiks = [...new Set(targetNiks.filter(Boolean))];
+        uniqueInspectorNiks = uniqueNiks;
         if (uniqueNiks.length > 0) {
           await db.update(notifications)
             .set({ isRead: true })
@@ -466,6 +468,35 @@ router.post("/api/inspections/universal", async (req, res) => {
       }
 
       invalidateScheduleCache();
+
+      // Generate completion notifications for submitter and co-inspectors
+      try {
+        if (uniqueInspectorNiks && uniqueInspectorNiks.length > 0) {
+          const completionPayload = JSON.stringify({
+            pdfUrl: finalTbpLink,
+            linkPdf2: finalGpsLink,
+            waMessageText,
+            formTitle: finalData.judulForm || 'Inspeksi Rutin Mingguan',
+            location: finalData.lokasiUmum || '-',
+            id: result[0]?.id
+          });
+
+          const notifsToInsert = uniqueInspectorNiks.map((nik: string) => ({
+            userId: nik,
+            title: `Inspeksi Selesai: ${finalData.judulForm || 'Inspeksi Rutin Mingguan'}`,
+            message: `Inspeksi ${finalData.judulForm || ''} (${finalData.lokasiUmum || '-'}) telah selesai dilakukan. Klik untuk melihat hasil, mengunduh PDF, atau membuka Form Safety.`,
+            type: 'INSPECTION_COMPLETED',
+            link: completionPayload,
+            isRead: false
+          }));
+
+          const insertedNotifs = await db.insert(notifications).values(notifsToInsert).returning();
+          sendWebPush(insertedNotifs);
+        }
+      } catch (notifCompletionErr) {
+        console.error("Gagal membuat notifikasi selesai inspeksi universal:", notifCompletionErr);
+      }
+
       res.json({ success: true, message: 'Inspeksi universal tersimpan', data: result[0], pdfUrl: finalTbpLink, linkPdf2: finalGpsLink, waMessageText });
     } catch (error: any) {
       console.error(error);
@@ -716,8 +747,14 @@ router.post("/api/inspections", async (req, res) => {
         const matchedEmps = await db.select().from(employees);
         const targetNiks: string[] = [];
         if (req.body.inspectorNik) targetNiks.push(req.body.inspectorNik);
-        if (apdInspector) {
-          const cleanStr = String(apdInspector).toLowerCase();
+        const insp2 = req.body.signatures?.insp2Name || (dataF && dataF[0] && dataF[0][18]);
+        const insp3 = req.body.signatures?.insp3Name || (dataF && dataF[0] && dataF[0][20]);
+        if (req.body.signatures?.insp2Nik) targetNiks.push(req.body.signatures.insp2Nik);
+        if (req.body.signatures?.insp3Nik) targetNiks.push(req.body.signatures.insp3Nik);
+
+        const allApdInspectorsRaw = [apdInspector, insp2, insp3].filter(Boolean);
+        allApdInspectorsRaw.forEach((rawStr: string) => {
+          const cleanStr = String(rawStr).toLowerCase();
           matchedEmps.forEach(emp => {
             const eName = (emp.name || '').toLowerCase();
             if (eName && (cleanStr.includes(eName) || eName.includes(cleanStr))) {
@@ -726,7 +763,8 @@ router.post("/api/inspections", async (req, res) => {
             const nikMatch = cleanStr.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/i);
             if (nikMatch) targetNiks.push(nikMatch[0].toUpperCase());
           });
-        }
+        });
+
         const uniqueNiks = [...new Set(targetNiks.filter(Boolean))];
         if (uniqueNiks.length > 0) {
           await db.update(notifications)
@@ -897,6 +935,56 @@ router.post("/api/inspections", async (req, res) => {
         }).catch(err => {
           console.error(`[Auto-PDF] Gagal membuat background PDF untuk APD #${result[0].id}:`, err);
         });
+      }
+
+      // Generate completion notifications for submitter and co-inspectors
+      try {
+        const apdInspector = (dataF && dataF.length > 0 && dataF[0][16]) || '';
+        const insp2 = req.body.signatures?.insp2Name || (dataF && dataF[0] && dataF[0][18]);
+        const insp3 = req.body.signatures?.insp3Name || (dataF && dataF[0] && dataF[0][20]);
+        const targetNiks: string[] = [];
+        if (req.body.inspectorNik) targetNiks.push(req.body.inspectorNik);
+        if (req.body.signatures?.insp2Nik) targetNiks.push(req.body.signatures.insp2Nik);
+        if (req.body.signatures?.insp3Nik) targetNiks.push(req.body.signatures.insp3Nik);
+
+        const matchedEmps = await db.select().from(employees);
+        [apdInspector, insp2, insp3].filter(Boolean).forEach((rawStr: string) => {
+          const cleanStr = String(rawStr).toLowerCase();
+          matchedEmps.forEach(emp => {
+            const eName = (emp.name || '').toLowerCase();
+            if (eName && (cleanStr.includes(eName) || eName.includes(cleanStr))) {
+              targetNiks.push(emp.nik);
+            }
+            const nikMatch = cleanStr.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/i);
+            if (nikMatch) targetNiks.push(nikMatch[0].toUpperCase());
+          });
+        });
+
+        const apdUniqueNiks = [...new Set(targetNiks.filter(Boolean))];
+        if (apdUniqueNiks.length > 0) {
+          const completionPayload = JSON.stringify({
+            pdfUrl: finalTbpLink,
+            linkPdf2: finalGpsLink,
+            waMessageText,
+            formTitle: `Inspeksi APD - ${dataF && dataF[0] ? dataF[0][2] : 'Shift'}`,
+            location: dataF && dataF[0] ? dataF[0][2] : 'Area Kerja',
+            id: result[0]?.id
+          });
+
+          const notifsToInsert = apdUniqueNiks.map((nik: string) => ({
+            userId: nik,
+            title: `Inspeksi Selesai: Inspeksi APD - ${dataF && dataF[0] ? dataF[0][2] : 'Shift'}`,
+            message: `Inspeksi APD (${dataF && dataF[0] ? dataF[0][2] : 'Shift'}) telah selesai dilakukan. Klik untuk melihat hasil, mengunduh PDF, atau membuka Form Safety.`,
+            type: 'INSPECTION_COMPLETED',
+            link: completionPayload,
+            isRead: false
+          }));
+
+          const insertedNotifs = await db.insert(notifications).values(notifsToInsert).returning();
+          sendWebPush(insertedNotifs);
+        }
+      } catch (notifCompletionErr) {
+        console.error("Gagal membuat notifikasi selesai inspeksi APD:", notifCompletionErr);
       }
 
       res.status(201).json({ ...result[0], pdfUrl: finalTbpLink, linkPdf2: finalGpsLink, waMessageText });
@@ -1482,7 +1570,9 @@ export async function fetchInspectionScheduleFromSheet(forceRefresh = false, she
 
     const no = parseInt(col0, 10);
     if (!isNaN(no) && col1) {
-      const isCuti = col5.toLowerCase() === 'cuti' || col2.toLowerCase() === 'cuti';
+      const isCuti = col5.toLowerCase().trim().includes('cuti') || 
+        col2.toLowerCase().trim().includes('cuti') || 
+        col3.toLowerCase().trim().includes('cuti');
       let cleanShift = col3;
       if (isCuti) {
         cleanShift = 'Cuti';
@@ -1721,6 +1811,73 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
   return schedules;
 }
 
+export async function getRosterToday(nik: string, name: string) {
+  const nowUtc = new Date();
+  const witDate = new Date(nowUtc.getTime() + (9 * 60 * 60 * 1000));
+  const parts = witDate.toDateString().split(' ');
+  const dayNum = parseInt(parts[2], 10);
+  const todayRosterDate = `${dayNum} ${parts[1]} ${parts[3].substring(2)}`; // e.g. "17 Sep 26"
+
+  let targetNik = (nik || '').trim();
+  if (!targetNik && name) {
+    const allEmps = await getAllEmployeesCached();
+    const cleanName = name.trim().toLowerCase();
+    const matched = allEmps.find(e => {
+      const eName = (e.name || '').trim().toLowerCase();
+      return eName === cleanName || eName.includes(cleanName) || cleanName.includes(eName);
+    });
+    if (matched) targetNik = matched.nik || '';
+  }
+
+  let rosterToday = {
+    date: todayRosterDate,
+    shiftCode: '',
+    isOnsite: false,
+    isCuti: false,
+    statusLabel: 'Status Roster Aktif',
+    rawStatus: ''
+  };
+
+  if (targetNik) {
+    const cleanTargetNik = targetNik.toUpperCase().trim();
+    const rosterRows = await db.select().from(roster).where(
+      and(
+        eq(roster.nik, cleanTargetNik),
+        eq(roster.date, todayRosterDate)
+      )
+    ).limit(1);
+
+    if (rosterRows.length > 0 && rosterRows[0].status) {
+      const code = (rosterRows[0].status || '').trim().toUpperCase();
+      const onsiteCodes = ['D', 'DS', 'N', 'NS', 'OFF', 'LS', 'S'];
+      const trvCodes = ['CT', 'C', 'CR', 'CE', 'CI', 'CS', 'TRV', 'TV', 'XP', 'TT', 'IK', 'I', 'SL', 'SS', 'IA', 'UL', 'DL'];
+      
+      const isOnsite = onsiteCodes.includes(code);
+      const isCuti = trvCodes.some(c => code === c || code.startsWith(c));
+
+      let label = 'Onsite (Aktif)';
+      if (code === 'D' || code === 'DS') label = 'Onsite (Day Shift)';
+      else if (code === 'N' || code === 'NS') label = 'Onsite (Night Shift)';
+      else if (code === 'OFF') label = 'Onsite (Off Shift)';
+      else if (code === 'LS') label = 'Onsite (Long Shift)';
+      else if (isOnsite) label = `Onsite (${code})`;
+      else if (isCuti) label = `Off-Site (Cuti / ${code})`;
+      else label = code;
+
+      rosterToday = {
+        date: todayRosterDate,
+        shiftCode: code,
+        isOnsite,
+        isCuti,
+        statusLabel: label,
+        rawStatus: rosterRows[0].status
+      };
+    }
+  }
+
+  return rosterToday;
+}
+
 router.get("/api/inspection-schedule", async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === 'true';
@@ -1793,9 +1950,12 @@ router.get("/api/inspection-schedule", async (req, res) => {
         });
       });
 
+      const rosterToday = await getRosterToday(queryNik, queryName);
+
       return res.json({
         found: !!matched,
         schedule: matched || null,
+        rosterToday,
         sheet: targetSheet,
         week: targetWeekTag,
         totalScheduled: allSchedules.length
@@ -1814,4 +1974,81 @@ router.get("/api/inspection-schedule", async (req, res) => {
     res.status(500).json({ error: error.message || "Failed to load inspection schedule" });
   }
 });
+
+// ── DAILY TASKS STATUS (P2H & PEMANTAUAN AT A GLANCE) ──────────────────────────
+router.get("/api/daily-tasks-status", async (req, res) => {
+  try {
+    const nik = (req.query.nik as string || '').trim().toLowerCase();
+    const name = (req.query.name as string || '').trim().toLowerCase();
+
+    // Current Date in WIT (UTC+9)
+    const nowUtc = new Date();
+    const witDate = new Date(nowUtc.getTime() + (9 * 60 * 60 * 1000));
+    const todayStr = witDate.toISOString().split('T')[0]; // "YYYY-MM-DD"
+    
+    const [y, m, d] = todayStr.split('-').map(Number);
+    // WIT midnight in UTC is 15:00 previous day
+    const startWitUtc = new Date(Date.UTC(y, m - 1, d, -9, 0, 0, 0));
+    const endWitUtc = new Date(startWitUtc.getTime() + 24 * 60 * 60 * 1000);
+
+    // 1. Query Inspeksi Harian (P2H) today
+    const todayHarian = await db.select().from(inspections).where(
+      and(
+        eq(inspections.type, 'Harian'),
+        gte(inspections.date, startWitUtc),
+        lte(inspections.date, endWitUtc)
+      )
+    ).orderBy(desc(inspections.date));
+
+    // Check if current user specifically submitted P2H today
+    const myHarian = todayHarian.filter(h => {
+      if (!name && !nik) return false;
+      const insp = (h.inspectorName || '').trim().toLowerCase();
+      if (name && insp.includes(name)) return true;
+      if (name && insp && name.includes(insp)) return true;
+      if (name) {
+        const parts = name.split(/\s+/).filter(Boolean);
+        if (parts.length >= 2 && parts.every(p => insp.includes(p))) return true;
+      }
+      return false;
+    });
+
+    // 2. Query Pemantauan Harian today
+    const todayPemantauan = await db.select().from(pemantauan).where(
+      eq(pemantauan.tanggal, todayStr)
+    );
+
+    const suhuRecords = todayPemantauan.filter(p => (p.kategori || '').toUpperCase() === 'SUHU');
+    const gasRecords = todayPemantauan.filter(p => (p.kategori || '').toUpperCase() === 'GAS');
+
+    // 3. Query Roster Today for the employee (D/N/OFF/LS = Onsite)
+    const rosterToday = await getRosterToday(nik, name);
+
+    res.json({
+      success: true,
+      date: todayStr,
+      rosterToday,
+      p2h: {
+        completedToday: myHarian.length > 0,
+        myCountToday: myHarian.length,
+        deptCompletedToday: todayHarian.length > 0,
+        deptCountToday: todayHarian.length,
+        lastRecord: myHarian[0] || todayHarian[0] || null
+      },
+      pemantauan: {
+        completedToday: todayPemantauan.length > 0,
+        suhuCompleted: suhuRecords.length > 0,
+        gasCompleted: gasRecords.length > 0,
+        petugas: todayPemantauan[0]?.inspektorPetugas || null,
+        jam: todayPemantauan[0]?.jam || null,
+        shift: todayPemantauan[0]?.shift || null,
+        totalRecords: todayPemantauan.length
+      }
+    });
+  } catch (error: any) {
+    console.error("Daily tasks status error:", error);
+    res.status(500).json({ error: "Failed to fetch daily task status: " + error.message });
+  }
+});
+
 

@@ -2,7 +2,7 @@ import { NotificationBell } from "./components/notification-bell";
 import React, { useState, useEffect, Suspense, lazy, useRef, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 
-import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical, Building2, LayoutDashboard, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt } from 'lucide-react';
+import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { appendRowsToSheet, getDowntimeRecords,updateDowntimeRepair, getEmployees, loginEmployee, getEquipments, ToolRecord, updateToolPhotoUrl, uploadPhotoToDrive } from './sheets-api';
@@ -14,7 +14,7 @@ import { initAuth, googleSignIn } from './google-auth';
 import { WhatsAppModal } from './components/whatsapp-modal';
 import { InspectionCompletionModal, InspectionCompletionData } from './components/InspectionCompletionModal';
 import { P5MNotificationModal } from './components/p5m-notification-modal';
-import { GroupReportScreen, GroupReportFloatingWidget } from './components/GroupReportScreen';
+import { GroupReportScreen } from './components/GroupReportScreen';
 import { ReminderNotificationModal } from './components/ReminderNotificationModal';
 import { InspectionNotificationModal } from './components/InspectionNotificationModal';
 import { GlobalOpenFindingsReminder } from './components/OpenFindingsReminderModal';
@@ -95,6 +95,8 @@ const WOMaintenanceDashboard = lazyWithRetry(() => import('./components/wo-maint
 const FeedbackSupportScreen = lazyWithRetry(() => import('./components/feedback-support-screen').then(m => ({ default: m.FeedbackSupportScreen })));
 const EasterEggGame = lazyWithRetry(() => import('./components/easter-egg-game').then(m => ({ default: m.EasterEggGame })));
 const FinanceScreen = lazyWithRetry(() => import('./components/FinanceScreen').then(m => ({ default: m.FinanceScreen || m.default })));
+const ModulesScreen = lazyWithRetry(() => import('./components/modules-screen').then(m => ({ default: m.ModulesScreen })));
+import { ModulesDrawer } from './components/ModulesDrawer';
 import { LabBotWidget } from './components/LabBotWidget';
 
 export default function App() {
@@ -102,6 +104,20 @@ export default function App() {
   // Global WhatsApp & Inspection Completion modal state — lifted here so it survives route changes
   const [globalWaMessage, setGlobalWaMessage] = useState('');
   const [inspectionCompletionData, setInspectionCompletionData] = useState<InspectionCompletionData | null>(null);
+
+  // Listen for inspection completion modal open requests (e.g. from notification bell)
+  useEffect(() => {
+    const handleOpenCompletionModal = (e: any) => {
+      if (e?.detail) {
+        setInspectionCompletionData(e.detail);
+        if (e.detail.waMessageText) {
+          setGlobalWaMessage(e.detail.waMessageText);
+        }
+      }
+    };
+    window.addEventListener('open-inspection-completion-modal', handleOpenCompletionModal);
+    return () => window.removeEventListener('open-inspection-completion-modal', handleOpenCompletionModal);
+  }, []);
 
   // Listen for SW messages (push received)
   useEffect(() => {
@@ -267,9 +283,69 @@ export default function App() {
 
     return null;
   }, [userProfile]);
+
+  const isAdminOrDeveloper = React.useMemo(() => {
+    if (isDeveloper) return true;
+    const jab = (userProfile?.jabatan || '').toLowerCase();
+    const sec = (userProfile?.section || '').toLowerCase();
+    return jab.includes('admin') || jab.includes('manager') || jab.includes('superintendent') || sec.includes('admin') || sec.includes('administrasi');
+  }, [isDeveloper, userProfile]);
+
   const [showProfileScreen, setShowProfileScreen] = useState(false);
+  const [showModulesDrawer, setShowModulesDrawer] = useState(false);
   const [showBulletinMenu, setShowBulletinMenu] = useState(false);
+  const [showHazardReportModal, setShowHazardReportModal] = useState(false);
+  const [showSapDrawer, setShowSapDrawer] = useState(false);
+  const [showChatDrawer, setShowChatDrawer] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Listen for global open sap drawer and chat drawer requests
+  useEffect(() => {
+    const handleOpenSap = () => {
+      if (isAdminOrDeveloper) {
+        setShowSapDrawer(true);
+      } else {
+        toast.error('Akses SAP Management hanya untuk Tim Administrasi dan Developer.');
+      }
+    };
+    const handleOpenChat = () => setShowChatDrawer(true);
+    window.addEventListener('open-sap-drawer', handleOpenSap);
+    window.addEventListener('open-chat-drawer', handleOpenChat);
+    return () => {
+      window.removeEventListener('open-sap-drawer', handleOpenSap);
+      window.removeEventListener('open-chat-drawer', handleOpenChat);
+    };
+  }, [isAdminOrDeveloper]);
+
+  // Listen for global open hazard report modal requests
+  useEffect(() => {
+    const handleOpenHazard = () => {
+      if (isAdminOrDeveloper) {
+        setShowSapDrawer(true);
+      } else {
+        toast.error('Akses SAP Management hanya untuk Tim Administrasi dan Developer.');
+      }
+    };
+    window.addEventListener('open-hazard-report-modal', handleOpenHazard);
+    return () => window.removeEventListener('open-hazard-report-modal', handleOpenHazard);
+  }, [isAdminOrDeveloper]);
+
+  // Listen for global open modules drawer requests and Alt+M shortcut
+  useEffect(() => {
+    const handleOpenDrawer = () => setShowModulesDrawer(true);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === 'm' || e.key === 'M')) {
+        e.preventDefault();
+        setShowModulesDrawer(prev => !prev);
+      }
+    };
+    window.addEventListener('open-modules-drawer', handleOpenDrawer);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('open-modules-drawer', handleOpenDrawer);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   // Theme state
   const [currentMode, setCurrentMode] = useState('morning');
@@ -1038,7 +1114,7 @@ export default function App() {
             STAGING ENVIRONMENT - DATA TEST
           </div>
         )}
-        <div className="flex flex-col pb-20 relative min-h-[100dvh]">
+        <div className="flex flex-col pb-20 md:pb-6 relative min-h-[100dvh]">
           {/* Modals & Portals */}
           <ThemeModal 
             show={showGlobalThemeModal} 
@@ -1136,13 +1212,132 @@ export default function App() {
             )}
           </button></div></div></header>
 
-      {/* Main Content Area */}
-      <main className="@container flex-1 flex flex-col w-full h-full bg-transparent">
+      {/* Main Layout Body: Dedicated Left Rail + Content Area */}
+      <div className="flex-1 flex w-full relative">
+        {/* Dedicated Left Rail for All Menus (Desktop View, Non-overlapping) */}
+        <aside 
+          className="hidden md:flex flex-col items-center w-20 lg:w-24 shrink-0 border-r transition-colors sticky top-[57px] h-[calc(100dvh-57px)] z-30 select-none py-4 gap-2 justify-start overflow-y-auto"
+          style={{
+            backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
+            borderColor: 'var(--border-main, #E2E8F0)'
+          }}
+        >
+          {/* Primary "Semua Menu" Launcher Button */}
+          <button
+            onClick={() => setShowModulesDrawer(true)}
+            className="group relative flex flex-col items-center justify-center w-14 lg:w-16 py-2.5 rounded-2xl bg-gradient-to-b from-teal-500 via-teal-600 to-emerald-600 hover:from-teal-400 hover:via-teal-500 hover:to-emerald-500 text-white shadow-xl shadow-teal-500/25 border-2 border-white/25 transition-all duration-300 active:scale-95 cursor-pointer hover:shadow-teal-500/45 hover:-translate-y-0.5"
+            title="Buka Semua Menu & Modul Portal"
+          >
+            {/* Glow ring on hover */}
+            <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-teal-400 to-emerald-500 opacity-0 group-hover:opacity-60 blur-xs transition-opacity duration-300 pointer-events-none" />
+
+            {/* Icon Container with subtle glass effect and micro-rotation */}
+            <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 shadow-inner">
+              <LayoutGrid className="w-4 h-4 lg:w-4.5 lg:h-4.5 text-white" />
+            </div>
+
+            {/* Text Labels: Semua Menu */}
+            <span className="relative text-[10px] lg:text-[11px] font-black uppercase tracking-wider mt-1.5 font-display text-center leading-tight">
+              Semua
+            </span>
+            <span className="relative text-[8px] font-bold text-teal-100 uppercase tracking-widest mt-0.5 leading-none">
+              Menu
+            </span>
+          </button>
+
+          {/* Subtle divider */}
+          <div className="w-8 h-px bg-[var(--border-main,#E2E8F0)] my-1 shrink-0" />
+
+          {/* Navigation Items transferred from footer to Left Rail */}
+          <div className="flex flex-col items-center gap-1.5 w-full px-1">
+            {/* Home */}
+            <button
+              onClick={() => handleNav('home')}
+              className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                activeTab === 'home'
+                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                  : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+              }`}
+              title="Beranda / Home"
+            >
+              <Home className="w-5 h-5" />
+              <span className="text-[10px] font-semibold leading-none">Home</span>
+            </button>
+
+            {/* Buletin */}
+            <button
+              onClick={() => {
+                if (userDept === 'ALL') {
+                  setShowBulletinMenu(true);
+                } else {
+                  handleNav(`bulletin/${userProfile?.pt || 'TBP'}`);
+                }
+              }}
+              className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                activeTab.startsWith('bulletin')
+                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                  : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+              }`}
+              title="Buletin K3 & Pengumuman"
+            >
+              <FileText className="w-5 h-5" />
+              <span className="text-[10px] font-semibold leading-none">Buletin</span>
+            </button>
+
+            {/* Cloud */}
+            <button
+              onClick={() => handleNav('preplab-cloud')}
+              className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                activeTab === 'preplab-cloud'
+                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                  : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+              }`}
+              title="PrepLab Cloud Storage"
+            >
+              <Cloud className="w-5 h-5" />
+              <span className="text-[10px] font-semibold leading-none">Cloud</span>
+            </button>
+
+            {/* Settings */}
+            <button
+              onClick={() => handleNav('settings')}
+              className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                activeTab === 'settings'
+                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                  : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+              }`}
+              title="Pengaturan Akun & Tema"
+            >
+              <Settings className="w-5 h-5" />
+              <span className="text-[10px] font-semibold leading-none">Settings</span>
+            </button>
+
+            {/* Developer (if applicable) */}
+            {isDeveloper && (
+              <button
+                onClick={() => handleNav('admin-dashboard')}
+                className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                  activeTab === 'admin-dashboard'
+                    ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                    : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+                }`}
+                title="Developer Dashboard"
+              >
+                <Code2 className="w-5 h-5" />
+                <span className="text-[10px] font-semibold leading-none">Dev</span>
+              </button>
+            )}
+          </div>
+        </aside>
+
+        {/* Main Content Area */}
+        <main className="@container flex-1 flex flex-col w-full h-full bg-transparent min-w-0">
         
       <Suspense fallback={<div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
               <AnimatePresence mode="wait">
 <Routes location={location} key={location.pathname}>
   <Route path="/" element={<HomeScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} userPt={userProfile?.pt} />} />
+  <Route path="/modules" element={<ModulesScreen onNav={handleNav} inspectorNik={inspectorNik!} inspectorName={inspectorName!} userPt={userProfile?.pt} />} />
   <Route path="/chat" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
   <Route path="/group-reports" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
   <Route path="/inspect" element={<InspectionScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} equipmentCategories={equipmentCategories || []} reloadData={fetchMasterData} loading={loadingEquipments} />} />
@@ -1200,6 +1395,63 @@ export default function App() {
   </AnimatePresence>
       </Suspense>
       </main>
+
+        {/* Dedicated Right Rail on Homepage (SAP Management & Chat - 2 Buttons Only) */}
+        {activeTab === 'home' && (
+          <aside 
+            className="hidden md:flex flex-col items-center w-20 lg:w-24 shrink-0 border-l transition-colors sticky top-[57px] h-[calc(100dvh-57px)] z-30 select-none py-4 gap-3 justify-start overflow-y-auto"
+            style={{
+              backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
+              borderColor: 'var(--border-main, #E2E8F0)'
+            }}
+          >
+            {/* 1. SAP Management Launcher Button (Khusus Developer & Tim Admin, selain itu di-hide) */}
+            {isAdminOrDeveloper && (
+              <button
+                onClick={() => setShowSapDrawer(true)}
+                className="group relative flex flex-col items-center justify-center w-14 lg:w-16 py-2.5 rounded-2xl bg-gradient-to-b from-amber-500 via-amber-600 to-orange-600 hover:from-amber-400 hover:via-amber-500 hover:to-orange-500 text-white shadow-xl shadow-amber-500/25 border-2 border-white/25 transition-all duration-300 active:scale-95 cursor-pointer hover:shadow-amber-500/45 hover:-translate-y-0.5"
+                title="Buka SAP Management (Safety & Rekap Laporan)"
+              >
+                {/* Glow ring on hover */}
+                <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-amber-400 to-orange-500 opacity-0 group-hover:opacity-60 blur-xs transition-opacity duration-300 pointer-events-none" />
+
+                {/* Icon Container with subtle glass effect and micro-rotation */}
+                <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                  <ShieldAlert className="w-4 h-4 lg:w-4.5 lg:h-4.5 text-white" />
+                </div>
+
+                {/* Text Labels: SAP Management */}
+                <span className="relative text-[9px] lg:text-[10px] font-black uppercase tracking-wider mt-1.5 font-display text-center leading-tight">
+                  SAP
+                </span>
+                <span className="relative text-[7.5px] lg:text-[8px] font-bold text-amber-100 uppercase tracking-tight mt-0.5 leading-none">
+                  Management
+                </span>
+              </button>
+            )}
+
+            {/* 2. Chat Launcher Button (Tersedia untuk semua pengguna) */}
+            <button
+              onClick={() => setShowChatDrawer(true)}
+              className="group relative flex flex-col items-center justify-center w-14 lg:w-16 py-2.5 rounded-2xl bg-gradient-to-b from-teal-500 via-teal-600 to-emerald-600 hover:from-teal-400 hover:via-teal-500 hover:to-emerald-500 text-white shadow-xl shadow-teal-500/25 border-2 border-white/25 transition-all duration-300 active:scale-95 cursor-pointer hover:shadow-teal-500/45 hover:-translate-y-0.5"
+              title="Buka Portal Chat (Global & Section)"
+            >
+              {/* Glow ring on hover */}
+              <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-teal-400 to-emerald-500 opacity-0 group-hover:opacity-60 blur-xs transition-opacity duration-300 pointer-events-none" />
+
+              {/* Icon Container with subtle glass effect and micro-rotation */}
+              <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                <MessageSquare className="w-4 h-4 lg:w-4.5 lg:h-4.5 text-white" />
+              </div>
+
+              {/* Text Labels: Chat */}
+              <span className="relative text-[10px] lg:text-[11px] font-black uppercase tracking-wider mt-1.5 font-display text-center leading-tight">
+                Chat
+              </span>
+            </button>
+          </aside>
+        )}
+      </div>
       </div>
       </div>
 
@@ -1295,7 +1547,7 @@ export default function App() {
       </AnimatePresence>
       {!isCrewRole && (
         <nav 
-          className="fixed bottom-0 w-full backdrop-blur-xl border-t z-40 flex items-center justify-around h-[4.5rem] pb-safe transition-colors" 
+          className="fixed bottom-0 w-full md:hidden backdrop-blur-xl border-t z-40 flex items-center justify-around h-[4.5rem] pb-safe transition-colors" 
           style={{ 
             backgroundColor: 'var(--card-bg, var(--bg-main, #FFFFFF))',
             borderColor: 'var(--border-main, #E2E8F0)'
@@ -1319,17 +1571,30 @@ export default function App() {
               }
             }} 
           />
+
+          {/* Center All Menu Button on Mobile */}
+          <button
+            onClick={() => setShowModulesDrawer(true)}
+            className="flex flex-col items-center justify-center -mt-3.5 group cursor-pointer active:scale-95 transition-transform"
+            title="Buka Semua Menu"
+          >
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-md transition-all duration-200 ${
+              showModulesDrawer || activeTab === 'modules'
+                ? 'bg-gradient-to-tr from-teal-500 to-emerald-600 text-white shadow-teal-500/40 scale-105 ring-2 ring-teal-400/50'
+                : 'bg-gradient-to-tr from-teal-600 to-emerald-700 text-white shadow-teal-600/25'
+            }`}>
+              <LayoutGrid className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 mt-1 whitespace-nowrap leading-none">
+              Semua Menu
+            </span>
+          </button>
+
           <NavItem 
             icon={<Cloud className="w-5 h-5" />} 
             label="Cloud" 
             active={activeTab === 'preplab-cloud'} 
             onClick={() => handleNav('preplab-cloud')} 
-          />
-          <NavItem 
-            icon={<Receipt className="w-5 h-5" />} 
-            label="Keuangan" 
-            active={activeTab === 'finance'} 
-            onClick={() => handleNav('finance')} 
           />
 
           <NavItem 
@@ -1340,8 +1605,8 @@ export default function App() {
           />
           {isDeveloper && (
             <NavItem 
-              icon={<Settings className="w-5 h-5" />} 
-              label="Developer" 
+              icon={<Code2 className="w-5 h-5" />} 
+              label="Dev" 
               active={activeTab === 'admin-dashboard'} 
               onClick={() => handleNav('admin-dashboard')} 
             />
@@ -1359,6 +1624,103 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* All Menu Modules Drawer (Slides in from Left, Wider than Profile View) */}
+      <ModulesDrawer
+        isOpen={showModulesDrawer}
+        onClose={() => setShowModulesDrawer(false)}
+        onNav={(tab) => {
+          handleNav(tab);
+          setShowModulesDrawer(false);
+        }}
+        inspectorNik={inspectorNik || undefined}
+        inspectorName={inspectorName || undefined}
+        userPt={userProfile?.pt}
+      />
+
+      {/* SAP Management Drawer (Slides in from RIGHT, wider than profile view) */}
+      <AnimatePresence>
+        {showSapDrawer && (
+          <div className="fixed inset-0 z-[70] overflow-hidden">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              onClick={() => setShowSapDrawer(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[75]"
+            />
+
+            {/* Drawer Panel - Slides in from the RIGHT */}
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              className="fixed inset-y-0 right-0 z-[80] w-full sm:w-[650px] md:w-[780px] lg:w-[940px] xl:w-[1080px] h-[100dvh] shadow-2xl border-l flex flex-col overflow-hidden transition-colors"
+              style={{
+                backgroundColor: 'var(--bg-main, #F8FAFC)',
+                borderColor: 'var(--border-main, #E2E8F0)',
+                color: 'var(--text-main, #1E293B)'
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <GroupReportScreen
+                inspectorName={inspectorName || 'Inspector'}
+                inspectorNik={inspectorNik!}
+                inspectorRole={userProfile?.jabatan}
+                inspectorSection={userProfile?.section}
+                onClose={() => setShowSapDrawer(false)}
+                isFloating={true}
+                isDeveloper={isDeveloper}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Chat Drawer (Slides in from RIGHT, wider than profile view) */}
+      <AnimatePresence>
+        {showChatDrawer && (
+          <div className="fixed inset-0 z-[70] overflow-hidden">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              onClick={() => setShowChatDrawer(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[75]"
+            />
+
+            {/* Drawer Panel - Slides in from the RIGHT */}
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              className="fixed inset-y-0 right-0 z-[80] w-full sm:w-[540px] md:w-[640px] lg:w-[740px] xl:w-[820px] h-[100dvh] shadow-2xl border-l flex flex-col overflow-hidden transition-colors"
+              style={{
+                backgroundColor: 'var(--bg-main, #F8FAFC)',
+                borderColor: 'var(--border-main, #E2E8F0)',
+                color: 'var(--text-main, #1E293B)'
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <ChatScreen
+                inspectorName={inspectorName || 'Inspector'}
+                inspectorNik={inspectorNik!}
+                userProfile={userProfile}
+                isDeveloper={isDeveloper}
+                onClose={() => setShowChatDrawer(false)}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+
 
       {/* Global Inspection Completion Modal (Download PDF, Buka General Submit Safety, WhatsApp) */}
       <InspectionCompletionModal
@@ -1388,16 +1750,7 @@ export default function App() {
         }}
       />
 
-      {/* Global Floating Group Safety & PDF Widget */}
-      {inspectorNik && (
-        <GroupReportFloatingWidget
-          inspectorNik={inspectorNik}
-          inspectorName={inspectorName || 'Inspector'}
-          inspectorRole={userProfile?.jabatan}
-          inspectorSection={userProfile?.section}
-          isDeveloper={isDeveloper}
-        />
-      )}
+
 
       {/* Global Push Popup Inspection Reminder Modal */}
       {inspectorNik && (
@@ -1408,11 +1761,13 @@ export default function App() {
         />
       )}
 
-      {/* Global Interactive LabBot AI Assistant (SOP & K3) */}
+      {/* Global Interactive LabBot AI Assistant (SOP & K3) - Hidden as requested */}
+      {/* 
       <LabBotWidget
         inspectorNik={inspectorNik || undefined}
         inspectorName={inspectorName || undefined}
       />
+      */}
 
       {/* Global Open Inspection Findings Reminder Modal for Assigned Supervisors */}
       {inspectorNik && (

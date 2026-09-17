@@ -157,6 +157,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   const [ktaImageFile, setKtaImageFile] = useState<File | null>(null);
   const [ktaImagePreview, setKtaImagePreview] = useState<string | null>(null);
   const [isSubmittingKta, setIsSubmittingKta] = useState(false);
+  const isSubmittingKtaRef = useRef(false);
   const [showSingleUploadReminderModal, setShowSingleUploadReminderModal] = useState(false);
   const [singleUploadObligationLabel, setSingleUploadObligationLabel] = useState('');
 
@@ -165,6 +166,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   const [ssImageFile, setSsImageFile] = useState<File | null>(null);
   const [ssImagePreview, setSsImagePreview] = useState<string | null>(null);
   const [isSubmittingSs, setIsSubmittingSs] = useState(false);
+  const isSubmittingSsRef = useRef(false);
 
   // User Obligation Calculation
   const myObligation = useMemo(() => {
@@ -453,7 +455,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
 
       if (isPartial) {
         reminderTitle = '⚠️ Pengingat: Baru 1x Unggah KTA / TTA';
-        reminderMessage = `Halo ${emp.name}, Anda baru mengunggah 1x laporan dari kewajiban ${obligation.label} pada ${selectedWeek}. Mohon segera melengkapi 1 laporan lagi agar target kepatuhan keselamatan kerja Anda lengkap terpenuhi.`;
+        reminderMessage = `Halo ${emp.name}, Anda baru mengunggah 1x laporan dari kewajiban ${obligation.label} pada ${selectedWeek}. Mohon segera melengkapi 1 laporan lagi agar target laporan observasi (KTA/TTA) Anda lengkap terpenuhi.`;
       }
 
       const res = await fetch('/api/notifications', {
@@ -728,6 +730,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
 
   const handleSubmitKtaReport = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSubmittingKtaRef.current || isSubmittingKta) return;
     if (!ktaImageFile && !ktaImagePreview) {
       toast.error('Wajib melampirkan screenshot bukti pengisian form!');
       return;
@@ -742,6 +745,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     const autoWeek = currentActiveWeek;
 
     try {
+      isSubmittingKtaRef.current = true;
       setIsSubmittingKta(true);
       toast.loading('Mengunggah bukti screenshot form...', { id: 'upload-kta' });
 
@@ -829,12 +833,14 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     } catch (err: any) {
       toast.error('Terjadi kesalahan: ' + err.message, { id: 'upload-kta' });
     } finally {
+      isSubmittingKtaRef.current = false;
       setIsSubmittingKta(false);
     }
   };
 
   const handleSubmitSsReport = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSubmittingSsRef.current || isSubmittingSs) return;
     if (!ssImageFile && !ssImagePreview) {
       toast.error('Wajib melampirkan screenshot bukti pengisian form general inspeksi!');
       return;
@@ -844,6 +850,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     const autoWeek = currentActiveWeek;
 
     try {
+      isSubmittingSsRef.current = true;
       setIsSubmittingSs(true);
       toast.loading('Mengunggah bukti screenshot form general inspeksi...', { id: 'upload-ss' });
 
@@ -900,6 +907,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     } catch (err: any) {
       toast.error('Terjadi kesalahan: ' + err.message, { id: 'upload-ss' });
     } finally {
+      isSubmittingSsRef.current = false;
       setIsSubmittingSs(false);
     }
   };
@@ -1078,7 +1086,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
             </div>
             <div className="min-w-0">
               <h1 className="text-sm sm:text-base font-black tracking-tight text-[var(--text-main)] font-display truncate">
-                Pelaporan Hazard Report Safety
+                SAP Management (Hazard & Safety)
               </h1>
               <p className="text-[11px] text-[var(--text-muted)] font-medium truncate">
                 Inspeksi K3 & Laporan KTA/TTA Prep & Lab ({selectedWeek})
@@ -1266,192 +1274,201 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                 </p>
               </div>
             ) : (
-              filteredMessages.map((msg, i) => {
-                const isMe = msg.senderNik === inspectorNik;
-                const isKta = msg.category === 'kta_tta' || msg.type === 'kta_tta' || Boolean(msg.imageUrl);
-                const isPdf = msg.type === 'pdf_report' || Boolean(msg.pdfUrl);
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-stretch">
+                {filteredMessages.map((msg, i) => {
+                  const isMe = msg.senderNik === inspectorNik;
+                  const isKta = msg.category === 'kta_tta' || msg.type === 'kta_tta' || Boolean(msg.imageUrl);
+                  const isPdf = msg.type === 'pdf_report' || Boolean(msg.pdfUrl);
 
-                return (
-                  <div key={msg.id || i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1`}>
-                    
-                    <div className="flex items-center gap-1.5 px-1 text-[10px] font-semibold text-[var(--text-muted)]">
-                      <span className="text-[var(--primary)] font-bold">{msg.senderName}</span>
-                      <span>•</span>
-                      <span className="opacity-75">{msg.senderRole}</span>
-                      {msg.week && (
-                        <span className="ml-1 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/30">
-                          {msg.week}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className={`max-w-[92%] sm:max-w-md w-full rounded-2xl p-3 shadow-sm border relative group ${
-                      isMe 
-                        ? 'bg-[var(--card-bg)] border-[var(--primary)]/40 text-[var(--text-main)] rounded-tr-xs' 
-                        : 'bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)] rounded-tl-xs'
-                    }`}>
+                  return (
+                    <div key={msg.id || i} className="flex flex-col w-full h-full space-y-1">
                       
-                      {/* Developer / Admin Trash Button */}
-                      {(isDevUser || isMe) && (
-                        <button
-                          onClick={() => handleDeleteMessage(msg.id)}
-                          className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity shadow-md z-10 cursor-pointer"
-                          title="Hapus Laporan Ini"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      )}
-
-                      {/* POST BODY: KTA/TTA CARD */}
-                      {isKta ? (
-                        <div className="space-y-2.5">
-                          <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
-                              msg.reportType === 'TTA'
-                                ? 'bg-rose-500/15 text-rose-600 border-rose-500/30'
-                                : 'bg-amber-500/15 text-amber-600 border-amber-500/30'
-                            }`}>
-                              {msg.reportType === 'TTA' ? '⚠️ TTA (Tindakan Tidak Aman)' : '⚠️ KTA (Kondisi Tidak Aman)'}
+                      <div className="flex items-center justify-between px-1 text-[10px] font-semibold text-[var(--text-muted)]">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="text-[var(--primary)] font-bold truncate">{msg.senderName}</span>
+                          <span>•</span>
+                          <span className="opacity-75 truncate">{msg.senderRole}</span>
+                          {isMe && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/30">
+                              Anda
                             </span>
-                            {msg.location && msg.location !== '-' && (
-                              <span className="text-[10px] text-[var(--text-muted)] font-medium flex items-center gap-0.5">
-                                📍 {msg.location}
+                          )}
+                        </div>
+                        {msg.week && (
+                          <span className="ml-1 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/30 shrink-0">
+                            {msg.week}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className={`w-full h-full flex flex-col justify-between rounded-2xl p-3 sm:p-3.5 shadow-sm border relative group transition-all duration-200 hover:shadow-md ${
+                        isMe 
+                          ? 'bg-[var(--card-bg)] border-[var(--primary)]/50 text-[var(--text-main)] ring-1 ring-[var(--primary)]/20' 
+                          : 'bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)] hover:border-[var(--primary)]/40'
+                      }`}>
+                        
+                        {/* Developer / Admin Trash Button */}
+                        {(isDevUser || isMe) && (
+                          <button
+                            onClick={() => handleDeleteMessage(msg.id)}
+                            className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity shadow-md z-10 cursor-pointer"
+                            title="Hapus Laporan Ini"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+
+                        {/* POST BODY: KTA/TTA CARD */}
+                        {isKta ? (
+                          <div className="space-y-2.5">
+                            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                                msg.reportType === 'TTA'
+                                  ? 'bg-rose-500/15 text-rose-600 border-rose-500/30'
+                                  : 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+                              }`}>
+                                {msg.reportType === 'TTA' ? '⚠️ TTA (Tindakan Tidak Aman)' : '⚠️ KTA (Kondisi Tidak Aman)'}
                               </span>
+                              {msg.location && msg.location !== '-' && (
+                                <span className="text-[10px] text-[var(--text-muted)] font-medium flex items-center gap-0.5 truncate max-w-[180px]">
+                                  📍 {msg.location}
+                                </span>
+                              )}
+                            </div>
+
+                            {msg.text && (
+                              <p className="text-xs leading-relaxed font-medium whitespace-pre-wrap text-[var(--text-main)]">
+                                {msg.text}
+                              </p>
+                            )}
+
+                            {/* BUKTI SCREENSHOT FORM CARD (TIDAK ADA PREVIEW GAMBAR BESAR, HANYA KARTU TOMBOL LIHAT) */}
+                            {msg.imageUrl && msg.imageUrl !== '#' && (
+                              <div className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2.5 space-y-2">
+                                <div className="flex items-start gap-2.5">
+                                  <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 border border-amber-500/30 flex items-center justify-center shrink-0 font-bold">
+                                    <Camera className="w-4 h-4" />
+                                  </div>
+
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-[11px] text-[var(--text-main)] truncate uppercase font-mono">
+                                      BUKTI SCREENSHOT {msg.reportType || 'KTA / TTA'}
+                                    </h4>
+                                    <p className="text-[10px] text-[var(--text-muted)] truncate">
+                                      Formulir {msg.week || selectedWeek} - {msg.senderName}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--border-main)]">
+                                  <button
+                                    type="button"
+                                    onClick={() => openImageLightbox(msg.imageUrl, `Bukti Form ${msg.reportType || 'KTA'} - ${msg.senderName}`, msg.senderName, msg.reportType, msg.week, msg.timestamp, msg.text, msg.imageUrl)}
+                                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-[var(--primary)] text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Lihat Bukti Formulir</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const driveLink = getDriveOpenUrl(msg.imageUrl);
+                                      const waText = encodeURIComponent(`*${msg.reportType || 'KTA'} REPORT (${msg.week || selectedWeek})*\nPelapor: ${msg.senderName}\nKeterangan: ${msg.text || '-'}\nBukti Formulir: ${driveLink}`);
+                                      window.open(`https://wa.me/?text=${waText}`, '_blank');
+                                    }}
+                                    className="py-1.5 px-3 rounded-lg bg-emerald-600 text-white text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer"
+                                    title="Kirim ke WhatsApp"
+                                  >
+                                    <Share2 className="w-3.5 h-3.5" />
+                                    <span>WA</span>
+                                  </button>
+                                </div>
+                              </div>
                             )}
                           </div>
+                        ) : (
+                          /* POST BODY: INSPEKSI PDF REPORT CARD */
+                          <div>
+                            {msg.text && (
+                              <p className="text-xs leading-relaxed font-medium mb-2 whitespace-pre-wrap">
+                                {msg.text}
+                              </p>
+                            )}
 
-                          {msg.text && (
-                            <p className="text-xs leading-relaxed font-medium whitespace-pre-wrap text-[var(--text-main)]">
-                              {msg.text}
-                            </p>
-                          )}
+                            {isPdf && (
+                              <div className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2.5 space-y-2">
+                                <div className="flex items-start gap-2.5">
+                                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-500 border border-blue-500/30 flex items-center justify-center shrink-0 font-bold">
+                                    <FileText className="w-4 h-4" />
+                                  </div>
 
-                          {/* BUKTI SCREENSHOT FORM CARD (TIDAK ADA PREVIEW GAMBAR BESAR, HANYA KARTU TOMBOL LIHAT) */}
-                          {msg.imageUrl && msg.imageUrl !== '#' && (
-                            <div className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2.5 space-y-2">
-                              <div className="flex items-start gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 border border-amber-500/30 flex items-center justify-center shrink-0 font-bold">
-                                  <Camera className="w-4 h-4" />
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-[11px] text-[var(--text-main)] truncate uppercase font-mono">
+                                      {msg.pdfTitle || 'CHECKLIST INSPEKSI TERPADU'}
+                                    </h4>
+                                    <p className="text-[10px] text-[var(--text-muted)] truncate">
+                                      {msg.pdfSubTitle || msg.pdfFileName || 'Dokumen PDF Laporan'}
+                                    </p>
+                                  </div>
                                 </div>
 
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="font-bold text-[11px] text-[var(--text-main)] truncate uppercase font-mono">
-                                    BUKTI SCREENSHOT {msg.reportType || 'KTA / TTA'}
-                                  </h4>
-                                  <p className="text-[10px] text-[var(--text-muted)] truncate">
-                                    Formulir {msg.week || selectedWeek} - {msg.senderName}
-                                  </p>
-                                </div>
-                              </div>
+                                <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--border-main)]">
+                                  {(!msg.pdfUrl || msg.pdfUrl === '#' || msg.pdfUrl === 'null') && msg.id?.startsWith('insp-db-') ? (
+                                    <button
+                                      disabled={regeneratingPdfId === msg.id}
+                                      onClick={() => handleRegeneratePdf(msg.id)}
+                                      className="flex-1 py-1 px-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                                      title="Buat ulang dokumen PDF via Google Apps Script"
+                                    >
+                                      <RefreshCw className={`w-3.5 h-3.5 ${regeneratingPdfId === msg.id ? 'animate-spin' : ''}`} />
+                                      <span>{regeneratingPdfId === msg.id ? 'Memproses PDF...' : 'Buat Ulang PDF'}</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => openPdfModal(msg.pdfUrl, msg.pdfTitle, msg.senderName)}
+                                      className="flex-1 py-1 px-2.5 rounded-lg bg-[var(--primary)] text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" /> Pratinjau PDF
+                                    </button>
+                                  )}
 
-                              <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--border-main)]">
-                                <button
-                                  type="button"
-                                  onClick={() => openImageLightbox(msg.imageUrl, `Bukti Form ${msg.reportType || 'KTA'} - ${msg.senderName}`, msg.senderName, msg.reportType, msg.week, msg.timestamp, msg.text, msg.imageUrl)}
-                                  className="flex-1 py-1.5 px-2.5 rounded-lg bg-[var(--primary)] text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  <span>Lihat Bukti Formulir</span>
-                                </button>
+                                  {msg.pdfUrl && msg.pdfUrl !== '#' && (
+                                    <a
+                                      href={getPdfEmbedUrl(msg.pdfUrl)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="p-1 px-2 rounded-lg bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] text-[10px] font-bold flex items-center justify-center gap-1 hover:bg-[var(--bg-main)] transition-colors"
+                                      title="Buka di Tab Baru (Viewer)"
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  )}
 
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const driveLink = getDriveOpenUrl(msg.imageUrl);
-                                    const waText = encodeURIComponent(`*${msg.reportType || 'KTA'} REPORT (${msg.week || selectedWeek})*\nPelapor: ${msg.senderName}\nKeterangan: ${msg.text || '-'}\nBukti Formulir: ${driveLink}`);
-                                    window.open(`https://wa.me/?text=${waText}`, '_blank');
-                                  }}
-                                  className="py-1.5 px-3 rounded-lg bg-emerald-600 text-white text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer"
-                                  title="Kirim ke WhatsApp"
-                                >
-                                  <Share2 className="w-3.5 h-3.5" />
-                                  <span>WA</span>
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        /* POST BODY: INSPEKSI PDF REPORT CARD */
-                        <div>
-                          {msg.text && (
-                            <p className="text-xs leading-relaxed font-medium mb-2 whitespace-pre-wrap">
-                              {msg.text}
-                            </p>
-                          )}
-
-                          {isPdf && (
-                            <div className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2.5 space-y-2">
-                              <div className="flex items-start gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-500 border border-blue-500/30 flex items-center justify-center shrink-0 font-bold">
-                                  <FileText className="w-4 h-4" />
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="font-bold text-[11px] text-[var(--text-main)] truncate uppercase font-mono">
-                                    {msg.pdfTitle || 'CHECKLIST INSPEKSI TERPADU'}
-                                  </h4>
-                                  <p className="text-[10px] text-[var(--text-muted)] truncate">
-                                    {msg.pdfSubTitle || msg.pdfFileName || 'Dokumen PDF Laporan'}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--border-main)]">
-                                {(!msg.pdfUrl || msg.pdfUrl === '#' || msg.pdfUrl === 'null') && msg.id?.startsWith('insp-db-') ? (
                                   <button
-                                    disabled={regeneratingPdfId === msg.id}
-                                    onClick={() => handleRegeneratePdf(msg.id)}
-                                    className="flex-1 py-1 px-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-                                    title="Buat ulang dokumen PDF via Google Apps Script"
+                                    onClick={() => {
+                                      const waText = encodeURIComponent(`*${msg.pdfTitle}*\nDikirim oleh: ${msg.senderName}\n${msg.text}\nLink PDF: ${msg.pdfUrl || '-'}`);
+                                      window.open(`https://wa.me/?text=${waText}`, '_blank');
+                                    }}
+                                    className="py-1 px-2.5 rounded-lg bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center gap-1 hover:bg-emerald-700 transition-colors shadow-xs"
                                   >
-                                    <RefreshCw className={`w-3.5 h-3.5 ${regeneratingPdfId === msg.id ? 'animate-spin' : ''}`} />
-                                    <span>{regeneratingPdfId === msg.id ? 'Memproses PDF...' : 'Buat Ulang PDF'}</span>
+                                    <Share2 className="w-3 h-3" /> WA
                                   </button>
-                                ) : (
-                                  <button
-                                    onClick={() => openPdfModal(msg.pdfUrl, msg.pdfTitle, msg.senderName)}
-                                    className="flex-1 py-1 px-2.5 rounded-lg bg-[var(--primary)] text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
-                                  >
-                                    <Eye className="w-3.5 h-3.5" /> Pratinjau PDF
-                                  </button>
-                                )}
-
-                                {msg.pdfUrl && msg.pdfUrl !== '#' && (
-                                  <a
-                                    href={getPdfEmbedUrl(msg.pdfUrl)}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="p-1 px-2 rounded-lg bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] text-[10px] font-bold flex items-center justify-center gap-1 hover:bg-[var(--bg-main)] transition-colors"
-                                    title="Buka di Tab Baru (Viewer)"
-                                  >
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
-                                )}
-
-                                <button
-                                  onClick={() => {
-                                    const waText = encodeURIComponent(`*${msg.pdfTitle}*\nDikirim oleh: ${msg.senderName}\n${msg.text}\nLink PDF: ${msg.pdfUrl || '-'}`);
-                                    window.open(`https://wa.me/?text=${waText}`, '_blank');
-                                  }}
-                                  className="py-1 px-2.5 rounded-lg bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center gap-1 hover:bg-emerald-700 transition-colors shadow-xs"
-                                >
-                                  <Share2 className="w-3 h-3" /> WA
-                                </button>
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                            )}
+                          </div>
+                        )}
 
-                      <div className="flex items-center justify-end gap-1 mt-1.5 text-[9px] text-[var(--text-muted)]">
-                        <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                        <div className="flex items-center justify-end gap-1 mt-1.5 text-[9px] text-[var(--text-muted)]">
+                          <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
 
             <div ref={messagesEndRef} />
@@ -1519,7 +1536,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           {rekapSubTab === 'INSPEKSI' && (
             <div className="space-y-3">
               {/* Summary Dashboard Cards */}
-              <div className={`grid ${isFloating ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-5'} gap-2`}>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 <Card className="p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] text-center">
                   <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase">Total Wajib</p>
                   {loadingRekap ? (
@@ -1556,7 +1573,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                   )}
                 </Card>
 
-                <Card className={`p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-center ${isFloating ? 'col-span-2' : 'col-span-2 sm:col-span-1'}`}>
+                <Card className="p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-center col-span-2 sm:col-span-1">
                   <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase">% {selectedWeek}</p>
                   {loadingRekap ? (
                     <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-[var(--primary)]" /></div>
@@ -1760,7 +1777,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
               </div>
 
               {/* Rekap List Cards */}
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {loadingRekap ? (
                   <div className="py-8 text-center text-[var(--text-muted)] text-xs flex items-center justify-center gap-2">
                     <RefreshCw className="w-4 h-4 animate-spin text-[var(--primary)]" />
@@ -2020,7 +2037,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           {rekapSubTab === 'KTA_TTA' && (
             <div className="space-y-3">
               {/* Summary Dashboard Cards KTA */}
-              <div className={`grid ${isFloating ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-5'} gap-2`}>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 <Card className="p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] text-center">
                   <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase">Total Wajib</p>
                   {loadingRekapKta ? (
@@ -2057,7 +2074,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                   )}
                 </Card>
 
-                <Card className={`p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-center ${isFloating ? 'col-span-2' : 'col-span-2 sm:col-span-1'}`}>
+                <Card className="p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-center col-span-2 sm:col-span-1">
                   <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase">% {selectedWeek}</p>
                   {loadingRekapKta ? (
                     <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-amber-500" /></div>
@@ -2121,7 +2138,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
               </div>
 
               {/* Rekap KTA List Cards */}
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {loadingRekapKta ? (
                   <div className="py-8 text-center text-[var(--text-muted)] text-xs flex items-center justify-center gap-2">
                     <RefreshCw className="w-4 h-4 animate-spin text-amber-500" />
@@ -2911,7 +2928,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                 PENGINGAT KEWAJIBAN LAPORAN
               </h3>
               <p className="text-xs text-amber-100 mt-1 font-medium">
-                Kepatuhan Keselamatan Kerja • {currentActiveWeek}
+                Laporan Observasi (KTA/TTA) • {currentActiveWeek}
               </p>
             </div>
 
