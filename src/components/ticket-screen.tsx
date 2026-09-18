@@ -116,15 +116,24 @@ export function getInspectionPhotoFileName(photo: any, duplicateCount?: number):
   if (prefixRegex.test(rawArea)) {
     rawArea = rawArea.replace(prefixRegex, '');
   }
+  // Bersihkan ekstensi gambar dari rawArea jika ada (misal .jpeg atau .jpg)
+  rawArea = rawArea.replace(/\.(jpe?g|png|webp|gif)$/i, '');
   const areaName = clean(rawArea) || 'Area';
 
   const suffix = duplicateCount && duplicateCount > 1 ? ` (${duplicateCount})` : '';
 
-  // Format: Week XX_Nama Form_Area.jpg
-  return `${weekStr}_${formName}_${areaName}${suffix}.jpg`
+  // Format: Week XX_Nama Form_Area.jpg (Pastikan ekstensi selalu .jpg bukan .jpeg)
+  let resultName = `${weekStr}_${formName}_${areaName}${suffix}.jpg`
+    .replace(/\.jpeg$/i, '.jpg')
     .replace(/_{2,}/g, '_')
     .replace(/\s{2,}/g, ' ')
     .trim();
+
+  if (resultName.toLowerCase().endsWith('.jpeg')) {
+    resultName = resultName.slice(0, -5) + '.jpg';
+  }
+
+  return resultName;
 }
 
 export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: string, inspectorNik: string }) {

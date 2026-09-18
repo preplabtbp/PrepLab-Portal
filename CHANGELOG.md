@@ -11,6 +11,9 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Foto berformat data URL Base64 (`data:image/...`) kini dikonversi langsung menjadi binary `Blob` di sisi browser tanpa mengirim string base64 raksasa ke server HTTP GET, meniadakan kendala *Request-URI Too Large* (HTTP 414 / 431).
   - Foto Google Drive dialirkan secara aman melalui endpoint `/api/drive/view/:fileId`.
   - Memastikan seluruh foto dokumentasi mingguan (33 foto pada minggu berjalan, baik tersimpan di Drive maupun Base64) terunduh 100% lengkap tanpa ada yang terlewat ke dalam satu arsip ZIP.
+- **Standarisasi Ekstensi Berkas Foto `.jpg` (`src/components/ticket-screen.tsx`, `src/components/inspection-forms/FormSarana.tsx`, `src/sheets-api.ts`, `server/routes/cloud.ts`)**:
+  - Memastikan seluruh berkas foto inspeksi yang diunduh (baik satuan maupun bulk ZIP) serta yang diunggah ke Google Drive secara konsisten menggunakan ekstensi standar `.jpg` (mengonversi format `.jpeg` menjadi `.jpg`).
+  - Membersihkan potensi duplikasi ekstensi ganda (seperti `area.jpeg.jpg`) dari penamaan file foto hasil inspeksi.
 - **Dukungan Agregasi Data URL di Backend Galeri (`server/routes/misc.ts`)**:
   - Memperluas filter `/api/gallery` agar mengenali foto proses bertipe `data:image/` selain `http`.
   - Menangani parameter data URL langsung pada endpoint `/api/gallery/image-proxy` sebagai proteksi cadangan.

@@ -295,13 +295,14 @@ export const updateToolPhotoUrl = async (sheetOrigin: string, rowIndex: number, 
 };
 
 export const uploadPhotoToDrive = async (base64Data: string, mimeType: string, filename: string, folderName?: string): Promise<string> => {
+  const safeFilename = (filename || 'photo.jpg').replace(/\.jpeg$/i, '.jpg');
   const res = await fetch('/api/upload', {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json',
       'Authorization': `Bearer `
     },
-    body: JSON.stringify({ base64Data, mimeType, filename, folderName })
+    body: JSON.stringify({ base64Data, mimeType, filename: safeFilename, folderName })
   });
   const data = await res.json();
   return data.url;

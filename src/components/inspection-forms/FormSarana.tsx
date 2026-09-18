@@ -108,7 +108,8 @@ export function FormSarana({ inspectorName, inspectorNik, onSubmit, autoFillAllY
         
         try {
            const base64Data = compressedBase64.split(',')[1];
-           const url = await uploadPhotoToDrive(base64Data, 'image/jpeg', file.name, 'Form Inspeksi');
+           const cleanFileName = (file.name || 'foto_sarana.jpg').replace(/\.jpeg$/i, '.jpg');
+           const url = await uploadPhotoToDrive(base64Data, 'image/jpeg', cleanFileName, 'Form Inspeksi');
            setUnits(prevUnits => prevUnits.map(u => u.id === unitId ? { ...u, foto: url } : u));
         } catch(err) {
            console.error("Gagal upload", err);

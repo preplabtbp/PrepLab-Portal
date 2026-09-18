@@ -62,8 +62,9 @@ router.post("/api/upload", async (req, res) => {
       stream.push(null);
 
       // 4. Upload ke Drive
+      const cleanFilename = (filename || 'uploaded_file').replace(/\.jpeg$/i, '.jpg');
       const fileMetadata = {
-        name: filename || 'uploaded_file',
+        name: cleanFilename,
         parents: [finalFolderId]
       };
       const media = {
