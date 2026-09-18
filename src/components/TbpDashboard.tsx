@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Cloud, 
   Sun, 
@@ -15,6 +15,7 @@ import {
   Check, 
   Loader2,
   ChevronRight,
+  ChevronLeft,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -36,6 +37,8 @@ import {
   FolderOpen,
   ExternalLink,
   Calendar,
+  CalendarDays,
+  CalendarCheck,
   Compass,
   Layers,
   Radio,
@@ -58,6 +61,9 @@ const WeatherIcon = ({ code, className }: { code: number, className?: string }) 
 interface TbpDashboardProps {
   posts: any[];
   onSelectPost: (post: any) => void;
+  agendaEvents?: any[];
+  onOpenFullAgenda?: () => void;
+  activeUniverse?: string;
 }
 
 interface DashboardMediaSettings {
@@ -144,8 +150,227 @@ const PRESET_WALLPAPERS = [
   }
 ];
 
-export function TbpDashboard({ posts, onSelectPost }: TbpDashboardProps) {
+export function TbpDashboard({ 
+  posts, 
+  onSelectPost, 
+  agendaEvents = [], 
+  onOpenFullAgenda, 
+  activeUniverse 
+}: TbpDashboardProps) {
   const [time, setTime] = useState(new Date());
+
+  // =========================================================================
+  // MINI CALENDAR & MAJOR AGENDAS STATE & HELPERS
+  // =========================================================================
+  const [currentCalDate, setCurrentCalDate] = useState(() => new Date());
+  const [selectedCalDateStr, setSelectedCalDateStr] = useState<string | null>(null);
+
+  const prevCalMonth = () => {
+    setCurrentCalDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+  const nextCalMonth = () => {
+    setCurrentCalDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+  const resetCalToToday = () => {
+    setCurrentCalDate(new Date());
+    setSelectedCalDateStr(null);
+  };
+
+  const formatDateToIsoKey = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  // Map of dates (YYYY-MM-DD) that have major events/agendas
+  const datesWithEvents = useMemo(() => {
+    const dateMap = new Map<string, number>();
+    (agendaEvents || []).forEach(evt => {
+      if (
+        evt.isBirthday ||
+        evt.kategori === 'Quality Assurance' ||
+        evt.title?.includes('🎂') ||
+        evt.title?.toLowerCase().includes('ulang tahun') ||
+        (evt.id && String(evt.id).startsWith('bday-'))
+      ) {
+        return;
+      }
+      const rawDate = evt.startDate || evt.start;
+      if (!rawDate) return;
+      const d = new Date(rawDate);
+      if (!isNaN(d.getTime())) {
+        const key = formatDateToIsoKey(d);
+        dateMap.set(key, (dateMap.get(key) || 0) + 1);
+      }
+    });
+    return dateMap;
+  }, [agendaEvents]);
+
+  // Calendar cells for currently viewed month
+  const calendarGrid = useMemo(() => {
+    const year = currentCalDate.getFullYear();
+    const month = currentCalDate.getMonth();
+
+    const firstDay = new Date(year, month, 1);
+    let startDay = firstDay.getDay() - 1; // 0=Mon, 6=Sun
+    if (startDay < 0) startDay = 6;
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+    const cells: Array<{
+      dayNum: number;
+      dateKey: string;
+      isCurrentMonth: boolean;
+      isToday: boolean;
+      hasEvents: boolean;
+      eventCount: number;
+    }> = [];
+
+    const todayKey = formatDateToIsoKey(new Date());
+
+    // 1. Previous month trailing days
+    for (let i = startDay - 1; i >= 0; i--) {
+      const dNum = daysInPrevMonth - i;
+      const prevDate = new Date(year, month - 1, dNum);
+      const dKey = formatDateToIsoKey(prevDate);
+      cells.push({
+        dayNum: dNum,
+        dateKey: dKey,
+        isCurrentMonth: false,
+        isToday: dKey === todayKey,
+        hasEvents: datesWithEvents.has(dKey),
+        eventCount: datesWithEvents.get(dKey) || 0,
+      });
+    }
+
+    // 2. Current month days
+    for (let d = 1; d <= daysInMonth; d++) {
+      const curDate = new Date(year, month, d);
+      const dKey = formatDateToIsoKey(curDate);
+      cells.push({
+        dayNum: d,
+        dateKey: dKey,
+        isCurrentMonth: true,
+        isToday: dKey === todayKey,
+        hasEvents: datesWithEvents.has(dKey),
+        eventCount: datesWithEvents.get(dKey) || 0,
+      });
+    }
+
+    // 3. Next month leading days to complete full 7-day rows
+    const remaining = (7 - (cells.length % 7)) % 7;
+    for (let d = 1; d <= remaining; d++) {
+      const nextDate = new Date(year, month + 1, d);
+      const dKey = formatDateToIsoKey(nextDate);
+      cells.push({
+        dayNum: d,
+        dateKey: dKey,
+        isCurrentMonth: false,
+        isToday: dKey === todayKey,
+        hasEvents: datesWithEvents.has(dKey),
+        eventCount: datesWithEvents.get(dKey) || 0,
+      });
+    }
+
+    return cells;
+  }, [currentCalDate, datesWithEvents]);
+
+  // Major agendas list (upcoming or filtered by selected date)
+  const majorAgendasList = useMemo(() => {
+    if (!agendaEvents || agendaEvents.length === 0) return [];
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+    // Base filter: non-birthday, valid dates
+    let list = agendaEvents.filter(evt => {
+      if (
+        evt.isBirthday ||
+        evt.kategori === 'Quality Assurance' ||
+        evt.title?.includes('🎂') ||
+        evt.title?.toLowerCase().includes('ulang tahun') ||
+        (evt.id && String(evt.id).startsWith('bday-'))
+      ) {
+        return false;
+      }
+      return Boolean(evt.startDate || evt.start);
+    });
+
+    // Universe filter if event has explicit pt
+    if (activeUniverse && activeUniverse !== 'ALL') {
+      list = list.filter(evt => {
+        if (!evt.pt) return true;
+        return (evt.pt === 'GTS' ? 'GTS' : 'TBP') === activeUniverse;
+      });
+    }
+
+    // If a specific date is selected in the mini calendar, filter to that date
+    if (selectedCalDateStr) {
+      return list.filter(evt => {
+        const d = new Date(evt.startDate || evt.start);
+        return !isNaN(d.getTime()) && formatDateToIsoKey(d) === selectedCalDateStr;
+      }).sort((a, b) => new Date(a.startDate || a.start).getTime() - new Date(b.startDate || b.start).getTime());
+    }
+
+    // Otherwise, show upcoming major agendas (today and forward)
+    return list
+      .filter(evt => {
+        const d = new Date(evt.startDate || evt.start).getTime();
+        return !isNaN(d) && d >= startOfToday;
+      })
+      .sort((a, b) => new Date(a.startDate || a.start).getTime() - new Date(b.startDate || b.start).getTime())
+      .slice(0, 5);
+  }, [agendaEvents, selectedCalDateStr, activeUniverse]);
+
+  const getRelativeStatus = (dInput: string | Date) => {
+    const d = new Date(dInput);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      return { 
+        text: 'HARI INI', 
+        badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-extrabold',
+      };
+    } else if (diffDays === 1) {
+      return { 
+        text: 'BESOK', 
+        badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 font-bold',
+      };
+    } else if (diffDays === 2) {
+      return { 
+        text: 'LUSA', 
+        badgeClass: 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30 font-bold',
+      };
+    } else if (diffDays > 2 && diffDays <= 7) {
+      return { 
+        text: `${diffDays} hari lagi`, 
+        badgeClass: 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/30 font-semibold',
+      };
+    } else if (diffDays > 7) {
+      return { 
+        text: `${diffDays} hari lagi`, 
+        badgeClass: 'bg-slate-500/10 text-slate-500 border-slate-500/20 font-medium',
+      };
+    } else {
+      return { 
+        text: 'Selesai', 
+        badgeClass: 'bg-slate-500/10 text-slate-400 border-slate-500/20 font-medium',
+      };
+    }
+  };
+
+  const getCategoryBadge = (kat?: string) => {
+    const k = (kat || '').toLowerCase();
+    if (k.includes('meeting') || k.includes('rapat')) return 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20';
+    if (k.includes('audit') || k.includes('k3') || k.includes('safety')) return 'bg-rose-500/10 text-rose-500 border-rose-500/20';
+    if (k.includes('kalibrasi') || k.includes('maintenance')) return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+    if (k.includes('training') || k.includes('pelatihan')) return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
+    return 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20';
+  };
   const [mediaSettings, setMediaSettings] = useState<DashboardMediaSettings>(() => {
     try {
       const cached = localStorage.getItem('preplab_bulletin_media');
@@ -781,6 +1006,273 @@ export function TbpDashboard({ posts, onSelectPost }: TbpDashboardProps) {
 
           {/* Right Column: Weather & Widget Cards */}
           <div className="lg:col-span-7 space-y-6">
+            {/* ========================================================================= */}
+            {/* KALENDER AGENDA DEPARTEMEN CARD                                           */}
+            {/* ========================================================================= */}
+            <div 
+              className="rounded-2xl border shadow-xl backdrop-blur-xl p-5 transition-all duration-300 relative overflow-hidden"
+              style={{
+                backgroundColor: 'var(--card-bg, rgba(255, 255, 255, 0.7))',
+                borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+              }}
+            >
+              {/* Ambient Glow */}
+              <div 
+                className="absolute -top-12 -right-12 w-56 h-56 rounded-full pointer-events-none opacity-20 blur-3xl"
+                style={{ background: 'radial-gradient(circle, var(--primary, #2A9D8F), transparent 70%)' }}
+              />
+
+              {/* Card Header */}
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-5 relative z-10 border-b pb-4" style={{ borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))' }}>
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shadow-xs text-white"
+                    style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
+                  >
+                    <CalendarDays className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-display font-bold text-sm tracking-wide uppercase" style={{ color: 'var(--text-main, #0f172a)' }}>
+                        Kalender & Agenda Departemen
+                      </h2>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/20">
+                        {datesWithEvents.size} Hari Terjadwal
+                      </span>
+                    </div>
+                    <p className="text-[11px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                      Informasi jadwal inspeksi, meeting koordinasi, audit, & operasional terdekat
+                    </p>
+                  </div>
+                </div>
+
+                {onOpenFullAgenda && (
+                  <button
+                    onClick={onOpenFullAgenda}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs"
+                    title="Buka Kalender Agenda Lengkap"
+                  >
+                    <span>Kalender Lengkap</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* 2-Column Responsive Layout: Mini Calendar (Left) + Major Agendas List (Right) */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 relative z-10">
+                {/* Mini Calendar Column */}
+                <div className="md:col-span-5 flex flex-col justify-between p-3.5 rounded-xl border"
+                  style={{
+                    backgroundColor: 'var(--input-bg, rgba(0, 0, 0, 0.02))',
+                    borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+                  }}
+                >
+                  {/* Calendar Month Navigation Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <button
+                      onClick={prevCalMonth}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
+                      title="Bulan Sebelumnya"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-xs capitalize" style={{ color: 'var(--text-main, #0f172a)' }}>
+                        {currentCalDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                      </span>
+                      <button
+                        onClick={resetCalToToday}
+                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors cursor-pointer ml-1"
+                        title="Kembali ke Hari Ini"
+                      >
+                        Hari Ini
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={nextCalMonth}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
+                      title="Bulan Berikutnya"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Days of Week Header */}
+                  <div className="grid grid-cols-7 gap-1 text-center mb-1.5">
+                    {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map((dayName, idx) => (
+                      <span key={idx} className="text-[10px] font-bold uppercase tracking-wider opacity-60" style={{ color: 'var(--text-muted, #64748b)' }}>
+                        {dayName}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Calendar Cells Grid */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {calendarGrid.map((cell, idx) => {
+                      const isSelected = selectedCalDateStr === cell.dateKey;
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedCalDateStr(null);
+                            } else {
+                              setSelectedCalDateStr(cell.dateKey);
+                            }
+                          }}
+                          className={`h-8 rounded-lg flex flex-col items-center justify-center relative transition-all duration-150 cursor-pointer ${
+                            isSelected
+                              ? 'bg-teal-600 text-white font-black shadow-md scale-105 ring-2 ring-teal-400/50'
+                              : cell.isToday
+                              ? 'bg-teal-500/15 border border-teal-500/50 font-bold text-teal-600 dark:text-teal-400'
+                              : cell.isCurrentMonth
+                              ? 'hover:bg-slate-200/70 dark:hover:bg-slate-800/70 text-slate-800 dark:text-slate-200 font-medium'
+                              : 'opacity-25 hover:opacity-50 text-slate-400'
+                          }`}
+                          title={`${cell.dateKey} ${cell.hasEvents ? `(${cell.eventCount} agenda)` : ''}`}
+                        >
+                          <span className="text-[11px] leading-none">{cell.dayNum}</span>
+                          {cell.hasEvents && (
+                            <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-amber-300' : 'bg-teal-500'}`} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Calendar Legend */}
+                  <div className="mt-3 pt-2 border-t flex items-center justify-between text-[10px]" style={{ borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))', color: 'var(--text-muted, #64748b)' }}>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
+                      <span>Ada Agenda</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded border border-teal-500/50 bg-teal-500/10"></span>
+                      <span>Hari Ini</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Major Agendas Column */}
+                <div className="md:col-span-7 flex flex-col justify-between space-y-3">
+                  {/* Filter Subheader */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs uppercase tracking-wide" style={{ color: 'var(--text-main, #0f172a)' }}>
+                        {selectedCalDateStr ? (
+                          <>Agenda: <span className="text-teal-600 dark:text-teal-400">{new Date(selectedCalDateStr + 'T00:00:00').toLocaleDateString('id-ID', { dateStyle: 'medium' })}</span></>
+                        ) : (
+                          "Agenda Departemen Terdekat"
+                        )}
+                      </span>
+                      {selectedCalDateStr && (
+                        <button
+                          onClick={() => setSelectedCalDateStr(null)}
+                          className="text-[10px] text-teal-600 dark:text-teal-400 hover:underline cursor-pointer font-medium"
+                        >
+                          (Tampilkan Semua)
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded-md font-mono" style={{ backgroundColor: 'var(--input-bg, rgba(0,0,0,0.04))', color: 'var(--text-muted, #64748b)' }}>
+                      {majorAgendasList.length} Kegiatan
+                    </span>
+                  </div>
+
+                  {/* Agendas List */}
+                  <div className="space-y-2 max-h-[290px] overflow-y-auto pr-1 custom-scrollbar">
+                    {majorAgendasList.length === 0 ? (
+                      <div className="p-6 rounded-xl border text-center flex flex-col items-center justify-center space-y-2"
+                        style={{
+                          backgroundColor: 'var(--input-bg, rgba(0, 0, 0, 0.01))',
+                          borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+                        }}
+                      >
+                        <CalendarCheck className="w-8 h-8 text-teal-500/40" />
+                        <div className="text-xs font-semibold" style={{ color: 'var(--text-main, #0f172a)' }}>
+                          {selectedCalDateStr ? 'Tidak ada agenda di tanggal terpilih' : 'Tidak ada agenda departemen terdekat'}
+                        </div>
+                        <p className="text-[10px] max-w-[240px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                          {selectedCalDateStr ? 'Silakan pilih tanggal lain yang memiliki dot hijau atau lihat agenda mendatang.' : 'Semua kegiatan telah selesai atau belum ada jadwal baru yang ditambahkan.'}
+                        </p>
+                        {onOpenFullAgenda && (
+                          <button
+                            onClick={onOpenFullAgenda}
+                            className="mt-1 text-xs text-teal-600 dark:text-teal-400 hover:underline font-bold cursor-pointer"
+                          >
+                            + Tambah atau Periksa Agenda
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      majorAgendasList.map((agenda, aIdx) => {
+                        const rel = getRelativeStatus(agenda.startDate || agenda.start);
+                        const catClass = getCategoryBadge(agenda.kategori);
+                        const evtDate = new Date(agenda.startDate || agenda.start);
+                        
+                        return (
+                          <div
+                            key={agenda.id || aIdx}
+                            onClick={onOpenFullAgenda}
+                            className="p-3 rounded-xl border transition-all duration-200 hover:scale-[1.01] hover:shadow-md cursor-pointer group"
+                            style={{
+                              backgroundColor: 'var(--input-bg, rgba(0, 0, 0, 0.02))',
+                              borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+                            }}
+                            title="Klik untuk membuka di kalender lengkap"
+                          >
+                            <div className="flex items-start justify-between gap-2 mb-1.5">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap mb-1">
+                                  <span className={`text-[9px] px-2 py-0.5 rounded-full border ${rel.badgeClass}`}>
+                                    {rel.text}
+                                  </span>
+                                  {agenda.kategori && (
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${catClass}`}>
+                                      {agenda.kategori}
+                                    </span>
+                                  )}
+                                </div>
+                                <h3 className="font-bold text-xs tracking-tight group-hover:text-[var(--primary)] transition-colors line-clamp-1" style={{ color: 'var(--text-main, #0f172a)' }}>
+                                  {agenda.title}
+                                </h3>
+                              </div>
+                              <ExternalLink className="w-3.5 h-3.5 opacity-30 group-hover:opacity-100 group-hover:text-teal-500 transition-opacity flex-shrink-0 mt-1" />
+                            </div>
+
+                            <div className="flex items-center gap-3 text-[10px] flex-wrap" style={{ color: 'var(--text-muted, #64748b)' }}>
+                              <div className="flex items-center gap-1 font-medium">
+                                <Clock className="w-3 h-3 text-teal-500/80" />
+                                <span>
+                                  {evtDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                  {' • '}
+                                  {evtDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIT
+                                </span>
+                              </div>
+                              {agenda.pic && (
+                                <div className="flex items-center gap-1">
+                                  <span className="opacity-60">PIC:</span>
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300">{agenda.pic}</span>
+                                </div>
+                              )}
+                              {agenda.lokasi && (
+                                <div className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3 text-sky-500" />
+                                  <span className="truncate max-w-[120px]">{agenda.lokasi}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* KAWASI WEATHER FROSTED GLASS CARD */}
             <div 
               className="rounded-2xl border shadow-xl backdrop-blur-xl p-5 transition-all duration-300 relative overflow-hidden"

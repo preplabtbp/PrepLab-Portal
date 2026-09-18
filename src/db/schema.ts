@@ -383,6 +383,10 @@ export const bulletinComments = pgTable('bulletin_comments', {
   content: text('content').notNull(),
   fileUrl: text('file_url'),
   fileName: text('file_name'),
+  replyToId: integer('reply_to_id'),
+  replyToNik: text('reply_to_nik'),
+  replyToName: text('reply_to_name'),
+  replyToContent: text('reply_to_content'),
   createdAt: timestamp('created_at').defaultNow(),
 }, (t) => [
   index('idx_bulletin_comments_post_id').on(t.postId),

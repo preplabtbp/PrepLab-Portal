@@ -9,7 +9,25 @@ import { Calendar, Plus, FolderOpen, StickyNote, X, Search, Filter, Loader2, Edi
 import { Card, Button, Input, Select, Textarea } from './ui';
 import { toast } from 'sonner';
 
-export function AgendaDashboard({ inspectorNik, inspectorName, userDept, initialEventId }: { inspectorNik: string, inspectorName: string, userDept?: string, initialEventId?: string }) {
+export function AgendaDashboard({ 
+  inspectorNik, 
+  inspectorName, 
+  userDept, 
+  initialEventId,
+  isDeveloper 
+}: { 
+  inspectorNik: string; 
+  inspectorName: string; 
+  userDept?: string; 
+  initialEventId?: string;
+  isDeveloper?: boolean;
+}) {
+  const isDev = Boolean(
+    isDeveloper || 
+    inspectorNik === '02D24000043' || 
+    inspectorNik === '02D25000055' || 
+    inspectorNik === 'preplabadmin'
+  );
   const [events, setEvents] = useState<any[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [notes, setNotes] = useState<any[]>([]);
@@ -114,6 +132,7 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept, initial
           else if (kat === 'spv up') { bgColor = '#FFD21F'; textColor = '#2d3748'; }
           else if (kat === 'private' || kat === 'personal') { bgColor = '#C0B6AC'; }
           else if (kat === 'rapat' || kat === 'meeting') { bgColor = '#6366F1'; textColor = '#ffffff'; }
+          else if (kat === 'birthday' || kat === 'ulang tahun' || r.isBirthday) { bgColor = '#EC4899'; textColor = '#ffffff'; }
           else if (kat === 'quality assurance' || kat === 'qa') { bgColor = '#3B82F6'; textColor = '#ffffff'; }
           else { bgColor = '#0D9488'; textColor = '#ffffff'; }
           return {
@@ -220,37 +239,42 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept, initial
 
   
   const filteredEvents = useMemo(() => {
+    const isBirthdayEvent = (e: any) => {
+      if (e.id && String(e.id).startsWith('bday-')) return true;
+      if (e.extendedProps?.isBirthday) return true;
+      const k = (e.extendedProps?.kategori || '').toLowerCase();
+      return k === 'birthday' || k === 'ulang tahun';
+    };
+
     if (categoryFilter === 'All') {
-       return events.filter(e => {
-           if (e.id && String(e.id).startsWith('bday-')) return false;
-           if (e.extendedProps?.isBirthday) return false;
-           return true;
-       });
+      return events.filter(e => !isBirthdayEvent(e));
     }
     if (categoryFilter === 'Meeting') {
-       return events.filter(e => {
-           if (e.extendedProps?.isHoliday) return true;
-           const k = (e.extendedProps?.kategori || '').toLowerCase();
-           return k === 'meeting' || k === 'rapat' || (e.title || '').toLowerCase().includes('meeting') || (e.title || '').toLowerCase().includes('rapat');
-       });
+      return events.filter(e => {
+        if (isBirthdayEvent(e)) return false;
+        if (e.extendedProps?.isHoliday) return true;
+        const k = (e.extendedProps?.kategori || '').toLowerCase();
+        return k === 'meeting' || k === 'rapat' || (e.title || '').toLowerCase().includes('meeting') || (e.title || '').toLowerCase().includes('rapat');
+      });
     }
     if (categoryFilter === 'Quality Assurance') {
-       return events.filter(e => {
-           if (e.extendedProps?.isHoliday) return true;
-           return (
-             e.extendedProps?.kategori === 'Quality Assurance' || 
-             (e.id && String(e.id).startsWith('bday-')) ||
-             e.extendedProps?.isBirthday === true
-           );
-       });
+      return events.filter(e => {
+        if (isBirthdayEvent(e)) return false; // Strictly exclude birthdays from Quality Assurance!
+        if (e.extendedProps?.isHoliday) return true;
+        const k = (e.extendedProps?.kategori || '').toLowerCase();
+        return k === 'quality assurance' || k === 'qa';
+      });
+    }
+    if (categoryFilter === 'Birthday') {
+      if (!isDev) return [];
+      return events.filter(e => isBirthdayEvent(e));
     }
     return events.filter(e => {
-        if (e.extendedProps?.isHoliday) return true; // always show holidays
-        if (e.id && String(e.id).startsWith('bday-')) return false;
-        if (e.extendedProps?.isBirthday) return false;
-        return e.extendedProps?.kategori === categoryFilter;
+      if (isBirthdayEvent(e)) return false;
+      if (e.extendedProps?.isHoliday) return true; // always show holidays
+      return e.extendedProps?.kategori === categoryFilter;
     });
-  }, [events, categoryFilter]);
+  }, [events, categoryFilter, isDev]);
 
   const handleEventClick = (info: any) => {
     setCurrentAgenda(info.event);
@@ -273,17 +297,31 @@ export function AgendaDashboard({ inspectorNik, inspectorName, userDept, initial
         
         <div className="flex flex-wrap gap-2 w-full md:w-auto justify-start md:justify-end">
           <div className="flex bg-slate-100 p-1 rounded-lg w-full md:w-auto overflow-x-auto hide-scrollbar" style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-main)', borderWidth: 1 }}>
-            {['All', 'Meeting', 'Quality Assurance', 'Private', 'SPV UP', 'General'].map(cat => (
+            {[
+              'All', 
+              'Meeting', 
+              'Quality Assurance', 
+              'Private', 
+              'SPV UP', 
+              'General',
+              ...(isDev ? ['Birthday'] : [])
+            ].map(cat => (
               <button 
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex-shrink-0 ${categoryFilter === cat ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
                 style={{ 
                   backgroundColor: categoryFilter === cat ? 'var(--card-bg)' : 'transparent',
-                  color: categoryFilter === cat ? 'var(--primary)' : 'var(--text-main)'
+                  color: categoryFilter === cat ? (cat === 'Birthday' ? '#EC4899' : 'var(--primary)') : 'var(--text-main)'
                 }}
               >
-                {cat === 'All' ? 'Semua' : cat === 'Meeting' ? 'Meeting' : cat === 'Quality Assurance' ? 'Quality Assurance' : cat === 'SPV UP' ? 'Section' : cat === 'Private' ? 'Pribadi' : 'General'}
+                {cat === 'All' ? 'Semua' : 
+                 cat === 'Meeting' ? 'Meeting' : 
+                 cat === 'Quality Assurance' ? 'Quality Assurance' : 
+                 cat === 'SPV UP' ? 'Section' : 
+                 cat === 'Private' ? 'Pribadi' : 
+                 cat === 'General' ? 'General' : 
+                 cat === 'Birthday' ? '🎂 Ulang Tahun (Dev)' : cat}
               </button>
             ))}
           </div>

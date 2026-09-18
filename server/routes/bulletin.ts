@@ -199,6 +199,10 @@ router.get("/api/bulletin/:id/comments", async (req, res) => {
           content: bulletinComments.content,
           fileUrl: bulletinComments.fileUrl,
           fileName: bulletinComments.fileName,
+          replyToId: bulletinComments.replyToId,
+          replyToNik: bulletinComments.replyToNik,
+          replyToName: bulletinComments.replyToName,
+          replyToContent: bulletinComments.replyToContent,
           createdAt: bulletinComments.createdAt,
           authorAvatar: employees.avatar,
           authorJabatan: employees.jabatan,
@@ -241,6 +245,10 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
         statusUpdate,
         fileUrl,
         fileName,
+        replyToId,
+        replyToNik,
+        replyToName,
+        replyToContent,
         picNik,
         pt
       } = req.body;
@@ -261,19 +269,42 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
         content: content.trim(),
         fileUrl: fileUrl || null,
         fileName: fileName || null,
+        replyToId: replyToId ? parseInt(String(replyToId)) : null,
+        replyToNik: replyToNik || null,
+        replyToName: replyToName || null,
+        replyToContent: replyToContent || null,
         universe: pt || 'TBP_GPS',
       }).returning();
 
       const comment = inserted[0];
 
-      // Notification calculation by Section and PIC
+      // Notification calculation by Section, PIC, and Reply Target
       const postArray = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, postId)).limit(1);
       const post = postArray[0];
       const postSection = section || post?.category || post?.department || 'Prep & Lab';
 
+      const topicLabel = topicTitle ? `"${topicTitle.length > 35 ? topicTitle.substring(0, 35) + '...' : topicTitle}"` : (post?.title || 'Topik');
+      const notifLink = `/bulletin/TBP?postId=${postId}&topic=${encodeURIComponent(topicTitle || '')}`;
+
+      const notificationsData: any[] = [];
+
+      // 1. Direct notification to the person whose comment was replied to
+      if (replyToNik && replyToNik !== authorNik) {
+        notificationsData.push({
+          userId: replyToNik,
+          role: postSection,
+          title: `💬 Tanggapan Baru di Buletin Board`,
+          message: `Komentar anda mendapatkan tanggapan dari ${authorName || 'Personil'} di topik ${topicLabel} bulletin board.`,
+          type: 'info',
+          link: notifLink,
+          isRead: false,
+        });
+      }
+
+      // 2. Broadcast to other section members & PIC (excluding author and reply recipient who already got notified)
       const allEmployees = await db.select().from(employees);
       const targetEmployees = allEmployees.filter((e) => {
-        if (!e.nik || e.nik === authorNik) return false;
+        if (!e.nik || e.nik === authorNik || e.nik === replyToNik) return false;
         
         // If PIC is specified, always include PIC
         if (picNik && e.nik === picNik) return true;
@@ -291,24 +322,24 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
         );
       });
 
-      const topicLabel = topicTitle ? `"${topicTitle.length > 35 ? topicTitle.substring(0, 35) + '...' : topicTitle}"` : (post?.title || 'Topik');
       const notifTitle = statusUpdate
         ? `⚡ Update Status [${postSection}]: ${statusUpdate}`
         : `💬 Update Topik [${postSection}]`;
       const notifMessage = statusUpdate
         ? `${authorName || 'Personil'} mengupdate status topik ${topicLabel} ke "${statusUpdate}".`
         : `${authorName || 'Personil'} mengupdate progress pada topik ${topicLabel}.`;
-      const notifLink = `/bulletin/TBP?postId=${postId}&topic=${encodeURIComponent(topicTitle || '')}`;
 
-      const notificationsData = targetEmployees.map((t) => ({
-        userId: t.nik,
-        role: postSection,
-        title: notifTitle,
-        message: notifMessage,
-        type: statusUpdate ? 'success' : 'info',
-        link: notifLink,
-        isRead: false,
-      }));
+      targetEmployees.forEach((t) => {
+        notificationsData.push({
+          userId: t.nik,
+          role: postSection,
+          title: notifTitle,
+          message: notifMessage,
+          type: statusUpdate ? 'success' : 'info',
+          link: notifLink,
+          isRead: false,
+        });
+      });
 
       if (notificationsData.length > 0) {
         const insertedNotifs = await db.insert(notifications).values(notificationsData).returning();

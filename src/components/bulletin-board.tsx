@@ -49,7 +49,7 @@ import {
   CalendarCheck,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { AgendaDashboard } from "./agenda-dashboard";
@@ -57,12 +57,19 @@ import { AgendaDashboard } from "./agenda-dashboard";
 export function BulletinBoard({
   inspectorName,
   inspectorNik,
+  isDeveloper,
+  userPt,
 }: {
   inspectorName: string;
   inspectorNik: string;
+  isDeveloper?: boolean;
+  userPt?: string;
 }) {
   const { pt } = useParams();
+  const navigate = useNavigate();
   const isSuperAdmin = inspectorNik === '02D24000043' || inspectorNik === '02D25000055' || inspectorNik === 'preplabadmin';
+  const isDev = Boolean(isDeveloper || isSuperAdmin);
+  const userUniverse = userPt === 'GTS' ? 'GTS' : 'TBP';
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
@@ -76,19 +83,29 @@ export function BulletinBoard({
 
   // Helper to determine active PT universe from route parameter (default TBP for TBP/GPS, GTS for GTS)
   const resolvePtFilter = useCallback((paramPt?: string): string => {
+    if (!isDev) return userUniverse;
     if (paramPt === 'GTS') return 'GTS';
     if (paramPt === 'TBP' || paramPt === 'GPS') return 'TBP';
     if (paramPt === 'ALL') return 'ALL';
-    return 'TBP';
-  }, []);
+    const saved = localStorage.getItem('bulletin_active_universe');
+    if (saved === 'ALL' || saved === 'TBP' || saved === 'GTS') return saved;
+    return userUniverse;
+  }, [isDev, userUniverse]);
 
   const [selectedPtFilter, setSelectedPtFilter] = useState<string>(() => resolvePtFilter(pt));
 
   useEffect(() => {
-    if (pt) {
+    if (!isDev) {
+      if (selectedPtFilter !== userUniverse) {
+        setSelectedPtFilter(userUniverse);
+      }
+      if (pt !== userUniverse) {
+        navigate(`/bulletin/${userUniverse}`, { replace: true });
+      }
+    } else if (pt) {
       setSelectedPtFilter(resolvePtFilter(pt));
     }
-  }, [pt, resolvePtFilter]);
+  }, [isDev, pt, userUniverse, resolvePtFilter, navigate, selectedPtFilter]);
 
   // Agenda & Meetings State
   const [agendaEventsList, setAgendaEventsList] = useState<any[]>([]);
@@ -176,11 +193,11 @@ export function BulletinBoard({
   const fetchPosts = async () => {
     setLoading(true);
     try {
-      // If user is 02D24000043 / SuperAdmin, load ALL bulletin posts across all PTs!
-      const targetPt = isSuperAdmin ? "ALL" : (pt || "TBP");
+      // If user is Developer / SuperAdmin, load ALL bulletin posts across all PTs!
+      const targetPt = isDev ? "ALL" : userUniverse;
       const fetchUrl =
         `/api/bulletin?pt=${targetPt}&nik=${encodeURIComponent(inspectorNik || "")}&_t=${Date.now()}`;
-      console.log("[Bulletin] Fetching:", fetchUrl, "isSuperAdmin:", isSuperAdmin);
+      console.log("[Bulletin] Fetching:", fetchUrl, "isDev:", isDev);
       const res = await fetch(fetchUrl, {
         cache: "no-store",
         headers: {
@@ -213,11 +230,17 @@ export function BulletinBoard({
   };
 
   // Handle URL deep link (e.g. from notifications /bulletin/TBP?postId=411&topic=...)
+  const [deepLinkTopic, setDeepLinkTopic] = useState<string | undefined>(undefined);
+
   useEffect(() => {
     if (posts.length === 0) return;
     try {
       const params = new URLSearchParams(window.location.search);
       const urlPostId = params.get("postId");
+      const urlTopic = params.get("topic");
+      if (urlTopic) {
+        setDeepLinkTopic(urlTopic);
+      }
       if (urlPostId) {
         const target = posts.find((p) => String(p.id) === urlPostId);
         if (target) {
@@ -867,7 +890,7 @@ ${aiMeetingNotes
                   <span className="font-bold text-xs truncate tracking-tight" style={{ color: 'var(--text-main, #f1f5f9)' }}>
                     Prep & Lab Bulletin
                   </span>
-                  {isSuperAdmin && (
+                  {isDev && (
                     <span className="text-[9px] font-mono text-teal-400 font-semibold tracking-wider">
                       ★ ALL ACCESS
                     </span>
@@ -877,8 +900,8 @@ ${aiMeetingNotes
               <ChevronDown className="w-3.5 h-3.5 opacity-60 flex-shrink-0" />
             </div>
 
-            {/* SuperAdmin Universe Filter Selector */}
-            {isSuperAdmin && (
+            {/* SuperAdmin & Developer Universe Filter Selector vs Static Non-Dev Indicator */}
+            {isDev ? (
               <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-main, #242424)' }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted, #94a3b8)' }}>
@@ -905,6 +928,10 @@ ${aiMeetingNotes
                         key={ptKey}
                         onClick={() => {
                           setSelectedPtFilter(ptKey);
+                          try {
+                            localStorage.setItem('bulletin_active_universe', ptKey);
+                          } catch (e) {}
+                          navigate(`/bulletin/${ptKey}`);
                           setShowAllPostsView(true);
                           if (selectedPost && ptKey !== 'ALL') {
                             const postUniverse = selectedPost.pt === 'GTS' ? 'GTS' : 'TBP';
@@ -930,6 +957,15 @@ ${aiMeetingNotes
                     );
                   })}
                 </div>
+              </div>
+            ) : (
+              <div className="px-3 py-2 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-main, #242424)' }}>
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                  Workspace Universe
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                  {userUniverse === 'GTS' ? 'PT GTS' : 'PT TBP / GPS'}
+                </span>
               </div>
             )}
 
@@ -1062,12 +1098,12 @@ ${aiMeetingNotes
             {/* Recents Section */}
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 custom-scrollbar">
               <div className="text-[11px] font-semibold mb-1.5 tracking-wide flex items-center justify-between" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                <span>{showAllPostsView ? `Semua Dokumen (${(isSuperAdmin && selectedPtFilter !== "ALL") ? filteredPosts.length : posts.length})` : "Recents"}</span>
+                <span>{showAllPostsView ? `Semua Dokumen (${selectedPtFilter !== "ALL" ? filteredPosts.length : posts.length})` : "Recents"}</span>
                 <button
                   onClick={() => setShowAllPostsView(!showAllPostsView)}
                   className="text-[10px] text-teal-400 hover:underline cursor-pointer font-medium"
                 >
-                  {showAllPostsView ? "Lihat Recents" : `Buka Semua (${posts.length})`}
+                  {showAllPostsView ? "Lihat Recents" : `Buka Semua (${selectedPtFilter !== "ALL" ? filteredPosts.length : posts.length})`}
                 </button>
               </div>
 
@@ -1098,7 +1134,7 @@ ${aiMeetingNotes
                     >
                       {icon}
                       <span className="truncate flex-1">{title}</span>
-                      {post.pt && isSuperAdmin && (
+                      {post.pt && isDev && (
                         <span 
                           className="text-[9px] px-1 py-0.2 rounded font-mono font-bold"
                           style={{
@@ -1289,8 +1325,11 @@ ${aiMeetingNotes
         <div className="flex-1 p-4 md:p-6 lg:p-8 w-full pb-32">
           {!selectedPost && !isEditing ? (
             <TbpDashboard
-              posts={isSuperAdmin && selectedPtFilter !== "ALL" ? posts.filter((p) => p.pt === selectedPtFilter) : posts}
+              posts={selectedPtFilter !== "ALL" ? posts.filter((p) => (p.pt === "GTS" ? "GTS" : "TBP") === selectedPtFilter) : posts}
               onSelectPost={(post) => navigateToPost(post)}
+              agendaEvents={agendaEventsList}
+              onOpenFullAgenda={() => setShowFullAgendaModal(true)}
+              activeUniverse={selectedPtFilter}
             />
           ) : isEditing ? (
             <div className="space-y-6 max-w-4xl mx-auto">
@@ -1373,21 +1412,33 @@ ${aiMeetingNotes
           ) : parsedTableData ? (
             <div className="space-y-6 w-full max-w-none animate-in fade-in duration-200">
               {/* View Mode Contextual Header Bar */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
                 <button
                   onClick={goBack}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#242424] hover:bg-[#2f2f2f] text-slate-300 hover:text-white text-xs font-medium transition-all shadow-xs border border-slate-700 hover:border-teal-600/60 group cursor-pointer"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-xs border group cursor-pointer hover:opacity-80"
+                  style={{
+                    backgroundColor: 'var(--card-bg, #242424)',
+                    borderColor: 'var(--border-main, #334155)',
+                    color: 'var(--text-main, #cbd5e1)'
+                  }}
                 >
                   <ArrowLeft className="w-3.5 h-3.5 text-teal-400 group-hover:-translate-x-0.5 transition-transform" />
-                  <span>Kembali ke <strong className="text-teal-300 font-semibold">{immediateParentTitle}</strong></span>
+                  <span>Kembali ke <strong className="text-teal-400 font-semibold">{immediateParentTitle}</strong></span>
                 </button>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-blue-950/60 text-blue-300 border border-blue-700/50 font-mono flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-500 dark:text-blue-400 border border-blue-500/30 font-mono flex items-center gap-1.5 font-bold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                     DATABASE TABLE
                   </span>
-                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-mono">
+                  <span 
+                    className="text-[11px] px-2.5 py-1 rounded-full font-mono border"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #1e293b)',
+                      color: 'var(--text-muted, #94a3b8)',
+                      borderColor: 'var(--border-main, #334155)'
+                    }}
+                  >
                     {selectedPost.category || "PAGE"}
                   </span>
                 </div>
@@ -1395,7 +1446,10 @@ ${aiMeetingNotes
 
               {/* Cover Image */}
               {selectedPost.coverImage && (
-                <div className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border border-slate-800 shadow-md">
+                <div 
+                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border shadow-md"
+                  style={{ borderColor: 'var(--border-main, #334155)' }}
+                >
                   <img
                     src={selectedPost.coverImage}
                     alt="Cover"
@@ -1406,18 +1460,24 @@ ${aiMeetingNotes
 
               {/* Title & Metadata */}
               <div>
-                <h1 className="text-3xl md:text-5xl font-black text-slate-100 tracking-tight leading-tight mb-3">
+                <h1 
+                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3"
+                  style={{ color: 'var(--text-main, #f8fafc)' }}
+                >
                   {getPostTitle(selectedPost)}
                 </h1>
 
-                <div className="flex items-center gap-2 text-xs text-slate-400 pb-2">
+                <div 
+                  className="flex items-center gap-2 text-xs pb-2 font-medium"
+                  style={{ color: 'var(--text-muted, #94a3b8)' }}
+                >
                   <div className="flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-slate-500" />
+                    <User className="w-3.5 h-3.5 opacity-70" />
                     <span>{selectedPost.authorName || "System"}</span>
                   </div>
                   <span>•</span>
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                    <Calendar className="w-3.5 h-3.5 opacity-70" />
                     <span>
                       {new Date(selectedPost.createdAt).toLocaleDateString(
                         "id-ID",
@@ -1430,8 +1490,213 @@ ${aiMeetingNotes
 
               {/* Content Before Table */}
               {parsedTableData.beforeText.trim() && (
-                <div className="prose prose-invert prose-sm md:prose-base max-w-none prose-headings:font-black prose-a:text-teal-400 prose-img:rounded-xl">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <div 
+                  className="prose max-w-none text-sm md:text-base leading-relaxed"
+                  style={{ color: 'var(--text-main, #f8fafc)' }}
+                >
+                  <ReactMarkdown 
+                    components={{
+                      h1: ({ node, children }: any) => {
+                        const text = String(children).trim();
+                        const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
+                        const targetPost = posts.find(
+                          (p) =>
+                            p.title &&
+                            (p.title.trim().toLowerCase() === clean ||
+                              p.title.trim().toLowerCase().replace(/^[#\s\-*]+/, "") === clean ||
+                              (clean.length >= 4 &&
+                                (p.title.toLowerCase().includes(clean) ||
+                                  clean.includes(p.title.toLowerCase().trim()))))
+                        );
+                        if (targetPost && text.length > 3) {
+                          return (
+                            <div
+                              onClick={() => navigateToPost(targetPost)}
+                              className="my-2.5 p-3.5 border rounded-xl cursor-pointer transition-all flex items-center justify-between group shadow-xs hover:border-teal-500/70"
+                              style={{
+                                backgroundColor: 'var(--card-bg, #242424)',
+                                borderColor: 'var(--border-main, #334155)',
+                                color: 'var(--text-main, #cbd5e1)'
+                              }}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg shadow-sm text-teal-400 group-hover:scale-105 transition-transform" style={{ backgroundColor: 'var(--input-bg, #181818)' }}>
+                                  <Folder className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <span className="font-bold block text-sm group-hover:text-teal-400" style={{ color: 'var(--text-main, #cbd5e1)' }}>
+                                    {text}
+                                  </span>
+                                  <span className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                                    Klik untuk membuka halaman / dokumen
+                                  </span>
+                                </div>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-transform" />
+                            </div>
+                          );
+                        }
+                        return <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>;
+                      },
+                      h2: ({ node, children }: any) => {
+                        const text = String(children).trim();
+                        const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
+                        const targetPost = posts.find(
+                          (p) =>
+                            p.title &&
+                            (p.title.trim().toLowerCase() === clean ||
+                              p.title.trim().toLowerCase().replace(/^[#\s\-*]+/, "") === clean ||
+                              (clean.length >= 4 &&
+                                (p.title.toLowerCase().includes(clean) ||
+                                  clean.includes(p.title.toLowerCase().trim()))))
+                        );
+                        if (targetPost && text.length > 3) {
+                          return (
+                            <div
+                              onClick={() => navigateToPost(targetPost)}
+                              className="my-2.5 p-3.5 border rounded-xl cursor-pointer transition-all flex items-center justify-between group shadow-xs hover:border-teal-500/70"
+                              style={{
+                                backgroundColor: 'var(--card-bg, #242424)',
+                                borderColor: 'var(--border-main, #334155)',
+                                color: 'var(--text-main, #cbd5e1)'
+                              }}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg shadow-sm text-teal-400 group-hover:scale-105 transition-transform" style={{ backgroundColor: 'var(--input-bg, #181818)' }}>
+                                  <Folder className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <span className="font-bold block text-sm group-hover:text-teal-400" style={{ color: 'var(--text-main, #cbd5e1)' }}>
+                                    {text}
+                                  </span>
+                                  <span className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                                    Klik untuk membuka sub-halaman
+                                  </span>
+                                </div>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-transform" />
+                            </div>
+                          );
+                        }
+                        return <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>;
+                      },
+                      h3: ({ node, children }: any) => {
+                        const text = String(children).trim();
+                        const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
+                        const targetPost = posts.find(
+                          (p) =>
+                            p.title &&
+                            (p.title.trim().toLowerCase() === clean ||
+                              p.title.trim().toLowerCase().replace(/^[#\s\-*]+/, "") === clean ||
+                              (clean.length >= 4 &&
+                                (p.title.toLowerCase().includes(clean) ||
+                                  clean.includes(p.title.toLowerCase().trim()))))
+                        );
+                        if (targetPost && text.length > 3) {
+                          return (
+                            <div
+                              onClick={() => navigateToPost(targetPost)}
+                              className="my-2 p-3 border rounded-xl cursor-pointer transition-all flex items-center justify-between group shadow-xs hover:border-teal-500/70"
+                              style={{
+                                backgroundColor: 'var(--card-bg, #242424)',
+                                borderColor: 'var(--border-main, #334155)',
+                                color: 'var(--text-main, #cbd5e1)'
+                              }}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="p-1.5 rounded-lg text-teal-400" style={{ backgroundColor: 'var(--input-bg, #181818)' }}>
+                                  <FileText className="w-4 h-4" />
+                                </div>
+                                <span className="font-semibold text-xs group-hover:text-teal-400" style={{ color: 'var(--text-main, #cbd5e1)' }}>
+                                  {text}
+                                </span>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-transform" />
+                            </div>
+                          );
+                        }
+                        return <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>;
+                      },
+                      blockquote: ({ node, children }: any) => {
+                        const text = String(children)
+                          .replace(/\"/g, "")
+                          .trim()
+                          .toLowerCase();
+                        if (text.includes("menu info")) return null;
+                        return (
+                          <blockquote 
+                            className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
+                            style={{
+                              backgroundColor: 'var(--input-bg, #222)',
+                              color: 'var(--text-main, #cbd5e1)',
+                              borderColor: 'var(--primary, #2A9D8F)'
+                            }}
+                          >
+                            {children}
+                          </blockquote>
+                        );
+                      },
+                      p: ({ node, children }: any) => {
+                        if (
+                          typeof children === "string" &&
+                          children.replace(/\"/g, "").trim().toLowerCase() ===
+                            "menu info laboratorium"
+                        )
+                          return null;
+                        return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
+                      },
+                      a: ({ href, children }: any) => {
+                        const url = href || "";
+                        const text = String(children);
+                        const isDrive = url.includes("drive.google.com");
+                        const isFile =
+                          isDrive ||
+                          url.includes("/uploads/notion/") ||
+                          url.match(/\.(pdf|docx?|pptx?|xlsx?|zip|png|jpe?g)$/i) ||
+                          text.match(/\.(pdf|docx?|pptx?|xlsx?|zip|png|jpe?g)/i);
+
+                        if (isFile) {
+                          return (
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-1.5 my-1.5 rounded-lg border text-xs font-medium transition-all shadow-xs group no-underline hover:border-teal-500"
+                              style={{
+                                backgroundColor: 'var(--card-bg, #282828)',
+                                borderColor: 'var(--border-main, #334155)',
+                                color: 'var(--primary, #2A9D8F)'
+                              }}
+                            >
+                              <FileText className="w-4 h-4 text-teal-400 group-hover:scale-110 transition-transform" />
+                              <span className="font-semibold" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</span>
+                              <span 
+                                className="text-[10px] px-1.5 py-0.5 rounded ml-1"
+                                style={{
+                                  backgroundColor: 'var(--input-bg, #181818)',
+                                  color: 'var(--text-muted, #94a3b8)'
+                                }}
+                              >
+                                {isDrive ? "Google Drive" : "Unduh File"}
+                              </span>
+                            </a>
+                          );
+                        }
+
+                        return (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-teal-500 hover:text-teal-400 underline underline-offset-2 transition-colors font-medium"
+                          >
+                            {children}
+                          </a>
+                        );
+                      }
+                    }}
+                    remarkPlugins={[remarkGfm]}
+                  >
                     {parsedTableData.beforeText}
                   </ReactMarkdown>
                 </div>
@@ -1449,6 +1714,7 @@ ${aiMeetingNotes
                 pt={pt || "TBP"}
                 beforeText={parsedTableData.beforeText}
                 afterText={parsedTableData.afterText}
+                initialTopicTitle={deepLinkTopic}
                 onPostContentUpdate={(newContent: string) => {
                   setSelectedPost((prev: any) => (prev ? { ...prev, content: newContent } : null));
                   setPosts((prev) =>
@@ -1461,8 +1727,41 @@ ${aiMeetingNotes
 
               {/* Content After Table */}
               {parsedTableData.afterText.trim() && (
-                <div className="prose prose-invert prose-sm md:prose-base max-w-none prose-headings:font-black prose-a:text-teal-400 prose-img:rounded-xl pt-4">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <div 
+                  className="prose max-w-none text-sm md:text-base leading-relaxed pt-4"
+                  style={{ color: 'var(--text-main, #f8fafc)' }}
+                >
+                  <ReactMarkdown 
+                    components={{
+                      h1: ({ node, children }: any) => <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>,
+                      h2: ({ node, children }: any) => <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>,
+                      h3: ({ node, children }: any) => <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>,
+                      blockquote: ({ node, children }: any) => (
+                        <blockquote 
+                          className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
+                          style={{
+                            backgroundColor: 'var(--input-bg, #222)',
+                            color: 'var(--text-main, #cbd5e1)',
+                            borderColor: 'var(--primary, #2A9D8F)'
+                          }}
+                        >
+                          {children}
+                        </blockquote>
+                      ),
+                      p: ({ node, children }: any) => <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>,
+                      a: ({ href, children }: any) => (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-teal-500 hover:text-teal-400 underline underline-offset-2 transition-colors font-medium"
+                        >
+                          {children}
+                        </a>
+                      )
+                    }}
+                    remarkPlugins={[remarkGfm]}
+                  >
                     {parsedTableData.afterText}
                   </ReactMarkdown>
                 </div>
@@ -1471,17 +1770,29 @@ ${aiMeetingNotes
           ) : (
             <div className="space-y-6 w-full max-w-none">
               {/* View Mode Contextual Header Bar */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
                 <button
                   onClick={goBack}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#242424] hover:bg-[#2f2f2f] text-slate-300 hover:text-white text-xs font-medium transition-all shadow-xs border border-slate-700 hover:border-teal-600/60 group cursor-pointer"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-xs border group cursor-pointer hover:opacity-80"
+                  style={{
+                    backgroundColor: 'var(--card-bg, #242424)',
+                    borderColor: 'var(--border-main, #334155)',
+                    color: 'var(--text-main, #cbd5e1)'
+                  }}
                 >
                   <ArrowLeft className="w-3.5 h-3.5 text-teal-400 group-hover:-translate-x-0.5 transition-transform" />
-                  <span>Kembali ke <strong className="text-teal-300 font-semibold">{immediateParentTitle}</strong></span>
+                  <span>Kembali ke <strong className="text-teal-400 font-semibold">{immediateParentTitle}</strong></span>
                 </button>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-mono">
+                  <span 
+                    className="text-[11px] px-2.5 py-1 rounded-full font-mono border"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #1e293b)',
+                      color: 'var(--text-muted, #94a3b8)',
+                      borderColor: 'var(--border-main, #334155)'
+                    }}
+                  >
                     {selectedPost.category || "PAGE"}
                   </span>
                 </div>
@@ -1489,7 +1800,10 @@ ${aiMeetingNotes
 
               {/* Cover Image */}
               {selectedPost.coverImage && (
-                <div className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border border-slate-800 shadow-md">
+                <div 
+                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border shadow-md"
+                  style={{ borderColor: 'var(--border-main, #334155)' }}
+                >
                   <img
                     src={selectedPost.coverImage}
                     alt="Cover"
@@ -1500,18 +1814,24 @@ ${aiMeetingNotes
 
               {/* Title & Metadata */}
               <div>
-                <h1 className="text-3xl md:text-5xl font-black text-slate-100 tracking-tight leading-tight mb-3">
+                <h1 
+                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3"
+                  style={{ color: 'var(--text-main, #f8fafc)' }}
+                >
                   {getPostTitle(selectedPost)}
                 </h1>
 
-                <div className="flex items-center gap-2 text-xs text-slate-400 pb-4">
+                <div 
+                  className="flex items-center gap-2 text-xs pb-4 font-medium"
+                  style={{ color: 'var(--text-muted, #94a3b8)' }}
+                >
                   <div className="flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-slate-500" />
+                    <User className="w-3.5 h-3.5 opacity-70" />
                     <span>{selectedPost.authorName || "System"}</span>
                   </div>
                   <span>•</span>
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                    <Calendar className="w-3.5 h-3.5 opacity-70" />
                     <span>
                       {new Date(selectedPost.createdAt).toLocaleDateString(
                         "id-ID",
@@ -1523,7 +1843,10 @@ ${aiMeetingNotes
               </div>
 
               {/* Rendered Content */}
-              <div className="prose prose-invert prose-sm md:prose-base max-w-none prose-headings:font-black prose-a:text-teal-400 prose-img:rounded-xl">
+              <div 
+                className="prose max-w-none text-sm md:text-base leading-relaxed"
+                style={{ color: 'var(--text-main, #f8fafc)' }}
+              >
                 <ReactMarkdown
                   components={{
                     h1: ({ node, children }) => {
@@ -1542,17 +1865,22 @@ ${aiMeetingNotes
                         return (
                           <div
                             onClick={() => navigateToPost(targetPost)}
-                            className="my-2.5 p-3.5 border border-slate-700/80 rounded-xl bg-[#242424] hover:bg-[#1a382d] hover:border-teal-600/70 cursor-pointer transition-all flex items-center justify-between group shadow-xs"
+                            className="my-2.5 p-3.5 border rounded-xl cursor-pointer transition-all flex items-center justify-between group shadow-xs hover:border-teal-500/70"
+                            style={{
+                              backgroundColor: 'var(--card-bg, #242424)',
+                              borderColor: 'var(--border-main, #334155)',
+                              color: 'var(--text-main, #cbd5e1)'
+                            }}
                           >
                             <div className="flex items-center gap-3">
-                              <div className="p-2 bg-[#181818] rounded-lg shadow-sm text-teal-400 group-hover:text-teal-300 group-hover:bg-[#1e3c2f]">
+                              <div className="p-2 rounded-lg shadow-sm text-teal-400 group-hover:scale-105 transition-transform" style={{ backgroundColor: 'var(--input-bg, #181818)' }}>
                                 <Folder className="w-5 h-5" />
                               </div>
                               <div>
-                                <span className="font-bold text-slate-200 group-hover:text-teal-300 block text-sm">
+                                <span className="font-bold block text-sm group-hover:text-teal-400" style={{ color: 'var(--text-main, #cbd5e1)' }}>
                                   {text}
                                 </span>
-                                <span className="text-[11px] text-slate-500 group-hover:text-slate-400">
+                                <span className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                                   Klik untuk membuka halaman / dokumen
                                 </span>
                               </div>
@@ -1561,7 +1889,7 @@ ${aiMeetingNotes
                           </div>
                         );
                       }
-                      return <h1 className="text-2xl font-bold mt-6 mb-3 text-slate-100">{children}</h1>;
+                      return <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>;
                     },
                     h2: ({ node, children }) => {
                       const text = String(children).trim();
@@ -1579,17 +1907,22 @@ ${aiMeetingNotes
                         return (
                           <div
                             onClick={() => navigateToPost(targetPost)}
-                            className="my-2.5 p-3.5 border border-slate-700/80 rounded-xl bg-[#242424] hover:bg-[#1a382d] hover:border-teal-600/70 cursor-pointer transition-all flex items-center justify-between group shadow-xs"
+                            className="my-2.5 p-3.5 border rounded-xl cursor-pointer transition-all flex items-center justify-between group shadow-xs hover:border-teal-500/70"
+                            style={{
+                              backgroundColor: 'var(--card-bg, #242424)',
+                              borderColor: 'var(--border-main, #334155)',
+                              color: 'var(--text-main, #cbd5e1)'
+                            }}
                           >
                             <div className="flex items-center gap-3">
-                              <div className="p-2 bg-[#181818] rounded-lg shadow-sm text-teal-400 group-hover:text-teal-300 group-hover:bg-[#1e3c2f]">
+                              <div className="p-2 rounded-lg shadow-sm text-teal-400 group-hover:scale-105 transition-transform" style={{ backgroundColor: 'var(--input-bg, #181818)' }}>
                                 <Folder className="w-5 h-5" />
                               </div>
                               <div>
-                                <span className="font-bold text-slate-200 group-hover:text-teal-300 block text-sm">
+                                <span className="font-bold block text-sm group-hover:text-teal-400" style={{ color: 'var(--text-main, #cbd5e1)' }}>
                                   {text}
                                 </span>
-                                <span className="text-[11px] text-slate-500 group-hover:text-slate-400">
+                                <span className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                                   Klik untuk membuka sub-halaman
                                 </span>
                               </div>
@@ -1598,7 +1931,7 @@ ${aiMeetingNotes
                           </div>
                         );
                       }
-                      return <h2 className="text-xl font-bold mt-5 mb-2 text-slate-200">{children}</h2>;
+                      return <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>;
                     },
                     h3: ({ node, children }) => {
                       const text = String(children).trim();
@@ -1616,13 +1949,18 @@ ${aiMeetingNotes
                         return (
                           <div
                             onClick={() => navigateToPost(targetPost)}
-                            className="my-2 p-3 border border-slate-700/80 rounded-xl bg-[#242424] hover:bg-[#1a382d] hover:border-teal-600/70 cursor-pointer transition-all flex items-center justify-between group shadow-xs"
+                            className="my-2 p-3 border rounded-xl cursor-pointer transition-all flex items-center justify-between group shadow-xs hover:border-teal-500/70"
+                            style={{
+                              backgroundColor: 'var(--card-bg, #242424)',
+                              borderColor: 'var(--border-main, #334155)',
+                              color: 'var(--text-main, #cbd5e1)'
+                            }}
                           >
                             <div className="flex items-center gap-3">
-                              <div className="p-1.5 bg-[#181818] rounded-lg text-teal-400 group-hover:text-teal-300">
+                              <div className="p-1.5 rounded-lg text-teal-400" style={{ backgroundColor: 'var(--input-bg, #181818)' }}>
                                 <FileText className="w-4 h-4" />
                               </div>
-                              <span className="font-semibold text-slate-200 group-hover:text-teal-300 text-xs">
+                              <span className="font-semibold text-xs group-hover:text-teal-400" style={{ color: 'var(--text-main, #cbd5e1)' }}>
                                 {text}
                               </span>
                             </div>
@@ -1630,16 +1968,23 @@ ${aiMeetingNotes
                           </div>
                         );
                       }
-                      return <h3 className="text-lg font-bold mt-4 mb-2 text-slate-300">{children}</h3>;
+                      return <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>;
                     },
                     blockquote: ({ node, children }) => {
                       const text = String(children)
                         .replace(/\"/g, "")
                         .trim()
                         .toLowerCase();
-                      if (text.includes("menu info")) return null;
+                        if (text.includes("menu info")) return null;
                       return (
-                        <blockquote className="border-l-4 border-teal-500/60 bg-[#222] px-4 py-2 my-3 rounded-r-lg text-slate-300 italic">
+                        <blockquote 
+                          className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
+                          style={{
+                            backgroundColor: 'var(--input-bg, #222)',
+                            color: 'var(--text-main, #cbd5e1)',
+                            borderColor: 'var(--primary, #2A9D8F)'
+                          }}
+                        >
                           {children}
                         </blockquote>
                       );
@@ -1651,36 +1996,7 @@ ${aiMeetingNotes
                           "menu info laboratorium"
                       )
                         return null;
-                      const text = String(children).trim();
-                      const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
-                      const targetPost = posts.find(
-                        (p) =>
-                          p.title &&
-                          (p.title.trim().toLowerCase() === clean ||
-                            p.title.trim().toLowerCase().replace(/^[#\s\-*]+/, "") === clean ||
-                            (clean.length >= 4 &&
-                              (p.title.toLowerCase().includes(clean) ||
-                                clean.includes(p.title.toLowerCase().trim()))))
-                      );
-                      if (targetPost && text.length > 3) {
-                        return (
-                          <div
-                            onClick={() => navigateToPost(targetPost)}
-                            className="my-2 p-3 border border-slate-700/80 rounded-xl bg-[#242424] hover:bg-[#1a382d] hover:border-teal-600/70 cursor-pointer transition-all flex items-center justify-between group shadow-xs"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="p-1.5 bg-[#181818] rounded-lg text-teal-400 group-hover:text-teal-300">
-                                <FileText className="w-4 h-4" />
-                              </div>
-                              <span className="font-semibold text-slate-200 group-hover:text-teal-300 text-xs">
-                                {text}
-                              </span>
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-transform" />
-                          </div>
-                        );
-                      }
-                      return <p className="mb-3 leading-relaxed text-slate-300">{children}</p>;
+                      return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
                     },
                     a: ({ href, children }) => {
                       const url = href || "";
@@ -1698,11 +2014,22 @@ ${aiMeetingNotes
                             href={url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-3 py-1.5 my-1.5 rounded-lg bg-[#282828] hover:bg-[#1a382d] border border-slate-700 hover:border-teal-500/70 text-teal-300 hover:text-teal-200 text-xs font-medium transition-all shadow-xs group no-underline"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 my-1.5 rounded-lg border text-xs font-medium transition-all shadow-xs group no-underline hover:border-teal-500"
+                            style={{
+                              backgroundColor: 'var(--card-bg, #282828)',
+                              borderColor: 'var(--border-main, #334155)',
+                              color: 'var(--primary, #2A9D8F)'
+                            }}
                           >
                             <FileText className="w-4 h-4 text-teal-400 group-hover:scale-110 transition-transform" />
-                            <span className="font-semibold">{children}</span>
-                            <span className="text-[10px] text-slate-400 bg-[#181818] px-1.5 py-0.5 rounded ml-1 group-hover:text-teal-300">
+                            <span className="font-semibold" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</span>
+                            <span 
+                              className="text-[10px] px-1.5 py-0.5 rounded ml-1"
+                              style={{
+                                backgroundColor: 'var(--input-bg, #181818)',
+                                color: 'var(--text-muted, #94a3b8)'
+                              }}
+                            >
                               {isDrive ? "Google Drive" : "Unduh File"}
                             </span>
                           </a>
@@ -1714,31 +2041,44 @@ ${aiMeetingNotes
                           href={url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-teal-400 hover:text-teal-300 underline underline-offset-2 transition-colors"
+                          className="text-teal-500 hover:text-teal-400 underline underline-offset-2 transition-colors font-medium"
                         >
                           {children}
                         </a>
                       );
                     },
                     table: ({ children }) => (
-                      <div className="overflow-x-auto my-4 rounded-xl border border-slate-800 shadow-sm">
+                      <div 
+                        className="overflow-x-auto my-4 rounded-xl border shadow-sm"
+                        style={{
+                          backgroundColor: 'var(--card-bg, #181818)',
+                          borderColor: 'var(--border-main, #334155)'
+                        }}
+                      >
                         <table className="w-full text-left text-xs border-collapse">
                           {children}
                         </table>
                       </div>
                     ),
                     thead: ({ children }) => (
-                      <thead className="bg-[#242424] text-slate-200 font-bold border-b border-slate-700">
+                      <thead 
+                        className="font-bold border-b"
+                        style={{
+                          backgroundColor: 'var(--input-bg, #242424)',
+                          color: 'var(--text-main, #cbd5e1)',
+                          borderColor: 'var(--border-main, #334155)'
+                        }}
+                      >
                         {children}
                       </thead>
                     ),
                     th: ({ children }) => (
-                      <th className="px-4 py-2.5 font-bold text-slate-200">
+                      <th className="px-4 py-2.5 font-bold" style={{ color: 'var(--text-main, #cbd5e1)' }}>
                         {children}
                       </th>
                     ),
                     td: ({ children }) => (
-                      <td className="px-4 py-2 border-b border-slate-800/60 text-slate-300">
+                      <td className="px-4 py-2 border-b" style={{ borderColor: 'var(--border-main, #334155)', color: 'var(--text-main, #cbd5e1)' }}>
                         {children}
                       </td>
                     ),
@@ -1756,35 +2096,53 @@ ${aiMeetingNotes
       {/* Full Agenda Modal */}
       {showFullAgendaModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1e1e1e] border border-slate-700 w-full max-w-5xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-[#242424]">
+          <div 
+            className="border w-full max-w-5xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200"
+            style={{
+              backgroundColor: 'var(--card-bg, #1e1e1e)',
+              borderColor: 'var(--border-main, #334155)',
+              color: 'var(--text-main, #f8fafc)'
+            }}
+          >
+            <div 
+              className="px-5 py-4 border-b flex items-center justify-between"
+              style={{
+                backgroundColor: 'var(--input-bg, #242424)',
+                borderColor: 'var(--border-main, #334155)'
+              }}
+            >
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-teal-950/60 border border-teal-600/40 text-teal-400">
+                <div className="p-2 rounded-xl bg-teal-500/15 border border-teal-500/40 text-teal-500">
                   <CalendarDays className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-slate-100">
+                  <h2 className="text-base font-bold" style={{ color: 'var(--text-main, #f8fafc)' }}>
                     Agenda & Jadwal Kegiatan Tim
                   </h2>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Integrasi kalender operasional, meeting, dan jadwal rutin Prep & Lab
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowFullAgendaModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#333] transition-colors"
+                className="p-1.5 rounded-lg opacity-70 hover:opacity-100 transition-colors"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 bg-[#1a1a1a]">
+            <div 
+              className="flex-1 overflow-y-auto p-4"
+              style={{ backgroundColor: 'var(--bg-main, #1a1a1a)' }}
+            >
               <AgendaDashboard
                 inspectorNik={inspectorNik}
                 inspectorName={inspectorName}
                 userDept="ALL"
                 initialEventId={selectedAgendaEventId || undefined}
+                isDeveloper={isDev}
               />
             </div>
           </div>
@@ -1794,24 +2152,38 @@ ${aiMeetingNotes
       {/* AI Meeting Note Modal */}
       {showAiMeetingModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1e1e1e] border border-slate-700 w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-[#242424]">
+          <div 
+            className="border w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200"
+            style={{
+              backgroundColor: 'var(--card-bg, #1e1e1e)',
+              borderColor: 'var(--border-main, #334155)',
+              color: 'var(--text-main, #f8fafc)'
+            }}
+          >
+            <div 
+              className="px-5 py-4 border-b flex items-center justify-between"
+              style={{
+                backgroundColor: 'var(--input-bg, #242424)',
+                borderColor: 'var(--border-main, #334155)'
+              }}
+            >
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-teal-950/60 border border-teal-600/40 text-teal-400">
+                <div className="p-2 rounded-xl bg-teal-500/15 border border-teal-500/40 text-teal-500">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-slate-100">
+                  <h2 className="text-base font-bold" style={{ color: 'var(--text-main, #f8fafc)' }}>
                     New AI Meeting Note (Notulensi Rapat)
                   </h2>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Buat dan format otomatis notulensi rapat dengan asisten cerdas AI
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowAiMeetingModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#333] transition-colors"
+                className="p-1.5 rounded-lg opacity-70 hover:opacity-100 transition-colors"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1819,7 +2191,7 @@ ${aiMeetingNotes
 
             <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">
+                <label className="block font-semibold mb-1" style={{ color: 'var(--text-main, #f8fafc)' }}>
                   Judul / Topik Rapat <span className="text-rose-400">*</span>
                 </label>
                 <input
@@ -1827,38 +2199,53 @@ ${aiMeetingNotes
                   placeholder="Contoh: Rapat Koordinasi Shift & Kalibrasi XRF"
                   value={aiMeetingTitle}
                   onChange={(e) => setAiMeetingTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#282828] border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-teal-500 text-xs"
+                  className="w-full px-3 py-2 rounded-lg border text-xs focus:outline-none focus:border-teal-500"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #282828)',
+                    borderColor: 'var(--border-main, #334155)',
+                    color: 'var(--text-main, #f8fafc)'
+                  }}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">
+                  <label className="block font-semibold mb-1" style={{ color: 'var(--text-main, #f8fafc)' }}>
                     PIC / Pemimpin Rapat
                   </label>
                   <input
                     type="text"
                     value={aiMeetingPic}
                     onChange={(e) => setAiMeetingPic(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#282828] border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-teal-500 text-xs"
+                    className="w-full px-3 py-2 rounded-lg border text-xs focus:outline-none focus:border-teal-500"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #282828)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f8fafc)'
+                    }}
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">
+                  <label className="block font-semibold mb-1" style={{ color: 'var(--text-main, #f8fafc)' }}>
                     Waktu & Tanggal
                   </label>
                   <input
                     type="datetime-local"
                     value={aiMeetingDate}
                     onChange={(e) => setAiMeetingDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#282828] border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-teal-500 text-xs"
+                    className="w-full px-3 py-2 rounded-lg border text-xs focus:outline-none focus:border-teal-500"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #282828)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f8fafc)'
+                    }}
                   />
                 </div>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="font-semibold text-slate-300">
+                  <label className="font-semibold" style={{ color: 'var(--text-main, #f8fafc)' }}>
                     Poin-Poin Catatan / Diskusi Rapat
                   </label>
                   <button
@@ -1885,7 +2272,12 @@ ${aiMeetingNotes
                   placeholder="Ketik poin rapat di sini...&#10;- Evaluasi antrian preparasi sampel&#10;- Jadwal kalibrasi spektrometer&#10;- Peningkatan kepatuhan APD"
                   value={aiMeetingNotes}
                   onChange={(e) => setAiMeetingNotes(e.target.value)}
-                  className="w-full p-3 bg-[#282828] border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-teal-500 text-xs font-mono resize-none leading-relaxed"
+                  className="w-full p-3 rounded-lg border text-xs font-mono resize-none leading-relaxed focus:outline-none focus:border-teal-500"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #282828)',
+                    borderColor: 'var(--border-main, #334155)',
+                    color: 'var(--text-main, #f8fafc)'
+                  }}
                 />
               </div>
 
@@ -1898,31 +2290,42 @@ ${aiMeetingNotes
                     rows={6}
                     value={aiGeneratedContent}
                     onChange={(e) => setAiGeneratedContent(e.target.value)}
-                    className="w-full p-3 bg-[#242424] border border-teal-700/50 rounded-lg text-slate-200 focus:outline-none focus:border-teal-500 text-xs font-mono resize-none leading-relaxed"
+                    className="w-full p-3 rounded-lg border text-xs font-mono resize-none leading-relaxed focus:outline-none focus:border-teal-500"
+                    style={{
+                      backgroundColor: 'var(--card-bg, #242424)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f8fafc)'
+                    }}
                   />
                 </div>
               )}
 
-              <div className="p-3 bg-[#242424] rounded-lg border border-slate-800 space-y-2">
-                <span className="font-semibold text-slate-300 block text-[11px]">
+              <div 
+                className="p-3 rounded-lg border space-y-2"
+                style={{
+                  backgroundColor: 'var(--card-bg, #242424)',
+                  borderColor: 'var(--border-main, #334155)'
+                }}
+              >
+                <span className="font-semibold block text-[11px]" style={{ color: 'var(--text-main, #f8fafc)' }}>
                   Tujuan Penyimpanan:
                 </span>
                 <div className="flex items-center gap-4 text-xs">
-                  <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     <input
                       type="checkbox"
                       checked={saveToAgenda}
                       onChange={(e) => setSaveToAgenda(e.target.checked)}
-                      className="rounded bg-[#1a1a1a] border-slate-700 text-teal-500 focus:ring-0"
+                      className="rounded text-teal-500 focus:ring-0"
                     />
                     <span>📅 Kalender Agenda Tim</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     <input
                       type="checkbox"
                       checked={saveToBulletin}
                       onChange={(e) => setSaveToBulletin(e.target.checked)}
-                      className="rounded bg-[#1a1a1a] border-slate-700 text-teal-500 focus:ring-0"
+                      className="rounded text-teal-500 focus:ring-0"
                     />
                     <span>📰 Buletin Workspace Notion</span>
                   </label>
@@ -1930,7 +2333,13 @@ ${aiMeetingNotes
               </div>
             </div>
 
-            <div className="px-5 py-3 border-t border-slate-800 flex items-center justify-end gap-2 bg-[#242424]">
+            <div 
+              className="px-5 py-3 border-t flex items-center justify-end gap-2"
+              style={{
+                backgroundColor: 'var(--input-bg, #242424)',
+                borderColor: 'var(--border-main, #334155)'
+              }}
+            >
               <Button
                 onClick={() => setShowAiMeetingModal(false)}
                 variant="secondary"
@@ -1952,20 +2361,35 @@ ${aiMeetingNotes
       {/* Quick Search Modal (Ctrl + K) */}
       {showSearchModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
-          <div className="bg-[#202020] border border-slate-700 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-3.5 border-b border-slate-800 flex items-center gap-3 bg-[#242424]">
-              <Search className="w-5 h-5 text-slate-400" />
+          <div 
+            className="border w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            style={{
+              backgroundColor: 'var(--card-bg, #202020)',
+              borderColor: 'var(--border-main, #334155)',
+              color: 'var(--text-main, #f8fafc)'
+            }}
+          >
+            <div 
+              className="p-3.5 border-b flex items-center gap-3"
+              style={{
+                backgroundColor: 'var(--input-bg, #242424)',
+                borderColor: 'var(--border-main, #334155)'
+              }}
+            >
+              <Search className="w-5 h-5" style={{ color: 'var(--text-muted, #94a3b8)' }} />
               <input
                 autoFocus
                 type="text"
                 placeholder="Ketik untuk mencari dokumen atau menu..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-transparent border-none outline-none text-sm w-full text-slate-200 placeholder:text-slate-500"
+                className="bg-transparent border-none outline-none text-sm w-full"
+                style={{ color: 'var(--text-main, #f8fafc)' }}
               />
               <button
                 onClick={() => setShowSearchModal(false)}
-                className="p-1 rounded-md text-slate-400 hover:text-white"
+                className="p-1 rounded-md opacity-70 hover:opacity-100"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1973,7 +2397,7 @@ ${aiMeetingNotes
 
             <div className="max-h-80 overflow-y-auto p-2 space-y-0.5">
               {filteredPosts.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-500 italic">
+                <div className="py-8 text-center text-xs italic" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                   Tidak ada dokumen yang cocok dengan "{searchQuery}"
                 </div>
               ) : (
@@ -1985,13 +2409,17 @@ ${aiMeetingNotes
                       navigateToPost(p);
                       setShowSearchModal(false);
                     }}
-                    className="flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-[#2c2c2c] hover:text-white cursor-pointer transition-colors text-slate-300 group"
+                    className="flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg cursor-pointer transition-colors group hover:opacity-90"
+                    style={{
+                      backgroundColor: 'transparent',
+                      color: 'var(--text-main, #f8fafc)'
+                    }}
                   >
                     {getNotionIcon(p)}
-                    <span className="truncate flex-1 font-medium group-hover:text-teal-300">
+                    <span className="truncate flex-1 font-medium group-hover:text-teal-400">
                       {getPostTitle(p)}
                     </span>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-teal-400" />
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-teal-400" />
                   </div>
                 ))
               )}
@@ -2003,17 +2431,31 @@ ${aiMeetingNotes
       {/* Notifications Modal */}
       {showNotifModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
-          <div className="bg-[#202020] border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-3.5 border-b border-slate-800 flex items-center justify-between bg-[#242424]">
+          <div 
+            className="border w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            style={{
+              backgroundColor: 'var(--card-bg, #202020)',
+              borderColor: 'var(--border-main, #334155)',
+              color: 'var(--text-main, #f8fafc)'
+            }}
+          >
+            <div 
+              className="p-3.5 border-b flex items-center justify-between"
+              style={{
+                backgroundColor: 'var(--input-bg, #242424)',
+                borderColor: 'var(--border-main, #334155)'
+              }}
+            >
               <div className="flex items-center gap-2">
                 <Inbox className="w-4 h-4 text-teal-400" />
-                <span className="font-bold text-sm text-slate-200">
+                <span className="font-bold text-sm" style={{ color: 'var(--text-main, #f8fafc)' }}>
                   Inbox & Notifikasi Tim
                 </span>
               </div>
               <button
                 onClick={() => setShowNotifModal(false)}
-                className="p-1 rounded-md text-slate-400 hover:text-white"
+                className="p-1 rounded-md opacity-70 hover:opacity-100"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2021,22 +2463,26 @@ ${aiMeetingNotes
 
             <div className="max-h-80 overflow-y-auto p-3 space-y-2">
               {notificationsList.length === 0 ? (
-                <div className="py-6 text-center text-xs text-slate-500 italic">
+                <div className="py-6 text-center text-xs italic" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                   Tidak ada notifikasi baru saat ini.
                 </div>
               ) : (
                 notificationsList.slice(0, 10).map((n) => (
                   <div
                     key={n.id}
-                    className="p-2.5 rounded-lg bg-[#262626] border border-slate-800 text-xs text-slate-300 space-y-1"
+                    className="p-2.5 rounded-lg border text-xs space-y-1"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #262626)',
+                      borderColor: 'var(--border-main, #334155)'
+                    }}
                   >
-                    <div className="font-semibold text-slate-200 flex items-center justify-between">
+                    <div className="font-semibold flex items-center justify-between" style={{ color: 'var(--text-main, #f8fafc)' }}>
                       <span>{n.title || "Pemberitahuan Sistem"}</span>
-                      <span className="text-[10px] text-slate-500">
+                      <span className="text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                         {n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ""}
                       </span>
                     </div>
-                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                    <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                       {n.message || n.content || "Pemberitahuan baru telah diterbitkan."}
                     </p>
                   </div>

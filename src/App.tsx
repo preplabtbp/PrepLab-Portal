@@ -1267,11 +1267,10 @@ export default function App() {
             {/* Buletin */}
             <button
               onClick={() => {
-                if (userDept === 'ALL') {
-                  setShowBulletinMenu(true);
-                } else {
-                  handleNav(`bulletin/${userProfile?.pt || 'TBP'}`);
-                }
+                const targetUniverse = isDeveloper
+                  ? (localStorage.getItem('bulletin_active_universe') || userProfile?.pt || 'TBP')
+                  : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
+                handleNav(`bulletin/${targetUniverse}`);
               }}
               className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
                 activeTab.startsWith('bulletin')
@@ -1384,9 +1383,9 @@ export default function App() {
   <Route path="/pelanggaran-dashboard" element={<PelanggaranDashboard />} />
   <Route path="/wo-maintenance-dashboard" element={<WOMaintenanceDashboard onBack={() => handleNav('home')} inspectorNik={inspectorNik!} />} />
   <Route path="/wo-dashboard" element={<WOMaintenanceDashboard onBack={() => handleNav('home')} inspectorNik={inspectorNik!} />} />
-  <Route path="/bulletin/:pt" element={<BulletinBoard inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
-  <Route path="/bulletin" element={<Navigate to={`/bulletin/${userProfile?.pt || 'TBP'}`} replace />} />
-  <Route path="/agenda" element={<AgendaDashboard key="agenda" inspectorNik={inspectorNik!} inspectorName={inspectorName!} userDept={userDept || undefined} />} />
+  <Route path="/bulletin/:pt" element={<BulletinBoard inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} userPt={userProfile?.pt || 'TBP'} />} />
+  <Route path="/bulletin" element={<Navigate to={`/bulletin/${isDeveloper ? (localStorage.getItem('bulletin_active_universe') || userProfile?.pt || 'TBP') : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP')}`} replace />} />
+  <Route path="/agenda" element={<AgendaDashboard key="agenda" inspectorNik={inspectorNik!} inspectorName={inspectorName!} userDept={userDept || undefined} isDeveloper={isDeveloper} />} />
   <Route path="/p5m" element={<P5MScreen onBack={() => handleNav('home')} userProfile={userProfile} />} />
   <Route path="/feedback-support" element={<FeedbackSupportScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/finance" element={<FinanceScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
@@ -1564,11 +1563,10 @@ export default function App() {
             label="Buletin" 
             active={activeTab.startsWith('bulletin')} 
             onClick={() => { 
-              if (userDept === 'ALL') {
-                setShowBulletinMenu(true);
-              } else {
-                handleNav(`bulletin/${userProfile?.pt || 'TBP'}`);
-              }
+              const targetUniverse = isDeveloper
+                ? (localStorage.getItem('bulletin_active_universe') || userProfile?.pt || 'TBP')
+                : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
+              handleNav(`bulletin/${targetUniverse}`);
             }} 
           />
 

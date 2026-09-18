@@ -2,6 +2,60 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.36] - 2026-09-18
+
+### 📰 Navigasi Buletin Langsung & Penguncian Universe Perusahaan
+
+- **Navigasi Langsung Tanpa Pop-up Dialog (`src/App.tsx`)**:
+  - Mengklik menu Buletin pada bilah navigasi utama (sidebar desktop maupun menu mobile) kini langsung membuka halaman buletin sesuai universe perusahaan pengguna (`bulletin/TBP` atau `bulletin/GTS`).
+  - Dialog pop-up pemilihan universe yang sebelumnya muncul kini telah ditiadakan sepenuhnya untuk mempercepat akses informasi personil.
+- **Penguncian Universe untuk Non-Developer (`src/components/bulletin-board.tsx`)**:
+  - Tab pengubah universe (`ALL / TBP / GTS`) di dalam modul buletin disembunyikan bagi seluruh pengguna reguler (non-developer).
+  - Pengguna reguler dikunci secara aman ke universe perusahaannya masing-masing dengan label badge status resmi (`TBP GPS UNIVERSE` atau `GTS UNIVERSE`).
+  - Khusus akun Developer, tab switcher universe (`ALL / TBP / GTS`) tetap tersedia penuh di bagian atas modul buletin untuk kebutuhan audit dan moderasi lintas entitas, dengan pilihan aktif tersimpan secara otomatis di `localStorage`.
+
+### 📅 Kalender & Agenda Departemen pada Homepage Buletin
+
+- **Integrasi Widget Kalender Interaktif (`src/components/TbpDashboard.tsx`)**:
+  - Menghadirkan widget interaktif **"Kalender & Agenda Departemen"** di halaman muka buletin.
+  - Kalender mini dilengkapi kontrol navigasi bulan (sebelumnya/berikutnya/bulan ini), indikator tanggal aktif, dan penanda titik berwarna (*dots*) pada tanggal yang memiliki agenda kegiatan.
+  - Pengguna dapat mengklik tanggal mana pun untuk memfilter daftar agenda yang berlangsung pada tanggal tersebut.
+- **Daftar Agenda Departemen Terdekat (`src/components/TbpDashboard.tsx`)**:
+  - Menampilkan kartu agenda kegiatan terdekat dengan badge waktu relatif yang informatif (`HARI INI`, `BESOK`, `LUSA`, atau `X Hari Lagi`).
+  - Dilengkapi jam pelaksanaan waktu WIT, penanggung jawab/departemen penyelenggara, nama kegiatan, dan pill kategori bertema.
+
+### 🎂 Pemisahan Agenda Ulang Tahun ke Tab Khusus Developer
+
+- **Pembersihan Agenda Quality Assurance (`server/routes/agenda.ts` & `src/components/agenda-dashboard.tsx`)**:
+  - Menghilangkan kegiatan ulang tahun dari kategori `Quality Assurance` dan tab `Semua Kategori` agar agenda operasional kerja tim QA tetap rapi dan tidak tertimbun ucapan ulang tahun.
+  - Kategori agenda ulang tahun distandarisasi di backend menjadi `kategori: 'Birthday'` dengan departemen global `'ALL'`.
+- **Tab Khusus Developer (`src/components/agenda-dashboard.tsx`)**:
+  - Menambahkan tab khusus **`🎂 Ulang Tahun (Dev)`** yang hanya dapat dilihat dan diakses oleh akun Developer (`isDev`).
+
+### 💬 Sistem Komentar Bersarang (Threaded Comments) & Drawer Diskusi Buletin
+
+- **Balasan Komentar Bertingkat / Nested Replies (`src/components/NotionDatabaseTable.tsx`, `src/db/schema.ts`, `server.ts`)**:
+  - Kolom komentar buletin kini mendukung balasan bertingkat dengan kutipan referensi komentar yang dibalas (`replyToId`, `replyToNik`, `replyToName`, `replyToContent`).
+  - Menampilkan panel kutipan aktif di atas input balasan beserta tombol batal silang.
+  - Komentar balasan ditampilkan dengan indentasi bertingkat, garis panduan alur diskusi, dan chip nama pengirim asli.
+- **Drawer Samping Interaktif (`src/components/NotionDatabaseTable.tsx`)**:
+  - Slide-over drawer kini memiliki transisi visual mulus, panel header yang bersih, dan backdrop blur modern.
+
+### 🖼️ Penampil Gambar & Thumbnail Google Drive Buletin
+
+- **Proxy Gambar Cerdas Google Drive (`server/routes/bulletin.ts`)**:
+  - Menyediakan endpoint `/api/drive/view/:fileId` yang secara cerdas mengambil stream berkas gambar langsung dari Google Drive API saat thumbnail publik Google dibatasi hak aksesnya.
+  - Mengeliminasi masalah gambar rusak (*broken thumbnail*) pada lampiran buletin dan preview kartu pengumuman.
+
+### 🏆 Sinkronisasi & Pembaruan Leaderboard Quest K3LH
+
+- **Endpoint Progres Quest Real-time (`server.ts`)**:
+  - Menambahkan endpoint `POST /api/quiz/quest-progress` yang merekam node kemajuan kuis quest pulau Obi personil secara persisten ke database `easter_egg_progress`.
+- **Normalisasi Event Socket Progres (`server.ts`)**:
+  - Memperbaiki penanganan event socket `quiz:progress` agar dapat menerima baik angka node langsung maupun objek data personil (`{ nik, name, node }`) tanpa memicu kegagalan database.
+- **Penyelarasan Klasemen / Leaderboard (`server.ts`)**:
+  - Memperbarui endpoint `/api/quiz/quest-leaderboard` dengan `LEFT JOIN` dan fallback nama `COALESCE(employees.name, easterEggProgress.nik)` sehingga klasemen seluruh personil tampil akurat dan terbarui secara instan.
+
 ## [2.8.35] - 2026-09-17
 
 ### 📅 Penambahan Informasi Tanggal & Jam pada Kartu Modul SAP Management

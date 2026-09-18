@@ -5,7 +5,8 @@ import {
   Sparkles, RefreshCw, Layers, Eye, CheckCircle2, Sun, 
   Moon, Sunset, SlidersHorizontal, CheckSquare, Square,
   Globe, Users, User, Share2, Search, ArrowUpRight,
-  ChevronDown, ChevronUp, Maximize2, Minimize2, Heart
+  ChevronDown, ChevronUp, Maximize2, Minimize2, Heart,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -39,6 +40,105 @@ export interface CustomThemeTemplate {
   likesCount?: number;
   likedBy?: string[];
   likedByUsers?: any[];
+}
+
+// =========================================================================
+// WCAG 2.1 Contrast Ratio & Readability Diagnostic Helper
+// =========================================================================
+function parseColorToRgb(color: string): [number, number, number] | null {
+  if (!color) return null;
+  const c = color.trim().toLowerCase();
+  if (c.startsWith('#')) {
+    let hex = c.slice(1);
+    if (hex.length === 3) {
+      hex = hex.split('').map(char => char + char).join('');
+    }
+    if (hex.length === 6) {
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      return [r, g, b];
+    }
+  }
+  const rgbMatch = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (rgbMatch) {
+    return [parseInt(rgbMatch[1], 10), parseInt(rgbMatch[2], 10), parseInt(rgbMatch[3], 10)];
+  }
+  return null;
+}
+
+function getLuminance(rgb: [number, number, number]): number {
+  const [r, g, b] = rgb.map(val => {
+    const s = val / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+export function getContrastRatio(color1: string, color2: string): number {
+  const rgb1 = parseColorToRgb(color1);
+  const rgb2 = parseColorToRgb(color2);
+  if (!rgb1 || !rgb2) return 4.5;
+  const lum1 = getLuminance(rgb1);
+  const lum2 = getLuminance(rgb2);
+  const brightest = Math.max(lum1, lum2);
+  const darkest = Math.min(lum1, lum2);
+  return (brightest + 0.05) / (darkest + 0.05);
+}
+
+export interface ReadabilityCheckResult {
+  hasIssue: boolean;
+  minRatio: number;
+  warnings: string[];
+}
+
+export function evaluateThemeReadability(colors: ThemeColors): ReadabilityCheckResult {
+  const warnings: string[] = [];
+  let minRatio = 21;
+
+  // 1. Text main vs Background main
+  if (colors['--text-main'] && colors['--bg-main']) {
+    const ratio = getContrastRatio(colors['--text-main'], colors['--bg-main']);
+    if (ratio < minRatio) minRatio = ratio;
+    if (ratio < 3.0) {
+      warnings.push(`Kontras Teks Utama vs Background Utama sangat rendah (${ratio.toFixed(2)}:1).`);
+    } else if (ratio < 4.5) {
+      warnings.push(`Kontras Teks Utama vs Background Utama agak rendah (${ratio.toFixed(2)}:1). Standar WCAG minimal 4.5:1.`);
+    }
+  }
+
+  // 2. Text main vs Card background
+  if (colors['--text-main'] && colors['--card-bg']) {
+    const ratio = getContrastRatio(colors['--text-main'], colors['--card-bg']);
+    if (ratio < minRatio) minRatio = ratio;
+    if (ratio < 3.0) {
+      warnings.push(`Kontras Teks Utama vs Background Kartu sangat rendah (${ratio.toFixed(2)}:1).`);
+    }
+  }
+
+  // 3. Text muted vs Card background
+  if (colors['--text-muted'] && colors['--card-bg']) {
+    const ratio = getContrastRatio(colors['--text-muted'], colors['--card-bg']);
+    if (ratio < minRatio) minRatio = ratio;
+    if (ratio < 2.2) {
+      warnings.push(`Teks Redup (Muted) hampir tidak terbaca di atas Kartu (${ratio.toFixed(2)}:1).`);
+    }
+  }
+
+  // 4. Primary button vs Text on Primary
+  if (colors['--primary']) {
+    const whiteRatio = getContrastRatio('#FFFFFF', colors['--primary']);
+    const textMainRatio = colors['--text-main'] ? getContrastRatio(colors['--text-main'], colors['--primary']) : 4.5;
+    if (whiteRatio < 2.2 && textMainRatio < 2.2) {
+      warnings.push(`Warna Utama / Primary (${colors['--primary']}) terlalu pudar untuk tulisan tombol.`);
+    }
+  }
+
+  return {
+    hasIssue: warnings.length > 0 && minRatio < 3.0,
+    minRatio: minRatio === 21 ? 4.5 : minRatio,
+    warnings
+  };
 }
 
 export const PRESET_THEMES: Record<string, { name: string; desc: string; colors: ThemeColors }> = {
@@ -327,13 +427,59 @@ export default function ThemeModal({
     }
   }, [show, inspectorNik, targetMode]);
 
+  // State for Readability Warning Confirmation Modal Dialog
+  const [readabilityWarningModal, setReadabilityWarningModal] = useState<{
+    isOpen: boolean;
+    targetAction: () => void;
+    warnings: string[];
+    minRatio: number;
+    themeName?: string;
+  }>({
+    isOpen: false,
+    targetAction: () => {},
+    warnings: [],
+    minRatio: 21
+  });
+
+  const checkReadabilityBeforeProceed = (
+    colors: ThemeColors | Record<string, string>,
+    themeName: string,
+    onProceed: () => void
+  ): boolean => {
+    const evalResult = evaluateThemeReadability(colors as ThemeColors);
+    if (evalResult.hasIssue) {
+      setReadabilityWarningModal({
+        isOpen: true,
+        targetAction: onProceed,
+        warnings: evalResult.warnings,
+        minRatio: evalResult.minRatio,
+        themeName
+      });
+      return false;
+    }
+    onProceed();
+    return true;
+  };
+
   if (!show) return null;
 
   // Directly apply a theme from presets, community, or custom templates
-  const handleApplyThemeDirectly = async (colors: ThemeColors | Record<string, string>, themeName: string = 'Kustom', existingToastId?: string | number) => {
+  const handleApplyThemeDirectly = async (
+    colors: ThemeColors | Record<string, string>, 
+    themeName: string = 'Kustom', 
+    existingToastId?: string | number,
+    bypassWarning: boolean = false
+  ) => {
     if (!colors || typeof colors !== 'object') {
       toast.error('Format warna tema tidak valid');
       return;
+    }
+
+    if (!bypassWarning) {
+      const allowed = checkReadabilityBeforeProceed(colors, themeName, () => {
+        handleApplyThemeDirectly(colors, themeName, existingToastId, true);
+      });
+      if (!allowed) return;
     }
 
     const validatedColors = colors as ThemeColors;
@@ -446,10 +592,17 @@ export default function ThemeModal({
   };
 
   // Save current colors as a NEW or UPDATED Custom Template
-  const handleSaveCustomTemplate = async () => {
+  const handleSaveCustomTemplate = async (bypassWarning: boolean = false) => {
     if (!customTemplateName.trim()) {
       toast.error('Harap masukkan nama template custom Anda!');
       return;
+    }
+
+    if (!bypassWarning) {
+      const allowed = checkReadabilityBeforeProceed(editingColors, customTemplateName.trim(), () => {
+        handleSaveCustomTemplate(true);
+      });
+      if (!allowed) return;
     }
 
     setLoading(true);
@@ -568,11 +721,18 @@ export default function ThemeModal({
   };
 
   // Apply colors as active application theme
-  const handleApplyAndSaveActiveTheme = async () => {
+  const handleApplyAndSaveActiveTheme = async (bypassWarning: boolean = false) => {
+    if (!bypassWarning) {
+      const allowed = checkReadabilityBeforeProceed(editingColors, customTemplateName || targetMode, () => {
+        handleApplyAndSaveActiveTheme(true);
+      });
+      if (!allowed) return;
+    }
+
     setLoading(true);
     const toastId = toast.loading('Menerapkan dan menyimpan tema aktif...');
     try {
-      await handleApplyThemeDirectly(editingColors, customTemplateName || targetMode, toastId);
+      await handleApplyThemeDirectly(editingColors, customTemplateName || targetMode, toastId, true);
       onClose();
     } catch (e: any) {
       toast.info('Tema diterapkan pada sesi browser ini!', { id: toastId });
@@ -1348,6 +1508,55 @@ export default function ThemeModal({
                     )}
                   </div>
 
+                  {/* Real-time Readability Status Banner */}
+                  {(() => {
+                    const studioReadability = evaluateThemeReadability(editingColors);
+                    return (
+                      <div 
+                        className={`p-3 rounded-xl border flex items-start gap-2.5 transition-all text-xs ${
+                          studioReadability.hasIssue 
+                            ? 'bg-rose-500/15 border-rose-500/40 text-rose-800 dark:text-rose-200' 
+                            : studioReadability.warnings.length > 0
+                              ? 'bg-amber-500/15 border-amber-500/40 text-amber-800 dark:text-amber-200'
+                              : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-200'
+                        }`}
+                      >
+                        {studioReadability.hasIssue ? (
+                          <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5 animate-pulse" />
+                        ) : studioReadability.warnings.length > 0 ? (
+                          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        )}
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-bold">
+                              {studioReadability.hasIssue 
+                                ? 'Peringatan Masalah Keterbacaan' 
+                                : studioReadability.warnings.length > 0
+                                  ? 'Keterbacaan Cukup (Ada Catatan)'
+                                  : 'Keterbacaan Warna Optimal'}
+                            </span>
+                            <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-black/10 dark:bg-white/10 font-bold">
+                              {studioReadability.minRatio.toFixed(1)}:1
+                            </span>
+                          </div>
+                          {studioReadability.warnings.length > 0 ? (
+                            <ul className="text-[11px] space-y-0.5 opacity-90 list-disc list-inside">
+                              {studioReadability.warnings.map((w, idx) => (
+                                <li key={idx} className="leading-tight">{w}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-[11px] opacity-80 leading-tight">
+                              Kontras teks dan latar belakang memenuhi standar kenyamanan baca WCAG.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Template Meta & Save Card */}
                   <div 
                     className="p-3.5 sm:p-4 rounded-xl border flex flex-col gap-3 shadow-xs"
@@ -1801,6 +2010,90 @@ export default function ThemeModal({
         </div>
 
       </div>
+
+      {/* ========================================================================= */}
+      {/* READABILITY WARNING CONFIRMATION MODAL DIALOG                              */}
+      {/* ========================================================================= */}
+      {readabilityWarningModal.isOpen && (
+        <div 
+          className="fixed inset-0 z-[160] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setReadabilityWarningModal(prev => ({ ...prev, isOpen: false }))}
+        >
+          <div 
+            className="w-full max-w-md bg-slate-900 border border-amber-500/50 rounded-2xl shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-150 text-slate-100"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header with Alert Icon */}
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0 shadow-sm">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-base text-slate-100">
+                  Peringatan Keterbacaan Tema
+                </h3>
+                <p className="text-xs text-amber-400/90 font-mono mt-0.5">
+                  Rasio Kontras Terendah: {readabilityWarningModal.minRatio.toFixed(1)}:1 (Di bawah standar 3.0:1)
+                </p>
+              </div>
+              <button 
+                onClick={() => setReadabilityWarningModal(prev => ({ ...prev, isOpen: false }))}
+                className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Prompt Question */}
+            <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-200 text-xs font-medium leading-relaxed space-y-1.5">
+              <p className="font-bold text-amber-300 text-[13px] leading-snug">
+                Peringatan Keterbacaan: Kombinasi warna ini dapat menimbulkan masalah readability. Apakah Anda ingin tetap melanjutkannya?
+              </p>
+              <p className="text-[11px] text-amber-200/80">
+                Warna teks dan latar belakang yang dipilih memiliki kontras yang sangat dekat, sehingga teks menu, tabel, atau formulir akan sulit dibaca oleh pengguna.
+              </p>
+            </div>
+
+            {/* Warning details list */}
+            {readabilityWarningModal.warnings.length > 0 && (
+              <div className="space-y-1.5 bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-[11px] text-slate-300">
+                <span className="font-bold text-slate-400 block text-[10px] uppercase tracking-wider">Temuan Keterbacaan:</span>
+                <ul className="space-y-1 list-disc list-inside">
+                  {readabilityWarningModal.warnings.map((warn, idx) => (
+                    <li key={idx} className="leading-snug text-slate-300">{warn}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="pt-2 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setReadabilityWarningModal(prev => ({ ...prev, isOpen: false }));
+                  setActiveTab('studio');
+                }}
+                className="w-full sm:w-auto text-xs font-bold px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white order-2 sm:order-1 cursor-pointer"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 mr-1.5" />
+                Sesuaikan Kembali (Disarankan)
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const action = readabilityWarningModal.targetAction;
+                  setReadabilityWarningModal(prev => ({ ...prev, isOpen: false }));
+                  if (action) action();
+                }}
+                className="w-full sm:w-auto text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-950/30 border border-amber-800/50 order-1 sm:order-2 cursor-pointer"
+              >
+                Tetap Lanjutkan
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

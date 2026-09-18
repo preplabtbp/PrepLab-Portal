@@ -44,8 +44,10 @@ import {
   FileCheck, 
   Edit2, 
   Save,
-  Upload
+  Upload,
+  Reply
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
 import { toast } from 'sonner';
 import { uploadPhotoToDrive } from '../sheets-api';
@@ -63,64 +65,178 @@ export interface CommentAttachmentItem {
   size?: number;
 }
 
-const extractDriveId = (item: any): string | null => {
+export const extractDriveId = (item: any): string | null => {
+  if (!item) return null;
   if (item?.id && typeof item.id === 'string' && item.id.length >= 10) return item.id;
-  const str = item?.directUrl || item?.driveViewUrl || item?.driveDownloadUrl || (typeof item === 'string' ? item : '');
-  const match = str.match(/\/d\/([a-zA-Z0-9_-]+)/) || str.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (item?.driveId && typeof item.driveId === 'string' && item.driveId.length >= 10) return item.driveId;
+  const str = item?.fileUrl || item?.directUrl || item?.url || item?.driveViewUrl || item?.driveDownloadUrl || (typeof item === 'string' ? item : '');
+  if (!str) return null;
+  const match = str.match(/\/file\/d\/([a-zA-Z0-9_-]{20,})/i) ||
+                str.match(/[?&]id=([a-zA-Z0-9_-]{20,})/i) ||
+                str.match(/\/d\/([a-zA-Z0-9_-]{20,})/i) ||
+                str.match(/\/api\/drive\/(?:view|download)\/([a-zA-Z0-9_-]{20,})/i);
   return match ? match[1] : null;
 };
 
-export const parseCommentAttachments = (fileUrl?: string | null, fileName?: string | null): CommentAttachmentItem[] => {
-  if (!fileUrl) return [];
-  try {
-    const trimmed = fileUrl.trim();
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((item: any) => {
-          const name = item.name || fileName || 'Attachment';
-          const driveId = extractDriveId(item);
-          const isImg = 
-            item.category === 'image' || 
-            (item.mimeType && item.mimeType.startsWith('image/')) ||
-            /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(name) ||
-            (item.directUrl && (item.directUrl.includes('lh3.googleusercontent.com') || item.directUrl.startsWith('data:image/')));
-          
-          const directUrl = driveId ? `/api/drive/view/${driveId}` : (item.directUrl || item.url || '');
-          const driveDownloadUrl = driveId ? `/api/drive/download/${driveId}` : (item.driveDownloadUrl || item.url || '');
-          const driveViewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : (item.driveViewUrl || item.url || '');
+export const parseCommentAttachments = (fileUrl?: string | null, fileName?: string | null, contentText?: string | null): CommentAttachmentItem[] => {
+  if (!fileUrl && !contentText) return [];
 
-          return {
-            id: driveId || item.id,
-            name,
-            url: directUrl,
-            directUrl,
-            driveViewUrl,
-            driveDownloadUrl,
-            isImage: Boolean(isImg),
-            mimeType: item.mimeType,
-            size: item.size
-          };
-        });
-      }
+  // Ambil nama file dari teks content jika formatnya "📎 Lampiran Foto / Dokumen: filename.ext"
+  let extractedName = '';
+  if (contentText) {
+    const m = contentText.match(/📎\s*(?:Lampiran Foto \/ Dokumen|Lampiran Media|Lampiran):\s*([^\n\r]+)/i);
+    if (m && m[1]) {
+      extractedName = m[1].trim();
     }
-  } catch (e) {}
+  }
 
-  const driveId = extractDriveId({ directUrl: fileUrl });
-  const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(fileName || fileUrl || '') || fileUrl.startsWith('data:image/');
-  const directUrl = driveId ? `/api/drive/view/${driveId}` : fileUrl;
-  const driveDownloadUrl = driveId ? `/api/drive/download/${driveId}` : fileUrl;
-  const driveViewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : fileUrl;
+  if (fileUrl) {
+    try {
+      const trimmed = fileUrl.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((item: any) => {
+            const name = item.name || fileName || extractedName || 'Attachment';
+            const driveId = extractDriveId(item);
+            const isImg = 
+              item.category === 'image' || 
+              (item.mimeType && item.mimeType.startsWith('image/')) ||
+              /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(name) ||
+              (item.directUrl && (item.directUrl.includes('lh3.googleusercontent.com') || item.directUrl.startsWith('data:image/')));
+            
+            const directUrl = driveId ? `/api/drive/view/${driveId}` : (item.directUrl || item.url || item.fileUrl || '');
+            const driveDownloadUrl = driveId ? `/api/drive/download/${driveId}` : (item.driveDownloadUrl || item.url || item.fileUrl || '');
+            const driveViewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : (item.driveViewUrl || item.url || item.fileUrl || '');
 
-  return [{
-    id: driveId || undefined,
-    name: fileName || 'Attachment',
-    url: directUrl,
-    directUrl,
-    driveViewUrl,
-    driveDownloadUrl,
-    isImage: Boolean(isImg)
-  }];
+            return {
+              id: driveId || item.id,
+              name,
+              url: directUrl,
+              directUrl,
+              driveViewUrl,
+              driveDownloadUrl,
+              isImage: Boolean(isImg),
+              mimeType: item.mimeType,
+              size: item.size
+            };
+          });
+        }
+      }
+    } catch (e) {}
+
+    const driveId = extractDriveId({ fileUrl });
+    const name = fileName || extractedName || (driveId ? 'Foto / Dokumen Lampiran' : 'Attachment');
+    const isDoc = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|txt|csv)$/i.test(name);
+    const isImg = !isDoc && (
+      /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(name) ||
+      /\.(jpg|jpeg|png|gif|webp|svg|bmp)/i.test(fileUrl) ||
+      fileUrl.startsWith('data:image/') ||
+      Boolean(driveId)
+    );
+
+    const directUrl = driveId ? `/api/drive/view/${driveId}` : fileUrl;
+    const driveDownloadUrl = driveId ? `/api/drive/download/${driveId}` : fileUrl;
+    const driveViewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : fileUrl;
+
+    return [{
+      id: driveId || undefined,
+      name,
+      url: directUrl,
+      directUrl,
+      driveViewUrl,
+      driveDownloadUrl,
+      isImage: Boolean(isImg)
+    }];
+  }
+
+  return [];
+};
+
+export const AttachmentThumbnail = ({
+  attachment,
+  onPreview
+}: {
+  attachment: CommentAttachmentItem;
+  onPreview: (att: CommentAttachmentItem) => void;
+}) => {
+  const [imgFailed, setImgFailed] = useState(false);
+  const [fallbackStage, setFallbackStage] = useState(0);
+
+  const driveId = attachment.id || extractDriveId(attachment.directUrl || attachment.url);
+
+  // Jika bukan gambar atau gagal me-render gambar, tampilkan kartu dokumen rapi
+  if (!attachment.isImage || imgFailed) {
+    return (
+      <div
+        onClick={() => onPreview(attachment)}
+        className="flex items-center gap-2.5 p-2 px-3 rounded-xl border hover:border-teal-500/60 transition-all cursor-pointer group shadow-xs max-w-sm"
+        style={{
+          backgroundColor: 'var(--input-bg, #1a1a1a)',
+          borderColor: 'var(--border-main, #334155)'
+        }}
+        title={`Buka / Unduh: ${attachment.name}`}
+      >
+        <div className="w-8 h-8 rounded-lg bg-teal-950/80 border border-teal-700/50 flex items-center justify-center text-teal-400 shrink-0 group-hover:scale-105 transition-transform">
+          <FileText className="w-4 h-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-teal-300 truncate group-hover:underline">
+            {attachment.name}
+          </p>
+          <span className="text-[10px] text-slate-400 font-mono block">
+            {attachment.size ? `${(attachment.size / 1024).toFixed(0)} KB` : 'Lampiran Berkas'}
+          </span>
+        </div>
+        <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-teal-300 shrink-0" />
+      </div>
+    );
+  }
+
+  // Tampilan gambar foto
+  const primarySrc = attachment.directUrl || attachment.url;
+
+  return (
+    <div
+      onClick={() => onPreview(attachment)}
+      className="relative rounded-xl overflow-hidden border hover:border-teal-500/60 max-w-xs sm:max-w-sm aspect-video block group cursor-pointer shadow-sm transition-all hover:scale-[1.01]"
+      style={{
+        backgroundColor: 'var(--input-bg, #141414)',
+        borderColor: 'var(--border-main, #334155)'
+      }}
+      title={`Klik untuk memperbesar: ${attachment.name}`}
+    >
+      <img
+        src={primarySrc}
+        alt={attachment.name}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+        onError={(e) => {
+          const target = e.target as HTMLImageElement;
+          if (driveId) {
+            if (fallbackStage === 0) {
+              setFallbackStage(1);
+              target.src = `https://lh3.googleusercontent.com/d/${driveId}`;
+            } else if (fallbackStage === 1) {
+              setFallbackStage(2);
+              target.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`;
+            } else {
+              setImgFailed(true);
+            }
+          } else {
+            setImgFailed(true);
+          }
+        }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2.5 justify-between">
+        <span className="text-[11px] text-white font-medium truncate max-w-[80%] drop-shadow-sm">
+          {attachment.name}
+        </span>
+        <Maximize2 className="w-3.5 h-3.5 text-teal-300 shrink-0" />
+      </div>
+    </div>
+  );
 };
 
 export interface TableRowData {
@@ -221,6 +337,7 @@ interface NotionDatabaseTableProps {
   afterText?: string;
   onPostContentUpdate?: (newContent: string) => void;
   onRowsChange?: (newRows: TableRowData[]) => void;
+  initialTopicTitle?: string;
 }
 
 export function NotionDatabaseTable({
@@ -235,7 +352,8 @@ export function NotionDatabaseTable({
   beforeText = '',
   afterText = '',
   onPostContentUpdate,
-  onRowsChange
+  onRowsChange,
+  initialTopicTitle
 }: NotionDatabaseTableProps) {
   // Local table rows for responsive instant CRUD
   const [localRows, setLocalRows] = useState<TableRowData[]>(() => rows || []);
@@ -245,6 +363,21 @@ export function NotionDatabaseTable({
       setLocalRows(rows);
     }
   }, [rows]);
+
+  // Auto open topic drawer if initialTopicTitle is provided (e.g. from notification deep link)
+  useEffect(() => {
+    if (initialTopicTitle && localRows.length > 0) {
+      const match = localRows.find(r => {
+        const tVal = getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'keterangan') || '';
+        return tVal.toLowerCase().trim() === initialTopicTitle.toLowerCase().trim() ||
+               tVal.toLowerCase().includes(initialTopicTitle.toLowerCase().trim()) ||
+               initialTopicTitle.toLowerCase().includes(tVal.toLowerCase().trim());
+      });
+      if (match) {
+        setSelectedRow(match);
+      }
+    }
+  }, [initialTopicTitle, localRows]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -289,6 +422,30 @@ export function NotionDatabaseTable({
   const [selectedFile, setSelectedFile] = useState<{ name: string; url: string } | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; driveViewUrl?: string; driveDownloadUrl?: string } | null>(null);
+
+  // Replying state for threaded comments in discussion
+  const [replyingTo, setReplyingTo] = useState<{
+    id: number;
+    authorNik: string;
+    authorName: string;
+    content: string;
+  } | null>(null);
+
+  const handleStartReply = (c: any) => {
+    setReplyingTo({
+      id: c.id,
+      authorNik: c.authorNik || '',
+      authorName: c.authorName || 'Personil',
+      content: c.content || ''
+    });
+    setTimeout(() => {
+      const el = document.getElementById('notion-comment-textarea');
+      if (el) {
+        el.focus();
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  };
 
   // Construct standardized headers matching exact Notion requested order
   const displayHeaders = useMemo(() => {
@@ -420,6 +577,76 @@ export function NotionDatabaseTable({
     const q = selectedTopicTitle.toLowerCase().trim();
     return allComments.filter((c) => (c.topicTitle || '').toLowerCase().trim() === q);
   }, [allComments, selectedTopicTitle]);
+
+  // Ekstrak semua lampiran file dari komentar topik untuk Galeri Media
+  const galleryItems = useMemo(() => {
+    const list: { comment: any; attachment: CommentAttachmentItem; authorName: string }[] = [];
+    activeTopicComments.forEach((c: any) => {
+      if (c.fileUrl) {
+        const atts = parseCommentAttachments(c.fileUrl, c.fileName, c.content);
+        atts.forEach((att) => {
+          list.push({ comment: c, attachment: att, authorName: c.authorName || 'Personil' });
+        });
+      }
+    });
+    return list;
+  }, [activeTopicComments]);
+
+  // Strukturkan komentar topik menjadi Root Comments & Nested Replies (Threaded)
+  const { rootComments, repliesMap } = useMemo(() => {
+    const roots: any[] = [];
+    const replies: Record<number, any[]> = {};
+
+    const commentIdMap = new Map<number, any>();
+    activeTopicComments.forEach((c) => commentIdMap.set(c.id, c));
+
+    // Cari ID komentar induk paling atas jika ada multi-level reply
+    const findRootId = (item: any): number => {
+      let curr = item;
+      const visited = new Set<number>();
+      while (curr && curr.replyToId && commentIdMap.has(curr.replyToId)) {
+        if (visited.has(curr.id)) break;
+        visited.add(curr.id);
+        curr = commentIdMap.get(curr.replyToId);
+      }
+      return curr ? curr.id : item.id;
+    };
+
+    activeTopicComments.forEach((c) => {
+      if (c.replyToId && commentIdMap.has(c.replyToId)) {
+        const rootId = findRootId(c);
+        if (!replies[rootId]) replies[rootId] = [];
+        replies[rootId].push(c);
+      } else {
+        roots.push(c);
+      }
+    });
+
+    // Urutkan balasan secara kronologis (dari yang terlama ke terbaru)
+    Object.keys(replies).forEach((rId) => {
+      replies[Number(rId)].sort((a, b) => {
+        const tA = new Date(a.createdAt || 0).getTime();
+        const tB = new Date(b.createdAt || 0).getTime();
+        return tA - tB;
+      });
+    });
+
+    return { rootComments: roots, repliesMap: replies };
+  }, [activeTopicComments]);
+
+  // Handler seragam untuk preview attachment (gambar via ImageModal, dokumen via tab baru)
+  const handlePreviewAttachment = (att: CommentAttachmentItem) => {
+    if (att.isImage) {
+      setPreviewImage({
+        url: att.directUrl || att.url,
+        title: att.name,
+        driveViewUrl: att.driveViewUrl,
+        driveDownloadUrl: att.driveDownloadUrl
+      });
+    } else if (att.driveViewUrl) {
+      window.open(att.driveViewUrl, '_blank');
+    }
+  };
 
   // Save changes to database
   const saveTableToBackend = async (newRows: TableRowData[]) => {
@@ -677,16 +904,25 @@ export function NotionDatabaseTable({
           picNik: picVal || null,
           pt: pt || 'TBP',
           fileUrl: selectedFile?.url || null,
-          fileName: selectedFile?.name || null
+          fileName: selectedFile?.name || null,
+          replyToId: replyingTo?.id || null,
+          replyToNik: replyingTo?.authorNik || null,
+          replyToName: replyingTo?.authorName || null,
+          replyToContent: replyingTo?.content ? replyingTo.content.substring(0, 150) : null,
         })
       });
 
       const json = await res.json();
       if (json.status === 'success') {
-        toast.success(`Update terkirim! Notifikasi diteruskan ke personil ${activeSection}.`);
+        if (replyingTo) {
+          toast.success(`Tanggapan terkirim! Notifikasi otomatis masuk ke ${replyingTo.authorName}.`);
+        } else {
+          toast.success(`Update terkirim! Notifikasi diteruskan ke personil ${activeSection}.`);
+        }
         setCommentText('');
         setStatusUpdateChoice('');
         setSelectedFile(null);
+        setReplyingTo(null);
         
         // Update local row status if changed
         if (statusUpdateChoice) {
@@ -808,6 +1044,7 @@ export function NotionDatabaseTable({
             postId,
             content: `📎 Lampiran Foto / Dokumen: ${file.name}`,
             fileUrl: uploadedUrl,
+            fileName: file.name,
             topicTitle: topicTitleVal,
             topicId: topicTitleVal.toLowerCase().replace(/\s+/g, '-'),
             section: activeSection,
@@ -873,7 +1110,14 @@ export function NotionDatabaseTable({
       );
     }
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+      <span 
+        className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border"
+        style={{
+          backgroundColor: 'var(--input-bg, #334155)',
+          borderColor: 'var(--border-main, #475569)',
+          color: 'var(--text-main, #cbd5e1)'
+        }}
+      >
         {statusStr}
       </span>
     );
@@ -882,7 +1126,7 @@ export function NotionDatabaseTable({
   // Helper for Priority Badge
   const renderPriorityBadge = (pStr: string) => {
     const p = (pStr || '').toUpperCase().trim();
-    if (!p || p === '-') return <span className="text-slate-600 font-mono text-xs">-</span>;
+    if (!p || p === '-') return <span className="font-mono text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>;
 
     if (p.includes('HIGH') || p.includes('TINGGI') || p.includes('URGENT')) {
       return (
@@ -902,21 +1146,35 @@ export function NotionDatabaseTable({
     }
     if (p.includes('LOW') || p.includes('RENDAH')) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border"
+          style={{
+            backgroundColor: 'var(--input-bg, #1e293b)',
+            borderColor: 'var(--border-main, #334155)',
+            color: 'var(--text-muted, #94a3b8)'
+          }}
+        >
           <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
           LOW
         </span>
       );
     }
-    return <span className="text-xs text-slate-300">{pStr}</span>;
+    return <span className="text-xs" style={{ color: 'var(--text-main, #cbd5e1)' }}>{pStr}</span>;
   };
 
   // Helper for PIC Avatar Badge
   const renderPicBadge = (picStr: string) => {
-    if (!picStr || picStr === '-') return <span className="text-slate-600 font-mono text-xs">-</span>;
+    if (!picStr || picStr === '-') return <span className="font-mono text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>;
     const initial = picStr.charAt(0).toUpperCase();
     return (
-      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800/90 border border-slate-700 text-slate-200 text-xs font-medium">
+      <div 
+        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs font-medium"
+        style={{
+          backgroundColor: 'var(--input-bg, #1e293b)',
+          borderColor: 'var(--border-main, #334155)',
+          color: 'var(--text-main, #cbd5e1)'
+        }}
+      >
         <span className="w-4 h-4 rounded-full bg-teal-800 text-teal-200 text-[10px] font-bold flex items-center justify-center">
           {initial}
         </span>
@@ -927,7 +1185,7 @@ export function NotionDatabaseTable({
 
   // Helper to format multiline notes
   const renderFormattedNotes = (text: string) => {
-    if (!text || text === '-' || text === '•') return <span className="text-slate-600 font-mono text-xs">-</span>;
+    if (!text || text === '-' || text === '•') return <span className="font-mono text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>;
     const cleanText = text.trim();
     if (cleanText.includes('•')) {
       const items = cleanText
@@ -938,7 +1196,7 @@ export function NotionDatabaseTable({
       return (
         <ul className="space-y-1 my-1">
           {items.map((item, idx) => (
-            <li key={idx} className="flex items-start gap-1.5 text-xs text-slate-300 leading-relaxed">
+            <li key={idx} className="flex items-start gap-1.5 text-xs leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>
               <span className="text-teal-400 font-bold leading-none mt-1">•</span>
               <span className="flex-1">{item}</span>
             </li>
@@ -946,7 +1204,7 @@ export function NotionDatabaseTable({
         </ul>
       );
     }
-    return <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">{text}</p>;
+    return <p className="text-xs leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-main, #cbd5e1)' }}>{text}</p>;
   };
 
   // Export to CSV
@@ -976,21 +1234,41 @@ export function NotionDatabaseTable({
   };
 
   return (
-    <div className="w-full bg-[#181818] border border-slate-800 rounded-2xl shadow-xl overflow-hidden my-4 text-slate-200">
+    <div 
+      className="w-full rounded-2xl shadow-xl overflow-hidden my-4 border transition-colors"
+      style={{
+        backgroundColor: 'var(--card-bg, #181818)',
+        borderColor: 'var(--border-main, #334155)',
+        color: 'var(--text-main, #cbd5e1)'
+      }}
+    >
       {/* Top Header Bar */}
-      <div className="p-4 bg-[#202020] border-b border-[#2d2d2d] flex flex-wrap items-center justify-between gap-3">
+      <div 
+        className="p-4 border-b flex flex-wrap items-center justify-between gap-3"
+        style={{
+          backgroundColor: 'var(--card-bg, #202020)',
+          borderColor: 'var(--border-main, #2d2d2d)'
+        }}
+      >
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-teal-950/60 border border-teal-700/50 text-teal-400 shadow-sm">
+          <div className="p-2 rounded-xl bg-teal-500/15 border border-teal-500/40 text-teal-400 shadow-sm">
             <ClipboardList className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-bold text-slate-100 text-sm md:text-base flex items-center gap-2">
+            <h3 className="font-bold text-sm md:text-base flex items-center gap-2" style={{ color: 'var(--text-main, #f8fafc)' }}>
               <span>{title || 'Database Table'}</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-mono">
+              <span 
+                className="text-[10px] px-2 py-0.5 rounded-full font-mono border"
+                style={{
+                  backgroundColor: 'var(--input-bg, #1e293b)',
+                  color: 'var(--text-muted, #94a3b8)',
+                  borderColor: 'var(--border-main, #334155)'
+                }}
+              >
                 {filteredRows.length} baris
               </span>
             </h3>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
               Urutan kolom sinkron Notion: Number • Jenis kegiatan • Keterangan • PIC • Priority • Status • Created Time • Kategori • Activity • Period
             </p>
           </div>
@@ -1010,22 +1288,30 @@ export function NotionDatabaseTable({
           {/* Fit Page Mode Toggle */}
           <button
             onClick={() => setFitPageMode(!fitPageMode)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-xs ${
-              fitPageMode 
-                ? 'bg-teal-600/30 text-teal-300 border-teal-500/70' 
-                : 'bg-[#242424] hover:bg-[#2e2e2e] text-slate-300 border-slate-700'
-            }`}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-xs"
+            style={{
+              backgroundColor: fitPageMode ? 'rgba(42, 157, 143, 0.2)' : 'var(--input-bg, #242424)',
+              borderColor: fitPageMode ? 'var(--primary, #2A9D8F)' : 'var(--border-main, #334155)',
+              color: fitPageMode ? 'var(--primary, #2A9D8F)' : 'var(--text-main, #cbd5e1)'
+            }}
             title={fitPageMode ? "Matikan Fit Screen (Mode Scroll Lebar)" : "Aktifkan Fit Screen (Semua Kolom Muat 1 Layar Tanpa Horizontal Scroll)"}
           >
-            {fitPageMode ? <Minimize2 className="w-3.5 h-3.5 text-teal-400" /> : <Maximize2 className="w-3.5 h-3.5 text-slate-400" />}
+            {fitPageMode ? <Minimize2 className="w-3.5 h-3.5 text-teal-400" /> : <Maximize2 className="w-3.5 h-3.5 opacity-70" />}
             <span className="hidden sm:inline">{fitPageMode ? "Fit Screen: ON" : "Fit Screen"}</span>
           </button>
 
           {/* Zoom Out / In Controls */}
-          <div className="flex items-center bg-[#151515] p-0.5 rounded-xl border border-slate-800 text-xs">
+          <div 
+            className="flex items-center p-0.5 rounded-xl border text-xs"
+            style={{
+              backgroundColor: 'var(--input-bg, #151515)',
+              borderColor: 'var(--border-main, #334155)'
+            }}
+          >
             <button
               onClick={() => setZoomPercent((prev) => Math.max(70, prev - 10))}
-              className="p-1 px-1.5 hover:bg-[#282828] text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+              className="p-1 px-1.5 opacity-70 hover:opacity-100 rounded-lg transition-opacity cursor-pointer"
+              style={{ color: 'var(--text-main, #cbd5e1)' }}
               title="Zoom Out (Perkecil Tampilan)"
             >
               <ZoomOut className="w-3.5 h-3.5" />
@@ -1039,19 +1325,29 @@ export function NotionDatabaseTable({
             </span>
             <button
               onClick={() => setZoomPercent((prev) => Math.min(130, prev + 10))}
-              className="p-1 px-1.5 hover:bg-[#282828] text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+              className="p-1 px-1.5 opacity-70 hover:opacity-100 rounded-lg transition-opacity cursor-pointer"
+              style={{ color: 'var(--text-main, #cbd5e1)' }}
               title="Zoom In (Perbesar Tampilan)"
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="flex items-center bg-[#151515] p-1 rounded-xl border border-slate-800">
+          <div 
+            className="flex items-center p-1 rounded-xl border"
+            style={{
+              backgroundColor: 'var(--input-bg, #151515)',
+              borderColor: 'var(--border-main, #334155)'
+            }}
+          >
             <button
               onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                viewMode === 'table' ? 'bg-[#282828] text-teal-300 shadow-xs' : 'text-slate-400 hover:text-white'
-              }`}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+              style={{
+                backgroundColor: viewMode === 'table' ? 'var(--card-bg, #282828)' : 'transparent',
+                color: viewMode === 'table' ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
+                boxShadow: viewMode === 'table' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+              }}
               title="Table View"
             >
               <TableIcon className="w-3.5 h-3.5" />
@@ -1059,9 +1355,12 @@ export function NotionDatabaseTable({
             </button>
             <button
               onClick={() => setViewMode('board')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                viewMode === 'board' ? 'bg-[#282828] text-teal-300 shadow-xs' : 'text-slate-400 hover:text-white'
-              }`}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+              style={{
+                backgroundColor: viewMode === 'board' ? 'var(--card-bg, #282828)' : 'transparent',
+                color: viewMode === 'board' ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
+                boxShadow: viewMode === 'board' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+              }}
               title="Kanban Board View"
             >
               <Kanban className="w-3.5 h-3.5" />
@@ -1069,9 +1368,12 @@ export function NotionDatabaseTable({
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                viewMode === 'list' ? 'bg-[#282828] text-teal-300 shadow-xs' : 'text-slate-400 hover:text-white'
-              }`}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+              style={{
+                backgroundColor: viewMode === 'list' ? 'var(--card-bg, #282828)' : 'transparent',
+                color: viewMode === 'list' ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
+                boxShadow: viewMode === 'list' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+              }}
               title="List / Card View"
             >
               <LayoutList className="w-3.5 h-3.5" />
@@ -1081,7 +1383,12 @@ export function NotionDatabaseTable({
 
           <button
             onClick={handleExportCsv}
-            className="p-1.5 px-2.5 rounded-lg bg-[#282828] hover:bg-[#333] border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+            className="p-1.5 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer hover:opacity-80"
+            style={{
+              backgroundColor: 'var(--input-bg, #282828)',
+              borderColor: 'var(--border-main, #334155)',
+              color: 'var(--text-main, #cbd5e1)'
+            }}
             title="Download CSV"
           >
             <Download className="w-3.5 h-3.5" />
@@ -1091,19 +1398,32 @@ export function NotionDatabaseTable({
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="p-3 bg-[#1e1e1e] border-b border-[#2d2d2d] flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div 
+        className="p-3 border-b flex flex-wrap items-center justify-between gap-3 text-xs"
+        style={{
+          backgroundColor: 'var(--input-bg, #1e1e1e)',
+          borderColor: 'var(--border-main, #2d2d2d)'
+        }}
+      >
         {/* Search Input */}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-[#161616] rounded-xl border border-slate-700/80 text-slate-300 w-full sm:w-72">
-          <Search className="w-3.5 h-3.5 text-slate-500" />
+        <div 
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl border w-full sm:w-72"
+          style={{
+            backgroundColor: 'var(--card-bg, #161616)',
+            borderColor: 'var(--border-main, #334155)'
+          }}
+        >
+          <Search className="w-3.5 h-3.5 opacity-60" style={{ color: 'var(--text-muted, #94a3b8)' }} />
           <input
             type="text"
             placeholder="Cari kegiatan, PIC, keterangan..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-transparent border-none outline-none text-xs w-full text-slate-200 placeholder:text-slate-500"
+            className="bg-transparent border-none outline-none text-xs w-full"
+            style={{ color: 'var(--text-main, #e2e8f0)' }}
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="text-slate-500 hover:text-slate-300">
+            <button onClick={() => setSearchQuery('')} className="opacity-60 hover:opacity-100" style={{ color: 'var(--text-muted, #94a3b8)' }}>
               <X className="w-3 h-3" />
             </button>
           )}
@@ -1121,17 +1441,22 @@ export function NotionDatabaseTable({
             <button
               key={st.key}
               onClick={() => setStatusFilter(st.key)}
-              className={`px-3 py-1 rounded-lg font-semibold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 ${
-                statusFilter === st.key
-                  ? 'bg-teal-600/30 text-teal-300 border border-teal-500/60 shadow-xs'
-                  : 'bg-[#262626] text-slate-400 hover:text-slate-200 border border-slate-700/60'
-              }`}
+              className="px-3 py-1 rounded-lg font-semibold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 border cursor-pointer"
+              style={{
+                backgroundColor: statusFilter === st.key ? 'rgba(42, 157, 143, 0.2)' : 'var(--card-bg, #262626)',
+                borderColor: statusFilter === st.key ? 'var(--primary, #2A9D8F)' : 'var(--border-main, #334155)',
+                color: statusFilter === st.key ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)'
+              }}
             >
               <span>{st.label}</span>
               {st.count !== undefined && st.count > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                  statusFilter === st.key ? 'bg-teal-500/20 text-teal-300' : 'bg-slate-800 text-slate-400'
-                }`}>
+                <span 
+                  className="text-[10px] px-1.5 py-0.2 rounded-full font-mono"
+                  style={{
+                    backgroundColor: statusFilter === st.key ? 'rgba(42, 157, 143, 0.25)' : 'var(--input-bg, #1e293b)',
+                    color: statusFilter === st.key ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)'
+                  }}
+                >
                   {st.count}
                 </span>
               )}
@@ -1141,7 +1466,12 @@ export function NotionDatabaseTable({
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="px-2.5 py-1 rounded-lg bg-[#262626] border border-slate-700/60 text-slate-300 text-[11px] font-semibold outline-none cursor-pointer"
+            className="px-2.5 py-1 rounded-lg border text-[11px] font-semibold outline-none cursor-pointer"
+            style={{
+              backgroundColor: 'var(--card-bg, #262626)',
+              borderColor: 'var(--border-main, #334155)',
+              color: 'var(--text-main, #cbd5e1)'
+            }}
           >
             <option value="ALL">Semua Prioritas</option>
             <option value="HIGH">🔴 High Priority</option>
@@ -1164,7 +1494,14 @@ export function NotionDatabaseTable({
           }`}>
             {/* Table Header */}
             <thead>
-              <tr className="bg-[#242424] border-b border-[#303030] text-slate-300 select-none">
+              <tr 
+                className="border-b select-none"
+                style={{
+                  backgroundColor: 'var(--input-bg, #242424)',
+                  borderColor: 'var(--border-main, #303030)',
+                  color: 'var(--text-muted, #94a3b8)'
+                }}
+              >
                 {displayHeaders.map((colHeader) => {
                   const isSorted = sortColumn === colHeader;
                   const isNum = colHeader.toLowerCase() === 'number' || colHeader.toLowerCase() === 'no';
@@ -1195,7 +1532,7 @@ export function NotionDatabaseTable({
                     <th
                       key={colHeader}
                       onClick={() => handleSort(colHeader)}
-                      className={`font-bold hover:bg-[#2c2c2c] cursor-pointer transition-colors ${widthClass}`}
+                      className={`font-bold hover:opacity-80 cursor-pointer transition-opacity ${widthClass}`}
                     >
                       <div className={`flex items-center gap-1 ${isNum ? 'justify-center' : ''}`}>
                         <span className="truncate">{colHeader}</span>
@@ -1206,15 +1543,21 @@ export function NotionDatabaseTable({
                     </th>
                   );
                 })}
-                <th className={`text-center text-slate-400 ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'}`}>Aksi</th>
+                <th className={`text-center ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'}`} style={{ color: 'var(--text-muted, #94a3b8)' }}>Aksi</th>
               </tr>
             </thead>
 
             {/* Table Body */}
-            <tbody className="divide-y divide-slate-800/80 bg-[#1c1c1c]">
+            <tbody 
+              className="divide-y"
+              style={{
+                backgroundColor: 'var(--card-bg, #1c1c1c)',
+                borderColor: 'var(--border-main, #334155)'
+              }}
+            >
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={displayHeaders.length + 1} className="py-12 text-center text-slate-500 italic text-xs">
+                  <td colSpan={displayHeaders.length + 1} className="py-12 text-center italic text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>
                     Tidak ada data yang sesuai dengan pencarian atau filter.
                   </td>
                 </tr>
@@ -1231,7 +1574,8 @@ export function NotionDatabaseTable({
                         setSelectedRow(row);
                         setModalTab('details');
                       }}
-                      className="hover:bg-[#262626] transition-colors cursor-pointer group"
+                      className="hover:opacity-90 transition-all cursor-pointer group"
+                      style={{ borderBottomColor: 'var(--border-main, #334155)' }}
                     >
                       {displayHeaders.map((colName) => {
                         const val = getRowVal(row, colName);
@@ -1240,9 +1584,9 @@ export function NotionDatabaseTable({
                         // 1. Number Column
                         if (colLower === 'number' || colLower === 'no') {
                           return (
-                            <td key={colName} className={`text-center text-slate-500 font-mono ${
+                            <td key={colName} className={`text-center font-mono ${
                               fitPageMode ? 'px-1 py-2 text-[10px]' : 'px-3.5 py-3 text-[11px]'
-                            }`}>
+                            }`} style={{ color: 'var(--text-muted, #64748b)' }}>
                               {val || idx + 1}
                             </td>
                           );
@@ -1251,12 +1595,12 @@ export function NotionDatabaseTable({
                         // 2. Jenis kegiatan Column
                         if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') {
                           return (
-                            <td key={colName} className={`font-semibold text-slate-100 group-hover:text-teal-300 transition-colors ${
+                            <td key={colName} className={`font-semibold group-hover:text-teal-400 transition-colors ${
                               fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-3'
-                            }`}>
+                            }`} style={{ color: 'var(--text-main, #f8fafc)' }}>
                               <div className="flex items-center gap-1.5">
                                 <span className={`leading-snug block ${fitPageMode ? 'line-clamp-2 break-words text-[11px]' : ''}`}>
-                                  {val && val !== '-' ? val : <em className="text-slate-500">Tanpa Judul</em>}
+                                  {val && val !== '-' ? val : <em style={{ color: 'var(--text-muted, #64748b)' }}>Tanpa Judul</em>}
                                 </span>
                                 {cCount > 0 && (
                                   <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded-full bg-teal-950/80 border border-teal-700/60 text-teal-300 text-[9px] font-bold shadow-xs shrink-0">
@@ -1312,16 +1656,23 @@ export function NotionDatabaseTable({
                         // 7. Created Time Column
                         if (colLower.includes('created')) {
                           return (
-                            <td key={colName} className={`font-mono text-slate-400 ${
+                            <td key={colName} className={`font-mono ${
                               fitPageMode ? 'px-1 py-2 text-[10px] truncate' : 'px-3.5 py-3 whitespace-nowrap text-[11px]'
-                            }`}>
+                            }`} style={{ color: 'var(--text-muted, #94a3b8)' }}>
                               {val && val !== '-' ? (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700 text-slate-300">
-                                  <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                <span 
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border"
+                                  style={{
+                                    backgroundColor: 'var(--input-bg, #1e293b)',
+                                    borderColor: 'var(--border-main, #334155)',
+                                    color: 'var(--text-main, #cbd5e1)'
+                                  }}
+                                >
+                                  <Clock className="w-2.5 h-2.5 text-teal-400 shrink-0" />
                                   <span className="truncate">{val}</span>
                                 </span>
                               ) : (
-                                <span className="text-slate-600 font-mono">-</span>
+                                <span className="font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>
                               )}
                             </td>
                           );
@@ -1332,11 +1683,18 @@ export function NotionDatabaseTable({
                           return (
                             <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
                               {val && val !== '-' ? (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] bg-slate-800 text-slate-300 border border-slate-700 truncate">
+                                <span 
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] border truncate"
+                                  style={{
+                                    backgroundColor: 'var(--input-bg, #1e293b)',
+                                    borderColor: 'var(--border-main, #334155)',
+                                    color: 'var(--text-main, #cbd5e1)'
+                                  }}
+                                >
                                   {val}
                                 </span>
                               ) : (
-                                <span className="text-slate-600 font-mono">-</span>
+                                <span className="font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>
                               )}
                             </td>
                           );
@@ -1347,11 +1705,18 @@ export function NotionDatabaseTable({
                           return (
                             <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
                               {val && val !== '-' ? (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-800/90 text-slate-300 border border-slate-700/80 truncate">
+                                <span 
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono border truncate"
+                                  style={{
+                                    backgroundColor: 'var(--input-bg, #1e293b)',
+                                    borderColor: 'var(--border-main, #334155)',
+                                    color: 'var(--text-main, #cbd5e1)'
+                                  }}
+                                >
                                   {val}
                                 </span>
                               ) : (
-                                <span className="text-slate-600 font-mono">-</span>
+                                <span className="font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>
                               )}
                             </td>
                           );
@@ -1360,15 +1725,22 @@ export function NotionDatabaseTable({
                         // 10. Period Column
                         if (colLower.includes('period') || colLower.includes('periode')) {
                           return (
-                            <td key={colName} className={`font-mono text-slate-300 ${
+                            <td key={colName} className={`font-mono ${
                               fitPageMode ? 'px-1 py-2 text-[10px] truncate' : 'px-3.5 py-3 whitespace-nowrap text-[11px]'
-                            }`}>
+                            }`} style={{ color: 'var(--text-main, #cbd5e1)' }}>
                               {val && val !== '-' ? (
-                                <span className="px-1.5 py-0.5 rounded bg-slate-800/60 border border-slate-700/60 truncate">
+                                <span 
+                                  className="px-1.5 py-0.5 rounded border truncate"
+                                  style={{
+                                    backgroundColor: 'var(--input-bg, #1e293b)',
+                                    borderColor: 'var(--border-main, #334155)',
+                                    color: 'var(--text-main, #cbd5e1)'
+                                  }}
+                                >
                                   {val}
                                 </span>
                               ) : (
-                                <span className="text-slate-600 font-mono">-</span>
+                                <span className="font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>
                               )}
                             </td>
                           );
@@ -1376,10 +1748,10 @@ export function NotionDatabaseTable({
 
                         // Default custom column
                         return (
-                          <td key={colName} className={`text-slate-300 whitespace-nowrap ${
+                          <td key={colName} className={`whitespace-nowrap ${
                             fitPageMode ? 'px-1 py-2 text-[10.5px]' : 'px-3.5 py-3 text-xs'
-                          }`}>
-                            {val && val !== '-' ? val : <span className="text-slate-600 font-mono">-</span>}
+                          }`} style={{ color: 'var(--text-main, #cbd5e1)' }}>
+                            {val && val !== '-' ? val : <span className="font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>}
                           </td>
                         );
                       })}
@@ -1389,14 +1761,16 @@ export function NotionDatabaseTable({
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={(e) => handleOpenEditModal(row, localRows.indexOf(row), e)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition-colors"
+                            className="p-1.5 rounded-lg hover:text-amber-400 transition-colors"
+                            style={{ color: 'var(--text-muted, #94a3b8)' }}
                             title="Edit Data Kegiatan Ini"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={(e) => handleDeleteRow(localRows.indexOf(row), e)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
+                            className="p-1.5 rounded-lg hover:text-rose-400 transition-colors"
+                            style={{ color: 'var(--text-muted, #94a3b8)' }}
                             title="Hapus Baris Ini"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1411,15 +1785,22 @@ export function NotionDatabaseTable({
           </table>
 
           {/* Bottom Table Add Row Shortcut */}
-          <div className="p-3 bg-[#181818] border-t border-[#2d2d2d] flex items-center justify-between">
+          <div 
+            className="p-3 border-t flex items-center justify-between"
+            style={{
+              backgroundColor: 'var(--card-bg, #181818)',
+              borderColor: 'var(--border-main, #2d2d2d)'
+            }}
+          >
             <button
               onClick={handleOpenAddModal}
-              className="text-xs font-semibold text-slate-400 hover:text-teal-300 flex items-center gap-1.5 py-1 px-2.5 rounded-lg hover:bg-[#252525] transition-all cursor-pointer"
+              className="text-xs font-semibold hover:text-teal-400 flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all cursor-pointer"
+              style={{ color: 'var(--text-muted, #94a3b8)' }}
             >
               <Plus className="w-3.5 h-3.5" />
               <span>+ Tambah Baris Kegiatan Baru</span>
             </button>
-            <span className="text-[11px] text-slate-500 font-mono">
+            <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>
               Total {localRows.length} baris tercatat
             </span>
           </div>
@@ -1430,7 +1811,7 @@ export function NotionDatabaseTable({
       {/* 2. BOARD VIEW (Kanban by Status)                                          */}
       {/* ========================================================================= */}
       {viewMode === 'board' && (
-        <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#141414]">
+        <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4" style={{ backgroundColor: 'var(--bg-main, #141414)' }}>
           {['Open', 'On Progress', 'Close'].map((laneStatus) => {
             const laneRows = filteredRows.filter((r) => {
               const s = (getRowVal(r, 'Status') || '').toUpperCase();
@@ -1441,15 +1822,32 @@ export function NotionDatabaseTable({
             });
 
             return (
-              <div key={laneStatus} className="bg-[#1e1e1e] border border-slate-800 rounded-xl p-3 flex flex-col min-h-[350px]">
-                <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-800">
+              <div 
+                key={laneStatus} 
+                className="border rounded-xl p-3 flex flex-col min-h-[350px]"
+                style={{
+                  backgroundColor: 'var(--card-bg, #1e1e1e)',
+                  borderColor: 'var(--border-main, #334155)'
+                }}
+              >
+                <div 
+                  className="flex items-center justify-between pb-2 mb-3 border-b"
+                  style={{ borderColor: 'var(--border-main, #334155)' }}
+                >
                   <div className="flex items-center gap-2">
                     <span className={`w-2.5 h-2.5 rounded-full ${
                       laneStatus === 'Open' ? 'bg-amber-400' : laneStatus === 'On Progress' ? 'bg-blue-400' : 'bg-emerald-400'
                     }`} />
-                    <h4 className="font-bold text-xs uppercase tracking-wider text-slate-200">{laneStatus}</h4>
+                    <h4 className="font-bold text-xs uppercase tracking-wider" style={{ color: 'var(--text-main, #f1f5f9)' }}>{laneStatus}</h4>
                   </div>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-[#161616] text-slate-400 font-mono">
+                  <span 
+                    className="text-xs px-2 py-0.5 rounded-full font-mono border"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #161616)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-muted, #94a3b8)'
+                    }}
+                  >
                     {laneRows.length}
                   </span>
                 </div>
@@ -1462,22 +1860,35 @@ export function NotionDatabaseTable({
                         setSelectedRow(row);
                         setModalTab('details');
                       }}
-                      className="p-3 bg-[#242424] hover:bg-[#2b2b2b] border border-slate-700/60 rounded-xl shadow-sm cursor-pointer transition-all hover:border-teal-500/50 space-y-2 group"
+                      className="p-3 border rounded-xl shadow-sm cursor-pointer transition-all hover:border-teal-500/50 space-y-2 group"
+                      style={{
+                        backgroundColor: 'var(--input-bg, #242424)',
+                        borderColor: 'var(--border-main, #334155)'
+                      }}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <h5 className="font-semibold text-xs text-slate-100 group-hover:text-teal-300 leading-snug">
+                        <h5 
+                          className="font-semibold text-xs group-hover:text-teal-400 leading-snug"
+                          style={{ color: 'var(--text-main, #f1f5f9)' }}
+                        >
                           {getRowVal(row, 'Jenis kegiatan') || 'Tanpa Judul'}
                         </h5>
                         {renderPriorityBadge(getRowVal(row, 'Priority'))}
                       </div>
 
                       {getRowVal(row, 'Keterangan') && (
-                        <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+                        <p className="text-[11px] line-clamp-2 leading-relaxed" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                           {getRowVal(row, 'Keterangan')}
                         </p>
                       )}
 
-                      <div className="pt-2 border-t border-slate-700/50 flex items-center justify-between text-[10px] text-slate-400">
+                      <div 
+                        className="pt-2 border-t flex items-center justify-between text-[10px]"
+                        style={{
+                          borderColor: 'var(--border-main, #334155)',
+                          color: 'var(--text-muted, #94a3b8)'
+                        }}
+                      >
                         {renderPicBadge(getRowVal(row, 'PIC'))}
                         <span className="font-mono">{getRowVal(row, 'period') || getRowVal(row, 'Created Time')}</span>
                       </div>
@@ -1494,7 +1905,7 @@ export function NotionDatabaseTable({
       {/* 3. CARDS / LIST VIEW                                                      */}
       {/* ========================================================================= */}
       {viewMode === 'list' && (
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 bg-[#141414]">
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5" style={{ backgroundColor: 'var(--bg-main, #141414)' }}>
           {filteredRows.map((row, idx) => (
             <div
               key={idx}
@@ -1502,28 +1913,45 @@ export function NotionDatabaseTable({
                 setSelectedRow(row);
                 setModalTab('details');
               }}
-              className="p-4 bg-[#1f1f1f] hover:bg-[#252525] border border-slate-800 hover:border-teal-600/60 rounded-2xl shadow-md cursor-pointer transition-all space-y-3 flex flex-col justify-between"
+              className="p-4 border hover:border-teal-500/60 rounded-2xl shadow-md cursor-pointer transition-all space-y-3 flex flex-col justify-between"
+              style={{
+                backgroundColor: 'var(--card-bg, #1f1f1f)',
+                borderColor: 'var(--border-main, #334155)'
+              }}
             >
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#161616] text-slate-400 border border-slate-800">
+                  <span 
+                    className="text-[10px] font-mono px-2 py-0.5 rounded border"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #161616)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-muted, #94a3b8)'
+                    }}
+                  >
                     #{getRowVal(row, 'number') || idx + 1}
                   </span>
                   {renderStatusBadge(getRowVal(row, 'Status'))}
                 </div>
 
-                <h4 className="font-bold text-sm text-slate-100 leading-snug">
+                <h4 className="font-bold text-sm leading-snug" style={{ color: 'var(--text-main, #f1f5f9)' }}>
                   {getRowVal(row, 'Jenis kegiatan') || 'Tanpa Judul'}
                 </h4>
 
                 {getRowVal(row, 'Keterangan') && (
-                  <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                  <p className="text-xs line-clamp-3 leading-relaxed" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     {getRowVal(row, 'Keterangan')}
                   </p>
                 )}
               </div>
 
-              <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+              <div 
+                className="pt-3 border-t flex items-center justify-between text-xs"
+                style={{
+                  borderColor: 'var(--border-main, #334155)',
+                  color: 'var(--text-muted, #94a3b8)'
+                }}
+              >
                 {renderPicBadge(getRowVal(row, 'PIC'))}
                 {renderPriorityBadge(getRowVal(row, 'Priority'))}
               </div>
@@ -1541,27 +1969,39 @@ export function NotionDatabaseTable({
           onClick={() => setShowRowModal(false)}
         >
           <div 
-            className="w-full max-w-xl max-h-[90vh] bg-[#1e1e1e] border border-slate-700 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+            className="w-full max-w-xl max-h-[90vh] border rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+            style={{
+              backgroundColor: 'var(--card-bg, #1e1e1e)',
+              borderColor: 'var(--border-main, #334155)',
+              color: 'var(--text-main, #cbd5e1)'
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="p-4 bg-[#252525] border-b border-slate-800 flex items-center justify-between shrink-0">
+            <div 
+              className="p-4 border-b flex items-center justify-between shrink-0"
+              style={{
+                backgroundColor: 'var(--input-bg, #252525)',
+                borderColor: 'var(--border-main, #334155)'
+              }}
+            >
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-teal-600/30 border border-teal-500/50 text-teal-300 flex items-center justify-center font-bold">
                   <Edit2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-slate-100">
+                  <h3 className="font-bold text-base" style={{ color: 'var(--text-main, #f1f5f9)' }}>
                     {editingRowIndex === null ? 'Tambah Data Kegiatan Baru' : 'Edit Data Kegiatan'}
                   </h3>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Struktur kolom sinkron database Weekly Notion
                   </p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowRowModal(false)}
-                className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                className="p-1.5 rounded-full hover:opacity-80 transition-opacity"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1572,27 +2012,37 @@ export function NotionDatabaseTable({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {/* Number */}
                 <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Number / No
                   </label>
                   <input
                     type="text"
                     value={rowFormData['number'] || ''}
                     onChange={(e) => setRowFormData({ ...rowFormData, number: e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none"
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
                     placeholder="1"
                   />
                 </div>
 
                 {/* Priority */}
                 <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Priority
                   </label>
                   <select
                     value={rowFormData['Priority'] || 'Normal'}
                     onChange={(e) => setRowFormData({ ...rowFormData, Priority: e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none cursor-pointer"
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
                   >
                     <option value="Low">Low</option>
                     <option value="Normal">Normal</option>
@@ -1604,7 +2054,7 @@ export function NotionDatabaseTable({
 
               {/* Jenis kegiatan */}
               <div>
-                <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                   Jenis Kegiatan *
                 </label>
                 <input
@@ -1612,21 +2062,31 @@ export function NotionDatabaseTable({
                   required
                   value={rowFormData['Jenis kegiatan'] || ''}
                   onChange={(e) => setRowFormData({ ...rowFormData, 'Jenis kegiatan': e.target.value })}
-                  className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none font-medium"
+                  className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-medium"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #141414)',
+                    borderColor: 'var(--border-main, #334155)',
+                    color: 'var(--text-main, #f1f5f9)'
+                  }}
                   placeholder="Contoh: Kalibrasi XRF, Analisis Sampel Harian, dsb..."
                 />
               </div>
 
               {/* Keterangan */}
               <div>
-                <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                   Keterangan & Rincian
                 </label>
                 <textarea
                   rows={3}
                   value={rowFormData['Keterangan'] || ''}
                   onChange={(e) => setRowFormData({ ...rowFormData, Keterangan: e.target.value })}
-                  className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none leading-relaxed"
+                  className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none leading-relaxed"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #141414)',
+                    borderColor: 'var(--border-main, #334155)',
+                    color: 'var(--text-main, #f1f5f9)'
+                  }}
                   placeholder="Deskripsi langkah, catatan temuan, atau hasil pekerjaan..."
                 />
               </div>
@@ -1635,7 +2095,7 @@ export function NotionDatabaseTable({
                 {/* PIC Field with Special Role & Searchable Employee Dropdown */}
                 <div className="relative">
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-slate-300 font-bold uppercase tracking-wider text-[10px]">
+                    <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                       PIC (Penanggung Jawab)
                     </label>
                     <span className="text-[9px] text-teal-400 font-mono">Cari Nama / NIK</span>
@@ -1650,14 +2110,20 @@ export function NotionDatabaseTable({
                         setRowFormData({ ...rowFormData, PIC: e.target.value });
                         setIsPicDropdownOpen(true);
                       }}
-                      className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none text-xs"
+                      className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs"
+                      style={{
+                        backgroundColor: 'var(--input-bg, #141414)',
+                        borderColor: 'var(--border-main, #334155)',
+                        color: 'var(--text-main, #f1f5f9)'
+                      }}
                       placeholder="Ketik NIK, Nama, atau pilih Role..."
                     />
                     {rowFormData['PIC'] && (
                       <button
                         type="button"
                         onClick={() => setRowFormData({ ...rowFormData, PIC: '' })}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 opacity-70 hover:opacity-100"
+                        style={{ color: 'var(--text-muted, #94a3b8)' }}
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -1671,10 +2137,16 @@ export function NotionDatabaseTable({
                         className="fixed inset-0 z-10" 
                         onClick={() => setIsPicDropdownOpen(false)} 
                       />
-                      <div className="absolute left-0 right-0 top-full mt-1.5 z-20 bg-[#222222] border border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto divide-y divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
+                      <div 
+                        className="absolute left-0 right-0 top-full mt-1.5 z-20 border rounded-2xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto divide-y animate-in fade-in zoom-in-95 duration-100"
+                        style={{
+                          backgroundColor: 'var(--card-bg, #222222)',
+                          borderColor: 'var(--border-main, #334155)'
+                        }}
+                      >
                         {/* Quick Role Picks */}
-                        <div className="p-2 bg-[#1b1b1b]">
-                          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block px-2 pb-1.5">
+                        <div className="p-2" style={{ backgroundColor: 'var(--input-bg, #1b1b1b)' }}>
+                          <span className="text-[9px] font-bold uppercase tracking-wider block px-2 pb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                             Role Khusus
                           </span>
                           <div className="grid grid-cols-2 gap-1">
@@ -1686,10 +2158,15 @@ export function NotionDatabaseTable({
                                   setRowFormData({ ...rowFormData, PIC: role });
                                   setIsPicDropdownOpen(false);
                                 }}
-                                className="px-2 py-1.5 rounded-lg bg-[#2a2a2a] hover:bg-teal-950/80 text-slate-300 hover:text-teal-300 border border-slate-700/60 hover:border-teal-600/50 text-[11px] font-semibold text-left transition-colors flex items-center justify-between cursor-pointer"
+                                className="px-2 py-1.5 rounded-lg border text-[11px] font-semibold text-left transition-colors flex items-center justify-between cursor-pointer"
+                                style={{
+                                  backgroundColor: 'var(--card-bg, #2a2a2a)',
+                                  borderColor: 'var(--border-main, #334155)',
+                                  color: 'var(--text-main, #f1f5f9)'
+                                }}
                               >
                                 <span>{role}</span>
-                                <Check className="w-2.5 h-2.5 opacity-40" />
+                                <Check className="w-2.5 h-2.5 opacity-40 text-teal-400" />
                               </button>
                             ))}
                           </div>
@@ -1697,7 +2174,7 @@ export function NotionDatabaseTable({
 
                         {/* Employee Search List */}
                         <div className="p-1.5">
-                          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block px-2 py-1">
+                          <span className="text-[9px] font-bold uppercase tracking-wider block px-2 py-1" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                             Daftar Karyawan ({employeesList.length})
                           </span>
                           {employeesList
@@ -1720,17 +2197,17 @@ export function NotionDatabaseTable({
                                   setRowFormData({ ...rowFormData, PIC: emp.name || emp.nik });
                                   setIsPicDropdownOpen(false);
                                 }}
-                                className="w-full px-2.5 py-2 rounded-xl hover:bg-[#2d2d2d] flex items-center justify-between text-left transition-colors cursor-pointer group"
+                                className="w-full px-2.5 py-2 rounded-xl hover:opacity-80 flex items-center justify-between text-left transition-opacity cursor-pointer group"
                               >
                                 <div className="flex items-center gap-2 overflow-hidden">
                                   <span className="w-6 h-6 rounded-full bg-teal-900/80 border border-teal-700/60 text-teal-300 text-[10px] font-bold flex items-center justify-center shrink-0">
                                     {(emp.name || 'U').charAt(0).toUpperCase()}
                                   </span>
                                   <div className="truncate">
-                                    <span className="text-xs font-semibold text-slate-200 group-hover:text-teal-300 block truncate">
+                                    <span className="text-xs font-semibold block truncate" style={{ color: 'var(--text-main, #f1f5f9)' }}>
                                       {emp.name}
                                     </span>
-                                    <span className="text-[10px] text-slate-500 font-mono">
+                                    <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                                       {emp.nik} • {emp.jabatan || emp.section || 'Personil'}
                                     </span>
                                   </div>
@@ -1745,13 +2222,18 @@ export function NotionDatabaseTable({
 
                 {/* Status */}
                 <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Status
                   </label>
                   <select
                     value={rowFormData['Status'] || 'Open'}
                     onChange={(e) => setRowFormData({ ...rowFormData, Status: e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none cursor-pointer text-xs"
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
                   >
                     <option value="Open">Open</option>
                     <option value="On Progress">On Progress</option>
@@ -1764,40 +2246,55 @@ export function NotionDatabaseTable({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Created Time */}
                 <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Created Time
                   </label>
                   <input
                     type="text"
                     value={rowFormData['Created Time'] || ''}
                     onChange={(e) => setRowFormData({ ...rowFormData, 'Created Time': e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none font-mono text-[11px]"
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-mono text-[11px]"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
                   />
                 </div>
 
                 {/* Kategori */}
                 <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Kategori
                   </label>
                   <input
                     type="text"
                     value={rowFormData['Kategori'] || ''}
                     onChange={(e) => setRowFormData({ ...rowFormData, Kategori: e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none text-xs"
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
                     placeholder="Laboratorium"
                   />
                 </div>
 
                 {/* Activity (routine/non routine) */}
                 <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Activity
                   </label>
                   <select
                     value={rowFormData['Activity (routine/non routine)'] || 'Routine'}
                     onChange={(e) => setRowFormData({ ...rowFormData, 'Activity (routine/non routine)': e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none cursor-pointer text-xs"
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
                   >
                     <option value="Routine">Routine</option>
                     <option value="Non-routine">Non-routine</option>
@@ -1807,7 +2304,7 @@ export function NotionDatabaseTable({
 
               {/* Period Dropdown */}
               <div>
-                <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 text-[10px]">
+                <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                   Period / Periode
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1818,7 +2315,12 @@ export function NotionDatabaseTable({
                         setRowFormData({ ...rowFormData, period: e.target.value });
                       }
                     }}
-                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none cursor-pointer text-xs"
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
                   >
                     <option value="Daily">Daily</option>
                     <option value="Weekly">Weekly</option>
@@ -1833,14 +2335,19 @@ export function NotionDatabaseTable({
                     type="text"
                     value={rowFormData['period'] || ''}
                     onChange={(e) => setRowFormData({ ...rowFormData, period: e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-[#141414] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none text-xs"
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
                     placeholder="Input periode manual jika kustom..."
                   />
                 </div>
               </div>
 
               {/* Modal Footer Buttons */}
-              <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
+              <div className="pt-3 border-t flex items-center justify-end gap-2" style={{ borderColor: 'var(--border-main, #334155)' }}>
                 <Button
                   type="button"
                   variant="secondary"
@@ -1866,323 +2373,587 @@ export function NotionDatabaseTable({
       {/* ========================================================================= */}
       {/* 5. SLIDE-OVER DRAWER (RIGHT-TO-LEFT): ROW DETAILS & TOPIC DISCUSSION       */}
       {/* ========================================================================= */}
-      {selectedRow && (
-        <div className="fixed inset-0 z-[120] overflow-hidden">
-          {/* Backdrop */}
-          <div 
-            className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
-            onClick={() => setSelectedRow(null)}
-          />
+      <AnimatePresence>
+        {selectedRow && (
+          <div className="fixed inset-0 z-[120] overflow-hidden">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="fixed inset-0 bg-black/75 backdrop-blur-sm"
+              onClick={() => setSelectedRow(null)}
+            />
 
-          {/* Right-to-Left Slide-over Panel (Wide 2-Column Layout) */}
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-4 sm:pl-10">
-            <div 
-              className="w-screen max-w-5xl lg:max-w-6xl xl:max-w-7xl bg-[#1a1a1a] border-l border-slate-800 shadow-[-20px_0_50px_rgba(0,0,0,0.9)] flex flex-col h-full overflow-hidden animate-in slide-in-from-right duration-300 ease-out"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Drawer Sticky Header */}
-              <div className="p-4 sm:p-5 bg-[#222222] border-b border-slate-800 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <span className="text-xs sm:text-sm font-mono px-3 py-1 rounded-xl bg-teal-950/90 text-teal-300 border border-teal-600/50 font-bold shrink-0 shadow-sm">
-                    #{getRowVal(selectedRow, 'number') || '1'}
-                  </span>
-                  <div className="truncate">
-                    <h3 className="font-black text-slate-100 text-base sm:text-xl truncate">
-                      {selectedTopicTitle || 'Detail Kegiatan'}
-                    </h3>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[11px] text-teal-400/90 font-mono font-semibold">
-                        {getRowVal(selectedRow, 'Kategori') || 'Laboratorium'}
-                      </span>
-                      <span className="text-slate-600">•</span>
-                      <span className="text-[11px] text-slate-400 font-mono">
-                        Periode: {getRowVal(selectedRow, 'period') || 'Periodik'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => handleOpenEditModal(selectedRow, localRows.indexOf(selectedRow))}
-                    className="p-2 px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    <span>Edit</span>
-                  </button>
-                  <button
-                    onClick={() => handleDeleteRow(localRows.indexOf(selectedRow))}
-                    className="p-2 px-3.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Hapus</span>
-                  </button>
-                  <button
-                    onClick={() => setSelectedRow(null)}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors ml-1 cursor-pointer"
-                    title="Tutup Panel (ESC)"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Drawer Body: Wide 2-Column Responsive Layout */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                  
-                  {/* ================================================================= */}
-                  {/* LEFT COLUMN: DETAIL TOPIK & RINCIAN KEGIATAN                      */}
-                  {/* ================================================================= */}
-                  <div className="lg:col-span-5 xl:col-span-5 space-y-5">
-                    
-                    {/* Key Highlights Grid */}
-                    <div className="grid grid-cols-2 gap-2.5 p-4 bg-[#141414] rounded-2xl border border-slate-800 shadow-inner text-xs">
-                      <div>
-                        <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1.5">Status</span>
-                        {renderStatusBadge(getRowVal(selectedRow, 'Status'))}
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1.5">Priority</span>
-                        {renderPriorityBadge(getRowVal(selectedRow, 'Priority'))}
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1.5">PIC</span>
-                        {renderPicBadge(getRowVal(selectedRow, 'PIC'))}
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1.5">Activity Type</span>
-                        <span className="font-mono text-slate-300 font-semibold px-2 py-0.5 rounded bg-[#1e1e1e] border border-slate-700 inline-block truncate max-w-full text-[11px]">
-                          {getRowVal(selectedRow, 'Activity (routine/non routine)') || 'Routine'}
+            {/* Right-to-Left Slide-over Panel (Wide 2-Column Layout) */}
+            <div className="fixed inset-y-0 right-0 max-w-full flex pl-4 sm:pl-10 pointer-events-none">
+              <motion.div 
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
+                className="w-screen max-w-5xl lg:max-w-6xl xl:max-w-7xl border-l shadow-[-20px_0_50px_rgba(0,0,0,0.5)] flex flex-col h-full overflow-hidden pointer-events-auto"
+                style={{
+                  backgroundColor: 'var(--card-bg, #1a1a1a)',
+                  borderColor: 'var(--border-main, #334155)',
+                  color: 'var(--text-main, #cbd5e1)'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Drawer Sticky Header */}
+                <div 
+                  className="p-4 sm:p-5 border-b flex items-center justify-between shrink-0"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #222222)',
+                    borderColor: 'var(--border-main, #334155)'
+                  }}
+                >
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <span className="text-xs sm:text-sm font-mono px-3 py-1 rounded-xl bg-teal-950/90 text-teal-300 border border-teal-600/50 font-bold shrink-0 shadow-sm">
+                      #{getRowVal(selectedRow, 'number') || '1'}
+                    </span>
+                    <div className="truncate">
+                      <h3 className="font-black text-base sm:text-xl truncate" style={{ color: 'var(--text-main, #f1f5f9)' }}>
+                        {selectedTopicTitle || 'Detail Kegiatan'}
+                      </h3>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[11px] text-teal-400 font-mono font-semibold">
+                          {getRowVal(selectedRow, 'Kategori') || 'Laboratorium'}
+                        </span>
+                        <span style={{ color: 'var(--text-muted, #64748b)' }}>•</span>
+                        <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                          Periode: {getRowVal(selectedRow, 'period') || 'Periodik'}
                         </span>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Rincian & Keterangan Card */}
-                    <div className="p-4 sm:p-5 bg-[#171717] rounded-2xl border border-slate-800 shadow-sm space-y-3">
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
-                        <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
-                          <FileText className="w-4 h-4" />
-                          <span>Rincian & Keterangan Kegiatan</span>
-                        </h4>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleOpenEditModal(selectedRow, localRows.indexOf(selectedRow))}
+                      className="p-2 px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteRow(localRows.indexOf(selectedRow))}
+                      className="p-2 px-3.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Hapus</span>
+                    </button>
+                    <button
+                      onClick={() => setSelectedRow(null)}
+                      className="p-2 rounded-xl border hover:opacity-80 transition-opacity ml-1 cursor-pointer"
+                      style={{
+                        backgroundColor: 'var(--card-bg, #1e293b)',
+                        borderColor: 'var(--border-main, #334155)',
+                        color: 'var(--text-muted, #94a3b8)'
+                      }}
+                      title="Tutup Panel (ESC)"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Drawer Body: Wide 2-Column Responsive Layout */}
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    
+                    {/* ================================================================= */}
+                    {/* LEFT COLUMN: DETAIL TOPIK & RINCIAN KEGIATAN                      */}
+                    {/* ================================================================= */}
+                    <div className="lg:col-span-5 xl:col-span-5 space-y-5">
+                      
+                      {/* Key Highlights Grid */}
+                      <div 
+                        className="grid grid-cols-2 gap-2.5 p-4 rounded-2xl border shadow-inner text-xs"
+                        style={{
+                          backgroundColor: 'var(--input-bg, #141414)',
+                          borderColor: 'var(--border-main, #334155)'
+                        }}
+                      >
+                        <div>
+                          <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Status</span>
+                          {renderStatusBadge(getRowVal(selectedRow, 'Status'))}
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Priority</span>
+                          {renderPriorityBadge(getRowVal(selectedRow, 'Priority'))}
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>PIC</span>
+                          {renderPicBadge(getRowVal(selectedRow, 'PIC'))}
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Activity Type</span>
+                          <span 
+                            className="font-mono font-semibold px-2 py-0.5 rounded border inline-block truncate max-w-full text-[11px]"
+                            style={{
+                              backgroundColor: 'var(--card-bg, #1e1e1e)',
+                              borderColor: 'var(--border-main, #334155)',
+                              color: 'var(--text-main, #cbd5e1)'
+                            }}
+                          >
+                            {getRowVal(selectedRow, 'Activity (routine/non routine)') || 'Routine'}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="text-slate-200 leading-relaxed text-xs sm:text-sm font-sans pt-1">
-                        {renderFormattedNotes(getRowVal(selectedRow, 'Keterangan'))}
-                      </div>
-                    </div>
-
-                    {/* Secondary Metadata Info Cards */}
-                    <div className="grid grid-cols-3 gap-2.5 text-[11px]">
-                      <div className="p-3 bg-[#171717] rounded-xl border border-slate-800">
-                        <span className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">Kategori</span>
-                        <span className="text-slate-300 font-medium truncate block">{getRowVal(selectedRow, 'Kategori') || '-'}</span>
-                      </div>
-                      <div className="p-3 bg-[#171717] rounded-xl border border-slate-800">
-                        <span className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">Period</span>
-                        <span className="text-slate-300 font-medium truncate block">{getRowVal(selectedRow, 'period') || '-'}</span>
-                      </div>
-                      <div className="p-3 bg-[#171717] rounded-xl border border-slate-800">
-                        <span className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">Dibuat</span>
-                        <span className="text-slate-300 font-mono text-[10px] truncate block">{getRowVal(selectedRow, 'Created Time') || '-'}</span>
-                      </div>
-                    </div>
-
-                    {/* 3. GALERI & LAMPIRAN MEDIA TOPIK */}
-                    <div className="p-4 sm:p-5 bg-[#171717] rounded-2xl border border-slate-800 shadow-sm space-y-3">
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
-                        <div className="flex items-center gap-2">
-                          <ImageIcon className="w-4 h-4 text-teal-400" />
-                          <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider">
-                            Galeri & Lampiran Media ({activeTopicComments.filter((c: any) => c.fileUrl).length})
+                      {/* Rincian & Keterangan Card */}
+                      <div 
+                        className="p-4 sm:p-5 rounded-2xl border shadow-sm space-y-3"
+                        style={{
+                          backgroundColor: 'var(--card-bg, #171717)',
+                          borderColor: 'var(--border-main, #334155)'
+                        }}
+                      >
+                        <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                          <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
+                            <FileText className="w-4 h-4" />
+                            <span>Rincian & Keterangan Kegiatan</span>
                           </h4>
                         </div>
-                        
-                        <input
-                          type="file"
-                          ref={galleryFileInputRef}
-                          onChange={handleGalleryFileUpload}
-                          accept="image/*,.pdf,.doc,.docx"
-                          className="hidden"
-                        />
-                        <button
-                          type="button"
-                          disabled={isUploadingGallery}
-                          onClick={() => galleryFileInputRef.current?.click()}
-                          className="px-2.5 py-1 rounded-lg bg-teal-950/80 hover:bg-teal-900 text-teal-300 border border-teal-600/50 text-[10px] font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
-                        >
-                          {isUploadingGallery ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                          <span>+ Upload Lampiran / Foto</span>
-                        </button>
+
+                        <div className="leading-relaxed text-xs sm:text-sm font-sans pt-1" style={{ color: 'var(--text-main, #e2e8f0)' }}>
+                          {renderFormattedNotes(getRowVal(selectedRow, 'Keterangan'))}
+                        </div>
                       </div>
 
-                      {/* Gallery Items Grid */}
-                      {activeTopicComments.filter((c: any) => c.fileUrl).length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
-                          {activeTopicComments.filter((c: any) => c.fileUrl).map((media: any, idx: number) => (
-                            <div 
-                              key={media.id || idx}
-                              onClick={() => setPreviewImage({ url: media.fileUrl, title: media.content || 'Lampiran Kegiatan' })}
-                              className="group relative rounded-xl overflow-hidden aspect-video border border-slate-800 hover:border-teal-500/60 bg-[#121212] cursor-pointer shadow-sm transition-all hover:scale-[1.02]"
-                            >
-                              <img 
-                                src={media.fileUrl} 
-                                alt={media.content || 'Lampiran'} 
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
-                                <span className="text-[10px] font-bold text-white truncate">{media.content?.replace(/^📎\s*Lampiran Foto \/ Dokumen:\s*/, '') || 'Foto Kegiatan'}</span>
-                                <span className="text-[9px] text-teal-300 font-mono">{media.authorName || 'Personil'}</span>
-                              </div>
-                            </div>
-                          ))}
+                      {/* Secondary Metadata Info Cards */}
+                      <div className="grid grid-cols-3 gap-2.5 text-[11px]">
+                        <div className="p-3 rounded-xl border" style={{ backgroundColor: 'var(--input-bg, #171717)', borderColor: 'var(--border-main, #334155)' }}>
+                          <span className="text-[9px] uppercase font-bold block mb-0.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Kategori</span>
+                          <span className="font-medium truncate block" style={{ color: 'var(--text-main, #cbd5e1)' }}>{getRowVal(selectedRow, 'Kategori') || '-'}</span>
                         </div>
-                      ) : (
-                        <div 
-                          onClick={() => galleryFileInputRef.current?.click()}
-                          className="py-6 px-4 bg-[#141414] hover:bg-[#181818] rounded-xl border border-dashed border-slate-800 hover:border-teal-600/50 text-center cursor-pointer transition-colors group"
+                        <div className="p-3 rounded-xl border" style={{ backgroundColor: 'var(--input-bg, #171717)', borderColor: 'var(--border-main, #334155)' }}>
+                          <span className="text-[9px] uppercase font-bold block mb-0.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Period</span>
+                          <span className="font-medium truncate block" style={{ color: 'var(--text-main, #cbd5e1)' }}>{getRowVal(selectedRow, 'period') || '-'}</span>
+                        </div>
+                        <div className="p-3 rounded-xl border" style={{ backgroundColor: 'var(--input-bg, #171717)', borderColor: 'var(--border-main, #334155)' }}>
+                          <span className="text-[9px] uppercase font-bold block mb-0.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Dibuat</span>
+                          <span className="font-mono text-[10px] truncate block" style={{ color: 'var(--text-main, #cbd5e1)' }}>{getRowVal(selectedRow, 'Created Time') || '-'}</span>
+                        </div>
+                      </div>
+
+                      {/* 3. GALERI & LAMPIRAN MEDIA TOPIK */}
+                      <div 
+                        className="p-4 sm:p-5 rounded-2xl border shadow-sm space-y-3"
+                        style={{
+                          backgroundColor: 'var(--card-bg, #171717)',
+                          borderColor: 'var(--border-main, #334155)'
+                        }}
+                      >
+                        <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                          <div className="flex items-center gap-2">
+                            <ImageIcon className="w-4 h-4 text-teal-400" />
+                            <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider">
+                              Galeri & Lampiran Media ({galleryItems.length})
+                            </h4>
+                          </div>
+                          
+                          <input
+                            type="file"
+                            ref={galleryFileInputRef}
+                            onChange={handleGalleryFileUpload}
+                            accept="image/*,.pdf,.doc,.docx"
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            disabled={isUploadingGallery}
+                            onClick={() => galleryFileInputRef.current?.click()}
+                            className="px-2.5 py-1 rounded-lg bg-teal-950/80 hover:bg-teal-900 text-teal-300 border border-teal-600/50 text-[10px] font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+                          >
+                            {isUploadingGallery ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                            <span>+ Upload Lampiran / Foto</span>
+                          </button>
+                        </div>
+
+                        {/* Gallery Items Grid */}
+                        {galleryItems.length > 0 ? (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
+                            {galleryItems.map((item, idx) => {
+                              const driveId = item.attachment.id || extractDriveId(item.attachment.directUrl || item.attachment.url);
+                              return (
+                                <div 
+                                  key={item.comment.id || idx}
+                                  onClick={() => handlePreviewAttachment(item.attachment)}
+                                  className="group relative rounded-xl overflow-hidden aspect-video border hover:border-teal-500/60 cursor-pointer shadow-sm transition-all hover:scale-[1.02]"
+                                  style={{
+                                    backgroundColor: 'var(--input-bg, #121212)',
+                                    borderColor: 'var(--border-main, #334155)'
+                                  }}
+                                  title={`Klik untuk melihat: ${item.attachment.name}`}
+                                >
+                                  {item.attachment.isImage ? (
+                                    <img 
+                                      src={item.attachment.directUrl || item.attachment.url} 
+                                      alt={item.attachment.name}
+                                      loading="lazy"
+                                      referrerPolicy="no-referrer"
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                      onError={(e) => {
+                                        const target = e.target as HTMLImageElement;
+                                        if (driveId) {
+                                          if (!target.src.includes('googleusercontent.com')) {
+                                            target.src = `https://lh3.googleusercontent.com/d/${driveId}`;
+                                          } else if (!target.src.includes('thumbnail')) {
+                                            target.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`;
+                                          }
+                                        }
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-teal-950/30">
+                                      <FileText className="w-6 h-6 text-teal-400 mb-1" />
+                                      <span className="text-[10px] text-teal-300 font-semibold truncate w-full px-1">{item.attachment.name}</span>
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
+                                    <span className="text-[10px] font-bold text-white truncate">{item.attachment.name}</span>
+                                    <span className="text-[9px] text-teal-300 font-mono">{item.authorName}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div 
+                            onClick={() => galleryFileInputRef.current?.click()}
+                            className="py-6 px-4 rounded-xl border border-dashed text-center cursor-pointer transition-colors group"
+                            style={{
+                              backgroundColor: 'var(--input-bg, #141414)',
+                              borderColor: 'var(--border-main, #334155)'
+                            }}
+                          >
+                            <ImageIcon className="w-6 h-6 mx-auto mb-1.5 text-teal-400 transition-colors" />
+                            <p className="text-xs font-medium transition-colors" style={{ color: 'var(--text-main, #cbd5e1)' }}>
+                              Belum ada foto atau lampiran untuk kegiatan ini
+                            </p>
+                            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted, #64748b)' }}>
+                              Klik di sini untuk mengunggah foto dokumentasi / hasil inspeksi
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+
+                    {/* ================================================================= */}
+                    {/* RIGHT COLUMN: DISKUSI PROGRESS & REALTIME TIMELINE                */}
+                    {/* ================================================================= */}
+                    <div className="lg:col-span-7 xl:col-span-7 space-y-4">
+                      
+                      {/* Header Discussion */}
+                      <div className="flex items-center justify-between px-1">
+                        <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4" />
+                          <span>Diskusi & Riwayat Progres ({activeTopicComments.length})</span>
+                        </h4>
+                        <span 
+                          className="text-[10px] font-mono px-2 py-0.5 rounded-full border"
+                          style={{
+                            backgroundColor: 'var(--input-bg, #141414)',
+                            borderColor: 'var(--border-main, #334155)',
+                            color: 'var(--text-muted, #94a3b8)'
+                          }}
                         >
-                          <ImageIcon className="w-6 h-6 mx-auto mb-1.5 text-slate-600 group-hover:text-teal-400 transition-colors" />
-                          <p className="text-xs text-slate-400 font-medium group-hover:text-slate-200 transition-colors">
-                            Belum ada foto atau lampiran untuk kegiatan ini
-                          </p>
-                          <p className="text-[10px] text-slate-600 mt-0.5">
-                            Klik di sini untuk mengunggah foto dokumentasi / hasil inspeksi
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                  </div>
-
-                  {/* ================================================================= */}
-                  {/* RIGHT COLUMN: DISKUSI PROGRESS & REALTIME TIMELINE                */}
-                  {/* ================================================================= */}
-                  <div className="lg:col-span-7 xl:col-span-7 space-y-4">
-                    
-                    {/* Header Discussion */}
-                    <div className="flex items-center justify-between px-1">
-                      <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
-                        <MessageSquare className="w-4 h-4" />
-                        <span>Diskusi & Riwayat Progres ({activeTopicComments.length})</span>
-                      </h4>
-                      <span className="text-[10px] text-slate-500 font-mono bg-[#141414] px-2 py-0.5 rounded-full border border-slate-800">
-                        ⚡ Realtime Feed
-                      </span>
-                    </div>
-
-                    {/* New Comment & Status Update Form */}
-                    <form onSubmit={handlePostComment} className="p-4 bg-[#171717] border border-slate-800 rounded-2xl space-y-3 shadow-md">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-200 flex items-center gap-1.5 text-xs">
-                          <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-                          <span>Kirim Update Progres / Catatan Baru</span>
+                          ⚡ Realtime Feed
                         </span>
                       </div>
 
-                      <textarea
-                        rows={3}
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                        placeholder={`Tuliskan update progres, temuan kendala, atau hasil tindakan untuk "${selectedTopicTitle}"...`}
-                        className="w-full p-3 rounded-xl bg-[#202020] border border-slate-700 text-slate-200 focus:border-teal-500 outline-none leading-relaxed text-xs"
-                      />
+                      {/* New Comment & Status Update Form */}
+                      <form 
+                        onSubmit={handlePostComment} 
+                        className="p-4 border rounded-2xl space-y-3 shadow-md"
+                        style={{
+                          backgroundColor: 'var(--card-bg, #171717)',
+                          borderColor: 'var(--border-main, #334155)'
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-main, #f1f5f9)' }}>
+                            <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+                            <span>{replyingTo ? `Balas Catatan: ${replyingTo.authorName}` : 'Kirim Update Progres / Catatan Baru'}</span>
+                          </span>
+                        </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-slate-400 font-semibold">Ubah Status:</span>
-                          <select
-                            value={statusUpdateChoice}
-                            onChange={(e) => setStatusUpdateChoice(e.target.value)}
-                            className="p-1.5 px-2.5 rounded-lg bg-[#202020] border border-slate-700 text-slate-200 text-xs outline-none cursor-pointer"
+                        {/* Replying banner */}
+                        {replyingTo && (
+                          <div 
+                            className="flex items-center justify-between p-2.5 px-3 rounded-xl border text-xs animate-in fade-in duration-150 shadow-xs"
+                            style={{
+                              backgroundColor: 'rgba(20, 184, 166, 0.12)',
+                              borderColor: 'rgba(20, 184, 166, 0.35)',
+                              color: 'var(--text-main, #f1f5f9)'
+                            }}
                           >
-                            <option value="">Status Tetap ({getRowVal(selectedRow, 'Status') || 'Open'})</option>
-                            <option value="On Progress">⏩ Ubah ke On Progress</option>
-                            <option value="Close">✅ Ubah ke Closed / Selesai</option>
-                            <option value="Pending">⏳ Ubah ke Pending</option>
-                            <option value="Open">⭕ Ubah ke Open</option>
-                          </select>
-                        </div>
-
-                        <Button
-                          type="submit"
-                          disabled={submittingComment || !commentText.trim()}
-                          className="!w-auto text-xs px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-lg cursor-pointer"
-                        >
-                          {submittingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 mr-1.5" />}
-                          <span>Kirim Update</span>
-                        </Button>
-                      </div>
-                    </form>
-
-                    {/* Activity / Comments Timeline Stream */}
-                    <div className="space-y-3 pt-1">
-                      {commentsLoading ? (
-                        <div className="text-center py-8 text-slate-500">
-                          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-teal-400" />
-                          <p className="text-xs">Memuat riwayat diskusi...</p>
-                        </div>
-                      ) : activeTopicComments.length === 0 ? (
-                        <div className="text-center py-8 px-4 bg-[#151515] rounded-2xl border border-dashed border-slate-800 text-slate-500">
-                          <MessageSquare className="w-6 h-6 mx-auto mb-1.5 opacity-40 text-slate-400" />
-                          <p className="text-xs italic">Belum ada update progres atau catatan diskusi pada kegiatan ini.</p>
-                        </div>
-                      ) : (
-                        activeTopicComments.map((c) => (
-                          <div key={c.id} className="p-3.5 bg-[#171717] border border-slate-800/80 rounded-2xl space-y-2 shadow-sm">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2.5">
-                                <span className="w-7 h-7 rounded-full bg-teal-900/90 border border-teal-700/60 text-teal-300 text-xs font-bold flex items-center justify-center shrink-0">
-                                  {(c.authorName || 'U').charAt(0).toUpperCase()}
-                                </span>
-                                <div>
-                                  <span className="font-bold text-slate-200 text-xs block leading-tight">
-                                    {c.authorName || 'Personil'}
-                                  </span>
-                                  <span className="text-[10px] text-slate-500 font-mono">
-                                    {new Date(c.createdAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
-                                  </span>
-                                </div>
-                              </div>
-                              {c.authorNik === currentAuthorNik && (
-                                <button
-                                  onClick={() => handleDeleteComment(c.id)}
-                                  className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
-                                  title="Hapus Catatan Ini"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Reply className="w-3.5 h-3.5 text-teal-400 shrink-0 rotate-180" />
+                              <span className="truncate">
+                                Membalas <strong className="text-teal-300 font-semibold">{replyingTo.authorName}</strong>: <span className="opacity-85 italic font-normal">"{replyingTo.content.substring(0, 60)}{replyingTo.content.length > 60 ? '...' : ''}"</span>
+                              </span>
                             </div>
-                            
-                            <p className="text-xs text-slate-300 whitespace-pre-line leading-relaxed pl-9">
-                              {c.content}
-                            </p>
-
-                            {/* Media preview if comment has file_url */}
-                            {c.fileUrl && (
-                              <div className="pl-9 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setPreviewImage({ url: c.fileUrl, title: c.content || 'Lampiran Media' })}
-                                  className="relative rounded-xl overflow-hidden border border-slate-700 hover:border-teal-500/60 max-w-xs aspect-video block group cursor-pointer"
-                                >
-                                  <img src={c.fileUrl} alt="Lampiran" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                </button>
-                              </div>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => setReplyingTo(null)}
+                              className="p-1 hover:bg-teal-500/20 rounded-md text-teal-300 hover:text-white transition-colors cursor-pointer shrink-0 ml-2"
+                              title="Batal Membalas"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-                        ))
-                      )}
-                    </div>
+                        )}
 
+                        <textarea
+                          id="notion-comment-textarea"
+                          rows={3}
+                          value={commentText}
+                          onChange={(e) => setCommentText(e.target.value)}
+                          placeholder={
+                            replyingTo 
+                              ? `Tulis tanggapan untuk ${replyingTo.authorName}...` 
+                              : `Tuliskan update progres, temuan kendala, atau hasil tindakan untuk "${selectedTopicTitle}"...`
+                          }
+                          className="w-full p-3 rounded-xl border focus:border-teal-500 outline-none leading-relaxed text-xs"
+                          style={{
+                            backgroundColor: 'var(--input-bg, #202020)',
+                            borderColor: 'var(--border-main, #334155)',
+                            color: 'var(--text-main, #f1f5f9)'
+                          }}
+                        />
+
+                        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted, #94a3b8)' }}>Ubah Status:</span>
+                            <select
+                              value={statusUpdateChoice}
+                              onChange={(e) => setStatusUpdateChoice(e.target.value)}
+                              className="p-1.5 px-2.5 rounded-lg border text-xs outline-none cursor-pointer"
+                              style={{
+                                backgroundColor: 'var(--input-bg, #202020)',
+                                borderColor: 'var(--border-main, #334155)',
+                                color: 'var(--text-main, #f1f5f9)'
+                              }}
+                            >
+                              <option value="">Status Tetap ({getRowVal(selectedRow, 'Status') || 'Open'})</option>
+                              <option value="On Progress">⏩ Ubah ke On Progress</option>
+                              <option value="Close">✅ Ubah ke Closed / Selesai</option>
+                              <option value="Pending">⏳ Ubah ke Pending</option>
+                              <option value="Open">⭕ Ubah ke Open</option>
+                            </select>
+                          </div>
+
+                          <Button
+                            type="submit"
+                            disabled={submittingComment || !commentText.trim()}
+                            className="!w-auto text-xs px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-lg cursor-pointer"
+                          >
+                            {submittingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : replyingTo ? <Reply className="w-3.5 h-3.5 mr-1.5 rotate-180" /> : <Send className="w-3.5 h-3.5 mr-1.5" />}
+                            <span>{replyingTo ? 'Kirim Balasan' : 'Kirim Update'}</span>
+                          </Button>
+                        </div>
+                      </form>
+
+                      {/* Activity / Comments Timeline Stream */}
+                      <div className="space-y-3 pt-1">
+                        {commentsLoading ? (
+                          <div className="text-center py-8" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-teal-400" />
+                            <p className="text-xs">Memuat riwayat diskusi...</p>
+                          </div>
+                        ) : rootComments.length === 0 ? (
+                          <div 
+                            className="text-center py-8 px-4 rounded-2xl border border-dashed"
+                            style={{
+                              backgroundColor: 'var(--card-bg, #151515)',
+                              borderColor: 'var(--border-main, #334155)',
+                              color: 'var(--text-muted, #94a3b8)'
+                            }}
+                          >
+                            <MessageSquare className="w-6 h-6 mx-auto mb-1.5 opacity-40 text-teal-400" />
+                            <p className="text-xs italic">Belum ada update progres atau catatan diskusi pada kegiatan ini.</p>
+                          </div>
+                        ) : (
+                          rootComments.map((root) => {
+                            const rootAtts = parseCommentAttachments(root.fileUrl, root.fileName, root.content);
+                            const threadReplies = repliesMap[root.id] || [];
+
+                            return (
+                              <div 
+                                key={root.id} 
+                                className="p-3.5 sm:p-4 border rounded-2xl space-y-2.5 shadow-sm transition-all"
+                                style={{
+                                  backgroundColor: 'var(--card-bg, #171717)',
+                                  borderColor: 'var(--border-main, #334155)'
+                                }}
+                              >
+                                {/* Header Komentar Utama */}
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="w-7 h-7 rounded-full bg-teal-900/90 border border-teal-700/60 text-teal-300 text-xs font-bold flex items-center justify-center shrink-0">
+                                      {(root.authorName || 'U').charAt(0).toUpperCase()}
+                                    </span>
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-bold text-xs block leading-tight" style={{ color: 'var(--text-main, #f1f5f9)' }}>
+                                          {root.authorName || 'Personil'}
+                                        </span>
+                                        {threadReplies.length > 0 && (
+                                          <span className="text-[9px] px-1.5 py-0.2 rounded-full font-mono bg-teal-950/80 text-teal-300 border border-teal-600/40 font-semibold">
+                                            {threadReplies.length} balasan
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                                        {new Date(root.createdAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartReply(root)}
+                                      className="px-2 py-0.5 rounded-lg hover:bg-teal-500/20 text-teal-400 hover:text-teal-300 font-semibold text-[11px] flex items-center gap-1 transition-colors cursor-pointer border border-teal-500/30"
+                                      title="Balas komentar utama ini"
+                                    >
+                                      <Reply className="w-3 h-3 rotate-180" />
+                                      <span>Balas</span>
+                                    </button>
+                                    {root.authorNik === currentAuthorNik && (
+                                      <button
+                                        onClick={() => handleDeleteComment(root.id)}
+                                        className="p-1.5 rounded-lg hover:opacity-80 hover:text-rose-400 transition-colors cursor-pointer"
+                                        style={{ color: 'var(--text-muted, #94a3b8)' }}
+                                        title="Hapus Catatan Ini"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Isi Komentar Utama */}
+                                <p className="text-xs whitespace-pre-line leading-relaxed pl-9" style={{ color: 'var(--text-main, #cbd5e1)' }}>
+                                  {root.content}
+                                </p>
+
+                                {/* Media preview if root comment has file_url */}
+                                {rootAtts.length > 0 && (
+                                  <div className="pl-9 pt-1 space-y-2">
+                                    {rootAtts.map((att, aIdx) => (
+                                      <AttachmentThumbnail 
+                                        key={att.id || aIdx} 
+                                        attachment={att} 
+                                        onPreview={handlePreviewAttachment} 
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* THREADED REPLIES CONTAINER (BERSARANG DI DALAM KOMENTAR UTAMA) */}
+                                {threadReplies.length > 0 && (
+                                  <div className="mt-3 ml-2 sm:ml-6 pl-3 sm:pl-4 border-l-2 border-teal-500/40 space-y-2.5 pt-1">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-teal-400 mb-1">
+                                      <CornerDownRight className="w-3.5 h-3.5" />
+                                      <span>Balasan Diskusi ({threadReplies.length})</span>
+                                    </div>
+
+                                    {threadReplies.map((reply: any) => {
+                                      const replyAtts = parseCommentAttachments(reply.fileUrl, reply.fileName, reply.content);
+                                      return (
+                                        <div
+                                          key={reply.id}
+                                          className="p-3 rounded-xl border space-y-1.5 shadow-xs transition-all"
+                                          style={{
+                                            backgroundColor: 'var(--input-bg, #141414)',
+                                            borderColor: 'var(--border-main, #334155)'
+                                          }}
+                                        >
+                                          <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                              <span className="w-5 h-5 rounded-full bg-teal-900/90 border border-teal-600/50 text-teal-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                                {(reply.authorName || 'U').charAt(0).toUpperCase()}
+                                              </span>
+                                              <div>
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                  <span className="font-bold text-[11px]" style={{ color: 'var(--text-main, #f1f5f9)' }}>
+                                                    {reply.authorName || 'Personil'}
+                                                  </span>
+                                                  {reply.replyToName && (
+                                                    <span className="text-[10px] text-teal-400 font-medium">
+                                                      membalas <span className="font-semibold">@{reply.replyToName}</span>
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <span className="text-[9px] font-mono block" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                                                  {new Date(reply.createdAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                                                </span>
+                                              </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-1">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleStartReply(reply)}
+                                                className="px-2 py-0.5 rounded-md hover:bg-teal-500/20 text-teal-400 font-semibold text-[10px] flex items-center gap-1 transition-colors cursor-pointer border border-teal-500/30"
+                                                title={`Balas tanggapan ${reply.authorName}`}
+                                              >
+                                                <Reply className="w-2.5 h-2.5 rotate-180" />
+                                                <span>Balas</span>
+                                              </button>
+                                              {reply.authorNik === currentAuthorNik && (
+                                                <button
+                                                  onClick={() => handleDeleteComment(reply.id)}
+                                                  className="p-1 rounded-md hover:opacity-80 hover:text-rose-400 transition-colors cursor-pointer"
+                                                  style={{ color: 'var(--text-muted, #94a3b8)' }}
+                                                  title="Hapus Tanggapan Ini"
+                                                >
+                                                  <Trash2 className="w-3 h-3" />
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          <p className="text-xs whitespace-pre-line leading-relaxed pl-7" style={{ color: 'var(--text-main, #cbd5e1)' }}>
+                                            {reply.content}
+                                          </p>
+
+                                          {replyAtts.length > 0 && (
+                                            <div className="pl-7 pt-1 space-y-1.5">
+                                              {replyAtts.map((att, aIdx) => (
+                                                <AttachmentThumbnail
+                                                  key={att.id || aIdx}
+                                                  attachment={att}
+                                                  onPreview={handlePreviewAttachment}
+                                                />
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                    </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Image Preview Modal */}
       {previewImage && (

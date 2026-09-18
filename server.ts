@@ -86,6 +86,10 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS sisa_ct TEXT;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS jatuh_tempo_ct TEXT;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS first_login_complete BOOLEAN DEFAULT false;`);
+    await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_id INTEGER;`);
+    await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_nik TEXT;`);
+    await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_name TEXT;`);
+    await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_content TEXT;`);
     
     await db.execute(sql`CREATE TABLE IF NOT EXISTS rekap_manual_overrides (
       id SERIAL PRIMARY KEY,
@@ -429,18 +433,29 @@ const app = express();
       io.to('quiz_room').emit('quiz:state', quizPlayers);
     });
 
-    socket.on('quiz:progress', async (nodeIndex) => {
+    socket.on('quiz:progress', async (payload) => {
       const user = onlineSockets.get(socket.id);
       if (user && user.isQuiz) {
+        let nodeIndex = 0;
+        let targetNik = user.nik;
+        if (typeof payload === 'object' && payload !== null) {
+          nodeIndex = Number(payload.node) || 0;
+          if (payload.nik) targetNik = payload.nik;
+        } else {
+          nodeIndex = Number(payload) || 0;
+        }
+
         user.node = nodeIndex;
+        if (targetNik) user.nik = targetNik;
         onlineSockets.set(socket.id, user);
 
         // Update progress in database if user has NIK
-        if (user.nik) {
+        if (targetNik) {
           try {
             await db.insert(easterEggProgress).values({
-              nik: user.nik,
+              nik: targetNik,
               node: nodeIndex,
+              lastUpdated: new Date(),
             }).onConflictDoUpdate({
               target: easterEggProgress.nik,
               set: { node: nodeIndex, lastUpdated: new Date() }
@@ -625,16 +640,36 @@ const app = express();
     }
   });
 
+  app.post('/api/quiz/quest-progress', async (req, res) => {
+    try {
+      const { nik, node } = req.body;
+      if (!nik) return res.status(400).json({ error: 'NIK is required' });
+      const nodeIndex = Number(node) || 0;
+      await db.insert(easterEggProgress).values({
+        nik: String(nik).trim(),
+        node: nodeIndex,
+        lastUpdated: new Date(),
+      }).onConflictDoUpdate({
+        target: easterEggProgress.nik,
+        set: { node: nodeIndex, lastUpdated: new Date() }
+      });
+      res.json({ success: true, nik, node: nodeIndex });
+    } catch (err) {
+      console.error('Failed to save quest progress:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   app.get('/api/quiz/quest-leaderboard', async (req, res) => {
     try {
       const records = await db.select({
         nik: easterEggProgress.nik,
         node: easterEggProgress.node,
-        name: employees.name,
+        name: sql<string>`COALESCE(${employees.name}, ${easterEggProgress.nik})`.as('name'),
         lastUpdated: easterEggProgress.lastUpdated,
       })
       .from(easterEggProgress)
-      .innerJoin(employees, eq(easterEggProgress.nik, employees.nik))
+      .leftJoin(employees, eq(easterEggProgress.nik, employees.nik))
       .orderBy(desc(easterEggProgress.node), desc(easterEggProgress.lastUpdated));
       res.json(records);
     } catch (err) {

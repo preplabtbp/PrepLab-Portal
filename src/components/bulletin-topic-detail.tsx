@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button, Input, Textarea } from './ui';
-import { ChevronLeft, Send, X, FileText, User, Paperclip, MessageSquare, Clock, Edit2, Check, ExternalLink, Trash2, Image as ImageIcon, FileSpreadsheet, Download, Maximize2, FileDown } from 'lucide-react';
+import { ChevronLeft, Send, X, FileText, User, Paperclip, MessageSquare, Clock, Edit2, Check, ExternalLink, Trash2, Image as ImageIcon, FileSpreadsheet, Download, Maximize2, FileDown, Reply } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { uploadPhotoToDrive } from '../sheets-api';
@@ -118,6 +118,13 @@ export function BulletinTopicDetail({
     }
   };
 
+  const [replyingTo, setReplyingTo] = useState<{
+    id: number;
+    authorNik: string;
+    authorName: string;
+    content: string;
+  } | null>(null);
+
   const submitComment = async () => {
     if (!newComment.trim() && !selectedFile) return;
     try {
@@ -129,13 +136,21 @@ export function BulletinTopicDetail({
           authorName: inspectorName,
           content: newComment || (selectedFile ? 'Sent a file' : ''),
           fileName: selectedFile?.name,
-          fileUrl: selectedFile?.url
+          fileUrl: selectedFile?.url,
+          replyToId: replyingTo?.id || null,
+          replyToNik: replyingTo?.authorNik || null,
+          replyToName: replyingTo?.authorName || null,
+          replyToContent: replyingTo?.content ? replyingTo.content.substring(0, 150) : null,
         })
       });
       const result = await res.json();
       if (result.status === 'success') {
+        if (replyingTo) {
+          toast.success(`Tanggapan terkirim! Notifikasi otomatis masuk ke ${replyingTo.authorName}.`);
+        }
         setNewComment('');
         setSelectedFile(null);
+        setReplyingTo(null);
         fetchComments();
       }
     } catch(e) {
@@ -445,28 +460,49 @@ export function BulletinTopicDetail({
                              <div className={`flex items-center gap-2 ${isOwn ? 'flex-row-reverse' : ''}`}>
                                <span className="text-[10px] font-medium text-slate-400">{c.createdAt ? format(new Date(c.createdAt), 'dd MMM yyyy, HH:mm') : ''}</span>
                                
-                               {/* Delete Comment Button */}
-                               {canDelete && (
-                                 commentToDelete === c.id ? (
-                                   <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-lg animate-in fade-in duration-150">
-                                     <span className="text-[10px] font-bold text-rose-600">Hapus?</span>
-                                     <button onClick={() => deleteComment(c.id)} className="text-[10px] font-bold text-rose-700 hover:underline px-1">Ya</button>
-                                     <button onClick={() => setCommentToDelete(null)} className="text-[10px] font-bold text-slate-500 hover:underline px-1">Batal</button>
-                                   </div>
-                                 ) : (
-                                   <button 
-                                     onClick={() => setCommentToDelete(c.id)} 
-                                     className="text-slate-300 hover:text-rose-600 transition-colors p-1 rounded-md hover:bg-rose-50" 
-                                     title="Hapus Komentar Ini"
-                                   >
-                                     <Trash2 className="w-3.5 h-3.5" />
-                                   </button>
-                                 )
-                               )}
+                               <div className="flex items-center gap-1.5">
+                                 <button
+                                   type="button"
+                                   onClick={() => setReplyingTo({ id: c.id, authorNik: c.authorNik, authorName: c.authorName, content: c.content })}
+                                   className="text-[11px] px-2 py-0.5 rounded-lg hover:bg-teal-50 text-teal-600 font-semibold flex items-center gap-1 transition-colors border border-teal-200"
+                                   title="Balas komentar ini"
+                                 >
+                                   <Reply className="w-3 h-3 rotate-180" />
+                                   <span>Balas</span>
+                                 </button>
+
+                                 {/* Delete Comment Button */}
+                                 {canDelete && (
+                                   commentToDelete === c.id ? (
+                                     <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-lg animate-in fade-in duration-150">
+                                       <span className="text-[10px] font-bold text-rose-600">Hapus?</span>
+                                       <button onClick={() => deleteComment(c.id)} className="text-[10px] font-bold text-rose-700 hover:underline px-1">Ya</button>
+                                       <button onClick={() => setCommentToDelete(null)} className="text-[10px] font-bold text-slate-500 hover:underline px-1">Batal</button>
+                                     </div>
+                                   ) : (
+                                     <button 
+                                       onClick={() => setCommentToDelete(c.id)} 
+                                       className="text-slate-300 hover:text-rose-600 transition-colors p-1 rounded-md hover:bg-rose-50" 
+                                       title="Hapus Komentar Ini"
+                                     >
+                                       <Trash2 className="w-3.5 h-3.5" />
+                                     </button>
+                                   )
+                                 )}
+                               </div>
                              </div>
                            </div>
                            
                             <div className={`border shadow-2xs rounded-2xl p-3.5 inline-block min-w-[20%] max-w-[85%] ${isOwn ? 'bg-teal-50/90 border-teal-200/80 rounded-tr-none text-right' : 'bg-white border-slate-200 rounded-tl-none'}`}>
+                              {c.replyToName && (
+                                <div className="mb-2 p-2 px-2.5 rounded-xl border-l-2 border-teal-500 bg-slate-50 text-[11px] flex items-start gap-1.5 text-left">
+                                  <Reply className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5 rotate-180" />
+                                  <div className="min-w-0">
+                                    <span className="font-bold text-teal-700 block text-[10px]">Membalas {c.replyToName}</span>
+                                    <p className="line-clamp-2 italic text-slate-600">"{c.replyToContent}"</p>
+                                  </div>
+                                </div>
+                              )}
                               {c.content && <p className={`text-sm text-slate-700 whitespace-pre-wrap leading-relaxed ${isOwn ? 'text-right' : 'text-left'}`}>{c.content}</p>}
                               
                               {/* Attachments rendering */}
@@ -602,6 +638,24 @@ export function BulletinTopicDetail({
                             <X className="w-3.5 h-3.5" />
                           </button>
                        </div>
+                     </div>
+                   )}
+                   {replyingTo && (
+                     <div className="mb-2.5 flex items-center justify-between p-2 px-3 rounded-xl bg-teal-50 border border-teal-200 text-xs text-teal-800 animate-in fade-in duration-150">
+                       <div className="flex items-center gap-2 min-w-0">
+                         <Reply className="w-3.5 h-3.5 text-teal-600 shrink-0 rotate-180" />
+                         <span className="truncate">
+                           Membalas <strong className="text-teal-900">{replyingTo.authorName}</strong>: <span className="opacity-80 italic font-normal">"{replyingTo.content.substring(0, 60)}{replyingTo.content.length > 60 ? '...' : ''}"</span>
+                         </span>
+                       </div>
+                       <button
+                         type="button"
+                         onClick={() => setReplyingTo(null)}
+                         className="p-1 hover:bg-teal-100 rounded-md text-teal-600 hover:text-teal-900 transition-colors shrink-0 ml-2"
+                         title="Batal Membalas"
+                       >
+                         <X className="w-3.5 h-3.5" />
+                       </button>
                      </div>
                    )}
                    <div className="flex items-end gap-3">

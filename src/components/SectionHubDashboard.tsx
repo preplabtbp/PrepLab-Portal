@@ -349,12 +349,21 @@ export function SectionHubDashboard({
       {/* Header Info Area */}
       <div className="space-y-4 px-2">
         {/* Section Emoji / Icon */}
-        <div className="w-16 h-16 rounded-2xl bg-[#242424] border border-[#333] flex items-center justify-center text-3xl shadow-xl -mt-14 relative z-10">
+        <div 
+          className="w-16 h-16 rounded-2xl border flex items-center justify-center text-3xl shadow-xl -mt-14 relative z-10"
+          style={{
+            backgroundColor: 'var(--card-bg, #242424)',
+            borderColor: 'var(--border-main, #333)'
+          }}
+        >
           {config.icon}
         </div>
 
         {/* Title */}
-        <h1 className="text-3xl md:text-5xl font-black text-slate-100 tracking-tight">
+        <h1 
+          className="text-3xl md:text-5xl font-black tracking-tight"
+          style={{ color: 'var(--text-main, #f8fafc)' }}
+        >
           {sectionTitle}
         </h1>
 
@@ -362,7 +371,12 @@ export function SectionHubDashboard({
         <div className="flex items-center gap-2 pt-1">
           <button
             onClick={onGoHome}
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#252525] hover:bg-[#2f2f2f] text-slate-200 hover:text-teal-300 text-xs font-bold border border-[#383838] hover:border-teal-500/50 shadow-md transition-all group cursor-pointer"
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold border shadow-md transition-all group cursor-pointer hover:border-teal-500/50"
+            style={{
+              backgroundColor: 'var(--card-bg, #252525)',
+              borderColor: 'var(--border-main, #383838)',
+              color: 'var(--text-main, #cbd5e1)'
+            }}
           >
             <Home className="w-3.5 h-3.5 text-teal-400 group-hover:scale-110 transition-transform" />
             <span>{currentUniverse === 'GTS' ? 'HOME GTS' : 'HOME TBP & GPS'}</span>
