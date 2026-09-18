@@ -4,7 +4,8 @@ import {
   Activity, ThermometerSun, Wrench, PlusCircle, LineChart, ShieldCheck, 
   CheckSquare, Eye, AlertTriangle, ClipboardCheck, Package, Box, FileText, 
   Settings, BookOpen, Info, Briefcase, Users, Calendar, Clock, Utensils, 
-  LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink
+  LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink,
+  Trophy
 } from 'lucide-react';
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
@@ -159,6 +160,7 @@ export function ModulesDrawer({
       color: 'rose' as const,
       bgIcon: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20',
       items: [
+        { id: 'leaderboard', title: "Hall of Fame & Rank", desc: "Pangkat PB & Achievement", icon: <Trophy className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('leaderboard')) },
         { id: 'wo-maintenance-dashboard', title: "WO Maintenance", desc: "Downtime & sparepart", icon: <Wrench className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('wo-maintenance-dashboard')) },
         { id: 'adm-dashboard', title: "Administrasi", desc: "Kehadiran personel", icon: <User className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('adm-dashboard')) },
         { id: 'pelanggaran-dashboard', title: "Pelanggaran", desc: "SP & Konseling aktif", icon: <AlertTriangle className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('pelanggaran-dashboard')) },
@@ -184,7 +186,7 @@ export function ModulesDrawer({
   const allowedSections = useMemo(() => {
     if (isCrew) {
       return sections.map(s => {
-        const allowedItemIds = ['quiz', 'food-report', 'manual'];
+        const allowedItemIds = ['quiz', 'food-report', 'manual', 'leaderboard'];
         if (isQA) allowedItemIds.push('quiz-admin');
         if (isMaintenance) allowedItemIds.push('create-wo', 'wo-list', 'wo-dashboard', 'wo-maintenance-dashboard');
         const allowedItems = s.items.filter(item => allowedItemIds.includes(item.id));

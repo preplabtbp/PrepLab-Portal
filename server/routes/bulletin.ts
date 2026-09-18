@@ -11,7 +11,7 @@ import {
 import { generatePdfFromTemplate, drive } from '../../google-services.js';
 import { 
   sendWebPush, getUniverse, uploadFileToDrive, syncBulletinToAgenda, 
-  getNotificationTargets, getTableObj, sanitizePayload 
+  getNotificationTargets, getSectionNotificationTargets, getTableObj, sanitizePayload 
 } from "../utils.js";
 import webpush from 'web-push';
 import path from "path";
@@ -126,21 +126,25 @@ router.post("/api/bulletin", async (req, res) => {
       // Sync to agenda if there is an agendaDate
       await syncBulletinToAgenda(post);
       
-      const dept = post.department;
-      const targets = await getNotificationTargets(dept);
+      const dept = post.department || 'General';
+      const postUniverse = (post.pt || 'TBP').toUpperCase().includes('GTS') ? 'GTS' : 'TBP';
+      const targets = await getSectionNotificationTargets(dept);
       
       const notificationsData = targets
         .filter(t => t.nik !== post.authorNik && t.nik)
         .map(t => ({
           userId: t.nik,
-          title: `New Bulletin (${dept})`,
-          message: `${post.authorName || 'Someone'} posted a new topic.`,
+          role: dept,
+          title: `📰 Artikel Buletin Baru [${dept}]`,
+          message: `${post.authorName || 'Personil'} menerbitkan topik baru: "${post.title || post.category || 'Topik Buletin'}"`,
           type: 'info',
-          link: ''
+          link: `/bulletin/${postUniverse}?postId=${post.id}`,
+          isRead: false
         }));
         
       if (notificationsData.length > 0) {
-        const __notif = await db.insert(notifications).values(notificationsData).returning(); sendWebPush(__notif);
+        const insertedNotifs = await db.insert(notifications).values(notificationsData).returning();
+        sendWebPush(insertedNotifs);
       }
       
       res.json({ status: "success", data: post });
@@ -282,68 +286,75 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
       const postArray = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, postId)).limit(1);
       const post = postArray[0];
       const postSection = section || post?.category || post?.department || 'Prep & Lab';
+      const postUniverse = (pt || post?.pt || 'TBP').toUpperCase().includes('GTS') ? 'GTS' : 'TBP';
 
       const topicLabel = topicTitle ? `"${topicTitle.length > 35 ? topicTitle.substring(0, 35) + '...' : topicTitle}"` : (post?.title || 'Topik');
-      const notifLink = `/bulletin/TBP?postId=${postId}&topic=${encodeURIComponent(topicTitle || '')}`;
+      const notifLink = `/bulletin/${postUniverse}?postId=${postId}&topic=${encodeURIComponent(topicTitle || '')}`;
 
       const notificationsData: any[] = [];
+      const isNestedReply = Boolean(replyToId || replyToNik);
 
-      // 1. Direct notification to the person whose comment was replied to
-      if (replyToNik && replyToNik !== authorNik) {
-        notificationsData.push({
-          userId: replyToNik,
-          role: postSection,
-          title: `💬 Tanggapan Baru di Buletin Board`,
-          message: `Komentar anda mendapatkan tanggapan dari ${authorName || 'Personil'} di topik ${topicLabel} bulletin board.`,
-          type: 'info',
-          link: notifLink,
-          isRead: false,
+      if (isNestedReply) {
+        // HANYA masuk ke orang yang membuat komentar utama yang dibalas
+        if (replyToNik && replyToNik !== authorNik) {
+          notificationsData.push({
+            userId: replyToNik,
+            role: null, // Pribadi ke pembuat komentar, tidak disebar ke section
+            title: `💬 Balasan Komentar Baru`,
+            message: `${authorName || 'Personil'} membalas komentar Anda di topik ${topicLabel}: "${content.length > 60 ? content.substring(0, 60) + '...' : content}"`,
+            type: 'info',
+            link: notifLink,
+            isRead: false,
+          });
+        }
+      } else {
+        // Komentar Utama Baru: Masuk ke pembuat artikel DAN personil di section yang relevan
+        const allEmployees = await db.select().from(employees);
+        const targetEmployees = allEmployees.filter((e) => {
+          if (!e.nik || e.nik === authorNik) return false;
+          
+          // Jika author artikel bukan pengirim komentar, selalu sertakan
+          if (post?.authorNik && e.nik === post.authorNik) return true;
+
+          // Jika PIC ditentukan, selalu sertakan
+          if (picNik && e.nik === picNik) return true;
+
+          // Section match (case-insensitive fuzzy match)
+          const empSect = (e.section || '').toLowerCase();
+          const empDept = (e.department || '').toLowerCase();
+          const targetSect = postSection.toLowerCase();
+
+          return (
+            empSect.includes(targetSect) ||
+            targetSect.includes(empSect) ||
+            empDept.includes(targetSect) ||
+            targetSect.includes(empDept)
+          );
+        });
+
+        const notifTitle = statusUpdate
+          ? `⚡ Update Status [${postSection}]: ${statusUpdate}`
+          : `💬 Komentar Baru [${postSection}]`;
+        const notifMessage = statusUpdate
+          ? `${authorName || 'Personil'} mengupdate status topik ${topicLabel} ke "${statusUpdate}".`
+          : `${authorName || 'Personil'} berkomentar di topik ${topicLabel}: "${content.length > 60 ? content.substring(0, 60) + '...' : content}"`;
+
+        targetEmployees.forEach((t) => {
+          notificationsData.push({
+            userId: t.nik,
+            role: postSection,
+            title: notifTitle,
+            message: notifMessage,
+            type: statusUpdate ? 'success' : 'info',
+            link: notifLink,
+            isRead: false,
+          });
         });
       }
 
-      // 2. Broadcast to other section members & PIC (excluding author and reply recipient who already got notified)
-      const allEmployees = await db.select().from(employees);
-      const targetEmployees = allEmployees.filter((e) => {
-        if (!e.nik || e.nik === authorNik || e.nik === replyToNik) return false;
-        
-        // If PIC is specified, always include PIC
-        if (picNik && e.nik === picNik) return true;
-
-        // Section match (case-insensitive fuzzy match)
-        const empSect = (e.section || '').toLowerCase();
-        const empDept = (e.department || '').toLowerCase();
-        const targetSect = postSection.toLowerCase();
-
-        return (
-          empSect.includes(targetSect) ||
-          targetSect.includes(empSect) ||
-          empDept.includes(targetSect) ||
-          targetSect.includes(empDept)
-        );
-      });
-
-      const notifTitle = statusUpdate
-        ? `⚡ Update Status [${postSection}]: ${statusUpdate}`
-        : `💬 Update Topik [${postSection}]`;
-      const notifMessage = statusUpdate
-        ? `${authorName || 'Personil'} mengupdate status topik ${topicLabel} ke "${statusUpdate}".`
-        : `${authorName || 'Personil'} mengupdate progress pada topik ${topicLabel}.`;
-
-      targetEmployees.forEach((t) => {
-        notificationsData.push({
-          userId: t.nik,
-          role: postSection,
-          title: notifTitle,
-          message: notifMessage,
-          type: statusUpdate ? 'success' : 'info',
-          link: notifLink,
-          isRead: false,
-        });
-      });
-
       if (notificationsData.length > 0) {
         const insertedNotifs = await db.insert(notifications).values(notificationsData).returning();
-        insertedNotifs.forEach((n) => sendWebPush(n));
+        sendWebPush(insertedNotifs);
       }
 
       res.json({ status: "success", data: comment });

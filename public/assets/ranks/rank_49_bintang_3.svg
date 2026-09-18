@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+
+  <defs>
+    <!-- Silver / Titanium Gradient -->
+    <linearGradient id="silverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="25%" stop-color="#F1F5F9"/>
+      <stop offset="50%" stop-color="#CBD5E1"/>
+      <stop offset="75%" stop-color="#94A3B8"/>
+      <stop offset="100%" stop-color="#475569"/>
+    </linearGradient>
+
+    <!-- Silver Highlight Bevel -->
+    <linearGradient id="silverBevel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="35%" stop-color="#E2E8F0" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#334155" stop-opacity="0.85"/>
+    </linearGradient>
+
+    <!-- Chiseled Star Facet Light (Facing light source) -->
+    <linearGradient id="starFacetLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="40%" stop-color="#F8FAFC"/>
+      <stop offset="100%" stop-color="#CBD5E1"/>
+    </linearGradient>
+
+    <!-- Chiseled Star Facet Shadow (Facing away) -->
+    <linearGradient id="starFacetDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#94A3B8"/>
+      <stop offset="60%" stop-color="#64748B"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+
+    <!-- Gold Radiant Gradient -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFBEB"/>
+      <stop offset="20%" stop-color="#FDE047"/>
+      <stop offset="50%" stop-color="#F59E0B"/>
+      <stop offset="80%" stop-color="#D97706"/>
+      <stop offset="100%" stop-color="#78350F"/>
+    </linearGradient>
+
+    <!-- Gold Bevel -->
+    <linearGradient id="goldBevel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FEF9C3" stop-opacity="0.95"/>
+      <stop offset="50%" stop-color="#F59E0B" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#92400E" stop-opacity="0.9"/>
+    </linearGradient>
+
+    <!-- Gold Star Facet Light -->
+    <linearGradient id="goldStarFacetLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF9C3"/>
+      <stop offset="40%" stop-color="#FDE047"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+
+    <!-- Gold Star Facet Shadow -->
+    <linearGradient id="goldStarFacetDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D97706"/>
+      <stop offset="60%" stop-color="#B45309"/>
+      <stop offset="100%" stop-color="#78350F"/>
+    </linearGradient>
+
+    <!-- Crystalline Diamond (Cyan/Sapphire) -->
+    <linearGradient id="diamondCyan" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F0F9FF"/>
+      <stop offset="25%" stop-color="#7DD3FC"/>
+      <stop offset="50%" stop-color="#0284C7"/>
+      <stop offset="85%" stop-color="#0369A1"/>
+      <stop offset="100%" stop-color="#0C4A6E"/>
+    </linearGradient>
+
+    <!-- Crystalline Diamond (Gold Topaz) -->
+    <linearGradient id="diamondGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFBEB"/>
+      <stop offset="25%" stop-color="#FDE047"/>
+      <stop offset="50%" stop-color="#F59E0B"/>
+      <stop offset="80%" stop-color="#D97706"/>
+      <stop offset="100%" stop-color="#78350F"/>
+    </linearGradient>
+
+    <!-- Diamond Facet Highlights (Cyan) -->
+    <linearGradient id="facetTop" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#38BDF8" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="facetBottom" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0284C7" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#082F49" stop-opacity="0.85"/>
+    </linearGradient>
+
+    <!-- Diamond Facet Highlights (Gold) -->
+    <linearGradient id="facetGoldTop" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#FDE047" stop-opacity="0.25"/>
+    </linearGradient>
+    <linearGradient id="facetGoldBottom" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#B45309" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#451A03" stop-opacity="0.9"/>
+    </linearGradient>
+
+    <!-- Crimson Military Plate Gradient (Gambar 3 Reference) -->
+    <radialGradient id="plateCrimson" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#6B1D22"/>
+      <stop offset="50%" stop-color="#4A1216"/>
+      <stop offset="85%" stop-color="#2D0A0C"/>
+      <stop offset="100%" stop-color="#1A0406"/>
+    </radialGradient>
+
+    <!-- Drop Shadow Filter -->
+    <filter id="badgeShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+
+    <!-- Gold Glow Filter -->
+    <filter id="goldGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="1" stdDeviation="3.5" flood-color="#F59E0B" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#badgeShadow)">
+
+    
+    <!-- Crimson Tactical Plate -->
+    <rect x="8" y="8" width="84" height="84" rx="14" fill="url(#plateCrimson)" stroke="#334155" stroke-width="2"/>
+    <!-- Subtle Inner Metallic Rim -->
+    <rect x="10" y="10" width="80" height="80" rx="12" fill="none" stroke="url(#silverBevel)" stroke-width="1" opacity="0.4"/>
+  
+    
+    <g id="star5">
+      <polygon points="50,36 46.0,30.5 50.0,19.0" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="50,36 50.0,19.0 54.0,30.5" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/><polygon points="50,36 54.0,30.5 66.2,30.7" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="50,36 66.2,30.7 56.5,38.1" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/><polygon points="50,36 56.5,38.1 60.0,49.8" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="50,36 60.0,49.8 50.0,42.8" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/><polygon points="50,36 50.0,42.8 40.0,49.8" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="50,36 40.0,49.8 43.5,38.1" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/><polygon points="50,36 43.5,38.1 33.8,30.7" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="50,36 33.8,30.7 46.0,30.5" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/>
+      <line x1="50" y1="36" x2="50.0" y2="19.0" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/><line x1="50" y1="36" x2="66.2" y2="30.7" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/><line x1="50" y1="36" x2="60.0" y2="49.8" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/><line x1="50" y1="36" x2="40.0" y2="49.8" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/><line x1="50" y1="36" x2="33.8" y2="30.7" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/>
+      <circle cx="50" cy="36" r="1.5" fill="#FFFFFF" opacity="0.95"/>
+    </g>
+  
+    <g id="star5">
+      <polygon points="31,64 27.0,58.5 31.0,47.0" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="31,64 31.0,47.0 35.0,58.5" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/><polygon points="31,64 35.0,58.5 47.2,58.7" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="31,64 47.2,58.7 37.5,66.1" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/><polygon points="31,64 37.5,66.1 41.0,77.8" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="31,64 41.0,77.8 31.0,70.8" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/><polygon points="31,64 31.0,70.8 21.0,77.8" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="31,64 21.0,77.8 24.5,66.1" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/><polygon points="31,64 24.5,66.1 14.8,58.7" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="31,64 14.8,58.7 27.0,58.5" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/>
+      <line x1="31" y1="64" x2="31.0" y2="47.0" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/><line x1="31" y1="64" x2="47.2" y2="58.7" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/><line x1="31" y1="64" x2="41.0" y2="77.8" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/><line x1="31" y1="64" x2="21.0" y2="77.8" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/><line x1="31" y1="64" x2="14.8" y2="58.7" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/>
+      <circle cx="31" cy="64" r="1.5" fill="#FFFFFF" opacity="0.95"/>
+    </g>
+  
+    <g id="star5">
+      <polygon points="69,64 65.0,58.5 69.0,47.0" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="69,64 69.0,47.0 73.0,58.5" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/><polygon points="69,64 73.0,58.5 85.2,58.7" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="69,64 85.2,58.7 75.5,66.1" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/><polygon points="69,64 75.5,66.1 79.0,77.8" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="69,64 79.0,77.8 69.0,70.8" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/><polygon points="69,64 69.0,70.8 59.0,77.8" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="69,64 59.0,77.8 62.5,66.1" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/><polygon points="69,64 62.5,66.1 52.8,58.7" fill="url(#starFacetLight)" stroke="#334155" stroke-width="0.6"/><polygon points="69,64 52.8,58.7 65.0,58.5" fill="url(#starFacetDark)" stroke="#334155" stroke-width="0.6"/>
+      <line x1="69" y1="64" x2="69.0" y2="47.0" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/><line x1="69" y1="64" x2="85.2" y2="58.7" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/><line x1="69" y1="64" x2="79.0" y2="77.8" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/><line x1="69" y1="64" x2="59.0" y2="77.8" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/><line x1="69" y1="64" x2="52.8" y2="58.7" stroke="#FFFFFF" stroke-width="0.85" opacity="0.9"/>
+      <circle cx="69" cy="64" r="1.5" fill="#FFFFFF" opacity="0.95"/>
+    </g>
+  
+  
+  </g>
+</svg>

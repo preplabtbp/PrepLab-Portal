@@ -37,6 +37,7 @@ import { generatePdfFromTemplate, drive } from './google-services.js';
 import path from "path";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import { setIoInstance } from "./server/utils.js";
 import { db, pool } from "./src/db/index.js";
 import { chatMessages, employees, equipments, workOrders, users, tickets, downtime, spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, easterEggProgress, induksi, developerUsers } from "./src/db/schema.js";
 
@@ -62,6 +63,7 @@ import { employeesRouter } from "./server/routes/employees.js";
 import { p5mRouter } from "./server/routes/p5m.js";
 import { financeRouter } from "./server/routes/finance.js";
 import { labbotRouter } from "./server/routes/labbot.js";
+import { gamificationRouter } from "./server/routes/gamification.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
 
 async function initDbSchema() {
@@ -168,6 +170,19 @@ async function initDbSchema() {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_inspection_proofs_week ON inspection_proofs(week);`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_inspection_proofs_nik ON inspection_proofs(nik);`);
     
+    // Gamification Customization Columns & Milestone Tracking Table
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS equipped_frame TEXT DEFAULT 'default';`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS equipped_title TEXT DEFAULT 'Frontline Trainee';`);
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS gamification_milestones (
+      id SERIAL PRIMARY KEY,
+      nik TEXT NOT NULL,
+      milestone_type TEXT NOT NULL,
+      milestone_key TEXT NOT NULL,
+      title TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_gamification_milestones_nik_key ON gamification_milestones(nik, milestone_key);`);
+
     // Auto seed questions if table is empty
     const qCount = await db.select().from(questions).limit(1);
     if (!qCount || qCount.length === 0) {
@@ -295,6 +310,7 @@ const app = express();
   const io = new Server(httpServer, {
     cors: { origin: "*" }
   });
+  setIoInstance(io);
 
   // Teams Chat & System Socket.IO state
   const onlineSockets = new Map(); // socket.id -> { nik, name, department, avatar, room, isQuiz, node }
@@ -331,6 +347,9 @@ const app = express();
           room,
           senderNik: msg.senderNik,
           senderName: msg.senderName,
+          senderTitle: msg.senderTitle,
+          senderFrame: msg.senderFrame,
+          senderAvatar: msg.senderAvatar,
           text: msg.text,
           timestamp: new Date().toISOString(),
           mentionedNiks: msg.mentionedNiks || []
@@ -551,13 +570,22 @@ const app = express();
     '/api/inspection-schedule',
     '/api/daily-tasks-status',
     '/api/induksi',
-    '/api/changelog'
+    '/api/changelog',
+    '/api/gamification'
   ];
 
   app.use('/api', (req, res, next) => {
     const url = req.originalUrl.split('?')[0];
     const isPublic = PUBLIC_API_PREFIXES.some(prefix => url === prefix || url.startsWith(prefix + '/'));
     if (isPublic) {
+      return next();
+    }
+    // Allow public read-only (GET) access to P5M schedules, pool, and materi so all workers can view briefings & materials
+    if (req.method === 'GET' && (
+      url.startsWith('/api/p5m/materi') || 
+      url.startsWith('/api/p5m/schedules') || 
+      url.startsWith('/api/p5m/pool')
+    )) {
       return next();
     }
     return requireAuth(req, res, next);
@@ -588,6 +616,7 @@ const app = express();
   app.use(financeRouter);
   app.use(labbotRouter);
   app.use(changelogRouter);
+  app.use("/api/gamification", gamificationRouter);
 
   // --- CHAT ROUTES ---
   app.get('/api/chat/:room', async (req, res) => {

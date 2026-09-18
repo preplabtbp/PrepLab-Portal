@@ -22,6 +22,8 @@ export interface FlyerInfo {
   viewUrl: string;
   streamUrl: string;
   downloadUrl: string;
+  driveViewUrl?: string;
+  drivePreviewUrl?: string;
 }
 
 export function getFlyerInfo(rawUrl?: string | null, title?: string | null): FlyerInfo {
@@ -44,7 +46,7 @@ export function getFlyerInfo(rawUrl?: string | null, title?: string | null): Fly
   const safeTitle = encodeURIComponent(cleanTitle || 'Dokumen_P5M');
   const safeUrl = encodeURIComponent(cleanUrl || '');
 
-  // Backend streaming endpoint (public endpoint with fallback)
+  // Backend streaming endpoint (authenticated service account proxy - zero permission wall)
   const streamUrl = `/api/p5m/flyer?title=${safeTitle}${cleanUrl ? `&url=${safeUrl}` : ''}`;
 
   if (fileId) {
@@ -56,12 +58,14 @@ export function getFlyerInfo(rawUrl?: string | null, title?: string | null): Fly
     return {
       isPdf: true,
       fileId,
-      // Direct Google Drive embed viewer for seamless iframe rendering with native zoom and controls:
-      embedUrl: drivePreviewUrl,
+      // Default to streamUrl so Google Drive 'Akses dibatasi' permission prompt never blocks regular employees:
+      embedUrl: streamUrl,
       imageUrl: driveImageUrl,
-      viewUrl: driveViewUrl,
+      viewUrl: streamUrl,
       streamUrl,
-      downloadUrl: driveDownloadUrl
+      downloadUrl: driveDownloadUrl,
+      driveViewUrl,
+      drivePreviewUrl
     };
   }
 

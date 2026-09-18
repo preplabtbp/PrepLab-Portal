@@ -100,7 +100,14 @@ export function ReminderNotificationModal({ userNik, onNavigateToInspection, onN
   useEffect(() => {
     checkReminders();
     const interval = setInterval(checkReminders, 10000);
-    return () => clearInterval(interval);
+    const handleNotifEvent = () => {
+      checkReminders();
+    };
+    window.addEventListener('notification_received', handleNotifEvent);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('notification_received', handleNotifEvent);
+    };
   }, [userNik]);
 
   if (!activeReminder) return null;

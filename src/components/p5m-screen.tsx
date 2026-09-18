@@ -360,7 +360,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
   // Preview Image Modal
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
-  const [pdfViewerMode, setPdfViewerMode] = useState<'drive' | 'stream'>('drive');
+  const [pdfViewerMode, setPdfViewerMode] = useState<'drive' | 'stream'>('stream');
 
   // Archive History State
   const [archiveList, setArchiveList] = useState<any[]>([]);
@@ -444,6 +444,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
             (lowerName && (slotName === lowerName || slotName.includes(lowerName) || lowerName.includes(slotName)));
 
           if (isMatch) {
+            const matchingMateri = materiList.find(m => 
+              m.judul?.trim().toLowerCase() === String(slot.materi || '').trim().toLowerCase()
+            );
+            const resolvedFileUrl = slot.fileUrl || matchingMateri?.fileUrl || `/api/p5m/flyer?title=${encodeURIComponent(slot.materi || 'Materi Briefing P5M')}`;
+
             assignments.push({
               day,
               dateFormatted: datesMeta[day]?.display || day,
@@ -452,9 +457,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               location: locKey,
               locationLabel: locLabel,
               materi: slot.materi || 'Materi Briefing P5M',
-              kategori: slot.kategori || 'Teknis',
-              subKategori: slot.subKategori || 'General',
-              fileUrl: slot.fileUrl || null,
+              kategori: slot.kategori || matchingMateri?.kategori || 'Teknis',
+              subKategori: slot.subKategori || matchingMateri?.subKategori || 'General',
+              fileUrl: resolvedFileUrl,
               isSenam: Boolean(slot.isSenam),
               isLogbook: Boolean(slot.isLogbook)
             });
@@ -477,7 +482,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
     });
 
     return assignments;
-  }, [scheduleData, currentNik, currentName, datesMeta]);
+  }, [scheduleData, currentNik, currentName, datesMeta, materiList]);
 
   // Warnings / Notifications State
   const [materiWarnings, setMateriWarnings] = useState<string[]>([]);
@@ -1073,19 +1078,17 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               <span>{isQATeam ? 'Jadwal' : 'Jadwal Saya'}</span>
             </button>
 
-            {isQATeam && (
-              <button
-                onClick={() => setActiveTab('materi')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                  activeTab === 'materi'
-                    ? 'bg-[var(--primary)] text-white shadow-md font-bold'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-main)]'
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>Bank Materi ({materiList.length})</span>
-              </button>
-            )}
+            <button
+              onClick={() => setActiveTab('materi')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                activeTab === 'materi'
+                  ? 'bg-[var(--primary)] text-white shadow-md font-bold'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-main)]'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Bank Materi ({materiList.length})</span>
+            </button>
 
             <button
               onClick={() => setActiveTab('archive')}
@@ -1190,17 +1193,31 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       </h3>
                     </div>
 
-                    {/* Action button: Flyer / Materi download */}
+                    {/* Action button: Flyer / Materi preview & download */}
                     <div className="pt-3 border-t border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <a
-                        href={`/api/p5m/flyer?download=true&title=${encodeURIComponent(ass.materi)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
-                      >
-                        <FileText className="w-4 h-4" />
-                        <span>Unduh Materi / Flyer Briefing</span>
-                      </a>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          type="button"
+                          onClick={() => setPreviewImage({ 
+                            url: ass.fileUrl || `/api/p5m/flyer?title=${encodeURIComponent(ass.materi)}`, 
+                            title: ass.materi 
+                          })}
+                          className="px-3.5 py-2 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
+                        >
+                          <Eye className="w-4 h-4" />
+                          <span>Buka / Lihat Materi</span>
+                        </Button>
+
+                        <a
+                          href={`/api/p5m/flyer?download=true&title=${encodeURIComponent(ass.materi)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Unduh File</span>
+                        </a>
+                      </div>
 
                       <span className="text-[11px] text-slate-400 italic text-center sm:text-right">
                         Durasi Presentasi: 5–7 Menit
@@ -1937,23 +1954,25 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 <span>Segarkan Data</span>
               </Button>
 
-              <Button
-                onClick={() => {
-                  setEditingMateri(null);
-                  setFormJudul('');
-                  setFormKategori('Teknis');
-                  setFormSubKategori('General');
-                  setFormDivisi('Preparation');
-                  setFormIsInternal(false);
-                  setFormImageBase64(null);
-                  setFormImagePreview(null);
-                  setFormImageFilename('');
-                  setMateriModalOpen(true);
-                }}
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-9 px-3.5 rounded-xl shadow-md"
-              >
-                <Plus className="w-4 h-4 mr-1.5" /> Tambah Materi Baru
-              </Button>
+              {isQATeam && (
+                <Button
+                  onClick={() => {
+                    setEditingMateri(null);
+                    setFormJudul('');
+                    setFormKategori('Teknis');
+                    setFormSubKategori('General');
+                    setFormDivisi('Preparation');
+                    setFormIsInternal(false);
+                    setFormImageBase64(null);
+                    setFormImagePreview(null);
+                    setFormImageFilename('');
+                    setMateriModalOpen(true);
+                  }}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-9 px-3.5 rounded-xl shadow-md"
+                >
+                  <Plus className="w-4 h-4 mr-1.5" /> Tambah Materi Baru
+                </Button>
+              )}
             </div>
           </div>
 
@@ -2016,7 +2035,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       <th className="py-3 px-4 w-40">Sub-Kategori</th>
                       <th className="py-3 px-4 w-28 text-center">File / Flyer</th>
                       <th className="py-3 px-4 w-36">Terakhir Digunakan</th>
-                      <th className="py-3 px-4 w-24 text-center">Aksi</th>
+                      {isQATeam && <th className="py-3 px-4 w-24 text-center">Aksi</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]">
@@ -2059,7 +2078,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                             return (
                               <button
                                 onClick={() => setPreviewImage({ url: item.fileUrl, title: item.judul })}
-                                className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 mx-auto border transition-colors ${
+                                className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 mx-auto border transition-colors cursor-pointer ${
                                   isPdf 
                                     ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-500/30' 
                                     : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30'
@@ -2076,32 +2095,34 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                         <td className="py-3 px-4 font-mono text-[var(--text-muted)] text-[11px]">
                           {item.lastUsed ? new Date(item.lastUsed).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '— Belum pernah'}
                         </td>
-                        <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              onClick={() => {
-                                setEditingMateri(item);
-                                setFormJudul(item.judul);
-                                setFormKategori(item.kategori || 'Teknis');
-                                setFormSubKategori(item.subKategori || 'General');
-                                setFormDivisi(item.divisi || 'Preparation');
-                                setFormIsInternal(Boolean(item.isInternal));
-                                setMateriModalOpen(true);
-                              }}
-                              className="p-1.5 text-[var(--text-muted)] hover:text-amber-500 hover:bg-[var(--input-bg)] rounded-lg transition-colors"
-                              title="Edit Materi"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteMateri(item.id)}
-                              className="p-1.5 text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--input-bg)] rounded-lg transition-colors"
-                              title="Hapus Materi"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
+                        {isQATeam && (
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setEditingMateri(item);
+                                  setFormJudul(item.judul);
+                                  setFormKategori(item.kategori || 'Teknis');
+                                  setFormSubKategori(item.subKategori || 'General');
+                                  setFormDivisi(item.divisi || 'Preparation');
+                                  setFormIsInternal(Boolean(item.isInternal));
+                                  setMateriModalOpen(true);
+                                }}
+                                className="p-1.5 text-[var(--text-muted)] hover:text-amber-500 hover:bg-[var(--input-bg)] rounded-lg transition-colors cursor-pointer"
+                                title="Edit Materi"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteMateri(item.id)}
+                                className="p-1.5 text-[var(--text-muted)] hover:text-rose-500 hover:bg-[var(--input-bg)] rounded-lg transition-colors cursor-pointer"
+                                title="Hapus Materi"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -2420,17 +2441,29 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       href={info.viewUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold transition-colors"
-                      title="Buka di Tab Baru"
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold transition-colors cursor-pointer"
+                      title="Buka Stream di Tab Baru"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                       <span className="hidden sm:inline">Buka Tab Baru</span>
                     </a>
                   )}
+                  {hasValidUrl && info.driveViewUrl && (
+                    <a
+                      href={info.driveViewUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+                      title="Buka Dokumen Asli di Google Drive"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Drive Asli</span>
+                    </a>
+                  )}
                   {hasValidUrl && (
                     <a
                       href={info.downloadUrl}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs flex items-center gap-1.5 font-bold shadow-md shadow-emerald-950 transition-colors"
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs flex items-center gap-1.5 font-bold shadow-md shadow-emerald-950 transition-colors cursor-pointer"
                       title="Unduh File"
                     >
                       <Download className="w-3.5 h-3.5" />
@@ -2439,7 +2472,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   )}
                   <button 
                     onClick={() => setPreviewImage(null)} 
-                    className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 flex items-center justify-center transition-colors font-bold"
+                    className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 flex items-center justify-center transition-colors font-bold cursor-pointer"
                     title="Tutup Pratinjau"
                   >
                     <X className="w-4 h-4" />
@@ -2452,7 +2485,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 {hasValidUrl ? (
                   info.isPdf ? (
                     <iframe 
-                      src={pdfViewerMode === 'stream' ? info.streamUrl : info.embedUrl} 
+                      src={pdfViewerMode === 'drive' ? (info.drivePreviewUrl || info.embedUrl) : info.streamUrl} 
                       title={previewImage.title}
                       className="w-full h-full rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
                       allow="autoplay; encrypted-media; fullscreen"
@@ -2478,7 +2511,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     </div>
                     <h4 className="text-sm font-bold text-white">Dokumen Belum Dilampirkan</h4>
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      Belum ada tautan PDF atau Flyer Google Drive untuk materi <b>"{previewImage.title}"</b>. Silakan perbarui materi pada menu <b>Kelola Materi P5M</b> atau hubungi tim QA.
+                      Belum ada tautan PDF atau Flyer Google Drive untuk materi <b>"{previewImage.title}"</b>. Silakan perbarui materi pada menu <b>Bank Materi</b> atau hubungi tim QA.
                     </p>
                     <div className="pt-2">
                       <Button
@@ -2496,7 +2529,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               <div className="bg-slate-900 border-t border-slate-800 px-4 py-2.5 flex items-center justify-between text-xs text-slate-400 shrink-0">
                 <span className="font-mono text-[11px]">
                   {hasValidUrl 
-                    ? `💡 Mode: ${pdfViewerMode === 'drive' ? 'Google Drive Embed' : 'Server Stream Langsung'}. Jika preview terhambat login, klik "Mode Stream Server" di atas.` 
+                    ? `💡 Mode: ${pdfViewerMode === 'stream' ? 'Server Stream Langsung (Bebas Hambatan Akses)' : 'Google Drive Embed'}. Jika ada kendala tampilan, gunakan tombol ganti mode di atas.` 
                     : 'Status: Link materi kosong'}
                 </span>
                 <Button

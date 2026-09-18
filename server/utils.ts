@@ -12,6 +12,14 @@ import webpush from 'web-push';
 
 import { env } from "./config/env.js";
 
+let _io: any = null;
+export function setIoInstance(io: any) {
+  _io = io;
+}
+export function getIoInstance() {
+  return _io;
+}
+
 export async function sendWebPush(notifs: any | any[]) {
   try {
     if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {
@@ -27,6 +35,16 @@ export async function sendWebPush(notifs: any | any[]) {
     const notificationsArray = Array.isArray(notifs) ? notifs : [notifs];
     for (const notif of notificationsArray) {
       if (!notif) continue;
+
+      // Real-time socket delivery to all connected clients
+      if (_io) {
+        try {
+          _io.emit('notification:new', notif);
+        } catch (ioErr) {
+          console.error('[Socket Notification Emit Error]:', ioErr);
+        }
+      }
+
       let subs: any[] = [];
 
       if (notif.userId) {
@@ -50,9 +68,9 @@ export async function sendWebPush(notifs: any | any[]) {
         if (targetNiks.length > 0) {
           subs = await db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.nik, targetNiks));
         }
-        // Fallback: if targeted role currently has no registered devices, broadcast to all subscribers so critical alerts aren't lost
+        // Do NOT broadcast to other departments if this role has no registered devices!
         if (subs.length === 0) {
-          subs = await db.select().from(pushSubscriptions);
+          continue;
         }
       } else {
         subs = await db.select().from(pushSubscriptions);
@@ -191,6 +209,26 @@ export async function getNotificationTargets(dept: string) {
   }
 }
 
+export async function getSectionNotificationTargets(sectionOrDept: string) {
+  try {
+    const all = await db.select().from(employees);
+    const query = (sectionOrDept || '').toLowerCase().trim();
+    if (!query || query === 'all' || query === 'semua' || query === 'prep & lab' || query === 'general') {
+      return all;
+    }
+    return all.filter((e: any) => {
+      const d = (e.department || '').toLowerCase();
+      const s = (e.section || '').toLowerCase();
+      const j = (e.jabatan || '').toLowerCase();
+      return d.includes(query) || s.includes(query) || j.includes(query) ||
+             query.includes(d) || query.includes(s);
+    });
+  } catch (e) {
+    console.error("Error getSectionNotificationTargets:", e);
+    return [];
+  }
+}
+
 export const getTableObj = (name: string) => {
   switch (name) {
     case "employees": return employees;
@@ -253,3 +291,54 @@ export const sanitizePayload = (t: any, payload: any): any => {
   }
   return cleaned;
 };
+
+// Siaran Pengumuman Resmi Global Chat (Broadcast Achievement & Pangkat Tertinggi)
+export async function broadcastGlobalChatMessage({
+  text,
+  senderName = 'HQ VANGUARD COMMAND',
+  senderNik = 'SYSTEM_BROADCAST',
+  isAnnouncement = true,
+  metadata = {}
+}: {
+  text: string;
+  senderName?: string;
+  senderNik?: string;
+  isAnnouncement?: boolean;
+  metadata?: any;
+}) {
+  const room = 'global';
+  const newMsg = {
+    id: Date.now(),
+    room,
+    senderNik,
+    senderName,
+    text,
+    timestamp: new Date().toISOString(),
+    isAnnouncement: true,
+    metadata
+  };
+
+  // 1. Simpan ke database chat_messages
+  try {
+    await db.insert(chatMessages).values({
+      room,
+      senderNik,
+      senderName,
+      text
+    });
+  } catch (err: any) {
+    console.warn('[Broadcast Chat DB Save Notice]:', err?.message);
+  }
+
+  // 2. Siarkan via Socket.io ke seluruh pengguna aktif
+  if (_io) {
+    try {
+      _io.to('global').emit('new_message', newMsg);
+      _io.emit('new_message', newMsg);
+    } catch (ioErr: any) {
+      console.warn('[Broadcast Socket Emit Notice]:', ioErr?.message);
+    }
+  }
+
+  return newMsg;
+}

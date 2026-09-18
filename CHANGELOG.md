@@ -2,6 +2,48 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.2] - 2026-09-19
+
+### 🎖️ Penyatuan Card Profil, Direktori Pangkat Leaderboard & Perbaikan Akses Flyer P5M
+
+- **Penyempurnaan Header Profil Personil (`src/pages/ProfilePage.tsx`)**:
+  - Memperkecil ukuran logo lencana pangkat agar selaras seukuran font nama lengkap (`w-6 h-6 sm:w-7 sm:h-7`).
+  - Menghilangkan latar belakang hitam di sekeliling logo pangkat sehingga tidak memakan ruang visual horizontal.
+  - Memposisikan gelar militer aktif `[{activeMilitaryTitle}]` tepat di baris bawah nama personil, disusul oleh username/callsign di baris ketiga.
+- **Direktori 51 Jenjang Pangkat di Leaderboard (`src/components/LeaderboardScreen.tsx`)**:
+  - Menambahkan tab khusus *Daftar Pangkat & Personil* yang memuat seluruh hierarki 51 tingkat pangkat PrepLab Vanguard.
+  - Menerapkan batasan cerdas: jika sebuah jenjang pangkat diduduki oleh **lebih dari 10 personil**, daftar kartu personil individu disembunyikan dan diringkas dengan banner jumlah personil. Jika 1–10 personil, daftar personil ditampilkan lengkap dengan avatar, dynamic frames, dan status departemen.
+  - Dilengkapi fitur pencarian tingkat pangkat, pengurutan (#51 → #1 atau #1 → #51), serta filter kelompok tier.
+- **Perbaikan Akses Materi & Flyer P5M (`src/lib/p5m-flyer.ts`, `server.ts`, `src/components/p5m-screen.tsx`)**:
+  - Mengarahkan pratinjau flyer dan dokumen PDF secara bawaan ke server streaming proxy (`/api/p5m/flyer`), meniadakan kendala *"Akses dibatasi"* dari tautan mentah Google Drive.
+  - Membuka akses publik baca (GET) untuk `/api/p5m/materi`, `/api/p5m/schedules`, dan `/api/p5m/pool` sehingga semua personil dapat meninjau penugasan tanpa hambatan sesi.
+  - Menambahkan tombol *Buka / Lihat Materi* pada kartu penugasan personil (`myAssignments`) serta membuka akses baca katalog *Bank Materi* bagi seluruh personil operasional.
+
+## [2.9.1] - 2026-09-19
+
+### 🎖️ Redesain Pangkat Vektor Point Blank Kustom & Zero-Baseline Reset untuk Rilis Main
+
+- **Pangkat Vektor PB Presisi Tinggi (`public/assets/ranks/`, `src/lib/pointBlankRanks.ts`)**:
+  - Mengganti aset raster lama dengan ikon vektor SVG kustom mandiri yang *blend in* sempurna baik di tema *dark mode* maupun *light mode*.
+  - **Strip 1–4**: Desain balok horizontal perak ramping dengan bingkai gelap bevel.
+  - **Major 1–3**: Desain bintang 8 penjuru 3D berdimensi tajam dengan bingkai pelindung.
+  - **Bintang 5 (Commander)**: Susunan 5 bintang emas 3D di atas plakat perisai merah marun berlis emas (*crimson velvet gold-trimmed shield*).
+- **Reset Bersih Semua Achievement & EXP Dimulai dari 0 untuk Rilis Main (`server/routes/gamification.ts`)**:
+  - Seluruh 268 personil kini memulai kompetisi serentak dari **0 EXP (Pangkat Trainee, 0 badge/gelar terbuka, 0 Season XP)**.
+  - Mengimplementasikan mekanisme **Season Start Cutoff (`gamification_season_start`)** yang secara cerdas hanya menghitung aktivitas pada/setelah tanggal peluncuran tanpa menghapus data operasional riil.
+  - Menghapus seluruh artifisial testing XP, sehingga EXP murni mencerminkan kontribusi personil di lapangan.
+
+## [2.9.0] - 2026-09-18
+
+### 🎖️ Sistem Pangkat Militer & Gamifikasi Kehormatan Operasional
+
+- **Aset Ikon Pangkat Resmi 51 Level (`public/assets/ranks/`, `src/lib/pointBlankRanks.ts`)**:
+  - Mengintegrasikan 51 level ikon pangkat Vanguard mulai dari Trainee hingga Supreme Vanguard Commander.
+- **12 Cabang Prestasi Militer Berjenjang (Tier I s/d Tier IV Master) (`src/lib/gamificationEngine.ts`)**:
+  - 12 cabang pencapaian dinilai langsung dari rekam jejak riil di database portal dengan 12 dynamic glowing avatar frame.
+- **Siaran Komando Emas di Chat Global (`src/components/ChatScreen.tsx`)**:
+  - Pengumuman otomatis taktis bergradien emas megah untuk promosi pangkat tertinggi dan pembukaan achievement master.
+
 ## [2.8.37] - 2026-09-18
 
 ### 📸 Perbaikan Unduh Massal ZIP Foto Dokumentasi Inspeksi
@@ -68,6 +110,21 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Memperbaiki penanganan event socket `quiz:progress` agar dapat menerima baik angka node langsung maupun objek data personil (`{ nik, name, node }`) tanpa memicu kegagalan database.
 - **Penyelarasan Klasemen / Leaderboard (`server.ts`)**:
   - Memperbarui endpoint `/api/quiz/quest-leaderboard` dengan `LEFT JOIN` dan fallback nama `COALESCE(employees.name, easterEggProgress.nik)` sehingga klasemen seluruh personil tampil akurat dan terbarui secara instan.
+
+### 🔔 Pembaruan Sistem & Arsitektur Modul Notifikasi Real-Time
+
+- **Penghantaran Notifikasi Seketika via Socket.IO (`server/utils.ts`, `src/components/notification-bell.tsx`)**:
+  - Notifikasi baru kini dipancarkan langsung melalui event Socket.IO (`notification:new`) seketika saat event terjadi di server tanpa perlu menunggu jeda polling 30 detik.
+  - Dilengkapi nada dering *audio chime* lembut, pertambahan badge lonceng instan, dan toast interaktif Sonner dengan tombol aksi *"Buka"*.
+- **Aturan Notifikasi Buletin: Isolasi Balasan vs Siaran Seksi (`server/routes/bulletin.ts`)**:
+  - **Komentar dalam Komentar (Balasan / Nested Replies)**: Notifikasi **hanya** dikirimkan kepada orang yang membuat komentar yang dibalas (`replyToNik`), tidak disiarkan ke anggota seksi lainnya.
+  - **Artikel Baru & Komentar Utama**: Penerbitan artikel baru dan komentar utama baru secara cerdas ditargetkan ke seluruh personil di seksi/departemen yang relevan.
+- **Pembersihan Fallback Spam Web Push HP (`server/utils.ts`)**:
+  - Menghilangkan fallback broadcast liar yang sebelumnya mengirimkan notifikasi role ke seluruh karyawan saat role bersangkutan belum memiliki perangkat push terdaftar di HP.
+- **Navigasi Cerdas & Tautan Langsung / Deep-Linking (`src/components/notification-bell.tsx` & `src/App.tsx`)**:
+  - Mengklik kartu notifikasi buletin atau agenda kini langsung membawa pengguna ke halaman buletin topik spesifik atau modul agenda.
+- **Sinkronisasi Instan Modal Pengingat Tugas (`src/components/ReminderNotificationModal.tsx`)**:
+  - Modal pengingat tugas inspeksi dan KTA mendengarkan event notifikasi real-time sehingga langsung muncul begitu pengingat dikirimkan oleh admin tanpa menunggu siklus interval 10 detik.
 
 ## [2.8.35] - 2026-09-17
 

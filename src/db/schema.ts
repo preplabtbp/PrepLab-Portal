@@ -50,6 +50,8 @@ export const employees = pgTable('employees', {
   passwordHash: text('password_hash'),
   avatar: text('avatar'),
   cover: text('cover'),
+  equippedFrame: text('equipped_frame').default('default'),
+  equippedTitle: text('equipped_title').default('Frontline Trainee'),
   sisaCt: text('sisa_ct'),
   jatuhTempoCt: text('jatuh_tempo_ct'),
   firstLoginComplete: boolean('first_login_complete').default(false),
@@ -628,4 +630,16 @@ export const inspectionProofs = pgTable('inspection_proofs', {
 }, (t) => [
   index('idx_inspection_proofs_week').on(t.week),
   index('idx_inspection_proofs_nik').on(t.nik),
+]);
+
+// Define 'gamification_milestones' table (Log pencapaian achievement & kenaikan pangkat 3 besar yang telah dibroadcast)
+export const gamificationMilestones = pgTable('gamification_milestones', {
+  id: serial('id').primaryKey(),
+  nik: text('nik').notNull(),
+  milestoneType: text('milestone_type').notNull(), // 'ACHIEVEMENT' | 'RANK_PROMOTION'
+  milestoneKey: text('milestone_key').notNull(),   // e.g. 'ACH_BRANCH_KTA_T1' or 'RANK_49'
+  title: text('title').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (t) => [
+  index('idx_gamification_milestones_nik_key').on(t.nik, t.milestoneKey),
 ]);

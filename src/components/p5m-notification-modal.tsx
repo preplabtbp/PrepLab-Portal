@@ -60,7 +60,7 @@ export function P5MNotificationModal({ inspectorNik, inspectorName, onNavigateTo
   const [isOpen, setIsOpen] = useState(false);
   const [assignment, setAssignment] = useState<any | null>(null);
   const [previewFlyer, setPreviewFlyer] = useState<{ url: string; title: string } | null>(null);
-  const [pdfViewerMode, setPdfViewerMode] = useState<'drive' | 'stream'>('drive');
+  const [pdfViewerMode, setPdfViewerMode] = useState<'drive' | 'stream'>('stream');
 
   const checkAssignment = async (forceOpen = false, overrideNik?: string, overrideName?: string, notifData?: any) => {
     const nik = overrideNik || inspectorNik;

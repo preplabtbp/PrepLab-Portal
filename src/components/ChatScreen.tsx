@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, User, Users, Globe, Building2, X, Sparkles, 
-  ShieldCheck, CheckCheck, MessageSquare, Flame, Filter, ChevronDown, AtSign
+  ShieldCheck, CheckCheck, MessageSquare, Flame, Filter, ChevronDown, AtSign,
+  Trophy, Award, Megaphone
 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
+import { getFrameById } from '../lib/gamificationEngine';
 
 const SECTIONS_LIST = [
   { id: 'preparation', name: 'Preparation', label: 'Prep' },
@@ -301,10 +303,16 @@ export default function ChatScreen({
     e.preventDefault();
     if (!text.trim() || !socketRef.current) return;
 
+    const equippedTitle = localStorage.getItem('preplab_equipped_title') || userProfile?.equippedTitle || 'Frontline Trainee';
+    const equippedFrame = localStorage.getItem('preplab_equipped_frame') || userProfile?.equippedFrame || 'default';
+
     socketRef.current.emit('send_message', {
       room: activeRoom,
       senderNik: inspectorNik,
       senderName: inspectorName,
+      senderTitle: equippedTitle,
+      senderFrame: equippedFrame,
+      senderAvatar: userProfile?.avatar || undefined,
       text: text.trim(),
       mentionedNiks: Array.from(mentionedNiks)
     });
@@ -532,6 +540,51 @@ export default function ChatScreen({
               ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : '';
 
+            const isAnnouncement = Boolean(
+              msg.isAnnouncement || 
+              msg.senderNik === 'SYSTEM_BROADCAST' || 
+              (typeof msg.text === 'string' && (
+                msg.text.startsWith('🎉 [ACHIEVEMENT UNLOCKED]') || 
+                msg.text.startsWith('🎖️ [PROMOSI KOMANDO TERTINGGI]') || 
+                msg.text.startsWith('📢 [PENGUMUMAN KOMANDO]')
+              ))
+            );
+
+            if (isAnnouncement) {
+              return (
+                <motion.div
+                  key={msg.id || idx}
+                  initial={{ opacity: 0, scale: 0.96, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="w-full my-2.5 flex justify-center"
+                >
+                  <div className="w-full max-w-2xl rounded-3xl p-4 sm:p-5 bg-gradient-to-r from-amber-950/95 via-slate-900 to-amber-950/95 border-2 border-amber-500/60 shadow-xl shadow-amber-500/15 text-amber-100 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-36 h-36 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+                    <div className="flex items-center gap-2.5 mb-2.5 border-b border-amber-500/30 pb-2">
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 shadow-md shrink-0">
+                        <Trophy className="w-4 h-4 text-amber-400 animate-pulse" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 font-mono block truncate">
+                          {msg.senderName || 'SIARAN KOMANDO PREPLAB HQ'}
+                        </span>
+                        <span className="text-[9px] text-amber-300/70 font-semibold block">
+                          Pengumuman Kehormatan Seluruh Pangkalan
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-mono text-amber-400/60 shrink-0">
+                        {timeStr}
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm font-medium text-amber-100/95 leading-relaxed whitespace-pre-wrap">
+                      {msg.text}
+                    </p>
+                  </div>
+                </motion.div>
+              );
+            }
+
             const isMentioned = !isMe && (
               (msg.mentionedNiks && msg.mentionedNiks.includes(inspectorNik)) ||
               (msg.text && (
@@ -543,58 +596,85 @@ export default function ChatScreen({
               ))
             );
 
+            // Resolve Sender Customization (Frame, Title, Avatar)
+            const senderEmp = employeesList.find(e => e.nik === msg.senderNik);
+            const senderFrame = msg.senderFrame || senderEmp?.equippedFrame || (isMe ? (localStorage.getItem('preplab_equipped_frame') || 'default') : 'default');
+            const senderTitle = msg.senderTitle || senderEmp?.equippedTitle || (isMe ? (localStorage.getItem('preplab_equipped_title') || 'Frontline Trainee') : 'Frontline Trainee');
+            const senderAvatar = msg.senderAvatar || senderEmp?.avatar || (isMe ? userProfile?.avatar : undefined);
+            const frameObj = getFrameById(senderFrame);
+
             return (
               <motion.div
                 key={msg.id || idx}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18 }}
-                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}
               >
-                {!isMe && (
-                  <div className="flex items-center gap-1.5 mb-1 px-1">
-                    <button
-                      type="button"
-                      onClick={() => handleMentionUser(msg.senderName || msg.senderNik, msg.senderNik)}
-                      className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer"
-                      title={`Klik untuk mention ${msg.senderName || msg.senderNik}`}
-                    >
-                      <span>{msg.senderName || msg.senderNik}</span>
-                    </button>
-                    {msg.senderNik === '02D25000055' || msg.senderNik === '02D24000043' || msg.senderNik === 'preplabadmin' ? (
-                      <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                        DEV
-                      </span>
-                    ) : null}
+                <div className={`flex items-start gap-2.5 max-w-[88%] sm:max-w-[78%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                  {/* Dynamic Glowing Avatar Frame */}
+                  <div className={`w-8 h-8 rounded-full border-2 overflow-hidden flex items-center justify-center text-[10px] font-black shrink-0 ${frameObj.ringColor} ${frameObj.effect} mt-0.5 shadow-sm`}>
+                    {senderAvatar ? (
+                      <img src={senderAvatar} alt={msg.senderName} className="w-full h-full object-cover" />
+                    ) : (
+                      (msg.senderName || msg.senderNik || 'AF').slice(0, 2).toUpperCase()
+                    )}
                   </div>
-                )}
 
-                <div
-                  className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed shadow-xs transition-all ${
-                    isMe
-                      ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-br-xs'
-                      : isMentioned
-                      ? 'bg-amber-500/10 border-2 border-amber-500/50 text-[var(--text-main)] rounded-bl-xs ring-2 ring-amber-500/20 shadow-md'
-                      : 'bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] rounded-bl-xs'
-                  }`}
-                >
-                  {isMentioned && (
-                    <div className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 mb-1">
-                      <Sparkles className="w-3 h-3 text-amber-500" />
-                      <span>Menyebut Anda</span>
+                  <div className={`flex-1 min-w-0 flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                    <div className={`flex items-center gap-1.5 mb-1 flex-wrap ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      {!isMe ? (
+                        <button
+                          type="button"
+                          onClick={() => handleMentionUser(msg.senderName || msg.senderNik, msg.senderNik)}
+                          className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer"
+                          title={`Klik untuk mention ${msg.senderName || msg.senderNik}`}
+                        >
+                          <span>{msg.senderName || msg.senderNik}</span>
+                        </button>
+                      ) : (
+                        <span className="text-[11px] font-bold text-[var(--text-muted)]">Anda</span>
+                      )}
+
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 font-bold">
+                        [{senderTitle}]
+                      </span>
+
+                      {(msg.senderNik === '02D25000055' || msg.senderNik === '02D24000043' || msg.senderNik === 'preplabadmin') && (
+                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                          DEV
+                        </span>
+                      )}
                     </div>
-                  )}
 
-                  <p className="whitespace-pre-wrap break-words">
-                    {renderFormattedText(msg.text, inspectorName, inspectorNik, isMe)}
-                  </p>
+                    <div
+                      className={`rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed shadow-xs transition-all ${
+                        isMe
+                          ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-tr-xs'
+                          : isMentioned
+                          ? 'bg-amber-500/10 border-2 border-amber-500/50 text-[var(--text-main)] rounded-tl-xs ring-2 ring-amber-500/20 shadow-md'
+                          : 'bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] rounded-tl-xs'
+                      }`}
+                    >
+                      {isMentioned && (
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 mb-1">
+                          <Sparkles className="w-3 h-3 text-amber-500" />
+                          <span>Menyebut Anda</span>
+                        </div>
+                      )}
 
-                  <div
-                    className={`text-[9px] mt-1 text-right font-mono select-none ${
-                      isMe ? 'text-teal-100/80' : 'text-[var(--text-muted)]'
-                    }`}
-                  >
-                    {timeStr}
+                      <p className="whitespace-pre-wrap break-words">
+                        {renderFormattedText(msg.text, inspectorName, inspectorNik, isMe)}
+                      </p>
+
+                      <div
+                        className={`text-[9px] mt-1 text-right font-mono select-none ${
+                          isMe ? 'text-teal-100/80' : 'text-[var(--text-muted)]'
+                        }`}
+                      >
+                        {timeStr}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </motion.div>
