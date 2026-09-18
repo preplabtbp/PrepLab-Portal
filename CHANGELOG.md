@@ -2,6 +2,19 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.8.37] - 2026-09-18
+
+### 📸 Perbaikan Unduh Massal ZIP Foto Dokumentasi Inspeksi
+
+- **Dukungan Penuh Format Base64 & Direct Blob Conversion (`src/components/ticket-screen.tsx`)**:
+  - Mengimplementasikan helper `fetchPhotoAsBlob` yang secara cerdas mendeteksi format gambar sebelum diunduh.
+  - Foto berformat data URL Base64 (`data:image/...`) kini dikonversi langsung menjadi binary `Blob` di sisi browser tanpa mengirim string base64 raksasa ke server HTTP GET, meniadakan kendala *Request-URI Too Large* (HTTP 414 / 431).
+  - Foto Google Drive dialirkan secara aman melalui endpoint `/api/drive/view/:fileId`.
+  - Memastikan seluruh foto dokumentasi mingguan (33 foto pada minggu berjalan, baik tersimpan di Drive maupun Base64) terunduh 100% lengkap tanpa ada yang terlewat ke dalam satu arsip ZIP.
+- **Dukungan Agregasi Data URL di Backend Galeri (`server/routes/misc.ts`)**:
+  - Memperluas filter `/api/gallery` agar mengenali foto proses bertipe `data:image/` selain `http`.
+  - Menangani parameter data URL langsung pada endpoint `/api/gallery/image-proxy` sebagai proteksi cadangan.
+
 ## [2.8.36] - 2026-09-18
 
 ### 📰 Navigasi Buletin Langsung & Penguncian Universe Perusahaan

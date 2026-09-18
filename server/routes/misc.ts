@@ -1798,6 +1798,17 @@ router.get("/api/gallery/image-proxy", async (req, res) => {
     const targetUrl = req.query.url as string;
     if (!targetUrl) return res.status(400).send("URL parameter required");
 
+    // Handle Data URL (Base64) directly if passed
+    if (targetUrl.startsWith("data:")) {
+      const parts = targetUrl.split(",");
+      const mimeMatch = parts[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+      const buf = Buffer.from(parts[1] || "", "base64");
+      res.setHeader("Content-Type", mime);
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.send(buf);
+    }
+
     // Extract file ID if Google Drive URL
     const driveMatch = targetUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || targetUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
     if (driveMatch) {
@@ -1943,7 +1954,7 @@ router.get("/api/gallery", async (req, res) => {
               if (Array.isArray(payloadArr)) {
                 payloadArr.forEach((item: any, pIdx: number) => {
                   const unitPhoto = item.foto || item.photo || item.url;
-                  if (unitPhoto && typeof unitPhoto === 'string' && unitPhoto.startsWith('http') && !seenUrls.has(unitPhoto.trim())) {
+                  if (unitPhoto && typeof unitPhoto === 'string' && (unitPhoto.startsWith('http') || unitPhoto.startsWith('data:image/')) && !seenUrls.has(unitPhoto.trim())) {
                     seenUrls.add(unitPhoto.trim());
                     const unitName = item.unit || item.reg || item.item || item.nama || `Unit ${pIdx + 1}`;
                     allGallery.push({
@@ -1979,7 +1990,7 @@ router.get("/api/gallery", async (req, res) => {
                   });
                 }
               } catch(e) {}
-            } else if (insp.photoUrl.startsWith('http') && !seenUrls.has(insp.photoUrl.trim())) {
+            } else if ((insp.photoUrl.startsWith('http') || insp.photoUrl.startsWith('data:image/')) && !seenUrls.has(insp.photoUrl.trim())) {
               seenUrls.add(insp.photoUrl.trim());
               allGallery.push({
                 url: insp.photoUrl.trim(),

@@ -37,11 +37,59 @@ export function extractDriveFileId(url: string): string | null {
 }
 
 export function getPhotoFetchUrl(photoUrl: string): string {
+  if (!photoUrl) return '';
+  if (photoUrl.startsWith('data:') || photoUrl.startsWith('blob:')) {
+    return photoUrl;
+  }
   const fileId = extractDriveFileId(photoUrl);
   if (fileId) {
     return `/api/drive/view/${fileId}`;
   }
   return `/api/gallery/image-proxy?url=${encodeURIComponent(photoUrl)}`;
+}
+
+export async function fetchPhotoAsBlob(photoUrl: string): Promise<Blob> {
+  if (!photoUrl || photoUrl === '-') throw new Error("URL foto tidak valid");
+
+  // 1. Data URL (Base64) langsung dikonversi ke Blob tanpa network request HTTP (mencegah error 414 URL too long)
+  if (photoUrl.startsWith('data:')) {
+    const arr = photoUrl.split(',');
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  }
+
+  // 2. Blob URL
+  if (photoUrl.startsWith('blob:')) {
+    const res = await fetch(photoUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.blob();
+  }
+
+  // 3. Google Drive URL via backend streaming proxy /api/drive/view/:fileId
+  const fileId = extractDriveFileId(photoUrl);
+  if (fileId) {
+    try {
+      const driveRes = await fetch(`/api/drive/view/${fileId}`);
+      if (driveRes.ok) {
+        return await driveRes.blob();
+      }
+    } catch (e) {
+      console.warn("Gagal stream drive langsung:", e);
+    }
+  }
+
+  // 4. Fallback ke /api/gallery/image-proxy
+  const fetchUrl = `/api/gallery/image-proxy?url=${encodeURIComponent(photoUrl)}`;
+  const res = await fetch(fetchUrl);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.blob();
 }
 
 export function getInspectionPhotoFileName(photo: any, duplicateCount?: number): string {
@@ -259,10 +307,7 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
         const photo = filteredGalleryPhotos[i];
         setZipProgress(`${i + 1} / ${filteredGalleryPhotos.length}`);
         try {
-          const fetchUrl = getPhotoFetchUrl(photo.url);
-          const res = await fetch(fetchUrl);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const blob = await res.blob();
+          const blob = await fetchPhotoAsBlob(photo.url);
 
           const baseName = getInspectionPhotoFileName(photo);
           const currentCount = (usedFileNames.get(baseName) || 0) + 1;
@@ -310,10 +355,7 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
     const fileName = getInspectionPhotoFileName(photo);
     try {
       toast.info(`Mengunduh: ${fileName}...`);
-      const fetchUrl = getPhotoFetchUrl(photo.url);
-      const res = await fetch(fetchUrl);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
+      const blob = await fetchPhotoAsBlob(photo.url);
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = fileName;
@@ -323,8 +365,7 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
       URL.revokeObjectURL(link.href);
       toast.success(`Foto ${fileName} berhasil diunduh!`);
     } catch (err) {
-      console.error(err);
-      toast.error("Gagal mengunduh foto. Anda dapat membuka di Drive.");
+      console.error("Gagal unduh foto satuan:", err);
     }
   };
 
