@@ -1,6 +1,22 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.9] - 2026-09-19
+
+### 🤖 Smart Suggest Kategori Mesin/Aset, Validasi Ketat & Input Detail Alat
+
+- **Pemilihan Kategori Terstandarisasi Non-Instrument (`src/components/create-wo-screen.tsx` & `src/lib/equipmentNormalizer.ts`)**:
+  - Mengubah input bebas nama alat non-instrument menjadi sistem pemilihan kategori terstandarisasi berdasarkan katalog 31 kategori resmi PrepLab (dikelompokkan rapi ke dalam 7 rumpun: *IT & Kelistrikan*, *HVAC & Fasilitas*, *Fasilitas & Bangunan*, *Utilitas & K3*, *Alat Operasional Preparasi*, *Fasilitas Kerja & Ergonomi*, dan *Sanitasi & Housekeeping*).
+- **Fitur Rekomendasi Pintar (Smart Suggest)**:
+  - Menyediakan algoritma pendeteksi kata kunci (*fuzzy/keyword matcher*): saat pelapor mengetik `"PC"`, `"CPU"`, `"Komputer"`, `"Monitor"`, atau `"UPS"`, sistem secara otomatis merekomendasikan kategori **`Perangkat IT & Kelistrikan [IT]`** dengan kartu pilihan satu-klik.
+  - Berlaku untuk seluruh kata kunci operasional lainnya (seperti `"Arco"` → *Gerobak Arco*, `"AC"`/`"Daikin"` → *Air Conditioner (AC)*, `"Sapu"`/`"Pel"` → *Alat Housekeeping*, `"Plafon"` → *Plafon*, dsb.).
+- **Validasi Ketat & Notifikasi Tim QA**:
+  - Pelapor tidak dapat lagi memasukkan nama mesin/asset sembarangan yang tidak masuk dalam kategori resmi (*blocking validation*).
+  - Menampilkan informasi kontak Tim QA: *"Tidak menemukan kategori alat/mesin yang sesuai? Harap hubungi Tim QA untuk penambahan kategori atau aset baru."*
+- **Input Nama Detail / Spesifikasi Mesin/Aset**:
+  - Setelah kategori dipilih, sistem secara dinamis memunculkan kolom input **Detail Nama / Spesifikasi Mesin / Aset Rusak** (contoh: *"PC Desktop Ruang Timbang No. 2"*, *"AC Split Daikin 2PK Area Prep"*).
+  - Nama detail digabungkan ke dalam nama alat dan tersinkronisasi utuh ke Dashboard Maintenance, PDF Work Order, dan notifikasi WhatsApp sehingga tim maintenance dapat langsung mengidentifikasi unit spesifik di lapangan.
+
 ## [2.9.8] - 2026-09-19
 
 ### 📐 Proporsionalitas & Keterbacaan Penuh Tabel Rincian Work Order

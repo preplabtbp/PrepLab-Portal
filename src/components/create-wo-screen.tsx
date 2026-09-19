@@ -1,8 +1,11 @@
 import { CreateInternalTicketScreen } from './create-internal-ticket-screen';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Card, Input, Select, Textarea, Button } from './ui';
 import { appendRowsToSheet, ToolRecord, uploadPhotoToDrive} from '../sheets-api';
-import { CheckCircle2, Loader2, Image as ImageIcon, UploadCloud, RotateCcw , PlusCircle } from 'lucide-react';
+import { 
+  CheckCircle2, Loader2, Image as ImageIcon, UploadCloud, RotateCcw, PlusCircle,
+  Sparkles, AlertCircle, Info, ChevronDown, Check, X, Search, AlertTriangle
+} from 'lucide-react';
 import { ImageModal } from './image-modal';
 import { DevModeAccordion, useDevOptions } from './dev-mode-accordion';
 import { WhatsAppModal } from './whatsapp-modal';
@@ -10,7 +13,13 @@ import SignatureCanvas from 'react-signature-canvas';
 import { toast } from 'sonner';
 import { workOrderSchema } from '../lib/zod';
 import { PageHeader } from './PageHeader';
-import { normalizeEquipment, STANDARD_NON_INSTRUMENT_NAMES } from '../lib/equipmentNormalizer';
+import { 
+  normalizeEquipment, 
+  STANDARD_NON_INSTRUMENT_NAMES, 
+  STANDARD_NON_INSTRUMENT_CATALOG, 
+  StandardNonInstrumentItem, 
+  findSmartSuggest 
+} from '../lib/equipmentNormalizer';
 
 export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategories }: { inspectorName: string, inspectorNik: string, equipmentCategories: {category: string, tools: ToolRecord[]}[] }) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -24,6 +33,12 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
     fotoUrl: ''
   });
   
+  // Non-Instrument Category & Smart Suggest States
+  const [selectedNonInstrCategory, setSelectedNonInstrCategory] = useState<StandardNonInstrumentItem | null>(null);
+  const [nonInstrSearchQuery, setNonInstrSearchQuery] = useState('');
+  const [nonInstrDetail, setNonInstrDetail] = useState('');
+  const [isNonInstrDropdownOpen, setIsNonInstrDropdownOpen] = useState(false);
+  const nonInstrRef = useRef<HTMLDivElement>(null);
   
   const [activeWoTab, setActiveWoTab] = useState<'kerusakan' | 'permintaan'>('kerusakan');
 
@@ -36,6 +51,42 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
   const sigPad = useRef<any>(null);
 
   const { devOptions, setDevOptions, parsedDevOptions } = useDevOptions(inspectorNik);
+
+  // Click outside to close non-instr dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (nonInstrRef.current && !nonInstrRef.current.contains(event.target as Node)) {
+        setIsNonInstrDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Compute smart suggestions based on user query
+  const smartSuggestions = useMemo(() => {
+    if (!nonInstrSearchQuery.trim()) return [];
+    return findSmartSuggest(nonInstrSearchQuery);
+  }, [nonInstrSearchQuery]);
+
+  const topKeywordMatch = useMemo(() => {
+    return smartSuggestions.find(s => s.matchType === 'keyword' || s.score >= 90);
+  }, [smartSuggestions]);
+
+  // Grouped standard categories for clean browsing
+  const groupedCategories = useMemo(() => {
+    const filtered = nonInstrSearchQuery.trim()
+      ? smartSuggestions.map(s => s.item)
+      : STANDARD_NON_INSTRUMENT_CATALOG;
+
+    const map = new Map<string, StandardNonInstrumentItem[]>();
+    for (const item of filtered) {
+      const group = item.categoryGroup || 'Lainnya';
+      if (!map.has(group)) map.set(group, []);
+      map.get(group)!.push(item);
+    }
+    return Array.from(map.entries());
+  }, [nonInstrSearchQuery, smartSuggestions]);
 
   const formatToolDisplay = React.useCallback((t: ToolRecord) => {
     const parts = [t.name];
@@ -136,12 +187,26 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
       let toolName = '-';
 
       if (formData.tipeWO === 'Instrument') {
+        if (!selectedTool && !formData.toolSearch.trim()) {
+          toast.error('Harap pilih alat instrumen yang rusak!');
+          setSubmitting(false);
+          return;
+        }
         toolId = selectedTool ? selectedTool.id : '-';
         toolName = selectedTool ? selectedTool.name : (formData.toolSearch.split(' - ')[0] || formData.toolSearch || '-');
       } else {
-        const norm = normalizeEquipment(formData.toolNameManual, '-', 'Non-Instrument');
-        toolName = norm.name;
-        toolId = norm.code !== '-' ? norm.code : 'NON-INSTR';
+        if (!selectedNonInstrCategory) {
+          toast.error('Harap pilih kategori mesin/asset yang valid dari daftar! Jika belum terdaftar, harap hubungi Tim QA.');
+          setSubmitting(false);
+          return;
+        }
+        if (!nonInstrDetail.trim()) {
+          toast.error('Harap isi Nama Detail / Spesifikasi mesin/asset agar tim maintenance mudah menelusuri unit di lapangan!');
+          setSubmitting(false);
+          return;
+        }
+        toolName = `${selectedNonInstrCategory.name} - ${nonInstrDetail.trim()}`;
+        toolId = selectedNonInstrCategory.code;
       }
 
       // Get signature base64
@@ -219,6 +284,10 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
         fotoUrl: ''
       });
       setSelectedTool(null);
+      setSelectedNonInstrCategory(null);
+      setNonInstrSearchQuery('');
+      setNonInstrDetail('');
+      setIsNonInstrDropdownOpen(false);
       if (sigPad.current) sigPad.current.clear();
       
       // setTimeout(() => setSuccess(false), 3000); // Removed so user can click WA
@@ -293,6 +362,10 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
               onChange={e => {
                 setFormData({...formData, tipeWO: e.target.value});
                 setSelectedTool(null);
+                setSelectedNonInstrCategory(null);
+                setNonInstrSearchQuery('');
+                setNonInstrDetail('');
+                setIsNonInstrDropdownOpen(false);
               }}
               options={[
                 {value: "Instrument", label: "Instrument"},
@@ -301,9 +374,9 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
             />
           </div>
 
-          <div className="space-y-2 relative">
-            <label className="block text-sm font-medium text-slate-700">
-              {formData.tipeWO === 'Instrument' ? 'Cari Alat Rusak' : 'Nama Mesin / Asset Rusak'}
+          <div className="space-y-3 relative">
+            <label className="block text-sm font-semibold text-slate-800">
+              {formData.tipeWO === 'Instrument' ? 'Cari Alat Instrumen Rusak' : 'Kategori Mesin / Asset Rusak'}
             </label>
             
             {formData.tipeWO === 'Instrument' ? (
@@ -311,8 +384,8 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
                 <input 
                   list="tools-list"
                   type="text"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-white shadow-sm"
-                  placeholder="Ketik untuk mencari ID / Nama Alat"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-white shadow-xs"
+                  placeholder="Ketik untuk mencari ID / Nama Alat Instrumen..."
                   value={formData.toolSearch}
                   onChange={(e) => handleToolSearchChange(e.target.value)}
                   required
@@ -324,35 +397,222 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
                 </datalist>
                 
                 {selectedTool && (
-                   <div className="text-xs text-teal-600 bg-teal-50 px-3 py-2 rounded-lg mt-2 border border-teal-100 font-medium">
-                     Alat Terdeteksi: {selectedTool.name} {(selectedTool.id && selectedTool.id.trim() !== '-' && selectedTool.id.trim() !== '') ? `(${selectedTool.id})` : ''}
+                   <div className="text-xs text-teal-800 bg-teal-50 px-3 py-2.5 rounded-xl border border-teal-200 font-medium flex items-center justify-between shadow-2xs">
+                     <span>Alat Terdeteksi: <strong>{selectedTool.name}</strong> {(selectedTool.id && selectedTool.id.trim() !== '-' && selectedTool.id.trim() !== '') ? `(${selectedTool.id})` : ''}</span>
+                     <span className="text-[10px] text-teal-800 bg-teal-100 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Tervalidasi</span>
                    </div>
                 )}
+
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                  <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span>Instrumen tidak ditemukan? <strong>Harap hubungi Tim QA</strong> untuk registrasi alat baru.</span>
+                </div>
               </>
             ) : (
-              <>
-                <input 
-                  list="non-instruments-list"
-                  type="text"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-white shadow-sm"
-                  placeholder="Pilih atau ketik nama alat non-instrument (cth: Gerobak Arco, Sekop JIS 30D)..."
-                  value={formData.toolNameManual}
-                  onChange={(e) => setFormData({...formData, toolNameManual: e.target.value})}
-                  required
-                />
-                <datalist id="non-instruments-list">
-                  {STANDARD_NON_INSTRUMENT_NAMES.map((name, idx) => (
-                    <option key={`non-instr-${idx}`} value={name} />
-                  ))}
-                </datalist>
+              <div className="space-y-3" ref={nonInstrRef}>
+                {/* 1. KATEGORI SELECTION CONTAINER */}
+                {selectedNonInstrCategory ? (
+                  <div className="p-3.5 rounded-xl border-2 border-teal-500 bg-teal-50/70 shadow-xs space-y-3 transition-all">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-800">Kategori Terpilih:</span>
+                            <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-teal-200 text-teal-900 border border-teal-300">
+                              {selectedNonInstrCategory.code}
+                            </span>
+                            <span className="text-[10px] font-semibold text-slate-600 bg-white/90 px-2 py-0.2 rounded border border-slate-200">
+                              {selectedNonInstrCategory.categoryGroup}
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-sm text-slate-900 mt-0.5">
+                            {selectedNonInstrCategory.name}
+                          </h4>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            {selectedNonInstrCategory.description}
+                          </p>
+                        </div>
+                      </div>
 
-                {formData.toolNameManual && (
-                  <div className="text-xs text-teal-700 bg-teal-50/90 px-3 py-2 rounded-lg mt-2 border border-teal-200/80 font-medium flex items-center justify-between shadow-2xs">
-                    <span>Nama Standar Terdeteksi: <strong>{normalizeEquipment(formData.toolNameManual, '-', 'Non-Instrument').name}</strong></span>
-                    <span className="text-[10px] text-teal-700 bg-teal-100/80 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Tersinkron</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedNonInstrCategory(null);
+                          setIsNonInstrDropdownOpen(true);
+                        }}
+                        className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition-colors flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
+                        title="Klik untuk memilih kategori lain"
+                      >
+                        <RotateCcw className="w-3 h-3 text-slate-500" />
+                        <span>Ganti</span>
+                      </button>
+                    </div>
+
+                    {/* 2. INPUT NAMA DETAIL / SPESIFIKASI ALAT (MUNCUL SETELAH MEMILIH KATEGORI) */}
+                    <div className="pt-3 border-t border-teal-200/80 space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <label className="block text-xs font-bold text-slate-800 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <span>Nama Detail / Spesifikasi Mesin / Aset Rusak</span>
+                          <span className="text-rose-500">*</span>
+                        </span>
+                        <span className="text-[10.5px] font-semibold text-teal-800 bg-teal-100 px-2 py-0.5 rounded">
+                          Wajib diisi
+                        </span>
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full px-3.5 py-2.5 border-2 border-teal-500/50 rounded-xl text-sm focus:ring-4 focus:ring-teal-500/20 focus:border-teal-600 bg-white shadow-xs font-medium placeholder:text-slate-400"
+                        placeholder={selectedNonInstrCategory.detailPlaceholder}
+                        value={nonInstrDetail}
+                        onChange={(e) => setNonInstrDetail(e.target.value)}
+                        required
+                        autoFocus
+                      />
+                      <p className="text-[11px] text-slate-600 flex items-center gap-1.5 mt-1">
+                        <Info className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <span>Tuliskan nomor unit, merk, atau spesifikasi detail alat agar tim maintenance mudah menelusuri di lapangan.</span>
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {/* Search / Select Category Input */}
+                    <div className="relative">
+                      <div className="relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input 
+                          type="text"
+                          className="w-full pl-9.5 pr-8 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-white shadow-xs placeholder:text-slate-400"
+                          placeholder="Ketik untuk mencari kategori (cth: PC, CPU, AC, Arco, Sekop, Lampu, Plafon)..."
+                          value={nonInstrSearchQuery}
+                          onChange={(e) => {
+                            setNonInstrSearchQuery(e.target.value);
+                            setIsNonInstrDropdownOpen(true);
+                          }}
+                          onFocus={() => setIsNonInstrDropdownOpen(true)}
+                        />
+                        {nonInstrSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNonInstrSearchQuery('');
+                              setIsNonInstrDropdownOpen(true);
+                            }}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* SMART SUGGESTION BANNER (IF KEYWORD MATCH FOUND) */}
+                      {topKeywordMatch && (
+                        <div 
+                          onClick={() => {
+                            setSelectedNonInstrCategory(topKeywordMatch.item);
+                            setIsNonInstrDropdownOpen(false);
+                          }}
+                          className="mt-2 p-2.5 rounded-xl border-2 border-teal-500 bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50 hover:from-teal-100 hover:to-emerald-100 cursor-pointer shadow-xs transition-all flex items-center justify-between group"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                              <Sparkles className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800">Rekomendasi Pintar (Smart Suggest):</span>
+                                <span className="font-mono text-[9px] font-bold px-1.5 py-0.2 rounded bg-teal-200 text-teal-900 border border-teal-300">{topKeywordMatch.item.code}</span>
+                              </div>
+                              <h5 className="font-bold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">
+                                {topKeywordMatch.item.name}
+                              </h5>
+                              <p className="text-[10.5px] text-slate-500 line-clamp-1">
+                                {topKeywordMatch.matchedKeyword && `Kata kunci cocok: "${topKeywordMatch.matchedKeyword}" • `}{topKeywordMatch.item.categoryGroup}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-teal-700 bg-white px-2.5 py-1 rounded-lg border border-teal-300 shadow-2xs group-hover:bg-teal-600 group-hover:text-white transition-colors shrink-0">
+                            Pilih Kategori Ini →
+                          </span>
+                        </div>
+                      )}
+
+                      {/* DROPDOWN MENU OF STANDARDIZED CATEGORIES */}
+                      {isNonInstrDropdownOpen && (
+                        <div className="absolute z-20 left-0 right-0 mt-1 max-h-72 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl divide-y divide-slate-100 text-xs">
+                          {groupedCategories.length === 0 ? (
+                            <div className="p-4 text-center space-y-2">
+                              <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+                                <AlertTriangle className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-slate-800">Kategori Tidak Ditemukan</p>
+                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                  Nama mesin/asset harus terdaftar dalam kategori resmi agar data laporan valid.
+                                </p>
+                              </div>
+                              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-medium text-left flex items-start gap-2">
+                                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                <span>Jika ingin menambahkan kategori atau jenis aset baru, <strong>harap hubungi Tim QA</strong>.</span>
+                              </div>
+                            </div>
+                          ) : (
+                            groupedCategories.map(([groupName, items]) => (
+                              <div key={groupName} className="p-1.5">
+                                <div className="px-2.5 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 rounded">
+                                  {groupName} ({items.length})
+                                </div>
+                                <div className="mt-1 space-y-0.5">
+                                  {items.map(item => (
+                                    <button
+                                      type="button"
+                                      key={item.code}
+                                      onClick={() => {
+                                        setSelectedNonInstrCategory(item);
+                                        setIsNonInstrDropdownOpen(false);
+                                      }}
+                                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-teal-50 transition-colors flex items-center justify-between group cursor-pointer"
+                                    >
+                                      <div className="min-w-0 pr-2">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="font-bold text-slate-800 text-xs group-hover:text-teal-700">
+                                            {item.name}
+                                          </span>
+                                          <span className="font-mono text-[9px] font-bold px-1 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 group-hover:bg-teal-100 group-hover:text-teal-800">
+                                            {item.code}
+                                          </span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                                          {item.description}
+                                        </p>
+                                      </div>
+                                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-teal-600 -rotate-90 shrink-0" />
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* QA Contact Notice */}
+                    <div className="p-2.5 rounded-lg bg-amber-50/70 border border-amber-200/80 text-[11px] text-amber-900 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Nama mesin/asset harus sesuai kategori terdaftar. Ingin menambahkan kategori baru?</span>
+                      </div>
+                      <span className="font-bold text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded text-[10px] border border-amber-300 shrink-0 whitespace-nowrap">
+                        Hubungi Tim QA
+                      </span>
+                    </div>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
 
