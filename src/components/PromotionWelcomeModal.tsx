@@ -137,7 +137,7 @@ export const PromotionWelcomeModal: React.FC<PromotionWelcomeModalProps> = ({
               {/* Personnel & Rank Titles */}
               <div className="space-y-1 text-center sm:text-left">
                 <span className="text-[11px] font-mono text-amber-400 uppercase tracking-wider block font-bold">
-                  PANGKAT MILITER POINT BLANK RESMI
+                  PANGKAT KEHORMATAN PREPLAB VANGUARD
                 </span>
                 <h3 className="text-xl sm:text-2xl font-black text-amber-300 font-display">
                   {currentRank.name}

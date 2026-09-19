@@ -749,7 +749,7 @@ export function ExpAuditModal({
                     <strong>Transparansi Gamifikasi PrepLab:</strong> Seluruh perolehan EXP dihitung secara otomatis oleh sistem berdasarkan data formulir dan aksi nyata yang terekam di database.
                   </p>
                   <p>
-                    Klasemen bulanan direset pada tanggal 1 setiap bulan, sedangkan <strong>Pangkat Kehormatan Point Blank (Level 1–51)</strong> bersifat permanen dan terus bertumbuh seumur karir.
+                    Klasemen bulanan direset pada tanggal 1 setiap bulan, sedangkan <strong>Pangkat Kehormatan Vanguard (Level 1–51)</strong> bersifat permanen dan terus bertumbuh seumur karir.
                   </p>
                 </div>
               </div>

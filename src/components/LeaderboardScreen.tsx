@@ -564,7 +564,7 @@ export function LeaderboardScreen({
                     </span>
                   </div>
                   <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                    Peringkat klasemen kompetisi dihitung eksklusif dari perolehan EXP pada bulan berjalan (direset setiap awal bulan). Jenjang Pangkat Militer PB (Level 1–51) tetap permanen berdasarkan total karir.
+                    Peringkat klasemen kompetisi dihitung eksklusif dari perolehan EXP pada bulan berjalan (direset setiap awal bulan). Jenjang Pangkat Kehormatan (Level 1–51) tetap permanen berdasarkan total karir.
                   </p>
                 </div>
               </div>
@@ -702,7 +702,7 @@ export function LeaderboardScreen({
                       {selectedDiscipline === 'EXP' ? (
                         <>
                           <div>
-                            <span className="text-[10px] text-[var(--text-muted)] block">Pangkat PB</span>
+                            <span className="text-[10px] text-[var(--text-muted)] block">Pangkat Kehormatan</span>
                             <span className="font-bold text-xs text-teal-600 dark:text-teal-400 block truncate max-w-[80px]">
                               {top3[1].currentRank?.name || 'Trainee'}
                             </span>
@@ -786,7 +786,7 @@ export function LeaderboardScreen({
                       {selectedDiscipline === 'EXP' ? (
                         <>
                           <div>
-                            <span className="text-[10px] text-[var(--text-muted)] block">Pangkat PB</span>
+                            <span className="text-[10px] text-[var(--text-muted)] block">Pangkat Kehormatan</span>
                             <span className="font-black text-xs text-amber-500 block truncate max-w-[90px]">
                               {top3[0].currentRank?.name || 'Trainee'}
                             </span>
@@ -871,7 +871,7 @@ export function LeaderboardScreen({
                       {selectedDiscipline === 'EXP' ? (
                         <>
                           <div>
-                            <span className="text-[10px] text-[var(--text-muted)] block">Pangkat PB</span>
+                            <span className="text-[10px] text-[var(--text-muted)] block">Pangkat Kehormatan</span>
                             <span className="font-bold text-xs text-teal-600 dark:text-teal-400 block truncate max-w-[80px]">
                               {top3[2].currentRank?.name || 'Trainee'}
                             </span>
@@ -966,7 +966,7 @@ export function LeaderboardScreen({
                           </th>
                           <th className="py-3 px-4 text-right">
                             <span>Total EXP Karir</span>
-                            <span className="block text-[9px] font-normal text-[var(--text-muted)]">Pangkat PB (Level 1-51)</span>
+                            <span className="block text-[9px] font-normal text-[var(--text-muted)]">Pangkat Kehormatan (Level 1–51)</span>
                           </th>
                         </>
                       ) : (
@@ -1368,7 +1368,7 @@ export function LeaderboardScreen({
                 </span>
                 <h3 className="text-lg font-bold font-display">12 Cabang Achievement Kehormatan</h3>
                 <p className="text-xs text-slate-300 mt-0.5 max-w-2xl">
-                  Achievement tugas rutin dapat dilihat kriteria cara mendapatkannya secara transparan. Selesaikan aktivitas harian di portal untuk menaikkan pangkat, meraih gelar militer, dan membuka bingkai avatar eksklusif!
+                  Achievement tugas rutin dapat dilihat kriteria cara mendapatkannya secara transparan. Selesaikan aktivitas harian di portal untuk menaikkan pangkat, meraih gelar kehormatan, dan membuka bingkai avatar eksklusif!
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -1835,7 +1835,7 @@ export function LeaderboardScreen({
                     </span>
                   </div>
 
-                  {/* Progress to Next PB Rank */}
+                  {/* Progress to Next Rank */}
                   <div className="space-y-2 pt-3 border-t" style={{ borderColor: 'var(--border-main)' }}>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-[var(--text-muted)] font-semibold">
@@ -1863,7 +1863,7 @@ export function LeaderboardScreen({
 
             {/* Right Column: Customization Selectors */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Gelar Militer Selector */}
+              {/* Gelar Kehormatan Selector */}
               <Card 
                 className="p-6 rounded-3xl border shadow-xs space-y-4"
                 style={{
@@ -1873,7 +1873,7 @@ export function LeaderboardScreen({
               >
                 <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--border-main)' }}>
                   <div>
-                    <h4 className="font-bold text-base font-display text-[var(--text-main)]">Gelar Militer Kehormatan</h4>
+                    <h4 className="font-bold text-base font-display text-[var(--text-main)]">Gelar Kehormatan Taktis</h4>
                     <p className="text-xs text-[var(--text-muted)]">Pilih gelar yang telah terbuka dari 12 cabang pencapaian untuk dipasang di samping nama Anda.</p>
                   </div>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-teal-500/10 text-teal-600 font-bold">
@@ -2088,7 +2088,7 @@ export function LeaderboardScreen({
                           ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/30' 
                           : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
                       }`}>
-                        {isBranchRevealed ? selectedBranch.category.toUpperCase() : 'KLASIFIKASI: DOKUMEN RAHASIA MILITER'}
+                        {isBranchRevealed ? selectedBranch.category.toUpperCase() : 'KLASIFIKASI: PENCAPAIAN RAHASIA OPERASIONAL'}
                       </span>
                       <h3 className="font-bold text-lg font-display text-[var(--text-main)] mt-1">
                         {isBranchRevealed ? selectedBranch.name : '🔒 [ Berkas Rahasia Komando ]'}

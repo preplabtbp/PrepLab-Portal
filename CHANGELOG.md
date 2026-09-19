@@ -1,6 +1,19 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.12] - 2026-09-20
+
+### 🎖️ Penyempurnaan Terminologi Pangkat Kehormatan, Modal Audit EXP & Hall of Fame
+
+- **Standardisasi Terminologi Pangkat Profesional**:
+  - Menggantikan seluruh nomenklatur game (*"PB / Point Blank"*) menjadi istilah komando kehormatan korporat (*"Pangkat Kehormatan Preplab Vanguard"*, *"Pangkat Kehormatan (Level 1–51)"*, *"Gelar Kehormatan Taktis"*, dan *"Pencapaian Rahasia Operasional"*).
+  - Memperbarui teks pada pop-up upacara promosi awal (`PromotionWelcomeModal.tsx`), podium top 3 leaderboard, tabel klasemen bulanan (`LeaderboardScreen.tsx`), modal transparansi EXP (`ExpAuditModal.tsx`), serta drawer modul navigasi (`ModulesDrawer.tsx`).
+- **Modal Audit Transparansi Perolehan EXP Personil (`ExpAuditModal.tsx`)**:
+  - Fitur pencarian instan nama/NIK personil untuk memeriksa seluruh rekapitulasi poin EXP dari beragam instrumen (Inspeksi K3, Laporan KTA, Tema Desain, Kuis 100, dsb.) secara transparan.
+- **Penyempurnaan Hall of Fame & Batas Cabang Prestasi**:
+  - Memastikan Hall of Fame akhir musim tetap tampil terbuka dan permanen untuk apresiasi pencapaian personil terbaik.
+  - Menyelaraskan perhitungan cabang prestasi aktif personil agar konsisten dengan 12 cabang achievement sistem.
+
 ## [2.9.11] - 2026-09-19
 
 ### ⏱️ Format Durasi Jam & Menit Eksplisit, Interaktivitas Filter Grafik Batang, & Presisi Proporsi Kategori

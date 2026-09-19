@@ -160,7 +160,7 @@ export function ModulesDrawer({
       color: 'rose' as const,
       bgIcon: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20',
       items: [
-        { id: 'leaderboard', title: "Hall of Fame & Rank", desc: "Pangkat PB & Achievement", icon: <Trophy className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('leaderboard')) },
+        { id: 'leaderboard', title: "Hall of Fame & Rank", desc: "Pangkat Kehormatan & Prestasi", icon: <Trophy className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('leaderboard')) },
         { id: 'wo-maintenance-dashboard', title: "WO Maintenance", desc: "Downtime & sparepart", icon: <Wrench className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('wo-maintenance-dashboard')) },
         { id: 'adm-dashboard', title: "Administrasi", desc: "Kehadiran personel", icon: <User className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('adm-dashboard')) },
         { id: 'pelanggaran-dashboard', title: "Pelanggaran", desc: "SP & Konseling aktif", icon: <AlertTriangle className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('pelanggaran-dashboard')) },
