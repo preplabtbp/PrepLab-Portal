@@ -76,7 +76,7 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
       const isJuneJuly = d.getFullYear() === 2026 && [5, 6].includes(d.getMonth());
       if (!isJuneJuly) return false;
 
-      const dt = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
+      const dt = parseDowntimeHours(wo.downtimeDuration ?? (wo as any).downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
       return dt <= 0;
     };
 
@@ -147,7 +147,7 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
       const eqKey = norm.isInstrument ? `${eqCode}___${eqName}` : `NON_INSTR___${eqName}`;
 
       // Calculate downtime
-      const dtHours = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
+      const dtHours = parseDowntimeHours(wo.downtimeDuration ?? (wo as any).downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
 
       totalDowntimeHours += dtHours;
       if (dtHours > 0) {
