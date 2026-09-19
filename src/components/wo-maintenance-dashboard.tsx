@@ -3,7 +3,8 @@ import {
   Wrench, Activity, Clock, Package, Filter, Download, 
   Search, RefreshCw, CheckCircle2, AlertTriangle, ArrowUpRight, 
   ChevronLeft, ChevronRight, Eye, Layers, Sparkles, SlidersHorizontal, 
-  Calendar, FileSpreadsheet, X, ShieldAlert, Check, Cpu, Hammer, BarChart2
+  Calendar, FileSpreadsheet, X, ShieldAlert, Check, Cpu, Hammer, BarChart2,
+  ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { Card, Button, Input, Select } from './ui';
 import { Bar, Doughnut } from 'react-chartjs-2';
@@ -68,9 +69,10 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   // Modal Detail WO Preview
   const [selectedWO, setSelectedWO] = useState<any | null>(null);
 
-  // Pagination & Search for Bottom Drilldown Table
+  // Pagination, Search & Sorting for Bottom Drilldown Table
   const [tableCurrentPage, setTableCurrentPage] = useState<number>(1);
   const [tableSearchQuery, setTableSearchQuery] = useState<string>('');
+  const [tableSortOrder, setTableSortOrder] = useState<'asc' | 'desc'>('asc');
   const ITEMS_PER_PAGE = 20;
 
   const isoWeeksList = useMemo(() => getYearISOWeeksList(new Date().getFullYear()), []);
@@ -78,7 +80,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   // Reset pagination to page 1 whenever any filter or search changes
   useEffect(() => {
     setTableCurrentPage(1);
-  }, [selectedCategory, selectedEquipmentCode, filterPeriod, customStartDate, customEndDate, searchQuery, tableSearchQuery]);
+  }, [selectedCategory, selectedEquipmentCode, filterPeriod, customStartDate, customEndDate, searchQuery, tableSearchQuery, tableSortOrder]);
 
   // Helper to filter out testing/dummy work orders
   const isDummyOrTestWO = (wo: any): boolean => {
@@ -314,7 +316,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
         photoUrl: w.photoUrl || w.photo_url,
         closingPhoto: w.closingPhoto || w.closing_photo,
         pdfUrl: w.pdfUrl || w.pdf_url
-      }))
+      })).sort((a, b) => (a.woId || '').localeCompare(b.woId || '', 'id', { numeric: true }))
     };
   };
 
@@ -1316,6 +1318,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
             wo.technicianPic, wo.status, wo.requestorName, wo.shift
           ].filter(Boolean).join(' ').toLowerCase();
           return str.includes(q);
+        }).sort((a, b) => {
+          const cmp = (a.woId || '').localeCompare(b.woId || '', 'id', { numeric: true });
+          return tableSortOrder === 'asc' ? cmp : -cmp;
         });
 
         const totalTablePages = Math.max(1, Math.ceil(tableFilteredWorkOrders.length / ITEMS_PER_PAGE));
@@ -1375,6 +1380,23 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                     </button>
                   )}
                 </div>
+
+                {/* Sort Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => setTableSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                  className="h-8 px-2.5 text-xs font-semibold rounded-lg border flex items-center gap-1.5 transition-colors cursor-pointer hover:bg-slate-100"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #FFFFFF)',
+                    color: 'var(--text-main, #0f172a)',
+                    borderColor: 'var(--border-main, #CBD5E1)'
+                  }}
+                  title="Urutkan No. WO (Klik untuk ubah urutan)"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5 text-teal-600" />
+                  <span className="hidden sm:inline">No. WO:</span>
+                  <span className="text-teal-700 font-bold">{tableSortOrder === 'asc' ? 'A → Z (Terlama)' : 'Z → A (Terbaru)'}</span>
+                </button>
 
                 <span 
                   className="text-[11px] font-bold whitespace-nowrap"
@@ -1514,7 +1536,20 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                   }}
                 >
                   <tr>
-                    <th className="py-3 px-3.5 whitespace-nowrap">No. WO</th>
+                    <th 
+                      onClick={() => setTableSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                      className="py-3 px-3.5 whitespace-nowrap cursor-pointer select-none hover:bg-slate-200/70 transition-colors group"
+                      title="Klik untuk mengubah urutan No. WO"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>No. WO</span>
+                        {tableSortOrder === 'asc' ? (
+                          <ArrowUp className="w-3.5 h-3.5 text-teal-600 group-hover:scale-110 transition-transform" />
+                        ) : (
+                          <ArrowDown className="w-3.5 h-3.5 text-teal-600 group-hover:scale-110 transition-transform" />
+                        )}
+                      </div>
+                    </th>
                     <th className="py-3 px-3.5 whitespace-nowrap">Tanggal & Shift</th>
                     <th className="py-3 px-3.5 whitespace-nowrap">Nama Alat & Kode</th>
                     <th className="py-3 px-3.5 whitespace-nowrap">Kategori</th>

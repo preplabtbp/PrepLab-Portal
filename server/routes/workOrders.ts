@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../../src/db/index.js";
-import { eq, desc, or, inArray, isNull, and, gte, lte } from "drizzle-orm";
+import { eq, desc, asc, or, inArray, isNull, and, gte, lte } from "drizzle-orm";
 import { 
   chatMessages, employees, equipments, workOrders, users, tickets, downtime, 
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
@@ -36,8 +36,8 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
     
     // Fetch work orders (TBP and GPS are unified as 1 dataset; only GTS is separate)
     let allWOs = (pt && (pt as string).toUpperCase() === 'GTS')
-      ? await db.select().from(workOrders).where(eq(workOrders.pt, 'GTS'))
-      : await db.select().from(workOrders);
+      ? await db.select().from(workOrders).where(eq(workOrders.pt, 'GTS')).orderBy(asc(workOrders.woId))
+      : await db.select().from(workOrders).orderBy(asc(workOrders.woId));
 
     // Helper to filter out dummy/test entries
     const isDummyOrTestWO = (wo: any): boolean => {
@@ -267,7 +267,7 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
 router.get("/api/work-orders", async (req, res) => {
     try {
       const { pt } = req.query;
-      let query: any = db.select().from(workOrders);
+      let query: any = db.select().from(workOrders).orderBy(asc(workOrders.woId));
       if (pt && (pt as string).toUpperCase() === 'GTS') {
         query = query.where(eq(workOrders.pt, 'GTS'));
       }
@@ -331,7 +331,7 @@ router.post("/api/work-orders", async (req, res) => {
       if (!newWO.woId) {
         const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, '');
         const randomStr = Math.floor(100 + Math.random() * 900).toString();
-        newWO.woId = `FWO-${dateStr}-${randomStr}`;
+        newWO.woId = `WO-${dateStr}-${randomStr}`;
       }
       if (newWO.date) newWO.date = new Date(newWO.date);
       if (newWO.repairStart) newWO.repairStart = new Date(newWO.repairStart);

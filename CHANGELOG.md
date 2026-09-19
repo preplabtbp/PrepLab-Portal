@@ -2,6 +2,23 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.6] - 2026-09-19
+
+### 🏷️ Standarisasi Format No. WO & Pengurutan Tabel Berdasarkan No. WO
+
+- **Standarisasi Menyeluruh Nomor Work Order (`WO-YYMMDD-XXX`)**:
+  - Mengonversi seluruh 515 tiket Work Order di database produksi ke format baku tunggal: `WO-YYMMDD-XXX` (contoh: `WO-260607-001`, `WO-260717-313`).
+  - Menghilangkan awalan lama `FWO-` dan format digit panjang `WO-YYYYMMDD-XXXX` agar seragam dan rapi di seluruh sistem.
+  - Memperbarui generator nomor WO baru di backend (`server/routes/workOrders.ts`) agar selalu mencetak format `WO-YYMMDD-XXX`.
+  - Memperbarui referensi pesan notifikasi terkait ID lama agar tautan dan pelacakan notifikasi tetap akurat.
+- **Pengurutan Otomatis dan Interaktif Berdasarkan No. WO (`src/components/wo-maintenance-dashboard.tsx` & `server/routes/workOrders.ts`)**:
+  - Tabel *Rincian Seluruh Work Order* pada Dashboard Maintenance kini secara baku diurutkan berdasarkan `No. WO`.
+  - Menambahkan tombol pengubah urutan (*sort toggle*) di sebelah kolom pencarian (`No. WO: A → Z` / `Z → A`).
+  - Menjadikan judul kolom header **No. WO** dapat diklik langsung dengan indikator visual panah (`ArrowUp` / `ArrowDown`) untuk membalik urutan (Ascending / Descending) kapan saja.
+  - Endpoint `/api/work-orders/maintenance-summary` dan `/api/work-orders` kini mengembalikan data yang tersusun rapi berdasarkan nomor WO (`orderBy(asc(workOrders.woId))`).
+- **Restorasi Downtime Tiket Closed Historis**:
+  - Memastikan 94 tiket yang sudah berstatus Closed sebelum periode pemutihan tetap mempertahankan data downtime aslinya, sementara 259 tiket open yang diputihkan tetap berdurasi 0 jam.
+
 ## [2.9.5] - 2026-09-19
 
 ### 🧹 Pemutihan Laporan Work Order & Penol-an Downtime Periode Juni - Juli 2026
