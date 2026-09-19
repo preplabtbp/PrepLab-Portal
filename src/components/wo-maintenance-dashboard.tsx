@@ -4,7 +4,7 @@ import {
   Search, RefreshCw, CheckCircle2, AlertTriangle, ArrowUpRight, 
   ChevronLeft, ChevronRight, Eye, Layers, Sparkles, SlidersHorizontal, 
   Calendar, FileSpreadsheet, X, ShieldAlert, Check, Cpu, Hammer, BarChart2,
-  ArrowUpDown, ArrowUp, ArrowDown
+  ArrowUpDown, ArrowUp, ArrowDown, EyeOff
 } from 'lucide-react';
 import { Card, Button, Input, Select } from './ui';
 import { Bar, Doughnut } from 'react-chartjs-2';
@@ -73,6 +73,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   const [tableCurrentPage, setTableCurrentPage] = useState<number>(1);
   const [tableSearchQuery, setTableSearchQuery] = useState<string>('');
   const [tableSortOrder, setTableSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [hidePemutihan, setHidePemutihan] = useState<boolean>(true);
   const ITEMS_PER_PAGE = 20;
 
   const isoWeeksList = useMemo(() => getYearISOWeeksList(new Date().getFullYear()), []);
@@ -80,7 +81,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   // Reset pagination to page 1 whenever any filter or search changes
   useEffect(() => {
     setTableCurrentPage(1);
-  }, [selectedCategory, selectedEquipmentCode, filterPeriod, customStartDate, customEndDate, searchQuery, tableSearchQuery, tableSortOrder]);
+  }, [selectedCategory, selectedEquipmentCode, filterPeriod, customStartDate, customEndDate, searchQuery, tableSearchQuery, tableSortOrder, hidePemutihan]);
 
   // Helper to filter out testing/dummy work orders
   const isDummyOrTestWO = (wo: any): boolean => {
@@ -115,8 +116,34 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
     return false;
   };
 
+  // Helper to identify June-July zero-downtime pemutihan work orders
+  const isPemutihanZeroDt = (wo: any): boolean => {
+    if (!wo || !wo.date) return false;
+    const d = new Date(wo.date);
+    if (isNaN(d.getTime())) return false;
+    const isJuneJuly = d.getFullYear() === 2026 && [5, 6].includes(d.getMonth());
+    if (!isJuneJuly) return false;
+
+    const rawDt = wo.downtimeDuration != null ? String(wo.downtimeDuration).trim() : (wo.downtime_duration != null ? String(wo.downtime_duration).trim() : '');
+    let dt = 0;
+    if (rawDt && rawDt !== '0' && rawDt !== '0 Jam 0 Menit') {
+      const parsed = parseFloat(rawDt.replace(',', '.'));
+      if (!isNaN(parsed) && parsed > 0) dt = parsed;
+    } else if (wo.repairStart && wo.repairEnd && !rawDt) {
+      const diff = new Date(wo.repairEnd).getTime() - new Date(wo.repairStart).getTime();
+      if (diff > 0) dt = diff / (1000 * 60 * 60);
+    }
+    return dt <= 0;
+  };
+
   // Helper to compute maintenance summary from all raw work orders (Unified TBP & GPS)
-  const computeClientSummary = (allWOs: any[], period: string, startCustom?: string, endCustom?: string) => {
+  const computeClientSummary = (
+    allWOs: any[], 
+    period: string, 
+    startCustom?: string, 
+    endCustom?: string, 
+    shouldHidePemutihan: boolean = true
+  ) => {
     const normalizeCategory = (cat: string | null | undefined): 'Instrument (L)' | 'Non-Instrument (PL)' => {
       if (!cat) return 'Non-Instrument (PL)';
       const c = cat.toLowerCase();
@@ -138,8 +165,11 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       return isNaN(num) ? 0 : num;
     };
 
-    // Filter out dummy/testing entries
+    // Filter out dummy/testing entries and optional June-July zero-downtime pemutihan
     let filtered = allWOs.filter(wo => !isDummyOrTestWO(wo));
+    if (shouldHidePemutihan) {
+      filtered = filtered.filter(wo => !isPemutihanZeroDt(wo));
+    }
     
     // Filter by period
     if (period === 'this_iso_week' || period === 'this_week') {
@@ -326,13 +356,13 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       setLoading(true);
       // 1. Try pre-calculated maintenance summary
       try {
-        const summaryRes = await fetch('/api/work-orders/maintenance-summary', {
+        const summaryRes = await fetch(`/api/work-orders/maintenance-summary?hidePemutihan=${hidePemutihan}`, {
           headers: { 'Accept': 'application/json' }
         });
         if (summaryRes.ok) {
           const summaryData = await summaryRes.json();
           if (summaryData && Array.isArray(summaryData.rawWorkOrders) && summaryData.rawWorkOrders.length > 0) {
-            const clientRes = computeClientSummary(summaryData.rawWorkOrders, filterPeriod, customStartDate, customEndDate);
+            const clientRes = computeClientSummary(summaryData.rawWorkOrders, filterPeriod, customStartDate, customEndDate, hidePemutihan);
             setData(clientRes);
             return;
           }
@@ -349,7 +379,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       if (resRaw.ok && contentType.includes('application/json')) {
         const rawJson = await resRaw.json();
         const allWOs = Array.isArray(rawJson) ? rawJson : [];
-        const summaryResult = computeClientSummary(allWOs, filterPeriod, customStartDate, customEndDate);
+        const summaryResult = computeClientSummary(allWOs, filterPeriod, customStartDate, customEndDate, hidePemutihan);
         setData(summaryResult);
       } else {
         throw new Error('Gagal memuat data work orders dari server');
@@ -364,7 +394,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
   useEffect(() => {
     fetchMaintenanceData();
-  }, [filterPeriod, customStartDate, customEndDate]);
+  }, [filterPeriod, customStartDate, customEndDate, hidePemutihan]);
 
   // List of all raw WOs from backend
   const rawWorkOrders = useMemo(() => data.rawWorkOrders || [], [data.rawWorkOrders]);
@@ -380,11 +410,14 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
     });
   }, [data.equipmentList, selectedCategory]);
 
-  // Filtered WOs based on Category, Equipment Selection, and Search Query
+  // Filtered WOs based on Category, Equipment Selection, Search Query, and Hide Pemutihan
   const filteredWorkOrders = useMemo(() => {
     return rawWorkOrders.filter(wo => {
       // Exclude dummy / test work orders
       if (isDummyOrTestWO(wo)) return false;
+
+      // Exclude June-July zero-downtime pemutihan work orders if hidePemutihan is active
+      if (hidePemutihan && isPemutihanZeroDt(wo)) return false;
 
       const norm = normalizeEquipment(
         wo.equipmentName ?? wo.equipment_name,
@@ -429,7 +462,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
       return true;
     });
-  }, [rawWorkOrders, selectedCategory, selectedEquipmentCode, searchQuery]);
+  }, [rawWorkOrders, selectedCategory, selectedEquipmentCode, searchQuery, hidePemutihan]);
 
   // Dynamically computed KPI metrics for the filtered view
   const computedMetrics = useMemo(() => {
@@ -909,6 +942,30 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
             </div>
           </div>
         )}
+
+        {/* Toggle Hide Pemutihan (Juni - Juli 0 Downtime) */}
+        <div 
+          className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t text-xs"
+          style={{ borderColor: 'var(--border-main, #E2E8F0)' }}
+        >
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={hidePemutihan}
+              onChange={e => setHidePemutihan(e.target.checked)}
+              className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300 cursor-pointer"
+            />
+            <span className="font-semibold" style={{ color: 'var(--text-main, #0f172a)' }}>
+              Sembunyikan WO Pemutihan Juni - Juli (Tanpa Downtime)
+            </span>
+          </label>
+          <span 
+            className="text-[10px] font-medium"
+            style={{ color: 'var(--text-muted, #64748B)' }}
+          >
+            {hidePemutihan ? '315 WO pemutihan tanpa downtime disembunyikan agar tidak mengganggu' : 'Menampilkan seluruh WO termasuk 315 pemutihan'}
+          </span>
+        </div>
       </Card>
 
       {/* ACTIVE EQUIPMENT FILTER BANNER (If specific tool is chosen) */}
@@ -1335,7 +1392,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
             >
               <div>
                 <h3 
-                  className="font-bold text-xs sm:text-sm flex items-center gap-1.5"
+                  className="font-bold text-xs sm:text-sm flex items-center gap-1.5 flex-wrap"
                   style={{ color: 'var(--text-main, #0f172a)' }}
                 >
                   <Layers className="w-4 h-4 text-teal-600" />
@@ -1343,6 +1400,11 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-900 border border-teal-300">
                     {tableFilteredWorkOrders.length} Kasus
                   </span>
+                  {hidePemutihan && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                      Pemutihan 0 DT disembunyikan
+                    </span>
+                  )}
                 </h3>
                 <p 
                   className="text-[11px] font-medium mt-0.5"
@@ -1380,6 +1442,22 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                     </button>
                   )}
                 </div>
+
+                {/* Hide/Show Pemutihan (0 Downtime Juni-Juli) Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setHidePemutihan(prev => !prev)}
+                  className={`h-8 px-2.5 text-xs font-semibold rounded-lg border flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    hidePemutihan 
+                      ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100' 
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                  }`}
+                  title={hidePemutihan ? "Klik untuk menampilkan 315 WO pemutihan Juni-Juli (0 downtime)" : "Klik untuk menyembunyikan 315 WO pemutihan Juni-Juli (0 downtime)"}
+                >
+                  <EyeOff className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="hidden sm:inline">Pemutihan:</span>
+                  <span className="font-bold">{hidePemutihan ? 'Disembunyikan' : 'Ditampilkan'}</span>
+                </button>
 
                 {/* Sort Toggle Button */}
                 <button

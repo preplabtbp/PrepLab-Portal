@@ -67,6 +67,31 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
 
     allWOs = allWOs.filter(wo => !isDummyOrTestWO(wo));
 
+    // Helper to filter out June-July zero-downtime pemutihan work orders
+    const isPemutihanZeroDt = (wo: any): boolean => {
+      if (!wo || !wo.date) return false;
+      const d = new Date(wo.date);
+      if (isNaN(d.getTime())) return false;
+      const isJuneJuly = d.getFullYear() === 2026 && [5, 6].includes(d.getMonth());
+      if (!isJuneJuly) return false;
+
+      const rawDt = wo.downtimeDuration != null ? String(wo.downtimeDuration).trim() : (wo.downtime_duration != null ? String(wo.downtime_duration).trim() : '');
+      let dt = 0;
+      if (rawDt && rawDt !== '0' && rawDt !== '0 Jam 0 Menit') {
+        const parsed = parseFloat(rawDt.replace(',', '.'));
+        if (!isNaN(parsed) && parsed > 0) dt = parsed;
+      } else if (wo.repairStart && wo.repairEnd && !rawDt) {
+        const diff = new Date(wo.repairEnd).getTime() - new Date(wo.repairStart).getTime();
+        if (diff > 0) dt = diff / (1000 * 60 * 60);
+      }
+      return dt <= 0;
+    };
+
+    const hidePemutihan = req.query.hidePemutihan !== 'false';
+    if (hidePemutihan) {
+      allWOs = allWOs.filter(wo => !isPemutihanZeroDt(wo));
+    }
+
     // Apply date filters if present
     if (startDate) {
       const sDate = new Date(startDate as string);

@@ -2,6 +2,20 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.7] - 2026-09-19
+
+### 👁️ Penyembunyian Work Order Pemutihan Tanpa Downtime Periode Juni - Juli 2026
+
+- **Otomatisasi Penyembunyian WO Pemutihan (`server/routes/workOrders.ts` & `src/components/wo-maintenance-dashboard.tsx`)**:
+  - Menyembunyikan secara baku (*default: hidden*) 315 tiket Work Order dari periode awal (Juni - Juli 2026) yang tidak memiliki jam henti/downtime (`0 Jam 0 Menit`) agar tidak mengganggu maupun mengaburkan data operasional aktual.
+  - Metrik akumulasi Dashboard Maintenance (total kasus perbaikan dan kalkulasi MTTR) kini menjadi jauh lebih akurat dan merefleksikan perbaikan riil, tanpa terdistorsi oleh ratusan tiket uji coba/pemutihan.
+- **Kontrol Toggle Interaktif di Dashboard & Tabel**:
+  - Menambahkan tombol cepat pada toolbar tabel *Rincian Seluruh Work Order*: `Pemutihan: Disembunyikan / Ditampilkan` lengkap dengan ikon `EyeOff`.
+  - Menambahkan opsi *checkbox* pada kartu filter utama: `Sembunyikan WO Pemutihan Juni - Juli (Tanpa Downtime)`.
+  - Menampilkan lencana informasi (*badge*) pada judul tabel ketika filter pemutihan aktif: `"Pemutihan 0 DT disembunyikan"`.
+- **Dukungan API Parameter (`?hidePemutihan=true|false`)**:
+  - Endpoint `/api/work-orders/maintenance-summary` kini mendukung parameter `hidePemutihan` (default `true`) untuk memastikan data ringkasan dan raw work order terfilter secara sinkron sejak dari layer server.
+
 ## [2.9.6] - 2026-09-19
 
 ### 🏷️ Standarisasi Format No. WO & Pengurutan Tabel Berdasarkan No. WO
