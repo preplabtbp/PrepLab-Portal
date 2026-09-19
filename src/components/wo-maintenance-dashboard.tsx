@@ -1629,13 +1629,13 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                       </div>
                     </th>
                     <th className="py-3 px-3.5 whitespace-nowrap">Tanggal & Shift</th>
-                    <th className="py-3 px-3.5 whitespace-nowrap">Nama Alat & Kode</th>
+                    <th className="py-3 px-3.5 min-w-[110px] max-w-[150px]">Nama Alat & Kode</th>
                     <th className="py-3 px-3.5 whitespace-nowrap">Kategori</th>
-                    <th className="py-3 px-3.5">Deskripsi Kerusakan</th>
-                    <th className="py-3 px-3.5">Tindakan Perbaikan</th>
+                    <th className="py-3 px-3.5 min-w-[120px] max-w-[180px]">Deskripsi Kerusakan</th>
+                    <th className="py-3 px-3.5 min-w-[120px] max-w-[180px]">Tindakan Perbaikan</th>
                     <th className="py-3 px-3.5 text-center whitespace-nowrap">Downtime</th>
                     <th className="py-3 px-3.5 whitespace-nowrap">Sparepart</th>
-                    <th className="py-3 px-3.5 whitespace-nowrap">Teknisi</th>
+                    <th className="py-3 px-3.5 min-w-[100px] max-w-[140px]">Teknisi</th>
                     <th className="py-3 px-3.5 text-center whitespace-nowrap">Status</th>
                     <th className="py-3 px-3.5 text-center whitespace-nowrap">Aksi</th>
                   </tr>
@@ -1694,9 +1694,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                             </span>
                           </td>
 
-                          <td className="py-3 px-3.5">
+                          <td className="py-3 px-3.5 min-w-[110px] max-w-[150px]">
                             <div 
-                              className="font-bold line-clamp-1" 
+                              className="font-bold line-clamp-1 text-xs" 
                               title={wo.equipmentName}
                               style={{ color: 'var(--text-main, #0f172a)' }}
                             >
@@ -1720,7 +1720,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                             </span>
                           </td>
 
-                          <td className="py-3 px-3.5 min-w-[140px] max-w-[200px]">
+                          <td className="py-3 px-3.5 min-w-[120px] max-w-[180px]">
                             <p 
                               className="line-clamp-2 text-[11px] font-medium" 
                               title={wo.issueDescription}
@@ -1730,7 +1730,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                             </p>
                           </td>
 
-                          <td className="py-3 px-3.5 min-w-[140px] max-w-[200px]">
+                          <td className="py-3 px-3.5 min-w-[120px] max-w-[180px]">
                             <p 
                               className="line-clamp-2 text-[11px] font-medium" 
                               title={wo.actionTaken}
@@ -1761,10 +1761,12 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                           </td>
 
                           <td 
-                            className="py-3 px-3.5 whitespace-nowrap font-bold text-[11px]"
+                            className="py-3 px-3.5 min-w-[100px] max-w-[140px] font-bold text-[11px]"
                             style={{ color: 'var(--text-main, #0f172a)' }}
                           >
-                            {wo.technicianPic || '-'}
+                            <span className="line-clamp-2" title={wo.technicianPic}>
+                              {wo.technicianPic || '-'}
+                            </span>
                           </td>
 
                           <td className="py-3 px-3.5 text-center whitespace-nowrap">
