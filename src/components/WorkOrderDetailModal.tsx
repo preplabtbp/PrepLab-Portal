@@ -10,6 +10,7 @@ import {
 import { toast } from 'sonner';
 import { updateWOStatus, getSpareparts } from '../sheets-api';
 import { WhatsAppModal } from './whatsapp-modal';
+import { formatDowntimeDuration } from '../lib/downtimeHelper';
 
 interface WorkOrderDetailModalProps {
   woId: string | null;
@@ -177,7 +178,9 @@ export function WorkOrderDetailModal({
         technicianPic: teknisiString,
         sparepartName: sparepartNameString,
         sparepartQty: sparepartQtyString,
-        repairEnd: new Date().toISOString(),
+        repairEnd: updated?.repairEnd || new Date().toISOString(),
+        repairStart: updated?.repairStart || prev?.repairStart || prev?.date,
+        downtimeDuration: updated?.downtimeDuration || formatDowntimeDuration(prev?.repairStart || prev?.date, new Date()),
         closingPhoto: updated?.closingPhoto || resolutionPhoto
       }));
 
@@ -469,6 +472,14 @@ export function WorkOrderDetailModal({
                         <span className="opacity-70" style={{ color: 'var(--text-muted)' }}>Teknisi PIC:</span>{' '}
                         <strong className="font-bold">{wo.technicianPic || '-'}</strong>
                       </div>
+                      {(wo.downtimeDuration || (wo.repairEnd && (wo.repairStart || wo.date))) && (
+                        <div>
+                          <span className="opacity-70" style={{ color: 'var(--text-muted)' }}>Total Downtime:</span>{' '}
+                          <strong className="font-bold text-rose-600 dark:text-rose-400">
+                            {wo.downtimeDuration || formatDowntimeDuration(wo.repairStart || wo.date, wo.repairEnd)}
+                          </strong>
+                        </div>
+                      )}
                       {wo.sparepartName && wo.sparepartName !== '-' && (
                         <div>
                           <span className="opacity-70" style={{ color: 'var(--text-muted)' }}>Sparepart:</span>{' '}

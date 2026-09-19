@@ -31,6 +31,7 @@ import {
   formatISOWeekLabel 
 } from '../utils/iso-week';
 import { normalizeEquipment } from '../lib/equipmentNormalizer';
+import { parseDowntimeHours, formatDowntimeDuration } from '../lib/downtimeHelper';
 
 ChartJS.register(
   CategoryScale,
@@ -124,15 +125,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
     const isJuneJuly = d.getFullYear() === 2026 && [5, 6].includes(d.getMonth());
     if (!isJuneJuly) return false;
 
-    const rawDt = wo.downtimeDuration != null ? String(wo.downtimeDuration).trim() : (wo.downtime_duration != null ? String(wo.downtime_duration).trim() : '');
-    let dt = 0;
-    if (rawDt && rawDt !== '0' && rawDt !== '0 Jam 0 Menit') {
-      const parsed = parseFloat(rawDt.replace(',', '.'));
-      if (!isNaN(parsed) && parsed > 0) dt = parsed;
-    } else if (wo.repairStart && wo.repairEnd && !rawDt) {
-      const diff = new Date(wo.repairEnd).getTime() - new Date(wo.repairStart).getTime();
-      if (diff > 0) dt = diff / (1000 * 60 * 60);
-    }
+    const dt = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
     return dt <= 0;
   };
 
@@ -224,7 +217,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       if (norm.isTest) continue;
 
       const cat = norm.category === 'Instrument (L)' ? 'Instrument (L)' : 'Non-Instrument (PL)';
-      const dt = parseDowntime(wo.downtimeDuration ?? wo.downtime_duration);
+      const dt = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
       const qty = parseQty(wo.sparepartQty ?? wo.sparepart_qty);
       const status = wo.status || 'Closed';
       const isClosed = status === 'Closed' || status === 'Resolved';
@@ -337,8 +330,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
         equipmentName: w.equipmentName || w.equipment_name,
         category: normalizeCategory(w.category),
         issueDescription: w.issueDescription || w.issue_description,
-        actionTaken: w.actionTaken || w.action_taken,
-        downtimeDuration: parseDowntime(w.downtimeDuration ?? w.downtime_duration),
+        downtimeDuration: (w.downtimeDuration ?? w.downtime_duration) || (w.repairEnd && (w.repairStart || w.date) ? formatDowntimeDuration(w.repairStart || w.date, w.repairEnd) : ''),
+        repairStart: w.repairStart || w.repair_start,
+        repairEnd: w.repairEnd || w.repair_end,
         sparepartName: w.sparepartName || w.sparepart_name,
         sparepartQty: parseQty(w.sparepartQty ?? w.sparepart_qty),
         technicianPic: w.technicianPic || w.technician_pic,
@@ -476,16 +470,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
     const sparepartsAgg: Record<string, { qty: number; count: number; tools: Set<string> }> = {};
 
     filteredWorkOrders.forEach(wo => {
-      let dt = 0;
-      const rawDt = wo.downtimeDuration != null ? String(wo.downtimeDuration).trim() : '';
-      if (rawDt) {
-        const parsed = parseFloat(rawDt.replace(',', '.'));
-        if (!isNaN(parsed) && parsed > 0) dt = parsed;
-      } else if (wo.repairStart && wo.repairEnd) {
-        const diffMs = new Date(wo.repairEnd).getTime() - new Date(wo.repairStart).getTime();
-        if (diffMs > 0) dt = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;
-      }
-
+      const dt = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
       totalDowntime += dt;
 
       const st = (wo.status || 'Open').toLowerCase();
@@ -603,7 +588,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
     let nonInstrumentDowntime = 0;
 
     filteredWorkOrders.forEach(wo => {
-      let dt = parseFloat(String(wo.downtimeDuration || '0').replace(',', '.')) || 0;
+      const dt = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
       const norm = normalizeEquipment(wo.equipmentName, wo.equipmentCode, wo.category);
       if (norm.isTest) return;
 
@@ -661,8 +646,8 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
           'Kategori': norm.category,
           'Lokasi Area': wo.location || '-',
           'Deskripsi Kerusakan': wo.issueDescription || '-',
-          'Tindakan Perbaikan': wo.actionTaken || '-',
-          'Downtime (Jam)': wo.downtimeDuration || '0',
+          'Downtime (Jam)': parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date),
+          'Durasi Downtime': (wo.downtimeDuration ?? wo.downtime_duration) || (wo.repairEnd && (wo.repairStart || wo.date) ? formatDowntimeDuration(wo.repairStart || wo.date, wo.repairEnd) : '-'),
           'Sparepart Diganti': wo.sparepartName || '-',
           'Qty Sparepart': wo.sparepartQty || '-',
           'Teknisi PIC': wo.technicianPic || '-',
@@ -1504,7 +1489,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
               ) : (
                 paginatedWorkOrders.map(wo => {
                   const isInstrument = (wo.category || '').toLowerCase().includes('instrument') && !(wo.category || '').toLowerCase().includes('non');
-                  const dtVal = parseFloat(String(wo.downtimeDuration || '0').replace(',', '.')) || 0;
+                  const dtVal = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
                   const st = (wo.status || 'Open').toLowerCase();
 
                   return (
@@ -1673,7 +1658,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                   ) : (
                     paginatedWorkOrders.map(wo => {
                       const isInstrument = (wo.category || '').toLowerCase().includes('instrument') && !(wo.category || '').toLowerCase().includes('non');
-                      const dtVal = parseFloat(String(wo.downtimeDuration || '0').replace(',', '.')) || 0;
+                      const dtVal = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
                       const st = (wo.status || 'Open').toLowerCase();
                       
                       return (
@@ -1755,7 +1740,10 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
                           <td className="py-2.5 px-1 text-center overflow-hidden">
                             {dtVal > 0 ? (
-                              <span className="font-black text-rose-900 font-mono bg-rose-100 px-1.5 py-0.5 rounded border border-rose-300 text-[10px] inline-block whitespace-nowrap">
+                              <span 
+                                className="font-black text-rose-900 font-mono bg-rose-100 px-1.5 py-0.5 rounded border border-rose-300 text-[10px] inline-block whitespace-nowrap"
+                                title={wo.downtimeDuration ? String(wo.downtimeDuration) : `${dtVal} Jam`}
+                              >
                                 {dtVal} Jam
                               </span>
                             ) : (
@@ -1932,7 +1920,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
               <div className="space-y-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Durasi Downtime</span>
-                <p className="font-black text-rose-600 text-sm">{selectedWO.downtimeDuration || '0'} Jam</p>
+                <p className="font-black text-rose-600 text-sm">
+                  {selectedWO.downtimeDuration || (parseDowntimeHours(selectedWO.downtimeDuration, selectedWO.repairStart, selectedWO.repairEnd, selectedWO.date) > 0 ? `${parseDowntimeHours(selectedWO.downtimeDuration, selectedWO.repairStart, selectedWO.repairEnd, selectedWO.date)} Jam` : '-')}
+                </p>
                 <p className="text-slate-500">
                   {selectedWO.repairStart ? new Date(selectedWO.repairStart).toLocaleString('id-ID') : '-'} s/d {selectedWO.repairEnd ? new Date(selectedWO.repairEnd).toLocaleString('id-ID') : '-'}
                 </p>

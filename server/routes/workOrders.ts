@@ -17,6 +17,7 @@ import webpush from 'web-push';
 import path from "path";
 import { workOrderSchema, ticketSchema } from "../../src/lib/zod.js";
 import { normalizeEquipment } from "../../src/lib/equipmentNormalizer.js";
+import { parseDowntimeHours, formatDowntimeDuration } from "../../src/lib/downtimeHelper.js";
 
 export const router = Router();
 
@@ -75,15 +76,7 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
       const isJuneJuly = d.getFullYear() === 2026 && [5, 6].includes(d.getMonth());
       if (!isJuneJuly) return false;
 
-      const rawDt = wo.downtimeDuration != null ? String(wo.downtimeDuration).trim() : (wo.downtime_duration != null ? String(wo.downtime_duration).trim() : '');
-      let dt = 0;
-      if (rawDt && rawDt !== '0' && rawDt !== '0 Jam 0 Menit') {
-        const parsed = parseFloat(rawDt.replace(',', '.'));
-        if (!isNaN(parsed) && parsed > 0) dt = parsed;
-      } else if (wo.repairStart && wo.repairEnd && !rawDt) {
-        const diff = new Date(wo.repairEnd).getTime() - new Date(wo.repairStart).getTime();
-        if (diff > 0) dt = diff / (1000 * 60 * 60);
-      }
+      const dt = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
       return dt <= 0;
     };
 
@@ -154,20 +147,7 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
       const eqKey = norm.isInstrument ? `${eqCode}___${eqName}` : `NON_INSTR___${eqName}`;
 
       // Calculate downtime
-      let dtHours = 0;
-      const rawDt = wo.downtimeDuration != null ? String(wo.downtimeDuration).trim() : '';
-      if (rawDt) {
-        const parsed = parseFloat(rawDt.replace(',', '.'));
-        if (!isNaN(parsed) && parsed > 0) {
-          dtHours = parsed;
-        }
-      } else if (wo.repairStart && wo.repairEnd) {
-        // Only fallback to repair date calculation if downtimeDuration was not specified
-        const diffMs = new Date(wo.repairEnd).getTime() - new Date(wo.repairStart).getTime();
-        if (diffMs > 0) {
-          dtHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;
-        }
-      }
+      const dtHours = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
 
       totalDowntimeHours += dtHours;
       if (dtHours > 0) {
@@ -499,6 +479,26 @@ router.put("/api/work-orders/:woId", async (req, res) => {
       if (updateData.date) updateData.date = new Date(updateData.date);
       if (updateData.repairStart) updateData.repairStart = new Date(updateData.repairStart);
       if (updateData.repairEnd) updateData.repairEnd = new Date(updateData.repairEnd);
+
+      // Auto-compute repairStart, repairEnd, and downtimeDuration when status is Closed
+      if (updateData.status === 'Closed') {
+        const existingRows = await db.select().from(workOrders).where(eq(workOrders.woId, woId)).limit(1);
+        if (existingRows.length === 0) {
+          return res.status(404).json({ error: "Work order not found" });
+        }
+        const existingWO = existingRows[0];
+
+        if (!updateData.repairEnd) {
+          updateData.repairEnd = new Date();
+        }
+        if (!updateData.repairStart) {
+          updateData.repairStart = existingWO.repairStart || existingWO.date || new Date();
+        }
+
+        if (!updateData.downtimeDuration || updateData.downtimeDuration === '0' || updateData.downtimeDuration === '-') {
+          updateData.downtimeDuration = formatDowntimeDuration(updateData.repairStart, updateData.repairEnd);
+        }
+      }
       
       const result = await db.update(workOrders)
         .set(updateData)
@@ -515,15 +515,7 @@ router.put("/api/work-orders/:woId", async (req, res) => {
          const dateOpts: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Jayapura', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
          const endStr = wo.repairEnd ? new Date(wo.repairEnd).toLocaleString('id-ID', dateOpts) + ' WIT' : '-';
          
-         let downtimeText = '-';
-         // Calculate downtime from WO creation date (wo.date) to repairEnd
-         if (wo.date && wo.repairEnd) {
-             const diffMs = new Date(wo.repairEnd).getTime() - new Date(wo.date).getTime();
-             const diffHrs = Math.floor(diffMs / 3600000);
-             const diffMins = Math.floor((diffMs % 3600000) / 60000);
-             downtimeText = `${diffHrs} jam ${diffMins} menit`;
-         }
-         
+         const downtimeText = wo.downtimeDuration || formatDowntimeDuration(wo.repairStart || wo.date, wo.repairEnd);
          const sparepartStr = wo.sparepartName ? `${wo.sparepartName} (Qty: ${wo.sparepartQty || 1})` : '-';
          
          waMessageText = `==== WORK ORDER SELESAI [${wo.woId}] ====\n` +

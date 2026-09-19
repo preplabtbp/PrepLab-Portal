@@ -1,6 +1,28 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.10] - 2026-09-19
+
+### ⏱️ Perbaikan Otomatisasi & Pemulihan Downtime Work Order Closed
+
+- **Pemulihan & Kalkulasi Akurat Seluruh WO Closed Agustus - September 2026 (`scripts/fix-closed-wo-downtime.cjs`)**:
+  - Mengidentifikasi dan memulihkan 80 kasus Work Order berstatus `Closed` pada periode Agustus - September 2026 yang sebelumnya kehilangan nilai downtime (tampil `-` / 0 jam).
+  - Melakukan komputasi ulang durasi downtime berdasarkan selisih waktu aktual pelaporan/mulai perbaikan (`date` / `repair_start`) hingga selesai perbaikan (`repair_end`) ke dalam format standar `X Jam Y Menit` (misal: `WO-260913-420` menjadi `2 Jam 44 Menit [2.7 Jam]`, `WO-260915-282` menjadi `1 Jam 42 Menit [1.7 Jam]`, `WO-260916-668` menjadi `6 Jam 19 Menit [6.3 Jam]`, dan `WO-260916-971` menjadi `0 Jam 7 Menit [0.1 Jam]`).
+  - Rekor pemutihan 259 tiket periode Juni - Juli tetap terjaga tanpa terpengaruh.
+- **Otomatisasi Penyimpanan Downtime di Backend (`server/routes/workOrders.ts`)**:
+  - Memperbaiki endpoint `PUT /api/work-orders/:woId` agar saat status WO diubah menjadi `Closed`:
+    - Otomatis menetapkan `repairEnd` (jika belum ada).
+    - Otomatis mengisi `repairStart` dari waktu lapor WO (`date`) jika teknisi langsung menyelesaikan dari status `Open`.
+    - Otomatis menghitung dan menyimpan `downtimeDuration` secara permanen ke database PostgreSQL `work_orders` sebelum eksekusi selesai.
+- **Parser Downtime Terpadu & Presisi Tinggi (`src/lib/downtimeHelper.ts`)**:
+  - Mengembangkan fungsi pembantu `parseDowntimeHours` yang mampu mem-parsing format durasi bahasa Indonesia (`"X Jam Y Menit"`) maupun desimal secara presisi.
+  - Memperbaiki bug kritis di mana fungsi bawaan `parseFloat("0 Jam 35 Menit")` sebelumnya menghasilkan angka `0` (sehingga seluruh perbaikan di bawah 1 jam dianggap 0 downtime dan tampil strip `-`).
+  - Menyediakan fallback cerdas: jika durasi string kosong, sistem otomatis menghitung selisih waktu `repairEnd - (repairStart || date)`.
+- **Pembaruan Visualisasi Dashboard & Detail Modal (`src/components/wo-maintenance-dashboard.tsx` & `WorkOrderDetailModal.tsx`)**:
+  - Grafik *Downtime per Alat*, diagram lingkaran *Proporsi Downtime Kategori*, dan lencana tabel kini menampilkan jam henti aktual yang akurat.
+  - Lencana tabel downtime dilengkapi tooltip teks detail durasi (`title="2 Jam 44 Menit"`).
+  - Modal penyelesaian WO kini menampilkan rincian total downtime secara eksplisit.
+
 ## [2.9.9] - 2026-09-19
 
 ### 🤖 Smart Suggest Kategori Mesin/Aset, Validasi Ketat & Input Detail Alat
