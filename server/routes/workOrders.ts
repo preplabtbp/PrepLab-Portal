@@ -130,14 +130,14 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
 
       // Calculate downtime
       let dtHours = 0;
-      if (wo.downtimeDuration) {
-        const parsed = parseFloat(String(wo.downtimeDuration).replace(',', '.'));
+      const rawDt = wo.downtimeDuration != null ? String(wo.downtimeDuration).trim() : '';
+      if (rawDt) {
+        const parsed = parseFloat(rawDt.replace(',', '.'));
         if (!isNaN(parsed) && parsed > 0) {
           dtHours = parsed;
         }
-      }
-      // If downtimeDuration is 0 or empty, try calculating from repairStart and repairEnd
-      if (dtHours === 0 && wo.repairStart && wo.repairEnd) {
+      } else if (wo.repairStart && wo.repairEnd) {
+        // Only fallback to repair date calculation if downtimeDuration was not specified
         const diffMs = new Date(wo.repairEnd).getTime() - new Date(wo.repairStart).getTime();
         if (diffMs > 0) {
           dtHours = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;

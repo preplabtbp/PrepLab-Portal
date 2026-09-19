@@ -2,6 +2,19 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.5] - 2026-09-19
+
+### 🧹 Pemutihan Laporan Work Order & Penol-an Downtime Periode Juni - Juli 2026
+
+- **Pemutihan 259 Work Order Open Menjadi Closed (`work_orders`)**:
+  - Mengubah seluruh 259 tiket Work Order berstatus `Open` pada periode awal implementasi (Juni 2026: 191 WO, Juli 2026: 68 WO) menjadi `Closed`.
+  - Mengisi keterangan tindakan perbaikan (*action_taken*) dengan `"Pemutihan laporan WO (Closed)"` untuk tiket yang belum memiliki catatan tindakan.
+  - Menetapkan durasi downtime menjadi `0 Jam 0 Menit` serta mengosongkan tanggal perbaikan kalkulatif sehingga tidak menambah jam henti pada metrik historis.
+- **Penol-an Downtime untuk 94 Work Order Closed Historis (Juni - Juli 2026)**:
+  - Mengatur ulang durasi downtime 94 tiket yang sudah berstatus `Closed` di bulan Juni dan Juli menjadi `0 Jam 0 Menit` sesuai arahan operasional agar periode transisi/uji coba tidak menggelembungkan akumulasi jam henti alat.
+- **Penyempurnaan Logika Fallback Downtime (`server/routes/workOrders.ts` & `src/components/wo-maintenance-dashboard.tsx`)**:
+  - Memperbaiki penanganan fallback kalkulasi durasi: kalkulasi selisih waktu (`repairEnd - repairStart`) kini **hanya** berjalan apabila kolom durasi downtime benar-benar kosong/null. Tiket dengan nilai eksplisit `0` atau `0 Jam 0 Menit` tetap diperlakukan mutlak sebagai 0 jam downtime.
+
 ## [2.9.4] - 2026-09-19
 
 ### 🔤 Pengurutan Alfabetis Dropdown Alat (Backend API & Client Summary Engine)

@@ -442,11 +442,11 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
     filteredWorkOrders.forEach(wo => {
       let dt = 0;
-      if (wo.downtimeDuration) {
-        const parsed = parseFloat(String(wo.downtimeDuration).replace(',', '.'));
+      const rawDt = wo.downtimeDuration != null ? String(wo.downtimeDuration).trim() : '';
+      if (rawDt) {
+        const parsed = parseFloat(rawDt.replace(',', '.'));
         if (!isNaN(parsed) && parsed > 0) dt = parsed;
-      }
-      if (dt === 0 && wo.repairStart && wo.repairEnd) {
+      } else if (wo.repairStart && wo.repairEnd) {
         const diffMs = new Date(wo.repairEnd).getTime() - new Date(wo.repairStart).getTime();
         if (diffMs > 0) dt = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;
       }
