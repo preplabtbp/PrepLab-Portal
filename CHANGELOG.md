@@ -1,6 +1,25 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.11] - 2026-09-19
+
+### ⏱️ Format Durasi Jam & Menit Eksplisit, Interaktivitas Filter Grafik Batang, & Presisi Proporsi Kategori
+
+- **Format Tampilan Downtime Eksplisit Jam & Menit (`src/lib/downtimeHelper.ts` & `src/components/wo-maintenance-dashboard.tsx`)**:
+  - Mengubah tampilan downtime pada tabel desktop dan kartu mobile dari format desimal (`2.7 Jam`) menjadi durasi eksplisit jam dan menit (`2 Jam 44 Menit`, `1 Jam 42 Menit`, `6 Jam 19 Menit`, `0 Jam 7 Menit`) sehingga teknisi dan manajemen dapat mengetahui jumlah menit secara pasti.
+  - Memperbarui fungsi `formatDowntimeDisplay`: memprioritaskan kalkulasi durasi aktual dari stempel waktu mulai dan selesai perbaikan (`repair_start` & `repair_end`), mempertahankan format string `X Jam Y Menit`, serta mengonversi nilai desimal menjadi jam dan menit yang presisi.
+  - Menyesuaikan proporsi kolom tabel (`colgroup`): memperlebar kolom Downtime dari `5%` menjadi `8%` sehingga teks durasi jam dan menit muat rapi dalam satu baris lencana tanpa terpotong.
+- **Filter Interaktif Satu-Klik pada Grafik Batang Downtime per Alat**:
+  - Mengaktifkan interaktivitas klik pada grafik batang *Downtime per Alat*: mengeklik batang alat (misal: *Gerobak Arco*) otomatis memfilter tabel rincian ke alat tersebut dan melakukan *smooth scroll* langsung ke tabel rincian.
+  - Batang yang terpilih diberi sorotan warna amber khusus (`#f59e0b` dengan garis tepi kontras) untuk visual feedback yang jelas.
+  - Menampilkan lencana filter aktif di judul tabel (`Alat: Gerobak Arco`) lengkap dengan tombol `[×]` untuk mereset filter. Mengeklik kembali batang yang sama juga membatalkan pilihan (*toggle filter*).
+  - Menambahkan kursor *pointer* dan teks bantuan tooltip: `👉 Klik batang untuk memfilter tabel rincian`.
+- **Perbaikan Proporsi Diagram Lingkaran Kategori & Pembulatan Maksimal 2 Desimal**:
+  - Mengoreksi sumber data *Proporsi Downtime Kategori* (`Doughnut Chart`) agar membaca ringkasan kategori keseluruhan periode aktif (`categorySummary`) sehingga proporsi perbandingan Instrument vs Non-Instrument tetap akurat (tidak lagi menciut menjadi 100% teal saat tab kategori Non-Instr aktif).
+  - Menghilangkan artefak desimal pecahan *floating-point* (seperti `208.29999999999995 Jam` dan `96.00000000000001 Jam`) dengan pembulatan bersih maksimal 2 desimal (`208.3 Jam` dan `96 Jam`).
+  - Menambahkan persentase proporsi pada tooltip diagram lingkaran (`X Jam (Y%)`).
+  - Mengubah kartu ringkasan kategori menjadi tombol interaktif untuk mempermudah beralih filter kategori.
+
 ## [2.9.10] - 2026-09-19
 
 ### ⏱️ Perbaikan Otomatisasi & Pemulihan Downtime Work Order Closed

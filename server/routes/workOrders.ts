@@ -243,19 +243,19 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
       status: "success",
       summary: {
         totalWorkOrders: allWOs.length,
-        totalDowntimeHours: Math.round(totalDowntimeHours * 10) / 10,
-        mttrHours: mttrOverall,
+        totalDowntimeHours: Math.round(totalDowntimeHours * 100) / 100,
+        mttrHours: Math.round(mttrOverall * 100) / 100,
         totalSparepartUnits: Math.round(totalSparepartUnits * 10) / 10,
         totalEquipmentsWithDowntime: equipmentList.length,
         topDowntimeEquipment: topDowntimeEquipment
       },
       categorySummary: {
         'Instrument (L)': {
-          totalDowntime: Math.round((categorySummary['Instrument (L)'].totalDowntime) * 10) / 10,
+          totalDowntime: Math.round((categorySummary['Instrument (L)'].totalDowntime) * 100) / 100,
           woCount: categorySummary['Instrument (L)'].woCount
         },
         'Non-Instrument (PL)': {
-          totalDowntime: Math.round((categorySummary['Non-Instrument (PL)'].totalDowntime) * 10) / 10,
+          totalDowntime: Math.round((categorySummary['Non-Instrument (PL)'].totalDowntime) * 100) / 100,
           woCount: categorySummary['Non-Instrument (PL)'].woCount
         }
       },

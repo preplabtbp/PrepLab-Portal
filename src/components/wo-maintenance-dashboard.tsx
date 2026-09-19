@@ -31,7 +31,7 @@ import {
   formatISOWeekLabel 
 } from '../utils/iso-week';
 import { normalizeEquipment } from '../lib/equipmentNormalizer';
-import { parseDowntimeHours, formatDowntimeDuration } from '../lib/downtimeHelper';
+import { parseDowntimeHours, formatDowntimeDuration, formatDowntimeDisplay } from '../lib/downtimeHelper';
 
 ChartJS.register(
   CategoryScale,
@@ -83,6 +83,12 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   useEffect(() => {
     setTableCurrentPage(1);
   }, [selectedCategory, selectedEquipmentCode, filterPeriod, customStartDate, customEndDate, searchQuery, tableSearchQuery, tableSortOrder, hidePemutihan]);
+
+  // Helper to format numbers to at most 2 decimal places cleanly
+  const formatNumber2Dec = (num: number | null | undefined): number => {
+    if (num === null || num === undefined || isNaN(num)) return 0;
+    return Math.round(Number(num) * 100) / 100;
+  };
 
   // Helper to filter out testing/dummy work orders
   const isDummyOrTestWO = (wo: any): boolean => {
@@ -305,13 +311,17 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
     })).sort((a, b) => b.totalQty - a.totalQty);
 
     const totalWOs = filtered.length;
-    const mttrHours = totalWOs > 0 ? Number((totalDowntimeHours / totalWOs).toFixed(1)) : 0;
+    const mttrHours = totalWOs > 0 ? Number((totalDowntimeHours / totalWOs).toFixed(2)) : 0;
+
+    // Ensure categorySummary downtime is rounded cleanly to at most 2 decimal places
+    categorySummary['Instrument (L)'].totalDowntime = Math.round(categorySummary['Instrument (L)'].totalDowntime * 100) / 100;
+    categorySummary['Non-Instrument (PL)'].totalDowntime = Math.round(categorySummary['Non-Instrument (PL)'].totalDowntime * 100) / 100;
 
     return {
       status: 'success',
       summary: {
         totalWorkOrders: totalWOs,
-        totalDowntimeHours: Number(totalDowntimeHours.toFixed(1)),
+        totalDowntimeHours: Number(totalDowntimeHours.toFixed(2)),
         mttrHours,
         totalSparepartUnits: Number(totalSparepartUnits.toFixed(0)),
         totalEquipmentsWithDowntime: equipmentList.length,
@@ -522,8 +532,8 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
     const sortedTools = Object.values(toolDowntimeMap).map(t => ({
       ...t,
-      downtime: Math.round(t.downtime * 10) / 10,
-      mttr: t.woCount > 0 ? Math.round((t.downtime / t.woCount) * 10) / 10 : 0
+      downtime: Math.round(t.downtime * 100) / 100,
+      mttr: t.woCount > 0 ? Math.round((t.downtime / t.woCount) * 100) / 100 : 0
     })).sort((a, b) => b.downtime - a.downtime);
 
     const sortedSpareparts = Object.entries(sparepartsAgg).map(([name, data]) => ({
@@ -534,11 +544,11 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
     })).sort((a, b) => b.qty - a.qty);
 
     const mttr = filteredWorkOrders.length > 0
-      ? Math.round((totalDowntime / filteredWorkOrders.length) * 10) / 10
+      ? Math.round((totalDowntime / filteredWorkOrders.length) * 100) / 100
       : 0;
 
     return {
-      totalDowntime: Math.round(totalDowntime * 10) / 10,
+      totalDowntime: Math.round(totalDowntime * 100) / 100,
       totalWOs: filteredWorkOrders.length,
       mttr,
       totalSparepartQty: Math.round(totalSparepartQty * 10) / 10,
@@ -562,58 +572,75 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
     ) || null;
   }, [selectedEquipmentCode, computedMetrics.sortedTools]);
 
+  // Top 10 Equipment by Downtime
+  const topTools = useMemo(() => {
+    return computedMetrics.sortedTools.slice(0, 10);
+  }, [computedMetrics.sortedTools]);
+
   // Chart Data 1: Top 10 Equipment by Downtime (Bar Chart)
   const equipmentBarChartData = useMemo(() => {
-    const topTools = computedMetrics.sortedTools.slice(0, 10);
     return {
       labels: topTools.map(t => t.name.length > 20 ? t.name.substring(0, 18) + '...' : t.name),
       datasets: [
         {
           label: 'Total Downtime (Jam)',
-          data: topTools.map(t => t.downtime),
-          backgroundColor: topTools.map(t => 
-            (t.category || '').toLowerCase().includes('instrument') && !(t.category || '').toLowerCase().includes('non')
+          data: topTools.map(t => formatNumber2Dec(t.downtime)),
+          backgroundColor: topTools.map(t => {
+            const isSelected = activeSelectedTool && (
+              activeSelectedTool.name === t.name || 
+              activeSelectedTool.code === t.code ||
+              selectedEquipmentCode === `${t.code}___${t.name}` ||
+              selectedEquipmentCode === `NON_INSTR___${t.name}` ||
+              selectedEquipmentCode === t.name
+            );
+            if (isSelected) return '#f59e0b';
+            return (t.category || '').toLowerCase().includes('instrument') && !(t.category || '').toLowerCase().includes('non')
               ? '#0284c7' 
-              : '#0d9488'
-          ),
+              : '#0d9488';
+          }),
+          borderColor: topTools.map(t => {
+            const isSelected = activeSelectedTool && (
+              activeSelectedTool.name === t.name || 
+              activeSelectedTool.code === t.code ||
+              selectedEquipmentCode === `${t.code}___${t.name}` ||
+              selectedEquipmentCode === `NON_INSTR___${t.name}` ||
+              selectedEquipmentCode === t.name
+            );
+            return isSelected ? '#b45309' : '#ffffff';
+          }),
+          borderWidth: topTools.map(t => {
+            const isSelected = activeSelectedTool && (
+              activeSelectedTool.name === t.name || 
+              activeSelectedTool.code === t.code ||
+              selectedEquipmentCode === `${t.code}___${t.name}` ||
+              selectedEquipmentCode === `NON_INSTR___${t.name}` ||
+              selectedEquipmentCode === t.name
+            );
+            return isSelected ? 2 : 0;
+          }),
           borderRadius: 6,
         }
       ]
     };
-  }, [computedMetrics.sortedTools]);
+  }, [topTools, activeSelectedTool, selectedEquipmentCode]);
 
   // Chart Data 2: Category Share (Doughnut Chart)
   const categoryDoughnutData = useMemo(() => {
-    let instrumentDowntime = 0;
-    let nonInstrumentDowntime = 0;
-
-    filteredWorkOrders.forEach(wo => {
-      const dt = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
-      const norm = normalizeEquipment(wo.equipmentName, wo.equipmentCode, wo.category);
-      if (norm.isTest) return;
-
-      if (norm.isInstrument) {
-        instrumentDowntime += dt;
-      } else {
-        nonInstrumentDowntime += dt;
-      }
-    });
+    const instrDt = formatNumber2Dec(data.categorySummary?.['Instrument (L)']?.totalDowntime || 0);
+    const nonInstrDt = formatNumber2Dec(data.categorySummary?.['Non-Instrument (PL)']?.totalDowntime || 0);
 
     return {
       labels: ['Instrument (L)', 'Non-Instrument (PL)'],
       datasets: [
         {
-          data: [
-            Math.round(instrumentDowntime * 10) / 10, 
-            Math.round(nonInstrumentDowntime * 10) / 10
-          ],
+          data: [instrDt, nonInstrDt],
           backgroundColor: ['#0284c7', '#0d9488'],
           borderColor: ['#ffffff', '#ffffff'],
           borderWidth: 2
         }
       ]
     };
-  }, [filteredWorkOrders]);
+  }, [data.categorySummary]);
 
   // Chart Data 3: Top Spareparts Used
   const sparepartsBarChartData = useMemo(() => {
@@ -1175,11 +1202,46 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                 options={{
                   responsive: true,
                   maintainAspectRatio: false,
+                  onClick: (_event, elements) => {
+                    if (elements && elements.length > 0) {
+                      const idx = elements[0].index;
+                      const tool = topTools[idx];
+                      if (tool) {
+                        const key = (tool.category || '').toLowerCase().includes('instrument') && !(tool.category || '').toLowerCase().includes('non')
+                          ? `${tool.code}___${tool.name}`
+                          : `NON_INSTR___${tool.name}`;
+                        
+                        if (
+                          selectedEquipmentCode === key || 
+                          selectedEquipmentCode === tool.name || 
+                          selectedEquipmentCode === tool.code ||
+                          (activeSelectedTool && activeSelectedTool.name === tool.name)
+                        ) {
+                          setSelectedEquipmentCode('ALL');
+                        } else {
+                          setSelectedEquipmentCode(key);
+                          setTimeout(() => {
+                            const tableEl = document.getElementById('wo-table-section');
+                            if (tableEl) {
+                              tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                          }, 80);
+                        }
+                      }
+                    }
+                  },
+                  onHover: (event, elements) => {
+                    const target = event.native?.target as HTMLElement;
+                    if (target) {
+                      target.style.cursor = elements && elements.length > 0 ? 'pointer' : 'default';
+                    }
+                  },
                   plugins: {
                     legend: { display: false },
                     tooltip: {
                       callbacks: {
-                        label: (ctx) => ` Total Downtime: ${ctx.raw} Jam`
+                        label: (ctx) => ` Total Downtime: ${ctx.raw} Jam`,
+                        afterLabel: () => '👉 Klik batang untuk memfilter tabel rincian'
                       }
                     }
                   },
@@ -1220,7 +1282,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
             </p>
 
             <div className="h-44 sm:h-48 flex items-center justify-center relative">
-              {computedMetrics.totalDowntime === 0 ? (
+              {((data.categorySummary?.['Instrument (L)']?.totalDowntime || 0) + (data.categorySummary?.['Non-Instrument (PL)']?.totalDowntime || 0)) === 0 ? (
                 <div 
                   className="text-xs font-semibold"
                   style={{ color: 'var(--text-muted, #64748B)' }}
@@ -1237,6 +1299,16 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                       legend: { 
                         position: 'bottom',
                         labels: { boxWidth: 10, font: { size: 10 } }
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: (ctx) => {
+                            const val = Number(ctx.raw) || 0;
+                            const total = (data.categorySummary?.['Instrument (L)']?.totalDowntime || 0) + (data.categorySummary?.['Non-Instrument (PL)']?.totalDowntime || 0);
+                            const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0';
+                            return ` ${ctx.label}: ${val} Jam (${pct}%)`;
+                          }
+                        }
                       }
                     }
                   }}
@@ -1250,18 +1322,34 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
             className="mt-3 pt-2.5 border-t grid grid-cols-2 gap-2 text-center"
             style={{ borderColor: 'var(--border-main, #E2E8F0)' }}
           >
-            <div className="p-2 rounded-xl bg-blue-50 border border-blue-200">
-              <span className="text-[10px] font-bold text-blue-900 block">Instrument</span>
+            <button 
+              type="button"
+              onClick={() => setSelectedCategory(prev => prev === 'Instrument (Lab)' ? 'ALL' : 'Instrument (Lab)')}
+              className={`p-2 rounded-xl transition-all border cursor-pointer text-center ${
+                selectedCategory === 'Instrument (Lab)' 
+                  ? 'bg-blue-100 border-blue-500 ring-2 ring-blue-400' 
+                  : 'bg-blue-50/70 border-blue-200 hover:bg-blue-100/60'
+              }`}
+            >
+              <span className="text-[10px] font-bold text-blue-900 block">Instrument (Lab)</span>
               <span className="text-xs sm:text-sm font-black text-blue-950">
-                {data.categorySummary?.['Instrument (L)']?.totalDowntime || 0} Jam
+                {formatNumber2Dec(data.categorySummary?.['Instrument (L)']?.totalDowntime)} Jam
               </span>
-            </div>
-            <div className="p-2 rounded-xl bg-teal-50 border border-teal-200">
+            </button>
+            <button 
+              type="button"
+              onClick={() => setSelectedCategory(prev => prev === 'Non-Instrument (Prep)' ? 'ALL' : 'Non-Instrument (Prep)')}
+              className={`p-2 rounded-xl transition-all border cursor-pointer text-center ${
+                selectedCategory === 'Non-Instrument (Prep)' 
+                  ? 'bg-teal-100 border-teal-500 ring-2 ring-teal-400' 
+                  : 'bg-teal-50/70 border-teal-200 hover:bg-teal-100/60'
+              }`}
+            >
               <span className="text-[10px] font-bold text-teal-900 block">Non-Instrument</span>
               <span className="text-xs sm:text-sm font-black text-teal-950">
-                {data.categorySummary?.['Non-Instrument (PL)']?.totalDowntime || 0} Jam
+                {formatNumber2Dec(data.categorySummary?.['Non-Instrument (PL)']?.totalDowntime)} Jam
               </span>
-            </div>
+            </button>
           </div>
         </Card>
 
@@ -1370,7 +1458,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
         const paginatedWorkOrders = tableFilteredWorkOrders.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
         return (
-          <Card className="p-3.5 sm:p-5 border shadow-xs space-y-3.5 rounded-2xl">
+          <Card id="wo-table-section" className="p-3.5 sm:p-5 border shadow-xs space-y-3.5 rounded-2xl scroll-mt-20">
             <div 
               className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b pb-3"
               style={{ borderColor: 'var(--border-main, #E2E8F0)' }}
@@ -1385,6 +1473,19 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-900 border border-teal-300">
                     {tableFilteredWorkOrders.length} Kasus
                   </span>
+                  {activeSelectedTool && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                      <span>Alat: {activeSelectedTool.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedEquipmentCode('ALL')}
+                        className="hover:text-amber-950 hover:bg-amber-200 rounded-full w-3.5 h-3.5 inline-flex items-center justify-center cursor-pointer ml-0.5"
+                        title="Hapus filter alat"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )}
                   {hidePemutihan && (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
                       Pemutihan 0 DT disembunyikan
@@ -1489,7 +1590,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
               ) : (
                 paginatedWorkOrders.map(wo => {
                   const isInstrument = (wo.category || '').toLowerCase().includes('instrument') && !(wo.category || '').toLowerCase().includes('non');
-                  const dtVal = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
+                  const dtDisplay = formatDowntimeDisplay(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
                   const st = (wo.status || 'Open').toLowerCase();
 
                   return (
@@ -1560,9 +1661,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                           className="flex items-center gap-2 text-[10px] font-semibold"
                           style={{ color: 'var(--text-muted, #475569)' }}
                         >
-                          {dtVal > 0 && (
+                          {dtDisplay !== '-' && (
                             <span className="font-black text-rose-900 bg-rose-100 px-1.5 py-0.5 rounded border border-rose-300">
-                              ⏱️ {dtVal} Jam
+                              ⏱️ {dtDisplay}
                             </span>
                           )}
                           <span>
@@ -1595,9 +1696,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                   <col style={{ width: '7.5%' }} />  {/* Tanggal & Shift */}
                   <col style={{ width: '13%' }} />   {/* Nama Alat & Kode */}
                   <col style={{ width: '7.5%' }} />  {/* Kategori */}
-                  <col style={{ width: '18%' }} />   {/* Deskripsi Kerusakan */}
-                  <col style={{ width: '18%' }} />   {/* Tindakan Perbaikan */}
-                  <col style={{ width: '5%' }} />    {/* Downtime */}
+                  <col style={{ width: '16.5%' }} /> {/* Deskripsi Kerusakan */}
+                  <col style={{ width: '16.5%' }} /> {/* Tindakan Perbaikan */}
+                  <col style={{ width: '8%' }} />    {/* Downtime */}
                   <col style={{ width: '5%' }} />    {/* Sparepart */}
                   <col style={{ width: '7.5%' }} />  {/* Teknisi */}
                   <col style={{ width: '6%' }} />    {/* Status */}
@@ -1658,7 +1759,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                   ) : (
                     paginatedWorkOrders.map(wo => {
                       const isInstrument = (wo.category || '').toLowerCase().includes('instrument') && !(wo.category || '').toLowerCase().includes('non');
-                      const dtVal = parseDowntimeHours(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
+                      const dtDisplay = formatDowntimeDisplay(wo.downtimeDuration ?? wo.downtime_duration, wo.repairStart, wo.repairEnd, wo.date);
                       const st = (wo.status || 'Open').toLowerCase();
                       
                       return (
@@ -1738,13 +1839,13 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                             </p>
                           </td>
 
-                          <td className="py-2.5 px-1 text-center overflow-hidden">
-                            {dtVal > 0 ? (
+                          <td className="py-2.5 px-1 text-center">
+                            {dtDisplay !== '-' ? (
                               <span 
                                 className="font-black text-rose-900 font-mono bg-rose-100 px-1.5 py-0.5 rounded border border-rose-300 text-[10px] inline-block whitespace-nowrap"
-                                title={wo.downtimeDuration ? String(wo.downtimeDuration) : `${dtVal} Jam`}
+                                title={dtDisplay}
                               >
-                                {dtVal} Jam
+                                {dtDisplay}
                               </span>
                             ) : (
                               <span style={{ color: 'var(--text-muted, #94A3B8)' }} className="text-[10px]">-</span>
@@ -1921,7 +2022,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
               <div className="space-y-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Durasi Downtime</span>
                 <p className="font-black text-rose-600 text-sm">
-                  {selectedWO.downtimeDuration || (parseDowntimeHours(selectedWO.downtimeDuration, selectedWO.repairStart, selectedWO.repairEnd, selectedWO.date) > 0 ? `${parseDowntimeHours(selectedWO.downtimeDuration, selectedWO.repairStart, selectedWO.repairEnd, selectedWO.date)} Jam` : '-')}
+                  {formatDowntimeDisplay(selectedWO.downtimeDuration ?? selectedWO.downtime_duration, selectedWO.repairStart, selectedWO.repairEnd, selectedWO.date)}
                 </p>
                 <p className="text-slate-500">
                   {selectedWO.repairStart ? new Date(selectedWO.repairStart).toLocaleString('id-ID') : '-'} s/d {selectedWO.repairEnd ? new Date(selectedWO.repairEnd).toLocaleString('id-ID') : '-'}

@@ -76,3 +76,51 @@ export function formatDowntimeDuration(
   const diffMins = Math.round((diffMs % 3600000) / 60000);
   return `${diffHrs} Jam ${diffMins} Menit`;
 }
+
+/**
+ * Formats downtime into human-readable text showing exact hours & minutes:
+ * e.g. "2 Jam 44 Menit", "1 Jam 42 Menit", "0 Jam 7 Menit"
+ * Ensures technicians and managers always see exact minutes instead of rough decimals.
+ */
+export function formatDowntimeDisplay(
+  raw: any,
+  repairStart?: string | Date | null,
+  repairEnd?: string | Date | null,
+  date?: string | Date | null
+): string {
+  if (raw != null) {
+    const s = String(raw).trim();
+    if (s && s !== '0' && s !== '0 Jam 0 Menit' && s !== '-') {
+      // 1. If already formatted with minutes e.g. "2 Jam 44 Menit", "45 Menit", "0 Jam 7 Menit"
+      if (/menit/i.test(s)) {
+        return s;
+      }
+
+      // 2. If timestamps exist, compute exact minutes from start and end
+      const start = repairStart || date;
+      if (start && repairEnd) {
+        const dur = formatDowntimeDuration(start, repairEnd);
+        if (dur !== '-') return dur;
+      }
+
+      // 3. If decimal/number like "2.7 Jam", "2.7", "2,7"
+      const cleanNum = s.replace(/jam/i, '').trim().replace(',', '.');
+      const num = parseFloat(cleanNum);
+      if (!isNaN(num) && num > 0) {
+        const totalMinutes = Math.round(num * 60);
+        const hrs = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        return `${hrs} Jam ${mins} Menit`;
+      }
+    }
+  }
+
+  // 4. Fallback to timestamps if raw was null or empty
+  const start = repairStart || date;
+  if (start && repairEnd) {
+    return formatDowntimeDuration(start, repairEnd);
+  }
+
+  return '-';
+}
+
