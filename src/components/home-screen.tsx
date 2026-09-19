@@ -127,8 +127,8 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
         />
       </section>
 
-      {/* Hall of Fame & Vanguard Rank Quick Banner */}
-      <section className="w-full">
+      {/* Hall of Fame & Vanguard Rank Quick Banner (Mobile shortcut, moved to Right Rail on Desktop) */}
+      <section className="w-full md:hidden">
         <div 
           onClick={() => onNav('leaderboard')}
           className="group relative overflow-hidden rounded-2xl border p-4 sm:p-5 transition-all duration-300 shadow-xs hover:shadow-md hover:border-amber-500/50 cursor-pointer"

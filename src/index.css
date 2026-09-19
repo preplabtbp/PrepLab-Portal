@@ -99,6 +99,136 @@ h1, h2, h3, h4, .font-display {
   85%, 100% { transform: translateX(var(--overflow, -50px)); }
 }
 
+/* =========================================================================
+   Dynamic Avatar Frame Custom Animations
+   ========================================================================= */
+
+/* 1. Mythic Flaming Crown Animations */
+@keyframes flame-flicker-soft {
+  0%, 100% { transform: scale(1) translateY(0); opacity: 0.85; }
+  50% { transform: scale(1.04) translateY(-1.5px); opacity: 1; }
+}
+
+@keyframes flame-blaze-medium {
+  0%, 100% { transform: scale(1.02) translateY(0) rotate(0deg); opacity: 0.9; }
+  25% { transform: scale(1.06) translateY(-2px) rotate(1deg); opacity: 1; }
+  75% { transform: scale(1.04) translateY(-1px) rotate(-1deg); opacity: 0.95; }
+}
+
+@keyframes flame-inferno-raging {
+  0% { transform: scale(1.04) translateY(0) rotate(0deg); filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.9)) drop-shadow(0 0 16px rgba(245, 158, 11, 0.8)); }
+  25% { transform: scale(1.1) translateY(-3px) rotate(2deg); filter: drop-shadow(0 0 12px rgba(239, 68, 68, 1)) drop-shadow(0 0 22px rgba(245, 158, 11, 0.9)); }
+  50% { transform: scale(1.07) translateY(-1.5px) rotate(-2deg); filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.9)) drop-shadow(0 0 18px rgba(245, 158, 11, 0.8)); }
+  75% { transform: scale(1.12) translateY(-3.5px) rotate(1.5deg); filter: drop-shadow(0 0 14px rgba(239, 68, 68, 1)) drop-shadow(0 0 26px rgba(245, 158, 11, 0.95)); }
+  100% { transform: scale(1.04) translateY(0) rotate(0deg); filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.9)) drop-shadow(0 0 16px rgba(245, 158, 11, 0.8)); }
+}
+
+@keyframes crown-gleam {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.6)); }
+  50% { filter: drop-shadow(0 0 10px rgba(251, 191, 36, 1)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.8)); }
+}
+
+@keyframes ember-float {
+  0% { transform: translateY(0) scale(0.8); opacity: 0; }
+  50% { opacity: 1; transform: translateY(-8px) scale(1.1); }
+  100% { transform: translateY(-16px) scale(0.6); opacity: 0; }
+}
+
+/* 2. Tactical Radar Sweep */
+@keyframes radar-sweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes radar-blip {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* 3. Holographic Matrix Scanline */
+@keyframes matrix-scanline {
+  0% { transform: translateY(-100%); opacity: 0; }
+  30% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+/* 4. Sonic Pulse Acoustic Ripple */
+@keyframes sonic-ripple-expand {
+  0% { transform: scale(0.95); opacity: 0.9; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+/* 5. Liquid Prismatic Chroma RGB Spin */
+@keyframes chroma-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 6. Biohazard Hazard Stripes Spin */
+@keyframes hazard-spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 7. Cosmic Nebula Galaxy Swirl */
+@keyframes nebula-swirl {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.04); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+/* 8. Tactical Laser Blink */
+@keyframes laser-pulse-fast {
+  0%, 100% { opacity: 0.5; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.15); filter: drop-shadow(0 0 6px rgba(244, 63, 94, 1)); }
+}
+
+.animate-flame-soft {
+  animation: flame-flicker-soft 2s ease-in-out infinite;
+}
+
+.animate-flame-medium {
+  animation: flame-blaze-medium 1.5s ease-in-out infinite;
+}
+
+.animate-flame-inferno {
+  animation: flame-inferno-raging 1.1s ease-in-out infinite;
+}
+
+.animate-crown-gleam {
+  animation: crown-gleam 2.2s ease-in-out infinite;
+}
+
+.animate-radar-sweep {
+  animation: radar-sweep 2.8s linear infinite;
+}
+
+.animate-matrix-scan {
+  animation: matrix-scanline 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-sonic-ripple {
+  animation: sonic-ripple-expand 1.8s ease-out infinite;
+}
+
+.animate-chroma-spin {
+  animation: chroma-spin 4s linear infinite;
+}
+
+.animate-hazard-spin {
+  animation: hazard-spin-slow 16s linear infinite;
+}
+
+.animate-nebula-swirl {
+  animation: nebula-swirl 12s linear infinite;
+}
+
+.animate-laser-pulse {
+  animation: laser-pulse-fast 1s ease-in-out infinite;
+}
+
+
 /* Print Optimization */
 @media print {
   @page {

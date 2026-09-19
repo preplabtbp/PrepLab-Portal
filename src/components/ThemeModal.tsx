@@ -524,6 +524,8 @@ export default function ThemeModal({
           applyToAll: true
         })
       });
+      window.dispatchEvent(new Event('gamification_updated'));
+      window.dispatchEvent(new Event('profile_updated'));
     } catch(e) {
       console.warn("Background theme save notice:", e);
     }
@@ -633,6 +635,8 @@ export default function ThemeModal({
             : (json.message || 'Tema kustom berhasil disimpan & diterapkan!'), 
           { id: toastId }
         );
+        window.dispatchEvent(new Event('gamification_updated'));
+        window.dispatchEvent(new Event('profile_updated'));
         await loadCustomTemplates();
         setActiveTab('templates');
       } else {
@@ -707,6 +711,8 @@ export default function ThemeModal({
         if (editingTemplateId === tmplId) {
           setEditingTemplateId(null);
         }
+        window.dispatchEvent(new Event('gamification_updated'));
+        window.dispatchEvent(new Event('profile_updated'));
       } else {
         throw new Error('Gagal menghapus template dari server');
       }

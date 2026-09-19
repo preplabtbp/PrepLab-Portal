@@ -4,7 +4,7 @@ import {
   LogOut, Briefcase, MapPin, Building, Hash, CalendarIcon, 
   Users, UserCircle2, ArrowLeft, Plane, Info, X, Camera, 
   Trash2, Image as ImageIcon, Calendar, Sparkles, Check, Upload, RefreshCw,
-  Trophy, Award, Shield, ChevronRight, Zap, Star
+  Trophy, Award, Shield, ChevronRight, Zap, Star, Medal, Crown, BarChart3
 } from 'lucide-react';
 import { getRankByXp } from '../lib/pointBlankRanks';
 import { getRosterData } from '../sheets-api';
@@ -12,7 +12,15 @@ import { motion, useDragControls } from 'motion/react';
 import { toast } from 'sonner';
 import { UsernamePromptModal } from '../components/UsernamePromptModal';
 import { PixelAvatarModal } from '../components/PixelAvatarModal';
-import { getFrameById } from '../lib/gamificationEngine';
+import { 
+  getFrameById, 
+  TIERED_ACHIEVEMENTS, 
+  calculateBranchProgress, 
+  getAchievementTierStyle 
+} from '../lib/gamificationEngine';
+import { DynamicAvatarFrame } from '../components/DynamicAvatarFrame';
+import { PromotionWelcomeModal } from '../components/PromotionWelcomeModal';
+import { ExpAuditModal } from '../components/ExpAuditModal';
 
 export const PRESET_PROFILE_COVERS = [
   {
@@ -78,6 +86,7 @@ export function ProfilePage({
 }) {
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [showCoverModal, setShowCoverModal] = useState(false);
+  const [showPromotionModal, setShowPromotionModal] = useState(false);
 
   const [profile, setProfile] = useState<any>(() => {
     const saved = localStorage.getItem('p2h_inspector_profile');
@@ -442,6 +451,32 @@ export function ProfilePage({
   // Gamification & Vanguard Rank Data
   const [gamificationData, setGamificationData] = useState<any>(null);
   const [loadingGamification, setLoadingGamification] = useState(true);
+  const [gamificationRefreshTick, setGamificationRefreshTick] = useState(0);
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [profileLeaderboard, setProfileLeaderboard] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (showAuditModal && profileLeaderboard.length === 0) {
+      fetch('/api/gamification/leaderboard')
+        .then(res => res.json())
+        .then(data => {
+          if (data?.leaderboard) setProfileLeaderboard(data.leaderboard);
+        })
+        .catch(() => {});
+    }
+  }, [showAuditModal, profileLeaderboard.length]);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setGamificationRefreshTick(t => t + 1);
+    };
+    window.addEventListener('gamification_updated', handleUpdate);
+    window.addEventListener('profile_updated', handleUpdate);
+    return () => {
+      window.removeEventListener('gamification_updated', handleUpdate);
+      window.removeEventListener('profile_updated', handleUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -462,7 +497,7 @@ export function ProfilePage({
         if (isMounted) setLoadingGamification(false);
       });
     return () => { isMounted = false; };
-  }, [inspectorNik]);
+  }, [inspectorNik, gamificationRefreshTick]);
 
   const rankInfo = useMemo(() => {
     if (gamificationData?.rankInfo) {
@@ -489,6 +524,53 @@ export function ProfilePage({
     const saved = localStorage.getItem('preplab_equipped_frame');
     return saved || gamificationData?.equippedFrame || 'default';
   }, [gamificationData]);
+
+  // Compute earned achievement medals and their progressive tier border styles
+  const earnedBranches = useMemo(() => {
+    if (!gamificationData?.stats) return [];
+    const stats = gamificationData.stats;
+    const countKeyMap: Record<string, number> = {
+      BRANCH_KTA: stats.ktaCount || 0,
+      BRANCH_INSPECTION: stats.inspectionCount || 0,
+      BRANCH_DEFECTS: stats.defectsCount || 0,
+      BRANCH_CS: stats.csCount || 0,
+      BRANCH_FEEDBACK: stats.feedbackCount || 0,
+      BRANCH_QUOTES: stats.quotesCount || 0,
+      BRANCH_THEMES: stats.themesCount || 0,
+      BRANCH_BULLETIN: stats.bulletinCount || 0,
+      BRANCH_P5M_SPEAKER: stats.p5mSpeakerCount || 0,
+      BRANCH_WO_CREATE: stats.woCreateCount || 0,
+      BRANCH_WO_RESOLVE: stats.woResolveCount || 0,
+      BRANCH_QUIZ: stats.quiz100Count || 0,
+      BRANCH_LOGIN_STREAK: stats.loginStreak || 0,
+      BRANCH_NIGHT: stats.nightCount || 0,
+      BRANCH_DAWN: stats.dawnCount || 0,
+      BRANCH_WEEKEND: stats.weekendCount || 0,
+      BRANCH_POLYMATH: stats.polymathCount || 0,
+      BRANCH_EASTER_EGG: stats.easterEggCount || 0,
+      BRANCH_SEASON: stats.seasonChampionCount || 0
+    };
+
+    return TIERED_ACHIEVEMENTS.map(branch => {
+      const currentCount = countKeyMap[branch.code] || 0;
+      const progressInfo = calculateBranchProgress(branch, currentCount);
+      const tierLevel = progressInfo.currentTier ? progressInfo.currentTier.tierLevel : 0;
+      return {
+        branch,
+        currentCount,
+        progressInfo,
+        tierLevel,
+        tierStyle: getAchievementTierStyle(tierLevel)
+      };
+    }).filter(b => b.tierLevel > 0);
+  }, [gamificationData]);
+
+  const activeFrameTier = useMemo(() => {
+    const frameObj = getFrameById(activeAvatarFrame);
+    if (!frameObj.sourceAchId) return 4;
+    const branch = earnedBranches.find((b: any) => b.branch?.id === frameObj.sourceAchId || b.branch?.code === frameObj.sourceAchId);
+    return branch?.tierLevel || 1;
+  }, [activeAvatarFrame, earnedBranches]);
 
   // Calculate detailed cuti info
   const cutiInfo = React.useMemo(() => {
@@ -734,26 +816,23 @@ export function ProfilePage({
               <div className="flex justify-between items-end -mt-10 sm:-mt-12 mb-4">
                 {/* Avatar Box with Equipped Dynamic Frame Ring */}
                 <div className="relative group">
-                  <div 
-                    className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl p-1 shadow-md relative overflow-hidden border transition-all duration-300 ${
-                      getFrameById(activeAvatarFrame).ringColor
-                    } ${getFrameById(activeAvatarFrame).effect}`}
-                    style={{
-                      backgroundColor: 'var(--card-bg, #FFFFFF)'
-                    }}
+                  <DynamicAvatarFrame
+                    frameId={activeAvatarFrame}
+                    tierLevel={activeFrameTier}
+                    size={96}
+                    isUnlocked={true}
                   >
                     {avatar ? (
                       <img 
                         src={avatar} 
                         alt={inspectorName || 'Foto Profil'} 
-                        className="w-full h-full rounded-xl object-cover"
+                        className="w-full h-full rounded-full object-cover"
                       />
                     ) : (
                       <div 
-                        className="w-full h-full rounded-xl flex items-center justify-center text-2xl sm:text-3xl font-bold font-display border"
+                        className="w-full h-full rounded-full flex items-center justify-center text-2xl sm:text-3xl font-bold font-display"
                         style={{
                           backgroundColor: 'var(--input-bg, rgba(42, 157, 143, 0.1))',
-                          borderColor: 'var(--border-main, #E2E8F0)',
                           color: 'var(--primary, #2A9D8F)'
                         }}
                       >
@@ -762,12 +841,12 @@ export function ProfilePage({
                     )}
 
                     {isUploading && (
-                      <div className="absolute inset-0 bg-black/70 rounded-xl flex flex-col items-center justify-center text-white p-1">
+                      <div className="absolute inset-0 bg-black/70 rounded-full flex flex-col items-center justify-center text-white p-1 z-30">
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mb-1" />
                         <span className="text-[9px] font-medium">Kompresi...</span>
                       </div>
                     )}
-                  </div>
+                  </DynamicAvatarFrame>
 
                   {/* Camera Upload Badge Button */}
                   <button
@@ -787,6 +866,17 @@ export function ProfilePage({
 
                 {/* Quick Action Buttons */}
                 <div className="flex items-center gap-1.5 sm:gap-2">
+                  <button 
+                    type="button"
+                    onClick={() => setShowPromotionModal(true)}
+                    className="rounded-xl flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 shadow-xs h-8 sm:h-9 text-xs font-bold border transition-all active:scale-95 cursor-pointer bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-700 dark:text-amber-300 border-amber-500/40"
+                    title="Buka Upacara Promosi Pangkat Resmi"
+                  >
+                    <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className="hidden xs:inline sm:inline">Upacara Promosi</span>
+                    <span className="xs:hidden sm:hidden">Promosi</span>
+                  </button>
+
                   <button 
                     type="button"
                     onClick={() => setIsPixelAvatarOpen(true)}
@@ -926,22 +1016,33 @@ export function ProfilePage({
                         />
                       </div>
 
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[10px] text-[var(--text-muted)]">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[10px] text-[var(--text-muted)]">
                         <span>
                           Target Berikutnya: <strong className="text-[var(--text-main)]">{rankInfo?.nextRank ? rankInfo.nextRank.name : 'Supreme Vanguard Commander'}</strong>
                           {rankInfo?.nextRank && ` · Sisa ${Math.max(0, safeNeededXp - safeCurrentXp).toLocaleString()} EXP lagi`}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onBack();
-                            window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
-                          }}
-                          className="text-teal-600 dark:text-teal-400 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer self-start sm:self-auto"
-                        >
-                          <span>Lihat Klasemen Hall of Fame</span>
-                          <ChevronRight className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => setShowAuditModal(true)}
+                            className="text-amber-600 dark:text-amber-400 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                            title="Buka Tabel Rekapitulasi & Audit Perolehan EXP"
+                          >
+                            <BarChart3 className="w-3 h-3" />
+                            <span>Rekap Perolehan EXP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onBack();
+                              window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
+                            }}
+                            className="text-teal-600 dark:text-teal-400 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <span>Lihat Klasemen Hall of Fame</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -949,6 +1050,125 @@ export function ProfilePage({
               </div>
             </div>
 
+          </Card>
+
+          {/* Card Showcase Prestasi & Medali Kehormatan */}
+          <Card 
+            className="p-5 sm:p-6 shadow-md space-y-4 border"
+            style={{
+              backgroundColor: 'var(--card-bg, #FFFFFF)',
+              borderColor: 'var(--border-main, #E2E8F0)'
+            }}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3.5" style={{ borderColor: 'var(--border-main)' }}>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                    <Medal className="w-4 h-4" />
+                  </span>
+                  <h3 className="font-bold text-sm sm:text-base font-display text-[var(--text-main)]">
+                    Etalase Medali &amp; Prestasi Kehormatan
+                  </h3>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold">
+                    {earnedBranches.length}/{TIERED_ACHIEVEMENTS.length} Terbuka
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--text-muted)] mt-1">
+                  Koleksi medali operasional dengan ketebalan border &amp; efek aura sesuai tingkatan kelas (Bronze 2px · Silver 3px · Gold 4px · Master 5px).
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onBack();
+                  window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer self-start sm:self-auto"
+              >
+                <span>Jelajahi 12 Cabang Lengkap</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {earnedBranches.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+                {earnedBranches.map(({ branch, currentCount, progressInfo, tierStyle }) => (
+                  <div
+                    key={branch.id}
+                    onClick={() => {
+                      onBack();
+                      window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
+                    }}
+                    className={`p-4 rounded-2xl ${tierStyle.cardBorder} ${tierStyle.cardShadow} relative overflow-hidden flex flex-col justify-between cursor-pointer hover:scale-[1.02] transition-all bg-[var(--card-bg)]`}
+                  >
+                    {/* Ambient glow in corner */}
+                    <div className={`absolute -top-10 -right-10 w-28 h-28 bg-gradient-to-bl ${tierStyle.cardGlowAura} rounded-full blur-xl pointer-events-none`} />
+
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className={`w-11 h-11 rounded-xl ${tierStyle.iconRing} flex items-center justify-center text-xl shadow-sm shrink-0`}>
+                          {branch.icon}
+                        </div>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className={`text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full ${tierStyle.badgePill} flex items-center gap-1`}>
+                            <span>{tierStyle.badgeEmoji}</span>
+                            <span>{tierStyle.tierName}</span>
+                          </span>
+                          <span className="text-[9px] font-mono text-[var(--text-muted)] font-bold">
+                            Tebal {tierStyle.borderThicknessPx}px · {tierStyle.metalLabel}
+                          </span>
+                        </div>
+                      </div>
+
+                      <h4 className="font-bold text-xs sm:text-sm font-display text-[var(--text-main)]">
+                        {branch.name}
+                      </h4>
+                      <p className="text-[11px] text-[var(--text-muted)] line-clamp-1 mt-0.5">
+                        {branch.description}
+                      </p>
+                    </div>
+
+                    <div className="pt-2.5 mt-2.5 border-t border-[var(--border-main)]/50 space-y-1.5 relative z-10">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-[var(--text-muted)]">Progres</span>
+                        <span className="font-bold text-[var(--text-main)] font-mono">{currentCount} / {progressInfo.targetCount} {branch.unit}</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full bg-gradient-to-r ${tierStyle.progressBarGradient}`}
+                          style={{ width: `${progressInfo.progressPercent}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] pt-0.5">
+                        <span className="text-[var(--text-muted)]">Gelar:</span>
+                        <span className="font-bold text-amber-600 dark:text-amber-400 truncate max-w-[140px]">
+                          [{progressInfo.currentTier?.titleReward}]
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-6 rounded-2xl border border-dashed border-amber-500/30 bg-amber-500/5 text-center space-y-2">
+                <Sparkles className="w-8 h-8 text-amber-500 mx-auto" />
+                <p className="text-sm font-bold text-[var(--text-main)]">Belum Ada Medali Yang Terbuka</p>
+                <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto">
+                  Lakukan inspeksi, laporkan KTA, buat tema, atau ikuti briefing P5M untuk membuka achievement kelas Bronze, Silver, Gold, hingga Master!
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    onBack();
+                    window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
+                  }}
+                  className="mt-2 text-xs font-bold cursor-pointer"
+                >
+                  Jelajahi 12 Cabang Achievement
+                </Button>
+              </div>
+            )}
           </Card>
 
           {profile && (
@@ -1344,6 +1564,25 @@ export function ProfilePage({
         onSave={(newAvatarDataUrl) => setAvatar(newAvatarDataUrl)}
         currentNik={inspectorNik}
         currentName={inspectorName}
+      />
+
+      <PromotionWelcomeModal
+        isOpen={showPromotionModal}
+        onClose={() => setShowPromotionModal(false)}
+        currentUserNik={inspectorNik || undefined}
+        currentUserName={inspectorName || undefined}
+        userAvatar={avatar}
+        forceShow={showPromotionModal}
+      />
+
+      <ExpAuditModal
+        isOpen={showAuditModal}
+        onClose={() => setShowAuditModal(false)}
+        currentNik={inspectorNik}
+        currentName={inspectorName}
+        leaderboardList={profileLeaderboard}
+        initialTargetNik={inspectorNik}
+        userGamification={gamificationData}
       />
     </>
   );

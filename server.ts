@@ -39,7 +39,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { setIoInstance } from "./server/utils.js";
 import { db, pool } from "./src/db/index.js";
-import { chatMessages, employees, equipments, workOrders, users, tickets, downtime, spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, easterEggProgress, induksi, developerUsers } from "./src/db/schema.js";
+import { chatMessages, employees, equipments, workOrders, users, tickets, downtime, spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, easterEggProgress, induksi, developerUsers, portalLogins } from "./src/db/schema.js";
 
 // Initialize web-push safely
 const vapidPublicKey = env.VAPID_PUBLIC_KEY as string;
@@ -182,6 +182,13 @@ async function initDbSchema() {
       created_at TIMESTAMP DEFAULT NOW()
     );`);
     await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_gamification_milestones_nik_key ON gamification_milestones(nik, milestone_key);`);
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS portal_logins (
+      id SERIAL PRIMARY KEY,
+      nik TEXT NOT NULL,
+      login_date TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_portal_logins_nik_date ON portal_logins(nik, login_date);`);
 
     // Auto seed questions if table is empty
     const qCount = await db.select().from(questions).limit(1);

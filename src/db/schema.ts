@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp, boolean, date, json, index } from 'drizzle-orm/pg-core';
+import { integer, pgTable, serial, text, timestamp, boolean, date, json, index, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // Define the 'users' table (Linked to Firebase Auth)
 export const users = pgTable('users', {
@@ -643,3 +643,14 @@ export const gamificationMilestones = pgTable('gamification_milestones', {
 }, (t) => [
   index('idx_gamification_milestones_nik_key').on(t.nik, t.milestoneKey),
 ]);
+
+// Define 'portal_logins' table (Log presensi login & kunjungan harian portal untuk streak)
+export const portalLogins = pgTable('portal_logins', {
+  id: serial('id').primaryKey(),
+  nik: text('nik').notNull(),
+  loginDate: text('login_date').notNull(), // 'YYYY-MM-DD'
+  createdAt: timestamp('created_at').defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_portal_logins_nik_date').on(t.nik, t.loginDate),
+]);
+

@@ -8,6 +8,7 @@ import {
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 import { getFrameById } from '../lib/gamificationEngine';
+import { DynamicAvatarFrame } from './DynamicAvatarFrame';
 
 const SECTIONS_LIST = [
   { id: 'preparation', name: 'Preparation', label: 'Prep' },
@@ -613,13 +614,20 @@ export default function ChatScreen({
               >
                 <div className={`flex items-start gap-2.5 max-w-[88%] sm:max-w-[78%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                   {/* Dynamic Glowing Avatar Frame */}
-                  <div className={`w-8 h-8 rounded-full border-2 overflow-hidden flex items-center justify-center text-[10px] font-black shrink-0 ${frameObj.ringColor} ${frameObj.effect} mt-0.5 shadow-sm`}>
+                  <DynamicAvatarFrame
+                    frameId={senderFrame}
+                    size={32}
+                    isUnlocked={true}
+                    className="mt-0.5"
+                  >
                     {senderAvatar ? (
                       <img src={senderAvatar} alt={msg.senderName} className="w-full h-full object-cover" />
                     ) : (
-                      (msg.senderName || msg.senderNik || 'AF').slice(0, 2).toUpperCase()
+                      <div className="w-full h-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-black text-slate-700 dark:text-slate-200">
+                        {(msg.senderName || msg.senderNik || 'AF').slice(0, 2).toUpperCase()}
+                      </div>
                     )}
-                  </div>
+                  </DynamicAvatarFrame>
 
                   <div className={`flex-1 min-w-0 flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                     <div className={`flex items-center gap-1.5 mb-1 flex-wrap ${isMe ? 'justify-end' : 'justify-start'}`}>

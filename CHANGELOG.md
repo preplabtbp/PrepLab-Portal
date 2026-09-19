@@ -124,6 +124,24 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Menambahkan datalist rekomendasi 31 alat standar saat membuat WO Non-Instrument.
   - Dilengkapi deteksi otomatis nama standar secara dinamis sehingga input pengguna selalu terstandarisasi sebelum disimpan ke database.
 
+## [2.9.3] - 2026-09-19
+
+### 📊 Tabel Rekapitulasi & Audit EXP, Sinkronisasi Polymath 10 Bidang & Transparansi Hall of Fame
+
+- **Tabel Rekapitulasi & Audit Perolehan EXP (`src/components/ExpAuditModal.tsx`, `LeaderboardScreen.tsx`, `ProfilePage.tsx`)**:
+  - Menyediakan visualisasi breakdown perolehan EXP dari seluruh 14 aktivitas operasional (+35 KTA, +50 Inspeksi, +60 Defects Closing, +40 Buat WO, +60 Selesai WO, +100 Saran, +100 Quotes, +100 Tema, +10 Buletin, +60 P5M, +250 Kuis 100%, +50 Shift Malam, +50 Shift Subuh, +50 Shift Weekend).
+  - Dilengkapi fitur *Mode EXP Saya* dan *Mode Cari & Audit Personil (Developer / Supervisor)* dengan kotak pencarian instan nama/NIK serta filter section.
+  - Opsi toggle periode *Bulan Ini (Season EXP)* vs *Total Karir (Career EXP)* lengkap dengan Baseline Pangkat Bintang 5/3 dan Bonus Milestone Achievement.
+  - Tombol aksi salin format teks laporan audit ke clipboard.
+- **Sinkronisasi Capaian 10 Bidang Aktif Polymath (`src/lib/gamificationEngine.ts`, `server/routes/gamification.ts`)**:
+  - Memperluas target achievement *Omni-Discipline Polymath* (`BRANCH_POLYMATH`) hingga Tier IV = 10 Bidang Aktif (+3.000 XP, Gelar: *Apex PrepLab Polymath*) untuk mengakomodasi personil serba bisa yang aktif di 10 modul operasional.
+  - Menyebutkan ke-13 modul yang dipantau sistem secara transparan pada petunjuk perolehan.
+- **Transparansi Achievement Hall of Fame Champion (`BRANCH_SEASON`)**:
+  - Mengubah achievement juara musim bulanan (`BRANCH_SEASON`) menjadi non-hidden (`isHidden: false`) dengan petunjuk perolehan terbuka agar seluruh personil termotivasi mengejar peringkat podium di akhir musim.
+- **Achievement Penuntasan Temuan Inspeksi (`BRANCH_DEFECTS`) & Bingkai Avatar Hazard Remediation Aegis**:
+  - Menambahkan achievement task rutin penuntasan temuan K3 (tiket status CLOSED) dengan 4 tier progresif (+150, +350, +800, +1.600 XP).
+  - Menghadirkan bingkai eksklusif bertema *Hazard Remediation Aegis* (`frame_hazard_aegis`) dengan filter section terpisah untuk *Inventory Control* dan *Administration*.
+
 ## [2.9.2] - 2026-09-19
 
 ### 🎖️ Penyatuan Card Profil, Direktori Pangkat Leaderboard & Perbaikan Akses Flyer P5M
@@ -136,6 +154,10 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Menambahkan tab khusus *Daftar Pangkat & Personil* yang memuat seluruh hierarki 51 tingkat pangkat PrepLab Vanguard.
   - Menerapkan batasan cerdas: jika sebuah jenjang pangkat diduduki oleh **lebih dari 10 personil**, daftar kartu personil individu disembunyikan dan diringkas dengan banner jumlah personil. Jika 1–10 personil, daftar personil ditampilkan lengkap dengan avatar, dynamic frames, dan status departemen.
   - Dilengkapi fitur pencarian tingkat pangkat, pengurutan (#51 → #1 atau #1 → #51), serta filter kelompok tier.
+- **Penempatan Menu Leaderboard di Desktop View (`src/App.tsx`, `src/components/home-screen.tsx`)**:
+  - Memindahkan akses menu Leaderboard ke *Dedicated Right Rail* pada tampilan desktop (`hidden md:flex`), diposisikan tepat di bawah tombol menu *Chat*.
+  - Menggunakan tombol bergaya lencana emas mewah (*amber/yellow gradient*) lengkap dengan efek kilau *glow ring*, micro-rotation ikon *Trophy*, dan label teks bertingkat (*Leader* / *Board*).
+  - Menyembunyikan banner besar leaderboard pada konten utama layar desktop (`md:hidden`) agar antarmuka beranda lebih ringkas dan terfokus.
 - **Perbaikan Akses Materi & Flyer P5M (`src/lib/p5m-flyer.ts`, `server.ts`, `src/components/p5m-screen.tsx`)**:
   - Mengarahkan pratinjau flyer dan dokumen PDF secara bawaan ke server streaming proxy (`/api/p5m/flyer`), meniadakan kendala *"Akses dibatasi"* dari tautan mentah Google Drive.
   - Membuka akses publik baca (GET) untuk `/api/p5m/materi`, `/api/p5m/schedules`, dan `/api/p5m/pool` sehingga semua personil dapat meninjau penugasan tanpa hambatan sesi.

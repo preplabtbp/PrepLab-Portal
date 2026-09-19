@@ -4,13 +4,25 @@ import {
   Trophy, Award, Crown, Star, Sparkles, Shield, Flame, CheckCircle2, 
   Lock, ArrowLeft, Users, Filter, ChevronRight, Info, Zap, Gift, 
   Layers, MapPin, Search, Eye, AlertTriangle, HelpCircle, Check, Swords,
-  Medal, Target, Activity, Compass, BookmarkCheck, Share2, X, Building2
+  Medal, Target, Activity, Compass, BookmarkCheck, Share2, X, Building2,
+  BarChart3
 } from 'lucide-react';
 import { PageHeader } from './PageHeader';
 import { Button, Card } from './ui';
 import { toast } from 'sonner';
+import { ExpAuditModal } from './ExpAuditModal';
 import { POINT_BLANK_RANKS, getRankByXp, PBRank } from '../lib/pointBlankRanks';
-import { TIERED_ACHIEVEMENTS, AchievementBranch, AchievementTier, AVAILABLE_FRAMES, calculateBranchProgress, getFrameById } from '../lib/gamificationEngine';
+import { 
+  TIERED_ACHIEVEMENTS, 
+  AchievementBranch, 
+  AchievementTier, 
+  AVAILABLE_FRAMES, 
+  calculateBranchProgress, 
+  getFrameById,
+  getAchievementTierStyle,
+  TierVisualConfig
+} from '../lib/gamificationEngine';
+import { DynamicAvatarFrame } from './DynamicAvatarFrame';
 
 export interface LeaderboardUser {
   rank: number;
@@ -27,7 +39,78 @@ export interface LeaderboardUser {
   badgesCount: number;
   inspectionCount: number;
   ktaCount: number;
+  woCreateCount?: number;
+  woResolveCount?: number;
+  csCount?: number;
+  feedbackCount?: number;
+  quotesCount?: number;
+  themesCount?: number;
+  bulletinCount?: number;
+  p5mSpeakerCount?: number;
+  quiz100Count?: number;
+  loginStreak?: number;
+  nightCount?: number;
+  dawnCount?: number;
+  weekendCount?: number;
+  polymathCount?: number;
   p5mStreak: number;
+  roleStartingXp?: number;
+  achievementBonusXp?: number;
+  baseActionsXp?: number;
+  sKtaCount?: number;
+  sInspectionCount?: number;
+  sDefectsCount?: number;
+  sWoCreateCount?: number;
+  sWoResolveCount?: number;
+  sFeedbackCount?: number;
+  sQuotesCount?: number;
+  sThemesCount?: number;
+  sBulletinCount?: number;
+  sQuiz100Count?: number;
+  sNightCount?: number;
+  sDawnCount?: number;
+  sWeekendCount?: number;
+}
+
+export const DISCIPLINE_OPTIONS = [
+  { code: 'EXP', label: 'EXP Bulan Ini (Top Gun)', icon: '🏆', unit: 'EXP' },
+  { code: 'BRANCH_KTA', label: 'Laporan KTA / Hazard', icon: '⚠️', unit: 'Laporan' },
+  { code: 'BRANCH_INSPECTION', label: 'Inspeksi K3 & APD', icon: '🛡️', unit: 'Inspeksi' },
+  { code: 'BRANCH_DEFECTS', label: 'Penuntasan Temuan K3', icon: '🎯', unit: 'Temuan Tuntas' },
+  { code: 'BRANCH_WO_CREATE', label: 'Pembuat Work Order', icon: '📋', unit: 'Tiket WO' },
+  { code: 'BRANCH_WO_RESOLVE', label: 'Penyelesai WO / Teknisi', icon: '⚙️', unit: 'WO Selesai' },
+  { code: 'BRANCH_P5M_SPEAKER', label: 'Pemateri Briefing P5M', icon: '🎙️', unit: 'Sesi P5M' },
+  { code: 'BRANCH_BULLETIN', label: 'Diskusi Papan Buletin', icon: '📰', unit: 'Komentar' },
+  { code: 'BRANCH_FEEDBACK', label: 'Ide Inovasi & Saran', icon: '💡', unit: 'Ide/Saran' },
+  { code: 'BRANCH_QUOTES', label: 'Quotes Motivasi', icon: '💬', unit: 'Quotes' },
+  { code: 'BRANCH_QUIZ', label: 'Kuis SOP Sempurna (100%)', icon: '🎓', unit: 'Kuis 100%' },
+  { code: 'BRANCH_LOGIN_STREAK', label: 'Kehadiran Login Streak', icon: '🔥', unit: 'Hari Beruntun' },
+  { code: 'BRANCH_NIGHT', label: 'Shift Malam (Jam Hening)', icon: '🌙', unit: 'Shift Malam' },
+  { code: 'BRANCH_DAWN', label: 'Shift Subuh (Patroli Fajar)', icon: '🌅', unit: 'Patroli Subuh' },
+  { code: 'BRANCH_WEEKEND', label: 'Dedikasi Akhir Pekan', icon: '⚡', unit: 'Tugas Weekend' },
+  { code: 'BRANCH_POLYMATH', label: 'Master Segala Lini (Polymath)', icon: '🌐', unit: 'Bidang Aktif' }
+];
+
+export function getUserDisciplineValue(u: LeaderboardUser, discCode: string): number {
+  switch (discCode) {
+    case 'EXP': return u.seasonXp || 0;
+    case 'BRANCH_KTA': return u.ktaCount || 0;
+    case 'BRANCH_INSPECTION': return u.inspectionCount || 0;
+    case 'BRANCH_DEFECTS': return u.defectsCount || 0;
+    case 'BRANCH_WO_CREATE': return u.woCreateCount || 0;
+    case 'BRANCH_WO_RESOLVE': return u.woResolveCount || 0;
+    case 'BRANCH_P5M_SPEAKER': return u.p5mSpeakerCount || 0;
+    case 'BRANCH_BULLETIN': return u.bulletinCount || 0;
+    case 'BRANCH_FEEDBACK': return u.feedbackCount || 0;
+    case 'BRANCH_QUOTES': return u.quotesCount || 0;
+    case 'BRANCH_QUIZ': return u.quiz100Count || 0;
+    case 'BRANCH_LOGIN_STREAK': return u.loginStreak || 0;
+    case 'BRANCH_NIGHT': return u.nightCount || 0;
+    case 'BRANCH_DAWN': return u.dawnCount || 0;
+    case 'BRANCH_WEEKEND': return u.weekendCount || 0;
+    case 'BRANCH_POLYMATH': return u.polymathCount || 0;
+    default: return u.seasonXp || 0;
+  }
 }
 
 export interface SectionScore {
@@ -54,12 +137,14 @@ export function LeaderboardScreen({
 }) {
   const [activeTab, setActiveTab] = useState<'individual' | 'ranks' | 'sections' | 'achievements' | 'customization'>('individual');
   const [selectedBranch, setSelectedBranch] = useState<AchievementBranch | null>(null);
+  const [achievementFilter, setAchievementFilter] = useState<'ALL' | 'ROUTINE' | 'HIDDEN'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [entityFilter, setEntityFilter] = useState<'ALL' | 'TBP_GPS' | 'GTS'>('ALL');
   const [rankSearchQuery, setRankSearchQuery] = useState('');
   const [rankTierGroupFilter, setRankTierGroupFilter] = useState('ALL');
   const [rankSortOrder, setRankSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [selectedDiscipline, setSelectedDiscipline] = useState<string>('EXP');
 
   // User Equipped Customization (LocalStorage + Live Sync)
   const [userTitle, setUserTitle] = useState(() => {
@@ -74,6 +159,32 @@ export function LeaderboardScreen({
   const [leaderboardList, setLeaderboardList] = useState<LeaderboardUser[]>([]);
   const [sectionScores, setSectionScores] = useState<SectionScore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [auditTargetNik, setAuditTargetNik] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleOpenAudit = (e: any) => {
+      if (e.detail?.nik) {
+        setAuditTargetNik(e.detail.nik);
+      }
+      setShowAuditModal(true);
+    };
+    window.addEventListener('open-exp-audit', handleOpenAudit);
+    return () => window.removeEventListener('open-exp-audit', handleOpenAudit);
+  }, []);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setRefreshTick(t => t + 1);
+    };
+    window.addEventListener('gamification_updated', handleUpdate);
+    window.addEventListener('profile_updated', handleUpdate);
+    return () => {
+      window.removeEventListener('gamification_updated', handleUpdate);
+      window.removeEventListener('profile_updated', handleUpdate);
+    };
+  }, []);
 
   // Load live user stats and leaderboard from server
   useEffect(() => {
@@ -116,21 +227,38 @@ export function LeaderboardScreen({
 
     loadData();
     return () => { isMounted = false; };
-  }, [inspectorNik, inspectorName]);
+  }, [inspectorNik, inspectorName, refreshTick]);
 
   // Derive current user rank info
   const userTotalXp = userGamification?.totalXp ?? 0;
   const userRankData = getRankByXp(userTotalXp);
 
-  // Filtered leaderboard based on Entity (TBP & GPS vs GTS)
+  // Active discipline config
+  const activeDisciplineConfig = useMemo(() => {
+    return DISCIPLINE_OPTIONS.find(d => d.code === selectedDiscipline) || DISCIPLINE_OPTIONS[0];
+  }, [selectedDiscipline]);
+
+  // Filtered leaderboard based on Entity (TBP & GPS vs GTS) & Selected Discipline
   const entityFilteredList = useMemo(() => {
-    return leaderboardList.filter(u => {
+    const list = leaderboardList.filter(u => {
       const userPt = (u.pt || 'TBP').trim().toUpperCase();
       if (entityFilter === 'TBP_GPS') return userPt === 'TBP' || userPt === 'GPS';
       if (entityFilter === 'GTS') return userPt === 'GTS';
       return true;
     });
-  }, [leaderboardList, entityFilter]);
+
+    if (selectedDiscipline === 'EXP') {
+      // Monthly EXP ranking (resets monthly via seasonXp), break ties with totalXp
+      return [...list].sort((a, b) => (b.seasonXp - a.seasonXp) || (b.totalXp - a.totalXp));
+    } else {
+      // Specific discipline / achievement ranking
+      return [...list].sort((a, b) => {
+        const valA = getUserDisciplineValue(a, selectedDiscipline);
+        const valB = getUserDisciplineValue(b, selectedDiscipline);
+        return (valB - valA) || (b.seasonXp - a.seasonXp) || (b.totalXp - a.totalXp);
+      });
+    }
+  }, [leaderboardList, entityFilter, selectedDiscipline]);
 
   // Top 3 Podium of the filtered entity
   const top3 = useMemo(() => entityFilteredList.slice(0, 3), [entityFilteredList]);
@@ -141,6 +269,8 @@ export function LeaderboardScreen({
       const matchSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.nik.toLowerCase().includes(searchQuery.toLowerCase());
       const matchSec = sectionFilter === 'ALL' || 
         (sectionFilter === 'Quality Assurance' && (u.section.toLowerCase().includes('quality') || u.section.toLowerCase() === 'qa')) ||
+        (sectionFilter === 'Inventory Control' && u.section.toLowerCase().includes('inventory')) ||
+        (sectionFilter === 'Administration' && u.section.toLowerCase().includes('admin')) ||
         u.section.toLowerCase().includes(sectionFilter.toLowerCase());
       return matchSearch && matchSec;
     });
@@ -241,6 +371,15 @@ export function LeaderboardScreen({
     return isBranchUnlocked(frame.sourceAchId);
   };
 
+  const getFrameTierLevel = (frame: any): number => {
+    if (!frame || !frame.sourceAchId) return 4;
+    const br = userGamification?.branchResults?.find(
+      (b: any) => b.branch?.id === frame.sourceAchId || b.branch?.code === frame.sourceAchId
+    );
+    if (!br || !br.currentTier) return 1;
+    return br.currentTier.tierLevel || 1;
+  };
+
   const triggerCelebration = () => {
     setShowCelebration(true);
     toast.success('🎉 Gelar Kehormatan Baru Terbuka!');
@@ -287,7 +426,23 @@ export function LeaderboardScreen({
             </h1>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-center">
+          <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                setAuditTargetNik(inspectorNik);
+                setShowAuditModal(true);
+              }}
+              className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-teal-500/15 hover:bg-teal-500/25 text-teal-700 dark:text-teal-300 border border-teal-500/30 transition-all cursor-pointer active:scale-95 shadow-2xs"
+              title="Buka Tabel Rekapitulasi & Audit Perolehan EXP"
+            >
+              <BarChart3 className="w-4 h-4 text-teal-500 shrink-0" />
+              <div className="text-left">
+                <span className="text-[9px] uppercase font-bold text-teal-600 dark:text-teal-400 block leading-tight">Audit Sistem</span>
+                <span className="text-xs font-black block leading-tight">Rekap EXP</span>
+              </div>
+            </button>
+
             <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-amber-500/10 border border-amber-500/25">
               <img 
                 src={userRankData.currentRank.icon} 
@@ -365,6 +520,19 @@ export function LeaderboardScreen({
             <Sparkles className="w-4 h-4 text-amber-500" />
             <span>Studio Gelar &amp; Profil</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAuditTargetNik(inspectorNik);
+              setShowAuditModal(true);
+            }}
+            className="px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/30 shadow-2xs"
+            title="Buka Tabel Rekapitulasi & Audit Perolehan EXP"
+          >
+            <BarChart3 className="w-4 h-4 text-teal-500 shrink-0" />
+            <span>Rekap Perolehan EXP</span>
+          </button>
         </div>
       </div>
 
@@ -374,7 +542,7 @@ export function LeaderboardScreen({
         {/* TAB 1: INDIVIDUAL TOP GUN LEADERBOARD */}
         {activeTab === 'individual' && (
           <div className="space-y-6">
-            {/* Season 1 Clean Baseline Status Banner */}
+            {/* Monthly Reset & Gamification Baseline Status Banner */}
             <div 
               className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-3xl border shadow-xs"
               style={{
@@ -389,20 +557,55 @@ export function LeaderboardScreen({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-black text-[var(--text-main)]">
-                      Season 1 Rilis Resmi · Clean Zero-Baseline
+                      Klasemen Performa Bulanan (Reset Otomatis Tiap Awal Bulan)
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                      Aktif Dimulai dari 0
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                      Reset Tiap Tgl 1
                     </span>
                   </div>
                   <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                    Seluruh 268 personil memulai serentak dari 0 EXP dan pangkat Trainee. Kumpulkan poin dari inspeksi alat, pelaporan KTA, P5M, dan kuis SOP!
+                    Peringkat klasemen kompetisi dihitung eksklusif dari perolehan EXP pada bulan berjalan (direset setiap awal bulan). Jenjang Pangkat Militer PB (Level 1–51) tetap permanen berdasarkan total karir.
                   </p>
                 </div>
               </div>
               <div className="text-left sm:text-right shrink-0">
-                <span className="text-[10px] text-[var(--text-muted)] block font-semibold">Status Musim</span>
-                <span className="text-xs font-mono font-bold text-teal-600 dark:text-teal-400">Dimulai Fresh</span>
+                <span className="text-[10px] text-[var(--text-muted)] block font-semibold">Periode Klasemen</span>
+                <span className="text-xs font-mono font-bold text-teal-600 dark:text-teal-400">Bulan Berjalan</span>
+              </div>
+            </div>
+
+            {/* Discipline / Achievement Category Selector (Tolak Ukur Keaktifan Personil di Tiap Bidang) */}
+            <div className="space-y-2 p-3 rounded-3xl bg-[var(--input-bg)] border border-[var(--border-main)] shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 px-1">
+                <span className="text-xs font-black text-[var(--text-main)] flex items-center gap-1.5">
+                  <Trophy className="w-4 h-4 text-amber-500" />
+                  <span>Pilih Tolak Ukur Klasemen:</span>
+                </span>
+                <span className="text-[11px] text-teal-600 dark:text-teal-400 font-bold">
+                  {selectedDiscipline === 'EXP' 
+                    ? '⚡ EXP Bulan Ini (Direset Setiap Awal Bulan)' 
+                    : `🎖️ Klasemen Keaktifan Bidang: ${activeDisciplineConfig.label}`}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {DISCIPLINE_OPTIONS.map(disc => {
+                  const isSelected = selectedDiscipline === disc.code;
+                  return (
+                    <button
+                      key={disc.code}
+                      type="button"
+                      onClick={() => setSelectedDiscipline(disc.code)}
+                      className={`px-3 py-1.5 rounded-2xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md shadow-amber-500/25 scale-102 font-black ring-1 ring-amber-400'
+                          : 'bg-[var(--card-bg)] text-[var(--text-muted)] border border-[var(--border-main)] hover:text-[var(--text-main)] hover:border-amber-400/40'
+                      }`}
+                    >
+                      <span>{disc.icon}</span>
+                      <span>{disc.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -465,12 +668,20 @@ export function LeaderboardScreen({
                       #2
                     </div>
                     {/* Avatar with Equipped Frame */}
-                    <div className={`w-18 h-18 rounded-full my-3 p-1 border-4 shadow-md bg-gradient-to-tr from-slate-200 to-slate-400 flex items-center justify-center text-2xl font-black text-slate-800 overflow-hidden ${getFrameById(top3[1].frame).ringColor} ${getFrameById(top3[1].frame).effect}`}>
-                      {top3[1].avatar ? (
-                        <img src={top3[1].avatar} alt={top3[1].name} className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        top3[1].name.slice(0, 2).toUpperCase()
-                      )}
+                    <div className="my-3 flex items-center justify-center">
+                      <DynamicAvatarFrame
+                        frameId={top3[1].frame}
+                        size={72}
+                        isUnlocked={true}
+                      >
+                        {top3[1].avatar ? (
+                          <img src={top3[1].avatar} alt={top3[1].name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-tr from-slate-200 to-slate-400 flex items-center justify-center text-2xl font-black text-slate-800">
+                            {top3[1].name.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                      </DynamicAvatarFrame>
                     </div>
                     <div className="flex items-center gap-1.5 mb-1">
                       <img 
@@ -488,18 +699,43 @@ export function LeaderboardScreen({
                     </span>
                     <span className="text-xs text-[var(--text-muted)] mt-1 font-semibold">{top3[1].section} ({top3[1].pt})</span>
                     <div className="mt-4 pt-3 border-t border-[var(--border-main)] w-full flex justify-around text-xs">
-                      <div>
-                        <span className="text-[10px] text-[var(--text-muted)] block">Season XP</span>
-                        <span className="font-black text-sm text-[var(--text-main)]">{top3[1].seasonXp}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[var(--text-muted)] block">KTA</span>
-                        <span className="font-black text-sm text-emerald-600">{top3[1].ktaCount}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[var(--text-muted)] block">Total XP</span>
-                        <span className="font-black text-sm text-amber-500">{top3[1].totalXp}</span>
-                      </div>
+                      {selectedDiscipline === 'EXP' ? (
+                        <>
+                          <div>
+                            <span className="text-[10px] text-[var(--text-muted)] block">Pangkat PB</span>
+                            <span className="font-bold text-xs text-teal-600 dark:text-teal-400 block truncate max-w-[80px]">
+                              {top3[1].currentRank?.name || 'Trainee'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-amber-500 block font-bold">EXP Bulan Ini</span>
+                            <span className="font-black text-sm text-amber-500">{top3[1].seasonXp} XP</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-[var(--text-muted)] block">Total EXP</span>
+                            <span className="font-black text-sm text-[var(--text-main)]">{top3[1].totalXp} XP</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-bold truncate max-w-[100px]">
+                              {activeDisciplineConfig.label}
+                            </span>
+                            <span className="font-black text-sm text-emerald-600 dark:text-emerald-400">
+                              {getUserDisciplineValue(top3[1], selectedDiscipline)} <span className="text-[10px] font-normal">{activeDisciplineConfig.unit}</span>
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-amber-500 block font-bold">EXP Bulan Ini</span>
+                            <span className="font-black text-xs text-amber-500">{top3[1].seasonXp} XP</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-[var(--text-muted)] block">Total EXP</span>
+                            <span className="font-black text-xs text-[var(--text-main)]">{top3[1].totalXp} XP</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -516,12 +752,20 @@ export function LeaderboardScreen({
                       </div>
                     </div>
                     {/* Avatar with Equipped Frame */}
-                    <div className={`w-22 h-22 rounded-full my-3 mt-4 p-1.5 border-4 shadow-lg shadow-amber-500/30 bg-gradient-to-tr from-amber-300 via-orange-400 to-amber-500 flex items-center justify-center text-3xl font-black text-slate-950 overflow-hidden ${getFrameById(top3[0].frame).ringColor} ${getFrameById(top3[0].frame).effect}`}>
-                      {top3[0].avatar ? (
-                        <img src={top3[0].avatar} alt={top3[0].name} className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        top3[0].name.slice(0, 2).toUpperCase()
-                      )}
+                    <div className="my-3 mt-4 flex items-center justify-center">
+                      <DynamicAvatarFrame
+                        frameId={top3[0].frame}
+                        size={84}
+                        isUnlocked={true}
+                      >
+                        {top3[0].avatar ? (
+                          <img src={top3[0].avatar} alt={top3[0].name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-tr from-amber-300 via-orange-400 to-amber-500 flex items-center justify-center text-3xl font-black text-slate-950">
+                            {top3[0].name.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                      </DynamicAvatarFrame>
                     </div>
                     <div className="flex items-center gap-1.5 mb-1">
                       <img 
@@ -539,18 +783,43 @@ export function LeaderboardScreen({
                     </span>
                     <span className="text-xs text-[var(--text-muted)] mt-1 font-semibold">{top3[0].section} ({top3[0].pt})</span>
                     <div className="mt-4 pt-3 border-t border-[var(--border-main)] w-full flex justify-around text-xs">
-                      <div>
-                        <span className="text-[10px] text-[var(--text-muted)] block">Season XP</span>
-                        <span className="font-black text-base text-amber-500">{top3[0].seasonXp}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[var(--text-muted)] block">KTA</span>
-                        <span className="font-black text-base text-emerald-600">{top3[0].ktaCount}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[var(--text-muted)] block">Total XP</span>
-                        <span className="font-black text-base text-teal-600 dark:text-teal-400">{top3[0].totalXp}</span>
-                      </div>
+                      {selectedDiscipline === 'EXP' ? (
+                        <>
+                          <div>
+                            <span className="text-[10px] text-[var(--text-muted)] block">Pangkat PB</span>
+                            <span className="font-black text-xs text-amber-500 block truncate max-w-[90px]">
+                              {top3[0].currentRank?.name || 'Trainee'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-amber-500 block font-black">EXP Bulan Ini</span>
+                            <span className="font-black text-base text-amber-500">{top3[0].seasonXp} XP</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-[var(--text-muted)] block">Total EXP</span>
+                            <span className="font-black text-base text-teal-600 dark:text-teal-400">{top3[0].totalXp} XP</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-bold truncate max-w-[110px]">
+                              {activeDisciplineConfig.label}
+                            </span>
+                            <span className="font-black text-base text-emerald-600 dark:text-emerald-400">
+                              {getUserDisciplineValue(top3[0], selectedDiscipline)} <span className="text-[10px] font-normal">{activeDisciplineConfig.unit}</span>
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-amber-500 block font-bold">EXP Bulan Ini</span>
+                            <span className="font-black text-sm text-amber-500">{top3[0].seasonXp} XP</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-[var(--text-muted)] block">Total EXP</span>
+                            <span className="font-black text-sm text-teal-600 dark:text-teal-400">{top3[0].totalXp} XP</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -568,12 +837,20 @@ export function LeaderboardScreen({
                       #3
                     </div>
                     {/* Avatar with Equipped Frame */}
-                    <div className={`w-18 h-18 rounded-full my-3 p-1 border-4 shadow-md bg-gradient-to-tr from-amber-600 to-amber-800 flex items-center justify-center text-2xl font-black text-amber-100 overflow-hidden ${getFrameById(top3[2].frame).ringColor} ${getFrameById(top3[2].frame).effect}`}>
-                      {top3[2].avatar ? (
-                        <img src={top3[2].avatar} alt={top3[2].name} className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        top3[2].name.slice(0, 2).toUpperCase()
-                      )}
+                    <div className="my-3 flex items-center justify-center">
+                      <DynamicAvatarFrame
+                        frameId={top3[2].frame}
+                        size={72}
+                        isUnlocked={true}
+                      >
+                        {top3[2].avatar ? (
+                          <img src={top3[2].avatar} alt={top3[2].name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-tr from-amber-600 to-amber-800 flex items-center justify-center text-2xl font-black text-amber-100">
+                            {top3[2].name.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                      </DynamicAvatarFrame>
                     </div>
                     <div className="flex items-center gap-1.5 mb-1">
                       <img 
@@ -591,18 +868,43 @@ export function LeaderboardScreen({
                     </span>
                     <span className="text-xs text-[var(--text-muted)] mt-1 font-semibold">{top3[2].section} ({top3[2].pt})</span>
                     <div className="mt-4 pt-3 border-t border-[var(--border-main)] w-full flex justify-around text-xs">
-                      <div>
-                        <span className="text-[10px] text-[var(--text-muted)] block">Season XP</span>
-                        <span className="font-black text-sm text-[var(--text-main)]">{top3[2].seasonXp}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[var(--text-muted)] block">KTA</span>
-                        <span className="font-black text-sm text-emerald-600">{top3[2].ktaCount}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[var(--text-muted)] block">Total XP</span>
-                        <span className="font-black text-sm text-amber-500">{top3[2].totalXp}</span>
-                      </div>
+                      {selectedDiscipline === 'EXP' ? (
+                        <>
+                          <div>
+                            <span className="text-[10px] text-[var(--text-muted)] block">Pangkat PB</span>
+                            <span className="font-bold text-xs text-teal-600 dark:text-teal-400 block truncate max-w-[80px]">
+                              {top3[2].currentRank?.name || 'Trainee'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-amber-500 block font-bold">EXP Bulan Ini</span>
+                            <span className="font-black text-sm text-amber-500">{top3[2].seasonXp} XP</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-[var(--text-muted)] block">Total EXP</span>
+                            <span className="font-black text-sm text-[var(--text-main)]">{top3[2].totalXp} XP</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-bold truncate max-w-[100px]">
+                              {activeDisciplineConfig.label}
+                            </span>
+                            <span className="font-black text-sm text-emerald-600 dark:text-emerald-400">
+                              {getUserDisciplineValue(top3[2], selectedDiscipline)} <span className="text-[10px] font-normal">{activeDisciplineConfig.unit}</span>
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-amber-500 block font-bold">EXP Bulan Ini</span>
+                            <span className="font-black text-xs text-amber-500">{top3[2].seasonXp} XP</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-[var(--text-muted)] block">Total EXP</span>
+                            <span className="font-black text-xs text-[var(--text-main)]">{top3[2].totalXp} XP</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -624,7 +926,7 @@ export function LeaderboardScreen({
               </div>
 
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                {['ALL', 'Laboratory', 'Preparation', 'Maintenance', 'Quality Assurance'].map(sec => (
+                {['ALL', 'Laboratory', 'Preparation', 'Maintenance', 'Quality Assurance', 'Inventory Control', 'Administration'].map(sec => (
                   <button
                     key={sec}
                     onClick={() => setSectionFilter(sec)}
@@ -656,10 +958,31 @@ export function LeaderboardScreen({
                       <th className="py-3 px-4">Pangkat &amp; Nama Personil</th>
                       <th className="py-3 px-4">Gelar Taktis</th>
                       <th className="py-3 px-4">Section &amp; PT</th>
-                      <th className="py-3 px-4 text-center">KTA</th>
-                      <th className="py-3 px-4 text-center">Inspeksi</th>
-                      <th className="py-3 px-4 text-right">Season XP</th>
-                      <th className="py-3 px-4 text-right">Total XP</th>
+                      {selectedDiscipline === 'EXP' ? (
+                        <>
+                          <th className="py-3 px-4 text-right">
+                            <span className="text-amber-500 font-black">EXP Bulan Ini</span>
+                            <span className="block text-[9px] font-normal text-[var(--text-muted)]">Reset Tiap Bulan</span>
+                          </th>
+                          <th className="py-3 px-4 text-right">
+                            <span>Total EXP Karir</span>
+                            <span className="block text-[9px] font-normal text-[var(--text-muted)]">Pangkat PB (Level 1-51)</span>
+                          </th>
+                        </>
+                      ) : (
+                        <>
+                          <th className="py-3 px-4 text-center">
+                            <span className="text-emerald-600 dark:text-emerald-400 font-black">{activeDisciplineConfig.label}</span>
+                            <span className="block text-[9px] font-normal text-[var(--text-muted)]">Total Kontribusi ({activeDisciplineConfig.unit})</span>
+                          </th>
+                          <th className="py-3 px-4 text-right">
+                            <span className="text-amber-500 font-bold">EXP Bulan Ini</span>
+                          </th>
+                          <th className="py-3 px-4 text-right">
+                            <span>Total EXP Karir</span>
+                          </th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]">
@@ -681,22 +1004,37 @@ export function LeaderboardScreen({
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-3">
                               {/* Avatar with Equipped Dynamic Frame Ring */}
-                              <div className={`w-8 h-8 rounded-full border-2 overflow-hidden flex items-center justify-center text-[10px] font-black shrink-0 ${getFrameById(user.frame).ringColor} ${getFrameById(user.frame).effect}`}>
+                              <DynamicAvatarFrame
+                                frameId={user.frame}
+                                size={34}
+                                isUnlocked={true}
+                              >
                                 {user.avatar ? (
                                   <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
                                 ) : (
-                                  user.name.slice(0, 2).toUpperCase()
+                                  <div className="w-full h-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-black text-slate-700 dark:text-slate-200">
+                                    {user.name.slice(0, 2).toUpperCase()}
+                                  </div>
                                 )}
-                              </div>
+                              </DynamicAvatarFrame>
                               <img 
                                 src={rankData.icon} 
                                 alt={rankData.name}
                                 className="w-6 h-6 object-contain shrink-0 filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.25)]"
                               />
                               <div className="min-w-0">
-                                <span className="font-bold text-[var(--text-main)] block truncate max-w-[170px] sm:max-w-none">
-                                  {user.name} {isMe && <span className="text-[10px] text-teal-600 dark:text-teal-400 font-bold">(Anda)</span>}
-                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setAuditTargetNik(user.nik);
+                                    setShowAuditModal(true);
+                                  }}
+                                  className="font-bold text-[var(--text-main)] hover:text-teal-600 dark:hover:text-teal-400 text-left block truncate max-w-[170px] sm:max-w-none cursor-pointer group/name transition-colors"
+                                  title="Klik untuk buka audit rincian penambahan EXP personil ini"
+                                >
+                                  <span>{user.name}</span> {isMe && <span className="text-[10px] text-teal-600 dark:text-teal-400 font-bold">(Anda)</span>}
+                                  <BarChart3 className="w-3 h-3 inline-block ml-1 opacity-0 group-hover/name:opacity-100 text-teal-500 transition-opacity" />
+                                </button>
                                 <span className="text-[10px] text-[var(--text-muted)] font-mono block truncate">
                                   {rankData.name} · {user.nik}
                                 </span>
@@ -714,18 +1052,31 @@ export function LeaderboardScreen({
                               {user.pt}
                             </span>
                           </td>
-                          <td className="py-3.5 px-4 text-center font-bold text-emerald-600">
-                            {user.ktaCount}
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-bold text-teal-600 dark:text-teal-400">
-                            {user.inspectionCount}
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-black text-amber-500">
-                            {user.seasonXp} XP
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-black text-[var(--text-main)]">
-                            {user.totalXp} XP
-                          </td>
+                          {selectedDiscipline === 'EXP' ? (
+                            <>
+                              <td className="py-3.5 px-4 text-right font-black text-amber-500">
+                                {user.seasonXp} XP
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-black text-[var(--text-main)]">
+                                {user.totalXp} XP
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="py-3.5 px-4 text-center">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-black text-xs border border-emerald-500/20">
+                                  <span>{getUserDisciplineValue(user, selectedDiscipline)}</span>
+                                  <span className="text-[10px] font-medium opacity-80">{activeDisciplineConfig.unit}</span>
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-bold text-amber-500">
+                                {user.seasonXp} XP
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-bold text-[var(--text-main)]">
+                                {user.totalXp} XP
+                              </td>
+                            </>
+                          )}
                         </tr>
                       );
                     })}
@@ -889,13 +1240,19 @@ export function LeaderboardScreen({
                                 }`}
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">
-                                  <div className={`w-8 h-8 rounded-full border-2 overflow-hidden flex items-center justify-center text-[10px] font-black shrink-0 ${getFrameById(u.frame).ringColor} ${getFrameById(u.frame).effect}`}>
+                                  <DynamicAvatarFrame
+                                    frameId={u.frame}
+                                    size={34}
+                                    isUnlocked={true}
+                                  >
                                     {u.avatar ? (
                                       <img src={u.avatar} alt={u.name} className="w-full h-full object-cover" />
                                     ) : (
-                                      u.name.slice(0, 2).toUpperCase()
+                                      <div className="w-full h-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-black text-slate-700 dark:text-slate-200">
+                                        {u.name.slice(0, 2).toUpperCase()}
+                                      </div>
                                     )}
-                                  </div>
+                                  </DynamicAvatarFrame>
                                   <div className="min-w-0">
                                     <span className="text-xs font-bold text-[var(--text-main)] block truncate">
                                       {u.name} {isMe && <span className="text-[10px] text-teal-600 font-bold">(Anda)</span>}
@@ -1007,34 +1364,86 @@ export function LeaderboardScreen({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 rounded-3xl border bg-gradient-to-r from-teal-950 via-slate-900 to-teal-950 text-white shadow-lg">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-wider text-teal-400 block mb-1">
-                  Progressive Title Mastery
+                  Progressive Title & Frame Mastery
                 </span>
                 <h3 className="text-lg font-bold font-display">12 Cabang Achievement Kehormatan</h3>
                 <p className="text-xs text-slate-300 mt-0.5 max-w-2xl">
-                  Setiap pekerjaan memiliki 4 tingkatan (Tier I s/d Tier IV Master). Gelar militer Anda akan otomatis naik tingkat saat konsisten mengulang kontribusi yang sama!
+                  Achievement tugas rutin dapat dilihat kriteria cara mendapatkannya secara transparan. Selesaikan aktivitas harian di portal untuk menaikkan pangkat, meraih gelar militer, dan membuka bingkai avatar eksklusif!
                 </p>
               </div>
-              <div className="px-3.5 py-2 rounded-2xl bg-teal-500/20 border border-teal-500/30 text-xs font-bold text-teal-300 shrink-0">
-                100% Verifikasi Sistem Otomatis
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="px-3.5 py-2 rounded-2xl bg-teal-500/20 border border-teal-500/30 text-xs font-bold text-teal-300">
+                  100% Verifikasi Sistem Otomatis
+                </div>
               </div>
             </div>
 
-            {/* Grid 12 Branches */}
+            {/* Filter Tabs: Semua, Tugas Rutin Portal, Pencapaian Rahasia */}
+            <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-[var(--border-main)]/50 w-fit">
+              <button
+                type="button"
+                onClick={() => setAchievementFilter('ALL')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  achievementFilter === 'ALL'
+                    ? 'bg-white dark:bg-slate-900 text-[var(--text-main)] shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                }`}
+              >
+                Semua ({TIERED_ACHIEVEMENTS.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAchievementFilter('ROUTINE')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  achievementFilter === 'ROUTINE'
+                    ? 'bg-teal-600 text-white shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-teal-600'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Tugas Rutin Portal ({TIERED_ACHIEVEMENTS.filter(b => !b.isHidden).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAchievementFilter('HIDDEN')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  achievementFilter === 'HIDDEN'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-amber-500'
+                }`}
+              >
+                <Lock className="w-3.5 h-3.5" />
+                Pencapaian Rahasia ({TIERED_ACHIEVEMENTS.filter(b => b.isHidden).length})
+              </button>
+            </div>
+
+            {/* Grid Branches */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {TIERED_ACHIEVEMENTS.map(branch => {
+              {TIERED_ACHIEVEMENTS.filter(b => {
+                if (achievementFilter === 'ROUTINE') return !b.isHidden;
+                if (achievementFilter === 'HIDDEN') return b.isHidden;
+                return true;
+              }).map(branch => {
                 // Find live count from user gamification stats
                 const countKeyMap: Record<string, number> = {
                   BRANCH_KTA: userGamification?.stats?.ktaCount || 0,
                   BRANCH_INSPECTION: userGamification?.stats?.inspectionCount || 0,
+                  BRANCH_DEFECTS: userGamification?.stats?.defectsCount || 0,
+                  BRANCH_WO_CREATE: userGamification?.stats?.woCreateCount || 0,
+                  BRANCH_WO_RESOLVE: userGamification?.stats?.woResolveCount || 0,
                   BRANCH_CS: userGamification?.stats?.csCount || 0,
                   BRANCH_FEEDBACK: userGamification?.stats?.feedbackCount || 0,
                   BRANCH_QUOTES: userGamification?.stats?.quotesCount || 0,
                   BRANCH_THEMES: userGamification?.stats?.themesCount || 0,
                   BRANCH_BULLETIN: userGamification?.stats?.bulletinCount || 0,
                   BRANCH_P5M_SPEAKER: userGamification?.stats?.p5mSpeakerCount || 0,
-                  BRANCH_DEFECTS: userGamification?.stats?.defectCount || 0,
                   BRANCH_QUIZ: userGamification?.stats?.quiz100Count || 0,
+                  BRANCH_LOGIN_STREAK: userGamification?.stats?.loginStreak || 0,
                   BRANCH_NIGHT: userGamification?.stats?.nightCount || 0,
+                  BRANCH_DAWN: userGamification?.stats?.dawnCount || 0,
+                  BRANCH_WEEKEND: userGamification?.stats?.weekendCount || 0,
+                  BRANCH_POLYMATH: userGamification?.stats?.polymathCount || 0,
+                  BRANCH_EASTER_EGG: userGamification?.stats?.easterEggCount || 0,
                   BRANCH_SEASON: userGamification?.stats?.seasonChampionCount || 0
                 };
 
@@ -1042,8 +1451,8 @@ export function LeaderboardScreen({
                 const progressInfo = calculateBranchProgress(branch, currentCount);
                 const isBranchRevealed = progressInfo.unlockedTitles.length > 0;
 
-                // If branch is completely locked, render as classified confidential vault
-                if (!isBranchRevealed) {
+                // Hidden achievement and completely locked: render as classified confidential vault
+                if (branch.isHidden && !isBranchRevealed) {
                   return (
                     <Card
                       key={branch.id}
@@ -1058,7 +1467,7 @@ export function LeaderboardScreen({
                           </div>
                           <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border border-amber-500/30 text-amber-400 bg-amber-500/10 flex items-center gap-1">
                             <Lock className="w-2.5 h-2.5" />
-                            Berkas Rahasia
+                            Pencapaian Rahasia
                           </span>
                         </div>
 
@@ -1066,7 +1475,7 @@ export function LeaderboardScreen({
                           🔒 [ Berkas Rahasia Komando ]
                         </h4>
                         <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                          Parameter misi terenkripsi dan dirahasiakan oleh Markas Komando. Lakukan aktivitas operasional harian untuk mengungkap kode achievement ini.
+                          {branch.hiddenHint || 'Parameter misi terenkripsi dan dirahasiakan oleh Markas Komando. Lakukan aktivitas operasional khusus untuk mengungkapnya.'}
                         </p>
                       </div>
 
@@ -1094,55 +1503,114 @@ export function LeaderboardScreen({
                   );
                 }
 
-                // Branch is revealed (Tier 1 or higher earned)
+                // Non-hidden achievement OR unlocked hidden achievement: render in full card
+                const tierLevel = progressInfo.currentTier ? progressInfo.currentTier.tierLevel : 0;
+                const tierStyle = getAchievementTierStyle(tierLevel > 0 ? tierLevel : 1);
+
                 return (
                   <Card
                     key={branch.id}
                     onClick={() => setSelectedBranch(branch)}
-                    className="p-5 rounded-3xl border shadow-xs space-y-4 flex flex-col justify-between cursor-pointer hover:scale-[1.01] hover:shadow-lg transition-all"
+                    className={`p-5 rounded-3xl ${tierLevel > 0 ? tierStyle.cardBorder : 'border-[var(--border-main)]'} ${tierLevel > 0 ? tierStyle.cardShadow : 'shadow-xs'} space-y-4 flex flex-col justify-between cursor-pointer hover:scale-[1.02] transition-all relative overflow-hidden group`}
                     style={{
                       backgroundColor: 'var(--card-bg, #FFFFFF)',
-                      borderColor: 'var(--border-main, #E2E8F0)'
                     }}
                   >
+                    {/* Ambient corner light aura for unlocked tiers */}
+                    {tierLevel > 0 && (
+                      <div className={`absolute -top-12 -right-12 w-40 h-40 bg-gradient-to-bl ${tierStyle.cardGlowAura} rounded-full blur-2xl pointer-events-none`} />
+                    )}
+
                     <div>
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-2xl shadow-inner">
+                      <div className="flex items-start justify-between gap-2 mb-2.5">
+                        <div className={`w-13 h-13 rounded-2xl ${tierLevel > 0 ? tierStyle.iconRing : 'bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-500'} flex items-center justify-center text-2xl shadow-md transition-transform group-hover:scale-105 shrink-0`}>
                           {branch.icon}
                         </div>
-                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full border border-teal-500/30 text-teal-600 dark:text-teal-400 bg-teal-500/10">
-                          {progressInfo.currentTier ? progressInfo.currentTier.tierName : 'Belum Terbuka'}
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          {branch.isHidden ? (
+                            <span className="text-[10px] uppercase font-black tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                              <Lock className="w-2.5 h-2.5" />
+                              Pencapaian Rahasia
+                            </span>
+                          ) : tierLevel > 0 ? (
+                            <span className={`text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full ${tierStyle.badgePill} flex items-center gap-1`}>
+                              <span>{tierStyle.badgeEmoji}</span>
+                              <span>{tierStyle.tierName}</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-300 dark:border-slate-700">
+                              Tugas Rutin
+                            </span>
+                          )}
+
+                          <span className="text-[9px] font-mono font-semibold text-[var(--text-muted)] flex items-center gap-1">
+                            {tierLevel > 0 ? (
+                              <>
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                Tier {tierLevel} · {tierStyle.metalLabel}
+                              </>
+                            ) : (
+                              <>Target: Tier I ({branch.tiers[0].requiredCount} {branch.unit})</>
+                            )}
+                          </span>
+                        </div>
                       </div>
 
-                      <h4 className="font-bold text-sm font-display text-[var(--text-main)]">
-                        {branch.name}
-                      </h4>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="font-bold text-sm font-display text-[var(--text-main)] group-hover:text-teal-600 transition-colors">
+                          {branch.name}
+                        </h4>
+                        {tierLevel >= 3 && <span className="text-xs animate-bounce">{tierStyle.flairIcon}</span>}
+                      </div>
+
                       <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">
                         {branch.description}
                       </p>
+
+                      {/* Explicit How To Get Box for Routine Portal Tasks */}
+                      {!branch.isHidden && branch.howToGet && (
+                        <div className="mt-2.5 p-2.5 rounded-2xl bg-teal-500/10 border border-teal-500/25 flex items-start gap-2 text-left">
+                          <Sparkles className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-teal-700 dark:text-teal-300 block">
+                              Cara Mendapatkan:
+                            </span>
+                            <p className="text-[11px] text-[var(--text-main)] leading-relaxed mt-0.5">
+                              {branch.howToGet}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Note for Cuti Site (CS): Cosmetic only, 0 EXP */}
+                      {branch.code === 'BRANCH_CS' && (
+                        <div className="mt-2.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-1.5 font-medium">
+                          <span>⛺</span>
+                          <span>Hadiah: Gelar & Bingkai Eksklusif (Tanpa EXP)</span>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="space-y-2 pt-2 border-t" style={{ borderColor: 'var(--border-main)' }}>
+                    <div className="space-y-2 pt-2.5 border-t border-[var(--border-main)]/60 relative z-10">
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="text-[var(--text-muted)] font-semibold">
-                          Progres: {currentCount} / {progressInfo.targetCount} {branch.unit}
+                          Progres: <strong className="text-[var(--text-main)]">{currentCount}</strong> / {progressInfo.targetCount} {branch.unit}
                         </span>
-                        <span className="font-black text-amber-500">
+                        <span className="font-black text-teal-600 dark:text-teal-400 font-mono">
                           {progressInfo.progressPercent}%
                         </span>
                       </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-slate-800/80 overflow-hidden p-0.5 border border-[var(--border-main)]/50">
                         <div 
-                          className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500" 
+                          className={`h-full rounded-full ${tierLevel > 0 ? `bg-gradient-to-r ${tierStyle.progressBarGradient}` : 'bg-teal-500'} transition-all duration-500`} 
                           style={{ width: `${progressInfo.progressPercent}%` }} 
                         />
                       </div>
 
                       <div className="pt-1 flex items-center justify-between text-[10px]">
-                        <span className="text-[var(--text-muted)]">Gelar Aktif:</span>
-                        <span className="font-bold text-teal-600 dark:text-teal-400 truncate max-w-[150px]">
-                          [{progressInfo.currentTier ? progressInfo.currentTier.titleReward : 'Terkunci'}]
+                        <span className="text-[var(--text-muted)] font-medium">Gelar Diperoleh:</span>
+                        <span className="font-bold text-teal-700 dark:text-teal-300 truncate max-w-[170px] bg-teal-500/10 px-2 py-0.5 rounded-md border border-teal-500/20">
+                          [{progressInfo.currentTier ? progressInfo.currentTier.titleReward : 'Belum Memenuhi'}]
                         </span>
                       </div>
                     </div>
@@ -1150,6 +1618,165 @@ export function LeaderboardScreen({
                 );
               })}
             </div>
+
+            {/* MODAL DETAIL ACHIEVEMENT (selectedBranch) */}
+            <AnimatePresence>
+              {selectedBranch && (
+                <div 
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+                  onClick={() => setSelectedBranch(null)}
+                >
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.95, opacity: 0 }}
+                    onClick={e => e.stopPropagation()}
+                    className="w-full max-w-lg rounded-3xl bg-[var(--card-bg)] border border-[var(--border-main)] shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto"
+                  >
+                    {/* Header Modal */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-3xl shadow-inner shrink-0">
+                          {selectedBranch.icon}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[var(--text-muted)] border border-[var(--border-main)]">
+                              {selectedBranch.category}
+                            </span>
+                            {selectedBranch.isHidden && (
+                              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                🔒 Rahasia
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="font-bold text-lg font-display text-[var(--text-main)] mt-1">
+                            {selectedBranch.name}
+                          </h3>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBranch(null)}
+                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-[var(--text-muted)] transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                      {selectedBranch.description}
+                    </p>
+
+                    {/* How to Get / Criteria */}
+                    <div className="p-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/25 space-y-1">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-teal-700 dark:text-teal-300 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Kriteria / Cara Mendapatkan di Portal
+                      </span>
+                      <p className="text-xs text-[var(--text-main)] leading-relaxed">
+                        {selectedBranch.howToGet || selectedBranch.hiddenHint || selectedBranch.description}
+                      </p>
+                    </div>
+
+                    {/* Tier Level Ladder */}
+                    <div className="space-y-2.5">
+                      <span className="text-xs font-bold text-[var(--text-main)] block">
+                        Tingkatan Medali & Hadiah (4 Tier):
+                      </span>
+                      <div className="space-y-2">
+                        {selectedBranch.tiers.map(tier => {
+                          // Check if user has unlocked this tier
+                          const countKeyMap: Record<string, number> = {
+                            BRANCH_KTA: userGamification?.stats?.ktaCount || 0,
+                            BRANCH_INSPECTION: userGamification?.stats?.inspectionCount || 0,
+                            BRANCH_DEFECTS: userGamification?.stats?.defectsCount || 0,
+                            BRANCH_WO_CREATE: userGamification?.stats?.woCreateCount || 0,
+                            BRANCH_WO_RESOLVE: userGamification?.stats?.woResolveCount || 0,
+                            BRANCH_CS: userGamification?.stats?.csCount || 0,
+                            BRANCH_FEEDBACK: userGamification?.stats?.feedbackCount || 0,
+                            BRANCH_QUOTES: userGamification?.stats?.quotesCount || 0,
+                            BRANCH_THEMES: userGamification?.stats?.themesCount || 0,
+                            BRANCH_BULLETIN: userGamification?.stats?.bulletinCount || 0,
+                            BRANCH_P5M_SPEAKER: userGamification?.stats?.p5mSpeakerCount || 0,
+                            BRANCH_QUIZ: userGamification?.stats?.quiz100Count || 0,
+                            BRANCH_LOGIN_STREAK: userGamification?.stats?.loginStreak || 0,
+                            BRANCH_NIGHT: userGamification?.stats?.nightCount || 0,
+                            BRANCH_DAWN: userGamification?.stats?.dawnCount || 0,
+                            BRANCH_WEEKEND: userGamification?.stats?.weekendCount || 0,
+                            BRANCH_POLYMATH: userGamification?.stats?.polymathCount || 0,
+                            BRANCH_EASTER_EGG: userGamification?.stats?.easterEggCount || 0,
+                            BRANCH_SEASON: userGamification?.stats?.seasonChampionCount || 0
+                          };
+                          const userCount = countKeyMap[selectedBranch.code] || 0;
+                          const isUnlocked = userCount >= tier.requiredCount;
+
+                          return (
+                            <div 
+                              key={tier.tierLevel}
+                              className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${
+                                isUnlocked 
+                                  ? 'bg-emerald-500/10 border-emerald-500/30' 
+                                  : 'bg-slate-50 dark:bg-slate-850/50 border-[var(--border-main)] opacity-70'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${
+                                  isUnlocked ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-200 dark:bg-slate-750 text-slate-500'
+                                }`}>
+                                  T{tier.tierLevel}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-bold text-[var(--text-main)]">
+                                      {tier.tierName}
+                                    </span>
+                                    <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                                      ({tier.requiredCount} {selectedBranch.unit})
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400">
+                                      [{tier.titleReward}]
+                                    </span>
+                                    <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 font-semibold">
+                                      {tier.xpReward > 0 ? `+${tier.xpReward} EXP` : '0 EXP (Eksklusif)'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="shrink-0 text-right">
+                                {isUnlocked ? (
+                                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-black flex items-center gap-1">
+                                    <Check className="w-3 h-3" />
+                                    Terbuka
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 text-[10px] font-bold flex items-center gap-1">
+                                    <Lock className="w-3 h-3" />
+                                    {userCount}/{tier.requiredCount}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Bottom Action */}
+                    <Button
+                      variant="outline"
+                      onClick={() => setSelectedBranch(null)}
+                      className="w-full py-2.5 rounded-2xl font-bold"
+                    >
+                      Tutup Berkas
+                    </Button>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
           </div>
         )}
 
@@ -1170,15 +1797,20 @@ export function LeaderboardScreen({
 
                     {/* Avatar with Equipped Frame */}
                     <div className="relative inline-block my-2">
-                      <div className={`w-24 h-24 rounded-full p-1 border-4 transition-all duration-300 ${
-                        AVAILABLE_FRAMES.find(f => f.id === userFrame)?.ringColor || 'border-slate-300'
-                      }`}>
-                        <div className="w-full h-full rounded-full bg-gradient-to-tr from-teal-600 to-emerald-600 flex items-center justify-center text-white text-2xl font-black">
-                          {(inspectorName || 'AF').slice(0, 2).toUpperCase()}
-                        </div>
+                      <div className="flex items-center justify-center p-2">
+                        <DynamicAvatarFrame
+                          frameId={userFrame}
+                          tierLevel={getFrameTierLevel(AVAILABLE_FRAMES.find(f => f.id === userFrame))}
+                          size={92}
+                          isUnlocked={true}
+                        >
+                          <div className="w-full h-full rounded-full bg-gradient-to-tr from-teal-600 to-emerald-600 flex items-center justify-center text-white text-2xl font-black">
+                            {(inspectorName || 'AF').slice(0, 2).toUpperCase()}
+                          </div>
+                        </DynamicAvatarFrame>
                       </div>
                       {/* Vanguard Rank Badge floating at bottom right */}
-                      <div className="absolute -bottom-2 -right-1 p-1 rounded-xl bg-[var(--card-bg)] border shadow-md" style={{ borderColor: 'var(--border-main)' }}>
+                      <div className="absolute -bottom-1 -right-1 p-1 rounded-xl bg-[var(--card-bg)] border shadow-md z-30" style={{ borderColor: 'var(--border-main)' }}>
                         <img 
                           src={userRankData.currentRank.icon} 
                           alt={userRankData.currentRank.name}
@@ -1299,6 +1931,8 @@ export function LeaderboardScreen({
                   {AVAILABLE_FRAMES.map(frame => {
                     const isSelected = userFrame === frame.id;
                     const unlocked = isFrameUnlocked(frame);
+                    const tierLevel = getFrameTierLevel(frame);
+                    const tierName = tierLevel === 1 ? 'Tier I (Bronze)' : tierLevel === 2 ? 'Tier II (Silver)' : tierLevel === 3 ? 'Tier III (Gold)' : 'Tier IV (Master)';
 
                     return (
                       <button
@@ -1312,29 +1946,66 @@ export function LeaderboardScreen({
                         }}
                         className={`p-3 rounded-2xl border text-left transition-all flex items-center gap-3 relative overflow-hidden ${
                           !unlocked 
-                            ? 'opacity-60 bg-slate-50 dark:bg-slate-800/40 border-dashed border-slate-300 dark:border-slate-700 cursor-not-allowed'
+                            ? 'opacity-70 bg-slate-50 dark:bg-slate-800/40 border-dashed border-slate-300 dark:border-slate-700 cursor-not-allowed'
                             : isSelected 
                             ? 'border-amber-500 bg-amber-500/10 text-amber-800 dark:text-amber-200 ring-2 ring-amber-500/30 cursor-pointer' 
                             : 'hover:bg-slate-50 dark:hover:bg-slate-800/60 border-[var(--border-main)] cursor-pointer'
                         }`}
                       >
-                        <div className={`w-9 h-9 rounded-full border-2 shrink-0 ${unlocked ? frame.ringColor : 'border-slate-400'} flex items-center justify-center`}>
-                          {unlocked ? <Sparkles className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-slate-400" />}
+                        {/* Dynamic Avatar Frame Mini Preview */}
+                        <div className="relative w-11 h-11 shrink-0 flex items-center justify-center">
+                          <DynamicAvatarFrame
+                            frameId={frame.id}
+                            tierLevel={tierLevel}
+                            size={36}
+                            isUnlocked={unlocked}
+                            showPreview={true}
+                          >
+                            <div className={`w-full h-full flex items-center justify-center ${unlocked ? 'bg-slate-900/70' : 'bg-slate-800/50'}`}>
+                              {unlocked ? (
+                                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                              ) : (
+                                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                              )}
+                            </div>
+                          </DynamicAvatarFrame>
                         </div>
+
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-bold text-xs truncate block">{frame.label}</span>
                             {frame.isExclusive && (
                               <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
                                 EKSKLUSIF
                               </span>
                             )}
+                            {unlocked && frame.isExclusive && (
+                              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+                                tierLevel === 4 
+                                  ? 'bg-red-500/20 text-red-500 border border-red-500/40' 
+                                  : tierLevel === 3 
+                                  ? 'bg-amber-500/20 text-amber-500 border border-amber-500/40'
+                                  : tierLevel === 2
+                                  ? 'bg-slate-400/20 text-slate-400 border border-slate-400/40'
+                                  : 'bg-amber-800/20 text-amber-700 dark:text-amber-300 border border-amber-700/40'
+                              }`}>
+                                {frame.id === 'frame_mythic_crown' 
+                                  ? (tierLevel === 4 ? 'Api Membara' : tierLevel === 3 ? 'Api Menyala' : tierLevel === 2 ? 'Api Sedang' : 'Api Redup')
+                                  : tierName}
+                              </span>
+                            )}
                           </div>
-                          <span className="text-[10px] text-[var(--text-muted)] block truncate">
+                          <span className="text-[10px] text-[var(--text-muted)] block truncate mt-0.5">
                             {unlocked 
-                              ? 'Efek visual aktif' 
-                              : `🔒 Terkunci (Ungkap: ${frame.sourceAchName})`}
+                              ? `Efek visual aktif • ${frame.id === 'frame_mythic_crown' ? `Mahkota Berapi (${tierLevel === 4 ? 'Membara' : tierLevel === 3 ? 'Menyala' : tierLevel === 2 ? 'Sedang' : 'Redup'})` : tierName}`
+                              : `🔒 Terkunci`}
                           </span>
+                          <div className="flex items-center gap-1 mt-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                            <Award className="w-3 h-3 shrink-0 text-amber-500" />
+                            <span className="truncate">
+                              {frame.sourceAchName ? `Diperoleh dari: ${frame.sourceAchName}` : 'Pencapaian Spesial'}
+                            </span>
+                          </div>
                         </div>
                         {isSelected && <Check className="w-4 h-4 text-amber-500 shrink-0" />}
                       </button>
@@ -1370,15 +2041,22 @@ export function LeaderboardScreen({
           const countKeyMap: Record<string, number> = {
             BRANCH_KTA: userGamification?.stats?.ktaCount || 0,
             BRANCH_INSPECTION: userGamification?.stats?.inspectionCount || 0,
+            BRANCH_DEFECTS: userGamification?.stats?.defectsCount || 0,
+            BRANCH_WO_CREATE: userGamification?.stats?.woCreateCount || 0,
+            BRANCH_WO_RESOLVE: userGamification?.stats?.woResolveCount || 0,
             BRANCH_CS: userGamification?.stats?.csCount || 0,
             BRANCH_FEEDBACK: userGamification?.stats?.feedbackCount || 0,
             BRANCH_QUOTES: userGamification?.stats?.quotesCount || 0,
             BRANCH_THEMES: userGamification?.stats?.themesCount || 0,
             BRANCH_BULLETIN: userGamification?.stats?.bulletinCount || 0,
             BRANCH_P5M_SPEAKER: userGamification?.stats?.p5mSpeakerCount || 0,
-            BRANCH_DEFECTS: userGamification?.stats?.defectCount || 0,
             BRANCH_QUIZ: userGamification?.stats?.quiz100Count || 0,
+            BRANCH_LOGIN_STREAK: userGamification?.stats?.loginStreak || 0,
             BRANCH_NIGHT: userGamification?.stats?.nightCount || 0,
+            BRANCH_DAWN: userGamification?.stats?.dawnCount || 0,
+            BRANCH_WEEKEND: userGamification?.stats?.weekendCount || 0,
+            BRANCH_POLYMATH: userGamification?.stats?.polymathCount || 0,
+            BRANCH_EASTER_EGG: userGamification?.stats?.easterEggCount || 0,
             BRANCH_SEASON: userGamification?.stats?.seasonChampionCount || 0
           };
           const userCount = countKeyMap[selectedBranch.code] || 0;
@@ -1458,53 +2136,65 @@ export function LeaderboardScreen({
                   </span>
                   {selectedBranch.tiers.map(t => {
                     const isUnlocked = userCount >= t.requiredCount;
+                    const tierStyle = getAchievementTierStyle(t.tierLevel);
 
                     return (
                       <div
                         key={t.tierLevel}
-                        className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                        className={`p-3.5 rounded-2xl transition-all flex items-center justify-between gap-3 relative overflow-hidden ${
                           isUnlocked 
-                            ? 'bg-teal-500/10 border-teal-500/30' 
-                            : 'bg-slate-50 dark:bg-slate-800/40 border-[var(--border-main)] opacity-75'
+                            ? `${tierStyle.modalRowBorder} ${tierStyle.modalRowGlow}` 
+                            : 'border-2 border-dashed border-slate-700/60 bg-slate-800/40 opacity-75'
                         }`}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                            isUnlocked ? 'bg-teal-500 text-white shadow-sm' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                        {/* Ambient corner shimmer if unlocked */}
+                        {isUnlocked && (
+                          <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl ${tierStyle.cardGlowAura} rounded-full blur-xl pointer-events-none`} />
+                        )}
+
+                        <div className="flex items-center gap-3 min-w-0 relative z-10">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 transition-transform ${
+                            isUnlocked ? `${tierStyle.iconRing} shadow-md` : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
                           }`}>
-                            {isUnlocked ? <Check className="w-4 h-4" /> : <Lock className="w-3.5 h-3.5" />}
+                            {isUnlocked ? tierStyle.badgeEmoji : <Lock className="w-4 h-4" />}
                           </div>
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs font-bold text-[var(--text-main)] truncate font-display">
                                 {isUnlocked 
                                   ? t.tierName 
                                   : `Tingkat ${t.tierLevel} - [ Misi Rahasia ${isBranchRevealed ? 'Lanjutan' : ''} ]`}
                               </span>
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold">
+                              <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${tierStyle.badgePill}`}>
+                                {tierStyle.borderThicknessPx}px · {tierStyle.metalLabel}
+                              </span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/25">
                                 {isUnlocked ? `+${t.xpReward} XP` : '+??? XP'}
                               </span>
                             </div>
-                            <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5 mt-0.5">
-                              <span>Target: {isUnlocked ? `${t.requiredCount} ${selectedBranch.unit}` : '???'}</span>
+                            <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5 mt-1 flex-wrap">
+                              <span>Target: <strong className="text-[var(--text-main)]">{isUnlocked ? `${t.requiredCount} ${selectedBranch.unit}` : '???'}</strong></span>
                               <span>·</span>
-                              <span className="font-bold text-teal-600 dark:text-teal-400">
+                              <span className="font-bold text-amber-600 dark:text-amber-400">
                                 Gelar: {isUnlocked ? `[${t.titleReward}]` : '[ ??? ]'}
                               </span>
                             </div>
                           </div>
                         </div>
 
-                        {isUnlocked ? (
-                          <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 shrink-0">
-                            Terbuka
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-500 shrink-0 flex items-center gap-1">
-                            <Lock className="w-3 h-3" />
-                            Rahasia
-                          </span>
-                        )}
+                        <div className="shrink-0 relative z-10">
+                          {isUnlocked ? (
+                            <span className={`text-[10px] font-black px-2.5 py-1 rounded-md ${tierStyle.badgePill} border flex items-center gap-1`}>
+                              <Check className="w-3 h-3 stroke-[3]" />
+                              Terbuka
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-500 flex items-center gap-1">
+                              <Lock className="w-3 h-3" />
+                              Rahasia
+                            </span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -1524,6 +2214,17 @@ export function LeaderboardScreen({
         })()}
       </AnimatePresence>
       </div>
+
+      {/* EXP Audit & Breakdown Modal */}
+      <ExpAuditModal
+        isOpen={showAuditModal}
+        onClose={() => setShowAuditModal(false)}
+        currentNik={inspectorNik || '02D25000055'}
+        currentName={inspectorName || ''}
+        leaderboardList={leaderboardList}
+        initialTargetNik={auditTargetNik}
+        userGamification={userGamification}
+      />
     </div>
   );
 }

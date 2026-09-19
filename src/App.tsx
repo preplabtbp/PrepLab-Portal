@@ -2,7 +2,7 @@ import { NotificationBell } from "./components/notification-bell";
 import React, { useState, useEffect, Suspense, lazy, useRef, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 
-import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare } from 'lucide-react';
+import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare, Trophy } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { appendRowsToSheet, getDowntimeRecords,updateDowntimeRepair, getEmployees, loginEmployee, getEquipments, ToolRecord, updateToolPhotoUrl, uploadPhotoToDrive } from './sheets-api';
@@ -21,6 +21,7 @@ import { GlobalOpenFindingsReminder } from './components/OpenFindingsReminderMod
 import { GlobalKtaPartialReminderModal } from './components/GlobalKtaPartialReminderModal';
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
 import { PushNotificationPrompt } from './components/PushNotificationPrompt';
+import { PromotionWelcomeModal } from './components/PromotionWelcomeModal';
 
 
 
@@ -1472,6 +1473,29 @@ export default function App() {
                 Chat
               </span>
             </button>
+
+            {/* 3. Leaderboard Launcher Button (Tersedia untuk semua pengguna) */}
+            <button
+              onClick={() => handleNav('leaderboard')}
+              className="group relative flex flex-col items-center justify-center w-14 lg:w-16 py-2.5 rounded-2xl bg-gradient-to-b from-amber-500 via-amber-600 to-yellow-600 hover:from-amber-400 hover:via-amber-500 hover:to-yellow-500 text-white shadow-xl shadow-amber-500/25 border-2 border-white/25 transition-all duration-300 active:scale-95 cursor-pointer hover:shadow-amber-500/45 hover:-translate-y-0.5"
+              title="Buka PrepLab Hall of Fame & Leaderboard"
+            >
+              {/* Glow ring on hover */}
+              <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-amber-400 to-yellow-500 opacity-0 group-hover:opacity-60 blur-xs transition-opacity duration-300 pointer-events-none" />
+
+              {/* Icon Container with subtle glass effect and micro-rotation */}
+              <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                <Trophy className="w-4 h-4 lg:w-4.5 lg:h-4.5 text-white" />
+              </div>
+
+              {/* Text Labels: Leaderboard */}
+              <span className="relative text-[8.5px] lg:text-[9.5px] font-black uppercase tracking-wider mt-1.5 font-display text-center leading-tight">
+                Leader
+              </span>
+              <span className="relative text-[7.5px] lg:text-[8px] font-bold text-amber-100 uppercase tracking-tight mt-0.5 leading-none">
+                Board
+              </span>
+            </button>
           </aside>
         )}
       </div>
@@ -1831,6 +1855,15 @@ export default function App() {
         userNik={inspectorNik} 
         userName={inspectorName} 
       />
+
+      {/* Official Main Release Rank Promotion Welcome Ceremony Modal */}
+      {inspectorNik && (
+        <PromotionWelcomeModal
+          currentUserNik={inspectorNik}
+          currentUserName={inspectorName}
+          userAvatar={userProfile?.avatar}
+        />
+      )}
 
     </div>
   );

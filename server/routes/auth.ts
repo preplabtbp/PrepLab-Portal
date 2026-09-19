@@ -4,7 +4,7 @@ import nodemailer from "nodemailer";
 import { eq, or, sql } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import { db } from "../../src/db/index.js";
-import { employees } from "../../src/db/schema.js";
+import { employees, portalLogins } from "../../src/db/schema.js";
 import { 
   generateAuthToken, 
   toPublicEmployee, 
@@ -13,6 +13,22 @@ import {
   JWT_SECRET
 } from "../middleware/auth.js";
 import { env } from "../config/env.js";
+
+// Helper: Record daily portal visit for login streak tracking
+export async function recordDailyLogin(nik: string) {
+  try {
+    if (!nik) return;
+    const cleanNik = nik.trim().toUpperCase();
+    const now = new Date();
+    // Use Jayapura/WIT timezone UTC+9
+    const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
+    await db.insert(portalLogins)
+      .values({ nik: cleanNik, loginDate: dateStr })
+      .onConflictDoNothing();
+  } catch (e) {
+    // Ignore duplicate or minor error
+  }
+}
 
 export const authRouter = Router();
 
@@ -215,10 +231,13 @@ authRouter.post("/login", async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
+    // Record daily login streak
+    recordDailyLogin(user.nik).catch(() => {});
+
     return res.json({ 
       status: "success", 
       requireSetup: false, 
-      employee: toPublicEmployee(user),
+      employee: toPublicEmployee(user), 
       token
     });
   } catch(e: any) {
@@ -231,6 +250,9 @@ authRouter.post("/login", async (req, res) => {
 authRouter.get("/me", requireAuth, async (req, res) => {
   try {
     const sessionUser = (req as any).user;
+    if (sessionUser?.nik) {
+      recordDailyLogin(sessionUser.nik).catch(() => {});
+    }
     const employeeMatches = await db.select().from(employees).where(eq(employees.nik, sessionUser.nik)).limit(1);
     
     if (employeeMatches.length > 0) {

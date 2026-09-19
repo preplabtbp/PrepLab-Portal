@@ -12,7 +12,7 @@ export const createPool = () => {
     database: process.env.SQL_DB_NAME,
     connectionTimeoutMillis: 10000,
     idleTimeoutMillis: 30000,
-    max: 20,
+    max: 10,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
   });

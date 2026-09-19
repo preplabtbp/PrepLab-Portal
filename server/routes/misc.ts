@@ -17,6 +17,7 @@ import {
 } from "../utils.js";
 import webpush from 'web-push';
 import { invalidateScheduleCache, fetchInspectionScheduleFromSheet } from "./inspections.js";
+import { invalidateGamificationCache } from "./gamification.js";
 
 export const router = Router();
 
@@ -2802,6 +2803,7 @@ router.post("/api/themes", async (req, res) => {
           await db.insert(userThemes).values({ nik, mode: m, themeName: themeName || m, colors: JSON.stringify(colors) });
         }
       }
+      invalidateGamificationCache();
       return res.json({ status: "success", message: "Tema berhasil diterapkan dan disimpan!" });
     } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
@@ -2871,6 +2873,7 @@ router.post("/api/themes/templates", async (req, res) => {
         }
       }
 
+      invalidateGamificationCache();
       return res.json({ 
         status: "success", 
         message: isPublished ? "Tema berhasil disimpan dan dipublikasikan ke Komunitas!" : "Template kustom berhasil disimpan!", 
@@ -2912,6 +2915,7 @@ router.post("/api/themes/templates/:id/publish", async (req, res) => {
       };
 
       await db.update(userThemes).set(updateData).where(and(eq(userThemes.id, templateId), eq(userThemes.nik, nik)));
+      invalidateGamificationCache();
       res.json({ 
         status: "success", 
         message: willPublish 
@@ -2936,6 +2940,7 @@ router.delete("/api/themes/templates/:id", async (req, res) => {
         deleteQuery = eq(userThemes.id, templateId);
       }
       await db.delete(userThemes).where(deleteQuery);
+      invalidateGamificationCache();
       res.json({ status: "success", message: "Template berhasil dihapus!" });
     } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
