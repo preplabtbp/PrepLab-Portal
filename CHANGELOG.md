@@ -2,6 +2,17 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.4] - 2026-09-19
+
+### 🔤 Pengurutan Alfabetis Dropdown Alat (Backend API & Client Summary Engine)
+
+- **Sinkronisasi Pengurutan Alfabetis (A - Z) Menyeluruh (`server/routes/workOrders.ts` & `src/components/wo-maintenance-dashboard.tsx`)**:
+  - Menyempurnakan pengurutan `equipmentList` di endpoint backend `/api/work-orders/maintenance-summary` dan kalkulator ringkasan frontend `computeClientSummary` agar sepenuhnya tersusun secara alfabetis dari A ke Z (menggantikan pengurutan berbasis durasi downtime).
+  - Menjaga integritas kartu ringkasan KPI *Peralatan Downtime Tertinggi* (`topDowntimeEquipment`) dengan mengidentifikasi alat dengan akumulasi jam henti terbesar secara independen sebelum pengurutan nama A - Z diterapkan.
+  - Memastikan *natural sorting* dan *whitespace trimming* bekerja optimal di seluruh browser desktop maupun mobile.
+- **Cache-Busting Bundle Frontend**:
+  - Pembaruan hash bundler Vite (`wo-maintenance-dashboard-BJCbE22T.js` dan `index-CABbzFAq.js`) untuk memastikan browser pengguna memuat bundel skrip terbaru tanpa tertahan oleh cache lama.
+
 ## [2.9.3] - 2026-09-19
 
 ### 🔧 Standarisasi Peralatan Non-Instrument, Unifikasi Kode & Pengurutan Alfabetis Dropdown

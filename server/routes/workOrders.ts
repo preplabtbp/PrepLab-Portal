@@ -211,7 +211,17 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
       ...eq,
       totalDowntime: Math.round(eq.totalDowntime * 10) / 10,
       mttr: eq.woCount > 0 ? Math.round((eq.totalDowntime / eq.woCount) * 10) / 10 : 0
-    })).sort((a, b) => b.totalDowntime - a.totalDowntime);
+    }));
+
+    // Find top downtime equipment before alphabetical sorting
+    const topDowntimeEquipment = [...equipmentList].sort((a, b) => b.totalDowntime - a.totalDowntime)[0] || null;
+
+    // Sort equipmentList alphabetically (A - Z) by equipmentName, secondary by equipmentCode
+    equipmentList.sort((a, b) => {
+      const cmp = (a.equipmentName || '').localeCompare(b.equipmentName || '', 'id', { sensitivity: 'base', numeric: true });
+      if (cmp !== 0) return cmp;
+      return (a.equipmentCode || '').localeCompare(b.equipmentCode || '', 'id', { sensitivity: 'base', numeric: true });
+    });
 
     const sparepartsList = Object.values(sparepartMap).map(sp => ({
       sparepartName: sp.sparepartName,
@@ -232,7 +242,7 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
         mttrHours: mttrOverall,
         totalSparepartUnits: Math.round(totalSparepartUnits * 10) / 10,
         totalEquipmentsWithDowntime: equipmentList.length,
-        topDowntimeEquipment: equipmentList[0] || null
+        topDowntimeEquipment: topDowntimeEquipment
       },
       categorySummary: {
         'Instrument (L)': {

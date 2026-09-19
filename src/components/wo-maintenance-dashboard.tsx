@@ -260,7 +260,17 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       ...eq,
       totalDowntime: Number(eq.totalDowntime.toFixed(1)),
       mttr: eq.woCount > 0 ? Number((eq.totalDowntime / eq.woCount).toFixed(1)) : 0
-    })).sort((a, b) => b.totalDowntime - a.totalDowntime);
+    }));
+
+    // Find top downtime equipment before alphabetical sorting
+    const topDowntimeEquipment = [...equipmentList].sort((a, b) => b.totalDowntime - a.totalDowntime)[0] || null;
+
+    // Sort equipmentList alphabetically A-Z
+    equipmentList.sort((a, b) => {
+      const cmp = (a.equipmentName || '').localeCompare(b.equipmentName || '', 'id', { sensitivity: 'base', numeric: true });
+      if (cmp !== 0) return cmp;
+      return (a.equipmentCode || '').localeCompare(b.equipmentCode || '', 'id', { sensitivity: 'base', numeric: true });
+    });
 
     const sparepartsList = Array.from(sparepartMap.values()).map(sp => ({
       sparepartName: sp.sparepartName,
@@ -280,7 +290,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
         mttrHours,
         totalSparepartUnits: Number(totalSparepartUnits.toFixed(0)),
         totalEquipmentsWithDowntime: equipmentList.length,
-        topDowntimeEquipment: equipmentList[0] || null
+        topDowntimeEquipment: topDowntimeEquipment
       },
       categorySummary,
       equipmentList,
@@ -362,9 +372,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
     const list = data.equipmentList || [];
     const filtered = selectedCategory === 'ALL' ? list : list.filter(eq => eq.category === selectedCategory);
     return [...filtered].sort((a, b) => {
-      const cmp = (a.equipmentName || '').localeCompare(b.equipmentName || '', 'id', { sensitivity: 'base', numeric: true });
+      const cmp = (a.equipmentName || '').trim().localeCompare((b.equipmentName || '').trim(), 'id', { sensitivity: 'base', numeric: true });
       if (cmp !== 0) return cmp;
-      return (a.equipmentCode || '').localeCompare(b.equipmentCode || '', 'id', { sensitivity: 'base', numeric: true });
+      return (a.equipmentCode || '').trim().localeCompare((b.equipmentCode || '').trim(), 'id', { sensitivity: 'base', numeric: true });
     });
   }, [data.equipmentList, selectedCategory]);
 
