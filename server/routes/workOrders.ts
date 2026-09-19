@@ -16,6 +16,7 @@ import {
 import webpush from 'web-push';
 import path from "path";
 import { workOrderSchema, ticketSchema } from "../../src/lib/zod.js";
+import { normalizeEquipment } from "../../src/lib/equipmentNormalizer.js";
 
 export const router = Router();
 
@@ -118,10 +119,14 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
     };
 
     allWOs.forEach(wo => {
-      const normCat = normalizeCategory(wo.category);
-      const eqName = wo.equipmentName?.trim() || 'Alat Tanpa Nama';
-      const eqCode = wo.equipmentCode?.trim() || '-';
-      const eqKey = `${eqCode}___${eqName}`;
+      const norm = normalizeEquipment(wo.equipmentName, wo.equipmentCode, wo.category);
+      if (norm.isTest) return;
+
+      const normCat = norm.category === 'Instrument (L)' ? 'Instrument (L)' : 'Non-Instrument (PL)';
+      const eqName = norm.name;
+      const eqCode = norm.code;
+      // For non-instrument equipment, group by standard name to unify variations under one asset
+      const eqKey = norm.isInstrument ? `${eqCode}___${eqName}` : `NON_INSTR___${eqName}`;
 
       // Calculate downtime
       let dtHours = 0;

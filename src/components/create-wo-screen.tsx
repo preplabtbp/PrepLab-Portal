@@ -10,6 +10,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import { toast } from 'sonner';
 import { workOrderSchema } from '../lib/zod';
 import { PageHeader } from './PageHeader';
+import { normalizeEquipment, STANDARD_NON_INSTRUMENT_NAMES } from '../lib/equipmentNormalizer';
 
 export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategories }: { inspectorName: string, inspectorNik: string, equipmentCategories: {category: string, tools: ToolRecord[]}[] }) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -138,7 +139,9 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
         toolId = selectedTool ? selectedTool.id : '-';
         toolName = selectedTool ? selectedTool.name : (formData.toolSearch.split(' - ')[0] || formData.toolSearch || '-');
       } else {
-        toolName = formData.toolNameManual;
+        const norm = normalizeEquipment(formData.toolNameManual, '-', 'Non-Instrument');
+        toolName = norm.name;
+        toolId = norm.code !== '-' ? norm.code : 'NON-INSTR';
       }
 
       // Get signature base64
@@ -327,12 +330,29 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
                 )}
               </>
             ) : (
-              <Input 
-                placeholder="Masukkan nama alat / mesin secara manual..."
-                value={formData.toolNameManual}
-                onChange={(e) => setFormData({...formData, toolNameManual: e.target.value})}
-                required
-              />
+              <>
+                <input 
+                  list="non-instruments-list"
+                  type="text"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-white shadow-sm"
+                  placeholder="Pilih atau ketik nama alat non-instrument (cth: Gerobak Arco, Sekop JIS 30D)..."
+                  value={formData.toolNameManual}
+                  onChange={(e) => setFormData({...formData, toolNameManual: e.target.value})}
+                  required
+                />
+                <datalist id="non-instruments-list">
+                  {STANDARD_NON_INSTRUMENT_NAMES.map((name, idx) => (
+                    <option key={`non-instr-${idx}`} value={name} />
+                  ))}
+                </datalist>
+
+                {formData.toolNameManual && (
+                  <div className="text-xs text-teal-700 bg-teal-50/90 px-3 py-2 rounded-lg mt-2 border border-teal-200/80 font-medium flex items-center justify-between shadow-2xs">
+                    <span>Nama Standar Terdeteksi: <strong>{normalizeEquipment(formData.toolNameManual, '-', 'Non-Instrument').name}</strong></span>
+                    <span className="text-[10px] text-teal-700 bg-teal-100/80 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Tersinkron</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

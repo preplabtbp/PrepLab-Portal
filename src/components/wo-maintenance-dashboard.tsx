@@ -29,6 +29,7 @@ import {
   getISOWeekRange,
   formatISOWeekLabel 
 } from '../utils/iso-week';
+import { normalizeEquipment } from '../lib/equipmentNormalizer';
 
 ChartJS.register(
   CategoryScale,
@@ -183,7 +184,14 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
     const sparepartMap = new Map<string, any>();
 
     for (const wo of filtered) {
-      const cat = normalizeCategory(wo.category);
+      const norm = normalizeEquipment(
+        wo.equipmentName ?? wo.equipment_name,
+        wo.equipmentCode ?? wo.equipment_code,
+        wo.category
+      );
+      if (norm.isTest) continue;
+
+      const cat = norm.category === 'Instrument (L)' ? 'Instrument (L)' : 'Non-Instrument (PL)';
       const dt = parseDowntime(wo.downtimeDuration ?? wo.downtime_duration);
       const qty = parseQty(wo.sparepartQty ?? wo.sparepart_qty);
       const status = wo.status || 'Closed';
@@ -202,9 +210,10 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
         if (isOpen) categorySummary[cat].openCount += 1;
       }
 
-      const eqCode = (wo.equipmentCode ?? wo.equipment_code ?? '').trim() || 'General';
-      const eqName = (wo.equipmentName ?? wo.equipment_name ?? '').trim() || 'Peralatan Lainnya';
-      const eqKey = `${eqCode}___${eqName}`;
+      const eqCode = norm.code;
+      const eqName = norm.name;
+      // For non-instrument equipment, group by standard name to aggregate identical items
+      const eqKey = norm.isInstrument ? `${eqCode}___${eqName}` : `NON_INSTR___${eqName}`;
 
       if (!equipmentMap.has(eqKey)) {
         equipmentMap.set(eqKey, {
@@ -348,11 +357,15 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   // List of all raw WOs from backend
   const rawWorkOrders = useMemo(() => data.rawWorkOrders || [], [data.rawWorkOrders]);
 
-  // Available unique equipments from list
+  // Available unique equipments from list (sorted alphabetically A-Z)
   const availableEquipments = useMemo(() => {
     const list = data.equipmentList || [];
-    if (selectedCategory === 'ALL') return list;
-    return list.filter(eq => eq.category === selectedCategory);
+    const filtered = selectedCategory === 'ALL' ? list : list.filter(eq => eq.category === selectedCategory);
+    return [...filtered].sort((a, b) => {
+      const cmp = (a.equipmentName || '').localeCompare(b.equipmentName || '', 'id', { sensitivity: 'base', numeric: true });
+      if (cmp !== 0) return cmp;
+      return (a.equipmentCode || '').localeCompare(b.equipmentCode || '', 'id', { sensitivity: 'base', numeric: true });
+    });
   }, [data.equipmentList, selectedCategory]);
 
   // Filtered WOs based on Category, Equipment Selection, and Search Query
@@ -361,22 +374,29 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       // Exclude dummy / test work orders
       if (isDummyOrTestWO(wo)) return false;
 
+      const norm = normalizeEquipment(
+        wo.equipmentName ?? wo.equipment_name,
+        wo.equipmentCode ?? wo.equipment_code,
+        wo.category
+      );
+      if (norm.isTest) return false;
+
       // Category Filter
       if (selectedCategory !== 'ALL') {
-        const woCat = (wo.category || '').toLowerCase();
-        if (selectedCategory === 'Instrument (L)') {
-          if (!woCat.includes('instrument') || woCat.includes('non')) return false;
-        } else if (selectedCategory === 'Non-Instrument (PL)') {
-          if (!woCat.includes('non') && !woCat.includes('prep') && woCat.includes('instrument')) return false;
-        }
+        if (norm.category !== selectedCategory) return false;
       }
 
       // Equipment Code / Key Filter
       if (selectedEquipmentCode !== 'ALL') {
-        const eqCode = (wo.equipmentCode || '').trim();
-        const eqName = (wo.equipmentName || '').trim();
-        const key = `${eqCode}___${eqName}`;
-        if (eqCode !== selectedEquipmentCode && key !== selectedEquipmentCode && eqName !== selectedEquipmentCode) {
+        const eqCode = norm.code;
+        const eqName = norm.name;
+        const key = norm.isInstrument ? `${eqCode}___${eqName}` : `NON_INSTR___${eqName}`;
+        if (
+          selectedEquipmentCode !== key && 
+          selectedEquipmentCode !== `${eqCode}___${eqName}` &&
+          selectedEquipmentCode !== eqName && 
+          selectedEquipmentCode !== eqCode
+        ) {
           return false;
         }
       }
@@ -385,7 +405,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchWO = (wo.woId || '').toLowerCase().includes(q);
-        const matchTool = (wo.equipmentName || '').toLowerCase().includes(q);
+        const matchTool = (norm.name || '').toLowerCase().includes(q) || (wo.equipmentName || '').toLowerCase().includes(q);
         const matchIssue = (wo.issueDescription || '').toLowerCase().includes(q);
         const matchAction = (wo.actionTaken || '').toLowerCase().includes(q);
         const matchPic = (wo.technicianPic || '').toLowerCase().includes(q);
@@ -429,14 +449,22 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       else openCount++;
 
       // Tool breakdown
-      const eqName = wo.equipmentName?.trim() || 'Alat Tanpa Nama';
-      const eqCode = wo.equipmentCode?.trim() || '-';
-      const key = `${eqCode}___${eqName}`;
+      const norm = normalizeEquipment(
+        wo.equipmentName ?? wo.equipment_name,
+        wo.equipmentCode ?? wo.equipment_code,
+        wo.category
+      );
+      if (norm.isTest) return;
+
+      const eqName = norm.name;
+      const eqCode = norm.code;
+      const key = norm.isInstrument ? `${eqCode}___${eqName}` : `NON_INSTR___${eqName}`;
+
       if (!toolDowntimeMap[key]) {
         toolDowntimeMap[key] = {
           code: eqCode,
           name: eqName,
-          category: wo.category || 'Non-Instrument (PL)',
+          category: norm.category,
           downtime: 0,
           woCount: 0
         };
@@ -497,7 +525,10 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   const activeSelectedTool = useMemo(() => {
     if (selectedEquipmentCode === 'ALL') return null;
     return computedMetrics.sortedTools.find(
-      t => t.code === selectedEquipmentCode || `${t.code}___${t.name}` === selectedEquipmentCode || t.name === selectedEquipmentCode
+      t => t.code === selectedEquipmentCode || 
+           `${t.code}___${t.name}` === selectedEquipmentCode || 
+           `NON_INSTR___${t.name}` === selectedEquipmentCode || 
+           t.name === selectedEquipmentCode
     ) || null;
   }, [selectedEquipmentCode, computedMetrics.sortedTools]);
 
@@ -528,8 +559,10 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
     filteredWorkOrders.forEach(wo => {
       let dt = parseFloat(String(wo.downtimeDuration || '0').replace(',', '.')) || 0;
-      const c = (wo.category || '').toLowerCase();
-      if (c.includes('instrument') && !c.includes('non')) {
+      const norm = normalizeEquipment(wo.equipmentName, wo.equipmentCode, wo.category);
+      if (norm.isTest) return;
+
+      if (norm.isInstrument) {
         instrumentDowntime += dt;
       } else {
         nonInstrumentDowntime += dt;
@@ -571,26 +604,29 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   // Export to Excel
   const handleExportExcel = () => {
     try {
-      const exportData = filteredWorkOrders.map((wo, idx) => ({
-        'No': idx + 1,
-        'No. WO': wo.woId || '-',
-        'Tanggal Kerusakan': wo.date ? new Date(wo.date).toLocaleString('id-ID') : '-',
-        'Shift': wo.shift || '-',
-        'Kode Alat': wo.equipmentCode || '-',
-        'Nama Alat': wo.equipmentName || '-',
-        'Kategori': wo.category || '-',
-        'Lokasi Area': wo.location || '-',
-        'Deskripsi Kerusakan': wo.issueDescription || '-',
-        'Tindakan Perbaikan': wo.actionTaken || '-',
-        'Downtime (Jam)': wo.downtimeDuration || '0',
-        'Sparepart Diganti': wo.sparepartName || '-',
-        'Qty Sparepart': wo.sparepartQty || '-',
-        'Teknisi PIC': wo.technicianPic || '-',
-        'Mulai Perbaikan': wo.repairStart ? new Date(wo.repairStart).toLocaleString('id-ID') : '-',
-        'Selesai Perbaikan': wo.repairEnd ? new Date(wo.repairEnd).toLocaleString('id-ID') : '-',
-        'Status': wo.status || 'Open',
-        'Pelapor (Requestor)': wo.requestorName || '-'
-      }));
+      const exportData = filteredWorkOrders.map((wo, idx) => {
+        const norm = normalizeEquipment(wo.equipmentName, wo.equipmentCode, wo.category);
+        return {
+          'No': idx + 1,
+          'No. WO': wo.woId || '-',
+          'Tanggal Kerusakan': wo.date ? new Date(wo.date).toLocaleString('id-ID') : '-',
+          'Shift': wo.shift || '-',
+          'Kode Alat': norm.code !== '-' ? norm.code : (wo.equipmentCode || '-'),
+          'Nama Alat': norm.name,
+          'Kategori': norm.category,
+          'Lokasi Area': wo.location || '-',
+          'Deskripsi Kerusakan': wo.issueDescription || '-',
+          'Tindakan Perbaikan': wo.actionTaken || '-',
+          'Downtime (Jam)': wo.downtimeDuration || '0',
+          'Sparepart Diganti': wo.sparepartName || '-',
+          'Qty Sparepart': wo.sparepartQty || '-',
+          'Teknisi PIC': wo.technicianPic || '-',
+          'Mulai Perbaikan': wo.repairStart ? new Date(wo.repairStart).toLocaleString('id-ID') : '-',
+          'Selesai Perbaikan': wo.repairEnd ? new Date(wo.repairEnd).toLocaleString('id-ID') : '-',
+          'Status': wo.status || 'Open',
+          'Pelapor (Requestor)': wo.requestorName || '-'
+        };
+      });
 
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
@@ -751,10 +787,11 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                 🌟 Semua Alat ({availableEquipments.length} Alat)
               </option>
               {availableEquipments.map((eq: any) => {
-                const key = `${eq.equipmentCode}___${eq.equipmentName}`;
+                const key = eq.category === 'Instrument (L)' ? `${eq.equipmentCode}___${eq.equipmentName}` : `NON_INSTR___${eq.equipmentName}`;
+                const hasCode = eq.equipmentCode && eq.equipmentCode !== '-' && eq.category === 'Instrument (L)';
                 return (
                   <option key={key} value={key} style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>
-                    {eq.equipmentName} ({eq.totalDowntime} Jam • {eq.woCount} WO)
+                    {eq.equipmentName} {hasCode ? `(${eq.equipmentCode})` : ''} ({eq.totalDowntime} Jam • {eq.woCount} WO)
                   </option>
                 );
               })}

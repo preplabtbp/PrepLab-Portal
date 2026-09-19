@@ -2,6 +2,22 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.3] - 2026-09-19
+
+### 🔧 Standarisasi Peralatan Non-Instrument, Unifikasi Kode & Pengurutan Alfabetis Dropdown
+
+- **Standarisasi Nomenklatur Peralatan Non-Instrument (`src/lib/equipmentNormalizer.ts`)**:
+  - Mengintegrasikan modul sentral `equipmentNormalizer.ts` yang menyatukan 120+ variasi nama alat liar dan typo menjadi 31 nama peralatan standar kanonikal (seperti *Gerobak Arco*, *Sekop JIS 30D*, *Sekop Besar / Ujung Rata*, *Ayakan Screen Test 200 Mesh*, *Lampu & Penerangan*, *Pintu & Aksesoris*, *Exhaust Fan*, dll.).
+  - Menetapkan kode kanonikal ketat untuk setiap peralatan non-instrument (contoh: `GA` untuk Gerobak Arco, `AST` untuk Ayakan Screen Test, `KRN` untuk Keran & Pipa Air, dll.) agar pengelompokan metrik downtime tidak lagi terfragmentasi.
+- **Unifikasi Data & Migrasi Database (`work_orders`)**:
+  - Melakukan migrasi database PostgreSQL pada tabel `work_orders` untuk membersihkan dan menyatukan seluruh riwayat data nama dan kode alat non-instrument.
+  - Menyingkirkan seluruh variasi nama ganda (0 duplikat tersisa) pada dropdown dan grafik dashboard.
+- **Pengurutan Alfabetis Dropdown "Pilih Alat Spesifik" (`src/components/wo-maintenance-dashboard.tsx`)**:
+  - Mengurutkan daftar alat pada dropdown filter dashboard secara alfabetis dari **A sampai Z** dengan *natural sorting* (`localeCompare`), dilengkapi pengurutan sekunder berdasarkan nomor/kode alat untuk kategori instrumen.
+- **Rekomendasi & Autocomplete Form Create WO (`src/components/create-wo-screen.tsx`)**:
+  - Menambahkan datalist rekomendasi 31 alat standar saat membuat WO Non-Instrument.
+  - Dilengkapi deteksi otomatis nama standar secara dinamis sehingga input pengguna selalu terstandarisasi sebelum disimpan ke database.
+
 ## [2.9.2] - 2026-09-19
 
 ### 🎖️ Penyatuan Card Profil, Direktori Pangkat Leaderboard & Perbaikan Akses Flyer P5M
