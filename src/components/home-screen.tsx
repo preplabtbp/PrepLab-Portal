@@ -127,6 +127,62 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
         />
       </section>
 
+      {/* Hall of Fame & Vanguard Rank Quick Banner */}
+      <section className="w-full">
+        <div 
+          onClick={() => onNav('leaderboard')}
+          className="group relative overflow-hidden rounded-2xl border p-4 sm:p-5 transition-all duration-300 shadow-xs hover:shadow-md hover:border-amber-500/50 cursor-pointer"
+          style={{
+            backgroundColor: 'var(--card-bg, #FFFFFF)',
+            borderColor: 'var(--border-main, #E2E8F0)'
+          }}
+        >
+          {/* Subtle tactical ambient background glow */}
+          <div className="absolute top-0 right-0 w-80 h-full bg-gradient-to-l from-amber-500/15 via-teal-500/10 to-transparent pointer-events-none" />
+          <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 p-2 flex items-center justify-center border border-amber-500/30 shadow-md group-hover:scale-105 group-hover:border-amber-400 transition-all shrink-0">
+                <img 
+                  src="/assets/ranks/rank_01_trainee.svg" 
+                  alt="Pangkat Operasional"
+                  className="w-8 h-8 sm:w-10 sm:h-10 object-contain filter drop-shadow-[0_2px_6px_rgba(0,0,0,0.25)]"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                    Tangga Kemahiran Operasional
+                  </span>
+                  <span className="text-[10px] font-semibold text-[var(--text-muted)] flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    Season 1 Aktif
+                  </span>
+                </div>
+                <h3 className="font-display font-black text-base sm:text-lg text-[var(--text-main)] group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors flex items-center gap-2">
+                  <span>PrepLab Hall of Fame &amp; Operational Vanguard</span>
+                </h3>
+                <p className="text-xs text-[var(--text-muted)] line-clamp-1">
+                  Capai jenjang tertinggi Supreme Vanguard Commander melalui keaktifan inspeksi, pelaporan KTA/TTA, &amp; kontribusi operasional!
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 group-hover:translate-x-0.5 transition-all"
+              >
+                <span>Buka Leaderboard</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Quick Shift Utilities (Non-duplicated) */}
       <section className="space-y-3 pt-1">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">

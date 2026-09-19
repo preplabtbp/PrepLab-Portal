@@ -1,15 +1,18 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Card, Button } from '../components/ui';
 import { 
   LogOut, Briefcase, MapPin, Building, Hash, CalendarIcon, 
   Users, UserCircle2, ArrowLeft, Plane, Info, X, Camera, 
-  Trash2, Image as ImageIcon, Calendar, Sparkles, Check, Upload, RefreshCw
+  Trash2, Image as ImageIcon, Calendar, Sparkles, Check, Upload, RefreshCw,
+  Trophy, Award, Shield, ChevronRight, Zap, Star
 } from 'lucide-react';
+import { getRankByXp } from '../lib/pointBlankRanks';
 import { getRosterData } from '../sheets-api';
 import { motion, useDragControls } from 'motion/react';
 import { toast } from 'sonner';
 import { UsernamePromptModal } from '../components/UsernamePromptModal';
 import { PixelAvatarModal } from '../components/PixelAvatarModal';
+import { getFrameById } from '../lib/gamificationEngine';
 
 export const PRESET_PROFILE_COVERS = [
   {
@@ -436,6 +439,57 @@ export function ProfilePage({
     return () => { isMounted = false; };
   }, [inspectorName, inspectorNik]);
 
+  // Gamification & Vanguard Rank Data
+  const [gamificationData, setGamificationData] = useState<any>(null);
+  const [loadingGamification, setLoadingGamification] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!inspectorNik) {
+      setLoadingGamification(false);
+      return;
+    }
+    fetch(`/api/gamification/user-stats/${encodeURIComponent(inspectorNik)}`)
+      .then(res => res.json())
+      .then(json => {
+        if (isMounted) {
+          const data = json.data || json;
+          setGamificationData(data);
+        }
+      })
+      .catch(err => console.error('Failed to load gamification stats', err))
+      .finally(() => {
+        if (isMounted) setLoadingGamification(false);
+      });
+    return () => { isMounted = false; };
+  }, [inspectorNik]);
+
+  const rankInfo = useMemo(() => {
+    if (gamificationData?.rankInfo) {
+      return gamificationData.rankInfo;
+    }
+    if (gamificationData?.rank) {
+      return gamificationData.rank;
+    }
+    if (typeof gamificationData?.totalXp === 'number') {
+      return getRankByXp(gamificationData.totalXp);
+    }
+    return getRankByXp(0);
+  }, [gamificationData]);
+
+  const activeMilitaryTitle = useMemo(() => {
+    const saved = localStorage.getItem('preplab_equipped_title');
+    if (saved && saved !== 'Frontline Scout') {
+      return saved;
+    }
+    return gamificationData?.defaultTitle || gamificationData?.equippedTitle || 'Frontline Trainee';
+  }, [gamificationData]);
+
+  const activeAvatarFrame = useMemo(() => {
+    const saved = localStorage.getItem('preplab_equipped_frame');
+    return saved || gamificationData?.equippedFrame || 'default';
+  }, [gamificationData]);
+
   // Calculate detailed cuti info
   const cutiInfo = React.useMemo(() => {
     const source = myRosterData || profile || {};
@@ -678,13 +732,14 @@ export function ProfilePage({
 
             <div className="px-5 pb-5 relative">
               <div className="flex justify-between items-end -mt-10 sm:-mt-12 mb-4">
-                {/* Avatar Box with Edit Badge */}
+                {/* Avatar Box with Equipped Dynamic Frame Ring */}
                 <div className="relative group">
                   <div 
-                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl p-1 shadow-md relative overflow-hidden border"
+                    className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl p-1 shadow-md relative overflow-hidden border transition-all duration-300 ${
+                      getFrameById(activeAvatarFrame).ringColor
+                    } ${getFrameById(activeAvatarFrame).effect}`}
                     style={{
-                      backgroundColor: 'var(--card-bg, #FFFFFF)',
-                      borderColor: 'var(--border-main, #E2E8F0)'
+                      backgroundColor: 'var(--card-bg, #FFFFFF)'
                     }}
                   >
                     {avatar ? (
@@ -730,81 +785,170 @@ export function ProfilePage({
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* Quick Action Buttons */}
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   <button 
                     type="button"
                     onClick={() => setIsPixelAvatarOpen(true)}
-                    className="rounded-xl flex items-center gap-2 px-3.5 sm:px-4 shadow-sm h-9 sm:h-10 text-xs sm:text-sm font-bold border transition-all active:scale-95 cursor-pointer bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-300 border-amber-500/40"
+                    className="rounded-xl flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 shadow-xs h-8 sm:h-9 text-xs font-bold border transition-all active:scale-95 cursor-pointer bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border-amber-500/40"
+                    title="Buka Pixel Avatar Studio"
                   >
-                    <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
-                    <span>Pixel Avatar Studio</span>
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse shrink-0" />
+                    <span className="hidden xs:inline sm:inline">Pixel Avatar Studio</span>
+                    <span className="xs:hidden sm:hidden">Studio</span>
                   </button>
 
                   <Button 
                     onClick={onLogout} 
                     variant="danger" 
-                    className="rounded-xl flex items-center gap-2 px-3.5 sm:px-4 shadow-sm h-9 sm:h-10 text-xs sm:text-sm cursor-pointer"
+                    className="rounded-xl flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 shadow-xs h-8 sm:h-9 text-xs font-bold cursor-pointer"
                   >
-                    <LogOut className="w-4 h-4" /> 
-                    <span>Keluar Sesi</span>
+                    <LogOut className="w-3.5 h-3.5 shrink-0" /> 
+                    <span>Keluar</span>
                   </Button>
                 </div>
               </div>
               
-              <div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-display font-bold" style={{ color: 'var(--text-main, #1E293B)' }}>
+              <div className="space-y-3.5">
+                {/* Hero Identity: Logo Pangkat Seukuran Font Nama (Tanpa Background Hitam), Title di Bawah Nama, Username di Bawah Title */}
+                <div className="pt-1">
+                  {/* Baris 1: Logo Pangkat + Nama Lengkap */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <img 
+                      src={rankInfo?.currentRank?.icon || '/assets/ranks/rank_01_trainee.svg'} 
+                      alt={rankInfo?.currentRank?.name || 'Pangkat'}
+                      className="w-6 h-6 sm:w-7 sm:h-7 object-contain inline-block shrink-0 filter drop-shadow-sm cursor-pointer hover:scale-110 transition-transform"
+                      title={`Pangkat Kehormatan: #${rankInfo?.currentRank?.id || 1} ${rankInfo?.currentRank?.name || 'Trainee'} (Klik untuk buka Hall of Fame)`}
+                      onClick={() => {
+                        onBack();
+                        window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
+                      }}
+                    />
+                    <h2 className="text-lg sm:text-2xl font-display font-bold tracking-tight text-[var(--text-main)] leading-snug break-words">
                       {inspectorName}
                     </h2>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span 
-                        className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-md border flex items-center gap-1"
-                        style={{
-                          backgroundColor: 'var(--input-bg, rgba(42, 157, 143, 0.1))',
-                          borderColor: 'var(--border-main, #E2E8F0)',
-                          color: 'var(--primary, #2A9D8F)'
-                        }}
-                      >
-                        @{profile?.username || 'Username belum disetel'}
-                      </span>
-                      <button 
-                        type="button"
-                        onClick={() => setShowUsernameModal(true)} 
-                        className="text-xs font-bold underline flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity"
-                        style={{ color: 'var(--primary, #2A9D8F)' }}
-                      >
-                        Ubah Panggilan
-                      </button>
-                    </div>
+                  </div>
+
+                  {/* Baris 2: Title Kehormatan di Bawah Nama */}
+                  <div className="mt-1.5">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-bold shadow-2xs w-fit">
+                      <Award className="w-3 h-3 text-amber-500 shrink-0" />
+                      <span>[{activeMilitaryTitle}]</span>
+                    </span>
+                  </div>
+
+                  {/* Baris 3: Username / Callsign di Bawah Title */}
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span 
+                      className="text-xs font-mono font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 w-fit"
+                      style={{
+                        backgroundColor: 'var(--input-bg, rgba(42, 157, 143, 0.1))',
+                        borderColor: 'var(--border-main, #E2E8F0)',
+                        color: 'var(--primary, #2A9D8F)'
+                      }}
+                    >
+                      @{profile?.username || 'Username belum disetel'}
+                    </span>
+                    <button 
+                      type="button"
+                      onClick={() => setShowUsernameModal(true)} 
+                      className="text-xs font-bold underline flex items-center gap-0.5 cursor-pointer hover:opacity-80 transition-opacity"
+                      style={{ color: 'var(--primary, #2A9D8F)' }}
+                    >
+                      Ubah Panggilan
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <span 
-                    className="px-2.5 py-1 rounded-md text-xs font-mono font-medium border"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #F1F5F9)',
-                      borderColor: 'var(--border-main, #E2E8F0)',
-                      color: 'var(--text-main, #1E293B)'
-                    }}
-                  >
-                    NIK: {inspectorNik || '-'}
+                {/* Metadata Badges Pill Row */}
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--border-main)]/70">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 whitespace-nowrap">
+                    <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    {rankInfo?.currentRank?.name}
                   </span>
-                  <div 
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border"
-                    style={{
-                      backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                      borderColor: 'rgba(16, 185, 129, 0.3)',
-                      color: '#10B981'
-                    }}
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Active
-                  </div>
+
+                  <span className="inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/25 font-mono whitespace-nowrap">
+                    {rankInfo?.currentRank?.tierGroup || rankInfo?.currentRank?.tier}
+                  </span>
+
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--border-main)] whitespace-nowrap">
+                    <Building className="w-3.5 h-3.5 text-teal-500 shrink-0" />
+                    {myRosterData?.pt || profile?.pt || 'TBP'} · {myRosterData?.section || profile?.section || 'Prep-Lab'}
+                  </span>
+
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono font-medium bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] whitespace-nowrap">
+                    <Hash className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
+                    {inspectorNik || '-'}
+                  </span>
+
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 whitespace-nowrap">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                    Aktif
+                  </span>
                 </div>
+
+                {/* Progress Bar Akumulasi EXP Kemahiran */}
+                {(() => {
+                  const safeCurrentXp = typeof rankInfo?.currentXp === 'number' 
+                    ? rankInfo.currentXp 
+                    : (typeof gamificationData?.totalXp === 'number' ? gamificationData.totalXp : 0);
+                  const safeNeededXp = typeof rankInfo?.neededXp === 'number' 
+                    ? rankInfo.neededXp 
+                    : (rankInfo?.nextRank ? rankInfo.nextRank.minXp : (rankInfo?.currentRank?.maxXp || 100));
+                  const safePercent = typeof rankInfo?.progressPercent === 'number' ? rankInfo.progressPercent : 0;
+
+                  return (
+                    <div className="pt-3 border-t border-[var(--border-main)] space-y-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs font-semibold">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <span className="text-[var(--text-muted)]">Akumulasi EXP Kemahiran</span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20 whitespace-nowrap">
+                            Tingkat {rankInfo?.currentRank?.id || 1}/51
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 sm:justify-end">
+                          <span className="font-mono font-bold text-[var(--text-main)]">
+                            {safeCurrentXp.toLocaleString()} / {safeNeededXp.toLocaleString()} EXP
+                          </span>
+                          <span className="text-teal-600 dark:text-teal-400 font-sans text-xs font-bold">
+                            ({safePercent}%)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-700/60 overflow-hidden p-0.5 border border-[var(--border-main)]">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(100, Math.max(2, safePercent))}%` }}
+                          transition={{ duration: 0.8, ease: "easeOut" }}
+                          className="h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-400 to-amber-400 shadow-xs"
+                        />
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[10px] text-[var(--text-muted)]">
+                        <span>
+                          Target Berikutnya: <strong className="text-[var(--text-main)]">{rankInfo?.nextRank ? rankInfo.nextRank.name : 'Supreme Vanguard Commander'}</strong>
+                          {rankInfo?.nextRank && ` · Sisa ${Math.max(0, safeNeededXp - safeCurrentXp).toLocaleString()} EXP lagi`}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onBack();
+                            window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
+                          }}
+                          className="text-teal-600 dark:text-teal-400 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer self-start sm:self-auto"
+                        >
+                          <span>Lihat Klasemen Hall of Fame</span>
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
+
           </Card>
 
           {profile && (

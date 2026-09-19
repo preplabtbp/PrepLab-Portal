@@ -93,6 +93,7 @@ const UserManualScreen = lazyWithRetry(() => import('./components/user-manual-sc
 const EmployeeDatabaseScreen = lazyWithRetry(() => import('./components/employee-database-screen').then(m => ({ default: m.EmployeeDatabaseScreen })));
 const WOMaintenanceDashboard = lazyWithRetry(() => import('./components/wo-maintenance-dashboard').then(m => ({ default: m.WOMaintenanceDashboard })));
 const FeedbackSupportScreen = lazyWithRetry(() => import('./components/feedback-support-screen').then(m => ({ default: m.FeedbackSupportScreen })));
+const LeaderboardScreen = lazyWithRetry(() => import('./components/LeaderboardScreen').then(m => ({ default: m.LeaderboardScreen })));
 const EasterEggGame = lazyWithRetry(() => import('./components/easter-egg-game').then(m => ({ default: m.EasterEggGame })));
 const FinanceScreen = lazyWithRetry(() => import('./components/FinanceScreen').then(m => ({ default: m.FinanceScreen || m.default })));
 const ModulesScreen = lazyWithRetry(() => import('./components/modules-screen').then(m => ({ default: m.ModulesScreen })));
@@ -205,6 +206,28 @@ export default function App() {
     window.addEventListener('profile_updated', handleProfileUpdate);
     return () => window.removeEventListener('profile_updated', handleProfileUpdate);
   }, []);
+
+  useEffect(() => {
+    const handleNavBulletin = (e: any) => {
+      const link = e.detail?.link || '/bulletin';
+      navigate(link);
+    };
+    const handleNavAgenda = (e: any) => {
+      const link = e.detail?.link || '/agenda';
+      navigate(link);
+    };
+    const handleNavTab = (e: any) => {
+      if (e.detail?.tab) handleNav(e.detail.tab);
+    };
+    window.addEventListener('navigate-bulletin', handleNavBulletin);
+    window.addEventListener('navigate-agenda', handleNavAgenda);
+    window.addEventListener('navigate-tab', handleNavTab);
+    return () => {
+      window.removeEventListener('navigate-bulletin', handleNavBulletin);
+      window.removeEventListener('navigate-agenda', handleNavAgenda);
+      window.removeEventListener('navigate-tab', handleNavTab);
+    };
+  }, [navigate]);
 
   const userProfile = React.useMemo(() => {
     try {
@@ -1389,6 +1412,7 @@ export default function App() {
   <Route path="/p5m" element={<P5MScreen onBack={() => handleNav('home')} userProfile={userProfile} />} />
   <Route path="/feedback-support" element={<FeedbackSupportScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/finance" element={<FinanceScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
+  <Route path="/leaderboard" element={<LeaderboardScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
   </AnimatePresence>

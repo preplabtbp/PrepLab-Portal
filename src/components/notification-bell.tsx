@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { subscribeUserToPush } from '../push-notifications';
 import { WorkOrderDetailModal } from './WorkOrderDetailModal';
+import { io } from 'socket.io-client';
 
 interface NotificationBellProps {
   userNik?: string;
@@ -93,6 +94,66 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, [userNik]);
+
+  // Real-time Socket.IO listener for instant notification delivery
+  useEffect(() => {
+    if (!userNik) return;
+    const socket = io();
+
+    socket.on('notification:new', (notif: any) => {
+      if (!notif) return;
+      // Determine if relevant to this user
+      const isPersonal = notif.userId && notif.userId === userNik;
+      const isBroadcast = !notif.userId;
+      const isRoleMatch = notif.role && (
+        userJabatan.includes(notif.role.toLowerCase()) || 
+        isDev || 
+        isSpvUp
+      );
+
+      if (isPersonal || isBroadcast || isRoleMatch) {
+        // Play soft chime sound
+        try {
+          const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+          const ctx = new AudioContext();
+          if (ctx.state === 'suspended') ctx.resume();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(1046.50, ctx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0, ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.4);
+        } catch (e) {}
+
+        // Show toast with action button
+        toast(notif.title || 'Notifikasi Baru', {
+          description: notif.message,
+          icon: '🔔',
+          duration: 5000,
+          action: {
+            label: 'Buka',
+            onClick: () => handleNotificationClick(notif)
+          }
+        });
+
+        // Inform other modal listeners (e.g. ReminderNotificationModal)
+        window.dispatchEvent(new CustomEvent('notification_received', { detail: notif }));
+
+        // Immediate fetch
+        fetchNotifications();
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [userNik, userJabatan, isDev, isSpvUp]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -237,6 +298,17 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     } else if (notif.link === '/chat' || notif.title?.includes('Chat') || notif.title?.includes('menyebut Anda')) {
       setIsOpen(false);
       window.dispatchEvent(new CustomEvent('open-chat-drawer'));
+    } else if (notif.link?.startsWith('/bulletin')) {
+      setIsOpen(false);
+      window.dispatchEvent(new CustomEvent('navigate-bulletin', { detail: { link: notif.link } }));
+    } else if (notif.link?.startsWith('/agenda') || notif.title?.toLowerCase().includes('agenda')) {
+      setIsOpen(false);
+      window.dispatchEvent(new CustomEvent('navigate-agenda', { detail: { link: notif.link || '/agenda' } }));
+    } else if (notif.link) {
+      setIsOpen(false);
+      if (notif.link.startsWith('/')) {
+        window.location.href = notif.link;
+      }
     }
   };
 
