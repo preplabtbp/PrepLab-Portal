@@ -1604,7 +1604,20 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
               className="hidden md:block overflow-x-auto rounded-xl border shadow-2xs"
               style={{ borderColor: 'var(--border-main, #CBD5E1)' }}
             >
-              <table className="w-full text-left text-xs">
+              <table className="w-full table-fixed text-left text-xs">
+                <colgroup>
+                  <col style={{ width: '8.5%' }} />  {/* No. WO */}
+                  <col style={{ width: '7.5%' }} />  {/* Tanggal & Shift */}
+                  <col style={{ width: '13%' }} />   {/* Nama Alat & Kode */}
+                  <col style={{ width: '7.5%' }} />  {/* Kategori */}
+                  <col style={{ width: '18%' }} />   {/* Deskripsi Kerusakan */}
+                  <col style={{ width: '18%' }} />   {/* Tindakan Perbaikan */}
+                  <col style={{ width: '5%' }} />    {/* Downtime */}
+                  <col style={{ width: '5%' }} />    {/* Sparepart */}
+                  <col style={{ width: '7.5%' }} />  {/* Teknisi */}
+                  <col style={{ width: '6%' }} />    {/* Status */}
+                  <col style={{ width: '4%' }} />    {/* Aksi */}
+                </colgroup>
                 <thead 
                   className="font-bold border-b text-[11px]"
                   style={{ 
@@ -1616,28 +1629,28 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                   <tr>
                     <th 
                       onClick={() => setTableSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                      className="py-3 px-3.5 whitespace-nowrap cursor-pointer select-none hover:bg-slate-200/70 transition-colors group"
+                      className="py-2.5 px-1.5 whitespace-nowrap cursor-pointer select-none hover:bg-slate-200/70 transition-colors group"
                       title="Klik untuk mengubah urutan No. WO"
                     >
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
                         <span>No. WO</span>
                         {tableSortOrder === 'asc' ? (
-                          <ArrowUp className="w-3.5 h-3.5 text-teal-600 group-hover:scale-110 transition-transform" />
+                          <ArrowUp className="w-3 h-3 text-teal-600 group-hover:scale-110 transition-transform" />
                         ) : (
-                          <ArrowDown className="w-3.5 h-3.5 text-teal-600 group-hover:scale-110 transition-transform" />
+                          <ArrowDown className="w-3 h-3 text-teal-600 group-hover:scale-110 transition-transform" />
                         )}
                       </div>
                     </th>
-                    <th className="py-3 px-3.5 whitespace-nowrap">Tanggal & Shift</th>
-                    <th className="py-3 px-3.5 min-w-[110px] max-w-[150px]">Nama Alat & Kode</th>
-                    <th className="py-3 px-3.5 whitespace-nowrap">Kategori</th>
-                    <th className="py-3 px-3.5 min-w-[120px] max-w-[180px]">Deskripsi Kerusakan</th>
-                    <th className="py-3 px-3.5 min-w-[120px] max-w-[180px]">Tindakan Perbaikan</th>
-                    <th className="py-3 px-3.5 text-center whitespace-nowrap">Downtime</th>
-                    <th className="py-3 px-3.5 whitespace-nowrap">Sparepart</th>
-                    <th className="py-3 px-3.5 min-w-[100px] max-w-[140px]">Teknisi</th>
-                    <th className="py-3 px-3.5 text-center whitespace-nowrap">Status</th>
-                    <th className="py-3 px-3.5 text-center whitespace-nowrap">Aksi</th>
+                    <th className="py-2.5 px-1.5 whitespace-nowrap">Tanggal & Shift</th>
+                    <th className="py-2.5 px-2 whitespace-nowrap">Nama Alat & Kode</th>
+                    <th className="py-2.5 px-1.5 text-center whitespace-nowrap">Kategori</th>
+                    <th className="py-2.5 px-2 whitespace-nowrap">Deskripsi Kerusakan</th>
+                    <th className="py-2.5 px-2 whitespace-nowrap">Tindakan Perbaikan</th>
+                    <th className="py-2.5 px-1 text-center whitespace-nowrap">Downtime</th>
+                    <th className="py-2.5 px-1 text-center whitespace-nowrap">Sparepart</th>
+                    <th className="py-2.5 px-1.5 whitespace-nowrap">Teknisi</th>
+                    <th className="py-2.5 px-1 text-center whitespace-nowrap">Status</th>
+                    <th className="py-2.5 px-1 text-center whitespace-nowrap">Aksi</th>
                   </tr>
                 </thead>
                 <tbody 
@@ -1668,50 +1681,50 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                           key={wo.id || wo.woId}
                           className="hover:bg-slate-100/60 transition-colors"
                         >
-                          <td className="py-3 px-3.5 font-mono font-bold text-teal-900 whitespace-nowrap">
-                            <span className="bg-teal-100 px-2 py-0.5 rounded border border-teal-300">
+                          <td className="py-2.5 px-1.5 font-mono font-bold text-teal-900 whitespace-nowrap overflow-hidden">
+                            <span className="bg-teal-50 text-teal-900 px-1.5 py-0.5 rounded border border-teal-300 text-[10px] block truncate text-center font-bold tracking-tight">
                               {wo.woId || '-'}
                             </span>
                           </td>
 
-                          <td className="py-3 px-3.5 whitespace-nowrap">
+                          <td className="py-2.5 px-1.5 overflow-hidden">
                             <div 
-                              className="flex items-center gap-1 font-bold"
+                              className="flex items-center gap-1 font-bold text-[11px] whitespace-nowrap"
                               style={{ color: 'var(--text-main, #0f172a)' }}
                             >
                               <span>{wo.date ? new Date(wo.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : '-'}</span>
                               {wo.date && (
-                                <span className="text-[10px] font-mono font-bold px-1 py-0.2 rounded bg-indigo-100 text-indigo-900 border border-indigo-300">
+                                <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-indigo-100 text-indigo-900 border border-indigo-300">
                                   W{String(getISOWeek(wo.date)).padStart(2, '0')}
                                 </span>
                               )}
                             </div>
                             <span 
-                              className="text-[10px] font-medium"
+                              className="text-[10px] font-medium block truncate"
                               style={{ color: 'var(--text-muted, #64748B)' }}
                             >
                               Shift {wo.shift || '-'}
                             </span>
                           </td>
 
-                          <td className="py-3 px-3.5 min-w-[110px] max-w-[150px]">
+                          <td className="py-2.5 px-2 overflow-hidden">
                             <div 
-                              className="font-bold line-clamp-1 text-xs" 
+                              className="font-bold text-[11px] line-clamp-2 leading-tight" 
                               title={wo.equipmentName}
                               style={{ color: 'var(--text-main, #0f172a)' }}
                             >
                               {wo.equipmentName || '-'}
                             </div>
                             <span 
-                              className="text-[10px] font-mono font-bold"
+                              className="text-[10px] font-mono font-bold block truncate"
                               style={{ color: 'var(--text-muted, #64748B)' }}
                             >
                               {wo.equipmentCode || '-'}
                             </span>
                           </td>
 
-                          <td className="py-3 px-3.5 whitespace-nowrap">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                          <td className="py-2.5 px-1.5 text-center overflow-hidden">
+                            <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded border inline-block truncate max-w-full ${
                               isInstrument 
                                 ? 'bg-blue-100 text-blue-900 border-blue-300' 
                                 : 'bg-teal-100 text-teal-900 border-teal-300'
@@ -1720,9 +1733,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                             </span>
                           </td>
 
-                          <td className="py-3 px-3.5 min-w-[120px] max-w-[180px]">
+                          <td className="py-2.5 px-2 overflow-hidden">
                             <p 
-                              className="line-clamp-2 text-[11px] font-medium" 
+                              className="line-clamp-2 text-[11px] font-medium leading-snug" 
                               title={wo.issueDescription}
                               style={{ color: 'var(--text-main, #1e293b)' }}
                             >
@@ -1730,9 +1743,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                             </p>
                           </td>
 
-                          <td className="py-3 px-3.5 min-w-[120px] max-w-[180px]">
+                          <td className="py-2.5 px-2 overflow-hidden">
                             <p 
-                              className="line-clamp-2 text-[11px] font-medium" 
+                              className="line-clamp-2 text-[11px] font-medium leading-snug" 
                               title={wo.actionTaken}
                               style={{ color: 'var(--text-muted, #475569)' }}
                             >
@@ -1740,9 +1753,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                             </p>
                           </td>
 
-                          <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                          <td className="py-2.5 px-1 text-center overflow-hidden">
                             {dtVal > 0 ? (
-                              <span className="font-black text-rose-900 font-mono bg-rose-100 px-2 py-0.5 rounded border border-rose-300 text-[11px]">
+                              <span className="font-black text-rose-900 font-mono bg-rose-100 px-1.5 py-0.5 rounded border border-rose-300 text-[10px] inline-block whitespace-nowrap">
                                 {dtVal} Jam
                               </span>
                             ) : (
@@ -1750,9 +1763,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                             )}
                           </td>
 
-                          <td className="py-3 px-3.5 whitespace-nowrap">
+                          <td className="py-2.5 px-1 text-center overflow-hidden">
                             {wo.sparepartName ? (
-                              <span className="font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300 text-[10px]">
+                              <span className="font-bold text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300 text-[9px] inline-block truncate max-w-full" title={wo.sparepartName}>
                                 {wo.sparepartName}
                               </span>
                             ) : (
@@ -1761,16 +1774,16 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                           </td>
 
                           <td 
-                            className="py-3 px-3.5 min-w-[100px] max-w-[140px] font-bold text-[11px]"
+                            className="py-2.5 px-1.5 font-bold text-[10.5px] overflow-hidden"
                             style={{ color: 'var(--text-main, #0f172a)' }}
                           >
-                            <span className="line-clamp-2" title={wo.technicianPic}>
+                            <span className="line-clamp-2 leading-tight block" title={wo.technicianPic}>
                               {wo.technicianPic || '-'}
                             </span>
                           </td>
 
-                          <td className="py-3 px-3.5 text-center whitespace-nowrap">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          <td className="py-2.5 px-1 text-center overflow-hidden">
+                            <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded-full border inline-block whitespace-nowrap ${
                               st === 'closed'
                                 ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
                                 : st.includes('progress')
@@ -1781,11 +1794,11 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                             </span>
                           </td>
 
-                          <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                          <td className="py-2.5 px-1 text-center overflow-hidden">
                             <button
                               onClick={() => setSelectedWO(wo)}
-                              className="p-1 rounded-lg bg-slate-100 hover:bg-teal-700 hover:text-white transition-colors cursor-pointer text-slate-700 border border-slate-300"
-                              title="Lihat Detail"
+                              className="p-1.5 rounded-md bg-slate-100 hover:bg-teal-700 hover:text-white transition-colors cursor-pointer text-slate-700 border border-slate-300 inline-flex items-center justify-center shadow-2xs"
+                              title="Lihat Detail Work Order"
                             >
                               <Eye className="w-3.5 h-3.5" />
                             </button>

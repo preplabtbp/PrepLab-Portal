@@ -1,6 +1,19 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.8] - 2026-09-19
+
+### 📐 Proporsionalitas & Keterbacaan Penuh Tabel Rincian Work Order
+
+- **Tata Letak Proporsional Terkunci (`table-fixed` & `<colgroup>`)**:
+  - Mengonversi tabel desktop dari *unconstrained auto-layout* ke sistem proporsional terdistribusi 100% menggunakan `<colgroup>` sehingga seluruh 11 kolom selalu pas di dalam kartu tabel tanpa terpotong (*no clipping*).
+  - Alokasi proporsi lebar kolom yang adil:
+    - **Kolom Naratif Utama (49%)**: `Nama Alat & Kode` (13%), `Deskripsi Kerusakan` (18%), dan `Tindakan Perbaikan` (18%) mendapatkan porsi hampir setengah lebar tabel untuk memastikan keluhan dan tindakan teknisi terbaca dengan jelas.
+    - **Kolom Metadata & Identitas (51%)**: `No. WO` (8.5%), `Tanggal & Shift` (7.5%), `Kategori` (7.5%), `Teknisi` (7.5%), `Status` (6%), `Downtime` (5%), `Sparepart` (5%), dan `Aksi` (4%) dirancang kompak dan rapi.
+- **Pencegahan Teks Terpotong & Header Berantakan**:
+  - Seluruh judul kolom header (`<th>`) kini diproteksi dengan `whitespace-nowrap` sehingga judul seperti *Deskripsi Kerusakan* dan *Tindakan Perbaikan* tidak lagi patah menjadi dua baris.
+  - Nama alat kini menggunakan `line-clamp-2 leading-tight` menggantikan `truncate`, sehingga nama alat panjang (seperti *Evacuable Pellet Disk*) tidak lagi terpotong elipsis (`Evacuable Pell...`).
+  - Kolom **Aksi** (*tombol lihat detail*) kini tampil 100% utuh di tepi kanan tanpa terpotong container.
 
 ## [2.9.7] - 2026-09-19
 
