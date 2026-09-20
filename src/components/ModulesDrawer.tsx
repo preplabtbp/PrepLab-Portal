@@ -385,7 +385,7 @@ export function ModulesDrawer({
                           <span className="text-xs sm:text-sm font-bold tracking-tight text-[var(--text-main)] truncate">
                             {section.title}
                           </span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[var(--text-muted)] border border-[var(--border-main)] shrink-0">
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${section.bgIcon}`}>
                             {section.items.length}
                           </span>
                         </div>
