@@ -13,11 +13,17 @@ export interface WordCorrection {
 // Kamus Typo & Bahasa Gaul / Singkatan ke Bahasa Baku KBBI & Istilah Maintenance Resmi
 export const KBBI_MAINTENANCE_DICTIONARY: Record<string, { standard: string; explanation?: string }> = {
   // --- Kerusakan Fisik & Mekanikal ---
+  'ruask': { standard: 'rusak', explanation: 'KBBI: rusak' },
+  'ruska': { standard: 'rusak', explanation: 'KBBI: rusak' },
+  'rusakk': { standard: 'rusak', explanation: 'KBBI: rusak' },
+  'rusat': { standard: 'rusak', explanation: 'KBBI: rusak' },
+  'rosak': { standard: 'rusak', explanation: 'KBBI: rusak' },
+  'rsak': { standard: 'rusak', explanation: 'KBBI: rusak' },
+  'rusk': { standard: 'rusak', explanation: 'KBBI: rusak' },
+  'rsk': { standard: 'rusak', explanation: 'KBBI: rusak' },
   'fatah': { standard: 'patah', explanation: 'KBBI: patah (bukan fatah)' },
   'pata': { standard: 'patah', explanation: 'KBBI: patah' },
   'path': { standard: 'patah', explanation: 'KBBI: patah' },
-  'rusat': { standard: 'rusak', explanation: 'KBBI: rusak' },
-  'rosak': { standard: 'rusak', explanation: 'KBBI: rusak' },
   'ancur': { standard: 'hancur', explanation: 'KBBI: hancur' },
   'ancoor': { standard: 'hancur', explanation: 'KBBI: hancur' },
   'sompel': { standard: 'gumpil', explanation: 'Istilah baku: gumpil / rompal pada tepi' },
@@ -171,6 +177,102 @@ export const MULTI_WORD_REPLACEMENTS: [RegExp, string][] = [
 ];
 
 /**
+ * Damerau-Levenshtein distance untuk menghitung jarak perbedaan kata
+ * Mendeteksi operasi: penambahan, penghapusan, penggantian, dan transposisi (dua huruf tertukar bersebelahan seperti ruask -> rusak)
+ */
+export function damerauLevenshteinDistance(source: string, target: string): number {
+  const sLen = source.length;
+  const tLen = target.length;
+  if (sLen === 0) return tLen;
+  if (tLen === 0) return sLen;
+
+  const dist: number[][] = [];
+  for (let i = 0; i <= sLen; i++) dist[i] = [i];
+  for (let j = 0; j <= tLen; j++) dist[0][j] = j;
+
+  for (let i = 1; i <= sLen; i++) {
+    for (let j = 1; j <= tLen; j++) {
+      const cost = source[i - 1] === target[j - 1] ? 0 : 1;
+      dist[i][j] = Math.min(
+        dist[i - 1][j] + 1,       // deletion
+        dist[i][j - 1] + 1,       // insertion
+        dist[i - 1][j - 1] + cost // substitution
+      );
+
+      // Transposition (contoh: 'ruask' vs 'rusak')
+      if (i > 1 && j > 1 && source[i - 1] === target[j - 2] && source[i - 2] === target[j - 1]) {
+        dist[i][j] = Math.min(dist[i][j], dist[i - 2][j - 2] + 1);
+      }
+    }
+  }
+
+  return dist[sLen][tLen];
+}
+
+// Daftar kata baku standar industri untuk fuzzy matching (mendeteksi typo huruf tertukar / terselip)
+export const CANONICAL_TERMS: { root: string; standard: string; explanation: string }[] = [
+  { root: 'rusak', standard: 'rusak', explanation: 'Kondisi mesin/alat tidak berfungsi (rusak)' },
+  { root: 'patah', standard: 'patah', explanation: 'KBBI: patah (terputus / patah fisik)' },
+  { root: 'bocor', standard: 'bocor', explanation: 'Kebocoran fluida / oli / debu' },
+  { root: 'hancur', standard: 'hancur', explanation: 'Kondisi fisik hancur' },
+  { root: 'kendur', standard: 'kendur', explanation: 'KBBI: kendur (tidak tegang/kencang)' },
+  { root: 'oblak', standard: 'oblak (longgar)', explanation: 'Toleransi bantalan poros longgar/goyang' },
+  { root: 'aus', standard: 'aus', explanation: 'KBBI: aus terkikis karena gesekan' },
+  { root: 'bengkok', standard: 'bengkok (deformasi)', explanation: 'Deformasi mekanis' },
+  { root: 'rembes', standard: 'rembesan', explanation: 'Terdapat rembesan fluida' },
+  { root: 'macet', standard: 'macet / tersangkut', explanation: 'Komponen tidak dapat berputar / bergerak' },
+  { root: 'pecah', standard: 'pecah', explanation: 'Kondisi fisik pecah' },
+  { root: 'retak', standard: 'retak', explanation: 'Kondisi fisik retak' },
+  { root: 'lepas', standard: 'terlepas', explanation: 'Komponen terlepas dari dudukannya' },
+  { root: 'mati', standard: 'mati (tidak ada daya)', explanation: 'Unit tidak menyala sama sekali' },
+  { root: 'kabel', standard: 'kabel', explanation: 'Kabel kelistrikan' },
+  { root: 'korslet', standard: 'korsleting listrik', explanation: 'Hubungan arus pendek' },
+  { root: 'sakelar', standard: 'sakelar', explanation: 'KBBI: sakelar' },
+  { root: 'sekring', standard: 'sekring (fuse)', explanation: 'Pengaman arus listrik' },
+  { root: 'baterai', standard: 'baterai', explanation: 'KBBI: baterai' },
+  { root: 'sekop', standard: 'sekop', explanation: 'KBBI: sekop' },
+  { root: 'dinamo', standard: 'motor dinamo', explanation: 'Motor dinamo penggerak' },
+  { root: 'bearing', standard: 'bearing (bantalan poros)', explanation: 'Bantalan poros putar' },
+  { root: 'kompresor', standard: 'kompresor', explanation: 'Kompresor udara' },
+  { root: 'selang', standard: 'selang', explanation: 'KBBI: selang' },
+  { root: 'pelumas', standard: 'pelumas (oli/gemuk)', explanation: 'Pelumas mesin' },
+  { root: 'pulverizer', standard: 'pulverizer', explanation: 'Mesin penghalus sampel' },
+  { root: 'crusher', standard: 'jaw crusher', explanation: 'Mesin peremuk sampel' },
+  { root: 'timbangan', standard: 'timbangan', explanation: 'Alat penimbang sampel' },
+  { root: 'saringan', standard: 'ayakan mesh (sieve)', explanation: 'Ayakan sampel' },
+  { root: 'komputer', standard: 'komputer (PC)', explanation: 'Perangkat komputer' },
+  { root: 'monitor', standard: 'layar monitor', explanation: 'Monitor komputer' },
+  { root: 'printer', standard: 'printer cetak', explanation: 'Mesin pencetak' }
+];
+
+/**
+ * Mencari saran fuzzy bila kata tidak persis ada di kamus
+ */
+function findFuzzyMatch(cleanWord: string): { standard: string; explanation: string } | null {
+  if (cleanWord.length < 4) return null;
+
+  for (const c of CANONICAL_TERMS) {
+    if (cleanWord === c.root) continue;
+    const dist = damerauLevenshteinDistance(cleanWord, c.root);
+    // Jika panjang kata 4-6, toleransi beda 1 huruf (termasuk huruf bertukar seperti ruask -> rusak)
+    if (c.root.length <= 6 && dist === 1) {
+      return {
+        standard: c.standard,
+        explanation: `Perbaikan ketik: ${cleanWord} ➔ ${c.standard}`
+      };
+    }
+    // Jika kata panjang (>= 7), toleransi beda hingga 2 huruf
+    if (c.root.length >= 7 && dist <= 2) {
+      return {
+        standard: c.standard,
+        explanation: `Perbaikan ketik: ${cleanWord} ➔ ${c.standard}`
+      };
+    }
+  }
+  return null;
+}
+
+/**
  * Mendeteksi kata-kata tidak baku atau typo dalam teks
  */
 export function detectTypos(text: string): WordCorrection[] {
@@ -181,6 +283,9 @@ export function detectTypos(text: string): WordCorrection[] {
 
   for (const w of words) {
     const clean = w.toLowerCase().trim();
+    if (!clean) continue;
+
+    // 1. Exact Match Kamus
     if (KBBI_MAINTENANCE_DICTIONARY[clean]) {
       const entry = KBBI_MAINTENANCE_DICTIONARY[clean];
       if (!found.some(f => f.word.toLowerCase() === clean)) {
@@ -190,6 +295,17 @@ export function detectTypos(text: string): WordCorrection[] {
           explanation: entry.explanation || `Standar KBBI: ${entry.standard}`
         });
       }
+      continue;
+    }
+
+    // 2. Fuzzy Match (Damerau-Levenshtein) untuk typo seperti "ruask", "patah", "mecet"
+    const fuzzy = findFuzzyMatch(clean);
+    if (fuzzy && !found.some(f => f.word.toLowerCase() === clean)) {
+      found.push({
+        word: w,
+        suggestion: fuzzy.standard,
+        explanation: fuzzy.explanation
+      });
     }
   }
 
@@ -220,15 +336,26 @@ export function correctTextKBBI(text: string): {
     }
   }
 
-  // 2. Ganti kata tunggal sesuai kamus
+  // 2. Ganti kata tunggal sesuai kamus dan fuzzy match
   const words = result.split(/(\s+|[.,;!?()]+)/);
   const newWords = words.map(w => {
     const clean = w.toLowerCase().trim();
-    if (clean && KBBI_MAINTENANCE_DICTIONARY[clean]) {
+    if (!clean) return w;
+
+    let target = '';
+    if (KBBI_MAINTENANCE_DICTIONARY[clean]) {
+      target = KBBI_MAINTENANCE_DICTIONARY[clean].standard;
+    } else {
+      const fuzzy = findFuzzyMatch(clean);
+      if (fuzzy) {
+        target = fuzzy.standard;
+      }
+    }
+
+    if (target) {
       count++;
       replaced.push(w);
       // Cocokkan kapitalisasi jika kata asli berhuruf kapital di awal
-      const target = KBBI_MAINTENANCE_DICTIONARY[clean].standard;
       if (w[0] === w[0]?.toUpperCase() && w[1] !== w[1]?.toUpperCase()) {
         return target.charAt(0).toUpperCase() + target.slice(1);
       }
