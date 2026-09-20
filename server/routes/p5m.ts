@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
 import { db } from "../../src/db/index.js";
-import { eq, desc, sql, and, like, or } from "drizzle-orm";
+import { eq, desc, sql, and, like, or, lte, gte } from "drizzle-orm";
 import { employees, roster, p5mMateri, p5mSchedules, notifications } from "../../src/db/schema.js";
 import { Client } from "@notionhq/client";
 import { drive } from "../../google-services.js";
@@ -400,7 +400,16 @@ function buildDefaultConfig(): Record<string, any> {
 function getWeekDates(referenceDateStr?: string) {
   let refDate = new Date();
   if (referenceDateStr) {
-    if (referenceDateStr.includes('-')) {
+    if (referenceDateStr.includes('/')) {
+      const parts = referenceDateStr.split('/');
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          refDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        } else {
+          refDate = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+        }
+      }
+    } else if (referenceDateStr.includes('-')) {
       const [y, m, d] = referenceDateStr.split('-').map(Number);
       refDate = new Date(y, m - 1, d);
     } else {
@@ -1835,6 +1844,28 @@ p5mRouter.get("/schedules", async (req, res) => {
 
 p5mRouter.get("/schedules/latest", async (req, res) => {
   try {
+    const weekDate = req.query.weekDate as string;
+    if (weekDate) {
+      const { dates } = getWeekDates(weekDate);
+      const mondayIso = dates['Senin']?.iso;
+      const sundayIso = dates['Minggu']?.iso;
+
+      const found = await db.select().from(p5mSchedules)
+        .where(
+          or(
+            eq(p5mSchedules.dateStart, mondayIso),
+            and(
+              lte(p5mSchedules.dateStart, sundayIso),
+              gte(p5mSchedules.dateEnd, mondayIso)
+            )
+          )
+        )
+        .orderBy(desc(p5mSchedules.id))
+        .limit(1);
+
+      return res.json({ success: true, data: found[0] || null });
+    }
+
     const latest = await db.select().from(p5mSchedules).orderBy(desc(p5mSchedules.id)).limit(1);
     res.json({ success: true, data: latest[0] || null });
   } catch (error: any) {

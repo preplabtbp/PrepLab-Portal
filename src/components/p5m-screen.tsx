@@ -245,10 +245,16 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
   const [selectedPt, setSelectedPt] = useState<string>(initialPt);
 
-  // Week selection state
+  // Week selection state (defaults to Monday of current or upcoming week)
   const [targetDateStr, setTargetDateStr] = useState<string>(() => {
     const today = new Date();
-    return today.toISOString().split('T')[0];
+    const day = today.getDay(); // 0 is Sunday, 1 is Monday...
+    const diff = day === 0 ? 1 : 1 - day;
+    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + diff);
+    const yyyy = monday.getFullYear();
+    const mm = String(monday.getMonth() + 1).padStart(2, '0');
+    const dd = String(monday.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   });
   const [datesMeta, setDatesMeta] = useState<Record<string, { iso: string; display: string }>>({});
 
@@ -503,7 +509,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
     fetchPoolAndDates(targetDateStr, selectedPt);
     fetchMateriList();
     fetchArchiveList();
-    fetchLatestSchedule();
+    fetchScheduleForWeek(targetDateStr);
   }, [selectedPt]);
 
   const fetchPoolAndDates = async (weekDate?: string, pt?: string) => {
@@ -572,18 +578,21 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
     }
   };
 
-  const fetchLatestSchedule = async () => {
+  const fetchScheduleForWeek = async (targetDate?: string) => {
     try {
-      const res = await fetch('/api/p5m/schedules/latest');
+      const activeDate = targetDate || targetDateStr;
+      const res = await fetch(`/api/p5m/schedules/latest?weekDate=${activeDate}`);
       const data = await res.json();
       if (data.success && data.data) {
         setScheduleData(data.data.scheduleData || null);
         setActiveScheduleId(data.data.id || null);
         if (data.data.config) setUiConfig(data.data.config);
-        if (data.data.dateStart) setTargetDateStr(data.data.dateStart);
+      } else {
+        setScheduleData(null);
+        setActiveScheduleId(null);
       }
     } catch (err) {
-      console.error('Failed to fetch latest schedule:', err);
+      console.error('Failed to fetch schedule for week:', err);
     }
   };
 
@@ -1228,8 +1237,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               type="date"
               value={targetDateStr}
               onChange={(e) => {
-                setTargetDateStr(e.target.value);
-                fetchPoolAndDates(e.target.value, selectedPt);
+                const newDate = e.target.value;
+                setTargetDateStr(newDate);
+                fetchPoolAndDates(newDate, selectedPt);
+                fetchScheduleForWeek(newDate);
               }}
               className="bg-transparent text-xs text-[var(--text-main)] outline-none cursor-pointer font-mono"
             />
@@ -1873,11 +1884,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
                   onPointerCancel={handlePointerUp}
-                  className="w-full overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x cursor-grab active:cursor-grabbing select-none"
+                  className={`w-full overflow-x-auto ${isEditMode ? 'pb-16' : 'pb-3'} scrollbar-thin scrollbar-thumb-slate-700 rounded-2xl touch-pan-x cursor-grab active:cursor-grabbing select-none`}
                   style={{ touchAction: 'pan-x pan-y' }}
                 >
                   <div 
-                    className={`bg-[var(--card-bg)] text-[var(--text-main)] rounded-2xl overflow-hidden shadow-xl border border-[var(--border-main)] transition-all ${
+                    className={`bg-[var(--card-bg)] text-[var(--text-main)] rounded-2xl ${isEditMode ? 'overflow-visible' : 'overflow-hidden'} shadow-xl border border-[var(--border-main)] transition-all ${
                       selectedDayFilter === 'ALL' ? 'min-w-[1180px]' : 'w-full min-w-0'
                     }`} 
                     ref={captureRef}
@@ -2432,7 +2443,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                           setScheduleData(arch.scheduleData);
                           setActiveScheduleId(arch.id);
                           if (arch.config) setUiConfig(arch.config);
-                          if (arch.dateStart) setTargetDateStr(arch.dateStart);
+                          if (arch.dateStart) {
+                            setTargetDateStr(arch.dateStart);
+                            fetchPoolAndDates(arch.dateStart, selectedPt);
+                          }
                           setActiveTab('schedule');
                           toast.success('Jadwal berhasil dimuat ke editor untuk ditinjau / diedit!');
                         }}
@@ -2898,10 +2912,25 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
     }
   }
 
+  const isNight = shift === 'malam';
+  const isRightEdge = day === 'Sabtu' || day === 'Minggu' || day === 'Jumat';
+  const popupPlacementClass = `${isNight ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} ${isRightEdge ? 'right-0' : 'left-0'}`;
+
   return (
-    <div className={`p-2 rounded-xl transition-all text-xs flex flex-col justify-between gap-1 ${cardStyle}`}>
+    <div className={`p-2 rounded-xl transition-all text-xs flex flex-col justify-between gap-1 ${cardStyle} ${selectNameOpen || selectMateriOpen ? 'z-40 relative' : ''}`}>
+      {/* Backdrop for click outside */}
+      {(selectNameOpen || selectMateriOpen) && (
+        <div 
+          className="fixed inset-0 z-40 bg-transparent cursor-default" 
+          onClick={() => {
+            setSelectNameOpen(false);
+            setSelectMateriOpen(false);
+          }} 
+        />
+      )}
+
       {/* Presenter Name (Editable or Static) */}
-      <div className="relative">
+      <div className={`relative ${selectNameOpen ? 'z-50' : ''}`}>
         {isEditMode ? (
           <div>
             <button
@@ -2917,7 +2946,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
             </button>
 
             {selectNameOpen && (
-              <div className="absolute z-50 left-0 top-full mt-1 w-64 bg-slate-900 border border-slate-700 text-white rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+              <div className={`absolute z-50 ${popupPlacementClass} w-64 bg-slate-900 border border-slate-700 text-white rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 duration-100`}>
                 <input
                   type="text"
                   placeholder="Cari personil / NIK..."
@@ -2991,7 +3020,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       </div>
 
       {/* Topic Title (Interactive Materi Picker or Direct Text) */}
-      <div className="relative mt-0.5">
+      <div className={`relative mt-0.5 ${selectMateriOpen ? 'z-50' : ''}`}>
         {isEditMode ? (
           <div>
             {isCustomText ? (
@@ -3027,7 +3056,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                 </button>
 
                 {selectMateriOpen && (
-                  <div className="absolute z-50 left-0 top-full mt-1 w-72 bg-slate-900 border border-slate-700 text-white rounded-xl shadow-2xl p-2 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+                  <div className={`absolute z-50 ${popupPlacementClass} w-72 sm:w-80 bg-slate-900 border border-slate-700 text-white rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 sm:max-h-72 overflow-y-auto animate-in fade-in zoom-in-95 duration-100`}>
                     <input
                       type="text"
                       placeholder="Cari materi briefing..."

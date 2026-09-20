@@ -1,6 +1,22 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.14] - 2026-09-20
+
+### 🔄 Sinkronisasi Roster Mingguan P5M & Smart Positioning Popover Editor
+
+- **Penyelarasan Roster P5M Berbasis Periode Minggu Aktif (`server/routes/p5m.ts` & `src/components/p5m-screen.tsx`)**:
+  - Mengeliminasi regresi tanggal usang di mana sistem sebelumnya memuat jadwal minggu lalu (14–20 Sep 2026) secara otomatis saat portal dibuka, sehingga personil seperti Muhammad Furqan sempat berstatus `(N)` (Night Shift lama).
+  - Mengimplementasikan penentuan default tanggal cerdas: otomatis menetapkan target ke hari Senin minggu baru (**21 September 2026**) ketika dibuka pada akhir pekan (Minggu, 20 September 2026).
+  - Menambahkan dukungan parameter `weekDate` pada endpoint `/api/p5m/schedules/latest`, memastikan jadwal tersimpan dan ketersediaan personil (`karyawanPool`) disinkronkan tepat per minggu target.
+  - Memperkuat fungsi pembacaan tanggal `getWeekDates` di backend untuk menangani format `DD/MM/YYYY` dengan garis miring secara presisi tanpa menghasilkan *Invalid Date*.
+- **Smart Positioning Dropdown Pemilih Materi & Personil (`src/components/p5m-screen.tsx`)**:
+  - Mengatasi kendala popover *"Cari materi briefing"* yang terpotong/tertutup oleh batas footer pada baris Night Shift paling bawah.
+  - Menerapkan arah membuka adaptif: popover pada sesi **Night Shift** otomatis membuka ke arah **ATAS (`bottom-full mb-1.5`)** melayang leluasa di area Day Shift yang lapang.
+  - Menyelaraskan popover kolom tepi kanan (Jumat, Sabtu, Minggu) merapat ke sisi kanan (`right-0`) agar tidak keluar dari batas horizontal layar.
+  - Menambahkan backdrop transparan untuk interaksi klik-di-luar (*click outside*) yang menutup dropdown secara otomatis.
+  - Mengaktifkan `overflow-visible` dengan padding bawah adaptif (`pb-16`) pada kontainer tabel selama mode edit aktif.
+
 ## [2.9.13] - 2026-09-20
 
 ### 📘 Pengaktifan Materi SOP & IK P5M, Proporsi Toolbar Responsif & Penyelarasan Roster Cuti
