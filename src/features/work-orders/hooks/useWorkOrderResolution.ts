@@ -73,14 +73,15 @@ export function useWorkOrderResolution(inspectorName: string, parsedDevOptions: 
         resolutionPhoto
       );
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['workOrders'] });
       resetForm();
-      if (data && data.waMessageText) {
-          setWaMessageToModal(data.waMessageText);
-      } else {
-          toast.success('Berhasil ditutup!');
-      }
+      const fallbackWaText = (
+        `==== WORK ORDER SELESAI [${variables}] ====\n` +
+        `*Status:* Closed / Selesai\n` +
+        `*Selesai Perbaikan:* ${new Date().toLocaleString('id-ID')}`
+      );
+      setWaMessageToModal(data?.waMessageText || fallbackWaText);
       onSuccess();
     },
     onError: (err) => console.error(err),

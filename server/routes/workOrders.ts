@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../../src/db/index.js";
-import { eq, desc, asc, or, inArray, isNull, and, gte, lte } from "drizzle-orm";
+import { eq, desc, asc, or, inArray, isNull, and, gte, lte, like } from "drizzle-orm";
 import { 
   chatMessages, employees, equipments, workOrders, users, tickets, downtime, 
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
@@ -549,6 +549,29 @@ router.put("/api/work-orders/:woId", async (req, res) => {
       res.status(500).json({ error: "Failed to update work order" });
     }
   });
+
+router.delete("/api/work-orders/:woId", async (req, res) => {
+  try {
+    const { woId } = req.params;
+    const existing = await db.select().from(workOrders).where(eq(workOrders.woId, woId)).limit(1);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: "Work order tidak ditemukan" });
+    }
+
+    // Delete associated notifications to prevent broken links
+    try {
+      await db.delete(notifications).where(like(notifications.message, `%${woId}%`));
+    } catch (e) {
+      console.warn("Could not delete related notifications:", e);
+    }
+
+    const result = await db.delete(workOrders).where(eq(workOrders.woId, woId)).returning();
+    res.json({ success: true, message: `Work Order ${woId} berhasil dihapus`, deleted: result[0] });
+  } catch (error) {
+    console.error("Error deleting work order:", error);
+    res.status(500).json({ error: "Gagal menghapus work order" });
+  }
+});
 
 router.get("/api/spareparts", async (req, res) => {
     try {

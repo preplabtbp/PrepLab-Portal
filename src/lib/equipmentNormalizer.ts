@@ -278,7 +278,7 @@ export const STANDARD_NON_INSTRUMENT_NAMES = STANDARD_NON_INSTRUMENT_CATALOG.map
 /**
  * Smart suggest matching function for equipment categories
  */
-export function findSmartSuggest(query: string): { item: StandardNonInstrumentItem; matchType: 'exact-name' | 'keyword' | 'partial'; matchedKeyword?: string }[] {
+export function findSmartSuggest(query: string): { item: StandardNonInstrumentItem; matchType: 'exact-name' | 'keyword' | 'partial'; matchedKeyword?: string; score: number }[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
 

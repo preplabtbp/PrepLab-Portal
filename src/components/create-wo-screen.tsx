@@ -20,6 +20,7 @@ import {
   StandardNonInstrumentItem, 
   findSmartSuggest 
 } from '../lib/equipmentNormalizer';
+import { KbbiCorrectorWidget } from './KbbiCorrectorWidget';
 
 export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategories }: { inspectorName: string, inspectorNik: string, equipmentCategories: {category: string, tools: ToolRecord[]}[] }) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -471,6 +472,11 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
                         required
                         autoFocus
                       />
+                      <KbbiCorrectorWidget 
+                        value={nonInstrDetail}
+                        onChange={setNonInstrDetail}
+                        fieldName="Nama Detail Alat"
+                      />
                       <p className="text-[11px] text-slate-600 flex items-center gap-1.5 mt-1">
                         <Info className="w-3.5 h-3.5 text-teal-600 shrink-0" />
                         <span>Tuliskan nomor unit, merk, atau spesifikasi detail alat agar tim maintenance mudah menelusuri di lapangan.</span>
@@ -637,6 +643,12 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
             value={formData.deskripsi}
             onChange={e => setFormData({...formData, deskripsi: e.target.value})}
             required
+          />
+          <KbbiCorrectorWidget 
+            value={formData.deskripsi}
+            onChange={(newVal) => setFormData(prev => ({ ...prev, deskripsi: newVal }))}
+            showTemplates={true}
+            fieldName="Deskripsi Kerusakan"
           />
 
           <div className="space-y-2">

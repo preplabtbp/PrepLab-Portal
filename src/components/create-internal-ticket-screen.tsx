@@ -6,6 +6,7 @@ import { Loader2, Image as ImageIcon, Send, ChevronLeft } from 'lucide-react';
 import { DevModeAccordion, useDevOptions } from './dev-mode-accordion';
 import { WhatsAppModal } from './whatsapp-modal';
 import { PageHeader } from './PageHeader';
+import { KbbiCorrectorWidget } from './KbbiCorrectorWidget';
 
 export function CreateInternalTicketScreen({ inspectorName, inspectorNik, onBack }: { inspectorName: string, inspectorNik: string, onBack?: () => void }) {
   const [formData, setFormData] = useState({
@@ -184,9 +185,15 @@ export function CreateInternalTicketScreen({ inspectorName, inspectorNik, onBack
               value={formData.deskripsi} 
               onChange={e => setFormData({...formData, deskripsi: e.target.value})} 
               required 
-              rows={4}
-              placeholder="Jelaskan kebutuhan dengan detail..."
+              placeholder="Jelaskan kebutuhan, dimensi, atau spesifikasi secara lengkap..." 
+              rows={4} 
               className="w-full"
+            />
+            <KbbiCorrectorWidget 
+              value={formData.deskripsi}
+              onChange={(newVal) => setFormData(prev => ({ ...prev, deskripsi: newVal }))}
+              showTemplates={false}
+              fieldName="Deskripsi Request"
             />
           </div>
 

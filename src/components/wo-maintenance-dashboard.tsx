@@ -4,7 +4,7 @@ import {
   Search, RefreshCw, CheckCircle2, AlertTriangle, ArrowUpRight, 
   ChevronLeft, ChevronRight, Eye, Layers, Sparkles, SlidersHorizontal, 
   Calendar, FileSpreadsheet, X, ShieldAlert, Check, Cpu, Hammer, BarChart2,
-  ArrowUpDown, ArrowUp, ArrowDown, EyeOff
+  ArrowUpDown, ArrowUp, ArrowDown, EyeOff, Trash2
 } from 'lucide-react';
 import { Card, Button, Input, Select } from './ui';
 import { Bar, Doughnut } from 'react-chartjs-2';
@@ -331,15 +331,21 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       equipmentList,
       sparepartsList,
       rawWorkOrders: filtered.map(w => ({
+        ...w,
         id: w.id,
         woId: w.woId || w.wo_id,
         date: w.date,
         shift: w.shift,
         pt: w.pt || 'TBP',
+        requestorNik: w.requestorNik || w.requestor_nik,
+        requestorName: w.requestorName || w.requestor_name,
+        location: w.location,
+        priority: w.priority || 'Medium',
         equipmentCode: w.equipmentCode || w.equipment_code,
         equipmentName: w.equipmentName || w.equipment_name,
         category: normalizeCategory(w.category),
         issueDescription: w.issueDescription || w.issue_description,
+        actionTaken: w.actionTaken || w.action_taken,
         downtimeDuration: (w.downtimeDuration ?? w.downtime_duration) || (w.repairEnd && (w.repairStart || w.date) ? formatDowntimeDuration(w.repairStart || w.date, w.repairEnd) : ''),
         repairStart: w.repairStart || w.repair_start,
         repairEnd: w.repairEnd || w.repair_end,
@@ -399,6 +405,68 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   useEffect(() => {
     fetchMaintenanceData();
   }, [filterPeriod, customStartDate, customEndDate, hidePemutihan]);
+
+  const [isDeletingWO, setIsDeletingWO] = useState(false);
+
+  const currentUserInfo = useMemo(() => {
+    const nik = inspectorNik || (typeof localStorage !== 'undefined' ? (localStorage.getItem('p2h_inspector_nik') || '') : '');
+    let section = '';
+    let jabatan = '';
+    try {
+      const profile = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
+      section = profile.section || '';
+      jabatan = profile.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '';
+    } catch (e) {}
+
+    const isSuperAdmin = nik === '02D25000055' || nik === '02D24000043' || nik === 'preplabadmin';
+    const isMaintenance = section.toLowerCase().includes('maintenance') || isSuperAdmin;
+    const isLeader = jabatan.toLowerCase().includes('spv') || jabatan.toLowerCase().includes('supervisor') || jabatan.toLowerCase().includes('leader') || jabatan.toLowerCase().includes('foreman') || isSuperAdmin;
+
+    return {
+      nik,
+      section,
+      jabatan,
+      isSuperAdmin,
+      isMaintenance,
+      isLeader,
+      canDeleteAny: isSuperAdmin || isMaintenance || isLeader
+    };
+  }, [inspectorNik]);
+
+  const canDeleteWO = (wo: any) => {
+    if (!wo) return false;
+    if (currentUserInfo.canDeleteAny) return true;
+    if (currentUserInfo.nik && wo.requestorNik && currentUserInfo.nik.toLowerCase() === String(wo.requestorNik).toLowerCase()) return true;
+    return false;
+  };
+
+  const handleDeleteWO = async (targetWoId: string) => {
+    if (!targetWoId) return;
+    const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus Work Order ${targetWoId} secara permanen? Data yang dihapus tidak dapat dikembalikan.`);
+    if (!confirmDelete) return;
+
+    try {
+      setIsDeletingWO(true);
+      const res = await fetch(`/api/work-orders/${encodeURIComponent(targetWoId)}`, {
+        method: 'DELETE'
+      });
+      const resJson = await res.json();
+      if (!res.ok) {
+        throw new Error(resJson.error || 'Gagal menghapus Work Order');
+      }
+
+      toast.success(`Work Order ${targetWoId} berhasil dihapus`);
+      if (selectedWO?.woId === targetWoId) {
+        setSelectedWO(null);
+      }
+      fetchMaintenanceData();
+    } catch (err: any) {
+      console.error('Error deleting WO:', err);
+      toast.error(err.message || 'Gagal menghapus Work Order');
+    } finally {
+      setIsDeletingWO(false);
+    }
+  };
 
   // List of all raw WOs from backend
   const rawWorkOrders = useMemo(() => data.rawWorkOrders || [], [data.rawWorkOrders]);
@@ -1324,9 +1392,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
           >
             <button 
               type="button"
-              onClick={() => setSelectedCategory(prev => prev === 'Instrument (Lab)' ? 'ALL' : 'Instrument (Lab)')}
+              onClick={() => setSelectedCategory(prev => prev === 'Instrument (L)' ? 'ALL' : 'Instrument (L)')}
               className={`p-2 rounded-xl transition-all border cursor-pointer text-center ${
-                selectedCategory === 'Instrument (Lab)' 
+                selectedCategory === 'Instrument (L)' 
                   ? 'bg-blue-100 border-blue-500 ring-2 ring-blue-400' 
                   : 'bg-blue-50/70 border-blue-200 hover:bg-blue-100/60'
               }`}
@@ -1338,9 +1406,9 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
             </button>
             <button 
               type="button"
-              onClick={() => setSelectedCategory(prev => prev === 'Non-Instrument (Prep)' ? 'ALL' : 'Non-Instrument (Prep)')}
+              onClick={() => setSelectedCategory(prev => prev === 'Non-Instrument (PL)' ? 'ALL' : 'Non-Instrument (PL)')}
               className={`p-2 rounded-xl transition-all border cursor-pointer text-center ${
-                selectedCategory === 'Non-Instrument (Prep)' 
+                selectedCategory === 'Non-Instrument (PL)' 
                   ? 'bg-teal-100 border-teal-500 ring-2 ring-teal-400' 
                   : 'bg-teal-50/70 border-teal-200 hover:bg-teal-100/60'
               }`}
@@ -1671,13 +1739,30 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                           </span>
                         </div>
 
-                        <button
-                          onClick={() => setSelectedWO(wo)}
-                          className="px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
-                        >
-                          <Eye className="w-3 h-3" />
-                          <span>Detail</span>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          {canDeleteWO(wo) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteWO(wo.woId);
+                              }}
+                              disabled={isDeletingWO}
+                              className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer transition-colors"
+                              title="Hapus Work Order"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Hapus</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setSelectedWO(wo)}
+                            className="px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Detail</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1697,12 +1782,12 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                   <col style={{ width: '13%' }} />   {/* Nama Alat & Kode */}
                   <col style={{ width: '7.5%' }} />  {/* Kategori */}
                   <col style={{ width: '16.5%' }} /> {/* Deskripsi Kerusakan */}
-                  <col style={{ width: '16.5%' }} /> {/* Tindakan Perbaikan */}
+                  <col style={{ width: '15.5%' }} /> {/* Tindakan Perbaikan */}
                   <col style={{ width: '8%' }} />    {/* Downtime */}
                   <col style={{ width: '5%' }} />    {/* Sparepart */}
                   <col style={{ width: '7.5%' }} />  {/* Teknisi */}
                   <col style={{ width: '6%' }} />    {/* Status */}
-                  <col style={{ width: '4%' }} />    {/* Aksi */}
+                  <col style={{ width: '5%' }} />    {/* Aksi */}
                 </colgroup>
                 <thead 
                   className="font-bold border-b text-[11px]"
@@ -1884,13 +1969,29 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                           </td>
 
                           <td className="py-2.5 px-1 text-center overflow-hidden">
-                            <button
-                              onClick={() => setSelectedWO(wo)}
-                              className="p-1.5 rounded-md bg-slate-100 hover:bg-teal-700 hover:text-white transition-colors cursor-pointer text-slate-700 border border-slate-300 inline-flex items-center justify-center shadow-2xs"
-                              title="Lihat Detail Work Order"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => setSelectedWO(wo)}
+                                className="p-1.5 rounded-md bg-slate-100 hover:bg-teal-700 hover:text-white transition-colors cursor-pointer text-slate-700 border border-slate-300 inline-flex items-center justify-center shadow-2xs"
+                                title="Lihat Detail Work Order"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                              {canDeleteWO(wo) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteWO(wo.woId);
+                                  }}
+                                  disabled={isDeletingWO}
+                                  className="p-1.5 rounded-md bg-slate-100 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer text-rose-600 border border-slate-300 inline-flex items-center justify-center shadow-2xs"
+                                  title="Hapus Work Order"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -2099,7 +2200,19 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
             </div>
 
             {/* Modal Footer */}
-            <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+              {canDeleteWO(selectedWO) ? (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteWO(selectedWO.woId)}
+                  disabled={isDeletingWO}
+                  className="px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-200 dark:border-rose-900/50 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                  title="Hapus Work Order secara permanen"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{isDeletingWO ? 'Menghapus...' : 'Hapus WO'}</span>
+                </button>
+              ) : <div />}
               <Button
                 variant="secondary"
                 onClick={() => setSelectedWO(null)}

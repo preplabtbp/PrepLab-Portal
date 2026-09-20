@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Send } from 'lucide-react';
 import { Button } from './ui';
 import { getAppSettings } from '../sheets-api';
@@ -37,7 +38,7 @@ export function WhatsAppModal({ isOpen, onClose, messageText, message, title, de
     if (targetNumber) {
       if (targetNumber.includes('chat.whatsapp.com')) {
          // Jika link grup, gunakan wa.me/?text= agar user bisa memilih grup dengan text prefilled.
-         waUrl = `https://wa.me/?text=${encodeURIComponent(messageText)}`;
+         waUrl = `https://wa.me/?text=${encodeURIComponent(finalMessage)}`;
       } else {
          // Coba parse nomor HP, ambil nomor pertama jika ada multiple
          const firstPart = targetNumber.split(/[,\/&]/)[0];
@@ -46,7 +47,7 @@ export function WhatsAppModal({ isOpen, onClose, messageText, message, title, de
             if (cleanNumber.startsWith('0')) {
                cleanNumber = '62' + cleanNumber.substring(1);
             }
-            waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(messageText)}`;
+            waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(finalMessage)}`;
          }
       }
     }
@@ -57,9 +58,9 @@ export function WhatsAppModal({ isOpen, onClose, messageText, message, title, de
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+  const modalContent = (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
         <div className="bg-emerald-500 p-6 flex flex-col items-center justify-center text-white relative">
           <button onClick={onClose} className="absolute top-3 right-3 text-emerald-100 hover:text-white transition-colors">
             <X className="w-5 h-5" />
@@ -85,4 +86,9 @@ export function WhatsAppModal({ isOpen, onClose, messageText, message, title, de
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalContent, document.body);
+  }
+  return modalContent;
 }

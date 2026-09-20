@@ -725,7 +725,8 @@ export const isResignedOrInactive = (emp: any): boolean => {
 export async function getRekapPersonnelClassification(
   selectedWeek: string,
   allEmployees: any[],
-  allRoster: any[]
+  allRoster: any[],
+  forceRefresh = false
 ) {
   const onCutiSet = new Set<string>();
   
@@ -766,7 +767,7 @@ export async function getRekapPersonnelClassification(
   const sheetCutiNames = new Set<string>();
 
   try {
-    const sheetSchedules = await fetchInspectionScheduleFromSheet(false, targetSheet);
+    const sheetSchedules = await fetchInspectionScheduleFromSheet(forceRefresh, targetSheet);
     if (Array.isArray(sheetSchedules)) {
       sheetSchedules.forEach((item: any) => {
         if (!item?.name) return;
@@ -1466,7 +1467,7 @@ router.get('/api/rekap-kta', async (req, res) => {
       manualOverrideMap,
       targetEmployees,
       cutiEmployees
-    } = await getRekapPersonnelClassification(selectedWeek, allEmployees, allRoster);
+    } = await getRekapPersonnelClassification(selectedWeek, allEmployees, allRoster, forceRefresh);
 
     // Query KTA reports for selected week
     const ktaQuery = selectedWeek === 'ALL'
@@ -1570,9 +1571,11 @@ router.get('/api/rekap-kta', async (req, res) => {
         check1Label: '',
         check1Done: false,
         check1Proof: null as string | null,
+        check1Timestamp: null as string | null,
         check2Label: '',
         check2Done: false,
         check2Proof: null as string | null,
+        check2Timestamp: null as string | null,
         summaryProgress: ''
       };
 

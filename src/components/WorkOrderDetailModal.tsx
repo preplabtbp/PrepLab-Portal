@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Input, Textarea } from './ui';
 import { 
@@ -63,6 +63,48 @@ export function WorkOrderDetailModal({
     setSpareparts([{ name: '', qty: '1' }]);
     setSelectedTechs([]);
     setTechSearch('');
+  };
+
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const canDelete = useMemo(() => {
+    const currentNik = inspectorNik || (typeof localStorage !== 'undefined' ? (localStorage.getItem('p2h_inspector_nik') || '') : '');
+    let userSection = '';
+    let userJabatan = '';
+    try {
+      const profile = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
+      userSection = profile.section || '';
+      userJabatan = profile.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '';
+    } catch (e) {}
+
+    const isSuperAdmin = currentNik === '02D25000055' || currentNik === '02D24000043' || currentNik === 'preplabadmin';
+    const isMaintenance = userSection.toLowerCase().includes('maintenance') || isSuperAdmin;
+    const isLeader = userJabatan.toLowerCase().includes('spv') || userJabatan.toLowerCase().includes('supervisor') || userJabatan.toLowerCase().includes('leader') || userJabatan.toLowerCase().includes('foreman') || isSuperAdmin;
+    const isRequestor = !!(currentNik && wo?.requestorNik && currentNik.toLowerCase() === String(wo.requestorNik).toLowerCase());
+
+    return isSuperAdmin || isMaintenance || isLeader || isRequestor;
+  }, [inspectorNik, wo]);
+
+  const handleDelete = async () => {
+    if (!wo?.woId) return;
+    if (!window.confirm(`Hapus Work Order ${wo.woId} secara permanen? Tindakan ini tidak dapat dibatalkan.`)) return;
+
+    try {
+      setIsDeleting(true);
+      const res = await fetch(`/api/work-orders/${encodeURIComponent(wo.woId)}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menghapus Work Order');
+
+      toast.success(`Work Order ${wo.woId} berhasil dihapus`);
+      onClose();
+      if (onResolved) onResolved();
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal menghapus Work Order');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const loadEmployeesAndSpareparts = async () => {
@@ -186,9 +228,19 @@ export function WorkOrderDetailModal({
 
       setIsResolving(false);
 
-      if (updated && updated.waMessageText) {
-        setWaMessageToModal(updated.waMessageText);
-      }
+      const fallbackWaText = (
+        `==== WORK ORDER SELESAI [${wo.woId}] ====\n` +
+        `*Nama Alat:* ${wo.equipmentName || '-'}\n` +
+        `*Kode/No Alat:* ${wo.equipmentCode || '-'}\n` +
+        `*Lokasi:* ${wo.location || '-'}\n` +
+        `*PIC Eksekusi:* ${teknisiString || '-'}\n\n` +
+        `*Kendala/Kerusakan:*\n${wo.issueDescription || '-'}\n\n` +
+        `*Tindakan Perbaikan:*\n${resolveNotes || '-'}\n\n` +
+        `*Sparepart Digunakan:* ${sparepartNameString ? `${sparepartNameString} (Qty: ${sparepartQtyString || 1})` : '-'}\n` +
+        `*Selesai Perbaikan:* ${new Date().toLocaleString('id-ID')}`
+      );
+
+      setWaMessageToModal(updated?.waMessageText || fallbackWaText);
 
       if (onResolved) {
         onResolved();
@@ -790,9 +842,23 @@ export function WorkOrderDetailModal({
               borderColor: 'var(--border-main, #E2E8F0)'
             }}
           >
-            <span className="text-[11px] opacity-70" style={{ color: 'var(--text-muted)' }}>
-              {wo?.woId ? `ID: ${wo.woId}` : 'Prep & Lab Portal'}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] opacity-70" style={{ color: 'var(--text-muted)' }}>
+                {wo?.woId ? `ID: ${wo.woId}` : 'Prep & Lab Portal'}
+              </span>
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="px-2.5 py-1 text-xs font-semibold text-rose-600 hover:text-white hover:bg-rose-600 rounded-lg border border-rose-200 dark:border-rose-900/50 transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Hapus Work Order secara permanen"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{isDeleting ? 'Menghapus...' : 'Hapus WO'}</span>
+                </button>
+              )}
+            </div>
             <Button
               onClick={onClose}
               variant="secondary"
@@ -813,6 +879,9 @@ export function WorkOrderDetailModal({
         <WhatsAppModal 
           isOpen={!!waMessageToModal}
           message={waMessageToModal}
+          messageText={waMessageToModal}
+          title="Work Order Diselesaikan"
+          description="Laporan penyelesaian WO telah disimpan. Kirim notifikasi ke WhatsApp?"
           onClose={() => setWaMessageToModal('')}
         />
       )}
