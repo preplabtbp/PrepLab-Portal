@@ -766,6 +766,48 @@ p5mRouter.delete("/materi/:id", async (req, res) => {
   }
 });
 
+// Reset status pemakaian seluruh materi SOP & IK agar bisa digunakan / diprioritaskan lagi
+p5mRouter.post("/materi/reset-sop-ik", async (req, res) => {
+  try {
+    const result = await db.update(p5mMateri)
+      .set({ lastUsed: null })
+      .where(sql`LOWER(${p5mMateri.judul}) ~* '\\y(sop|ik)\\y|instruksi kerja' OR LOWER(${p5mMateri.judul}) LIKE '%sop%' OR LOWER(${p5mMateri.judul}) LIKE '%ik %'`)
+      .returning({ id: p5mMateri.id, judul: p5mMateri.judul });
+
+    res.json({ 
+      success: true, 
+      count: result.length, 
+      message: `Berhasil mereset status pemakaian untuk ${result.length} materi SOP & IK!` 
+    });
+  } catch (error: any) {
+    console.error("Error resetting SOP/IK history:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Reset status pemakaian untuk 1 materi tertentu
+p5mRouter.put("/materi/:id/reset-used", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ success: false, message: "ID materi tidak valid" });
+    }
+    const updated = await db.update(p5mMateri)
+      .set({ lastUsed: null })
+      .where(eq(p5mMateri.id, id))
+      .returning();
+
+    if (updated.length === 0) {
+      return res.status(404).json({ success: false, message: "Materi tidak ditemukan" });
+    }
+
+    res.json({ success: true, message: "Riwayat pemakaian materi berhasil di-reset!", data: updated[0] });
+  } catch (error: any) {
+    console.error("Error resetting single materi:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // ============================================================
 // EMPLOYEE POOL & ROSTER FOR TARGET WEEK (GOLONGAN 2 & 3 + PT FILTER)
 // ============================================================
@@ -1199,7 +1241,17 @@ p5mRouter.post("/randomize", async (req, res) => {
         });
       }
 
-      const matchingPool = filterPool(poolMateri);
+      let matchingPool = filterPool(poolMateri);
+
+      if (matchingPool.length === 0) {
+        // Fallback: Jika pool materi General kosong, gunakan materi yang cocok kategori (termasuk SOP & IK)
+        matchingPool = poolMateri.filter(m => {
+          if (kategoriTarget && kategoriTarget !== 'All') {
+            return (m.kategori || 'Teknis').toLowerCase() === kategoriTarget.toLowerCase();
+          }
+          return true;
+        });
+      }
 
       if (matchingPool.length === 0) {
         return {
@@ -1925,6 +1977,7 @@ p5mRouter.get("/flyer", async (req, res) => {
         const isPdf = mimeType.includes('pdf') || 
                       meta.data.name?.toLowerCase().endsWith('.pdf') ||
                       targetJudul.toLowerCase().includes('.pdf') || 
+                      /\b(sop|ik)\b|instruksi kerja/i.test(targetJudul) ||
                       targetJudul.startsWith('IK ') || 
                       targetJudul.startsWith('SOP ') || 
                       targetJudul.startsWith('JSA ') ||

@@ -5,9 +5,10 @@ import {
   BookOpen, History, Users, Sparkles, Filter, Search, X, Layers,
   ChevronLeft, ArrowRight, ArrowLeft, Shield, ShieldAlert, Award, CheckCircle2, FileText,
   Briefcase, Loader2, Star, Eye, RefreshCw, Image as ImageIcon, ExternalLink,
-  Building2
+  Building2, FileSpreadsheet
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
+import * as XLSX from 'xlsx';
 import { Card, Button, Input } from './ui';
 import { toast } from 'sonner';
 import { getFlyerInfo } from '../lib/p5m-flyer';
@@ -852,6 +853,170 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
     }
   };
 
+  // State & Handler: Export Excel (.xlsx) untuk rekapan admin
+  const handleExportExcel = () => {
+    if (!scheduleData) {
+      toast.warning('Belum ada jadwal yang disusun untuk diekspor ke Excel.');
+      return;
+    }
+
+    try {
+      const rows: any[] = [];
+      let no = 1;
+
+      DAYS.forEach(day => {
+        const dData = scheduleData[day];
+        if (!dData) return;
+        const dateDisplay = datesMeta[day]?.display || day;
+        const isG = dData.tipe === 'gabungan';
+
+        ['pagi', 'malam'].forEach(shift => {
+          const shiftLabel = shift === 'pagi' ? 'Pagi (Day Shift)' : 'Malam (Night Shift)';
+          const sData = dData[shift];
+          if (!sData) return;
+
+          if (isG) {
+            const slots = sData.gabungan || [];
+            slots.forEach((s: any) => {
+              rows.push({
+                'No': no++,
+                'Hari': day,
+                'Tanggal': dateDisplay,
+                'Shift': shiftLabel,
+                'Sesi / Kategori': 'Gabungan (All Team)',
+                'Nama Pemateri': s.nama || 'KOSONG',
+                'NIK': s.nik || '-',
+                'Perusahaan': s.pt || selectedPt,
+                'Divisi': s.divisi || '-',
+                'Kelas Jabatan': s.kelas || '-',
+                'Topik / Judul Materi P5M': s.materi || '-',
+                'Kategori': s.kategori || '-',
+                'Sub-Kategori': s.subKategori || '-',
+                'Tipe Slot': s.isSenam ? 'Senam' : s.isLogbook ? 'Logbook' : s.isFallback ? 'Fallback' : 'Materi Rutin',
+                'Tautan Flyer / Dokumen': s.fileUrl ? (s.fileUrl.startsWith('http') ? s.fileUrl : `${window.location.origin}${s.fileUrl}`) : '-'
+              });
+            });
+          } else {
+            // Preparasi
+            const prepSlots = sData.preparasi || [];
+            prepSlots.forEach((s: any) => {
+              rows.push({
+                'No': no++,
+                'Hari': day,
+                'Tanggal': dateDisplay,
+                'Shift': shiftLabel,
+                'Sesi / Kategori': 'Preparasi & Maintenance',
+                'Nama Pemateri': s.nama || 'KOSONG',
+                'NIK': s.nik || '-',
+                'Perusahaan': s.pt || selectedPt,
+                'Divisi': s.divisi || 'Preparation',
+                'Kelas Jabatan': s.kelas || '-',
+                'Topik / Judul Materi P5M': s.materi || '-',
+                'Kategori': s.kategori || '-',
+                'Sub-Kategori': s.subKategori || '-',
+                'Tipe Slot': s.isSenam ? 'Senam' : s.isFallback ? 'Fallback' : 'Materi Rutin',
+                'Tautan Flyer / Dokumen': s.fileUrl ? (s.fileUrl.startsWith('http') ? s.fileUrl : `${window.location.origin}${s.fileUrl}`) : '-'
+              });
+            });
+
+            // Laboratorium
+            const labSlots = sData.laboratorium || [];
+            labSlots.forEach((s: any) => {
+              rows.push({
+                'No': no++,
+                'Hari': day,
+                'Tanggal': dateDisplay,
+                'Shift': shiftLabel,
+                'Sesi / Kategori': 'Laboratorium & QA',
+                'Nama Pemateri': s.nama || 'KOSONG',
+                'NIK': s.nik || '-',
+                'Perusahaan': s.pt || selectedPt,
+                'Divisi': s.divisi || 'Laboratory',
+                'Kelas Jabatan': s.kelas || '-',
+                'Topik / Judul Materi P5M': s.materi || '-',
+                'Kategori': s.kategori || '-',
+                'Sub-Kategori': s.subKategori || '-',
+                'Tipe Slot': s.isSenam ? 'Senam' : s.isFallback ? 'Fallback' : 'Materi Rutin',
+                'Tautan Flyer / Dokumen': s.fileUrl ? (s.fileUrl.startsWith('http') ? s.fileUrl : `${window.location.origin}${s.fileUrl}`) : '-'
+              });
+            });
+          }
+        });
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+
+      // Set lebar kolom rapi & proporsional
+      worksheet['!cols'] = [
+        { wch: 5 },  // No
+        { wch: 10 }, // Hari
+        { wch: 16 }, // Tanggal
+        { wch: 20 }, // Shift
+        { wch: 25 }, // Sesi / Kategori
+        { wch: 30 }, // Nama Pemateri
+        { wch: 16 }, // NIK
+        { wch: 12 }, // Perusahaan
+        { wch: 18 }, // Divisi
+        { wch: 16 }, // Kelas Jabatan
+        { wch: 45 }, // Topik / Judul Materi P5M
+        { wch: 14 }, // Kategori
+        { wch: 16 }, // Sub-Kategori
+        { wch: 16 }, // Tipe Slot
+        { wch: 35 }, // Tautan Flyer / Dokumen
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap Jadwal P5M');
+
+      const startStr = (datesMeta['Senin']?.display || 'Mingguan').replace(/\s+/g, '_');
+      const fileName = `Rekap_Jadwal_P5M_${selectedPt}_${startStr}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+
+      toast.success(`Tabel rekapan admin berhasil diekspor ke Excel (${fileName})!`);
+    } catch (err: any) {
+      console.error('Export Excel error:', err);
+      toast.error('Gagal mengekspor Excel: ' + (err?.message || 'Terjadi kesalahan'));
+    }
+  };
+
+  const [isResettingSopIk, setIsResettingSopIk] = useState(false);
+
+  // Reset riwayat pemakaian seluruh materi SOP & IK agar kembali diprioritaskan
+  const handleResetSopIk = async () => {
+    if (!window.confirm('Yakin ingin mereset status pemakaian seluruh materi SOP & IK? Materi SOP & IK akan kembali berstatus fresh dan diprioritaskan kembali oleh sistem saat acak jadwal.')) return;
+    setIsResettingSopIk(true);
+    try {
+      const res = await fetch('/api/p5m/materi/reset-sop-ik', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || 'Status pemakaian SOP & IK berhasil di-reset!');
+        fetchMateriList();
+      } else {
+        toast.error(data.message || 'Gagal mereset status SOP & IK');
+      }
+    } catch (err: any) {
+      toast.error('Gagal mereset SOP & IK: ' + err.message);
+    } finally {
+      setIsResettingSopIk(false);
+    }
+  };
+
+  // Reset status pemakaian 1 materi tertentu
+  const handleResetSingleMateri = async (id: number, judul: string) => {
+    try {
+      const res = await fetch(`/api/p5m/materi/${id}/reset-used`, { method: 'PUT' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Status pemakaian "${judul}" berhasil di-reset!`);
+        fetchMateriList();
+      } else {
+        toast.error(data.message || 'Gagal mereset materi');
+      }
+    } catch (err: any) {
+      toast.error('Gagal mereset materi: ' + err.message);
+    }
+  };
+
   // Materi CRUD Handlers
   const handleSaveMateriModal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -936,7 +1101,13 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const filteredMateri = useMemo(() => {
     return materiList.filter(m => {
       const matchSearch = m.judul?.toLowerCase().includes(materiSearch.toLowerCase());
-      const matchKat = materiFilterKat === 'All' || m.kategori === materiFilterKat;
+      let matchKat = false;
+      if (materiFilterKat === 'All') matchKat = true;
+      else if (materiFilterKat === 'SOP / IK') {
+        matchKat = /\b(sop|ik)\b|instruksi kerja/i.test(m.judul || '');
+      } else {
+        matchKat = m.kategori === materiFilterKat;
+      }
       const matchSubKat = materiFilterSubKat === 'All' || m.subKategori === materiFilterSubKat;
       const matchDiv = materiFilterDiv === 'All' || m.divisi === materiFilterDiv;
       return matchSearch && matchKat && matchSubKat && matchDiv;
@@ -1126,6 +1297,16 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
             <div className="flex items-center gap-2 flex-wrap">
               <Button
+                onClick={handleExportExcel}
+                disabled={!scheduleData}
+                className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs h-10 px-4 rounded-xl shadow-lg shadow-teal-600/20 flex items-center gap-2 flex-1 sm:flex-initial"
+                title="Ekspor Rekap Jadwal P5M Mingguan ke Excel (.xlsx)"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-white" />
+                <span>Ekspor Excel (.xlsx)</span>
+              </Button>
+
+              <Button
                 onClick={handleDownloadPNG}
                 disabled={!scheduleData || isExporting}
                 className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-10 px-4 rounded-xl shadow-lg shadow-emerald-600/20 flex items-center gap-2 flex-1 sm:flex-initial"
@@ -1135,7 +1316,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 ) : (
                   <Download className="w-4 h-4 text-white" />
                 )}
-                <span>Unduh Keseluruhan Jadwal (PNG)</span>
+                <span>Unduh Gambar (PNG)</span>
               </Button>
 
               <Button
@@ -1299,6 +1480,17 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               </div>
 
               <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={handleExportExcel}
+                  disabled={!scheduleData}
+                  className="bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 text-xs h-9 px-3.5 rounded-xl shadow-xs font-semibold"
+                  title="Ekspor Jadwal P5M ke Format Excel (.xlsx) untuk Rekapan Admin"
+                >
+                  <FileSpreadsheet className="w-4 h-4 mr-1.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Ekspor Excel (.xlsx)</span>
+                </Button>
+
                 <Button
                   variant="secondary"
                   onClick={handleDownloadPNG}
@@ -1955,23 +2147,40 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               </Button>
 
               {isQATeam && (
-                <Button
-                  onClick={() => {
-                    setEditingMateri(null);
-                    setFormJudul('');
-                    setFormKategori('Teknis');
-                    setFormSubKategori('General');
-                    setFormDivisi('Preparation');
-                    setFormIsInternal(false);
-                    setFormImageBase64(null);
-                    setFormImagePreview(null);
-                    setFormImageFilename('');
-                    setMateriModalOpen(true);
-                  }}
-                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-9 px-3.5 rounded-xl shadow-md"
-                >
-                  <Plus className="w-4 h-4 mr-1.5" /> Tambah Materi Baru
-                </Button>
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={handleResetSopIk}
+                    disabled={isResettingSopIk}
+                    className="bg-orange-500/15 hover:bg-orange-500/25 text-orange-700 dark:text-orange-300 border border-orange-500/40 text-xs h-9 px-3 rounded-xl shadow-xs font-semibold"
+                    title="Reset status pemakaian seluruh materi SOP & IK agar kembali diprioritaskan saat pengacakan jadwal otomatis"
+                  >
+                    {isResettingSopIk ? (
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-4 h-4 mr-1.5 text-orange-500" />
+                    )}
+                    <span>Reset Pemakaian SOP &amp; IK</span>
+                  </Button>
+
+                  <Button
+                    onClick={() => {
+                      setEditingMateri(null);
+                      setFormJudul('');
+                      setFormKategori('Teknis');
+                      setFormSubKategori('General');
+                      setFormDivisi('Preparation');
+                      setFormIsInternal(false);
+                      setFormImageBase64(null);
+                      setFormImagePreview(null);
+                      setFormImageFilename('');
+                      setMateriModalOpen(true);
+                    }}
+                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-9 px-3.5 rounded-xl shadow-md"
+                  >
+                    <Plus className="w-4 h-4 mr-1.5" /> Tambah Materi Baru
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -1995,6 +2204,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-main)] outline-none cursor-pointer"
             >
               <option value="All">Semua Kategori</option>
+              <option value="SOP / IK">📘 Dokumen SOP &amp; IK</option>
               <option value="Teknis">Teknis</option>
               <option value="Non-Teknis">Non-Teknis</option>
             </select>
@@ -2074,7 +2284,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                         </td>
                         <td className="py-3 px-4 text-center">
                           {item.fileUrl ? (() => {
-                            const isPdf = item.fileUrl.toLowerCase().includes('.pdf') || (item.judul && (item.judul.startsWith('IK ') || item.judul.startsWith('SOP ')));
+                            const isPdf = item.fileUrl.toLowerCase().includes('.pdf') || (item.judul && (/\b(sop|ik)\b|instruksi kerja/i.test(item.judul) || item.judul.startsWith('IK ') || item.judul.startsWith('SOP ')));
                             return (
                               <button
                                 onClick={() => setPreviewImage({ url: item.fileUrl, title: item.judul })}
@@ -2098,6 +2308,15 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                         {isQATeam && (
                           <td className="py-3 px-4 text-center">
                             <div className="flex items-center justify-center gap-1.5">
+                              {item.lastUsed && (
+                                <button
+                                  onClick={() => handleResetSingleMateri(item.id, item.judul)}
+                                  className="p-1.5 text-[var(--text-muted)] hover:text-emerald-500 hover:bg-[var(--input-bg)] rounded-lg transition-colors cursor-pointer"
+                                  title="Reset Status Pemakaian (Jadikan Belum Pernah)"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => {
                                   setEditingMateri(item);
@@ -2618,7 +2837,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       if (mKatFilter === 'All') return true;
       if (mKatFilter === 'SOP / IK') {
         const j = (m.judul || '').toLowerCase();
-        return j.startsWith('sop') || j.startsWith('ik ') || j.includes('sop') || j.includes('ik -') || j.includes('instruksi kerja');
+        return /\b(sop|ik)\b|instruksi kerja/i.test(j) || j.startsWith('sop') || j.startsWith('ik ') || j.includes('sop') || j.includes('ik -');
       }
       if (mKatFilter === 'Senam') return m.kategori === 'Senam';
       if (mKatFilter === 'Non-Teknis') return m.kategori === 'Non-Teknis';
@@ -2941,7 +3160,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
         </div>
 
         {slot.fileUrl && (() => {
-          const isPdf = slot.fileUrl.toLowerCase().includes('.pdf') || (slot.materi && (slot.materi.startsWith('IK ') || slot.materi.startsWith('SOP ')));
+          const isPdf = slot.fileUrl.toLowerCase().includes('.pdf') || (slot.materi && (/\b(sop|ik)\b|instruksi kerja/i.test(slot.materi) || slot.materi.startsWith('IK ') || slot.materi.startsWith('SOP ')));
           return (
             <button
               type="button"

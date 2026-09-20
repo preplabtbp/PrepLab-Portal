@@ -36,6 +36,7 @@ export function getFlyerInfo(rawUrl?: string | null, title?: string | null): Fly
     fileId ||
     cleanUrl.toLowerCase().includes('.pdf') ||
     cleanTitle.toLowerCase().includes('.pdf') ||
+    /\b(sop|ik)\b|instruksi kerja/i.test(cleanTitle) ||
     cleanTitle.startsWith('IK ') ||
     cleanTitle.startsWith('SOP ') ||
     cleanTitle.startsWith('JSA ') ||
