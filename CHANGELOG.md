@@ -10,6 +10,15 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Memperbarui teks pada pop-up upacara promosi awal (`PromotionWelcomeModal.tsx`), podium top 3 leaderboard, tabel klasemen bulanan (`LeaderboardScreen.tsx`), modal transparansi EXP (`ExpAuditModal.tsx`), serta drawer modul navigasi (`ModulesDrawer.tsx`).
 - **Modal Audit Transparansi Perolehan EXP Personil (`ExpAuditModal.tsx`)**:
   - Fitur pencarian instan nama/NIK personil untuk memeriksa seluruh rekapitulasi poin EXP dari beragam instrumen (Inspeksi K3, Laporan KTA, Tema Desain, Kuis 100, dsb.) secara transparan.
+- **Fitur Import Excel Roster Langsung dari PC Admin (`RosterExcelImportModal.tsx` & `excelRosterParser.ts`)**:
+  - Menyediakan modal import file spreadsheet `.xlsx` / `.xls` langsung dari komputer admin untuk mempercepat dan mempermudah alur pembaruan roster operasional.
+  - Mendukung pembacaan sheet `Staff` (`Rooster_Staff`), `Crew` (`Rooster_Crew`), dan `CutiTahunan` dengan live preview instan (< 1 detik).
+  - Menampilkan ringkasan metrik sebelum disimpan: jumlah personil terdeteksi, rentang tanggal (mulai–selesai), total entri shift, dan opsi fleksibel (update profil, jadwal shift, atau kuota cuti).
+  - Dilengkapi tombol **Unduh Template Excel Resmi** untuk standarisasi format file admin.
+  - Endpoint berkecepatan tinggi `POST /api/roster/import-excel` dengan chunked upsert dan otomatisasi refresh cache roster.
+- **Opsi Keterangan Roster XP (Penyesuaian Jadwal Speedboat) dengan Warna Khas (`roster-admin-screen.tsx` & `adm-dashboard.tsx`)**:
+  - Menambahkan kode status `XP` (*Speedboat*) ke daftar opsi preset edit shift admin lengkap dengan label `"XP (Speedboat)"` dan deskripsi `"Penyesuaian Jadwal Speedboat"`.
+  - Menerapkan palet warna *Cyan Maritim* yang berbeda dan mencolok (`bg-cyan-500/20 text-cyan-700 border-cyan-500/40 ring-1 ring-cyan-500/25`) pada sel tabel matriks roster, popover editor sel, legenda status, dan daftar absensi harian administrasi (`adm-dashboard.tsx`).
 - **Penyempurnaan Hall of Fame & Batas Cabang Prestasi**:
   - Memastikan Hall of Fame akhir musim tetap tampil terbuka dan permanen untuk apresiasi pencapaian personil terbaik.
   - Menyelaraskan perhitungan cabang prestasi aktif personil agar konsisten dengan 12 cabang achievement sistem.

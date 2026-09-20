@@ -444,6 +444,125 @@ router.post("/api/roster/izin", async (req, res) => {
     }
   });
 
+router.post("/api/roster/import-excel", async (req, res) => {
+  try {
+    const reqNik = req.body?.editorNik || req.headers['x-user-nik'] || (req as any).session?.userNik;
+    if (reqNik) {
+      const isAuth = await isAuthorizedRosterEditor(reqNik as string);
+      if (!isAuth) {
+        return res.status(403).json({ 
+          success: false, 
+          message: "Akses ditolak: Import roster hanya dapat dilakukan oleh Tim Administrasi dan Developer." 
+        });
+      }
+    }
+
+    const { 
+      employees: empList = [], 
+      rosters: rosterList = [], 
+      cuti: cutiList = [],
+      updateEmployees = true,
+      updateRosters = true,
+      updateCuti = true,
+      fileName = "roster.xlsx"
+    } = req.body;
+
+    let updatedEmpsCount = 0;
+    let updatedRostersCount = 0;
+    let updatedCutiCount = 0;
+
+    // 1. Upsert Profil Karyawan (jika dipilih)
+    if (updateEmployees && Array.isArray(empList) && empList.length > 0) {
+      const uniqueEmpMap = new Map<string, any>();
+      for (const emp of empList) {
+        if (emp && emp.nik) {
+          uniqueEmpMap.set(emp.nik.trim(), emp);
+        }
+      }
+
+      for (const emp of uniqueEmpMap.values()) {
+        await db.insert(employees)
+          .values(emp)
+          .onConflictDoUpdate({
+            target: employees.nik,
+            set: emp
+          });
+        updatedEmpsCount++;
+      }
+    }
+
+    // 2. Upsert Jadwal Roster (jika dipilih)
+    if (updateRosters && Array.isArray(rosterList) && rosterList.length > 0) {
+      const targetNiks = Array.from(new Set(rosterList.map((r: any) => r.nik).filter(Boolean)));
+      const targetDates = Array.from(new Set(rosterList.map((r: any) => r.date).filter(Boolean)));
+
+      // Hapus entri lama untuk kombinasi NIK dan Tanggal yang diimpor ini (chunked delete)
+      if (targetNiks.length > 0 && targetDates.length > 0) {
+        const deleteChunkSize = 100;
+        for (let k = 0; k < targetNiks.length; k += deleteChunkSize) {
+          const chunkNiks = targetNiks.slice(k, k + deleteChunkSize);
+          await db.delete(roster).where(
+            and(
+              inArray(roster.nik, chunkNiks as string[]),
+              inArray(roster.date, targetDates as string[])
+            )
+          );
+        }
+      }
+
+      // Batch insert entri roster baru (chunk 2000)
+      const insertChunkSize = 2000;
+      for (let j = 0; j < rosterList.length; j += insertChunkSize) {
+        const chunk = rosterList.slice(j, j + insertChunkSize);
+        await db.insert(roster).values(chunk);
+      }
+      updatedRostersCount = rosterList.length;
+    }
+
+    // 3. Update Cuti Tahunan (jika ada dan dipilih)
+    if (updateCuti && Array.isArray(cutiList) && cutiList.length > 0) {
+      const allDbEmp = await db.select({ id: employees.id, nik: employees.nik, name: employees.name }).from(employees);
+      const empByNik = new Map<string, number>();
+      const empByName = new Map<string, number>();
+      allDbEmp.forEach(e => {
+        if (e.nik) empByNik.set(e.nik.trim(), e.id);
+        if (e.name) empByName.set(e.name.trim().toLowerCase(), e.id);
+      });
+
+      for (const item of cutiList) {
+        const nik = (item.nik || '').trim();
+        const name = (item.name || '').trim();
+        let targetId = empByNik.get(nik);
+        if (!targetId && name) {
+          targetId = empByName.get(name.toLowerCase());
+        }
+        if (targetId) {
+          await db.update(employees)
+            .set({ sisaCt: item.sisaCt, jatuhTempoCt: item.jatuhTempoCt })
+            .where(eq(employees.id, targetId));
+          updatedCutiCount++;
+        }
+      }
+    }
+
+    // Refresh cache roster
+    invalidateRosterCache();
+
+    res.json({
+      success: true,
+      message: `Import Excel (${fileName}) berhasil: ${updatedEmpsCount} profil karyawan, ${updatedRostersCount} jadwal shift, dan ${updatedCutiCount} data cuti diperbarui.`,
+      stats: {
+        employees: updatedEmpsCount,
+        rosters: updatedRostersCount,
+        cuti: updatedCutiCount
+      }
+    });
+  } catch (error: any) {
+    console.error("Error in roster excel import:", error);
+    res.status(500).json({ success: false, message: error.message || "Gagal mengimpor file Excel" });
+  }
+});
+
 router.post(["/api/roster/sync", "/api/admin/sync-roster"], async (req, res) => {
   try {
     const reqNik = req.body?.editorNik || req.headers['x-user-nik'] || (req as any).session?.userNik;

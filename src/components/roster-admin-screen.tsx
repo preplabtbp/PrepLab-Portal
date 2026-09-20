@@ -2,11 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ChevronLeft, Loader2, Calendar, MapPin, Briefcase, Clock, 
   Plane, PlaneTakeoff, Info, Search, RefreshCw, CheckCircle2, 
-  AlertCircle, Edit2, Check, X, Filter, Users, ChevronRight, Layers, Sparkles
+  AlertCircle, Edit2, Check, X, Filter, Users, ChevronRight, Layers, Sparkles,
+  FileSpreadsheet
 } from 'lucide-react';
 import { getRosterData } from '../sheets-api';
 import { Button } from './ui';
 import { PageHeader } from './PageHeader';
+import { RosterExcelImportModal } from './RosterExcelImportModal';
 import { toast } from 'sonner';
 
 function safeFormatDate(date: any, options: any) {
@@ -37,6 +39,7 @@ const SHIFT_OPTIONS = [
   { code: 'OFF', label: 'OFF (Libur)', desc: 'Hari Libur Rutin', bg: 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30' },
   { code: 'TRV', label: 'TRV (Travel On)', desc: 'Perjalanan Masuk', bg: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' },
   { code: 'TV', label: 'TV (Travel Off)', desc: 'Perjalanan Pulang Cuti', bg: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' },
+  { code: 'XP', label: 'XP (Speedboat)', desc: 'Penyesuaian Jadwal Speedboat', bg: 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-500/40 ring-1 ring-cyan-500/25' },
   { code: 'CT', label: 'CT (Cuti Tahunan)', desc: 'Cuti Tahunan Karyawan', bg: 'bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/35' },
   { code: 'CI', label: 'CI (Cuti Istimewa)', desc: 'Cuti Istimewa 5 Tahunan', bg: 'bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/35' },
   { code: 'I', label: 'I (Izin / Sakit)', desc: 'Izin Tidak Masuk', bg: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' },
@@ -86,6 +89,9 @@ export function RosterAdminScreen() {
     displayDate: string;
     currentShift: string;
   } | null>(null);
+
+  // Excel Import Modal State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/developers')
@@ -389,11 +395,12 @@ export function RosterAdminScreen() {
     if (c === 'N') return 'bg-blue-900 text-white border-blue-800 font-black shadow-2xs';
     if (c === 'OFF') return 'bg-slate-500/20 text-slate-600 dark:text-slate-400 border-slate-500/30 font-bold';
     if (c === 'TRV' || c === 'TV') return 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40 font-black shadow-2xs ring-1 ring-amber-500/30';
+    if (c === 'XP') return 'bg-cyan-500/25 text-cyan-700 dark:text-cyan-300 border-cyan-500/45 font-black shadow-2xs ring-1 ring-cyan-500/30';
     if (c.startsWith('CT') || c.startsWith('CI') || c === 'C' || c === 'CR') {
       return 'bg-purple-500/25 text-purple-700 dark:text-purple-300 border-purple-500/45 font-black shadow-2xs ring-1 ring-purple-500/30';
     }
     if (c === 'S' || c === 'LS' || c === 'SD') return 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/35 font-bold';
-    if (c === 'I' || c.startsWith('IZIN') || c === 'XP' || c === 'TT') {
+    if (c === 'I' || c.startsWith('IZIN') || c === 'TT') {
       return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/40 font-bold';
     }
     return 'bg-teal-500/20 text-teal-700 dark:text-teal-400 border-teal-500/30 font-bold';
@@ -534,15 +541,26 @@ export function RosterAdminScreen() {
             </span>
           )}
           {canEditRoster && (
-            <Button
-              onClick={handleManualSync}
-              disabled={isSyncing}
-              className="text-white flex items-center gap-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 shadow-sm transition-all cursor-pointer"
-              style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
-            >
-              <RefreshCw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'Menyinkronkan...' : 'Sinkron Sheets'}
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(true)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 shadow-sm transition-all cursor-pointer"
+                title="Import data roster langsung dari file Excel di PC"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Import Excel</span>
+              </button>
+              <Button
+                onClick={handleManualSync}
+                disabled={isSyncing}
+                className="text-white flex items-center gap-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 shadow-sm transition-all cursor-pointer"
+                style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
+              >
+                <RefreshCw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Menyinkronkan...' : 'Sinkron Sheets'}
+              </Button>
+            </div>
           )}
         </div>
       </PageHeader>
@@ -927,6 +945,7 @@ export function RosterAdminScreen() {
               <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-blue-900 text-white border-blue-800">N = Night</span>
               <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-slate-500/15 text-slate-600 border-slate-500/30">OFF = Libur</span>
               <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-amber-500/15 text-amber-600 border-amber-500/30">TRV/TV = Travel</span>
+              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-500/35 ring-1 ring-cyan-500/20">XP = Speedboat</span>
               <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-purple-500/20 text-purple-600 border-purple-500/30">C/CT = Cuti</span>
               <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-emerald-500/15 text-emerald-600 border-emerald-500/30">S = Sakit</span>
               <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-teal-500/15 text-teal-600 border-teal-500/30">LS = Longshift</span>
@@ -1023,6 +1042,16 @@ export function RosterAdminScreen() {
           </div>
         </div>
       )}
+      {/* Excel Import Modal */}
+      <RosterExcelImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={() => {
+          sessionStorage.removeItem('preplab_roster_cache');
+          fetchRoster();
+        }}
+        currentUserNik={requestorNik}
+      />
     </div>
   );
 }
