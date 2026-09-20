@@ -51,6 +51,7 @@ export const KBBI_MAINTENANCE_DICTIONARY: Record<string, { standard: string; exp
   'retak': { standard: 'retak', explanation: 'Kondisi fisik retak' },
   'baut dol': { standard: 'ulir baut aus (dol)', explanation: 'Ulir baut aus / tidak mengikat' },
   'baut slek': { standard: 'ulir baut aus (dol)', explanation: 'Ulir baut aus' },
+  'bautnya': { standard: 'baut pengunci', explanation: 'Baut pengikat / pengunci' },
   'dol': { standard: 'aus (dol)', explanation: 'Ulir baut/mur aus atau dol' },
   'slek': { standard: 'aus (dol)', explanation: 'Ulir baut/mur aus' },
   'selek': { standard: 'aus (dol)', explanation: 'Ulir baut/mur aus' },
@@ -58,6 +59,34 @@ export const KBBI_MAINTENANCE_DICTIONARY: Record<string, { standard: string; exp
   'lepas': { standard: 'terlepas', explanation: 'Komponen terlepas' },
   'tumpah': { standard: 'tumpah', explanation: 'Tumpahan material / cairan' },
   'karatan': { standard: 'berkarat (korosi)', explanation: 'Terjadi korosi logam' },
+  'bolong': { standard: 'berlubang', explanation: 'Kondisi fisik berlubang / sobek' },
+  'agin': { standard: 'angin', explanation: 'KBBI: angin (suplai udara kompresor)' },
+  'sura': { standard: 'suara', explanation: 'KBBI: suara (bunyi mesin)' },
+  'pasa': { standard: 'pada', explanation: 'Kata hubung: pada' },
+  'prnggantian': { standard: 'penggantian', explanation: 'KBBI: penggantian komponen' },
+  'pergantian': { standard: 'penggantian', explanation: 'KBBI: penggantian (proses mengganti unit/komponen)' },
+  'prngelasan': { standard: 'pengelasan', explanation: 'KBBI: pengelasan (proses las)' },
+  'prmasangan': { standard: 'pemasangan', explanation: 'KBBI: pemasangan' },
+  'grinda': { standard: 'gerinda', explanation: 'KBBI: gerinda (bukan grinda)' },
+  'kran': { standard: 'keran air', explanation: 'KBBI: keran (bukan kran)' },
+  'pelapon': { standard: 'plafon', explanation: 'KBBI: plafon (langit-langit ruangan)' },
+  'expaired': { standard: 'kedaluwarsa', explanation: 'KBBI: kedaluwarsa (expired)' },
+  'kadarluarsa': { standard: 'kedaluwarsa', explanation: 'KBBI: kedaluwarsa (bukan kadaluarsa)' },
+  'kadaluarsa': { standard: 'kedaluwarsa', explanation: 'KBBI: kedaluwarsa' },
+  'swinger': { standard: 'swing kisi AC', explanation: 'Pengarah hembusan kisi AC' },
+  'altag': { standard: 'tagging label sampel', explanation: 'Label identitas sampel nikel' },
+  'tropol': { standard: 'troli sampel (trolley)', explanation: 'Gerobak dorong sampel bertingkat' },
+  'troly': { standard: 'troli (trolley)', explanation: 'Troli angkut' },
+  'zet': { standard: 'set', explanation: 'Satu set / kelengkapan komponen' },
+  'zetium': { standard: 'Zetium XRF', explanation: 'Spektrometer XRF Malvern Panalytical' },
+  'jawcrawser': { standard: 'jaw crusher', explanation: 'Mesin peremuk sampel (jaw crusher)' },
+  'vbelt': { standard: 'v-belt (tali kipas)', explanation: 'Sabuk pemindah tenaga (v-belt)' },
+  'wiremesh': { standard: 'kawat ayakan (wiremesh)', explanation: 'Anyaman kawat saringan mesh' },
+  'houskeeping': { standard: 'housekeeping (kebersihan)', explanation: 'Kegiatan pembersihan dan kerapian area kerja' },
+  'termokopel': { standard: 'termokopel (sensor suhu)', explanation: 'Sensor pengukur suhu furnace/oven' },
+  'thermo couple': { standard: 'termokopel (sensor suhu)', explanation: 'Sensor suhu thermocouple' },
+  'fumehood': { standard: 'fume hood (lemari asam)', explanation: 'Lemari penghisap uap kimia asam' },
+  'desikator': { standard: 'desikator kabinet', explanation: 'Lemari kedap pengering kelembapan sampel' },
 
   // --- Kelistrikan & Elektronik ---
   'matot': { standard: 'mati total (tidak menyala)', explanation: 'Unit tidak menerima daya sama sekali' },
@@ -121,6 +150,80 @@ export const KBBI_MAINTENANCE_DICTIONARY: Record<string, { standard: string; exp
   'timbaangan': { standard: 'timbangan', explanation: 'Timbangan' },
   'ayakan': { standard: 'ayakan mesh', explanation: 'Saringan sampel (sieve mesh)' },
 
+  // --- Istilah Pertambangan Nikel, Transportasi & Alat Berat ---
+  'manhaul': { standard: 'manhaul (bus operasional tambang)', explanation: 'Bus angkutan personel tambang' },
+  'man haul': { standard: 'manhaul (bus operasional tambang)', explanation: 'Bus angkutan personel tambang' },
+  'menhol': { standard: 'manhaul', explanation: 'Bus angkutan personel tambang (manhaul)' },
+  'manhol': { standard: 'manhaul', explanation: 'Bus angkutan personel tambang (manhaul)' },
+  'menhaul': { standard: 'manhaul', explanation: 'Bus angkutan personel tambang (manhaul)' },
+  'lv': { standard: 'LV (Light Vehicle)', explanation: 'Kendaraan operasional ringan lapangan' },
+  'elvi': { standard: 'LV (Light Vehicle)', explanation: 'Light Vehicle (mobil operasional)' },
+  'dt': { standard: 'Dump Truck (DT)', explanation: 'Truk pengangkut bijih tambang (dump truck)' },
+  'dumptruck': { standard: 'Dump Truck (DT)', explanation: 'Dump truck pengangkut ore' },
+  'dump truk': { standard: 'Dump Truck (DT)', explanation: 'Dump truck pengangkut ore' },
+  'damp truk': { standard: 'Dump Truck (DT)', explanation: 'Dump truck' },
+  'damtruk': { standard: 'Dump Truck (DT)', explanation: 'Dump truck' },
+  'hauling': { standard: 'hauling (pengangkutan ore)', explanation: 'Aktivitas pengangkutan bijih tambang' },
+  'holing': { standard: 'hauling', explanation: 'Pengangkutan bijih tambang (hauling)' },
+  'haulling': { standard: 'hauling', explanation: 'Pengangkutan bijih tambang (hauling)' },
+  'excavator': { standard: 'excavator (alat gali muat)', explanation: 'Alat berat penggali tambang' },
+  'eksa': { standard: 'excavator', explanation: 'Alat berat excavator' },
+  'heksa': { standard: 'excavator', explanation: 'Alat berat excavator' },
+  'excav': { standard: 'excavator', explanation: 'Excavator' },
+  'loader': { standard: 'wheel loader', explanation: 'Alat berat pemuat material' },
+  'loder': { standard: 'wheel loader', explanation: 'Wheel loader' },
+  'dozer': { standard: 'bulldozer', explanation: 'Alat berat perata / pendorong' },
+  'duser': { standard: 'bulldozer', explanation: 'Bulldozer' },
+  'bulldozer': { standard: 'bulldozer', explanation: 'Bulldozer' },
+  'grader': { standard: 'motor grader', explanation: 'Alat berat perata jalan hauling' },
+  'greder': { standard: 'motor grader', explanation: 'Motor grader' },
+  'greader': { standard: 'motor grader', explanation: 'Motor grader' },
+  'compactor': { standard: 'compactor / vibro', explanation: 'Alat pemadat jalan' },
+  'kompektor': { standard: 'compactor / vibro', explanation: 'Compactor pemadat jalan' },
+  'vibro': { standard: 'compactor / vibro', explanation: 'Vibratory roller' },
+  'water truck': { standard: 'water truck (truk penyiram)', explanation: 'Truk tangki penyiram jalan debu' },
+  'wt': { standard: 'water truck', explanation: 'Water truck' },
+  'fuel truck': { standard: 'fuel truck (truk bahan bakar)', explanation: 'Truk tangki solar mobile' },
+  'ft': { standard: 'fuel truck', explanation: 'Fuel truck' },
+  'pit': { standard: 'front pit (area tambang)', explanation: 'Front penambangan aktif' },
+  'rom': { standard: 'ROM stockpile', explanation: 'Run of Mine (area penumpukan bijih nikel)' },
+  'stockpile': { standard: 'stockpile (penumpukan ore)', explanation: 'Area penumpukan material' },
+  'stokpel': { standard: 'stockpile', explanation: 'Stockpile penumpukan bijih' },
+  'jetty': { standard: 'jetty (pelabuhan pengapalan)', explanation: 'Dermaga pengapalan ore nikel' },
+  'jeti': { standard: 'jetty', explanation: 'Dermaga pelabuhan tambang' },
+  'smelter': { standard: 'pabrik smelter', explanation: 'Pabrik peleburan / pemurnian nikel' },
+  'hpal': { standard: 'pabrik HPAL (High Pressure Acid Leach)', explanation: 'Pabrik pengolahan nikel sulfat HPAL' },
+  'hpall': { standard: 'pabrik HPAL', explanation: 'Pabrik HPAL' },
+  'rkef': { standard: 'pabrik RKEF (Rotary Kiln Electric Furnace)', explanation: 'Pabrik pengolahan feronikel RKEF' },
+  'disposal': { standard: 'area disposal (buangan OB)', explanation: 'Area penimbunan tanah penutup' },
+  'disposel': { standard: 'area disposal', explanation: 'Area penimbunan overburden' },
+  'settling pond': { standard: 'settling pond (kolam endap)', explanation: 'Kolam pengendapan sedimen tambang' },
+  'limonit': { standard: 'bijih limonit (low grade ore)', explanation: 'Lapisan bijih nikel kadar Fe tinggi' },
+  'limonite': { standard: 'bijih limonit', explanation: 'Bijih limonit' },
+  'saprolit': { standard: 'bijih saprolit (high grade ore)', explanation: 'Lapisan bijih nikel kadar Ni tinggi' },
+  'saprolite': { standard: 'bijih saprolit', explanation: 'Bijih saprolit' },
+  'ore': { standard: 'bijih nikel (nickel ore)', explanation: 'Batuan mengandung mineral nikel' },
+  'overburden': { standard: 'overburden (tanah penutup)', explanation: 'Lapisan tanah penutup batuan berharga' },
+  'ob': { standard: 'overburden (tanah penutup)', explanation: 'Overburden' },
+  'slurry': { standard: 'slurry (lumpur bijih)', explanation: 'Campuran bijih nikel halus dan air' },
+  'moisture': { standard: 'moisture content (kadar air)', explanation: 'Kandungan air dalam sampel nikel' },
+  'coring': { standard: 'drill core (sampel bor)', explanation: 'Sampel inti pemboran eksplorasi' },
+  'dryer': { standard: 'oven dryer (pengering sampel)', explanation: 'Oven pemanas pengering sampel nikel' },
+  'ovendryer': { standard: 'oven dryer', explanation: 'Oven pengering laboratorium' },
+  'riffle': { standard: 'riffle splitter (pembagi sampel)', explanation: 'Alat pembagi sampel representatif' },
+  'splitter': { standard: 'riffle splitter (pembagi sampel)', explanation: 'Alat pembagi sampel' },
+  'xrf': { standard: 'instrumen XRF (spektrometer kadar)', explanation: 'Spektrometer analisis kadar nikel' },
+  'loto': { standard: 'LOTO (Lockout / Tagout)', explanation: 'Prosedur keselamatan penguncian isolasi energi' },
+  'p2h': { standard: 'P2H (Pemeriksaan Harian Alat)', explanation: 'Pemeriksaan Harian sebelum unit beroperasi' },
+  'kta': { standard: 'KTA (Kondisi Tidak Aman)', explanation: 'Temuan bahaya kondisi fisik tempat kerja' },
+  'tta': { standard: 'TTA (Tindakan Tidak Aman)', explanation: 'Perilaku kerja berbahaya tidak sesuai SOP' },
+  'nearmiss': { standard: 'nearmiss (hampir celaka)', explanation: 'Insiden nyaris celaka tanpa cedera' },
+  'simper': { standard: 'SIMPER (Izin Mengemudi Perusahaan)', explanation: 'Izin mengoperasikan kendaraan/alat di tambang' },
+  'breakdown': { standard: 'breakdown (rusak / mogok)', explanation: 'Unit mengalami kerusakan di lapangan' },
+  'bd': { standard: 'breakdown (rusak)', explanation: 'Unit alat berat breakdown' },
+  'standby': { standard: 'standby (siap operasi)', explanation: 'Unit siap namun menunggu giliran kerja' },
+  'downtime': { standard: 'downtime (durasi alat mati)', explanation: 'Durasi waktu unit tidak dapat beroperasi' },
+
   // --- Kata Sambung / Singkatan Percakapan ---
   'ga': { standard: 'tidak', explanation: 'Baku: tidak' },
   'gak': { standard: 'tidak', explanation: 'Baku: tidak' },
@@ -161,7 +264,18 @@ export const MULTI_WORD_REPLACEMENTS: [RegExp, string][] = [
   [/\b(ga|gak|ngga|tdk)\s+(bisa|bs)\s+(muter|puter)\b/gi, 'tidak dapat berputar'],
   [/\b(ga|gak|ngga|tdk)\s+(bisa|bs)\s+(jalan|fungsi)\b/gi, 'tidak dapat berfungsi normal'],
   [/\b(ga|gak|ngga|tdk)\s+nyala\b/gi, 'tidak menyala'],
+  [/\b(ga|gak|ngga|tdk)\s+(nyalah|menyalah)\b/gi, 'tidak menyala'],
   [/\b(ga|gak|ngga|tdk)\s+muter\b/gi, 'tidak berputar'],
+  [/\bsuplai\s+agin\b/gi, 'suplai angin'],
+  [/\bsura\s+mesin\b/gi, 'suara mesin tidak normal'],
+  [/\bpasa\s+mesin\b/gi, 'pada mesin'],
+  [/\b(karna|krn)\s+bolong\b/gi, 'karena berlubang'],
+  [/\bac\s+diruang\b/gi, 'AC di ruang'],
+  [/\bbercecer\s+dilantai\b/gi, 'berceceran di lantai'],
+  [/\bmanhaul\s+(mogok|mati|rusak|bd)\b/gi, 'bus manhaul operasional mogok'],
+  [/\bgagang\s+(patah|rusak)\b/gi, 'gagang pegangan patah'],
+  [/\b(kabel\s+power|kabel\s+daya)\s+kendor\b/gi, 'kabel daya kendur pada soket'],
+  [/\boli\s+bocor\b/gi, 'kebocoran oli pelumas'],
   [/\bmati\s+total\b/gi, 'mati total (tidak ada daya)'],
   [/\bbau\s+gosong\b/gi, 'tercium bau hangus terbakar'],
   [/\bbau\s+sangit\b/gi, 'tercium bau hangus terbakar'],
@@ -242,7 +356,20 @@ export const CANONICAL_TERMS: { root: string; standard: string; explanation: str
   { root: 'saringan', standard: 'ayakan mesh (sieve)', explanation: 'Ayakan sampel' },
   { root: 'komputer', standard: 'komputer (PC)', explanation: 'Perangkat komputer' },
   { root: 'monitor', standard: 'layar monitor', explanation: 'Monitor komputer' },
-  { root: 'printer', standard: 'printer cetak', explanation: 'Mesin pencetak' }
+  { root: 'printer', standard: 'printer cetak', explanation: 'Mesin pencetak' },
+  { root: 'manhaul', standard: 'manhaul (bus operasional tambang)', explanation: 'Bus angkutan karyawan tambang' },
+  { root: 'hauling', standard: 'hauling (pengangkutan ore)', explanation: 'Aktivitas pengangkutan bijih tambang' },
+  { root: 'excavator', standard: 'excavator (alat gali muat)', explanation: 'Alat berat penggali tambang' },
+  { root: 'loader', standard: 'wheel loader', explanation: 'Alat berat pemuat material' },
+  { root: 'dozer', standard: 'bulldozer', explanation: 'Alat berat perata / pendorong' },
+  { root: 'grader', standard: 'motor grader', explanation: 'Alat berat perata jalan hauling' },
+  { root: 'compactor', standard: 'compactor / vibro', explanation: 'Alat pemadat jalan' },
+  { root: 'stockpile', standard: 'ROM stockpile', explanation: 'Area penumpukan bijih tambang' },
+  { root: 'limonit', standard: 'bijih limonit (low grade ore)', explanation: 'Bijih nikel kadar Fe tinggi' },
+  { root: 'saprolit', standard: 'bijih saprolit (high grade ore)', explanation: 'Bijih nikel kadar Ni tinggi' },
+  { root: 'splitter', standard: 'riffle splitter (pembagi sampel)', explanation: 'Alat pembagi sampel representatif' },
+  { root: 'breakdown', standard: 'breakdown (unit rusak / mogok)', explanation: 'Unit alat berat tidak beroperasi' },
+  { root: 'downtime', standard: 'downtime (durasi alat mati)', explanation: 'Durasi waktu unit tidak beroperasi' }
 ];
 
 /**
@@ -456,6 +583,52 @@ export const COMMON_DAMAGE_TEMPLATES = [
       {
         label: 'Pipa / Keran Air Bocor',
         snippet: 'Keran air wastafel tidak dapat tertutup rapat dan terjadi rembesan pada instalasi pipa.'
+      }
+    ]
+  },
+  {
+    category: 'Manhaul & Alat Berat Tambang',
+    icon: 'Truck',
+    color: 'indigo',
+    items: [
+      {
+        label: 'Manhaul Mogok / Tidak Starter',
+        snippet: 'Unit bus manhaul penjemputan shift tidak dapat distarter, terindikasi dinamo starter atau daya aki drop.'
+      },
+      {
+        label: 'AC Manhaul / Kabin Mati',
+        snippet: 'Sistem pendingin (AC) kabin manhaul tidak dingin dan hembusan blower mati, kabin panas dan berdebu.'
+      },
+      {
+        label: 'Bocor Selang Hidrolik (Hose)',
+        snippet: 'Terdapat kebocoran oli hidrolik pada selang (hydraulic hose) unit, berpotensi ceceran B3 di jalan tambang.'
+      },
+      {
+        label: 'Ban Sobek / Robek Batuan Ore',
+        snippet: 'Ban unit sobek pada dinding samping (sidewall) terkena batuan ore nikel keras di jalan hauling.'
+      }
+    ]
+  },
+  {
+    category: 'Preparasi Sampel Nikel (PrepLab)',
+    icon: 'Layers',
+    color: 'rose',
+    items: [
+      {
+        label: 'Jaw Crusher Macet Batuan Keras',
+        snippet: 'Jaw crusher macet tersangkut batuan saprolit keras, flywheel tertahan dan belt selip.'
+      },
+      {
+        label: 'Oven Dryer Suhu Tidak Tercapai',
+        snippet: 'Oven dryer pengering sampel nikel tidak dapat mencapai suhu 105°C, analisis moisture content terhambat.'
+      },
+      {
+        label: 'Mangkok Pulverizer Aus / Cincin Retak',
+        snippet: 'Cincin puck / ring mill pada mangkuk pulverizer mengalami keretakan dan aus, hasil penggerusan tidak lolos mesh 200.'
+      },
+      {
+        label: 'Dust Collector Daya Hisap Lemah',
+        snippet: 'Sistem penghisap debu (dust collector) mengalami penurunan daya hisap, filter bag kotor dan perlu pembersihan berkala.'
       }
     ]
   }
