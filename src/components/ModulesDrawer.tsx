@@ -5,7 +5,7 @@ import {
   CheckSquare, Eye, AlertTriangle, ClipboardCheck, Package, Box, FileText, 
   Settings, BookOpen, Info, Briefcase, Users, Calendar, Clock, Utensils, 
   LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink,
-  Trophy
+  Trophy, ChevronDown, ChevronsUpDown
 } from 'lucide-react';
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
@@ -28,10 +28,14 @@ export function ModulesDrawer({
   inspectorName = '',
   userPt
 }: ModulesDrawerProps) {
-  const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showKtaConfirmation, setShowKtaConfirmation] = useState(false);
   const [showFoodReportModal, setShowFoodReportModal] = useState(false);
+
+  // Accordion state: default expand first section only so user does not need to scroll
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    operational: true
+  });
 
   // Close drawer on Escape key press
   useEffect(() => {
@@ -173,16 +177,6 @@ export function ModulesDrawer({
     }
   ], [isLab, isMaintenance, hasInventoryAccess, isQA, isDeveloper, onNav]);
 
-  const tabs = useMemo(() => [
-    { id: 'all', label: 'Semua Menu' },
-    { id: 'operational', label: 'Operasional' },
-    { id: 'reporting', label: 'Pelaporan' },
-    ...(hasInventoryAccess ? [{ id: 'inventory', label: 'Inventory' }] : []),
-    { id: 'education', label: 'Edukasi' },
-    { id: 'admin', label: 'HR & Admin' },
-    { id: 'dashboard', label: 'Dashboard' }
-  ], [hasInventoryAccess]);
-
   const allowedSections = useMemo(() => {
     if (isCrew) {
       return sections.map(s => {
@@ -196,28 +190,49 @@ export function ModulesDrawer({
     return sections;
   }, [sections, isCrew, isQA, isMaintenance]);
 
+  const toggleSection = (id: string) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  const handleExpandAll = () => {
+    const next: Record<string, boolean> = {};
+    allowedSections.forEach(s => { next[s.id] = true; });
+    setOpenSections(next);
+  };
+
+  const handleCollapseAll = () => {
+    setOpenSections({});
+  };
+
+  const areAllExpanded = useMemo(() => {
+    return allowedSections.length > 0 && allowedSections.every(s => !!openSections[s.id]);
+  }, [allowedSections, openSections]);
+
   const filteredSections = useMemo(() => {
-    let result = activeTab === 'all' 
-      ? allowedSections 
-      : allowedSections.filter(s => s.id === activeTab);
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      result = result.map(s => ({
-        ...s,
-        items: s.items.filter(item => 
-          item.title.toLowerCase().includes(q) || 
-          item.desc.toLowerCase().includes(q)
-        )
-      })).filter(s => s.items.length > 0);
+    if (!searchQuery.trim()) {
+      return allowedSections;
     }
-
-    return result;
-  }, [allowedSections, activeTab, searchQuery]);
+    const q = searchQuery.toLowerCase().trim();
+    return allowedSections.map(s => ({
+      ...s,
+      items: s.items.filter(item => 
+        item.title.toLowerCase().includes(q) || 
+        item.desc.toLowerCase().includes(q)
+      )
+    })).filter(s => s.items.length > 0);
+  }, [allowedSections, searchQuery]);
 
   const totalModulesCount = useMemo(() => {
     return allowedSections.reduce((acc, s) => acc + s.items.length, 0);
   }, [allowedSections]);
+
+  const isSectionOpen = (sectionId: string) => {
+    if (searchQuery.trim()) return true; // Otomatis buka section saat user mengetik pencarian
+    return !!openSections[sectionId];
+  };
 
   return (
     <AnimatePresence>
@@ -233,7 +248,7 @@ export function ModulesDrawer({
             className="fixed inset-0 bg-black/60 backdrop-blur-xs"
           />
 
-          {/* Drawer Panel - Slides in from the LEFT on desktop view (wider than profile drawer) */}
+          {/* Drawer Panel - Slides in from the LEFT */}
           <motion.div 
             initial={{ x: "-100%" }}
             animate={{ x: 0 }}
@@ -287,16 +302,16 @@ export function ModulesDrawer({
               </button>
             </div>
 
-            {/* Search Bar & Category Filter */}
+            {/* Search Bar & Accordion Quick Controls */}
             <div 
-              className="px-5 sm:px-6 py-3 border-b shrink-0 space-y-3"
+              className="px-5 sm:px-6 py-3 border-b shrink-0 flex items-center gap-2.5"
               style={{
                 backgroundColor: 'var(--card-bg, #FFFFFF)',
                 borderColor: 'var(--border-main, #E2E8F0)'
               }}
             >
               {/* Search input */}
-              <div className="relative w-full">
+              <div className="relative flex-1">
                 <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
@@ -317,58 +332,94 @@ export function ModulesDrawer({
                 )}
               </div>
 
-              {/* Horizontal Scrollable Category Pills */}
-              <div className="flex overflow-x-auto gap-1.5 pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                {tabs.map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 border cursor-pointer ${
-                      activeTab === tab.id 
-                        ? 'shadow-xs font-bold text-white bg-teal-600 border-teal-600' 
-                        : 'bg-[var(--bg-main)] text-[var(--text-main)] border-[var(--border-main)] hover:border-teal-500/50'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
+              {/* Quick Toggle Expand / Collapse All */}
+              {!searchQuery.trim() && (
+                <button
+                  type="button"
+                  onClick={areAllExpanded ? handleCollapseAll : handleExpandAll}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-all shrink-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #FFFFFF)',
+                    borderColor: 'var(--border-main, #E2E8F0)',
+                    color: 'var(--text-muted, #64748B)'
+                  }}
+                  title={areAllExpanded ? "Tutup Semua Kategori" : "Buka Semua Kategori"}
+                >
+                  <ChevronsUpDown className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                  <span className="hidden sm:inline font-bold">{areAllExpanded ? "Tutup Semua" : "Buka Semua"}</span>
+                </button>
+              )}
             </div>
 
-            {/* Scrollable Content Body */}
-            <div className="flex-1 overflow-y-auto p-5 sm:px-6 space-y-6">
-              <AnimatePresence mode="popLayout">
-                {filteredSections.length === 0 ? (
-                  <div className="p-10 text-center rounded-2xl border border-dashed border-[var(--border-main)] bg-[var(--card-bg)]">
-                    <p className="text-sm font-bold text-[var(--text-main)] mb-1">Modul Tidak Ditemukan</p>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      Coba gunakan kata kunci lain seperti <em>"inspeksi"</em>, <em>"wo"</em>, atau <em>"apd"</em>.
-                    </p>
-                  </div>
-                ) : (
-                  filteredSections.map((section) => (
-                    <div key={section.id} className="space-y-2.5">
-                      <div className="flex items-center gap-2 px-1">
-                        <div className={`p-1.5 rounded-lg ${section.bgIcon}`}>
-                          {section.icon}
+            {/* Scrollable Content Body with Accordions */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
+              {filteredSections.length === 0 ? (
+                <div className="p-10 text-center rounded-2xl border border-dashed border-[var(--border-main)] bg-[var(--card-bg)]">
+                  <p className="text-sm font-bold text-[var(--text-main)] mb-1">Modul Tidak Ditemukan</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Coba gunakan kata kunci lain seperti <em>"inspeksi"</em>, <em>"wo"</em>, atau <em>"apd"</em>.
+                  </p>
+                </div>
+              ) : (
+                filteredSections.map((section) => {
+                  const isExpanded = isSectionOpen(section.id);
+                  return (
+                    <div 
+                      key={section.id} 
+                      className="rounded-2xl border transition-all overflow-hidden shadow-2xs"
+                      style={{
+                        backgroundColor: 'var(--card-bg, #FFFFFF)',
+                        borderColor: 'var(--border-main, #E2E8F0)'
+                      }}
+                    >
+                      {/* Accordion Header Button */}
+                      <button
+                        type="button"
+                        onClick={() => toggleSection(section.id)}
+                        className="w-full px-4 py-3 flex items-center justify-between text-left transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/50 cursor-pointer select-none"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`p-1.5 rounded-xl shrink-0 ${section.bgIcon}`}>
+                            {section.icon}
+                          </div>
+                          <span className="text-xs sm:text-sm font-bold tracking-tight text-[var(--text-main)] truncate">
+                            {section.title}
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[var(--text-muted)] border border-[var(--border-main)] shrink-0">
+                            {section.items.length}
+                          </span>
                         </div>
-                        <h3 className="text-xs sm:text-sm font-bold tracking-tight text-[var(--text-main)]">
-                          {section.title}
-                        </h3>
-                        <span className="text-[10px] font-semibold text-[var(--text-muted)]">
-                          ({section.items.length})
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {section.items.map(item => (
-                          <DrawerActionCard key={item.id} {...item} />
-                        ))}
-                      </div>
+                        <div className="p-1 rounded-lg text-[var(--text-muted)] transition-colors shrink-0">
+                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-teal-600 dark:text-teal-400' : ''}`} />
+                        </div>
+                      </button>
+
+                      {/* Accordion Body Content */}
+                      <AnimatePresence initial={false}>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: "easeInOut" }}
+                            className="overflow-hidden border-t"
+                            style={{ borderColor: 'var(--border-main, #E2E8F0)' }}
+                          >
+                            <div 
+                              className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5"
+                              style={{ backgroundColor: 'var(--bg-main, #F8FAFC)' }}
+                            >
+                              {section.items.map(item => (
+                                <DrawerActionCard key={item.id} {...item} />
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
-                  ))
-                )}
-              </AnimatePresence>
+                  );
+                })
+              )}
             </div>
 
             {/* Bottom Footer Info */}
