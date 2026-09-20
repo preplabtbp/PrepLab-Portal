@@ -65,7 +65,33 @@ const SPV_DEMO_USER = {
   isDeveloper: false
 };
 
+const MEETING_ROOM_USER = {
+  id: 999990,
+  nik: 'MEETINGROOM',
+  username: 'meetingroom',
+  name: 'Meeting Room PrepLab',
+  jabatan: 'Meeting Room Display',
+  jobGrade: 'ALL',
+  section: 'ALL',
+  department: 'ALL',
+  gol: 'IV',
+  pt: 'TBP',
+  firstLoginComplete: true,
+  isAdmin: true,
+  isDeveloper: false,
+  isMeetingRoom: true
+};
+
 function resolveDemoUser(normalized: string) {
+  if (
+    normalized === 'MEETING' ||
+    normalized === 'MEETINGROOM' ||
+    normalized === 'MEETING_ROOM' ||
+    normalized === 'RUANGMEETING' ||
+    normalized === 'RUANG_MEETING'
+  ) {
+    return MEETING_ROOM_USER;
+  }
   if (
     normalized === 'SPVDEMO' ||
     normalized === 'DEMOSPV' ||
@@ -150,10 +176,10 @@ authRouter.post("/login", async (req, res) => {
     const isDemoAllowed = env.ENABLE_DEMO_USER || process.env.ENABLE_DEMO_USER === 'true' || true;
     const demoUser = isDemoAllowed ? resolveDemoUser(normalized) : null;
     if (demoUser) {
-      const isPasswordValid = 
-        password === '112233' || 
-        password === 'spvdemo123' || 
-        password === 'demo123';
+      const isMeeting = demoUser.nik === 'MEETINGROOM';
+      const isPasswordValid = isMeeting
+        ? password === 'preplabportal'
+        : (password === '112233' || password === 'spvdemo123' || password === 'demo123');
 
       if (isPasswordValid) {
         const token = generateAuthToken(demoUser);

@@ -6,9 +6,10 @@ import {
   Moon, Sunset, SlidersHorizontal, CheckSquare, Square,
   Globe, Users, User, Share2, Search, ArrowUpRight,
   ChevronDown, ChevronUp, Maximize2, Minimize2, Heart,
-  AlertTriangle
+  AlertTriangle, Type
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { FONT_SIZE_OPTIONS, FontSizeOption, applyFontSize, getStoredFontSize } from '../utils/fontSize';
 
 export interface ThemeColors {
   '--bg-main': string;
@@ -379,6 +380,7 @@ export default function ThemeModal({
   const [fetchingTemplates, setFetchingTemplates] = useState(false);
   const [showStudioPreview, setShowStudioPreview] = useState(true);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [modalFontSize, setModalFontSize] = useState<FontSizeOption>(() => getStoredFontSize());
 
   // Active color editor state
   const defaultColors = useMemo(() => {
@@ -829,52 +831,93 @@ export default function ThemeModal({
           </div>
         </div>
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation & Font Quick Control */}
         <div 
-          className="flex border-b px-3 sm:px-5 pt-2 sm:pt-2.5 gap-2 overflow-x-auto text-xs font-semibold select-none shrink-0 no-scrollbar"
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b px-3 sm:px-5 pt-2 sm:pt-2.5 gap-2 select-none shrink-0"
           style={{ 
             backgroundColor: editingColors['--bg-main'] || '#F8FAFC',
             borderColor: editingColors['--border-main'] || '#E2E8F0'
           }}
         >
-          <button
-            onClick={() => setActiveTab('templates')}
-            className={`pb-2 px-2.5 sm:px-3 border-b-2 flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'templates' 
-                ? 'border-current font-bold' 
-                : 'border-transparent opacity-60 hover:opacity-100'
-            }`}
-            style={{ color: activeTab === 'templates' ? editingColors['--primary'] : 'inherit' }}
-          >
-            <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span>Koleksi Tema ({Object.keys(PRESET_THEMES).length + customTemplates.length + communityThemes.length})</span>
-          </button>
+          <div className="flex gap-2 overflow-x-auto text-xs font-semibold no-scrollbar">
+            <button
+              onClick={() => setActiveTab('templates')}
+              className={`pb-2 px-2.5 sm:px-3 border-b-2 flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'templates' 
+                  ? 'border-current font-bold' 
+                  : 'border-transparent opacity-60 hover:opacity-100'
+              }`}
+              style={{ color: activeTab === 'templates' ? editingColors['--primary'] : 'inherit' }}
+            >
+              <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>Koleksi Tema ({Object.keys(PRESET_THEMES).length + customTemplates.length + communityThemes.length})</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('studio')}
-            className={`pb-2 px-2.5 sm:px-3 border-b-2 flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'studio' 
-                ? 'border-current font-bold' 
-                : 'border-transparent opacity-60 hover:opacity-100'
-            }`}
-            style={{ color: activeTab === 'studio' ? editingColors['--primary'] : 'inherit' }}
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span>Studio Editor Warna</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('studio')}
+              className={`pb-2 px-2.5 sm:px-3 border-b-2 flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'studio' 
+                  ? 'border-current font-bold' 
+                  : 'border-transparent opacity-60 hover:opacity-100'
+              }`}
+              style={{ color: activeTab === 'studio' ? editingColors['--primary'] : 'inherit' }}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>Studio Editor Warna</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('preview')}
-            className={`pb-2 px-2.5 sm:px-3 border-b-2 flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'preview' 
-                ? 'border-current font-bold' 
-                : 'border-transparent opacity-60 hover:opacity-100'
-            }`}
-            style={{ color: activeTab === 'preview' ? editingColors['--primary'] : 'inherit' }}
-          >
-            <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span>Simulator UI Penuh</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('preview')}
+              className={`pb-2 px-2.5 sm:px-3 border-b-2 flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'preview' 
+                  ? 'border-current font-bold' 
+                  : 'border-transparent opacity-60 hover:opacity-100'
+              }`}
+              style={{ color: activeTab === 'preview' ? editingColors['--primary'] : 'inherit' }}
+            >
+              <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>Simulator UI Penuh</span>
+            </button>
+          </div>
+
+          {/* Quick Font Size Switcher */}
+          <div className="flex items-center gap-1.5 pb-2 sm:pb-2.5 self-start sm:self-auto">
+            <div className="flex items-center gap-1 text-[11px] font-bold opacity-75" style={{ color: editingColors['--text-main'] }}>
+              <Type className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Font:</span>
+            </div>
+            <div 
+              className="flex items-center gap-0.5 p-0.5 rounded-lg border shadow-2xs" 
+              style={{ 
+                backgroundColor: editingColors['--card-bg'] || '#FFFFFF', 
+                borderColor: editingColors['--border-main'] || '#E2E8F0' 
+              }}
+            >
+              {FONT_SIZE_OPTIONS.map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    setModalFontSize(opt.id);
+                    applyFontSize(opt.id);
+                    toast.success(`Ukuran font portal: ${opt.label}`);
+                  }}
+                  className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer transition-all ${
+                    modalFontSize === opt.id 
+                      ? 'shadow-xs ring-1 ring-black/10' 
+                      : 'opacity-60 hover:opacity-100 hover:bg-black/5'
+                  }`}
+                  style={{
+                    backgroundColor: modalFontSize === opt.id ? (editingColors['--primary'] || '#2A9D8F') : 'transparent',
+                    color: modalFontSize === opt.id ? '#FFFFFF' : (editingColors['--text-main'] || '#1E293B')
+                  }}
+                  title={`${opt.label} (${opt.desc})`}
+                >
+                  {opt.id.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Modal Body: Expansive scroll container without rigid height limits */}
@@ -1606,7 +1649,7 @@ export default function ThemeModal({
                       </Button>
 
                       <Button
-                        onClick={handleSaveCustomTemplate}
+                        onClick={() => handleSaveCustomTemplate()}
                         disabled={loading}
                         className="flex-1 h-9 text-xs flex items-center justify-center gap-1.5 shadow-sm text-white font-bold cursor-pointer"
                         style={{ backgroundColor: editingColors['--primary'] }}
@@ -2004,7 +2047,7 @@ export default function ThemeModal({
 
           <div className="flex items-center gap-2">
             <Button
-              onClick={handleApplyAndSaveActiveTheme}
+              onClick={() => handleApplyAndSaveActiveTheme()}
               disabled={loading}
               className="!w-auto text-xs font-bold text-white shadow-md flex items-center gap-2 px-4 py-2"
               style={{ backgroundColor: editingColors['--primary'] }}

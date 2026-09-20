@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Input } from './ui';
-import { LogOut, User, Lock, Mail, Settings2, Palette, ShieldAlert, Settings, Bell, Sparkles, MessageSquarePlus } from 'lucide-react';
+import { LogOut, User, Lock, Mail, Settings2, Palette, ShieldAlert, Settings, Bell, Sparkles, MessageSquarePlus, Type } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAppSettings } from '../sheets-api';
 import { PageHeader } from './PageHeader';
+import { FONT_SIZE_OPTIONS, FontSizeOption, applyFontSize, getStoredFontSize } from '../utils/fontSize';
 
 export function SettingsScreen({ 
   inspectorName, 
@@ -19,6 +20,7 @@ export function SettingsScreen({
   onNav?: (tab: string) => void;
 }) {
   const [profile, setProfile] = useState<any>(null);
+  const [activeFontSize, setActiveFontSize] = useState<FontSizeOption>(() => getStoredFontSize());
   
   const [email, setEmail] = useState('');
   const [soundEnabled, setSoundEnabled] = useState(() => {
@@ -262,6 +264,74 @@ export function SettingsScreen({
                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                    Putar Animasi Sapaan Harian (Splash)
                 </button>
+              </div>
+
+              {/* Pilihan Ukuran Font Seluruh Portal */}
+              <div className="pt-3 border-t space-y-2.5" style={{ borderColor: 'var(--border-main, #E2E8F0)' }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Type className="w-4 h-4 text-emerald-600" />
+                    <span className="text-xs font-bold tracking-tight" style={{ color: 'var(--text-main, #1E293B)' }}>
+                      Ukuran Font Seluruh Portal
+                    </span>
+                  </div>
+                  <span 
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-2xs"
+                    style={{ 
+                      backgroundColor: 'var(--input-bg, #FFFFFF)', 
+                      borderColor: 'var(--border-main, #CBD5E1)',
+                      color: 'var(--primary, #2A9D8F)' 
+                    }}
+                  >
+                    {FONT_SIZE_OPTIONS.find(o => o.id === activeFontSize)?.label} ({FONT_SIZE_OPTIONS.find(o => o.id === activeFontSize)?.desc})
+                  </span>
+                </div>
+
+                <div 
+                  className="grid grid-cols-5 gap-1 p-1 rounded-xl border"
+                  style={{ 
+                    backgroundColor: 'var(--bg-main, #F8FAFC)', 
+                    borderColor: 'var(--border-main, #E2E8F0)' 
+                  }}
+                >
+                  {FONT_SIZE_OPTIONS.map((opt) => {
+                    const isSelected = activeFontSize === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveFontSize(opt.id);
+                          applyFontSize(opt.id);
+                          toast.success(`Ukuran font diubah ke: ${opt.label}`);
+                        }}
+                        className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg text-center transition-all cursor-pointer select-none ${
+                          isSelected 
+                            ? 'shadow-xs ring-1 ring-emerald-500/50' 
+                            : 'hover:bg-black/5 opacity-70 hover:opacity-100'
+                        }`}
+                        style={{
+                          backgroundColor: isSelected ? 'var(--card-bg, #FFFFFF)' : 'transparent',
+                          color: isSelected ? 'var(--primary, #2A9D8F)' : 'var(--text-main, #1E293B)',
+                          border: isSelected ? '1px solid var(--border-main, #CBD5E1)' : '1px solid transparent'
+                        }}
+                        title={`${opt.label} (${opt.desc})`}
+                      >
+                        <span className={`leading-none mb-1 font-black ${
+                          opt.id === 'xs' ? 'text-[11px]' : opt.id === 'sm' ? 'text-xs' : opt.id === 'md' ? 'text-sm' : opt.id === 'lg' ? 'text-base' : 'text-lg'
+                        }`}>
+                          A
+                        </span>
+                        <span className="text-[9.5px] font-semibold leading-tight truncate max-w-full">
+                          {opt.id === 'xs' ? 'Extra Small' : opt.id === 'sm' ? 'Small' : opt.id === 'md' ? 'Medium' : opt.id === 'lg' ? 'Large' : 'Extra Large'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted, #64748B)' }}>
+                  Skala font berlaku instan untuk semua modul, dashboard, tabel data, dan buletin portal.
+                </p>
               </div>
             </Card>
 

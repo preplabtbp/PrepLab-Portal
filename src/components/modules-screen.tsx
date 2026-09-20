@@ -9,6 +9,7 @@ import {
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
 import { getKtaUrl } from '../sheets-api';
+import { MeetingRoomDevModal } from './MeetingRoomDevModal';
 
 interface ModulesScreenProps {
   onNav: (tab: any) => void;
@@ -22,6 +23,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
   const [searchQuery, setSearchQuery] = useState('');
   const [showKtaConfirmation, setShowKtaConfirmation] = useState(false);
   const [showFoodReportModal, setShowFoodReportModal] = useState(false);
+  const [showDevAuthModal, setShowDevAuthModal] = useState(false);
 
   const userJabatan = localStorage.getItem('p2h_inspector_jabatan') || '';
   let userSection = '';
@@ -39,13 +41,14 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
       .catch(() => {});
   }, []);
 
+  const isMeetingRoom = inspectorNik?.toUpperCase() === 'MEETINGROOM' || inspectorNik?.toUpperCase() === 'MEETING';
   const isSuperAdmin = inspectorNik === '02D25000055' || inspectorNik === '02D24000043';
   const isDeveloper = isSuperAdmin || inspectorNik === 'preplabadmin' || developerList.includes(inspectorNik);
-  const isLab = userSection.toLowerCase().includes('laboratory') || isDeveloper;
-  const isMaintenance = userSection.toLowerCase().includes('maintenance') || isDeveloper;
-  const hasInventoryAccess = userSection.toLowerCase().includes('inventory control') || isDeveloper;
-  const isQA = userSection.toLowerCase().includes('qa') || userSection.toLowerCase().includes('quality assurance') || isDeveloper;
-  const isCrew = userJabatan.toLowerCase().includes('crew');
+  const isLab = isMeetingRoom || userSection.toLowerCase().includes('laboratory') || isDeveloper;
+  const isMaintenance = isMeetingRoom || userSection.toLowerCase().includes('maintenance') || isDeveloper;
+  const hasInventoryAccess = isMeetingRoom || userSection.toLowerCase().includes('inventory control') || isDeveloper;
+  const isQA = isMeetingRoom || userSection.toLowerCase().includes('qa') || userSection.toLowerCase().includes('quality assurance') || isDeveloper;
+  const isCrew = isMeetingRoom ? false : userJabatan.toLowerCase().includes('crew');
 
   const sections = useMemo(() => [
     {
@@ -126,12 +129,25 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
         { id: 'pelanggaran-dashboard', title: "Pelanggaran", desc: "SP & Konseling aktif", icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => onNav('pelanggaran-dashboard') },
         { id: 'sap-dashboard', title: "SAP Dashboard", desc: "Inspeksi & Temuan", icon: <LineChart className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => onNav('sap-dashboard') },
         { id: 'monitoring', title: "Pemantauan", desc: "Suhu, Kelembapan, Gas", icon: <Activity className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => onNav('monitoring') },
-        ...(isDeveloper ? [
-          { id: 'admin-dashboard', title: "Developer", desc: "Manajemen Database", icon: <Settings className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'rose', action: () => onNav('admin-dashboard') }
+        ...((isDeveloper || isMeetingRoom) ? [
+          { 
+            id: 'admin-dashboard', 
+            title: "Developer", 
+            desc: "Manajemen Database", 
+            icon: <Settings className="w-5 h-5 sm:w-6 sm:h-6" />, 
+            color: 'rose', 
+            action: () => {
+              if (isMeetingRoom && !isDeveloper) {
+                setShowDevAuthModal(true);
+              } else {
+                onNav('admin-dashboard');
+              }
+            } 
+          }
         ] : [])
       ]
     }
-  ], [isLab, isMaintenance, hasInventoryAccess, isQA, isDeveloper, onNav]);
+  ], [isLab, isMaintenance, hasInventoryAccess, isQA, isDeveloper, isMeetingRoom, onNav]);
 
   const tabs = useMemo(() => [
     { id: 'all', label: 'Semua Menu' },
@@ -357,6 +373,16 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
           </motion.div>
         </div>
       )}
+
+      {/* Meeting Room Developer Auth Modal */}
+      <MeetingRoomDevModal
+        isOpen={showDevAuthModal}
+        onClose={() => setShowDevAuthModal(false)}
+        onSuccess={() => {
+          setShowDevAuthModal(false);
+          onNav('admin-dashboard');
+        }}
+      />
     </motion.div>
   );
 }

@@ -10,6 +10,7 @@ import {
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
 import { getKtaUrl } from '../sheets-api';
+import { MeetingRoomDevModal } from './MeetingRoomDevModal';
 
 interface ModulesDrawerProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export function ModulesDrawer({
   const [searchQuery, setSearchQuery] = useState('');
   const [showKtaConfirmation, setShowKtaConfirmation] = useState(false);
   const [showFoodReportModal, setShowFoodReportModal] = useState(false);
+  const [showDevAuthModal, setShowDevAuthModal] = useState(false);
 
   // Accordion state: default expand first section only so user does not need to scroll
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -77,13 +79,14 @@ export function ModulesDrawer({
       .catch(() => {});
   }, []);
 
+  const isMeetingRoom = inspectorNik?.toUpperCase() === 'MEETINGROOM' || inspectorNik?.toUpperCase() === 'MEETING';
   const isSuperAdmin = inspectorNik === '02D25000055' || inspectorNik === '02D24000043';
   const isDeveloper = isSuperAdmin || inspectorNik === 'preplabadmin' || developerList.includes(inspectorNik);
-  const isLab = userSection.toLowerCase().includes('laboratory') || isDeveloper;
-  const isMaintenance = userSection.toLowerCase().includes('maintenance') || isDeveloper;
-  const hasInventoryAccess = userSection.toLowerCase().includes('inventory control') || isDeveloper;
-  const isQA = userSection.toLowerCase().includes('qa') || userSection.toLowerCase().includes('quality assurance') || isDeveloper;
-  const isCrew = userJabatan.toLowerCase().includes('crew');
+  const isLab = isMeetingRoom || userSection.toLowerCase().includes('laboratory') || isDeveloper;
+  const isMaintenance = isMeetingRoom || userSection.toLowerCase().includes('maintenance') || isDeveloper;
+  const hasInventoryAccess = isMeetingRoom || userSection.toLowerCase().includes('inventory control') || isDeveloper;
+  const isQA = isMeetingRoom || userSection.toLowerCase().includes('qa') || userSection.toLowerCase().includes('quality assurance') || isDeveloper;
+  const isCrew = isMeetingRoom ? false : userJabatan.toLowerCase().includes('crew');
 
   const handleItemClick = (action: () => void) => {
     action();
@@ -170,12 +173,25 @@ export function ModulesDrawer({
         { id: 'pelanggaran-dashboard', title: "Pelanggaran", desc: "SP & Konseling aktif", icon: <AlertTriangle className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('pelanggaran-dashboard')) },
         { id: 'sap-dashboard', title: "SAP Dashboard", desc: "Inspeksi & Temuan", icon: <LineChart className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('sap-dashboard')) },
         { id: 'monitoring', title: "Pemantauan", desc: "Suhu, Kelembapan, Gas", icon: <Activity className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('monitoring')) },
-        ...(isDeveloper ? [
-          { id: 'admin-dashboard', title: "Developer", desc: "Manajemen Database", icon: <Settings className="w-5 h-5" />, color: 'rose', action: () => handleItemClick(() => onNav('admin-dashboard')) }
+        ...((isDeveloper || isMeetingRoom) ? [
+          { 
+            id: 'admin-dashboard', 
+            title: "Developer", 
+            desc: "Manajemen Database", 
+            icon: <Settings className="w-5 h-5" />, 
+            color: 'rose', 
+            action: () => {
+              if (isMeetingRoom && !isDeveloper) {
+                setShowDevAuthModal(true);
+              } else {
+                handleItemClick(() => onNav('admin-dashboard'));
+              }
+            } 
+          }
         ] : [])
       ]
     }
-  ], [isLab, isMaintenance, hasInventoryAccess, isQA, isDeveloper, onNav]);
+  ], [isLab, isMaintenance, hasInventoryAccess, isQA, isDeveloper, isMeetingRoom, onNav]);
 
   const allowedSections = useMemo(() => {
     if (isCrew) {
@@ -502,6 +518,16 @@ export function ModulesDrawer({
           )}
         </div>
       )}
+
+      {/* Meeting Room Dev Auth Modal */}
+      <MeetingRoomDevModal
+        isOpen={showDevAuthModal}
+        onClose={() => setShowDevAuthModal(false)}
+        onSuccess={() => {
+          setShowDevAuthModal(false);
+          handleItemClick(() => onNav('admin-dashboard'));
+        }}
+      />
     </AnimatePresence>
   );
 }

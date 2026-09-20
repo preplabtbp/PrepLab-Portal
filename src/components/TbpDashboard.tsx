@@ -45,9 +45,11 @@ import {
   Sliders,
   SkipForward,
   SkipBack,
-  Bookmark,
   CheckCircle2,
-  Activity
+  Activity,
+  Edit3,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -73,6 +75,11 @@ interface DashboardMediaSettings {
   gallery_3?: string;
   gallery_4?: string;
   lofi?: string;
+  gallery_1_label?: string;
+  gallery_2_label?: string;
+  gallery_3_label?: string;
+  gallery_4_label?: string;
+  hide_gallery_labels?: boolean;
 }
 
 const DEFAULT_MEDIA: DashboardMediaSettings = {
@@ -81,7 +88,12 @@ const DEFAULT_MEDIA: DashboardMediaSettings = {
   gallery_2: '/images/dashboard/gallery_2.jpg',
   gallery_3: '/images/dashboard/gallery_3.jpg',
   gallery_4: '/images/dashboard/gallery_4.jpg',
-  lofi: '/images/dashboard/lofi_girl.jpg'
+  lofi: '/images/dashboard/lofi_girl.jpg',
+  gallery_1_label: '🔬 Analytical Lab',
+  gallery_2_label: '⛏ Mining & Prep',
+  gallery_3_label: '⚙ Maintenance Unit',
+  gallery_4_label: '📋 QA/QC Center',
+  hide_gallery_labels: false
 };
 
 const PRESET_WALLPAPERS = [
@@ -383,8 +395,16 @@ export function TbpDashboard({
   // Modal State for customizer
   const [activeSlot, setActiveSlot] = useState<{ key: keyof DashboardMediaSettings; label: string } | null>(null);
   const [customizerTab, setCustomizerTab] = useState<'upload' | 'preset'>('preset');
+  const [tempLabel, setTempLabel] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const openSlotCustomizer = (slot: { key: keyof DashboardMediaSettings; label: string }) => {
+    setActiveSlot(slot);
+    const labelKey = `${slot.key}_label` as keyof DashboardMediaSettings;
+    const currentLbl = mediaSettings[labelKey];
+    setTempLabel(currentLbl !== undefined ? String(currentLbl) : (DEFAULT_MEDIA[labelKey] ? String(DEFAULT_MEDIA[labelKey]) : ''));
+  };
 
   // Sync with /api/settings on mount
   useEffect(() => {
@@ -456,11 +476,11 @@ export function TbpDashboard({
     }
   };
 
-  // Save new media URL
-  const handleSaveMedia = async (slotKey: keyof DashboardMediaSettings, url: string) => {
+  // General save settings to state, localStorage & backend
+  const handleSaveSettings = async (newPartial: Partial<DashboardMediaSettings>, successMsg = 'Pengaturan berhasil disimpan!') => {
     setIsSaving(true);
     try {
-      const updated = { ...mediaSettings, [slotKey]: url };
+      const updated = { ...mediaSettings, ...newPartial };
       setMediaSettings(updated);
       localStorage.setItem('preplab_bulletin_media', JSON.stringify(updated));
 
@@ -475,19 +495,24 @@ export function TbpDashboard({
         })
       });
 
-      toast.success('Foto canvas berhasil diperbarui!');
-      setActiveSlot(null);
+      toast.success(successMsg);
     } catch (e) {
-      toast.error('Gagal menyimpan foto canvas');
+      toast.error('Gagal menyimpan perubahan');
     } finally {
       setIsSaving(false);
     }
   };
 
+  // Save new media URL
+  const handleSaveMedia = async (slotKey: keyof DashboardMediaSettings, url: string) => {
+    await handleSaveSettings({ [slotKey]: url }, 'Foto canvas berhasil diperbarui!');
+    setActiveSlot(null);
+  };
+
   // Reset slot to default
   const handleResetMedia = async (slotKey: keyof DashboardMediaSettings) => {
     const defaultUrl = DEFAULT_MEDIA[slotKey];
-    if (defaultUrl) {
+    if (typeof defaultUrl === 'string') {
       await handleSaveMedia(slotKey, defaultUrl);
     }
   };
@@ -768,16 +793,36 @@ export function TbpDashboard({
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
               <span>281 Dokumen Tersedia</span>
             </div>
-            <div 
-              className="hidden md:flex px-3 py-1.5 rounded-xl border text-xs font-medium items-center gap-2 shadow-xs"
-              style={{
-                backgroundColor: 'var(--card-bg, rgba(255, 255, 255, 0.6))',
-                borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))',
-                color: 'var(--text-muted, #94a3b8)'
-              }}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Canvas Customizable</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const nextHidden = !mediaSettings.hide_gallery_labels;
+                  handleSaveSettings(
+                    { hide_gallery_labels: nextHidden },
+                    nextHidden ? 'Deskripsi foto disembunyikan!' : 'Deskripsi foto ditampilkan!'
+                  );
+                }}
+                className="px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer hover:bg-slate-700/30 transition-all active:scale-95"
+                style={{
+                  backgroundColor: 'var(--card-bg, rgba(255, 255, 255, 0.6))',
+                  borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))',
+                  color: mediaSettings.hide_gallery_labels ? 'var(--text-muted, #94a3b8)' : 'var(--primary, #2A9D8F)'
+                }}
+                title={mediaSettings.hide_gallery_labels ? "Tampilkan Deskripsi Foto" : "Hilangkan Deskripsi Foto"}
+              >
+                {mediaSettings.hide_gallery_labels ? (
+                  <>
+                    <EyeOff className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Deskripsi Tersembunyi</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3.5 h-3.5 text-teal-400" />
+                    <span>Deskripsi Aktif</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -786,13 +831,11 @@ export function TbpDashboard({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {([1, 2, 3, 4] as const).map((num) => {
             const slotKey = `gallery_${num}` as keyof DashboardMediaSettings;
-            const imgSrc = mediaSettings[slotKey] || DEFAULT_MEDIA[slotKey];
-            const labels = [
-              '🔬 Analytical Lab',
-              '⛏ Mining & Prep',
-              '⚙ Maintenance Unit',
-              '📋 QA/QC Center'
-            ];
+            const imgSrc = String(mediaSettings[slotKey] || DEFAULT_MEDIA[slotKey] || '');
+            const labelKey = `gallery_${num}_label` as keyof DashboardMediaSettings;
+            const customLabel = mediaSettings[labelKey];
+            const currentLabel = customLabel !== undefined ? String(customLabel) : String(DEFAULT_MEDIA[labelKey] || '');
+            const showLabel = !mediaSettings.hide_gallery_labels && currentLabel.trim().length > 0;
 
             return (
               <div 
@@ -809,24 +852,28 @@ export function TbpDashboard({
                   className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-700" 
                 />
                 
-                {/* Subtle dark gradient overlay at bottom */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent pointer-events-none" />
+                {/* Subtle dark gradient overlay at bottom if label is shown */}
+                {showLabel && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent pointer-events-none" />
+                )}
 
-                {/* Bottom label */}
-                <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
-                  <span className="px-2 py-0.5 rounded-lg bg-black/60 backdrop-blur-md text-white/90 text-[10px] font-semibold border border-white/20 shadow-md">
-                    {labels[num - 1]}
-                  </span>
-                </div>
+                {/* Bottom label (conditional) */}
+                {showLabel && (
+                  <div className="absolute bottom-2.5 left-2.5 pointer-events-none max-w-[85%]">
+                    <span className="px-2 py-0.5 rounded-lg bg-black/60 backdrop-blur-md text-white/90 text-[10px] font-semibold border border-white/20 shadow-md truncate block">
+                      {currentLabel}
+                    </span>
+                  </div>
+                )}
 
-                {/* Overlay with Change Photo Button */}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
+                {/* Overlay with Change Photo & Edit Label Button */}
+                <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 gap-2">
                   <button
-                    onClick={() => setActiveSlot({ key: slotKey, label: `Gallery Canvas #${num}` })}
-                    className="px-3 py-1.5 rounded-xl bg-black/80 hover:bg-teal-900/90 text-white text-[11px] font-bold border border-teal-500/50 shadow-xl flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-sm"
+                    onClick={() => openSlotCustomizer({ key: slotKey, label: `Gallery Canvas #${num}` })}
+                    className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-bold border border-teal-400/50 shadow-xl flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-sm"
                   >
-                    <Camera className="w-3 h-3 text-teal-300" />
-                    <span>Ganti Foto</span>
+                    <Camera className="w-3 h-3 text-white" />
+                    <span>Ganti Foto / Teks</span>
                   </button>
                 </div>
               </div>
@@ -1682,6 +1729,54 @@ export function TbpDashboard({
 
             {/* Tab Body */}
             <div className="p-5 overflow-y-auto flex-1 space-y-4 text-xs">
+              {/* Optional Label / Description Customizer for Gallery Slots */}
+              {activeSlot.key.startsWith('gallery_') && (
+                <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-700/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                      <Edit3 className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Deskripsi / Label Foto</span>
+                    </label>
+                    <span className="text-[10px] text-slate-400">Kosongkan jika ingin tanpa tulisan</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={tempLabel}
+                      onChange={(e) => setTempLabel(e.target.value)}
+                      placeholder="Contoh: 🔬 Analytical Lab (kosongkan untuk hilangkan)"
+                      className="flex-1 bg-slate-950 border border-slate-700 text-slate-100 text-xs rounded-xl px-3 py-2 outline-none focus:border-teal-400 placeholder:text-slate-500"
+                    />
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => {
+                        const labelKey = `${activeSlot.key}_label` as keyof DashboardMediaSettings;
+                        handleSaveSettings({ [labelKey]: tempLabel.trim() }, 'Deskripsi foto diperbarui!');
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs cursor-pointer active:scale-95 transition-all shadow-md shrink-0"
+                    >
+                      Simpan Teks
+                    </button>
+                    {tempLabel && (
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => {
+                          setTempLabel('');
+                          const labelKey = `${activeSlot.key}_label` as keyof DashboardMediaSettings;
+                          handleSaveSettings({ [labelKey]: '' }, 'Deskripsi foto dihilangkan!');
+                        }}
+                        className="px-3 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold cursor-pointer transition-all shrink-0"
+                        title="Hapus Label (Foto Bersih)"
+                      >
+                        Hapus Teks
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {customizerTab === 'preset' ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {PRESET_WALLPAPERS.map((preset) => {

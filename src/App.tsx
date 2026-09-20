@@ -22,6 +22,11 @@ import { GlobalKtaPartialReminderModal } from './components/GlobalKtaPartialRemi
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
 import { PushNotificationPrompt } from './components/PushNotificationPrompt';
 import { PromotionWelcomeModal } from './components/PromotionWelcomeModal';
+import { MeetingRoomDevModal } from './components/MeetingRoomDevModal';
+import { initFontSize } from './utils/fontSize';
+
+// Initialize portal-wide font scale on boot
+initFontSize();
 
 
 
@@ -281,16 +286,27 @@ export default function App() {
     }
   }, [inspectorNik]);
 
+  const isMeetingRoom = React.useMemo(() => {
+    const nik = (inspectorNik || '').toUpperCase();
+    return nik === 'MEETINGROOM' || nik === 'MEETING';
+  }, [inspectorNik]);
+
+  const [meetingRoomDevUnlocked, setMeetingRoomDevUnlocked] = useState(false);
+  const [showMeetingRoomDevModal, setShowMeetingRoomDevModal] = useState(false);
+
   const isDeveloper = React.useMemo(() => {
+    if (isMeetingRoom) return meetingRoomDevUnlocked;
     if (inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin') return true;
     return developerList.some(d => d.nik === inspectorNik);
-  }, [inspectorNik, developerList]);
+  }, [inspectorNik, developerList, isMeetingRoom, meetingRoomDevUnlocked]);
 
   const isCrewRole = React.useMemo(() => {
+    if (isMeetingRoom) return false;
     return userProfile?.jabatan?.toLowerCase().includes('crew') || false;
-  }, [userProfile]);
+  }, [userProfile, isMeetingRoom]);
 
   const userDept = React.useMemo(() => {
+    if (isMeetingRoom) return "ALL";
     if (!userProfile) return null;
     const s = (userProfile.section || "").toLowerCase();
     const j = (userProfile.jabatan || "").toLowerCase();
@@ -306,14 +322,15 @@ export default function App() {
     if (s.includes("inventory") || s.includes("inv")) return "Inventory Control";
 
     return null;
-  }, [userProfile]);
+  }, [userProfile, isMeetingRoom]);
 
   const isAdminOrDeveloper = React.useMemo(() => {
+    if (isMeetingRoom) return true;
     if (isDeveloper) return true;
     const jab = (userProfile?.jabatan || '').toLowerCase();
     const sec = (userProfile?.section || '').toLowerCase();
     return jab.includes('admin') || jab.includes('manager') || jab.includes('superintendent') || sec.includes('admin') || sec.includes('administrasi');
-  }, [isDeveloper, userProfile]);
+  }, [isDeveloper, userProfile, isMeetingRoom]);
 
   const [showProfileScreen, setShowProfileScreen] = useState(false);
   const [showModulesDrawer, setShowModulesDrawer] = useState(false);
@@ -554,8 +571,13 @@ export default function App() {
 
   
   const handleNav = (tab: string) => {
+    const cleanTab = tab.replace(/^\//, '');
+    if (cleanTab === 'admin-dashboard' && isMeetingRoom && !meetingRoomDevUnlocked) {
+      setShowMeetingRoomDevModal(true);
+      return;
+    }
     if (tab === 'home' || tab === '' || tab === '/') navigate('/');
-    else navigate('/' + tab.replace(/^\//, ''));
+    else navigate('/' + cleanTab);
   };
 
   const handleBack = () => {
@@ -805,6 +827,7 @@ export default function App() {
     localStorage.removeItem('p2h_inspector_jabatan');
     localStorage.removeItem('p2h_inspector_profile');
     sessionStorage.removeItem('username_prompted');
+    setMeetingRoomDevUnlocked(false);
     toast.success('Sesi berhasil diakhiri.');
     handleNav('home');
   };
@@ -1336,7 +1359,7 @@ export default function App() {
             </button>
 
             {/* Developer (if applicable) */}
-            {isDeveloper && (
+            {(isDeveloper || isMeetingRoom) && (
               <button
                 onClick={() => handleNav('admin-dashboard')}
                 className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
@@ -1401,7 +1424,16 @@ export default function App() {
   <Route path="/employee-database" element={<EmployeeDatabaseScreen inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
   <Route path="/roster-admin" element={<RosterAdminScreen />} />
   <Route path="/settings" element={<SettingsScreen inspectorName={inspectorName} inspectorNik={inspectorNik} onLogoutKaryawan={handleLogoutKaryawan} onOpenThemeModal={() => setShowGlobalThemeModal(true)} onNav={handleNav} />} />
-  <Route path="/admin-dashboard" element={<AdminDashboard inspectorNik={inspectorNik!} />} />
+  <Route 
+    path="/admin-dashboard" 
+    element={
+      isMeetingRoom && !meetingRoomDevUnlocked ? (
+        <Navigate to="/" replace />
+      ) : (
+        <AdminDashboard inspectorNik={inspectorNik!} />
+      )
+    } 
+  />
   <Route path="/sap-dashboard" element={<SapDashboard inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
   <Route path="/adm-dashboard" element={<AdmDashboard />} />
   <Route path="/pelanggaran-dashboard" element={<PelanggaranDashboard />} />
@@ -1649,7 +1681,7 @@ export default function App() {
             active={activeTab === 'settings'} 
             onClick={() => handleNav('settings')} 
           />
-          {isDeveloper && (
+          {(isDeveloper || isMeetingRoom) && (
             <NavItem 
               icon={<Code2 className="w-5 h-5" />} 
               label="Dev" 
@@ -1864,6 +1896,17 @@ export default function App() {
           userAvatar={userProfile?.avatar}
         />
       )}
+
+      {/* Meeting Room Developer Access Password Modal */}
+      <MeetingRoomDevModal
+        isOpen={showMeetingRoomDevModal}
+        onClose={() => setShowMeetingRoomDevModal(false)}
+        onSuccess={() => {
+          setMeetingRoomDevUnlocked(true);
+          setShowMeetingRoomDevModal(false);
+          navigate('/admin-dashboard');
+        }}
+      />
 
     </div>
   );
