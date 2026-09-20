@@ -1,6 +1,24 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.15] - 2026-09-20
+
+### 📊 Dukungan Upload Berkas 30MB+ & Interactive Excel Spreadsheet Viewer pada P5M
+
+- **Peningkatan Kapasitas Upload Materi P5M hingga 30MB+ (`server.ts` & `src/components/p5m-screen.tsx`)**:
+  - Menaikkan batas ukuran upload berkas pada form Tambah/Edit Materi P5M dari sebelumnya 10MB menjadi **30MB** (memenuhi dan melampaui kebutuhan 20MB+).
+  - Meningkatkan limit payload `express.json` dan `express.urlencoded` di backend `server.ts` menjadi **50MB**, mencegah galat HTTP 413 (*Payload Too Large*) saat mengirim data dokumen/spreadsheet terenkripsi base64 berukuran besar.
+  - Memberikan indikator peringatan ukuran berkas real-time pada kartu upload jika melebihi batas 30MB.
+- **Dukungan Penuh Format Spreadsheet Excel (`.xlsx` & `.xls`)**:
+  - Mengizinkan upload berkas dokumen Microsoft Excel (`.xlsx`, `.xls`) pada form materi baru di samping gambar flyer (`image/*`) dan PDF (`.pdf`).
+  - Menjaga ekstensi asli berkas saat disimpan ke Google Drive / local storage dan menyematkan MIME type resmi (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` / `application/vnd.ms-excel`).
+- **Interactive In-App Excel Viewer (`src/components/ExcelViewer.tsx`)**:
+  - Menghadirkan viewer spreadsheet interaktif bertenaga SheetJS langsung di dalam modal pratinjau materi portal.
+  - Fitur penjelajah multi-sheet: beralih tab sheet secara mulus dengan indikator jumlah baris dan kolom.
+  - Bilah pencarian instan: filter dan cari cell/kata kunci di seluruh baris tabel secara real-time.
+  - Tampilan grid tabel spreadsheet lengkap dengan header abjad kolom (A, B, C...) dan nomor baris (1, 2, 3...) bergaya modern dark mode.
+  - Tombol unduh langsung berkas spreadsheet asli (`.xlsx`) dan badge khusus `📊 Excel` pada tabel Bank Materi.
+
 ## [2.9.14] - 2026-09-20
 
 ### 🔄 Sinkronisasi Roster Mingguan P5M & Smart Positioning Popover Editor

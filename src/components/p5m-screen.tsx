@@ -12,6 +12,7 @@ import * as XLSX from 'xlsx';
 import { Card, Button, Input } from './ui';
 import { toast } from 'sonner';
 import { getFlyerInfo } from '../lib/p5m-flyer';
+import { ExcelViewer } from './ExcelViewer';
 
 // ============================================================
 // KONSTANTA & STRUKTUR DEFAULT
@@ -2326,18 +2327,22 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                         </td>
                         <td className="py-3 px-4 text-center">
                           {item.fileUrl ? (() => {
-                            const isPdf = item.fileUrl.toLowerCase().includes('.pdf') || (item.judul && (/\b(sop|ik)\b|instruksi kerja/i.test(item.judul) || item.judul.startsWith('IK ') || item.judul.startsWith('SOP ')));
+                            const urlLower = item.fileUrl.toLowerCase();
+                            const isExcel = urlLower.includes('.xlsx') || urlLower.includes('.xls') || (item.judul && (item.judul.toLowerCase().includes('.xlsx') || item.judul.toLowerCase().includes('.xls')));
+                            const isPdf = !isExcel && (urlLower.includes('.pdf') || (item.judul && (/\b(sop|ik)\b|instruksi kerja/i.test(item.judul) || item.judul.startsWith('IK ') || item.judul.startsWith('SOP '))));
                             return (
                               <button
                                 onClick={() => setPreviewImage({ url: item.fileUrl, title: item.judul })}
                                 className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 mx-auto border transition-colors cursor-pointer ${
-                                  isPdf 
+                                  isExcel
+                                    ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                                    : isPdf 
                                     ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-500/30' 
                                     : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30'
                                 }`}
                               >
-                                {isPdf ? <FileText className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
-                                <span>{isPdf ? 'Dokumen' : 'Flyer'}</span>
+                                {isExcel ? <FileSpreadsheet className="w-3 h-3" /> : isPdf ? <FileText className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
+                                <span>{isExcel ? 'Excel' : isPdf ? 'Dokumen' : 'Flyer'}</span>
                               </button>
                             );
                           })() : (
@@ -2566,60 +2571,98 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </label>
               </div>
 
-              {/* Upload Flyer / Poster */}
+              {/* Upload Flyer / Poster / Excel / PDF */}
               <div className="space-y-1.5 pt-1">
-                <label className="block text-[var(--text-main)] font-semibold">Upload Gambar / Flyer Materi (Google Drive &amp; Cloud Storage)</label>
+                <label className="block text-[var(--text-main)] font-semibold">
+                  Upload Berkas Materi (Flyer / Dokumen PDF / Spreadsheet Excel)
+                </label>
                 
-                {formImagePreview || editingMateri?.fileUrl ? (
-                  <div className="relative rounded-xl border border-emerald-500/40 bg-[var(--input-bg)] p-2 flex items-center gap-3">
-                    <img 
-                      src={formImagePreview || editingMateri?.fileUrl} 
-                      alt="Flyer Preview" 
-                      className="w-16 h-16 object-cover rounded-lg border border-[var(--border-main)] bg-[var(--card-bg)]"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold text-[var(--text-main)] truncate">
-                        {formImageFilename || 'Flyer Terlampir'}
+                {formImageBase64 || editingMateri?.fileUrl ? (() => {
+                  const checkName = (formImageFilename || editingMateri?.fileUrl || '').toLowerCase();
+                  const isExcelUpload = checkName.includes('.xlsx') || checkName.includes('.xls');
+                  const isPdfUpload = !isExcelUpload && checkName.includes('.pdf');
+
+                  return (
+                    <div className="relative rounded-xl border border-emerald-500/40 bg-[var(--input-bg)] p-2.5 flex items-center gap-3">
+                      {isExcelUpload ? (
+                        <div className="w-14 h-14 rounded-lg border border-emerald-500/40 bg-emerald-500/15 flex items-center justify-center shrink-0">
+                          <FileSpreadsheet className="w-7 h-7 text-emerald-500" />
+                        </div>
+                      ) : isPdfUpload ? (
+                        <div className="w-14 h-14 rounded-lg border border-rose-500/40 bg-rose-500/15 flex items-center justify-center shrink-0">
+                          <FileText className="w-7 h-7 text-rose-500" />
+                        </div>
+                      ) : (
+                        <img 
+                          src={formImagePreview || editingMateri?.fileUrl} 
+                          alt="Preview Materi" 
+                          className="w-14 h-14 object-cover rounded-lg border border-[var(--border-main)] bg-[var(--card-bg)] shrink-0"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      )}
+
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold text-[var(--text-main)] truncate">
+                          {formImageFilename || (isExcelUpload ? 'Spreadsheet Excel Terlampir' : isPdfUpload ? 'Dokumen PDF Terlampir' : 'Flyer Terlampir')}
+                        </div>
+                        <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1.5 mt-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                          <span>
+                            {formImageBase64 ? 'Berkas baru siap disimpan' : 'Berkas tersimpan di sistem'}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-[var(--text-muted)] font-mono mt-0.5">
+                          {isExcelUpload ? 'Format: Spreadsheet Excel (.xlsx / .xls)' : isPdfUpload ? 'Format: Dokumen PDF' : 'Format: Gambar / Flyer'}
+                        </div>
                       </div>
-                      <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
-                        {formImagePreview ? 'File baru siap diunggah' : 'File tersimpan di Google Drive'}
-                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormImageBase64(null);
+                          setFormImagePreview(null);
+                          setFormImageFilename('');
+                        }}
+                        className="p-2 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-xl transition-colors shrink-0"
+                        title="Hapus berkas"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFormImageBase64(null);
-                        setFormImagePreview(null);
-                        setFormImageFilename('');
-                      }}
-                      className="p-1.5 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors"
-                      title="Hapus gambar"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <label className="border-2 border-dashed border-[var(--border-main)] hover:border-amber-500/60 bg-[var(--input-bg)] rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all">
-                    <ImageIcon className="w-7 h-7 text-[var(--text-muted)] mb-1" />
-                    <span className="text-xs text-[var(--text-main)] font-medium">Klik untuk memilih file flyer (PNG/JPG)</span>
-                    <span className="text-[10px] text-[var(--text-muted)] mt-0.5">Maksimal 10MB • Akan disimpan ke Google Drive</span>
+                  );
+                })() : (
+                  <label className="border-2 border-dashed border-[var(--border-main)] hover:border-emerald-500/60 bg-[var(--input-bg)] rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all">
+                    <div className="flex items-center gap-2 mb-1 text-[var(--text-muted)]">
+                      <ImageIcon className="w-6 h-6" />
+                      <FileText className="w-6 h-6" />
+                      <FileSpreadsheet className="w-6 h-6 text-emerald-500" />
+                    </div>
+                    <span className="text-xs text-[var(--text-main)] font-semibold">
+                      Klik untuk memilih berkas flyer, PDF, atau spreadsheet Excel
+                    </span>
+                    <span className="text-[10px] text-[var(--text-muted)] mt-1 font-mono">
+                      Maksimal 30MB • Mendukung Gambar (PNG/JPG), PDF, dan Excel (.xlsx / .xls)
+                    </span>
                     <input 
                       type="file" 
-                      accept="image/*" 
+                      accept="image/*,.pdf,.xlsx,.xls" 
                       className="hidden" 
                       onChange={e => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          if (file.size > 10 * 1024 * 1024) {
-                            toast.error('Ukuran file maksimal 10MB');
+                          if (file.size > 30 * 1024 * 1024) {
+                            toast.error(`Ukuran file maksimal 30MB (File Anda: ${(file.size / (1024 * 1024)).toFixed(1)}MB)`);
                             return;
                           }
                           setFormImageFilename(file.name);
+                          const isImg = file.type.startsWith('image/');
                           const reader = new FileReader();
                           reader.onload = (evt) => {
                             const res = evt.target?.result as string;
                             setFormImageBase64(res);
-                            setFormImagePreview(res);
+                            setFormImagePreview(isImg ? res : null);
                           };
                           reader.readAsDataURL(file);
                         }
@@ -2674,15 +2717,31 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               {/* Header */}
               <div className="bg-slate-900 border-b border-slate-800 p-3 sm:p-4 flex items-center justify-between gap-3 shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-2xl bg-orange-500/15 text-orange-400 border border-orange-500/30 flex items-center justify-center font-bold shrink-0 shadow-xs">
-                    <FileText className="w-5 h-5" />
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-xs ${
+                    info.isExcel 
+                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                      : info.isPdf 
+                      ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30'
+                      : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                  }`}>
+                    {info.isExcel ? (
+                      <FileSpreadsheet className="w-5 h-5" />
+                    ) : info.isPdf ? (
+                      <FileText className="w-5 h-5" />
+                    ) : (
+                      <ImageIcon className="w-5 h-5" />
+                    )}
                   </div>
                   <div className="min-w-0">
                     <h3 className="font-bold text-sm sm:text-base text-white truncate">
                       {previewImage.title}
                     </h3>
                     <p className="text-[11px] text-slate-400 font-mono truncate">
-                      {info.isPdf ? '📄 Dokumen Prosedur Standar (IK / SOP / PDF)' : '🖼️ Flyer Briefing Keselamatan Kerja'}
+                      {info.isExcel 
+                        ? '📊 Dokumen Spreadsheet Excel (.xlsx / .xls)' 
+                        : info.isPdf 
+                        ? '📄 Dokumen Prosedur Standar (IK / SOP / PDF)' 
+                        : '🖼️ Flyer Briefing Keselamatan Kerja'}
                     </p>
                   </div>
                 </div>
@@ -2747,7 +2806,13 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               {/* Viewer Body */}
               <div className="flex-1 bg-slate-950 relative min-h-0 w-full flex flex-col items-center justify-center p-2">
                 {hasValidUrl ? (
-                  info.isPdf ? (
+                  info.isExcel ? (
+                    <ExcelViewer 
+                      url={info.streamUrl || info.viewUrl} 
+                      downloadUrl={info.downloadUrl}
+                      title={previewImage.title} 
+                    />
+                  ) : info.isPdf ? (
                     <iframe 
                       src={pdfViewerMode === 'drive' ? (info.drivePreviewUrl || info.embedUrl) : info.streamUrl} 
                       title={previewImage.title}
@@ -2775,7 +2840,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     </div>
                     <h4 className="text-sm font-bold text-white">Dokumen Belum Dilampirkan</h4>
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      Belum ada tautan PDF atau Flyer Google Drive untuk materi <b>"{previewImage.title}"</b>. Silakan perbarui materi pada menu <b>Bank Materi</b> atau hubungi tim QA.
+                      Belum ada tautan PDF, Excel, atau Flyer Google Drive untuk materi <b>"{previewImage.title}"</b>. Silakan perbarui materi pada menu <b>Bank Materi</b> atau hubungi tim QA.
                     </p>
                     <div className="pt-2">
                       <Button
@@ -2793,7 +2858,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               <div className="bg-slate-900 border-t border-slate-800 px-4 py-2.5 flex items-center justify-between text-xs text-slate-400 shrink-0">
                 <span className="font-mono text-[11px]">
                   {hasValidUrl 
-                    ? `💡 Mode: ${pdfViewerMode === 'stream' ? 'Server Stream Langsung (Bebas Hambatan Akses)' : 'Google Drive Embed'}. Jika ada kendala tampilan, gunakan tombol ganti mode di atas.` 
+                    ? (info.isExcel
+                        ? '📊 Spreadsheet Interactive Viewer: Jelajahi sheet, cari cell, atau unduh file asli via tombol Unduh.'
+                        : `💡 Mode: ${pdfViewerMode === 'stream' ? 'Server Stream Langsung (Bebas Hambatan Akses)' : 'Google Drive Embed'}. Jika ada kendala tampilan, gunakan tombol ganti mode di atas.`)
                     : 'Status: Link materi kosong'}
                 </span>
                 <Button

@@ -16,6 +16,7 @@ export function parseGoogleDriveId(url?: string | null): string | null {
 
 export interface FlyerInfo {
   isPdf: boolean;
+  isExcel: boolean;
   fileId: string | null;
   embedUrl: string;
   imageUrl: string;
@@ -29,13 +30,22 @@ export interface FlyerInfo {
 export function getFlyerInfo(rawUrl?: string | null, title?: string | null): FlyerInfo {
   const cleanTitle = (title || '').trim();
   const cleanUrl = (rawUrl || '').trim();
+  const lowerUrl = cleanUrl.toLowerCase();
+  const lowerTitle = cleanTitle.toLowerCase();
 
   const fileId = parseGoogleDriveId(cleanUrl);
 
-  const isPdf = Boolean(
+  const isExcel = Boolean(
+    lowerUrl.includes('.xlsx') ||
+    lowerUrl.includes('.xls') ||
+    lowerTitle.includes('.xlsx') ||
+    lowerTitle.includes('.xls')
+  );
+
+  const isPdf = !isExcel && Boolean(
     fileId ||
-    cleanUrl.toLowerCase().includes('.pdf') ||
-    cleanTitle.toLowerCase().includes('.pdf') ||
+    lowerUrl.includes('.pdf') ||
+    lowerTitle.includes('.pdf') ||
     /\b(sop|ik)\b|instruksi kerja/i.test(cleanTitle) ||
     cleanTitle.startsWith('IK ') ||
     cleanTitle.startsWith('SOP ') ||
@@ -57,7 +67,8 @@ export function getFlyerInfo(rawUrl?: string | null, title?: string | null): Fly
     const driveImageUrl = `/api/drive/view/${fileId}`;
 
     return {
-      isPdf: true,
+      isPdf,
+      isExcel,
       fileId,
       // Default to streamUrl so Google Drive 'Akses dibatasi' permission prompt never blocks regular employees:
       embedUrl: streamUrl,
@@ -71,7 +82,7 @@ export function getFlyerInfo(rawUrl?: string | null, title?: string | null): Fly
   }
 
   // Local / direct external URLs
-  const isDirectPdf = cleanUrl.toLowerCase().includes('.pdf') || cleanTitle.toLowerCase().includes('.pdf');
+  const isDirectPdf = lowerUrl.includes('.pdf') || lowerTitle.includes('.pdf');
   const embedUrl = isDirectPdf && cleanUrl.startsWith('http')
     ? streamUrl
     : (cleanUrl || streamUrl);
@@ -80,6 +91,7 @@ export function getFlyerInfo(rawUrl?: string | null, title?: string | null): Fly
 
   return {
     isPdf,
+    isExcel,
     fileId: null,
     embedUrl,
     imageUrl: streamUrl,

@@ -533,9 +533,9 @@ const app = express();
     crossOriginEmbedderPolicy: false,
   }));
 
-  // Middleware to parse JSON bodies & Cookies (Restricted body size for DoS protection)
-  app.use(express.json({ limit: '25mb' })); 
-  app.use(express.urlencoded({ limit: '25mb', extended: true }));
+  // Middleware to parse JSON bodies & Cookies (Support 20mb+ base64 document/excel uploads)
+  app.use(express.json({ limit: '50mb' })); 
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
   app.use(cookieParser());
 
   // Rate Limiting (P1 Hardening)

@@ -599,13 +599,22 @@ p5mRouter.post("/materi", async (req, res) => {
     const cleanJudul = judul.trim();
     let finalFileUrl: string | null = fileUrl || null;
 
-    // If image file (base64) provided, upload to Google Drive & save local copy
+    // If file (base64) provided, upload to Google Drive & save local copy
     if (base64Data) {
       const base64Clean = base64Data.replace(/^data:.*?;base64,/, "");
       const buffer = Buffer.from(base64Clean, 'base64');
       const safeId = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
-      const localFileName = `p5m_${safeId}.png`;
+      
+      const ext = path.extname(filename || '').toLowerCase() || '.png';
+      const localFileName = `p5m_${safeId}${ext}`;
       const localPath = path.join(process.cwd(), 'public', 'uploads', 'p5m', localFileName);
+
+      let mimeType = 'image/png';
+      if (ext === '.xlsx') mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      else if (ext === '.xls') mimeType = 'application/vnd.ms-excel';
+      else if (ext === '.pdf') mimeType = 'application/pdf';
+      else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+      else if (ext === '.webp') mimeType = 'image/webp';
 
       // Save local copy
       try {
@@ -617,6 +626,8 @@ p5mRouter.post("/materi", async (req, res) => {
       } catch (fErr: any) {
         console.warn("Local cache write failed:", fErr.message);
       }
+
+      finalFileUrl = `/uploads/p5m/${localFileName}`;
 
       // Upload to Google Drive: External vs Internal Briefing Flyer folder
       try {
@@ -631,11 +642,11 @@ p5mRouter.post("/materi", async (req, res) => {
 
         const driveRes = await drive.files.create({
           requestBody: {
-            name: filename || `P5M_${cleanJudul.replace(/[^a-zA-Z0-9_-]/g, '_')}.png`,
+            name: filename || `P5M_${cleanJudul.replace(/[^a-zA-Z0-9_-]/g, '_')}${ext}`,
             parents: [folderId]
           },
           media: {
-            mimeType: 'image/png',
+            mimeType,
             body: stream
           },
           fields: 'id, webViewLink',
@@ -653,7 +664,11 @@ p5mRouter.post("/materi", async (req, res) => {
           } catch (pErr: any) {
             // Permission inherited
           }
-          finalFileUrl = `https://lh3.googleusercontent.com/d/${driveFileId}`;
+          if (ext === '.xlsx' || ext === '.xls' || ext === '.pdf') {
+            finalFileUrl = `/uploads/p5m/${localFileName}`;
+          } else {
+            finalFileUrl = `https://lh3.googleusercontent.com/d/${driveFileId}`;
+          }
         }
       } catch (dErr: any) {
         console.warn("Drive upload failed, using local fallback URL:", dErr.message);
@@ -692,8 +707,17 @@ p5mRouter.put("/materi/:id", async (req, res) => {
       const base64Clean = base64Data.replace(/^data:.*?;base64,/, "");
       const buffer = Buffer.from(base64Clean, 'base64');
       const safeId = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
-      const localFileName = `p5m_${safeId}.png`;
+      
+      const ext = path.extname(filename || '').toLowerCase() || '.png';
+      const localFileName = `p5m_${safeId}${ext}`;
       const localPath = path.join(process.cwd(), 'public', 'uploads', 'p5m', localFileName);
+
+      let mimeType = 'image/png';
+      if (ext === '.xlsx') mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      else if (ext === '.xls') mimeType = 'application/vnd.ms-excel';
+      else if (ext === '.pdf') mimeType = 'application/pdf';
+      else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+      else if (ext === '.webp') mimeType = 'image/webp';
 
       try {
         const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'p5m');
@@ -704,6 +728,8 @@ p5mRouter.put("/materi/:id", async (req, res) => {
       } catch (fErr: any) {
         console.warn("Local cache write failed:", fErr.message);
       }
+
+      finalFileUrl = `/uploads/p5m/${localFileName}`;
 
       try {
         const isInternalVal = Boolean(isInternal);
@@ -717,11 +743,11 @@ p5mRouter.put("/materi/:id", async (req, res) => {
 
         const driveRes = await drive.files.create({
           requestBody: {
-            name: filename || `P5M_${(judul || 'materi').replace(/[^a-zA-Z0-9_-]/g, '_')}.png`,
+            name: filename || `P5M_${(judul || 'materi').replace(/[^a-zA-Z0-9_-]/g, '_')}${ext}`,
             parents: [folderId]
           },
           media: {
-            mimeType: 'image/png',
+            mimeType,
             body: stream
           },
           fields: 'id, webViewLink',
@@ -737,7 +763,11 @@ p5mRouter.put("/materi/:id", async (req, res) => {
               supportsAllDrives: true
             });
           } catch (pErr: any) {}
-          finalFileUrl = `https://lh3.googleusercontent.com/d/${driveFileId}`;
+          if (ext === '.xlsx' || ext === '.xls' || ext === '.pdf') {
+            finalFileUrl = `/uploads/p5m/${localFileName}`;
+          } else {
+            finalFileUrl = `https://lh3.googleusercontent.com/d/${driveFileId}`;
+          }
         }
       } catch (dErr: any) {
         finalFileUrl = `/uploads/p5m/${localFileName}`;
@@ -2033,15 +2063,22 @@ p5mRouter.get("/flyer", async (req, res) => {
       }
     }
 
-    const safeFilename = `Flyer_${targetJudul.replace(/[^a-zA-Z0-9_-]/g, '_')}.png`;
-
     // 1. If stored locally in /uploads/p5m/..., serve or download directly
     if (targetFileUrl && targetFileUrl.startsWith('/uploads/p5m/')) {
       const cleanPath = targetFileUrl.replace(/^\//, '');
       const localPath = path.join(process.cwd(), 'public', cleanPath);
       if (fs.existsSync(localPath)) {
+        const fileExt = path.extname(localPath).toLowerCase();
+        const safeName = `P5M_${targetJudul.replace(/[^a-zA-Z0-9_-]/g, '_')}${fileExt || '.png'}`;
+        if (fileExt === '.xlsx') {
+          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        } else if (fileExt === '.xls') {
+          res.setHeader('Content-Type', 'application/vnd.ms-excel');
+        } else if (fileExt === '.pdf') {
+          res.setHeader('Content-Type', 'application/pdf');
+        }
         if (isDownload) {
-          return res.download(localPath, safeFilename);
+          return res.download(localPath, safeName);
         }
         return res.sendFile(localPath);
       }
@@ -2061,15 +2098,31 @@ p5mRouter.get("/flyer", async (req, res) => {
           supportsAllDrives: true
         });
         const mimeType = meta.data.mimeType || 'image/png';
-        const isPdf = mimeType.includes('pdf') || 
-                      meta.data.name?.toLowerCase().endsWith('.pdf') ||
-                      targetJudul.toLowerCase().includes('.pdf') || 
-                      /\b(sop|ik)\b|instruksi kerja/i.test(targetJudul) ||
-                      targetJudul.startsWith('IK ') || 
-                      targetJudul.startsWith('SOP ') || 
-                      targetJudul.startsWith('JSA ') ||
-                      targetJudul.startsWith('JSA -');
-        const ext = isPdf ? '.pdf' : '.png';
+        const isXlsx = mimeType.includes('spreadsheet') || meta.data.name?.toLowerCase().endsWith('.xlsx') || targetJudul.toLowerCase().includes('.xlsx');
+        const isXls = mimeType.includes('excel') || meta.data.name?.toLowerCase().endsWith('.xls') || targetJudul.toLowerCase().includes('.xls');
+        const isPdf = !isXlsx && !isXls && (
+          mimeType.includes('pdf') || 
+          meta.data.name?.toLowerCase().endsWith('.pdf') ||
+          targetJudul.toLowerCase().includes('.pdf') || 
+          /\b(sop|ik)\b|instruksi kerja/i.test(targetJudul) ||
+          targetJudul.startsWith('IK ') || 
+          targetJudul.startsWith('SOP ') || 
+          targetJudul.startsWith('JSA ') ||
+          targetJudul.startsWith('JSA -')
+        );
+
+        let ext = '.png';
+        let resContentType = mimeType;
+        if (isXlsx) {
+          ext = '.xlsx';
+          resContentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        } else if (isXls) {
+          ext = '.xls';
+          resContentType = 'application/vnd.ms-excel';
+        } else if (isPdf) {
+          ext = '.pdf';
+          resContentType = 'application/pdf';
+        }
         const finalFilename = `P5M_${targetJudul.replace(/[^a-zA-Z0-9_-]/g, '_')}${ext}`;
 
         // Auto ensure anyone with the link can view so Google Drive embedded viewer never shows 'No preview available'
@@ -2085,7 +2138,7 @@ p5mRouter.get("/flyer", async (req, res) => {
           supportsAllDrives: true
         }, { responseType: 'stream' });
 
-        res.setHeader('Content-Type', isPdf ? 'application/pdf' : mimeType);
+        res.setHeader('Content-Type', resContentType);
         if (isDownload) {
           res.setHeader('Content-Disposition', `attachment; filename="${finalFilename}"`);
         } else {
@@ -2132,9 +2185,11 @@ p5mRouter.get("/flyer", async (req, res) => {
         const fetchRes = await fetch(targetFileUrl);
         if (fetchRes.ok) {
           const contentType = fetchRes.headers.get('content-type') || 'image/png';
+          const fallbackExt = contentType.includes('spreadsheet') ? '.xlsx' : contentType.includes('excel') ? '.xls' : contentType.includes('pdf') ? '.pdf' : '.png';
+          const safeFallbackName = `P5M_${targetJudul.replace(/[^a-zA-Z0-9_-]/g, '_')}${fallbackExt}`;
           res.setHeader('Content-Type', contentType);
           if (isDownload) {
-            res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+            res.setHeader('Content-Disposition', `attachment; filename="${safeFallbackName}"`);
           } else {
             res.setHeader('Content-Disposition', 'inline');
           }
