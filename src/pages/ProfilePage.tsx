@@ -484,7 +484,8 @@ export function ProfilePage({
       setLoadingGamification(false);
       return;
     }
-    fetch(`/api/gamification/user-stats/${encodeURIComponent(inspectorNik)}`)
+    const queryName = inspectorName || profile?.name || '';
+    fetch(`/api/gamification/user-stats/${encodeURIComponent(inspectorNik)}?name=${encodeURIComponent(queryName)}`)
       .then(res => res.json())
       .then(json => {
         if (isMounted) {

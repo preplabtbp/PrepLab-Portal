@@ -272,7 +272,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
     .limit(1);
 
     if (emp && emp.length > 0) {
-      if (!userName || userName.includes('Personil')) resolvedName = emp[0].name;
+      resolvedName = emp[0].name || userName || 'Personil PrepLab';
       resolvedPosition = emp[0].position || '';
       resolvedDepartment = emp[0].department || '';
       resolvedSection = normalizeSection(emp[0].section, emp[0].department, emp[0].position);
@@ -284,6 +284,8 @@ export async function computeUserGamification(nik: string, userName?: string) {
   } catch (e) {
     console.warn("Error resolving employee for gamification:", e);
   }
+
+  const cleanName = (resolvedName || '').trim().toUpperCase();
 
   // 1. KTA count (Lifetime career contributions)
   let ktaCount = 0;
@@ -300,22 +302,29 @@ export async function computeUserGamification(nik: string, userName?: string) {
   let inspectionCount = 0;
   let nightCount = 0;
   let dawnCount = 0;
+  let weekendCount = 0;
   const activityDates: string[] = [];
+  let userInspList: { id: number; date: Date | null; inspectorName: string | null; equipmentCode: string | null }[] = [];
 
   try {
-    const inspList = await db.select({
+    const allInsps = await db.select({
       id: inspections.id,
       date: inspections.date,
-      inspectorName: inspections.inspectorName
-    })
-    .from(inspections)
-    .where(or(
-      sql`UPPER(${inspections.equipmentCode}) = ${cleanNik}`, // fallback
-      sql`UPPER(${inspections.inspectorName}) LIKE ${'%' + (userName || cleanNik).toUpperCase() + '%'}`
-    ));
+      inspectorName: inspections.inspectorName,
+      equipmentCode: inspections.equipmentCode
+    }).from(inspections);
 
-    inspectionCount = inspList.length;
-    for (const item of inspList) {
+    userInspList = allInsps.filter(item => {
+      const inspName = (item.inspectorName || '').trim().toUpperCase();
+      const eqCode = (item.equipmentCode || '').trim().toUpperCase();
+      if (cleanNik && (inspName.includes(cleanNik) || eqCode.includes(cleanNik))) return true;
+      if (!inspName) return false;
+      if (cleanName && cleanName.length >= 3 && (inspName.includes(cleanName) || (inspName.length >= 3 && cleanName.includes(inspName)))) return true;
+      return false;
+    });
+
+    inspectionCount = userInspList.length;
+    for (const item of userInspList) {
       if (item.date) {
         const d = new Date(item.date);
         activityDates.push(d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' }));
@@ -323,22 +332,14 @@ export async function computeUserGamification(nik: string, userName?: string) {
         const m = d.getMinutes();
         if (h >= 1 && h <= 4) nightCount++;
         if ((h === 4 && m >= 30) || h === 5 || (h === 6 && m <= 30)) dawnCount++;
+
+        const witD = new Date(d.getTime() + (9 * 60 * 60 * 1000));
+        const day = witD.getUTCDay();
+        if (day === 0 || day === 6) weekendCount++;
       }
     }
   } catch (e) {
     console.warn("Error counting inspections:", e);
-  }
-
-  // Count weekend activities (Saturday & Sunday)
-  let weekendCount = 0;
-  try {
-    for (const dStr of activityDates) {
-      const d = new Date(dStr);
-      const day = d.getDay();
-      if (day === 0 || day === 6) weekendCount++;
-    }
-  } catch (e) {
-    console.warn("Error counting weekend activities:", e);
   }
 
   // 3. Work Orders Created & Resolved
@@ -650,12 +651,10 @@ export async function computeUserGamification(nik: string, userName?: string) {
       .from(ktaReports)
       .where(and(sql`UPPER(${ktaReports.nik}) = ${cleanNik}`, sql`${ktaReports.createdAt} >= ${seasonStart}`));
 
-    const sInsp = await db.select({ id: inspections.id, date: inspections.date })
-      .from(inspections)
-      .where(and(
-        sql`UPPER(${inspections.inspectorName}) LIKE ${'%' + (userName || cleanNik).toUpperCase() + '%'}`,
-        sql`${inspections.date} >= ${seasonStart}`
-      ));
+    const sInsp = userInspList.filter(item => {
+      if (!item.date) return false;
+      return new Date(item.date) >= seasonStart;
+    });
 
     let sNight = 0;
     let sDawn = 0;
@@ -667,7 +666,8 @@ export async function computeUserGamification(nik: string, userName?: string) {
         const m = d.getMinutes();
         if (h >= 1 && h <= 4) sNight++;
         if ((h === 4 && m >= 30) || h === 5 || (h === 6 && m <= 30)) sDawn++;
-        const day = d.getDay();
+        const witD = new Date(d.getTime() + (9 * 60 * 60 * 1000));
+        const day = witD.getUTCDay();
         if (day === 0 || day === 6) sWeekend++;
       }
     }
