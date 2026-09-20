@@ -1,6 +1,21 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.13] - 2026-09-20
+
+### 📘 Pengaktifan Materi SOP & IK P5M, Proporsi Toolbar Responsif & Penyelarasan Roster Cuti
+
+- **Pengaktifan Penuh Seluruh Dokumen SOP & IK pada P5M Schedule Builder (`server/routes/p5m.ts`)**:
+  - Mengintegrasikan seluruh 44 dokumen materi SOP (Standar Operasional Prosedur) dan IK (Instruksi Kerja) ke dalam mesin acak jadwal P5M otomatis untuk sesi Gabungan maupun Split.
+  - Menyeleraskan topik SOP/IK dengan divisi pembawa materi (misalnya presenter Lab membawakan IK Lab/Pencucian Platinum Ware, presenter Prep membawakan IK Crusher/Mixer, dst.).
+  - Mengeliminasi peringatan daur ulang materi semu dan memprioritaskan seluruh materi SOP/IK fresh sebelum mendaur ulang materi lama.
+  - Menambahkan opsi kategori baru **`📘 SOP & IK`** pada *Konfigurasi Slot Hari* serta tombol aksi cepat **`Reset SOP & IK`** langsung di tab Jadwal dan di dalam kotak notifikasi peringatan.
+- **Optimalisasi Proporsi Bilah Menu (Toolbar) P5M Builder (`src/components/p5m-screen.tsx`)**:
+  - Memperbaiki styling tombol toolbar menggunakan kelas `w-auto` dan `whitespace-nowrap`, mencegah ekspansi paksa `w-full` (100% lebar kontainer) yang sebelumnya membuat tombol bertumpuk ke bawah.
+  - Mengelompokkan tombol secara rapi dan seimbang: sisi kiri untuk aksi builder (*Acak*, *Edit Manual*, *Konfigurasi Slot*, *Reset SOP/IK*) dan sisi kanan untuk aksi berkas (*Ekspor Excel*, *Unduh PNG*, *Simpan Jadwal*).
+- **Penyelarasan Akurat Tanggal Cuti Profil Personil (`src/pages/ProfilePage.tsx`)**:
+  - Memperbarui resolusi tanggal cuti aktual pada kartu profil personil dengan mengutamakan `outsiteDate` / `nextTrvDate` hasil perhitungan master roster, memastikan tanggal awal cuti (misal: 24 September 2026) tampil 100% akurat dan sinkron dengan Master Spreadsheet HR.
+
 ## [2.9.12] - 2026-09-20
 
 ### 🎖️ Penyempurnaan Terminologi Pangkat Kehormatan, Modal Audit EXP & Hall of Fame

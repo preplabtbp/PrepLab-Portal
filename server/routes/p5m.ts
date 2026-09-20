@@ -1179,6 +1179,12 @@ p5mRouter.post("/randomize", async (req, res) => {
       return null;
     }
 
+    function isSopIk(judul?: string): boolean {
+      if (!judul) return false;
+      const j = judul.toLowerCase();
+      return /\b(sop|ik)\b|instruksi kerja/i.test(j) || j.startsWith('ik ') || j.startsWith('sop ');
+    }
+
     function pilihMateri(divisiTarget: string, kategoriTarget: string, materiTetap?: string | null, candidateDivision?: string, isGabunganSession?: boolean) {
       // Kategori Senam
       if (kategoriTarget === 'Senam' || materiTetap?.toLowerCase().includes('senam')) {
@@ -1196,21 +1202,41 @@ p5mRouter.post("/randomize", async (req, res) => {
       }
 
       const effectiveSection = (candidateDivision || divisiTarget || '').toLowerCase();
+      const isSopTarget = kategoriTarget === 'SOP / IK' || kategoriTarget === 'SOP' || kategoriTarget === 'IK';
 
       function filterPool(pool: typeof poolMateri) {
         return pool.filter(m => {
           const kat = m.kategori || 'Teknis';
           const subKat = m.subKategori || 'General';
+          const isDocSop = isSopIk(m.judul);
+
+          // Khusus jika slot memilih kategori spesifik SOP / IK
+          if (isSopTarget) {
+            if (!isDocSop) return false;
+            // Match divisi presenter/slot jika tersedia
+            if (effectiveSection.includes('prep')) return subKat === 'Preparation' || subKat === 'General';
+            if (effectiveSection.includes('lab') || effectiveSection.includes('qa') || effectiveSection.includes('admin') || effectiveSection.includes('ic')) return subKat === 'Laboratory' || subKat === 'General';
+            if (effectiveSection.includes('maint')) return subKat === 'Maintenance' || subKat === 'General';
+            return true;
+          }
 
           // Category filter (Teknis vs Non-Teknis vs Senam)
           if (kategoriTarget && kategoriTarget !== 'All') {
             if (kat.toLowerCase() !== kategoriTarget.toLowerCase()) return false;
           }
 
-          // ATURAN P5M GABUNGAN: Materi teknis maupun non-teknis WAJIB materi General / universal
-          // Tidak boleh materi teknis spesifik ke 1 section (Prep/Lab/Maint)
+          // ATURAN P5M GABUNGAN:
+          // Diperbolehkan:
+          // 1. Materi Teknis/Non-Teknis berlabel General
+          // 2. Dokumen SOP & IK yang relevan dengan divisi presenter (Prep, Lab, Maint)
           if (isGabunganSession) {
-            return subKat === 'General';
+            if (subKat === 'General') return true;
+            if (isDocSop) {
+              if (effectiveSection.includes('prep') && subKat === 'Preparation') return true;
+              if (effectiveSection.includes('lab') && subKat === 'Laboratory') return true;
+              if (effectiveSection.includes('maint') && subKat === 'Maintenance') return true;
+            }
+            return false;
           }
 
           // If Non-Teknis: All non-teknis topics are General and universal for everyone
@@ -1243,37 +1269,57 @@ p5mRouter.post("/randomize", async (req, res) => {
 
       let matchingPool = filterPool(poolMateri);
 
-      if (matchingPool.length === 0) {
-        // Fallback: Jika pool materi General kosong, gunakan materi yang cocok kategori (termasuk SOP & IK)
-        matchingPool = poolMateri.filter(m => {
-          if (kategoriTarget && kategoriTarget !== 'All') {
+      // Prioritas 1: Materi fresh yang BELUM PERNAH dipakai (lastUsed is null) & belum dipakai minggu ini
+      let freshCandidates = matchingPool.filter(m => m.lastUsed === null && !usedMateriIdsInWeek.has(m.id));
+
+      // Prioritas 1b: Jika freshCandidates di matchingPool habis, aktifkan seluruh materi SOP & IK fresh sebelum daur ulang!
+      if (freshCandidates.length === 0 && (kategoriTarget === 'Teknis' || kategoriTarget === 'All' || isSopTarget)) {
+        // Coba SOP & IK yang sesuai divisi presenter terlebih dahulu
+        const sectionSop = poolMateri.filter(m => {
+          if (m.lastUsed !== null || usedMateriIdsInWeek.has(m.id)) return false;
+          if (!isSopIk(m.judul)) return false;
+          if (effectiveSection.includes('prep')) return m.subKategori === 'Preparation' || m.subKategori === 'General';
+          if (effectiveSection.includes('lab') || effectiveSection.includes('qa') || effectiveSection.includes('admin') || effectiveSection.includes('ic')) return m.subKategori === 'Laboratory' || m.subKategori === 'General';
+          if (effectiveSection.includes('maint')) return m.subKategori === 'Maintenance' || m.subKategori === 'General';
+          return true;
+        });
+
+        if (sectionSop.length > 0) {
+          freshCandidates = sectionSop;
+        } else {
+          // Jika tidak ada yang cocok divisi persis, ambil SEMUA SOP & IK fresh di plant
+          const anyFreshSop = poolMateri.filter(m => {
+            if (m.lastUsed !== null || usedMateriIdsInWeek.has(m.id)) return false;
+            return isSopIk(m.judul);
+          });
+          if (anyFreshSop.length > 0) {
+            freshCandidates = anyFreshSop;
+          }
+        }
+      }
+
+      // Prioritas 1c: Jika masih kosong di sesi Gabungan, buka semua materi fresh lintas subkategori
+      if (freshCandidates.length === 0 && isGabunganSession) {
+        const anyFresh = poolMateri.filter(m => {
+          if (m.lastUsed !== null || usedMateriIdsInWeek.has(m.id)) return false;
+          if (kategoriTarget && kategoriTarget !== 'All' && !isSopTarget) {
             return (m.kategori || 'Teknis').toLowerCase() === kategoriTarget.toLowerCase();
           }
           return true;
         });
+        if (anyFresh.length > 0) {
+          freshCandidates = anyFresh;
+        }
       }
-
-      if (matchingPool.length === 0) {
-        return {
-          judul: isGabunganSession ? "Briefing Operasional & Keselamatan Kerja Terpadu" : "Briefing Teknis Operasional",
-          kategori: kategoriTarget || "Teknis",
-          subKategori: "General",
-          id: null,
-          fileUrl: null
-        };
-      }
-
-      // Prioritas 1: Materi yang BELUM PERNAH dipakai sama sekali (lastUsed is null) & belum dipakai minggu ini
-      const freshCandidates = matchingPool.filter(m => m.lastUsed === null && !usedMateriIdsInWeek.has(m.id));
 
       let selected: any = null;
 
       if (freshCandidates.length > 0) {
-        // Ambil materi baru yang belum pernah dibawakan
+        // Ambil materi baru yang belum pernah dibawakan (SOP/IK & General fresh)
         selected = freshCandidates[Math.floor(Math.random() * freshCandidates.length)];
       } else {
         // Prioritas 2: Pool materi baru telah habis! Daur ulang dari siklus rotasi terlama
-        const categoryKey = `${kategoriTarget || 'Teknis'}${isGabunganSession ? ' (Gabungan General)' : (effectiveSection ? ` (${effectiveSection})` : '')}`;
+        const categoryKey = isSopTarget ? 'SOP & IK' : `${kategoriTarget || 'Teknis'}${isGabunganSession ? ' (Gabungan General)' : (effectiveSection ? ` (${effectiveSection})` : '')}`;
         if (!exhaustedWarningCategories.has(categoryKey)) {
           exhaustedWarningCategories.add(categoryKey);
           warnings.push(`Pool materi untuk kategori ${categoryKey} telah habis terpakai semua. Sistem mendaur ulang materi dari siklus rotasi terlama.`);
@@ -1282,7 +1328,7 @@ p5mRouter.post("/randomize", async (req, res) => {
         // Cari kandidat daur ulang (hindari duplikasi dalam 1 minggu yang sama jika memungkinkan)
         let recycleCandidates = matchingPool.filter(m => !usedMateriIdsInWeek.has(m.id));
         if (recycleCandidates.length === 0) {
-          recycleCandidates = matchingPool;
+          recycleCandidates = matchingPool.length > 0 ? matchingPool : poolMateri;
         }
 
         // Urutkan dari lastUsed terlama
@@ -1296,14 +1342,24 @@ p5mRouter.post("/randomize", async (req, res) => {
         selected = recycleCandidates[0];
       }
 
-      if (selected && selected.id) {
+      if (!selected) {
+        return {
+          judul: isGabunganSession ? "Briefing Operasional & Keselamatan Kerja Terpadu" : "Briefing Teknis Operasional",
+          kategori: isSopTarget ? "Teknis" : (kategoriTarget || "Teknis"),
+          subKategori: "General",
+          id: null,
+          fileUrl: null
+        };
+      }
+
+      if (selected.id) {
         usedMateriIdsInWeek.add(selected.id);
       }
 
       return {
         judul: selected.judul,
-        kategori: selected.kategori,
-        subKategori: selected.subKategori,
+        kategori: selected.kategori || (isSopTarget ? 'Teknis' : 'Teknis'),
+        subKategori: selected.subKategori || 'General',
         id: selected.id,
         fileUrl: selected.fileUrl
       };

@@ -1322,7 +1322,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               <Button
                 variant="secondary"
                 onClick={() => setShowFullSchedulePreview(!showFullSchedulePreview)}
-                className="bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 text-xs h-10 px-3.5 rounded-xl"
+                className="w-auto bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 text-xs h-10 px-3.5 rounded-xl whitespace-nowrap cursor-pointer"
               >
                 <Eye className="w-4 h-4 mr-1.5 text-blue-400" />
                 <span>{showFullSchedulePreview ? 'Sembunyikan Tabel Lengkap' : 'Lihat Tabel Lengkap'}</span>
@@ -1430,12 +1430,12 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
           
           {/* Action Toolbar for QA Builder */}
           {isQATeam && (
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--card-bg)] border border-[var(--border-main)] p-3 rounded-2xl shadow-md text-[var(--text-main)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--card-bg)] border border-[var(--border-main)] p-2.5 sm:p-3 rounded-2xl shadow-sm text-[var(--text-main)]">
               <div className="flex items-center gap-2 flex-wrap">
                 <Button 
                   onClick={handleRandomize} 
                   disabled={isGenerating}
-                  className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold text-xs h-9 px-4 rounded-xl shadow-lg"
+                  className="w-auto bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold text-xs h-9 px-3.5 rounded-xl shadow-md cursor-pointer whitespace-nowrap"
                 >
                   {isGenerating ? (
                     <>
@@ -1454,7 +1454,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   variant="secondary"
                   onClick={() => setIsEditMode(!isEditMode)}
                   disabled={!scheduleData}
-                  className={`text-xs h-9 px-3.5 rounded-xl border transition-all ${
+                  className={`w-auto text-xs h-9 px-3.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap ${
                     isEditMode 
                       ? 'bg-blue-600/20 text-blue-600 dark:text-blue-300 border-blue-500/50 shadow-md ring-1 ring-blue-500/30' 
                       : 'bg-[var(--input-bg)] text-[var(--text-main)] border-[var(--border-main)] hover:bg-[var(--bg-main)]'
@@ -1467,7 +1467,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 <Button
                   variant="secondary"
                   onClick={() => setShowConfigDrawer(!showConfigDrawer)}
-                  className={`text-xs h-9 px-3.5 rounded-xl border transition-all ${
+                  className={`w-auto text-xs h-9 px-3.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap ${
                     showConfigDrawer 
                       ? 'bg-[var(--primary)]/15 text-[var(--primary)] border-[var(--primary)]/40 font-bold' 
                       : 'bg-[var(--input-bg)] text-[var(--text-main)] border-[var(--border-main)] hover:bg-[var(--bg-main)]'
@@ -1477,14 +1477,31 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   <span>Konfigurasi Slot Hari</span>
                   <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${showConfigDrawer ? 'rotate-180' : ''}`} />
                 </Button>
+
+                {isQATeam && (
+                  <Button
+                    variant="secondary"
+                    onClick={handleResetSopIk}
+                    disabled={isResettingSopIk}
+                    className="w-auto bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-300 border border-orange-500/30 text-xs h-9 px-3 rounded-xl shadow-xs font-semibold cursor-pointer whitespace-nowrap"
+                    title="Reset riwayat pemakaian seluruh materi SOP & IK agar dapat langsung digunakan kembali"
+                  >
+                    {isResettingSopIk ? (
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin text-orange-500" />
+                    ) : (
+                      <RotateCcw className="w-4 h-4 mr-1.5 text-orange-500" />
+                    )}
+                    <span>Reset SOP &amp; IK</span>
+                  </Button>
+                )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   variant="secondary"
                   onClick={handleExportExcel}
                   disabled={!scheduleData}
-                  className="bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 text-xs h-9 px-3.5 rounded-xl shadow-xs font-semibold"
+                  className="w-auto bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 text-xs h-9 px-3.5 rounded-xl shadow-xs font-semibold cursor-pointer whitespace-nowrap"
                   title="Ekspor Jadwal P5M ke Format Excel (.xlsx) untuk Rekapan Admin"
                 >
                   <FileSpreadsheet className="w-4 h-4 mr-1.5 text-emerald-600 dark:text-emerald-400" />
@@ -1495,7 +1512,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   variant="secondary"
                   onClick={handleDownloadPNG}
                   disabled={!scheduleData || isExporting}
-                  className="bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] hover:bg-[var(--bg-main)] text-xs h-9 px-3.5 rounded-xl shadow-sm"
+                  className="w-auto bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] hover:bg-[var(--bg-main)] text-xs h-9 px-3.5 rounded-xl shadow-xs cursor-pointer whitespace-nowrap"
                 >
                   {isExporting ? (
                     <Loader2 className="w-4 h-4 mr-1.5 animate-spin text-amber-500" />
@@ -1508,7 +1525,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 <Button
                   onClick={handleSaveSchedule}
                   disabled={!scheduleData || isSaving}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-lg shadow-emerald-600/20"
+                  className="w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-md shadow-emerald-600/20 cursor-pointer whitespace-nowrap"
                 >
                   {isSaving ? (
                     <>
@@ -1706,10 +1723,24 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
           {/* ── NOTIFICATION: MATERI RECYCLE WARNINGS (QA ONLY) ── */}
           {isQATeam && materiWarnings.length > 0 && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 space-y-2 animate-in fade-in">
-              <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
-                <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                <span>Pemberitahuan Daur Ulang Materi Briefing</span>
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 space-y-3 animate-in fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>Pemberitahuan Daur Ulang Materi Briefing</span>
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    await handleResetSopIk();
+                    setMateriWarnings([]);
+                  }}
+                  disabled={isResettingSopIk}
+                  className="bg-orange-500/20 hover:bg-orange-500/30 text-orange-600 dark:text-orange-300 border border-orange-500/40 text-[11px] h-7 px-3 rounded-lg font-bold shadow-xs self-start sm:self-auto"
+                >
+                  {isResettingSopIk ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin text-orange-500" /> : <RotateCcw className="w-3.5 h-3.5 mr-1.5 text-orange-500" />}
+                  <span>Reset &amp; Aktifkan Semua SOP &amp; IK</span>
+                </Button>
               </div>
               <div className="space-y-1 pl-6">
                 {materiWarnings.map((warn, i) => (
@@ -3225,6 +3256,8 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border outline-none cursor-pointer transition-colors ${
                   sl.kategori === 'Senam'
                     ? 'bg-amber-950/80 text-amber-300 border-amber-700/60'
+                    : sl.kategori === 'SOP / IK'
+                    ? 'bg-blue-950/80 text-blue-300 border-blue-700/60'
                     : sl.kategori === 'Non-Teknis'
                     ? 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60'
                     : 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
@@ -3232,6 +3265,7 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
                 title="Pilih Kategori Materi"
               >
                 <option value="Teknis">Teknis</option>
+                <option value="SOP / IK">SOP &amp; IK</option>
                 <option value="Non-Teknis">Non-Teknis</option>
                 <option value="Senam">Senam</option>
               </select>

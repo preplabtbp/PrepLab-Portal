@@ -611,7 +611,7 @@ export function ProfilePage({
       if (isNaN(planDate.getTime())) planDate = parseStringDate(rawPlan);
     }
 
-    const rawAktual = source.cuti_aktual_format || source.cuti_aktual || source.nextTrvDate;
+    const rawAktual = source.cuti_aktual_format || source.cuti_aktual || source.outsiteDate || source.nextTrvDate;
     if (rawAktual && rawAktual !== '-') {
       actualDate = new Date(rawAktual);
       if (isNaN(actualDate.getTime())) actualDate = parseStringDate(rawAktual);
