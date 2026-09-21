@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { updateWOStatus, getSpareparts } from '../sheets-api';
 import { WhatsAppModal } from './whatsapp-modal';
 import { formatDowntimeDuration } from '../lib/downtimeHelper';
+import { triggerExpGain } from '../lib/gamificationEvents';
 
 interface WorkOrderDetailModalProps {
   woId: string | null;
@@ -211,6 +212,8 @@ export function WorkOrderDetailModal({
       );
 
       toast.success(`Work Order ${wo.woId} berhasil diselesaikan!`, { id: 'wo-resolve' });
+      triggerExpGain(60, 'Work Order Diselesaikan!', `WO #${wo.woId} • ${wo.equipmentName || 'Peralatan'}`);
+      window.dispatchEvent(new Event('gamification_updated'));
 
       // Update local state to Closed
       setWo((prev: any) => ({

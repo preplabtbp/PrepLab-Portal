@@ -22,6 +22,7 @@ import { GlobalKtaPartialReminderModal } from './components/GlobalKtaPartialRemi
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
 import { PushNotificationPrompt } from './components/PushNotificationPrompt';
 import { PromotionWelcomeModal } from './components/PromotionWelcomeModal';
+import { GamificationAlertCenter } from './components/GamificationAlertCenter';
 import { MeetingRoomDevModal } from './components/MeetingRoomDevModal';
 import { initFontSize } from './utils/fontSize';
 
@@ -1886,6 +1887,13 @@ export default function App() {
       <PushNotificationPrompt 
         userNik={inspectorNik} 
         userName={inspectorName} 
+      />
+
+      {/* Universal Gamification Multi-Tier Celebration & Alert Center */}
+      <GamificationAlertCenter
+        currentNik={inspectorNik}
+        currentName={inspectorName}
+        userAvatar={userProfile?.avatar}
       />
 
       {/* Official Main Release Rank Promotion Welcome Ceremony Modal */}

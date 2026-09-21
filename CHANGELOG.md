@@ -1,6 +1,32 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.17] - 2026-09-21
+
+### 🎖️ Sistem Notifikasi Perayaan Gamifikasi 5-Tingkat & Pembaruan Leaderboard Top 10 + Game Master (GM)
+
+- **Sistem Pop-Up Notifikasi & Perayaan 5-Tingkat (`src/components/GamificationAlertCenter.tsx`, `src/lib/gamificationEvents.ts`)**:
+  - **Pop-Up Kecil (Perolehan EXP Interaktif)**:
+    - Menampilkan *floating pill toast* elegan di sudut kanan atas layar setiap kali pengguna menyelesaikan aktivitas yang menghasilkan EXP (Inspeksi Lapangan +50 EXP, Penuntasan Work Order +60 EXP, Pengajuan WO +40 EXP, Laporan KTA/TTA +35 EXP, Kuis SOP/K3 100% +250 EXP, Laporan Bug/Saran +100 EXP, dan Kustomisasi Tema +40 EXP).
+    - Dilengkapi *dual-tone chime* murni via Web Audio API synthesizer tanpa ketergantungan berkas audio eksternal.
+  - **Pop-Up Sedang (Pencapaian Lencana Tier Biasa)**:
+    - Modal kartu prestasi militer ketika membuka Tier 1 (Bronze), Tier 2 (Silver), atau Tier 3 (Gold) lengkap dengan perolehan bonus EXP dan gelar penghargaan.
+  - **Pop-Up Mewah (Lencana Master Tier 4 Tertinggi)**:
+    - Layar perayaan megah dengan efek semburan partikel emas dinamis (*HTML5 Canvas*), mahkota lencana Master, bingkai avatar eksklusif, serta opsi langsung memasang gelar kehormatan aktif.
+  - **Pop-Up Sedang (Kenaikan Pangkat Biasa Pangkat #2 s.d. #50)**:
+    - Upacara promosi taktis militer menampilkan lambang pangkat baru, perbandingan pangkat lama vs baru, dan akumulasi total EXP.
+  - **Pop-Up Mewah (Kenaikan Pangkat Bintang 5 Supreme Vanguard Commander - Pangkat #51)**:
+    - Upacara kenetralan komando tertinggi dengan animasi sinar radial emas berputar, lencana bintang 5 merah-emas legendaris, partikel selebrasi imperial, dan hak istimewa *Hall of Fame Abadi*.
+- **Pembaruan Leaderboard Kompetitif & Integrasi Pangkat GM (`src/components/LeaderboardScreen.tsx`, `server/routes/gamification.ts`)**:
+  - **Filter Top 10 Bersih per Kategori/Disiplin**:
+    - Tabel leaderboard kompetitif kini membatasi tampilan hanya untuk 10 besar personil terbaik per kategori.
+    - **Pinned Baris "Posisi Anda"**: Jika personil yang sedang login berada di luar 10 besar (atau berstatus Developer), kartu perangkat saya secara otomatis disematkan tepat di bawah baris ke-10 dengan pemisah visual bertuliskan *Posisi Anda Saat Ini*.
+  - **Rank 0: Game Master (GM) pada Tab "Daftar Pangkat & Personel"**:
+    - Menampilkan lencana hitam-emas minimalis Rank 0: Game Master (GM) di posisi paling terhormat untuk tim pengembang sistem PrepLab.
+    - Personil developer tercantum rapi di bawah Rank GM tanpa mengintervensi atau merebut podium kompetitif Top 10 personil operasional lapangan.
+- **Auto-Diffing Real-Time Latar Belakang**:
+  - Otomatis mendeteksi kenaikan pangkat dan pencapaian lencana baru dari respon API `/api/gamification/user-stats/:nik` saat kembali aktif atau event `gamification_updated` dipicu, tanpa perlu me-refresh peramban secara manual.
+
 ## [2.9.16] - 2026-09-20
 
 ### 🔬 Penyelarasan Kamus KBBI & Korektor Teks Khusus Preparation & Laboratory Nikel

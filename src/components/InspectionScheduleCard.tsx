@@ -10,6 +10,7 @@ import { Button } from './ui';
 import { toast } from 'sonner';
 import { compressImage } from '../features/inspections/hooks/useInspection';
 import { getKtaObligation, formatKtaImageUrl } from './GroupReportScreen';
+import { triggerExpGain } from '../lib/gamificationEvents';
 
 interface SchedulePartner {
   no?: number;
@@ -901,6 +902,8 @@ export function InspectionScheduleCard({
       }
 
       toast.success(`✅ Bukti KTA/TTA (${currentWeekTag}) berhasil diunggah!`, { id: 'upload-kta', duration: 5000 });
+      triggerExpGain(35, 'Laporan KTA/TTA Terkirim!', `Minggu: ${currentWeekTag}`);
+      window.dispatchEvent(new Event('gamification_updated'));
       setShowKtaModal(false);
       setKtaImageFile(null);
       setKtaImagePreview(null);

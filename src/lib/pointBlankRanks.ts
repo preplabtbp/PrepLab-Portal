@@ -2,12 +2,13 @@ export interface VanguardRank {
   id: number;
   code: string;
   name: string;
-  tier: 'Trainee' | 'Strip' | 'StaffSgt' | 'Sgt1stClass' | 'MasterSgt' | '2ndLt' | '1stLt' | 'Captain' | 'Major' | 'LtColonel' | 'Colonel' | 'General' | 'Commander';
+  tier: 'Trainee' | 'Strip' | 'StaffSgt' | 'Sgt1stClass' | 'MasterSgt' | '2ndLt' | '1stLt' | 'Captain' | 'Major' | 'LtColonel' | 'Colonel' | 'General' | 'Commander' | 'GM';
   tierGroup: string;
   icon: string;
   minXp: number;
   maxXp: number;
   badgeColor: string;
+  isGM?: boolean;
 }
 
 // Backward compatibility alias
@@ -601,7 +602,20 @@ export const VANGUARD_RANKS: VanguardRank[] = [
   }
 ];
 
-export const POINT_BLANK_RANKS = VANGUARD_RANKS;
+export const GM_RANK: VanguardRank = {
+  id: 0,
+  code: 'GAME_MASTER',
+  name: 'Game Master (GM)',
+  tier: 'GM',
+  tierGroup: 'Special Command',
+  icon: '/assets/ranks/rank_special_gm.svg',
+  minXp: 999999,
+  maxXp: 999999,
+  badgeColor: 'border-amber-400/80 bg-gradient-to-r from-zinc-950 via-slate-900 to-black text-amber-300 shadow-amber-500/30 shadow-md ring-1 ring-amber-400/40',
+  isGM: true
+};
+
+export const POINT_BLANK_RANKS: VanguardRank[] = [GM_RANK, ...VANGUARD_RANKS];
 
 export function getRankByXp(totalXp: number = 0): {
   currentRank: VanguardRank;

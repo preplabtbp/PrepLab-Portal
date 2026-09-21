@@ -1014,6 +1014,11 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
         return true;
       });
 
+      const devEmps = allEmps.filter(emp => {
+        const cleanNik = (emp.nik || '').trim().toUpperCase();
+        return devNikSet.has(cleanNik);
+      });
+
       // Safe batch 2 (4 queries): Inspections, CS Roster, Feedback, Quotes
       const [inspList, csGroups, fbGroups, quoteGroups] = await Promise.all([
         db.select({
@@ -1563,10 +1568,43 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
       sectionScores.sort((a, b) => b.avgXp - a.avgXp);
       sectionScores.forEach((s, idx) => { (s as any).rank = idx + 1; });
 
+      const devPersonnel = devEmps.map(emp => {
+        const cleanNik = (emp.nik || '').trim().toUpperCase();
+        return {
+          nik: cleanNik,
+          name: emp.name,
+          section: normalizeSection(emp.section, emp.department, emp.position),
+          pt: (emp.pt || 'TBP').trim().toUpperCase(),
+          position: emp.position || 'Game Master / Developer',
+          frame: emp.equippedFrame || 'cyber_neon',
+          title: emp.equippedTitle || 'System Architect',
+          avatar: emp.avatar || null,
+          isDevUser: true,
+          currentRank: {
+            id: 0,
+            code: 'GAME_MASTER',
+            name: 'Game Master (GM)',
+            tier: 'GM',
+            tierGroup: 'Special Command',
+            icon: '/assets/ranks/rank_special_gm.svg',
+            minXp: 999999,
+            maxXp: 999999,
+            badgeColor: 'border-amber-400/80 bg-gradient-to-r from-zinc-950 via-slate-900 to-black text-amber-300 shadow-amber-500/30 shadow-md ring-1 ring-amber-400/40',
+            isGM: true
+          },
+          totalXp: 999999,
+          seasonXp: 999999,
+          rank: 0,
+          inspectionCount: 0,
+          ktaCount: 0
+        };
+      });
+
       const responsePayload = {
         leaderboard: finalLeaderboard,
+        devPersonnel,
         sectionScores,
-        ranksMaster: VANGUARD_RANKS,
+        ranksMaster: POINT_BLANK_RANKS,
         achievementsMaster: TIERED_ACHIEVEMENTS,
         seasonInfo: {
           name: "Season 1 (Official Main Launch)",

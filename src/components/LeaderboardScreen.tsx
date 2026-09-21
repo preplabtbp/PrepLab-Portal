@@ -197,6 +197,20 @@ export function LeaderboardScreen({
     }
     return [];
   });
+  const [devPersonnel, setDevPersonnel] = useState<any[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('preplab_cached_leaderboard');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed.devPersonnel)) {
+            return parsed.devPersonnel;
+          }
+        }
+      } catch (e) {}
+    }
+    return [];
+  });
   const [isLoading, setIsLoading] = useState(() => leaderboardList.length === 0);
   const [refreshTick, setRefreshTick] = useState(0);
   const [showAuditModal, setShowAuditModal] = useState(false);
@@ -257,11 +271,14 @@ export function LeaderboardScreen({
           if (isMounted) {
             const list = lbData.leaderboard || [];
             const scores = lbData.sectionScores || [];
+            const devs = lbData.devPersonnel || [];
             setLeaderboardList(list);
             setSectionScores(scores);
+            setDevPersonnel(devs);
             try {
               localStorage.setItem('preplab_cached_leaderboard', JSON.stringify({
                 leaderboard: list,
+                devPersonnel: devs,
                 sectionScores: scores,
                 updatedAt: Date.now()
               }));
@@ -333,6 +350,24 @@ export function LeaderboardScreen({
     });
   }, [entityFilteredList, searchQuery, sectionFilter]);
 
+  // Display only Top 10 by default, or all matching if search query is active
+  const displayedUsers = useMemo(() => {
+    if (searchQuery.trim()) return filteredUsers;
+    return filteredUsers.slice(0, 10);
+  }, [filteredUsers, searchQuery]);
+
+  // Current user rank & outside top 10 detection in current category/discipline
+  const myUserInFilteredIndex = useMemo(() => {
+    return filteredUsers.findIndex(u => 
+      u.nik === currentNik || 
+      (inspectorName && u.name.trim().toLowerCase() === inspectorName.trim().toLowerCase())
+    );
+  }, [filteredUsers, currentNik, inspectorName]);
+
+  const isMyRankOutsideTop10 = (myUserInFilteredIndex >= 10) || (myUserInFilteredIndex === -1 && !searchQuery.trim());
+  const myUserRankNumber = myUserInFilteredIndex !== -1 ? myUserInFilteredIndex + 1 : null;
+  const myUserEntry = myUserInFilteredIndex !== -1 ? filteredUsers[myUserInFilteredIndex] : null;
+
   // Group personnel by rank ID
   const rankPersonnelMap = useMemo(() => {
     const map = new Map<number, LeaderboardUser[]>();
@@ -345,8 +380,28 @@ export function LeaderboardScreen({
       list.push(user);
       map.set(rId, list);
     }
+
+    // Populate GM Rank (id: 0) with devPersonnel
+    const gmList: any[] = [...(devPersonnel || [])];
+    if (isCurrentUserDev && !gmList.some(u => u.nik === currentNik)) {
+      gmList.push({
+        nik: currentNik,
+        name: inspectorName || userProfile?.name || 'Game Master',
+        section: userProfile?.section || 'Preparation',
+        pt: userProfile?.pt || 'TBP',
+        position: 'Game Master / Developer',
+        frame: userFrame || 'cyber_neon',
+        title: userTitle || 'System Architect',
+        avatar: userProfile?.avatar || null,
+        isDevUser: true,
+        totalXp: userTotalXp,
+        seasonXp: userGamification?.seasonXp || 0
+      });
+    }
+    map.set(0, gmList);
+
     return map;
-  }, [entityFilteredList]);
+  }, [entityFilteredList, devPersonnel, isCurrentUserDev, currentNik, inspectorName, userProfile, userFrame, userTitle, userTotalXp, userGamification]);
 
   // All distinct tier groups for filter buttons
   const allTierGroups = useMemo(() => {
@@ -372,9 +427,18 @@ export function LeaderboardScreen({
     }
 
     if (rankSortOrder === 'desc') {
-      list.sort((a, b) => b.id - a.id);
+      // Put GM (id: 0) at the very top in descending hierarchy
+      list.sort((a, b) => {
+        if (a.id === 0) return -1;
+        if (b.id === 0) return 1;
+        return b.id - a.id;
+      });
     } else {
-      list.sort((a, b) => a.id - b.id);
+      list.sort((a, b) => {
+        if (a.id === 0) return -1;
+        if (b.id === 0) return 1;
+        return a.id - b.id;
+      });
     }
 
     return list;
@@ -1045,7 +1109,7 @@ export function LeaderboardScreen({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]">
-                    {filteredUsers.map((user, idx) => {
+                    {displayedUsers.map((user, idx) => {
                       const isMe = user.nik === (inspectorNik || '02D25000055');
                       const rankData = user.currentRank || getRankByXp(user.totalXp).currentRank;
                       const displayRank = idx + 1;
@@ -1139,6 +1203,176 @@ export function LeaderboardScreen({
                         </tr>
                       );
                     })}
+
+                    {/* Visual Separator & Pinned Device Row when user is outside Top 10 */}
+                    {isMyRankOutsideTop10 && !searchQuery.trim() && (
+                      <>
+                        <tr>
+                          <td 
+                            colSpan={selectedDiscipline === 'EXP' ? 6 : 5} 
+                            className="py-2.5 px-4 text-center bg-slate-100/60 dark:bg-slate-850/60 text-[11px] text-[var(--text-muted)] italic font-semibold border-y border-dashed border-[var(--border-main)] select-none"
+                          >
+                            ••• {myUserRankNumber ? `Peringkat 11 s/d ${myUserRankNumber - 1} disembunyikan (Hanya 10 Besar yang Ditampilkan)` : 'Hanya 10 Besar Peringkat yang Ditampilkan'} •••
+                          </td>
+                        </tr>
+
+                        {myUserEntry ? (
+                          <tr className="bg-teal-500/15 dark:bg-teal-500/20 border-2 border-teal-500/50 font-bold shadow-xs">
+                            <td className="py-3.5 px-4 text-center">
+                              <span className="inline-block font-mono font-black text-xs px-2 py-0.5 rounded-md bg-teal-600 text-white shadow-xs">
+                                #{myUserRankNumber}
+                              </span>
+                              <span className="block text-[9px] text-teal-600 dark:text-teal-400 font-bold mt-0.5">
+                                (Perangkat Anda)
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-3">
+                                <DynamicAvatarFrame
+                                  frameId={myUserEntry.frame}
+                                  size={34}
+                                  isUnlocked={true}
+                                >
+                                  {myUserEntry.avatar ? (
+                                    <img src={myUserEntry.avatar} alt={myUserEntry.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-black text-slate-700 dark:text-slate-200">
+                                      {myUserEntry.name.slice(0, 2).toUpperCase()}
+                                    </div>
+                                  )}
+                                </DynamicAvatarFrame>
+                                <img 
+                                  src={myUserEntry.currentRank?.icon || userPublicRank?.icon || '/assets/ranks/rank_01_trainee.svg'} 
+                                  alt="rank"
+                                  className="w-6 h-6 object-contain shrink-0 filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.25)]"
+                                />
+                                <div className="min-w-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAuditTargetNik(myUserEntry.nik);
+                                      setShowAuditModal(true);
+                                    }}
+                                    className="font-bold text-[var(--text-main)] hover:text-teal-600 dark:hover:text-teal-400 text-left block truncate max-w-[170px] sm:max-w-none cursor-pointer group/name transition-colors"
+                                    title="Klik untuk buka audit rincian penambahan EXP perangkat ini"
+                                  >
+                                    <span>{myUserEntry.name}</span> <span className="text-[10px] text-teal-600 dark:text-teal-400 font-bold">(Perangkat Anda)</span>
+                                    <BarChart3 className="w-3 h-3 inline-block ml-1 opacity-0 group-hover/name:opacity-100 text-teal-500 transition-opacity" />
+                                  </button>
+                                  <span className="text-[10px] text-[var(--text-muted)] font-mono block truncate">
+                                    {myUserEntry.currentRank?.name || userPublicRank?.name} · {myUserEntry.nik}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/30 whitespace-nowrap">
+                                [{myUserEntry.title}]
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-[var(--text-muted)]">
+                              <span className="font-bold text-[var(--text-main)]">{myUserEntry.section}</span>{' '}
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-teal-500/10 text-teal-600 border border-teal-500/20">
+                                {myUserEntry.pt}
+                              </span>
+                            </td>
+                            {selectedDiscipline === 'EXP' ? (
+                              <>
+                                <td className="py-3.5 px-4 text-right font-black text-amber-500">
+                                  {myUserEntry.seasonXp} XP
+                                </td>
+                                <td className="py-3.5 px-4 text-right font-black text-teal-600 dark:text-teal-400">
+                                  {myUserEntry.totalXp} XP
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="py-3.5 px-4 text-center">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-black text-xs border border-emerald-500/30">
+                                    <span>{getUserDisciplineValue(myUserEntry, selectedDiscipline)}</span>
+                                    <span className="text-[10px] font-medium opacity-80">{activeDisciplineConfig.unit}</span>
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-right font-bold text-amber-500">
+                                  {myUserEntry.seasonXp} XP
+                                </td>
+                                <td className="py-3.5 px-4 text-right font-bold text-teal-600 dark:text-teal-400">
+                                  {myUserEntry.totalXp} XP
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        ) : isCurrentUserDev ? (
+                          /* Current User is Developer (Game Master) */
+                          <tr className="bg-amber-500/10 dark:bg-amber-500/15 border-2 border-amber-500/40 font-semibold shadow-inner">
+                            <td className="py-3.5 px-4 text-center">
+                              <span className="inline-block font-mono font-black text-xs px-2 py-0.5 rounded-md bg-black text-amber-300 border border-amber-400/60 shadow-xs">
+                                GM
+                              </span>
+                              <span className="block text-[9px] text-amber-600 dark:text-amber-400 font-bold mt-0.5">
+                                (Developer)
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-3">
+                                <DynamicAvatarFrame
+                                  frameId={userFrame || 'cyber_neon'}
+                                  size={34}
+                                  isUnlocked={true}
+                                >
+                                  {userProfile?.avatar ? (
+                                    <img src={userProfile.avatar} alt="avatar" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full bg-black flex items-center justify-center text-[10px] font-black text-amber-300">
+                                      GM
+                                    </div>
+                                  )}
+                                </DynamicAvatarFrame>
+                                <img 
+                                  src="/assets/ranks/rank_special_gm.svg" 
+                                  alt="Game Master" 
+                                  className="w-6 h-6 object-contain shrink-0 filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.25)]"
+                                />
+                                <div className="min-w-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAuditTargetNik(currentNik);
+                                      setShowAuditModal(true);
+                                    }}
+                                    className="font-bold text-[var(--text-main)] hover:text-amber-500 text-left block truncate max-w-[170px] sm:max-w-none cursor-pointer group/name transition-colors"
+                                    title="Klik untuk buka audit rincian penambahan EXP perangkat ini"
+                                  >
+                                    <span>{inspectorName || userProfile?.name || 'Game Master'}</span> <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">(Perangkat Anda)</span>
+                                    <BarChart3 className="w-3 h-3 inline-block ml-1 opacity-0 group-hover/name:opacity-100 text-amber-500 transition-opacity" />
+                                  </button>
+                                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-mono block truncate">
+                                    Game Master · {currentNik}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 whitespace-nowrap">
+                                [{userTitle || 'System Architect'}]
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-[var(--text-muted)]">
+                              <span className="font-bold text-[var(--text-main)]">{userProfile?.section || 'Preparation'}</span>{' '}
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                {userProfile?.pt || 'TBP'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-black text-amber-500">
+                              {userGamification?.seasonXp || 0} XP
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-black text-[var(--text-main)]">
+                              {userTotalXp} XP
+                            </td>
+                          </tr>
+                        ) : null}
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1233,7 +1467,11 @@ export function LeaderboardScreen({
                     {/* Rank Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3" style={{ borderColor: 'var(--border-main)' }}>
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 p-2 flex items-center justify-center border border-[var(--border-main)] shrink-0 shadow-inner">
+                        <div className={`w-12 h-12 rounded-2xl p-2 flex items-center justify-center border shrink-0 shadow-inner ${
+                          rank.id === 0 
+                            ? 'bg-gradient-to-b from-zinc-950 to-slate-900 border-amber-400/60 ring-1 ring-amber-400/30' 
+                            : 'bg-slate-100 dark:bg-slate-800 border-[var(--border-main)]'
+                        }`}>
                           <img
                             src={rank.icon}
                             alt={rank.name}
@@ -1242,8 +1480,12 @@ export function LeaderboardScreen({
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black uppercase font-mono px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                              #{rank.id}
+                            <span className={`text-[10px] font-black uppercase font-mono px-2 py-0.5 rounded-md border ${
+                              rank.id === 0
+                                ? 'bg-black text-amber-300 border-amber-400/60 shadow-xs'
+                                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                            }`}>
+                              {rank.id === 0 ? 'GM' : `#${rank.id}`}
                             </span>
                             <span className="text-[10px] font-semibold text-[var(--text-muted)]">
                               {rank.tierGroup}
@@ -1253,7 +1495,9 @@ export function LeaderboardScreen({
                             {rank.name}
                           </h3>
                           <span className="text-[11px] text-[var(--text-muted)] font-mono">
-                            Rentang EXP: {rank.minXp.toLocaleString()} - {rank.maxXp.toLocaleString()} EXP
+                            {rank.id === 0
+                              ? 'Hak Akses Penuh Pengembang & Game Master (Sistem PrepLab)'
+                              : `Rentang EXP: ${rank.minXp.toLocaleString()} - ${rank.maxXp.toLocaleString()} EXP`}
                           </span>
                         </div>
                       </div>
@@ -1326,7 +1570,7 @@ export function LeaderboardScreen({
                                     [{u.title}]
                                   </span>
                                   <span className="text-[10px] font-black text-amber-500 block">
-                                    {u.totalXp} XP
+                                    {u.totalXp >= 999999 ? 'Game Master' : `${(u.totalXp || 0).toLocaleString()} XP`}
                                   </span>
                                 </div>
                               </div>

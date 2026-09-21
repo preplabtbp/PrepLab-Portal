@@ -21,6 +21,7 @@ import {
   findSmartSuggest 
 } from '../lib/equipmentNormalizer';
 import { KbbiCorrectorWidget } from './KbbiCorrectorWidget';
+import { triggerExpGain } from '../lib/gamificationEvents';
 
 export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategories }: { inspectorName: string, inspectorNik: string, equipmentCategories: {category: string, tools: ToolRecord[]}[] }) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -271,6 +272,8 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
       const createdWO = await res.json();
       setSuccess(true);
       toast.success('Work Order berhasil dikirim!');
+      triggerExpGain(40, 'Work Order Diajukan!', `${rowData.namaAlat || 'Peralatan'} (${rowData.ruangan || '-'})`);
+      window.dispatchEvent(new Event('gamification_updated'));
       
       if (createdWO.waMessageText) {
           setWaMessageText(createdWO.waMessageText);

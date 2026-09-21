@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FONT_SIZE_OPTIONS, FontSizeOption, applyFontSize, getStoredFontSize } from '../utils/fontSize';
+import { triggerExpGain } from '../lib/gamificationEvents';
 
 export interface ThemeColors {
   '--bg-main': string;
@@ -637,6 +638,7 @@ export default function ThemeModal({
             : (json.message || 'Tema kustom berhasil disimpan & diterapkan!'), 
           { id: toastId }
         );
+        triggerExpGain(40, 'Kustomisasi Tema Diperbarui!', customTemplateName.trim() || 'Desain Tema');
         window.dispatchEvent(new Event('gamification_updated'));
         window.dispatchEvent(new Event('profile_updated'));
         await loadCustomTemplates();

@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner';
 import { PageHeader } from './PageHeader';
 import { uploadPhotoToDrive } from '../sheets-api';
+import { triggerExpGain } from '../lib/gamificationEvents';
 
 interface FeedbackItem {
   id: number;
@@ -192,6 +193,8 @@ export function FeedbackSupportScreen({
       }
 
       toast.success('Laporan berhasil dikirim ke tim Developer!');
+      triggerExpGain(100, 'Ide / Masukan Terkirim!', 'Terima kasih atas kontribusi Anda');
+      window.dispatchEvent(new Event('gamification_updated'));
       setSubmitSuccess(true);
       setDescription('');
       setScreenshotBase64(null);

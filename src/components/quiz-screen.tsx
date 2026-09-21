@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Button } from './ui';
 import { ArrowLeft, ArrowRight, CheckCircle, RefreshCcw, Activity, Timer } from 'lucide-react';
 import { toast } from 'sonner';
+import { triggerExpGain } from '../lib/gamificationEvents';
 
 interface Question {
   id: number;
@@ -212,8 +213,16 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
            const err = await res.json();
            toast.error(err.error || 'Gagal menyimpan skor');
         } else {
-           toast.success('Kuis berhasil diselesaikan');
-           localStorage.removeItem(`quiz_autosave_${inspectorNik}_${quizVersion}`);
+            toast.success('Kuis berhasil diselesaikan');
+            localStorage.removeItem(`quiz_autosave_${inspectorNik}_${quizVersion}`);
+            if (percentage === 100) {
+              triggerExpGain(250, 'Kuis Nilai Sempurna 100%!', `Versi ${quizVersion || 'K3/SOP'}`);
+            } else if (percentage >= 70) {
+              triggerExpGain(75, 'Kuis K3 Berhasil Lulus!', `Skor: ${percentage}%`);
+            } else {
+              triggerExpGain(30, 'Kuis Selesai Dikerjakan', `Skor: ${percentage}%`);
+            }
+            window.dispatchEvent(new Event('gamification_updated'));
         }
       } catch (e) {
           console.error("Gagal menyimpan skor", e);

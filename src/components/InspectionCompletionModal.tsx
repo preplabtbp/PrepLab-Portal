@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAppSettings } from '../sheets-api';
+import { triggerExpGain } from '../lib/gamificationEvents';
 
 export const GENERAL_INSPECTION_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform';
 
@@ -24,9 +25,9 @@ export interface InspectionCompletionData {
   isOpen?: boolean;
   pdfUrl?: string | null;
   linkPdf2?: string | null;
-  waMessageText?: string;
-  formTitle?: string;
-  location?: string;
+  waMessageText?: string | null;
+  formTitle?: string | null;
+  location?: string | null;
   id?: number | string;
   inspectorName?: string;
   inspectorNik?: string;
@@ -41,9 +42,17 @@ interface InspectionCompletionModalProps {
 export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionCompletionModalProps) {
   const [targetNumber, setTargetNumber] = useState('');
   const [copied, setCopied] = useState(false);
+  const alertedRef = React.useRef<string | null>(null);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && data) {
+      const completionKey = `${data.id || ''}_${data.formTitle || ''}`;
+      if (alertedRef.current !== completionKey) {
+        alertedRef.current = completionKey;
+        triggerExpGain(50, 'Inspeksi Berhasil Diselesaikan!', data.formTitle || 'Inspeksi Lapangan');
+        window.dispatchEvent(new Event('gamification_updated'));
+      }
+
       getAppSettings()
         .then((settings) => {
           if (settings && settings.success && settings.data) {
@@ -55,7 +64,7 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
         })
         .catch((e) => console.error('Error fetching WA target setting:', e));
     }
-  }, [isOpen]);
+  }, [isOpen, data]);
 
   if (!isOpen || !data) return null;
 
