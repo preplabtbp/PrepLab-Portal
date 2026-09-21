@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { AlertTriangle, ArrowUpRight, X, Clock, MapPin, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getOpenFindingsForSupervisor, normalizeUserRole } from '../utils/inspection-pic-matcher';
+import { CompactFindingPreview } from './StructuredFindingList';
 
 interface OpenFindingsReminderModalProps {
   isOpen: boolean;
@@ -121,9 +122,7 @@ export function OpenFindingsReminderModal({
                     </span>
                   </div>
 
-                  <p className="text-xs font-bold text-[var(--text-main,#0f172a)] line-clamp-2 leading-snug">
-                    {item.description || item.finding || 'Temuan ketidaksesuaian inspeksi'}
-                  </p>
+                  <CompactFindingPreview description={item.description || item.finding} maxItems={1} />
 
                   <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted,#64748b)] pt-0.5">
                     <span className="flex items-center gap-1 truncate">

@@ -12,6 +12,7 @@ import { ImageModal } from './image-modal';
 import { WhatsAppModal } from './whatsapp-modal';
 import { DevModeAccordion, useDevOptions } from './dev-mode-accordion';
 import { PageHeader } from './PageHeader';
+import { StructuredFindingList, CompactFindingPreview, parseFindingDescription } from './StructuredFindingList';
 
 const formatImageUrl = (url: string) => {
   if (!url || url === '-') return null;
@@ -744,10 +745,17 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
                  <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Area / Lokasi</p>
                  <p className="font-medium text-slate-800">{selectedTicket.location}</p>
                </div>
-               <div>
-                 <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Deskripsi Temuan</p>
-                 <p className="font-medium text-rose-600 leading-relaxed">{selectedTicket.description}</p>
-               </div>
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Deskripsi Temuan</p>
+                    {selectedTicket.description && parseFindingDescription(selectedTicket.description).length > 1 && (
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
+                        {parseFindingDescription(selectedTicket.description).length} Poin Temuan
+                      </span>
+                    )}
+                  </div>
+                  <StructuredFindingList description={selectedTicket.description} />
+                </div>
                {selectedTicket.risk && (
                  <div>
                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Risiko Bahaya</p>
@@ -971,12 +979,10 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
                                 </div>
 
                                 <div>
-                                  <h4 className="font-bold text-slate-900 text-sm leading-tight line-clamp-1 mb-1" title={t.location}>
+                                  <h4 className="font-bold text-slate-900 text-sm leading-tight line-clamp-1 mb-1.5" title={t.location}>
                                     {t.location}
                                   </h4>
-                                  <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
-                                    {t.description}
-                                  </p>
+                                  <CompactFindingPreview description={t.description} maxItems={2} className="text-slate-600" />
                                 </div>
                               </div>
                             </div>

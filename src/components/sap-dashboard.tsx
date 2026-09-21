@@ -33,6 +33,7 @@ import { toast } from 'sonner';
 import { ImageModal } from './image-modal';
 import { OpenFindingsReminderModal } from './OpenFindingsReminderModal';
 import { getOpenFindingsForSupervisor } from '../utils/inspection-pic-matcher';
+import { StructuredFindingList } from './StructuredFindingList';
 
 ChartJS.register(
   CategoryScale,
@@ -1316,9 +1317,9 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                         )}
                       </div>
 
-                      <h4 className="text-sm font-bold text-slate-900 leading-snug break-words">
-                        {ticket.description || 'Tidak ada deskripsi temuan'}
-                      </h4>
+                      <div className="pt-0.5">
+                        <StructuredFindingList description={ticket.description} />
+                      </div>
 
                       {ticket.recommendation && (
                         <p className="text-xs text-teal-800 font-medium bg-teal-50/60 p-2 rounded-lg border border-teal-100/80">

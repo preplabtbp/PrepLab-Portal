@@ -15,6 +15,10 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - **Pendaftaran Endpoint Publik Developer (`server.ts`)**: Mendaftarkan rute `/api/developers` ke dalam `PUBLIC_API_PREFIXES` agar pemanggilan `fetch('/api/developers')` dari sisi antarmuka pengguna tidak lagi ditolak dengan kode error *HTTP 401 Unauthorized*.
   - **Dukungan Seksi Quality Assurance (QA)**: Memperluas validasi `isAdminOrDeveloper` dan `isAdminRole` di seluruh antarmuka dan backend agar mencakup seksi `QA` / `Quality Assurance` dan jabatan `QA`.
   - **Pendaftaran NIK Developer Eksplisit**: Memasukkan NIK Sukarman A. Akil, ST (`04D21001047`) dan Junjunan Muhammad Syukur (`04D24000042`) ke dalam daftar pengenal pengembang terpercaya (*developer allowlist*) sehingga menu Developer dan peluncur *SAP Management* aktif dan terbuka penuh saat login.
+- **Format Daftar Rapi & Terstruktur Deskripsi Temuan K3 & Ketidakpatuhan APD (`src/components/StructuredFindingList.tsx`, `src/components/ticket-screen.tsx`, `src/components/sap-dashboard.tsx`, `src/components/OpenFindingsReminderModal.tsx`)**:
+  - Mengonversi deskripsi temuan yang sebelumnya menumpuk dalam satu paragraf teks mentah (seperti *1. Ketidakpatuhan APD: ... 2. Ketidakpatuhan APD: ...*) menjadi tampilan daftar kartu terstruktur yang rapi, elegan, dan mudah dibaca.
+  - Untuk temuan ketidakpatuhan APD personil, sistem secara otomatis mengekstrak nomor urut, nama personil, seksi/posisi, lencana item APD yang tidak lengkap (seperti `[❌ Sepatu]`, `[❌ Ear Plug]`, `[❌ Kacamata]`), serta catatan/keterangan terkait.
+  - Menyediakan tampilan *CompactFindingPreview* untuk pratinjau ringkas pada kartu daftar tiket dan modal pengingat temuan terbuka.
 
 ## [2.9.17] - 2026-09-21
 
