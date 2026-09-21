@@ -1,135 +1,89 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
-
   <defs>
-
-    <!-- Dark steel plate -->
-    <radialGradient id="plate" cx="38%" cy="32%" r="75%">
-      <stop offset="0%"   stop-color="#1C1C2E"/>
-      <stop offset="55%"  stop-color="#0D0D1A"/>
-      <stop offset="100%" stop-color="#050508"/>
-    </radialGradient>
-
-    <!-- Border: subtle crimson-to-dark -->
-    <linearGradient id="border" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"   stop-color="#3D0C0C"/>
-      <stop offset="40%"  stop-color="#7F1D1D"/>
-      <stop offset="60%"  stop-color="#991B1B"/>
-      <stop offset="100%" stop-color="#3D0C0C"/>
-    </linearGradient>
-
-    <!-- Inner bevel: very subtle -->
-    <linearGradient id="bevel" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%"   stop-color="#FFFFFF" stop-opacity="0.06"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.3"/>
-    </linearGradient>
-
-    <!-- GM text: cold silver-white -->
-    <linearGradient id="gmGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%"   stop-color="#FFFFFF"/>
-      <stop offset="30%"  stop-color="#E2E8F0"/>
-      <stop offset="65%"  stop-color="#94A3B8"/>
+    <!-- Silver / Titanium Gradient -->
+    <linearGradient id="silverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="25%" stop-color="#F1F5F9"/>
+      <stop offset="50%" stop-color="#CBD5E1"/>
+      <stop offset="75%" stop-color="#94A3B8"/>
       <stop offset="100%" stop-color="#475569"/>
     </linearGradient>
 
-    <!-- Thin top-edge light reflection -->
-    <linearGradient id="edgeLight" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%"   stop-color="#FFFFFF" stop-opacity="0.0"/>
-      <stop offset="30%"  stop-color="#FFFFFF" stop-opacity="0.12"/>
-      <stop offset="70%"  stop-color="#FFFFFF" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.0"/>
+    <!-- Silver Highlight Bevel -->
+    <linearGradient id="silverBevel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="35%" stop-color="#E2E8F0" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#334155" stop-opacity="0.85"/>
     </linearGradient>
 
-    <!-- Shadow filter -->
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.7"/>
-    </filter>
+    <!-- Plate Black Obsidian (GM) -->
+    <radialGradient id="plateBlack" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#181A22"/>
+      <stop offset="50%" stop-color="#0D0E14"/>
+      <stop offset="85%" stop-color="#05060A"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </radialGradient>
 
-    <!-- GM text subtle glow: deep red -->
-    <filter id="textGlow" x="-40%" y="-40%" width="180%" height="180%">
-      <feDropShadow dx="0" dy="0" stdDeviation="3"   flood-color="#7F1D1D" flood-opacity="0.6"/>
-      <feDropShadow dx="0" dy="0" stdDeviation="1.2" flood-color="#FFFFFF"  flood-opacity="0.15"/>
+    <!-- Drop Shadow Filter -->
+    <filter id="badgeShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.45"/>
     </filter>
-
-    <!-- Thin diagonal scratch texture overlay (noise-like) -->
-    <filter id="noise">
-      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" result="noiseOut"/>
-      <feColorMatrix in="noiseOut" type="saturate" values="0" result="grayNoise"/>
-      <feBlend in="SourceGraphic" in2="grayNoise" mode="overlay" result="blended"/>
-      <feComposite in="blended" in2="SourceGraphic" operator="in"/>
-    </filter>
-
   </defs>
 
-  <g filter="url(#shadow)">
+  <g filter="url(#badgeShadow)">
+    <!-- Tactical Plate -->
+    <rect x="8" y="8" width="84" height="84" rx="14" fill="url(#plateBlack)" stroke="#334155" stroke-width="2"/>
+    <!-- Subtle Inner Metallic Rim -->
+    <rect x="10" y="10" width="80" height="80" rx="12" fill="none" stroke="url(#silverBevel)" stroke-width="1" opacity="0.4"/>
 
-    <!-- Main plate: square with slightly rounded corners, like a military dog tag -->
-    <rect x="8" y="8" width="84" height="84" rx="10"
-          fill="url(#plate)"/>
+    <!-- Subtle Cardinal Notches -->
+    <line x1="50" y1="12" x2="50" y2="16" stroke="#94A3B8" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+    <line x1="50" y1="84" x2="50" y2="88" stroke="#94A3B8" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+    <line x1="12" y1="50" x2="16" y2="50" stroke="#94A3B8" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+    <line x1="84" y1="50" x2="88" y2="50" stroke="#94A3B8" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
 
-    <!-- Outer border: dark crimson -->
-    <rect x="8" y="8" width="84" height="84" rx="10"
-          fill="none" stroke="url(#border)" stroke-width="2"/>
+    <!-- Refined Architectural Vector GM Monogram (Slim, Balanced, Masculine) -->
+    <g id="gmSymbol">
+      <!-- Letter G -->
+      <path d="M 43 41
+               C 41 38.5 38.5 37 35 37
+               C 28.5 37 24 42 24 49.5
+               C 24 57 28.5 62 35 62
+               C 40.5 62 43.5 58.5 44 55
+               L 35.5 55
+               L 35.5 52.5
+               L 47 52.5
+               L 47 54.5
+               C 46.5 59.5 42 64.5 35 64.5
+               C 26.5 64.5 21 58.5 21 49.5
+               C 21 40.5 26.5 34.5 35 34.5
+               C 39.5 34.5 43.5 36.5 45.8 39.5
+               Z"
+            fill="url(#silverGrad)"
+            stroke="#1E293B"
+            stroke-width="0.5"/>
 
-    <!-- Inner bevel (very faint) -->
-    <rect x="11" y="11" width="78" height="78" rx="8"
-          fill="url(#bevel)"/>
+      <!-- Letter M -->
+      <path d="M 53 63.5
+               L 53 35.5
+               L 56.5 35.5
+               L 65.5 52
+               L 74.5 35.5
+               L 78 35.5
+               L 78 63.5
+               L 75 63.5
+               L 75 42.5
+               L 66.8 57.5
+               L 64.2 57.5
+               L 56 42.5
+               L 56 63.5
+               Z"
+            fill="url(#silverGrad)"
+            stroke="#1E293B"
+            stroke-width="0.5"/>
 
-    <!-- Top edge light reflection (single thin line) -->
-    <rect x="11" y="11" width="78" height="1.2" rx="0.6"
-          fill="url(#edgeLight)"/>
-
-    <!-- Left edge thin light reflection -->
-    <rect x="11" y="11" width="1.2" height="78" rx="0.6"
-          fill="url(#edgeLight)"/>
-
-    <!-- Subtle center vignette (darker middle to push text forward) -->
-    <rect x="8" y="8" width="84" height="84" rx="10"
-          fill="none"
-          stroke="#000000" stroke-width="8" stroke-opacity="0.18"/>
-
-    <!-- Single thin horizontal rule above text -->
-    <line x1="22" y1="38" x2="78" y2="38"
-          stroke="#7F1D1D" stroke-width="0.7" opacity="0.7"/>
-
-    <!-- Single thin horizontal rule below text -->
-    <line x1="22" y1="65" x2="78" y2="65"
-          stroke="#7F1D1D" stroke-width="0.7" opacity="0.7"/>
-
-    <!-- The GM text — bold, cold, centered -->
-    <g filter="url(#textGlow)">
-      <text
-        x="50" y="61"
-        text-anchor="middle"
-        dominant-baseline="auto"
-        font-family="'Impact', 'Arial Black', 'Haettenschweiler', sans-serif"
-        font-size="36"
-        font-weight="900"
-        letter-spacing="3"
-        fill="url(#gmGrad)"
-      >GM</text>
+      <!-- Center Hairline Laser Accent Underline -->
+      <line x1="36" y1="71" x2="64" y2="71" stroke="#EF4444" stroke-width="1" stroke-linecap="round" opacity="0.85"/>
     </g>
-
-    <!-- Hairline bevel on GM text (top-lit illusion) -->
-    <text
-      x="50" y="61"
-      text-anchor="middle"
-      dominant-baseline="auto"
-      font-family="'Impact', 'Arial Black', 'Haettenschweiler', sans-serif"
-      font-size="36"
-      font-weight="900"
-      letter-spacing="3"
-      fill="none"
-      stroke="#FFFFFF"
-      stroke-width="0.4"
-      opacity="0.18"
-    >GM</text>
-
-    <!-- Four corner dots: military precision -->
-    <circle cx="16" cy="16" r="1.5" fill="#7F1D1D" opacity="0.7"/>
-    <circle cx="84" cy="16" r="1.5" fill="#7F1D1D" opacity="0.7"/>
-    <circle cx="16" cy="84" r="1.5" fill="#7F1D1D" opacity="0.7"/>
-    <circle cx="84" cy="84" r="1.5" fill="#7F1D1D" opacity="0.7"/>
-
   </g>
-
 </svg>
