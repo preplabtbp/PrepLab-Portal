@@ -39,8 +39,8 @@ export const ACTION_XP_WEIGHTS = {
   WO_RESOLVE: 60,
   CS: 0, // Cuti Site gives 0 EXP (pure hidden achievement & titles)
   FEEDBACK: 100,
-  QUOTES: 100,
-  THEMES: 100,
+  QUOTES: 20,
+  THEMES: 40,
   BULLETIN: 10,
   P5M_SPEAKER: 60,
   QUIZ_100: 250,
@@ -110,7 +110,7 @@ export const EXP_SOURCES_CONFIG: ExpSourceDefinition[] = [
     category: 'community',
     icon: '💬',
     unit: 'Quotes',
-    weight: 100,
+    weight: 20,
     description: 'Penyusunan kata mutiara motivasi dan pesan keselamatan harian'
   },
   {
@@ -119,7 +119,7 @@ export const EXP_SOURCES_CONFIG: ExpSourceDefinition[] = [
     category: 'community',
     icon: '🎨',
     unit: 'Tema K3',
-    weight: 100,
+    weight: 40,
     description: 'Partisipasi pengajuan tema kampanye keselamatan kerja bulanan'
   },
   {

@@ -38,6 +38,7 @@ export interface LeaderboardUser {
   currentRank: PBRank;
   badgesCount: number;
   inspectionCount: number;
+  defectsCount?: number;
   ktaCount: number;
   woCreateCount?: number;
   woResolveCount?: number;
@@ -57,6 +58,8 @@ export interface LeaderboardUser {
   roleStartingXp?: number;
   achievementBonusXp?: number;
   baseActionsXp?: number;
+  isDevUser?: boolean;
+  publicRank?: any;
   sKtaCount?: number;
   sInspectionCount?: number;
   sDefectsCount?: number;
@@ -71,6 +74,7 @@ export interface LeaderboardUser {
   sDawnCount?: number;
   sWeekendCount?: number;
 }
+
 
 export const DISCIPLINE_OPTIONS = [
   { code: 'EXP', label: 'EXP Bulan Ini (Top Gun)', icon: '🏆', unit: 'EXP' },
@@ -232,6 +236,11 @@ export function LeaderboardScreen({
   // Derive current user rank info
   const userTotalXp = userGamification?.totalXp ?? 0;
   const userRankData = getRankByXp(userTotalXp);
+  // For public display: show GM rank if user is a developer
+  const isCurrentUserDev = userGamification?.isDevUser === true;
+  const userPublicRank = isCurrentUserDev
+    ? (userGamification?.publicRank || { id: 0, name: 'Game Master', icon: '/assets/ranks/rank_special_gm.png', isGM: true })
+    : userRankData.currentRank;
 
   // Active discipline config
   const activeDisciplineConfig = useMemo(() => {
@@ -445,14 +454,16 @@ export function LeaderboardScreen({
 
             <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-amber-500/10 border border-amber-500/25">
               <img 
-                src={userRankData.currentRank.icon} 
-                alt={userRankData.currentRank.name}
+                src={userPublicRank.icon} 
+                alt={userPublicRank.name}
                 className="w-7 h-7 object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.25)]"
               />
               <div className="text-left">
-                <span className="text-[9px] uppercase font-bold text-amber-500 block leading-tight">Pangkat Anda</span>
+                <span className="text-[9px] uppercase font-bold text-amber-500 block leading-tight">
+                  {isCurrentUserDev ? 'Status' : 'Pangkat Anda'}
+                </span>
                 <span className="text-xs font-black text-[var(--text-main)] block leading-tight truncate max-w-[140px]">
-                  {userRankData.currentRank.name}
+                  {userPublicRank.name}
                 </span>
               </div>
             </div>
@@ -1812,10 +1823,10 @@ export function LeaderboardScreen({
                       {/* Vanguard Rank Badge floating at bottom right */}
                       <div className="absolute -bottom-1 -right-1 p-1 rounded-xl bg-[var(--card-bg)] border shadow-md z-30" style={{ borderColor: 'var(--border-main)' }}>
                         <img 
-                          src={userRankData.currentRank.icon} 
-                          alt={userRankData.currentRank.name}
+                          src={userPublicRank.icon} 
+                          alt={userPublicRank.name}
                           className="w-7 h-7 object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.25)]"
-                          title={userRankData.currentRank.name}
+                          title={userPublicRank.name}
                         />
                       </div>
                     </div>
@@ -1831,8 +1842,13 @@ export function LeaderboardScreen({
                     </div>
 
                     <span className="text-xs text-[var(--text-muted)] font-semibold mt-1 block">
-                      {userRankData.currentRank.name} · {userTotalXp} Total EXP
+                      {isCurrentUserDev ? '🛡️ Game Master · Developer' : `${userPublicRank.name} · ${userTotalXp} Total EXP`}
                     </span>
+                    {isCurrentUserDev && (
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        Pangkat Asli: {userRankData.currentRank.name} · {userTotalXp} EXP
+                      </span>
+                    )}
                   </div>
 
                   {/* Progress to Next Rank */}

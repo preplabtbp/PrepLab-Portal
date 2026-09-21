@@ -513,6 +513,13 @@ export function ProfilePage({
     return getRankByXp(0);
   }, [gamificationData]);
 
+  // Developer GM status — profile page always shows real rank to owner + GM badge
+  const isDevUser: boolean = gamificationData?.isDevUser === true;
+  const publicRank = isDevUser
+    ? (gamificationData?.publicRank || { id: 0, name: 'Game Master', icon: '/assets/ranks/rank_special_gm.png', isGM: true })
+    : rankInfo?.currentRank;
+
+
   const activeMilitaryTitle = useMemo(() => {
     const saved = localStorage.getItem('preplab_equipped_title');
     if (saved && saved !== 'Frontline Scout') {
@@ -905,16 +912,27 @@ export function ProfilePage({
                 <div className="pt-1">
                   {/* Baris 1: Logo Pangkat + Nama Lengkap */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <img 
-                      src={rankInfo?.currentRank?.icon || '/assets/ranks/rank_01_trainee.svg'} 
-                      alt={rankInfo?.currentRank?.name || 'Pangkat'}
-                      className="w-6 h-6 sm:w-7 sm:h-7 object-contain inline-block shrink-0 filter drop-shadow-sm cursor-pointer hover:scale-110 transition-transform"
-                      title={`Pangkat Kehormatan: #${rankInfo?.currentRank?.id || 1} ${rankInfo?.currentRank?.name || 'Trainee'} (Klik untuk buka Hall of Fame)`}
-                      onClick={() => {
-                        onBack();
-                        window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
-                      }}
-                    />
+                    {/* Rank icon: show GM for devs, real rank otherwise */}
+                    <div className="relative inline-flex shrink-0">
+                      <img 
+                        src={rankInfo?.currentRank?.icon || '/assets/ranks/rank_01_trainee.svg'} 
+                        alt={rankInfo?.currentRank?.name || 'Pangkat'}
+                        className="w-6 h-6 sm:w-7 sm:h-7 object-contain inline-block shrink-0 filter drop-shadow-sm cursor-pointer hover:scale-110 transition-transform"
+                        title={`Pangkat Kehormatan: #${rankInfo?.currentRank?.id || 1} ${rankInfo?.currentRank?.name || 'Trainee'} (Klik untuk buka Hall of Fame)`}
+                        onClick={() => {
+                          onBack();
+                          window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
+                        }}
+                      />
+                      {isDevUser && (
+                        <img
+                          src="/assets/ranks/rank_special_gm.png"
+                          alt="Game Master"
+                          className="absolute -top-2 -right-2 w-4 h-4 object-contain filter drop-shadow-sm"
+                          title="Game Master — Pangkat Khusus Developer"
+                        />
+                      )}
+                    </div>
                     <h2 className="text-lg sm:text-2xl font-display font-bold tracking-tight text-[var(--text-main)] leading-snug break-words">
                       {inspectorName}
                     </h2>
@@ -955,11 +973,11 @@ export function ProfilePage({
                 <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--border-main)]/70">
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 whitespace-nowrap">
                     <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    {rankInfo?.currentRank?.name}
+                    {isDevUser ? '🛡️ Game Master' : rankInfo?.currentRank?.name}
                   </span>
 
                   <span className="inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/25 font-mono whitespace-nowrap">
-                    {rankInfo?.currentRank?.tierGroup || rankInfo?.currentRank?.tier}
+                    {isDevUser ? 'DEVELOPER' : (rankInfo?.currentRank?.tierGroup || rankInfo?.currentRank?.tier)}
                   </span>
 
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--border-main)] whitespace-nowrap">

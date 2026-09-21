@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { Readable } from "stream";
 import { db } from "../../src/db/index.js";
-import { eq, desc, or, inArray, isNull, and, gte, lte } from "drizzle-orm";
+import { eq, desc, or, inArray, isNull, and, gte, lte, count, sql } from "drizzle-orm";
 import { 
   chatMessages, employees, equipments, workOrders, users, tickets, downtime, 
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
@@ -2654,6 +2654,26 @@ router.post("/api/quotes", async (req, res) => {
       return res.status(400).json({ status: "error", message: "NIK pembuat quote wajib diisi" });
     }
 
+    // ── Daily limit: max 5 quotes per user per day (WIT UTC+9) ──
+    const DAILY_QUOTES_LIMIT = 5;
+    const witNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const todayStart = new Date(Date.UTC(witNow.getUTCFullYear(), witNow.getUTCMonth(), witNow.getUTCDate()) - 9 * 60 * 60 * 1000);
+    const todayEnd   = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+    const [todayQuotesRes] = await db.select({ count: count() })
+      .from(communityQuotes)
+      .where(and(
+        sql`UPPER(${communityQuotes.authorNik}) = ${authorNik.trim().toUpperCase()}`,
+        sql`${communityQuotes.createdAt} >= ${todayStart}`,
+        sql`${communityQuotes.createdAt} < ${todayEnd}`
+      ));
+    const todayQuotesCount = Number(todayQuotesRes?.count || 0);
+    if (todayQuotesCount >= DAILY_QUOTES_LIMIT) {
+      return res.status(429).json({
+        status: "error",
+        message: `Batas harian tercapai! Anda sudah membuat ${todayQuotesCount} quotes hari ini (maks. ${DAILY_QUOTES_LIMIT}/hari). Coba lagi besok.`
+      });
+    }
+
     let resolvedName = authorName;
     let resolvedRole = authorRole;
     let resolvedSection = authorSection;
@@ -2849,6 +2869,27 @@ router.post("/api/themes/templates", async (req, res) => {
 
         await db.update(userThemes).set(updateData).where(and(eq(userThemes.id, id), eq(userThemes.nik, nik)));
       } else {
+        // ── Daily limit: max 2 new theme templates per user per day (WIT UTC+9) ──
+        const DAILY_THEMES_LIMIT = 2;
+        const witNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+        const todayStart = new Date(Date.UTC(witNow.getUTCFullYear(), witNow.getUTCMonth(), witNow.getUTCDate()) - 9 * 60 * 60 * 1000);
+        const todayEnd   = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+        const [todayThemesRes] = await db.select({ count: count() })
+          .from(userThemes)
+          .where(and(
+            eq(userThemes.nik, nik),
+            sql`${userThemes.mode} LIKE 'template:%'`,
+            sql`${userThemes.createdAt} >= ${todayStart}`,
+            sql`${userThemes.createdAt} < ${todayEnd}`
+          ));
+        const todayThemesCount = Number(todayThemesRes?.count || 0);
+        if (todayThemesCount >= DAILY_THEMES_LIMIT) {
+          return res.status(429).json({
+            status: "error",
+            message: `Batas harian tercapai! Anda sudah membuat ${todayThemesCount} tema baru hari ini (maks. ${DAILY_THEMES_LIMIT}/hari). Coba lagi besok.`
+          });
+        }
+
         // Insert new custom template
         const templateMode = `template:${Date.now()}`;
         const result = await db.insert(userThemes).values({

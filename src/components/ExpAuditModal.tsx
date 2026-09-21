@@ -83,6 +83,8 @@ export function ExpAuditModal({
         seasonXp: g.seasonXp || 0,
         totalXp: g.totalXp || 0,
         currentRank: rankData.currentRank,
+        isDevUser: g.isDevUser === true,
+        publicRank: g.publicRank || rankData.currentRank,
         badgesCount: g.badgesEarned || 0,
         inspectionCount: g.stats?.inspectionCount || 0,
         defectsCount: g.stats?.defectsCount || 0,
@@ -513,8 +515,8 @@ export function ExpAuditModal({
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <img 
-                        src={targetUser.currentRank?.icon || '/assets/ranks/rank_01_trainee.svg'} 
-                        alt={targetUser.currentRank?.name || 'Pangkat'}
+                        src={targetUser.isDevUser ? '/assets/ranks/rank_special_gm.png' : (targetUser.currentRank?.icon || '/assets/ranks/rank_01_trainee.svg')} 
+                        alt={targetUser.isDevUser ? 'Game Master' : (targetUser.currentRank?.name || 'Pangkat')}
                         className="w-5 h-5 object-contain inline-block filter drop-shadow-xs"
                       />
                       <h3 className="text-base font-bold font-display text-[var(--text-main)]">
@@ -533,7 +535,10 @@ export function ExpAuditModal({
                       <span>{targetUser.section} · {targetUser.pt}</span>
                       <span>•</span>
                       <span className="font-semibold text-teal-600 dark:text-teal-400">
-                        Pangkat: #{targetUser.currentRank?.id || 1} {targetUser.currentRank?.name}
+                        {targetUser.isDevUser
+                          ? '🛡️ Game Master (Developer)'
+                          : `Pangkat: #${targetUser.currentRank?.id || 1} ${targetUser.currentRank?.name}`
+                        }
                       </span>
                     </div>
                   </div>

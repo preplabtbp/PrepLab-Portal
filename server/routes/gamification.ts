@@ -3,7 +3,8 @@ import { db } from "../../src/db/index.js";
 import { 
   ktaReports, inspections, roster, appFeedbacks, communityQuotes, 
   userThemes, bulletinComments, bulletinPosts, p5mSchedules, quizScores, 
-  employees, appSettings, gamificationMilestones, workOrders, portalLogins, easterEggProgress, tickets
+  employees, appSettings, gamificationMilestones, workOrders, portalLogins, easterEggProgress, tickets,
+  developerUsers
 } from "../../src/db/schema.js";
 import { eq, sql, desc, or, and, count } from "drizzle-orm";
 import { VANGUARD_RANKS, POINT_BLANK_RANKS, getRankByXp } from "../../src/lib/pointBlankRanks.js";
@@ -101,8 +102,8 @@ export const ACTION_XP_WEIGHTS = {
   WO_RESOLVE: 60,
   CS: 0, // Cuti Site gives 0 EXP (Hidden achievement only)
   FEEDBACK: 100,
-  QUOTES: 100,
-  THEMES: 100,
+  QUOTES: 20,
+  THEMES: 40,
   BULLETIN: 10,
   P5M_SPEAKER: 60,
   QUIZ_100: 250,
@@ -245,6 +246,18 @@ export async function computeUserGamification(nik: string, userName?: string) {
   const cleanNik = String(nik).trim().toUpperCase();
   const seasonStart = await getSeasonStartDate();
   const seasonStartIso = seasonStart.toISOString();
+
+  // Check if NIK is a developer
+  let isDevUser = false;
+  try {
+    const devCheck = await db.select({ nik: developerUsers.nik })
+      .from(developerUsers)
+      .where(sql`UPPER(${developerUsers.nik}) = ${cleanNik}`)
+      .limit(1);
+    isDevUser = devCheck.length > 0;
+  } catch (e) {
+    console.warn('Error checking developerUsers:', e);
+  }
 
   // Resolve employee metadata from database
   let resolvedName = userName || 'Personil PrepLab';
@@ -581,6 +594,21 @@ export async function computeUserGamification(nik: string, userName?: string) {
     };
   });
 
+  // XP cap thresholds: after reaching Max Achievement Tier, further creations give reduced EXP
+  // Quotes: Max Tier IV at 30 quotes → post-cap 5 EXP | Themes: Max Tier IV at 15 themes → post-cap 10 EXP
+  const QUOTES_XP_CAP_COUNT = 30;
+  const THEMES_XP_CAP_COUNT = 15;
+  const QUOTES_POST_CAP_XP = 5;
+  const THEMES_POST_CAP_XP = 10;
+
+  const cappedQuotesXp = quotesCount <= QUOTES_XP_CAP_COUNT
+    ? (quotesCount * ACTION_XP_WEIGHTS.QUOTES)
+    : (QUOTES_XP_CAP_COUNT * ACTION_XP_WEIGHTS.QUOTES) + ((quotesCount - QUOTES_XP_CAP_COUNT) * QUOTES_POST_CAP_XP);
+
+  const cappedThemesXp = themesCount <= THEMES_XP_CAP_COUNT
+    ? (themesCount * ACTION_XP_WEIGHTS.THEMES)
+    : (THEMES_XP_CAP_COUNT * ACTION_XP_WEIGHTS.THEMES) + ((themesCount - THEMES_XP_CAP_COUNT) * THEMES_POST_CAP_XP);
+
   // Calculate Base EXP from raw actions
   const baseActionsXp = 
     (ktaCount * ACTION_XP_WEIGHTS.KTA) +
@@ -590,8 +618,8 @@ export async function computeUserGamification(nik: string, userName?: string) {
     (woResolveCount * ACTION_XP_WEIGHTS.WO_RESOLVE) +
     (csCount * ACTION_XP_WEIGHTS.CS) + // Cuti Site gives 0 EXP (pure hidden achievement)
     (feedbackCount * ACTION_XP_WEIGHTS.FEEDBACK) +
-    (quotesCount * ACTION_XP_WEIGHTS.QUOTES) +
-    (themesCount * ACTION_XP_WEIGHTS.THEMES) +
+    cappedQuotesXp +
+    cappedThemesXp +
     (bulletinCount * ACTION_XP_WEIGHTS.BULLETIN) +
     (p5mSpeakerCount * ACTION_XP_WEIGHTS.P5M_SPEAKER) +
     (quiz100Count * ACTION_XP_WEIGHTS.QUIZ_100) +
@@ -729,6 +757,16 @@ export async function computeUserGamification(nik: string, userName?: string) {
       .from(quizScores)
       .where(and(sql`UPPER(${quizScores.nik}) = ${cleanNik}`, eq(quizScores.percentage, 100), sql`${quizScores.timestamp} >= ${seasonStart}`));
 
+    // Season XP also respects the post-cap rule
+    const sQuotesCount = Number(sQuotes?.count || 0);
+    const sThemesCount = Number(sThemes?.count || 0);
+    const sCappedQuotesXp = sQuotesCount <= QUOTES_XP_CAP_COUNT
+      ? (sQuotesCount * ACTION_XP_WEIGHTS.QUOTES)
+      : (QUOTES_XP_CAP_COUNT * ACTION_XP_WEIGHTS.QUOTES) + ((sQuotesCount - QUOTES_XP_CAP_COUNT) * QUOTES_POST_CAP_XP);
+    const sCappedThemesXp = sThemesCount <= THEMES_XP_CAP_COUNT
+      ? (sThemesCount * ACTION_XP_WEIGHTS.THEMES)
+      : (THEMES_XP_CAP_COUNT * ACTION_XP_WEIGHTS.THEMES) + ((sThemesCount - THEMES_XP_CAP_COUNT) * THEMES_POST_CAP_XP);
+
     seasonXp = 
       (Number(sKta?.count || 0) * ACTION_XP_WEIGHTS.KTA) +
       (sInsp.length * ACTION_XP_WEIGHTS.INSPECTION) +
@@ -736,8 +774,8 @@ export async function computeUserGamification(nik: string, userName?: string) {
       (Number(sWoCreate?.count || 0) * ACTION_XP_WEIGHTS.WO_CREATE) +
       (sWoResolve * ACTION_XP_WEIGHTS.WO_RESOLVE) +
       (Number(sFb?.count || 0) * ACTION_XP_WEIGHTS.FEEDBACK) +
-      (Number(sQuotes?.count || 0) * ACTION_XP_WEIGHTS.QUOTES) +
-      (Number(sThemes?.count || 0) * ACTION_XP_WEIGHTS.THEMES) +
+      sCappedQuotesXp +
+      sCappedThemesXp +
       (Number(sComments?.count || 0) * ACTION_XP_WEIGHTS.BULLETIN) +
       (Number(sQuiz?.count || 0) * ACTION_XP_WEIGHTS.QUIZ_100) +
       (sNight * ACTION_XP_WEIGHTS.NIGHT_SHIFT) +
@@ -805,6 +843,11 @@ export async function computeUserGamification(nik: string, userName?: string) {
     branchResults,
     unlockedTitles: allUnlockedTitles,
     defaultTitle,
+    isDevUser,
+    // publicRank: what others see. GM for developers, real rank for regular users.
+    publicRank: isDevUser
+      ? { id: 0, name: 'Game Master', tier: 'GM', tierGroup: 'System', icon: '/assets/ranks/rank_special_gm.png', isGM: true }
+      : rankInfo.currentRank,
     seasonInfo: {
       startDate: seasonStart.toISOString(),
       isZeroBaseline: true
@@ -929,8 +972,8 @@ gamificationRouter.get("/leaderboard", async (_req, res) => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const todayStr = `${now.getDate()} ${months[now.getMonth()]} ${String(now.getFullYear()).slice(-2)}`;
 
-    // 1. Fetch employees and today's roster to filter out resigned personnel (empty status today)
-    const [allEmps, todayRoster] = await Promise.all([
+    // 1. Fetch employees, today's roster, and developer NIKs
+    const [allEmps, todayRoster, devRows] = await Promise.all([
       db.select({
         nik: employees.nik,
         name: employees.name,
@@ -945,17 +988,23 @@ gamificationRouter.get("/leaderboard", async (_req, res) => {
       db.select({
         nik: sql<string>`UPPER(${roster.nik})`,
         status: roster.status
-      }).from(roster).where(eq(roster.date, todayStr))
+      }).from(roster).where(eq(roster.date, todayStr)),
+      db.select({ nik: developerUsers.nik }).from(developerUsers)
     ]);
+
+    // Build a set of developer NIKs (uppercase) for fast O(1) lookup
+    const devNikSet = new Set(devRows.map(d => (d.nik || '').trim().toUpperCase()));
 
     const todayRosterMap = new Map<string, string>();
     for (const r of todayRoster) {
       if (r.nik) todayRosterMap.set(r.nik, (r.status || '').trim());
     }
 
-    // Exclude employees who have resigned (missing or empty roster status for today)
+    // Exclude resigned personnel AND developers from public leaderboard
     const activeEmps = allEmps.filter(emp => {
       const cleanNik = (emp.nik || '').trim().toUpperCase();
+      // Exclude developers — they get a GM rank and are not part of the competitive ladder
+      if (devNikSet.has(cleanNik)) return false;
       const status = todayRosterMap.get(cleanNik);
       if (!status || status === '-' || status.toLowerCase() === 'resign' || status.toLowerCase() === 'keluar') {
         return false;
