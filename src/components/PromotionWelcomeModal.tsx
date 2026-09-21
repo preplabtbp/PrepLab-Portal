@@ -22,12 +22,20 @@ export const PromotionWelcomeModal: React.FC<PromotionWelcomeModalProps> = ({
   userAvatar,
   forceShow = false
 }) => {
-  const [open, setOpen] = useState(false);
-  const [gamificationData, setGamificationData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-
-  const nik = currentUserNik || localStorage.getItem('preplab_nik') || '02D25000055';
+  const nik = currentUserNik || (typeof window !== 'undefined' ? localStorage.getItem('preplab_nik') : null) || '02D25000055';
   const storageKey = `preplab_main_release_rank_promoted_v1_${nik}`;
+
+  const [open, setOpen] = useState(false);
+  const [gamificationData, setGamificationData] = useState<any>(() => {
+    if (typeof window !== 'undefined' && nik) {
+      try {
+        const cached = localStorage.getItem(`preplab_gamification_${nik}`);
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState(false);
 
   // Check if first-time promotion modal should be displayed automatically on launch
   useEffect(() => {
@@ -52,6 +60,9 @@ export const PromotionWelcomeModal: React.FC<PromotionWelcomeModalProps> = ({
       if (res.ok) {
         const data = await res.json();
         setGamificationData(data);
+        try {
+          localStorage.setItem(`preplab_gamification_${nik}`, JSON.stringify(data));
+        } catch (e) {}
       }
     } catch (e) {
       console.warn('Error loading promotion data:', e);
@@ -68,6 +79,17 @@ export const PromotionWelcomeModal: React.FC<PromotionWelcomeModalProps> = ({
   };
 
   if (!open) return null;
+
+  if (loading && !gamificationData) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+        <div className="p-8 rounded-3xl bg-slate-900 border border-amber-500/40 text-center space-y-3">
+          <div className="w-10 h-10 border-3 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-bold text-amber-300">Menghubungkan Data Komando &amp; Pangkat...</p>
+        </div>
+      </div>
+    );
+  }
 
   const totalXp = gamificationData?.totalXp || 0;
   const rankInfo = gamificationData?.rankInfo || getRankByXp(totalXp);
