@@ -1,22 +1,95 @@
 import React from 'react';
 
 export interface ParsedFindingItem {
-  type: 'apd' | 'general';
+  type: 'apd' | 'p3k' | 'general';
   number: number;
   raw: string;
   name?: string;
   role?: string;
   items?: string[];
   note?: string;
+  status?: string;
+  header?: string;
+}
+
+/**
+ * Parser for P3K inspection findings
+ * e.g. "Kekurangan Stok Item Kotak P3K: Gunting: Stok Kosong, Pinset: Stok Kosong..."
+ */
+function parseP3kDescription(text: string): ParsedFindingItem[] | null {
+  const p3kHeaderMatch = text.match(/^(Kekurangan Stok Item Kotak P3K|Checklist Isi Kotak P3K[^:]*|Kotak P3K[^:]*|Temuan P3K[^:]*):\s*(.+)$/i);
+  
+  if (!p3kHeaderMatch && !text.includes(': Stok Kosong') && !text.includes(': Kosong')) {
+    return null;
+  }
+
+  const header = p3kHeaderMatch ? p3kHeaderMatch[1].trim() : 'Kekurangan Stok Item Kotak P3K';
+  const body = p3kHeaderMatch ? p3kHeaderMatch[2].trim() : text;
+
+  const rawItems: ParsedFindingItem[] = [];
+  let remaining = body;
+
+  while (remaining.length > 0) {
+    const colonIdx = remaining.indexOf(':');
+    if (colonIdx === -1) break;
+    
+    const name = remaining.slice(0, colonIdx).trim();
+    const afterColon = remaining.slice(colonIdx + 1).trim();
+    
+    // Find where this item ends (at comma followed by next item with colon, ignoring commas inside parentheses)
+    let nextCommaIdx = -1;
+    let depth = 0;
+    for (let i = 0; i < afterColon.length; i++) {
+      if (afterColon[i] === '(') depth++;
+      else if (afterColon[i] === ')') depth--;
+      else if (afterColon[i] === ',' && depth === 0) {
+        const rest = afterColon.slice(i + 1);
+        if (rest.includes(':')) {
+          nextCommaIdx = i;
+          break;
+        }
+      }
+    }
+    
+    let statusPart = '';
+    if (nextCommaIdx !== -1) {
+      statusPart = afterColon.slice(0, nextCommaIdx).trim();
+      remaining = afterColon.slice(nextCommaIdx + 1).trim();
+    } else {
+      statusPart = afterColon.trim();
+      remaining = '';
+    }
+    
+    const noteMatch = statusPart.match(/^(.*?)\s*\((.*?)\)$/);
+    let status = statusPart;
+    let note = '';
+    if (noteMatch) {
+      status = noteMatch[1].trim();
+      note = noteMatch[2].trim().replace(/^Ket:\s*/i, '');
+    }
+    
+    rawItems.push({
+      type: 'p3k',
+      number: rawItems.length + 1,
+      raw: `${name}: ${statusPart}`,
+      name,
+      status: status || 'Stok Kosong',
+      note: note || undefined,
+      header
+    });
+  }
+
+  return rawItems.length > 0 ? rawItems : null;
 }
 
 /**
  * Utility to parse finding descriptions into structured list items.
  * Handles:
- * 1. Numbered lists on one line or multiline ("1. ... 2. ... 3. ...")
- * 2. Newline separated items ("Item A\nItem B")
- * 3. Bullet points ("• Item A\n• Item B" or "- Item A\n- Item B")
- * 4. Specific APD non-compliance format:
+ * 1. P3K item shortage lists ("Kekurangan Stok Item Kotak P3K: Item A: Stok Kosong, ...")
+ * 2. Numbered lists on one line or multiline ("1. ... 2. ... 3. ...")
+ * 3. Newline separated items ("Item A\nItem B")
+ * 4. Bullet points ("• Item A\n• Item B" or "- Item A\n- Item B")
+ * 5. Specific APD non-compliance format:
  *    "Ketidakpatuhan APD: [Nama] ([Role/Seksi]) - Tidak lengkap: [APD 1, APD 2], Ket: [Catatan]"
  */
 export function parseFindingDescription(rawDescription?: string | null): ParsedFindingItem[] {
@@ -26,6 +99,14 @@ export function parseFindingDescription(rawDescription?: string | null): ParsedF
 
   // 1. Check if text has numbered items like "1. ... 2. ..." or "1) ... 2) ..."
   const hasNumberedList = /^\s*1[\.\)]\s+/m.test(text) || /(?:^|\s+)2[\.\)]\s+/.test(text);
+
+  // 2. If not a numbered list, check if it's a P3K finding description
+  if (!hasNumberedList) {
+    const p3kParsed = parseP3kDescription(text);
+    if (p3kParsed && p3kParsed.length > 0) {
+      return p3kParsed;
+    }
+  }
 
   let rawItems: string[] = [];
 
@@ -75,6 +156,19 @@ export function parseFindingDescription(rawDescription?: string | null): ParsedF
       };
     }
 
+    // Check if individual item is P3K item pattern: "Item Name: Status (Note)"
+    const p3kSingleMatch = str.match(/^([^:]+):\s*(Stok Kosong|Kosong|Kadaluarsa|Rusak|Habis|Ada|Kurang)(?:\s*\((.*?)\))?$/i);
+    if (p3kSingleMatch) {
+      return {
+        type: 'p3k',
+        number: idx + 1,
+        raw: str,
+        name: p3kSingleMatch[1].trim(),
+        status: p3kSingleMatch[2].trim(),
+        note: p3kSingleMatch[3]?.trim().replace(/^Ket:\s*/i, '')
+      };
+    }
+
     return {
       type: 'general',
       number: idx + 1,
@@ -113,37 +207,59 @@ export function StructuredFindingList({
     );
   }
 
+  const header = items[0]?.header;
+
   return (
-    <ol className={`space-y-1.5 text-sm text-slate-800 ${className}`}>
-      {items.map((item, idx) => (
-        <li key={idx} className="flex items-start gap-2 leading-relaxed">
-          <span className="font-bold text-rose-600 shrink-0 select-none min-w-[1.25rem]">
-            {item.number}.
-          </span>
-          <div className="flex-1">
-            {item.type === 'apd' ? (
-              <span>
-                <strong className="text-slate-900 font-bold">{item.name}</strong>
-                {item.role && <span className="text-slate-500 text-xs ml-1">({item.role})</span>}
-                <span className="text-slate-400 mx-1.5">—</span>
-                <span className="text-rose-600 font-semibold">
-                  Tidak lengkap: {item.items?.join(', ')}
-                </span>
-                {item.note && (
-                  <span className="text-slate-600 text-xs ml-1.5 italic">
-                    (Ket: {item.note})
+    <div className="space-y-1.5">
+      {header && (
+        <p className="text-xs font-semibold text-slate-700">
+          {header}:
+        </p>
+      )}
+      <ol className={`space-y-1.5 text-sm text-slate-800 ${className}`}>
+        {items.map((item, idx) => (
+          <li key={idx} className="flex items-start gap-2 leading-relaxed">
+            <span className="font-bold text-rose-600 shrink-0 select-none min-w-[1.25rem]">
+              {item.number}.
+            </span>
+            <div className="flex-1">
+              {item.type === 'apd' ? (
+                <span>
+                  <strong className="text-slate-900 font-bold">{item.name}</strong>
+                  {item.role && <span className="text-slate-500 text-xs ml-1">({item.role})</span>}
+                  <span className="text-slate-400 mx-1.5">—</span>
+                  <span className="text-rose-600 font-semibold">
+                    Tidak lengkap: {item.items?.join(', ')}
                   </span>
-                )}
-              </span>
-            ) : (
-              <span className="text-rose-600 font-medium whitespace-pre-line break-words">
-                {item.raw}
-              </span>
-            )}
-          </div>
-        </li>
-      ))}
-    </ol>
+                  {item.note && (
+                    <span className="text-slate-600 text-xs ml-1.5 italic">
+                      (Ket: {item.note})
+                    </span>
+                  )}
+                </span>
+              ) : item.type === 'p3k' ? (
+                <span>
+                  <strong className="text-slate-900 font-bold">{item.name}</strong>
+                  <span className="text-slate-400 mx-1.5">—</span>
+                  <span className="text-rose-600 font-semibold">
+                    {item.status || 'Stok Kosong'}
+                  </span>
+                  {item.note && (
+                    <span className="text-slate-600 text-xs ml-1.5 italic">
+                      (Ket: {item.note})
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className="text-rose-600 font-medium whitespace-pre-line break-words">
+                  {item.raw}
+                </span>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -188,6 +304,11 @@ export function CompactFindingPreview({
               <>
                 <strong className="text-slate-900 font-bold">{item.name}</strong>
                 {item.items && item.items.length > 0 ? `: ${item.items.join(', ')}` : ''}
+              </>
+            ) : item.type === 'p3k' ? (
+              <>
+                <strong className="text-slate-900 font-bold">{item.name}</strong>
+                {`: ${item.status || 'Stok Kosong'}`}
               </>
             ) : (
               item.raw
