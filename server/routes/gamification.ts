@@ -20,32 +20,40 @@ export function normalizeSection(sec?: string | null, dept?: string | null, pos?
   const d = (dept || '').toUpperCase();
   const p = (pos || '').toUpperCase();
 
-  // 1. Maintenance
-  if (s.includes('MAINT') || d.includes('MAINT') || p.includes('MAINT')) {
-    return 'Maintenance';
-  }
-  // 2. Inventory Control
-  if (s.includes('INVENTORY') || d.includes('INVENTORY') || p.includes('INVENTORY') || s.includes('LOGISTIC') || d.includes('LOGISTIC') || p.includes('LOGISTIC')) {
-    return 'Inventory Control';
-  }
-  // 3. Quality Assurance
-  if (s.includes('QA') || s.includes('QUALITY') || d.includes('QA') || d.includes('QUALITY') || p.includes('QA') || p.includes('QUALITY')) {
+  // 1. Quality Assurance
+  if (s.includes('QA') || s.includes('QUALITY') || p.includes('QA') || p.includes('QUALITY')) {
     return 'Quality Assurance';
   }
-  // 4. Administration
-  if (s.includes('ADMIN') || d.includes('ADMIN') || p.includes('ADMIN') || s.includes('FINANCE') || d.includes('FINANCE') || p.includes('FINANCE') || s.includes('MANAGER') || d.includes('MANAGER')) {
-    return 'Administration';
-  }
-  // 5. Preparation
-  if (s.includes('PREP') || d.includes('PREP') || p.includes('PREP') || s.includes('WET') || s.includes('DRY')) {
-    return 'Preparation';
-  }
-  // 6. Laboratory
-  if (s.includes('LAB') || d.includes('LAB') || p.includes('LAB')) {
+  // 2. Laboratory (Check section and position first before department, avoiding 'Preparation & Laboratory' confusion)
+  if (s.includes('LAB') || p.includes('LAB') || s.includes('KIMIA') || s.includes('XRF') || s.includes('WET LAB')) {
     return 'Laboratory';
   }
+  // 3. Maintenance
+  if (s.includes('MAINT') || p.includes('MAINT')) {
+    return 'Maintenance';
+  }
+  // 4. Inventory Control
+  if (s.includes('INVENTORY') || p.includes('INVENTORY') || s.includes('LOGISTIC') || p.includes('LOGISTIC')) {
+    return 'Inventory Control';
+  }
+  // 5. Administration
+  if (s.includes('ADMIN') || p.includes('ADMIN') || s.includes('FINANCE') || p.includes('FINANCE') || s.includes('HR') || p.includes('HR')) {
+    return 'Administration';
+  }
+  // 6. Preparation
+  if (s.includes('PREP') || p.includes('PREP') || s.includes('WET') || s.includes('DRY')) {
+    return 'Preparation';
+  }
 
-  return sec || dept || 'Preparation';
+  // Department fallbacks (only if section/position didn't match specific roles)
+  if (d.includes('QA') || d.includes('QUALITY')) return 'Quality Assurance';
+  if (d.includes('MAINT')) return 'Maintenance';
+  if (d.includes('INVENTORY') || d.includes('LOGISTIC')) return 'Inventory Control';
+  if (d.includes('ADMIN') || d.includes('FINANCE') || d.includes('MANAGER')) return 'Administration';
+  if (d.includes('LAB') && !d.includes('PREP')) return 'Laboratory';
+  if (d.includes('PREP') && !d.includes('LAB')) return 'Preparation';
+
+  return sec || dept || 'Laboratory';
 }
 
 // Helper to provide starting rank points based on organizational leadership roles:
@@ -271,10 +279,10 @@ export async function computeUserGamification(nik: string, userName?: string) {
   // Check if NIK is a developer and resolve employee metadata in parallel
   let isDevUser = false;
   let resolvedName = userName || 'Personil PrepLab';
-  let resolvedSection = 'Preparation';
-  let resolvedDepartment = 'Preparation';
+  let resolvedSection = 'Laboratory';
+  let resolvedDepartment = 'Laboratory';
   let resolvedPosition = '';
-  let resolvedPt = 'TBP';
+  let resolvedPt = 'GPS';
   let resolvedEquippedFrame = 'default';
   let resolvedEquippedTitle = 'Frontline Trainee';
   let resolvedAvatar: string | null = null;

@@ -260,9 +260,8 @@ export default function App() {
     fetch('/api/developers')
       .then(res => res.json())
       .then(json => {
-        if (json.status === 'success' && Array.isArray(json.data)) {
-          setDeveloperList(json.data);
-        }
+        const list = Array.isArray(json) ? json : (json?.data || []);
+        setDeveloperList(list);
       })
       .catch(() => {});
 
@@ -297,7 +296,13 @@ export default function App() {
 
   const isDeveloper = React.useMemo(() => {
     if (isMeetingRoom) return meetingRoomDevUnlocked;
-    if (inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin') return true;
+    if (
+      inspectorNik === '02D25000055' ||
+      inspectorNik === '02D24000043' ||
+      inspectorNik === '04D21001047' || // Sukarman A. Akil, ST
+      inspectorNik === '04D24000042' || // Junjunan Muhammad Syukur
+      inspectorNik === 'preplabadmin'
+    ) return true;
     return developerList.some(d => d.nik === inspectorNik);
   }, [inspectorNik, developerList, isMeetingRoom, meetingRoomDevUnlocked]);
 
@@ -330,7 +335,16 @@ export default function App() {
     if (isDeveloper) return true;
     const jab = (userProfile?.jabatan || '').toLowerCase();
     const sec = (userProfile?.section || '').toLowerCase();
-    return jab.includes('admin') || jab.includes('manager') || jab.includes('superintendent') || sec.includes('admin') || sec.includes('administrasi');
+    return (
+      jab.includes('admin') ||
+      jab.includes('manager') ||
+      jab.includes('superintendent') ||
+      jab.includes('qa') ||
+      sec.includes('admin') ||
+      sec.includes('administrasi') ||
+      sec.includes('qa') ||
+      sec.includes('quality assurance')
+    );
   }, [isDeveloper, userProfile, isMeetingRoom]);
 
   const [showProfileScreen, setShowProfileScreen] = useState(false);
@@ -1446,7 +1460,7 @@ export default function App() {
   <Route path="/p5m" element={<P5MScreen onBack={() => handleNav('home')} userProfile={userProfile} />} />
   <Route path="/feedback-support" element={<FeedbackSupportScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/finance" element={<FinanceScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
-  <Route path="/leaderboard" element={<LeaderboardScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
+  <Route path="/leaderboard" element={<LeaderboardScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} userProfile={userProfile} onBack={() => handleNav('home')} />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
   </AnimatePresence>

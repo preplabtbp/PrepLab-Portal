@@ -58,17 +58,30 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
   const [developerList, setDeveloperList] = useState<string[]>([]);
   
   useEffect(() => {
-    fetch('/api/developers').then(res => res.json()).then(data => setDeveloperList(data.map((d: any) => d.nik))).catch(() => {});
+    fetch('/api/developers')
+      .then(res => res.json())
+      .then(json => {
+        const list = Array.isArray(json) ? json : (json?.data || []);
+        setDeveloperList(list.map((d: any) => d.nik));
+      })
+      .catch(() => {});
   }, []);
 
-  const isSuperAdmin = inspectorNik === '02D25000055' || inspectorNik === '02D24000043';
+  const isSuperAdmin = 
+    inspectorNik === '02D25000055' || 
+    inspectorNik === '02D24000043' || 
+    inspectorNik === '04D21001047' || // Sukarman A. Akil, ST
+    inspectorNik === '04D24000042';   // Junjunan Muhammad Syukur
   const isDeveloper = isSuperAdmin || inspectorNik === 'preplabadmin' || developerList.includes(inspectorNik);
   const isAdminRole = 
     userJabatan.toLowerCase().includes('admin') || 
     userJabatan.toLowerCase().includes('manager') || 
     userJabatan.toLowerCase().includes('superintendent') || 
+    userJabatan.toLowerCase().includes('qa') ||
     userSection.toLowerCase().includes('admin') ||
-    userSection.toLowerCase().includes('administrasi');
+    userSection.toLowerCase().includes('administrasi') ||
+    userSection.toLowerCase().includes('qa') ||
+    userSection.toLowerCase().includes('quality assurance');
 
   const isMaintenance = userSection.toLowerCase().includes('maintenance') || isDeveloper;
 

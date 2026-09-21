@@ -1,6 +1,21 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.18] - 2026-09-22
+
+### 🛡️ Perbaikan Resolusi Seksi Laboratory, Pemulihan Display Akumulasi EXP & Hak Akses Developer / SAP QA (Sukarman)
+
+- **Perbaikan Resolusi Seksi Laboratory (`server/routes/gamification.ts`, `src/App.tsx`, `src/components/LeaderboardScreen.tsx`)**:
+  - Memperbaiki fungsi `normalizeSection`: Pengecekan kata kunci seksi (`s`) dan posisi (`p`) kini diprioritaskan sebelum memeriksa departemen (`d`). Kata kunci `LAB` / `KIMIA` / `XRF` dievaluasi mendahului `PREP` sehingga departemen gabungan `"Preparation & Laboratory"` tidak lagi salah memetakan personil Laboratory menjadi `'Preparation'`.
+  - Mengirimkan prop `userProfile={userProfile}` ke komponen `<LeaderboardScreen>` di `src/App.tsx` sehingga kartu perangkat yang disematkan (*pinned row*) tidak lagi jatuh ke fallback default `'Preparation [TBP]'`, melainkan menampilkan data riil karyawan: `'Laboratory [GPS]'`.
+- **Pemulihan Tampilan Akumulasi EXP Perangkat Pengembang (`src/components/LeaderboardScreen.tsx`)**:
+  - Membersihkan *stale cache* lokal browser yang menyimpan nilai sementara dari pengujian kuis sebelumnya (`140 XP` season / `250 XP` total).
+  - Menyinkronkan perolehan EXP riil operasional pada baris Game Master / Developer (Total EXP riil: **5,190 XP**, Season EXP: **710 XP**) dengan fallback otomatis ke `currentDevEntry` bila data profil sedang dimuat.
+- **Pembukaan Hak Akses Penuh SAP Management & Menu Developer untuk Sukarman (QA) (`server.ts`, `server/middleware/auth.ts`, `src/App.tsx`, `src/components/home-screen.tsx`, `src/components/ModulesDrawer.tsx`, `src/components/modules-screen.tsx`)**:
+  - **Pendaftaran Endpoint Publik Developer (`server.ts`)**: Mendaftarkan rute `/api/developers` ke dalam `PUBLIC_API_PREFIXES` agar pemanggilan `fetch('/api/developers')` dari sisi antarmuka pengguna tidak lagi ditolak dengan kode error *HTTP 401 Unauthorized*.
+  - **Dukungan Seksi Quality Assurance (QA)**: Memperluas validasi `isAdminOrDeveloper` dan `isAdminRole` di seluruh antarmuka dan backend agar mencakup seksi `QA` / `Quality Assurance` dan jabatan `QA`.
+  - **Pendaftaran NIK Developer Eksplisit**: Memasukkan NIK Sukarman A. Akil, ST (`04D21001047`) dan Junjunan Muhammad Syukur (`04D24000042`) ke dalam daftar pengenal pengembang terpercaya (*developer allowlist*) sehingga menu Developer dan peluncur *SAP Management* aktif dan terbuka penuh saat login.
+
 ## [2.9.17] - 2026-09-21
 
 ### 🎖️ Sistem Notifikasi Perayaan Gamifikasi 5-Tingkat & Pembaruan Leaderboard Top 10 + Game Master (GM)

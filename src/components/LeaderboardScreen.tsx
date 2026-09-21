@@ -158,13 +158,22 @@ export function LeaderboardScreen({
   const [userFrame, setUserFrame] = useState(() => localStorage.getItem('preplab_equipped_frame') || 'golden_halo');
   const [showCelebration, setShowCelebration] = useState(false);
 
-  // Live Gamification Profile Data from Server with Instant LocalStorage Hydration
   const currentNik = inspectorNik || '02D25000055';
   const [userGamification, setUserGamification] = useState<any>(() => {
     if (typeof window !== 'undefined') {
       try {
         const cached = localStorage.getItem(`preplab_gamification_${currentNik}`);
-        if (cached) return JSON.parse(cached);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed) {
+            // Discard stale cache for Alvin if it has low test XP or incorrect section
+            if (String(currentNik).toUpperCase() === '02D24000043' && (parsed.totalXp < 1000 || parsed.section === 'Preparation')) {
+              localStorage.removeItem(`preplab_gamification_${currentNik}`);
+              return null;
+            }
+            return parsed;
+          }
+        }
       } catch (e) {}
     }
     return null;
@@ -299,10 +308,14 @@ export function LeaderboardScreen({
   // Derive current user rank info
   const userTotalXp = userGamification?.totalXp ?? 0;
   const userRankData = getRankByXp(userTotalXp);
+  const currentDevEntry = useMemo(() => {
+    return devPersonnel.find(d => String(d.nik).trim().toUpperCase() === String(currentNik).trim().toUpperCase()) || null;
+  }, [devPersonnel, currentNik]);
+
   // For public display: show GM rank if user is a developer
   const isCurrentUserDev = userGamification?.isDevUser === true ||
-    ['19980101', 'DEV001', 'ADMIN', 'SYSTEM'].includes(String(currentNik).trim().toUpperCase()) ||
-    ['adryansyah', 'alvin', 'admin'].includes(String(inspectorName || userProfile?.name || '').trim().toLowerCase());
+    ['19980101', 'DEV001', 'ADMIN', 'SYSTEM', '02D24000043', '02D25000055', '04D21001047', '04D24000042'].includes(String(currentNik).trim().toUpperCase()) ||
+    ['adryansyah', 'alvin', 'admin', 'sukarman'].includes(String(inspectorName || userProfile?.name || '').trim().toLowerCase());
   const userPublicRank = isCurrentUserDev
     ? (userGamification?.publicRank || { id: 0, name: 'Game Master', icon: '/assets/ranks/rank_special_gm.svg', isGM: true })
     : userRankData.currentRank;
@@ -1358,16 +1371,18 @@ export function LeaderboardScreen({
                               </span>
                             </td>
                             <td className="py-3.5 px-4 text-[var(--text-muted)]">
-                              <span className="font-bold text-[var(--text-main)]">{userProfile?.section || 'Preparation'}</span>{' '}
+                              <span className="font-bold text-[var(--text-main)]">
+                                {userProfile?.section || userGamification?.section || currentDevEntry?.section || 'Laboratory'}
+                              </span>{' '}
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                                {userProfile?.pt || 'TBP'}
+                                {userProfile?.pt || userGamification?.pt || currentDevEntry?.pt || 'GPS'}
                               </span>
                             </td>
                             <td className="py-3.5 px-4 text-right font-black text-amber-500">
-                              {userGamification?.seasonXp || 0} XP
+                              {(userGamification?.seasonXp ?? currentDevEntry?.seasonXp ?? 0)} XP
                             </td>
                             <td className="py-3.5 px-4 text-right font-black text-[var(--text-main)]">
-                              {userTotalXp} XP
+                              {(userTotalXp || currentDevEntry?.totalXp || 0)} XP
                             </td>
                           </tr>
                         ) : null}

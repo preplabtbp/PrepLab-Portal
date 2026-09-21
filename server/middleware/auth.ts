@@ -54,7 +54,13 @@ export async function checkIsAdminOrDeveloper(nik?: string, section?: string, ja
   const cleanNik = String(nik).trim().toUpperCase();
 
   // Superadmins / Default Developer accounts (Explicit production developer NIKs only)
-  if (cleanNik === '02D25000055' || cleanNik === '02D24000043' || cleanNik === 'PREPLABADMIN') {
+  if (
+    cleanNik === '02D25000055' ||
+    cleanNik === '02D24000043' ||
+    cleanNik === '04D21001047' || // Sukarman A. Akil, ST
+    cleanNik === '04D24000042' || // Junjunan Muhammad Syukur
+    cleanNik === 'PREPLABADMIN'
+  ) {
     return { isAdmin: true, isDeveloper: true };
   }
 
@@ -74,8 +80,10 @@ export async function checkIsAdminOrDeveloper(nik?: string, section?: string, ja
   const jab = (jabatan || '').toLowerCase();
   if (
     sec.includes('admin') || sec.includes('administrasi') ||
+    sec.includes('qa') || sec.includes('quality assurance') ||
     jab.includes('admin') || jab.includes('administrasi') ||
-    jab.includes('superintendent') || jab.includes('manager')
+    jab.includes('superintendent') || jab.includes('manager') ||
+    jab.includes('qa') || jab.includes('quality assurance')
   ) {
     return { isAdmin: true, isDeveloper: false };
   }

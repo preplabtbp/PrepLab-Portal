@@ -578,7 +578,8 @@ const app = express();
     '/api/daily-tasks-status',
     '/api/induksi',
     '/api/changelog',
-    '/api/gamification'
+    '/api/gamification',
+    '/api/developers'
   ];
 
   app.use('/api', (req, res, next) => {
