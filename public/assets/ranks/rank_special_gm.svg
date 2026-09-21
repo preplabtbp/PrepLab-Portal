@@ -31,18 +31,12 @@
   </defs>
 
   <g filter="url(#badgeShadow)">
-    <!-- Tactical Plate -->
+    <!-- Tactical Plate: Murni background kotak hitam tanpa aksesoris -->
     <rect x="8" y="8" width="84" height="84" rx="14" fill="url(#plateBlack)" stroke="#334155" stroke-width="2"/>
     <!-- Subtle Inner Metallic Rim -->
     <rect x="10" y="10" width="80" height="80" rx="12" fill="none" stroke="url(#silverBevel)" stroke-width="1" opacity="0.4"/>
 
-    <!-- Subtle Cardinal Notches -->
-    <line x1="50" y1="12" x2="50" y2="16" stroke="#94A3B8" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
-    <line x1="50" y1="84" x2="50" y2="88" stroke="#94A3B8" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
-    <line x1="12" y1="50" x2="16" y2="50" stroke="#94A3B8" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
-    <line x1="84" y1="50" x2="88" y2="50" stroke="#94A3B8" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
-
-    <!-- Refined Architectural Vector GM Monogram (Slim, Balanced, Masculine) -->
+    <!-- Refined Architectural Vector GM Monogram (Slim, Balanced, Masculine, No Accessories) -->
     <g id="gmSymbol">
       <!-- Letter G -->
       <path d="M 43 41
@@ -81,9 +75,6 @@
             fill="url(#silverGrad)"
             stroke="#1E293B"
             stroke-width="0.5"/>
-
-      <!-- Center Hairline Laser Accent Underline -->
-      <line x1="36" y1="71" x2="64" y2="71" stroke="#EF4444" stroke-width="1" stroke-linecap="round" opacity="0.85"/>
     </g>
   </g>
 </svg>

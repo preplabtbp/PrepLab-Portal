@@ -1,4 +1,6 @@
 import { Router } from "express";
+import fs from "fs";
+import path from "path";
 import { db } from "../../src/db/index.js";
 import { 
   ktaReports, inspections, roster, appFeedbacks, communityQuotes, 
@@ -954,6 +956,30 @@ gamificationRouter.post("/equip-customization", async (req, res) => {
   } catch (err: any) {
     console.error("Failed to equip customization:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/gamification/select-gm-variant (Pilih variasi 1-5 untuk rank_special_gm.svg)
+gamificationRouter.post("/select-gm-variant", async (req, res) => {
+  try {
+    const { variant } = req.body;
+    const vNum = parseInt(String(variant), 10);
+    if (!vNum || vNum < 1 || vNum > 5) {
+      return res.status(400).json({ error: "Variasi harus bernilai antara 1 sampai 5" });
+    }
+
+    const srcFile = `rank_gm_var${vNum}.svg`;
+    const srcPath = path.join(process.cwd(), "public", "assets", "ranks", srcFile);
+    const destPath = path.join(process.cwd(), "public", "assets", "ranks", "rank_special_gm.svg");
+
+    if (!fs.existsSync(srcPath)) {
+      return res.status(404).json({ error: `File ${srcFile} tidak ditemukan` });
+    }
+
+    fs.copyFileSync(srcPath, destPath);
+    return res.json({ success: true, message: `Variasi ${vNum} berhasil dijadikan badge GM utama!`, activeFile: srcFile });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 });
 

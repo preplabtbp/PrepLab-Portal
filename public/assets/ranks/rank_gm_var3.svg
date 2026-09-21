@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <defs>
+    <!-- Liquid Titanium Silver Gradient -->
+    <linearGradient id="silverGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="20%" stop-color="#F8FAFC"/>
+      <stop offset="50%" stop-color="#CBD5E1"/>
+      <stop offset="80%" stop-color="#94A3B8"/>
+      <stop offset="100%" stop-color="#64748B"/>
+    </linearGradient>
+
+    <!-- Silver Inner Bevel -->
+    <linearGradient id="silverBevel3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#475569" stop-opacity="0.6"/>
+    </linearGradient>
+
+    <!-- Shade 3: Vanta Pitch Black (Ultra Deep Vacuum) -->
+    <radialGradient id="plateVanta" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#14151B"/>
+      <stop offset="45%" stop-color="#07080B"/>
+      <stop offset="85%" stop-color="#020203"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </radialGradient>
+
+    <!-- Drop Shadow Filter -->
+    <filter id="badgeShadow3" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.75"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#badgeShadow3)">
+    <!-- Tactical Plate: Vanta Pitch Black -->
+    <rect x="8" y="8" width="84" height="84" rx="14" fill="url(#plateVanta)" stroke="#232733" stroke-width="2"/>
+    <!-- Inner Rim -->
+    <rect x="10" y="10" width="80" height="80" rx="12" fill="none" stroke="url(#silverBevel3)" stroke-width="1" opacity="0.3"/>
+
+    <!-- Typography 3: Pure Geometric Monoline (Minimalist, Prestigious, Ultra-Clean) -->
+    <!-- Uniform clean 4.5px stroke paths -->
+    <g fill="none" stroke="url(#silverGrad3)" stroke-width="4.2" stroke-linecap="square" stroke-linejoin="miter">
+      <!-- Letter G -->
+      <path d="M 45 42
+               A 16 16 0 1 0 45 58
+               L 45 50
+               L 33 50"/>
+
+      <!-- Letter M: Deep sharp vertex touching base line -->
+      <path d="M 54 66
+               L 54 34
+               L 66 53
+               L 78 34
+               L 78 66"/>
+    </g>
+  </g>
+</svg>

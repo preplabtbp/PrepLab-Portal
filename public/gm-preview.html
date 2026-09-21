@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Katalog 5 Variasi Badge GM - Minimalis, Maskulin & Elegan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090B10;
+      --card-bg: rgba(18, 22, 32, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent: #38BDF8;
+      --text: #F1F5F9;
+      --text-muted: #94A3B8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.08) 0px, transparent 50%);
+      color: var(--text);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .badge-pill {
+      display: inline-block;
+      padding: 6px 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 15px;
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      backdrop-filter: blur(16px);
+      transition: all 0.25s ease;
+    }
+
+    .card:hover {
+      border-color: rgba(56, 189, 248, 0.35);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .option-num {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #CBD5E1;
+      font-weight: 700;
+    }
+
+    .badge-preview-box {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 24px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 24px;
+      margin-top: 24px;
+      margin-bottom: 20px;
+    }
+
+    .preview-large {
+      width: 110px;
+      height: 110px;
+      filter: drop-shadow(0 10px 15px rgba(0,0,0,0.5));
+    }
+
+    .preview-small-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .preview-small {
+      width: 48px;
+      height: 48px;
+    }
+
+    .preview-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      text-align: center;
+      width: 100%;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 16px;
+      text-align: center;
+      flex-grow: 1;
+    }
+
+    .specs {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 18px;
+      font-size: 12px;
+    }
+
+    .spec-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .spec-row:last-child {
+      border-bottom: none;
+    }
+
+    .spec-key {
+      color: #64748B;
+    }
+
+    .spec-val {
+      color: #E2E8F0;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .btn-select {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.08);
+      color: #FFFFFF;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .btn-select:hover {
+      background: #38BDF8;
+      color: #0F172A;
+      border-color: #38BDF8;
+      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.4);
+    }
+
+    .btn-select.active {
+      background: #10B981;
+      color: #FFFFFF;
+      border-color: #10B981;
+      cursor: default;
+    }
+
+    #toast {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      background: #10B981;
+      color: #FFFFFF;
+      padding: 14px 22px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 14px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 999;
+    }
+
+    #toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge-pill">Game Master Badge Explorer</div>
+      <h1>5 Pilihan Desain Badge GM</h1>
+      <p class="subtitle">
+        Format murni background kotak hitam taktikal + inisial GM perak elegan, tanpa garis/notches/aksesoris lain yang berlebihan.
+      </p>
+    </header>
+
+    <div class="grid">
+      <!-- Variasi 1 -->
+      <div class="card" id="card-1">
+        <div class="option-num">OPSI 01</div>
+        <div class="badge-preview-box">
+          <img src="/assets/ranks/rank_gm_var1.svg?v=1" class="preview-large" alt="Opsi 1">
+          <div class="preview-small-col">
+            <img src="/assets/ranks/rank_gm_var1.svg?v=1" class="preview-small" alt="Opsi 1 Small">
+            <span class="preview-label">48x48</span>
+          </div>
+        </div>
+        <div class="card-title">Onyx Architectural</div>
+        <div class="card-desc">
+          Tipografi Extended Grotesk yang proporsional, ramping, dan maskulin dengan kurva lengkung seimbang dan spur horizontal bersih.
+        </div>
+        <div class="specs">
+          <div class="spec-row">
+            <span class="spec-key">Shade Hitam</span>
+            <span class="spec-val">Pure Onyx (#1E2028 &rarr; #000)</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-key">Style Font</span>
+            <span class="spec-val">Extended Grotesk Sleek</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-key">Border Rim</span>
+            <span class="spec-val">Graphite Bezel (#2B303C)</span>
+          </div>
+        </div>
+        <button class="btn-select" onclick="selectVariant(1)">Gunakan Opsi 1</button>
+      </div>
+
+      <!-- Variasi 2 -->
+      <div class="card" id="card-2">
+        <div class="option-num">OPSI 02</div>
+        <div class="badge-preview-box">
+          <img src="/assets/ranks/rank_gm_var2.svg?v=1" class="preview-large" alt="Opsi 2">
+          <div class="preview-small-col">
+            <img src="/assets/ranks/rank_gm_var2.svg?v=1" class="preview-small" alt="Opsi 2 Small">
+            <span class="preview-label">48x48</span>
+          </div>
+        </div>
+        <div class="card-title">Carbon Razor Stencil</div>
+        <div class="card-desc">
+          Potongan mikro presisi 45° khas militer modern. Tegas, maskulin, dan berkarakter kuat tanpa terkesan kartun.
+        </div>
+        <div class="specs">
+          <div class="spec-row">
+            <span class="spec-key">Shade Hitam</span>
+            <span class="spec-val">Carbon Charcoal (#242933 &rarr; #020)</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-key">Style Font</span>
+            <span class="spec-val">Tactical Stencil Razor</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-key">Border Rim</span>
+            <span class="spec-val">Steel Plate (#384152)</span>
+          </div>
+        </div>
+        <button class="btn-select" onclick="selectVariant(2)">Gunakan Opsi 2</button>
+      </div>
+
+      <!-- Variasi 3 -->
+      <div class="card" id="card-3">
+        <div class="option-num">OPSI 03</div>
+        <div class="badge-preview-box">
+          <img src="/assets/ranks/rank_gm_var3.svg?v=1" class="preview-large" alt="Opsi 3">
+          <div class="preview-small-col">
+            <img src="/assets/ranks/rank_gm_var3.svg?v=1" class="preview-small" alt="Opsi 3 Small">
+            <span class="preview-label">48x48</span>
+          </div>
+        </div>
+        <div class="card-title">Vanta Monoline</div>
+        <div class="card-desc">
+          Ketebalan garis monoline yang konsisten dengan lingkaran G sempurna dan vertex M tajam yang menyentuh dasar plat. Sangat bersih & berwibawa.
+        </div>
+        <div class="specs">
+          <div class="spec-row">
+            <span class="spec-key">Shade Hitam</span>
+            <span class="spec-val">Vanta Deep Void (#14151B &rarr; #000)</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-key">Style Font</span>
+            <span class="spec-val">Geometric Monoline 4.2px</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-key">Border Rim</span>
+            <span class="spec-val">Ultra-Slim Titanium (#232733)</span>
+          </div>
+        </div>
+        <button class="btn-select" onclick="selectVariant(3)">Gunakan Opsi 3</button>
+      </div>
+
+      <!-- Variasi 4 -->
+      <div class="card" id="card-4">
+        <div class="option-num">OPSI 04</div>
+        <div class="badge-preview-box">
+          <img src="/assets/ranks/rank_gm_var4.svg?v=1" class="preview-large" alt="Opsi 4">
+          <div class="preview-small-col">
+            <img src="/assets/ranks/rank_gm_var4.svg?v=1" class="preview-small" alt="Opsi 4 Small">
+            <span class="preview-label">48x48</span>
+          </div>
+        </div>
+        <div class="card-title">Midnight Chiseled Apex</div>
+        <div class="card-desc">
+          Bentuk pahatan serif tajam dengan kontras tebal-tipis tinggi bergaya ordo rahasia / penguasa tertinggi game. Elegan dan misterius.
+        </div>
+        <div class="specs">
+          <div class="spec-row">
+            <span class="spec-key">Shade Hitam</span>
+            <span class="spec-val">Midnight Cold Gunmetal (#181C26)</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-key">Style Font</span>
+            <span class="spec-val">Chiseled Display Serif</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-key">Border Rim</span>
+            <span class="spec-val">Dark Gunmetal (#2B3242)</span>
+          </div>
+        </div>
+        <button class="btn-select" onclick="selectVariant(4)">Gunakan Opsi 4</button>
+      </div>
+
+      <!-- Variasi 5 -->
+      <div class="card" id="card-5">
+        <div class="option-num">OPSI 05</div>
+        <div class="badge-preview-box">
+          <img src="/assets/ranks/rank_gm_var5.svg?v=1" class="preview-large" alt="Opsi 5">
+          <div class="preview-small-col">
+            <img src="/assets/ranks/rank_gm_var5.svg?v=1" class="preview-small" alt="Opsi 5 Small">
+            <span class="preview-label">48x48</span>
+          </div>
+        </div>
+        <div class="card-title">Smoked Cyber-Chamfer</div>
+        <div class="card-desc">
+          Seluruh lengkungan digantikan oleh potongan sudut chamfer 45° heksagonal ala teknologi kedirgantaraan stealth modern. Tajam dan futuristik.
+        </div>
+        <div class="specs">
+          <div class="spec-row">
+            <span class="spec-key">Shade Hitam</span>
+            <span class="spec-val">Smoked Tungsten (#222733 &rarr; #020)</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-key">Style Font</span>
+            <span class="spec-val">45° Chamfered Stealth Geometry</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-key">Border Rim</span>
+            <span class="spec-val">Tungsten Steel (#384154)</span>
+          </div>
+        </div>
+        <button class="btn-select" onclick="selectVariant(5)">Gunakan Opsi 5</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    async function selectVariant(num) {
+      try {
+        const res = await fetch('/api/gamification/select-gm-variant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ variant: num })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`✓ Opsi ${num} berhasil diterapkan sebagai Badge GM Utama!`);
+          document.querySelectorAll('.btn-select').forEach((b, idx) => {
+            if (idx + 1 === num) {
+              b.classList.add('active');
+              b.innerText = '✓ Sedang Digunakan';
+            } else {
+              b.classList.remove('active');
+              b.innerText = `Gunakan Opsi ${idx + 1}`;
+            }
+          });
+        } else {
+          showToast(`Gagal: ${data.error}`);
+        }
+      } catch (err) {
+        showToast(`Terjadi kesalahan: ${err.message}`);
+      }
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3500);
+    }
+  </script>
+</body>
+</html>
