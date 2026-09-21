@@ -1,5 +1,4 @@
 import React from 'react';
-import { AlertCircle, User, ShieldAlert, FileText, Info } from 'lucide-react';
 
 export interface ParsedFindingItem {
   type: 'apd' | 'general';
@@ -87,13 +86,15 @@ export function parseFindingDescription(rawDescription?: string | null): ParsedF
 interface StructuredFindingListProps {
   description?: string | null;
   className?: string;
-  isCompact?: boolean;
 }
 
+/**
+ * Clean & minimalist finding description list.
+ * Displays clean numbered list lines without bulky gradients, heavy boxes, or flashy elements.
+ */
 export function StructuredFindingList({
   description,
-  className = '',
-  isCompact = false
+  className = ''
 }: StructuredFindingListProps) {
   const items = parseFindingDescription(description);
 
@@ -103,99 +104,46 @@ export function StructuredFindingList({
     );
   }
 
-  // If there's only 1 general item without any special formatting
+  // If there's only 1 general item without any list format
   if (items.length === 1 && items[0].type === 'general') {
     return (
-      <div className={`p-3.5 rounded-xl bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/40 text-rose-700 dark:text-rose-300 ${className}`}>
-        <p className="text-sm font-medium leading-relaxed whitespace-pre-line break-words">
-          {items[0].raw}
-        </p>
-      </div>
+      <p className={`text-sm font-medium text-rose-600 dark:text-rose-400 leading-relaxed whitespace-pre-line break-words ${className}`}>
+        {items[0].raw}
+      </p>
     );
   }
 
   return (
-    <div className={`space-y-2.5 ${className}`}>
-      {items.map((item, idx) => {
-        if (item.type === 'apd') {
-          return (
-            <div
-              key={idx}
-              className="p-3.5 rounded-xl bg-gradient-to-r from-rose-50/80 via-white to-rose-50/30 dark:from-rose-950/25 dark:via-slate-900 dark:to-rose-950/10 border border-rose-200 dark:border-rose-900/50 shadow-xs hover:shadow-sm transition-all"
-            >
-              <div className="flex items-start gap-3">
-                {/* Number Badge */}
-                <span className="w-6 h-6 rounded-lg bg-rose-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs mt-0.5">
-                  {item.number}
+    <ol className={`space-y-1.5 text-sm text-slate-800 dark:text-slate-200 ${className}`}>
+      {items.map((item, idx) => (
+        <li key={idx} className="flex items-start gap-2 leading-relaxed">
+          <span className="font-bold text-rose-600 dark:text-rose-400 shrink-0 select-none min-w-[1.25rem]">
+            {item.number}.
+          </span>
+          <div className="flex-1">
+            {item.type === 'apd' ? (
+              <span>
+                <strong className="text-slate-900 dark:text-slate-100 font-semibold">{item.name}</strong>
+                {item.role && <span className="text-slate-500 text-xs ml-1">({item.role})</span>}
+                <span className="text-slate-400 mx-1.5">—</span>
+                <span className="text-rose-600 dark:text-rose-400 font-medium">
+                  Tidak lengkap: {item.items?.join(', ')}
                 </span>
-
-                <div className="flex-1 min-w-0 space-y-2">
-                  {/* Personil Header */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-slate-100 text-sm">
-                      <User className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                      <span>{item.name}</span>
-                    </div>
-
-                    {item.role && (
-                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">
-                        {item.role}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Missing APD Badges */}
-                  {item.items && item.items.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                      <span className="text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-1">
-                        <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
-                        <span>Tidak Lengkap:</span>
-                      </span>
-                      {item.items.map((apd, aIdx) => (
-                        <span
-                          key={aIdx}
-                          className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-900/40 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-800/60 shadow-2xs"
-                        >
-                          <span className="text-[10px] text-rose-600">✕</span>
-                          {apd}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Notes / Keterangan */}
-                  {item.note && (
-                    <div className="flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-300 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/40 px-2.5 py-1.5 rounded-lg">
-                      <Info className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                      <span className="leading-snug">
-                        <strong className="text-amber-800 dark:text-amber-300">Ket:</strong> {item.note}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        }
-
-        // General finding list item
-        return (
-          <div
-            key={idx}
-            className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex items-start gap-3 hover:border-slate-300 transition-colors"
-          >
-            <span className="w-6 h-6 rounded-lg bg-slate-700 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs mt-0.5">
-              {item.number}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-line break-words">
+                {item.note && (
+                  <span className="text-slate-500 text-xs ml-1.5 italic">
+                    (Ket: {item.note})
+                  </span>
+                )}
+              </span>
+            ) : (
+              <span className="text-rose-600 dark:text-rose-400 font-medium whitespace-pre-line break-words">
                 {item.raw}
-              </p>
-            </div>
+              </span>
+            )}
           </div>
-        );
-      })}
-    </div>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -229,16 +177,16 @@ export function CompactFindingPreview({
   const remaining = items.length - maxItems;
 
   return (
-    <div className={`space-y-1.5 ${className}`}>
+    <div className={`space-y-1 ${className}`}>
       {displayed.map((item, idx) => (
         <div key={idx} className="flex items-start gap-1.5 text-xs">
-          <span className="w-4 h-4 rounded bg-rose-100 text-rose-700 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
-            {item.number}
+          <span className="font-bold text-rose-600 shrink-0">
+            {item.number}.
           </span>
-          <span className="line-clamp-1 font-medium text-slate-700 dark:text-slate-300">
+          <span className="line-clamp-1 text-slate-700 dark:text-slate-300">
             {item.type === 'apd' ? (
               <>
-                <strong className="text-slate-900 dark:text-white">{item.name}</strong>
+                <strong className="text-slate-900 dark:text-white font-medium">{item.name}</strong>
                 {item.items && item.items.length > 0 ? `: ${item.items.join(', ')}` : ''}
               </>
             ) : (
@@ -248,8 +196,8 @@ export function CompactFindingPreview({
         </div>
       ))}
       {remaining > 0 && (
-        <p className="text-[11px] text-rose-600 font-semibold pl-5">
-          +{remaining} temuan personil lainnya...
+        <p className="text-[11px] text-rose-600 font-medium pl-3.5">
+          +{remaining} temuan lainnya...
         </p>
       )}
     </div>

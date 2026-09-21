@@ -745,17 +745,10 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
                  <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Area / Lokasi</p>
                  <p className="font-medium text-slate-800">{selectedTicket.location}</p>
                </div>
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Deskripsi Temuan</p>
-                    {selectedTicket.description && parseFindingDescription(selectedTicket.description).length > 1 && (
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
-                        {parseFindingDescription(selectedTicket.description).length} Poin Temuan
-                      </span>
-                    )}
-                  </div>
-                  <StructuredFindingList description={selectedTicket.description} />
-                </div>
+               <div>
+                 <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Deskripsi Temuan</p>
+                 <StructuredFindingList description={selectedTicket.description} />
+               </div>
                {selectedTicket.risk && (
                  <div>
                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Risiko Bahaya</p>
