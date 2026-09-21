@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
   <defs>
-    <!-- Sharp Chromium Silver Gradient -->
+    <!-- Liquid Mercury Chrome Gradient -->
     <linearGradient id="silverGrad5" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="30%" stop-color="#F1F5F9"/>
-      <stop offset="60%" stop-color="#CBD5E1"/>
-      <stop offset="85%" stop-color="#94A3B8"/>
-      <stop offset="100%" stop-color="#475569"/>
+      <stop offset="25%" stop-color="#F1F5F9"/>
+      <stop offset="55%" stop-color="#CBD5E1"/>
+      <stop offset="80%" stop-color="#94A3B8"/>
+      <stop offset="100%" stop-color="#334155"/>
     </linearGradient>
 
     <!-- Silver Inner Bevel -->
@@ -15,12 +15,12 @@
       <stop offset="100%" stop-color="#334155" stop-opacity="0.6"/>
     </linearGradient>
 
-    <!-- Shade 5: Smoked Tungsten Dark Metal -->
-    <radialGradient id="plateTungsten" cx="50%" cy="45%" r="65%">
-      <stop offset="0%" stop-color="#222733"/>
-      <stop offset="45%" stop-color="#12151D"/>
-      <stop offset="85%" stop-color="#07090D"/>
-      <stop offset="100%" stop-color="#020305"/>
+    <!-- Shade 5: Smoked Gunmetal Titanium -->
+    <radialGradient id="plateGunmetal5" cx="50%" cy="42%" r="66%">
+      <stop offset="0%" stop-color="#242A38"/>
+      <stop offset="42%" stop-color="#131620"/>
+      <stop offset="85%" stop-color="#05070B"/>
+      <stop offset="100%" stop-color="#000000"/>
     </radialGradient>
 
     <!-- Drop Shadow Filter -->
@@ -30,21 +30,21 @@
   </defs>
 
   <g filter="url(#badgeShadow5)">
-    <!-- Tactical Plate: Smoked Tungsten Dark Metal -->
-    <rect x="8" y="8" width="84" height="84" rx="14" fill="url(#plateTungsten)" stroke="#384154" stroke-width="2"/>
+    <!-- Tactical Plate: Gunmetal Titanium -->
+    <rect x="8" y="8" width="84" height="84" rx="14" fill="url(#plateGunmetal5)" stroke="#3E495D" stroke-width="2"/>
     <!-- Inner Rim -->
     <rect x="10" y="10" width="80" height="80" rx="12" fill="none" stroke="url(#silverBevel5)" stroke-width="1" opacity="0.35"/>
 
-    <!-- Typography 5: 45-Degree Chamfered Stealth Geometry -->
-    <g fill="url(#silverGrad5)" stroke="#090D14" stroke-width="0.5" stroke-linejoin="bevel">
-      <!-- Letter G (Chamfered Octagonal Flow) -->
+    <!-- Typography 5: Apex Razor-Hex Vanguard (Hexagonal Chamfered Tactical Precision) -->
+    <g fill="url(#silverGrad5)" stroke="#090C12" stroke-width="0.5" stroke-linejoin="miter">
+      <!-- Letter G: Sharp Hexagonal Monoline Face with Angled Terminal -->
       <polygon points="
-        28,32 46,32 46,36.5 30,36.5 22,44.5 22,55.5 30,63.5 42,63.5 45.5,60 45.5,52 35,52 35,48 49.5,48 49.5,61.5 43.5,67.5 28.5,67.5 18,57 18,43
+        29,32.5 46.5,32.5 46.5,37 31,37 23,45 23,56 31,64 42,64 45.5,60.5 45.5,53.5 35,53.5 35,49.5 49.5,49.5 49.5,62 43,68.5 29,68.5 18.5,58 18.5,43
       "/>
 
-      <!-- Letter M (45-Degree Chamfered Stealth Pillars) -->
+      <!-- Letter M: Razor-Hex Faceted Chevron Vertex -->
       <polygon points="
-        53,67 53,33 57.5,33 65.5,49.5 73.5,33 78,33 78,67 73.5,67 73.5,42 67,55 64,55 57.5,42 57.5,67
+        53,68 53,32.5 58,32.5 66,48 74,32.5 79,32.5 79,68 74.5,68 74.5,42.5 68,54.5 64,54.5 57.5,42.5 57.5,68
       "/>
     </g>
   </g>

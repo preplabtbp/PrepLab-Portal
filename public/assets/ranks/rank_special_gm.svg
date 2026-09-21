@@ -1,80 +1,51 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
   <defs>
-    <!-- Silver / Titanium Gradient -->
-    <linearGradient id="silverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <!-- Sharp Chromium Silver Gradient -->
+    <linearGradient id="silverGrad5" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="25%" stop-color="#F1F5F9"/>
-      <stop offset="50%" stop-color="#CBD5E1"/>
-      <stop offset="75%" stop-color="#94A3B8"/>
+      <stop offset="30%" stop-color="#F1F5F9"/>
+      <stop offset="60%" stop-color="#CBD5E1"/>
+      <stop offset="85%" stop-color="#94A3B8"/>
       <stop offset="100%" stop-color="#475569"/>
     </linearGradient>
 
-    <!-- Silver Highlight Bevel -->
-    <linearGradient id="silverBevel" x1="0%" y1="0%" x2="0%" y2="100%">
+    <!-- Silver Inner Bevel -->
+    <linearGradient id="silverBevel5" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95"/>
-      <stop offset="35%" stop-color="#E2E8F0" stop-opacity="0.3"/>
-      <stop offset="100%" stop-color="#334155" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#334155" stop-opacity="0.6"/>
     </linearGradient>
 
-    <!-- Plate Black Obsidian (GM) -->
-    <radialGradient id="plateBlack" cx="50%" cy="50%" r="65%">
-      <stop offset="0%" stop-color="#181A22"/>
-      <stop offset="50%" stop-color="#0D0E14"/>
-      <stop offset="85%" stop-color="#05060A"/>
-      <stop offset="100%" stop-color="#000000"/>
+    <!-- Shade: Smoked Tungsten Dark Metal -->
+    <radialGradient id="plateTungsten" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#222733"/>
+      <stop offset="45%" stop-color="#12151D"/>
+      <stop offset="85%" stop-color="#07090D"/>
+      <stop offset="100%" stop-color="#020305"/>
     </radialGradient>
 
     <!-- Drop Shadow Filter -->
-    <filter id="badgeShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.45"/>
+    <filter id="badgeShadow5" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.7"/>
     </filter>
   </defs>
 
-  <g filter="url(#badgeShadow)">
-    <!-- Tactical Plate: Murni background kotak hitam tanpa aksesoris -->
-    <rect x="8" y="8" width="84" height="84" rx="14" fill="url(#plateBlack)" stroke="#334155" stroke-width="2"/>
-    <!-- Subtle Inner Metallic Rim -->
-    <rect x="10" y="10" width="80" height="80" rx="12" fill="none" stroke="url(#silverBevel)" stroke-width="1" opacity="0.4"/>
+  <g filter="url(#badgeShadow5)">
+    <!-- Tactical Plate: Smoked Tungsten Dark Metal (Murni Box Kotak Tanpa Aksesoris) -->
+    <rect x="8" y="8" width="84" height="84" rx="14" fill="url(#plateTungsten)" stroke="#384154" stroke-width="2"/>
+    <!-- Inner Rim -->
+    <rect x="10" y="10" width="80" height="80" rx="12" fill="none" stroke="url(#silverBevel5)" stroke-width="1" opacity="0.35"/>
 
-    <!-- Refined Architectural Vector GM Monogram (Slim, Balanced, Masculine, No Accessories) -->
-    <g id="gmSymbol">
-      <!-- Letter G -->
-      <path d="M 43 41
-               C 41 38.5 38.5 37 35 37
-               C 28.5 37 24 42 24 49.5
-               C 24 57 28.5 62 35 62
-               C 40.5 62 43.5 58.5 44 55
-               L 35.5 55
-               L 35.5 52.5
-               L 47 52.5
-               L 47 54.5
-               C 46.5 59.5 42 64.5 35 64.5
-               C 26.5 64.5 21 58.5 21 49.5
-               C 21 40.5 26.5 34.5 35 34.5
-               C 39.5 34.5 43.5 36.5 45.8 39.5
-               Z"
-            fill="url(#silverGrad)"
-            stroke="#1E293B"
-            stroke-width="0.5"/>
+    <!-- Typography: 45-Degree Chamfered Stealth Geometry -->
+    <g fill="url(#silverGrad5)" stroke="#090D14" stroke-width="0.5" stroke-linejoin="bevel">
+      <!-- Letter G (Chamfered Octagonal Flow) -->
+      <polygon points="
+        28,32 46,32 46,36.5 30,36.5 22,44.5 22,55.5 30,63.5 42,63.5 45.5,60 45.5,52 35,52 35,48 49.5,48 49.5,61.5 43.5,67.5 28.5,67.5 18,57 18,43
+      "/>
 
-      <!-- Letter M -->
-      <path d="M 53 63.5
-               L 53 35.5
-               L 56.5 35.5
-               L 65.5 52
-               L 74.5 35.5
-               L 78 35.5
-               L 78 63.5
-               L 75 63.5
-               L 75 42.5
-               L 66.8 57.5
-               L 64.2 57.5
-               L 56 42.5
-               L 56 63.5
-               Z"
-            fill="url(#silverGrad)"
-            stroke="#1E293B"
-            stroke-width="0.5"/>
+      <!-- Letter M (45-Degree Chamfered Stealth Pillars) -->
+      <polygon points="
+        53,67 53,33 57.5,33 65.5,49.5 73.5,33 78,33 78,67 73.5,67 73.5,42 67,55 64,55 57.5,42 57.5,67
+      "/>
     </g>
   </g>
 </svg>
