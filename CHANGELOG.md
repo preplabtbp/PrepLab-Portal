@@ -1,6 +1,20 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.16] - 2026-09-20
+
+### 🔬 Penyelarasan Kamus KBBI & Korektor Teks Khusus Preparation & Laboratory Nikel
+
+- **Pembersihan Kosakata Alat Berat / Tambang Terbuka (`src/utils/kbbi-maintenance-corrector.ts`)**:
+  - Menghapus seluruh entri istilah tambang/hauling luar ruangan yang tidak relevan dengan operasional PrepLab (seperti *manhaul bus operasional tambang*, *dump truck*, *excavator*, *bulldozer*, *motor grader*, *compactor*, *water truck*, dll.).
+  - Mengoreksi penanganan kata `menhol` / `manhol` / `manhole`: kini secara akurat didefinisikan sebagai **`manhole (lubang inspeksi)`** untuk akses pemeriksaan/perawatan tabung tangki udara kompresor, bejana tekan (*pressure vessel*), saluran pipa, atau cerobong hisap *dust collector*, bukan lagi terdeteksi sebagai bus tambang (*manhaul*).
+- **Pengayaan Kosakata Baku Khusus Preparation & Laboratory Sampel Nikel**:
+  - **Area Preparasi Sampel**: Menambahkan terminologi baku untuk *jaw crusher* (jaw plate / pelat rahang, toggle plate, flywheel), *roll crusher*, *pulverizer* (mangkuk giling / bowl mill, cincin puck), *riffle splitter*, *rotary sample divider (RSD)*, *sieve shaker*, *ayakan wiremesh*, *oven dryer pengering sampel nikel (105°C)*, *baki sampel (drying tray)*, *sekop JIS 30D*, dan *troli sampel*.
+  - **Area Laboratorium & Spektrometri**: Menambahkan istilah resmi untuk *spektrometer XRF (Zetium)*, *mesin pres pelet (pellet press)*, *die set cetakan pelet*, *cup aluminium*, *asam borat binder*, *mesin fusi manik kaca (fluxer XRF)*, *cawan & cetakan platina (platinum crucible/mould Pt-Au)*, *tanur suhu tinggi (muffle furnace LOI 1000°C)*, *lemari asam (fume hood)*, *wet scrubber*, *pelat pemanas (hot plate)*, *water purifier / air demineralisasi*, *buret titrasi*, *desikator silika gel*, *neraca analitik (presisi 0.1 mg)*, *termokopel sensor suhu*, *water chiller*, serta gas ultra murni (*argon UHP*, *gas P10*).
+  - **Matriks Nikel & Kontrol Mutu**: Menyelaraskan istilah matriks *sampel saprolit (high Ni)*, *sampel limonit (high Fe)*, *kadar air (moisture content)*, *Loss on Ignition (LOI / hilang pijar)*, *CRM (Certified Reference Material)*, *sampel duplikat QC*, *larutan blangko*, dan *reagen analitis*.
+- **Pembaruan Template Deskripsi Kerusakan Cepat**:
+  - Mengganti kategori alat berat dengan kategori khusus: **Preparasi Sampel Nikel (Prep)**, **Laboratorium Kimia, XRF & Spektrometri**, **Utilitas PrepLab (Kompresor, Manhole & Dust Collector)**, **Kelistrikan & Motor Dinamo**, serta **Mekanikal, Baut & Pelumasan**.
+
 ## [2.9.15] - 2026-09-20
 
 ### 📊 Dukungan Upload Berkas 30MB+ & Interactive Excel Spreadsheet Viewer pada P5M
