@@ -846,7 +846,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
     isDevUser,
     // publicRank: what others see. GM for developers, real rank for regular users.
     publicRank: isDevUser
-      ? { id: 0, name: 'Game Master', tier: 'GM', tierGroup: 'System', icon: '/assets/ranks/rank_special_gm.png', isGM: true }
+      ? { id: 0, name: 'Game Master', tier: 'GM', tierGroup: 'System', icon: '/assets/ranks/rank_special_gm.svg', isGM: true }
       : rankInfo.currentRank,
     seasonInfo: {
       startDate: seasonStart.toISOString(),

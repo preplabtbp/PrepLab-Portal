@@ -239,7 +239,7 @@ export function LeaderboardScreen({
   // For public display: show GM rank if user is a developer
   const isCurrentUserDev = userGamification?.isDevUser === true;
   const userPublicRank = isCurrentUserDev
-    ? (userGamification?.publicRank || { id: 0, name: 'Game Master', icon: '/assets/ranks/rank_special_gm.png', isGM: true })
+    ? (userGamification?.publicRank || { id: 0, name: 'Game Master', icon: '/assets/ranks/rank_special_gm.svg', isGM: true })
     : userRankData.currentRank;
 
   // Active discipline config

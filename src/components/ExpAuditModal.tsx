@@ -515,7 +515,7 @@ export function ExpAuditModal({
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <img 
-                        src={targetUser.isDevUser ? '/assets/ranks/rank_special_gm.png' : (targetUser.currentRank?.icon || '/assets/ranks/rank_01_trainee.svg')} 
+                        src={targetUser.isDevUser ? '/assets/ranks/rank_special_gm.svg' : (targetUser.currentRank?.icon || '/assets/ranks/rank_01_trainee.svg')} 
                         alt={targetUser.isDevUser ? 'Game Master' : (targetUser.currentRank?.name || 'Pangkat')}
                         className="w-5 h-5 object-contain inline-block filter drop-shadow-xs"
                       />

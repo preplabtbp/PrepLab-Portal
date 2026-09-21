@@ -1,0 +1,258 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+
+  <defs>
+
+    <!-- Deep Void Plate: Obsidian Black-Purple -->
+    <radialGradient id="voidPlate" cx="40%" cy="35%" r="70%">
+      <stop offset="0%"   stop-color="#1E1033"/>
+      <stop offset="40%"  stop-color="#120920"/>
+      <stop offset="80%"  stop-color="#090612"/>
+      <stop offset="100%" stop-color="#040308"/>
+    </radialGradient>
+
+    <!-- Cosmic Border Gradient: Purple → Gold → Purple -->
+    <linearGradient id="cosmicBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#A855F7"/>
+      <stop offset="25%"  stop-color="#F59E0B"/>
+      <stop offset="50%"  stop-color="#EF4444"/>
+      <stop offset="75%"  stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+
+    <!-- Inner Accent Ring -->
+    <linearGradient id="innerRing" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#7C3AED" stop-opacity="0.9"/>
+      <stop offset="50%"  stop-color="#F59E0B" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#7C3AED" stop-opacity="0.9"/>
+    </linearGradient>
+
+    <!-- Crown Gold Gradient -->
+    <linearGradient id="crownGold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#FEF9C3"/>
+      <stop offset="20%"  stop-color="#FDE047"/>
+      <stop offset="55%"  stop-color="#F59E0B"/>
+      <stop offset="85%"  stop-color="#D97706"/>
+      <stop offset="100%" stop-color="#92400E"/>
+    </linearGradient>
+
+    <!-- Crown Bevel Highlight -->
+    <linearGradient id="crownBevel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="60%"  stop-color="#F59E0B" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#78350F" stop-opacity="0.8"/>
+    </linearGradient>
+
+    <!-- Gem: Central Purple Amethyst -->
+    <radialGradient id="gemPurple" cx="35%" cy="30%" r="70%">
+      <stop offset="0%"   stop-color="#F5F3FF"/>
+      <stop offset="20%"  stop-color="#C4B5FD"/>
+      <stop offset="50%"  stop-color="#7C3AED"/>
+      <stop offset="80%"  stop-color="#4C1D95"/>
+      <stop offset="100%" stop-color="#1E0A44"/>
+    </radialGradient>
+
+    <!-- Gem: Side Cyan Sapphire -->
+    <radialGradient id="gemCyan" cx="35%" cy="30%" r="70%">
+      <stop offset="0%"   stop-color="#F0F9FF"/>
+      <stop offset="25%"  stop-color="#7DD3FC"/>
+      <stop offset="55%"  stop-color="#0284C7"/>
+      <stop offset="85%"  stop-color="#0369A1"/>
+      <stop offset="100%" stop-color="#0C4A6E"/>
+    </radialGradient>
+
+    <!-- Gem: Side Ruby Red -->
+    <radialGradient id="gemRed" cx="35%" cy="30%" r="70%">
+      <stop offset="0%"   stop-color="#FEF2F2"/>
+      <stop offset="25%"  stop-color="#FCA5A5"/>
+      <stop offset="55%"  stop-color="#DC2626"/>
+      <stop offset="85%"  stop-color="#991B1B"/>
+      <stop offset="100%" stop-color="#450A0A"/>
+    </radialGradient>
+
+    <!-- GM Text Gradient: Gold Metallic -->
+    <linearGradient id="gmTextGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#FFFFFF"/>
+      <stop offset="15%"  stop-color="#FEF9C3"/>
+      <stop offset="40%"  stop-color="#FDE047"/>
+      <stop offset="65%"  stop-color="#F59E0B"/>
+      <stop offset="85%"  stop-color="#D97706"/>
+      <stop offset="100%" stop-color="#92400E"/>
+    </linearGradient>
+
+    <!-- Glow: Purple Outer Aura -->
+    <filter id="outerGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur"/>
+      <feColorMatrix in="blur" type="matrix"
+        values="0.5 0 0.8 0 0.1
+                0   0 0.5 0 0
+                0.8 0 1   0 0.2
+                0   0 0   1 0" result="colorBlur"/>
+      <feMerge>
+        <feMergeNode in="colorBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Glow: Gold Gem Sparkle -->
+    <filter id="goldGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#F59E0B" flood-opacity="0.85"/>
+    </filter>
+
+    <!-- Glow: Purple Gem -->
+    <filter id="purpleGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#A855F7" flood-opacity="0.9"/>
+    </filter>
+
+    <!-- Drop Shadow -->
+    <filter id="badgeShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+
+    <!-- Text Glow -->
+    <filter id="textGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#F59E0B" flood-opacity="0.9"/>
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#FFFFFF"  flood-opacity="0.5"/>
+    </filter>
+
+    <!-- Shimmer on plate -->
+    <linearGradient id="shimmer" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#A855F7" stop-opacity="0.0"/>
+      <stop offset="40%"  stop-color="#A855F7" stop-opacity="0.12"/>
+      <stop offset="60%"  stop-color="#FFFFFF"  stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#7C3AED" stop-opacity="0.0"/>
+    </linearGradient>
+
+  </defs>
+
+  <!-- === BADGE BODY === -->
+  <g filter="url(#badgeShadow)">
+
+    <!-- Outer Glow Ring (purple) -->
+    <rect x="4" y="4" width="92" height="92" rx="18"
+          fill="none" stroke="#7C3AED" stroke-width="1.5" opacity="0.35"/>
+
+    <!-- Main Plate: Dark Obsidian -->
+    <rect x="7" y="7" width="86" height="86" rx="15"
+          fill="url(#voidPlate)"/>
+
+    <!-- Cosmic Border -->
+    <rect x="7" y="7" width="86" height="86" rx="15"
+          fill="none" stroke="url(#cosmicBorder)" stroke-width="2.2"/>
+
+    <!-- Inner Thin Ring -->
+    <rect x="10.5" y="10.5" width="79" height="79" rx="12.5"
+          fill="none" stroke="url(#innerRing)" stroke-width="0.7" opacity="0.6"/>
+
+    <!-- Shimmer overlay -->
+    <rect x="7" y="7" width="86" height="86" rx="15"
+          fill="url(#shimmer)"/>
+
+    <!-- ===  CROWN  === -->
+    <g filter="url(#goldGlow)">
+      <!-- Crown base bar -->
+      <rect x="28" y="44" width="44" height="8" rx="2" fill="url(#crownGold)"/>
+      <rect x="28" y="44" width="44" height="8" rx="2" fill="url(#crownBevel)" opacity="0.5"/>
+
+      <!-- Left prong -->
+      <polygon points="31,44 34,44 33,30 30,30" fill="url(#crownGold)"/>
+      <polygon points="31,44 34,44 33,30 30,30" fill="url(#crownBevel)" opacity="0.45"/>
+
+      <!-- Right prong -->
+      <polygon points="66,44 69,44 70,30 67,30" fill="url(#crownGold)"/>
+      <polygon points="66,44 69,44 70,30 67,30" fill="url(#crownBevel)" opacity="0.45"/>
+
+      <!-- Center prong (taller) -->
+      <polygon points="47,44 53,44 52,22 48,22" fill="url(#crownGold)"/>
+      <polygon points="47,44 53,44 52,22 48,22" fill="url(#crownBevel)" opacity="0.5"/>
+
+      <!-- Crown accent lines -->
+      <line x1="28" y1="44" x2="72" y2="44" stroke="#FEF9C3" stroke-width="0.6" opacity="0.8"/>
+      <line x1="28" y1="52" x2="72" y2="52" stroke="#78350F" stroke-width="0.5" opacity="0.5"/>
+    </g>
+
+    <!-- === GEMS on Crown === -->
+
+    <!-- Center gem: Amethyst on center prong tip -->
+    <g filter="url(#purpleGlow)">
+      <!-- Diamond cut gem shape -->
+      <polygon points="50,18 54,22 50,28 46,22" fill="url(#gemPurple)"/>
+      <!-- Facet highlight -->
+      <polygon points="50,18 54,22 50,23" fill="#FFFFFF" opacity="0.55"/>
+      <polygon points="50,23 46,22 50,28" fill="#4C1D95" opacity="0.6"/>
+    </g>
+
+    <!-- Left gem: Ruby on left prong -->
+    <g filter="url(#purpleGlow)">
+      <polygon points="31.5,27 34,30 31.5,33 29,30" fill="url(#gemRed)"/>
+      <polygon points="31.5,27 34,30 31.5,29" fill="#FFFFFF" opacity="0.5"/>
+      <polygon points="31.5,29 29,30 31.5,33" fill="#7F1D1D" opacity="0.55"/>
+    </g>
+
+    <!-- Right gem: Sapphire on right prong -->
+    <g filter="url(#purpleGlow)">
+      <polygon points="68.5,27 71,30 68.5,33 66,30" fill="url(#gemCyan)"/>
+      <polygon points="68.5,27 71,30 68.5,29" fill="#FFFFFF" opacity="0.5"/>
+      <polygon points="68.5,29 66,30 68.5,33" fill="#0C4A6E" opacity="0.55"/>
+    </g>
+
+    <!-- === GM TEXT === -->
+    <g filter="url(#textGlow)">
+      <text
+        x="50" y="75"
+        text-anchor="middle"
+        font-family="'Georgia', 'Times New Roman', serif"
+        font-size="20"
+        font-weight="900"
+        letter-spacing="2"
+        fill="url(#gmTextGrad)"
+      >GM</text>
+    </g>
+
+    <!-- GM text metallic bevel line -->
+    <text
+      x="50" y="75"
+      text-anchor="middle"
+      font-family="'Georgia', 'Times New Roman', serif"
+      font-size="20"
+      font-weight="900"
+      letter-spacing="2"
+      fill="none"
+      stroke="#FFFFFF"
+      stroke-width="0.3"
+      opacity="0.4"
+    >GM</text>
+
+    <!-- Bottom accent: "GAME MASTER" label -->
+    <text
+      x="50" y="85"
+      text-anchor="middle"
+      font-family="'Arial Narrow', 'Arial', sans-serif"
+      font-size="5.5"
+      font-weight="700"
+      letter-spacing="1.8"
+      fill="#A855F7"
+      opacity="0.85"
+    >GAME MASTER</text>
+
+    <!-- Corner sparkle accents -->
+    <!-- Top-left star -->
+    <g opacity="0.75">
+      <line x1="16" y1="14" x2="16" y2="20" stroke="#FDE047" stroke-width="0.9"/>
+      <line x1="13" y1="17" x2="19" y2="17" stroke="#FDE047" stroke-width="0.9"/>
+      <line x1="14" y1="15" x2="18" y2="19" stroke="#FDE047" stroke-width="0.5" opacity="0.6"/>
+      <line x1="18" y1="15" x2="14" y2="19" stroke="#FDE047" stroke-width="0.5" opacity="0.6"/>
+    </g>
+    <!-- Top-right star -->
+    <g opacity="0.75">
+      <line x1="84" y1="14" x2="84" y2="20" stroke="#A855F7" stroke-width="0.9"/>
+      <line x1="81" y1="17" x2="87" y2="17" stroke="#A855F7" stroke-width="0.9"/>
+      <line x1="82" y1="15" x2="86" y2="19" stroke="#A855F7" stroke-width="0.5" opacity="0.6"/>
+      <line x1="86" y1="15" x2="82" y2="19" stroke="#A855F7" stroke-width="0.5" opacity="0.6"/>
+    </g>
+
+    <!-- Bottom divider line accent -->
+    <line x1="20" y1="79" x2="80" y2="79" stroke="url(#cosmicBorder)" stroke-width="0.6" opacity="0.4"/>
+
+  </g>
+
+</svg>

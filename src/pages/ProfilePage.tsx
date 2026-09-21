@@ -516,7 +516,7 @@ export function ProfilePage({
   // Developer GM status — profile page always shows real rank to owner + GM badge
   const isDevUser: boolean = gamificationData?.isDevUser === true;
   const publicRank = isDevUser
-    ? (gamificationData?.publicRank || { id: 0, name: 'Game Master', icon: '/assets/ranks/rank_special_gm.png', isGM: true })
+    ? (gamificationData?.publicRank || { id: 0, name: 'Game Master', icon: '/assets/ranks/rank_special_gm.svg', isGM: true })
     : rankInfo?.currentRank;
 
 
@@ -926,7 +926,7 @@ export function ProfilePage({
                       />
                       {isDevUser && (
                         <img
-                          src="/assets/ranks/rank_special_gm.png"
+                          src="/assets/ranks/rank_special_gm.svg"
                           alt="Game Master"
                           className="absolute -top-2 -right-2 w-4 h-4 object-contain filter drop-shadow-sm"
                           title="Game Master — Pangkat Khusus Developer"
