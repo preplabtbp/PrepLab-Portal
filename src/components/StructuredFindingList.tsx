@@ -107,36 +107,36 @@ export function StructuredFindingList({
   // If there's only 1 general item without any list format
   if (items.length === 1 && items[0].type === 'general') {
     return (
-      <p className={`text-sm font-medium text-rose-600 dark:text-rose-400 leading-relaxed whitespace-pre-line break-words ${className}`}>
+      <p className={`text-sm font-medium text-rose-600 leading-relaxed whitespace-pre-line break-words ${className}`}>
         {items[0].raw}
       </p>
     );
   }
 
   return (
-    <ol className={`space-y-1.5 text-sm text-slate-800 dark:text-slate-200 ${className}`}>
+    <ol className={`space-y-1.5 text-sm text-slate-800 ${className}`}>
       {items.map((item, idx) => (
         <li key={idx} className="flex items-start gap-2 leading-relaxed">
-          <span className="font-bold text-rose-600 dark:text-rose-400 shrink-0 select-none min-w-[1.25rem]">
+          <span className="font-bold text-rose-600 shrink-0 select-none min-w-[1.25rem]">
             {item.number}.
           </span>
           <div className="flex-1">
             {item.type === 'apd' ? (
               <span>
-                <strong className="text-slate-900 dark:text-slate-100 font-semibold">{item.name}</strong>
+                <strong className="text-slate-900 font-bold">{item.name}</strong>
                 {item.role && <span className="text-slate-500 text-xs ml-1">({item.role})</span>}
                 <span className="text-slate-400 mx-1.5">—</span>
-                <span className="text-rose-600 dark:text-rose-400 font-medium">
+                <span className="text-rose-600 font-semibold">
                   Tidak lengkap: {item.items?.join(', ')}
                 </span>
                 {item.note && (
-                  <span className="text-slate-500 text-xs ml-1.5 italic">
+                  <span className="text-slate-600 text-xs ml-1.5 italic">
                     (Ket: {item.note})
                   </span>
                 )}
               </span>
             ) : (
-              <span className="text-rose-600 dark:text-rose-400 font-medium whitespace-pre-line break-words">
+              <span className="text-rose-600 font-medium whitespace-pre-line break-words">
                 {item.raw}
               </span>
             )}
@@ -183,10 +183,10 @@ export function CompactFindingPreview({
           <span className="font-bold text-rose-600 shrink-0">
             {item.number}.
           </span>
-          <span className="line-clamp-1 text-slate-700 dark:text-slate-300">
+          <span className="line-clamp-1 text-slate-700">
             {item.type === 'apd' ? (
               <>
-                <strong className="text-slate-900 dark:text-white font-medium">{item.name}</strong>
+                <strong className="text-slate-900 font-bold">{item.name}</strong>
                 {item.items && item.items.length > 0 ? `: ${item.items.join(', ')}` : ''}
               </>
             ) : (
