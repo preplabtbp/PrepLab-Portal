@@ -776,8 +776,9 @@ export function InspectionScheduleCard({
   }, [showSsModal, showKtaModal]);
 
   // Set default checklist when KTA modal opens
+  const prevShowKtaModalRef = useRef(false);
   useEffect(() => {
-    if (showKtaModal) {
+    if (showKtaModal && !prevShowKtaModalRef.current) {
       if (myObligation.type === '1_KTA_OR_TTA') {
         setSelectedKtaChecklist(['KTA']);
       } else if (myObligation.type === '2_TTA') {
@@ -786,17 +787,18 @@ export function InspectionScheduleCard({
         if (!c1 && !c2) setSelectedKtaChecklist(['TTA_1', 'TTA_2']);
         else if (!c1) setSelectedKtaChecklist(['TTA_1']);
         else if (!c2) setSelectedKtaChecklist(['TTA_2']);
-        else setSelectedKtaChecklist(['TTA_1']);
+        else setSelectedKtaChecklist(['TTA_1', 'TTA_2']);
       } else {
         const hasK = myKtaRecord?.checkDetails?.check1Done;
         const hasT = myKtaRecord?.checkDetails?.check2Done;
         if (!hasK && !hasT) setSelectedKtaChecklist(['KTA', 'TTA']);
         else if (!hasK) setSelectedKtaChecklist(['KTA']);
         else if (!hasT) setSelectedKtaChecklist(['TTA']);
-        else setSelectedKtaChecklist(['KTA']);
+        else setSelectedKtaChecklist(['KTA', 'TTA']);
       }
     }
-  }, [showKtaModal, myObligation.type, myKtaRecord]);
+    prevShowKtaModalRef.current = showKtaModal;
+  }, [showKtaModal, myObligation.type]);
 
   const handleStartInspection = () => {
     if (!mySchedule || mySchedule.isCuti) return;

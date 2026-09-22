@@ -289,9 +289,11 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     );
   }, [rekapList, inspectorNik, inspectorName]);
 
-  // Pre-select checklist checkboxes based on obligation & what's already uploaded (Default: 1 item only, do not auto check 2)
+  // Pre-select checklist checkboxes based on obligation & what's already uploaded
+  const prevShowKtaModalRef = useRef(false);
   useEffect(() => {
-    if (showKtaModal) {
+    // Only initialize when modal opens (transition from closed to open)
+    if (showKtaModal && !prevShowKtaModalRef.current) {
       fetchRekapKtaData(currentActiveWeek);
       if (myObligation.type === '2_TTA') {
         const hasTta1 = myKtaRecord?.checkDetails?.check1Done;
@@ -301,8 +303,8 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
         } else if (!hasTta1 && hasTta2) {
           setSelectedChecklist(['TTA_1']);
         } else {
-          // Default to only 1 item (TTA 1) - do NOT auto check 2!
-          setSelectedChecklist(['TTA_1']);
+          // If neither is done or both done, default to BOTH items so 1 photo fulfills both!
+          setSelectedChecklist(['TTA_1', 'TTA_2']);
         }
       } else if (myObligation.type === '1_KTA_AND_1_TTA') {
         const hasKta = myKtaRecord?.checkDetails?.check1Done;
@@ -312,14 +314,15 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
         } else if (!hasKta && hasTta) {
           setSelectedChecklist(['KTA']);
         } else {
-          // Default to only 1 item (KTA) - do NOT auto check 2!
-          setSelectedChecklist(['KTA']);
+          // If neither is done or both done, default to BOTH items (1 KTA & 1 TTA) so 1 photo fulfills both!
+          setSelectedChecklist(['KTA', 'TTA']);
         }
       } else {
         setSelectedChecklist(['KTA']);
       }
     }
-  }, [showKtaModal, myObligation.type, myKtaRecord, currentActiveWeek]);
+    prevShowKtaModalRef.current = showKtaModal;
+  }, [showKtaModal, myObligation.type, currentActiveWeek]);
 
   const toggleChecklist = (itemKey: string) => {
     setSelectedChecklist(prev => {
