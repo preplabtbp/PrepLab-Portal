@@ -8,8 +8,8 @@ const notion = new Client({ auth: process.env.NOTION_API_KEY });
 const BULLETIN_FOLDER_ID = process.env.GDRIVE_BULLETIN_ATTACHMENTS_FOLDER_ID || '1JE6EusixbK7saIzboKNOk9aMiAqEX-zF';
 
 const PAGES_TO_SYNC = [
-  { id: '129d00c5-c809-8155-8029-e92dcba90b28', title: 'Pengecekan pH Scrubber' },
-  { id: '1a4d00c5-c809-80be-bb61-db68030db35a', title: 'Pembersihan EDXRF' }
+  { id: '1a4d00c5-c809-80be-bb61-db68030db35a', title: 'Pembersihan EDXRF' },
+  { id: '129d00c5-c809-8155-8029-e92dcba90b28', title: 'Pengecekan pH Scrubber' }
 ];
 
 async function getDriveToken(): Promise<string> {
@@ -161,84 +161,85 @@ async function syncPages() {
     `);
     console.log(`Cleared previous local comments for "${pageInfo.title}"`);
 
-    // 3. Process each comment and download/upload attachments
+    // 3. Process each comment and download/upload attachments in parallel chunks
     let insertedCount = 0;
     let attachmentUploadCount = 0;
+    const CHUNK_SIZE = 8;
 
-    for (let i = 0; i < allComments.length; i++) {
-      const c = allComments[i];
-      const authorName = await resolveUserName(c);
-      const commentContent = (c.rich_text || []).map((r: any) => r.plain_text).join('').trim() || 'Pengecekan / Pembersihan';
-      const createdDate = new Date(c.created_time);
+    for (let i = 0; i < allComments.length; i += CHUNK_SIZE) {
+      const chunk = allComments.slice(i, i + CHUNK_SIZE);
+      await Promise.all(chunk.map(async (c, cIdx) => {
+        const globalIdx = i + cIdx;
+        const authorName = await resolveUserName(c);
+        const commentContent = (c.rich_text || []).map((r: any) => r.plain_text).join('').trim() || 'Pengecekan / Pembersihan';
+        const createdDate = new Date(c.created_time);
+        const formattedCreated = createdDate.toISOString().replace('T', ' ').slice(0, 19);
 
-      const formattedCreated = createdDate.toISOString().replace('T', ' ').slice(0, 19);
+        // Process attachments if present
+        const attachmentsList = c.attachments || [];
+        const driveAttachments: any[] = [];
 
-      // Process attachments if present
-      const attachmentsList = c.attachments || [];
-      const driveAttachments: any[] = [];
+        for (let aIdx = 0; aIdx < attachmentsList.length; aIdx++) {
+          const att = attachmentsList[aIdx];
+          const rawUrl = att.file?.url || att.url;
+          if (!rawUrl) continue;
 
-      for (let aIdx = 0; aIdx < attachmentsList.length; aIdx++) {
-        const att = attachmentsList[aIdx];
-        const rawUrl = att.file?.url || att.url;
-        if (!rawUrl) continue;
-
-        let filename = 'photo.jpg';
-        try {
-          const urlObj = new URL(rawUrl);
-          const pathSegments = urlObj.pathname.split('/');
-          filename = decodeURIComponent(pathSegments[pathSegments.length - 1]) || `att_${i}_${aIdx}.jpg`;
-        } catch (e) {
-          filename = `att_${i}_${aIdx}.jpg`;
-        }
-
-        if (driveToken) {
+          let filename = `att_${globalIdx}_${aIdx}.jpg`;
           try {
-            console.log(`  Downloading attachment [${i + 1}/${allComments.length}]: ${filename}...`);
-            const fileRes = await fetch(rawUrl);
-            if (fileRes.ok) {
-              const arrayBuffer = await fileRes.arrayBuffer();
-              const buffer = Buffer.from(arrayBuffer);
-              const rawMime = fileRes.headers.get('content-type') || '';
-              const safeMime = (rawMime && rawMime.includes('/')) 
-                ? rawMime.split(';')[0].trim() 
-                : (filename.endsWith('.png') ? 'image/png' : 'image/jpeg');
-              
-              const uploaded = await uploadToDrive(driveToken, buffer, safeMime, filename);
-              console.log(`  ✓ Uploaded to Drive: ${uploaded.id}`);
-              
-              driveAttachments.push({
-                id: uploaded.id,
-                name: filename,
-                category: 'image',
-                mimeType: safeMime,
-                size: buffer.length,
-                driveViewUrl: `https://drive.google.com/file/d/${uploaded.id}/view?usp=drivesdk`,
-                driveDownloadUrl: `https://drive.google.com/uc?id=${uploaded.id}&export=download`,
-                directUrl: `https://lh3.googleusercontent.com/d/${uploaded.id}`
-              });
-              attachmentUploadCount++;
+            const urlObj = new URL(rawUrl);
+            const pathSegments = urlObj.pathname.split('/');
+            filename = decodeURIComponent(pathSegments[pathSegments.length - 1]) || filename;
+          } catch (e) {}
+
+          if (driveToken) {
+            try {
+              console.log(`  Downloading [${globalIdx + 1}/${allComments.length}]: ${filename}...`);
+              const fileRes = await fetch(rawUrl);
+              if (fileRes.ok) {
+                const arrayBuffer = await fileRes.arrayBuffer();
+                const buffer = Buffer.from(arrayBuffer);
+                const rawMime = fileRes.headers.get('content-type') || '';
+                const safeMime = (rawMime && rawMime.includes('/')) 
+                  ? rawMime.split(';')[0].trim() 
+                  : (filename.endsWith('.png') ? 'image/png' : 'image/jpeg');
+                
+                const uploaded = await uploadToDrive(driveToken, buffer, safeMime, filename);
+                console.log(`  ✓ Uploaded to Drive: ${filename} (${uploaded.id})`);
+                
+                driveAttachments.push({
+                  id: uploaded.id,
+                  name: filename,
+                  category: 'image',
+                  mimeType: safeMime,
+                  size: buffer.length,
+                  driveViewUrl: `https://drive.google.com/file/d/${uploaded.id}/view?usp=drivesdk`,
+                  driveDownloadUrl: `https://drive.google.com/uc?id=${uploaded.id}&export=download`,
+                  directUrl: `https://lh3.googleusercontent.com/d/${uploaded.id}`
+                });
+                attachmentUploadCount++;
+              }
+            } catch (err: any) {
+              console.warn(`  Failed attachment ${filename}:`, err.message);
             }
-          } catch (err: any) {
-            console.warn(`  Failed to upload attachment ${filename}:`, err.message);
           }
         }
-      }
 
-      const fileUrlVal = driveAttachments.length > 0 ? JSON.stringify(driveAttachments) : null;
-      const fileNameVal = driveAttachments.length > 0 ? driveAttachments[0].name : null;
+        const fileUrlVal = driveAttachments.length > 0 ? JSON.stringify(driveAttachments) : null;
+        const fileNameVal = driveAttachments.length > 0 ? driveAttachments[0].name : null;
 
-      await db.execute(sql`
-        INSERT INTO bulletin_comments (
-          post_id, topic_title, topic_id, section, category, content,
-          author_nik, author_name, file_url, file_name, created_at
-        ) VALUES (
-          ${postId}, ${pageInfo.title}, ${pageInfo.title.toLowerCase().replace(/\s+/g, '-')},
-          'Laboratorium', 'Weekly Laboratorium', ${commentContent},
-          'Guest', ${authorName},
-          ${fileUrlVal}, ${fileNameVal}, ${formattedCreated}
-        );
-      `);
-      insertedCount++;
+        await db.execute(sql`
+          INSERT INTO bulletin_comments (
+            post_id, topic_title, topic_id, section, category, content,
+            author_nik, author_name, file_url, file_name, created_at
+          ) VALUES (
+            ${postId}, ${pageInfo.title}, ${pageInfo.title.toLowerCase().replace(/\s+/g, '-')},
+            'Laboratorium', 'Weekly Laboratorium', ${commentContent},
+            'Guest', ${authorName},
+            ${fileUrlVal}, ${fileNameVal}, ${formattedCreated}
+          );
+        `);
+        insertedCount++;
+      }));
     }
 
     console.log(`✓ Completed "${pageInfo.title}": ${insertedCount} comments inserted, ${attachmentUploadCount} attachments uploaded to Drive.`);
