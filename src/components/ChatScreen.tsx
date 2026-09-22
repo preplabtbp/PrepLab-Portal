@@ -114,7 +114,7 @@ export default function ChatScreen({
       .catch(() => {});
   }, []);
 
-  // Fetch chat history with smooth merging
+  // Fetch chat history with smooth merging and optimistic replacement
   const fetchHistory = useCallback(async (isInitial = false) => {
     if (isInitial) setLoadingHistory(true);
     try {
@@ -124,12 +124,30 @@ export default function ChatScreen({
         if (Array.isArray(data)) {
           setMessages(prev => {
             if (isInitial || prev.length === 0) return data;
-            const existingIds = new Set(prev.map(m => m.id));
-            const newItems = data.filter(m => !existingIds.has(m.id));
-            if (newItems.length > 0) {
-              return [...prev, ...newItems].sort((a, b) => (a.id || 0) - (b.id || 0));
+            
+            // Merge DB data into current state, replacing matching optimistic messages
+            const updated = [...prev];
+            for (const item of data) {
+              const optIdx = updated.findIndex(m => 
+                m.id === item.id ||
+                (m.clientMsgId && m.clientMsgId === item.clientMsgId) ||
+                (String(m.id).startsWith('c_') && m.senderNik === item.senderNik && m.text === item.text)
+              );
+
+              if (optIdx !== -1) {
+                // Replace optimistic item with canonical DB item
+                updated[optIdx] = item;
+              } else if (!updated.some(m => m.id === item.id)) {
+                updated.push(item);
+              }
             }
-            return prev;
+
+            // Always sort chronologically by timestamp
+            return updated.sort((a, b) => {
+              const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+              const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+              return timeA - timeB;
+            });
           });
         }
       }
@@ -169,17 +187,25 @@ export default function ChatScreen({
       if (!msg) return;
       if (msg.room === activeRoomRef.current) {
         setMessages(prev => {
-          if (prev.some(m => m.id === msg.id || (m.timestamp === msg.timestamp && m.senderNik === msg.senderNik && m.text === msg.text))) {
+          // 1. Check if incoming message replaces an optimistic message from current sender
+          const optimisticIdx = prev.findIndex(m => 
+            (msg.clientMsgId && (m.clientMsgId === msg.clientMsgId || m.id === msg.clientMsgId)) ||
+            (String(m.id).startsWith('c_') && m.senderNik === msg.senderNik && m.text === msg.text)
+          );
+
+          if (optimisticIdx !== -1) {
+            const next = [...prev];
+            next[optimisticIdx] = msg;
+            return next;
+          }
+
+          // 2. Prevent duplicate by canonical DB ID
+          if (prev.some(m => m.id === msg.id)) {
             return prev;
           }
+
           return [...prev, msg];
         });
-      }
-    };
-
-    const handleBroadcast = (payload: any) => {
-      if (payload?.newMsg) {
-        handleIncomingMessage(payload.newMsg);
       }
     };
 
@@ -193,7 +219,6 @@ export default function ChatScreen({
     socket.on('presence:update', handlePresence);
     socket.on('presence:init', handlePresence);
     socket.on('new_message', handleIncomingMessage);
-    socket.on('chat:broadcast', handleBroadcast);
     socket.on('chat:mention', handleMention);
 
     return () => {
@@ -201,7 +226,6 @@ export default function ChatScreen({
       socket.off('presence:update', handlePresence);
       socket.off('presence:init', handlePresence);
       socket.off('new_message', handleIncomingMessage);
-      socket.off('chat:broadcast', handleBroadcast);
       socket.off('chat:mention', handleMention);
     };
   }, []);
@@ -386,8 +410,10 @@ export default function ChatScreen({
     const equippedTitle = localStorage.getItem('preplab_equipped_title') || userProfile?.equippedTitle || 'Frontline Trainee';
     const equippedFrame = localStorage.getItem('preplab_equipped_frame') || userProfile?.equippedFrame || 'default';
 
+    const clientMsgId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const optimisticMsg = {
-      id: Date.now(),
+      id: clientMsgId,
+      clientMsgId,
       room: activeRoom,
       senderNik: inspectorNik,
       senderName: inspectorName,
@@ -770,7 +796,9 @@ export default function ChatScreen({
                           <span>{msg.senderName || msg.senderNik}</span>
                         </button>
                       ) : (
-                        <span className="text-[11px] font-bold text-[var(--text-muted)]">Anda</span>
+                        <span className="text-[11px] font-bold text-[var(--text-muted)]">
+                          Anda ({inspectorName?.split(' ')[0] || 'Me'})
+                        </span>
                       )}
 
                       <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 font-bold">

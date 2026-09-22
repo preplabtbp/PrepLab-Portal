@@ -1,6 +1,24 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.21] - 2026-09-22
+
+### 💬 Perbaikan Duplikasi Pesan Chat (3x) & Sinkronisasi Multi-Localhost / Identitas Pengirim
+
+- **Eliminasi Total Duplikasi Pesan Chat (`server.ts`, `src/components/ChatScreen.tsx`)**:
+  - **Akar Masalah Pesan Terkirim 3x**:
+    1. *Optimistic Rendering*: Frontend menambahkan pesan sementara dengan `id: Date.now()`.
+    2. *Socket ID Mismatch & Double Broadcast*: Server sebelumnya membuat ID acak baru (`id: Date.now()`) yang berbeda milidetik dari client dan menyiarkan dua event sekaligus (`new_message` dan `chat:broadcast`), sehingga filter client menganggapnya sebagai pesan baru dan menampilkan duplikat ke-2.
+    3. *Polling Background (`fetchHistory`)*: Polling setiap 3.5 detik mengambil data dari PostgreSQL di mana kolom ID berupa SERIAL integer (misal `435`), sehingga tidak cocok dengan ID timestamp client dan menambahkan duplikat ke-3.
+  - **Solusi Komprehensif**:
+    - Backend kini memanfaatkan `.returning()` pada `db.insert(chatMessages)` untuk menangkap integer ID kanonikal Postgres riil dan mengembalikannya ke socket event.
+    - Menghapus siaran ganda `chat:broadcast` dan hanya menggunakan satu event kanonikal `new_message`.
+    - Menambahkan `clientMsgId` unik (`c_<timestamp>_<rand>`) pada pesan optimistik; saat konfirmasi socket atau sinkronisasi database tiba, pesan optimistik digantikan secara *in-place* tanpa menambah baris baru.
+    - Pengurutan riwayat pesan kini 100% konsisten secara kronologis berdasarkan `timestamp`, bukan integer ID yang sebelumnya tercampur dengan timestamp ms.
+- **Klarifikasi Identitas Pengirim Chat Antar Localhost (`src/components/ChatScreen.tsx`)**:
+  - Menjelaskan bahwa kedua instans pengembang terhubung ke basis data Cloud SQL yang sama. Saat Anugrah mengirim pesan uji coba dengan kata `"test"` atau `"tes"` dari localhost-nya, database menyimpannya secara valid dengan NIK dan nama Anugrah.
+  - Indikator pesan keluar kini menampilkan secara eksplisit: `Anda (<Nama Depan>)` (misal `Anda (Alvin)`), sehingga tidak ada lagi kerancuan antara pesan sendiri dan pesan dari rekan kerja yang sedang bersamaan melakukan pengujian.
+
 ## [2.9.20] - 2026-09-22
 
 ### ⚡ Pemulihan Realtime Chat Room & Presensi Karyawan Online, Serta Pemisahan Seksi Maintenance & Administration

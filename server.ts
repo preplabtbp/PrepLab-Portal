@@ -455,8 +455,31 @@ const app = express();
     socket.on('send_message', async (msg) => {
       try {
         const room = msg.room || 'global';
-        const newMsg = {
-          id: Date.now(),
+
+        // Persist to database if available and get real database record
+        let savedDbMsg: any = null;
+        try {
+          const inserted = await db.insert(chatMessages).values({
+            room,
+            senderNik: msg.senderNik,
+            senderName: msg.senderName,
+            text: msg.text
+          }).returning();
+          if (inserted && inserted.length > 0) {
+            savedDbMsg = inserted[0];
+          }
+        } catch (dbErr) {
+          console.warn('Chat DB insert error, fallback to memory:', dbErr);
+        }
+
+        const msgId = savedDbMsg ? savedDbMsg.id : Date.now();
+        const msgTimestamp = savedDbMsg?.timestamp 
+          ? new Date(savedDbMsg.timestamp).toISOString() 
+          : (msg.timestamp || new Date().toISOString());
+
+        const confirmedMsg = {
+          id: msgId,
+          clientMsgId: msg.clientMsgId || msg.id,
           room,
           senderNik: msg.senderNik,
           senderName: msg.senderName,
@@ -464,28 +487,15 @@ const app = express();
           senderFrame: msg.senderFrame,
           senderAvatar: msg.senderAvatar,
           text: msg.text,
-          timestamp: new Date().toISOString(),
+          timestamp: msgTimestamp,
           mentionedNiks: msg.mentionedNiks || []
         };
-        chatMessagesMemory.push(newMsg);
+
+        chatMessagesMemory.push(confirmedMsg);
         if (chatMessagesMemory.length > 250) chatMessagesMemory.shift();
 
-        // Persist to database if available
-        try {
-          await db.insert(chatMessages).values({
-            room,
-            senderNik: msg.senderNik,
-            senderName: msg.senderName,
-            text: msg.text
-          });
-        } catch (dbErr) {
-          // silently keep in-memory
-        }
-
-        // 1. Emit to room members
-        io.to(room).emit('new_message', newMsg);
-        // 2. Also broadcast globally so active chat drawers receive real-time updates seamlessly
-        io.emit('chat:broadcast', { room, newMsg });
+        // Emit single canonical message event to room members (no duplicate broadcast)
+        io.to(room).emit('new_message', confirmedMsg);
         
         // --- PROCESS MENTIONS ---
         const targetMentionNiks = new Set<string>();
