@@ -125,11 +125,15 @@ export const KBBI_MAINTENANCE_DICTIONARY: Record<string, { standard: string; exp
   // --- ISTILAH KHUSUS PREPARATION & LABORATORY NIKEL (PREPLAB) ---
   // =========================================================================
 
-  // 1. Manhole & Utilitas Kompresor, Dust Collector, Tangki Udara
+  // 1. Manhole (Lubang Inspeksi Tangki) & Manhaul (Bus Angkut Personel Tambang)
   'manhole': { standard: 'manhole (lubang inspeksi)', explanation: 'Lubang inspeksi / akses orang pada tabung tangki udara kompresor, bejana tekan, atau ducting' },
   'menhol': { standard: 'manhole (lubang inspeksi)', explanation: 'Lubang inspeksi / perawatan tangki kompresor atau bejana tekan (manhole)' },
   'manhol': { standard: 'manhole (lubang inspeksi)', explanation: 'Lubang inspeksi / lubang orang (manhole)' },
-  'menhaul': { standard: 'manhole (lubang inspeksi)', explanation: 'Lubang inspeksi bejana tangki (manhole)' },
+  'manhaul': { standard: 'manhaul (kendaraan angkut personel)', explanation: 'Bus / sarana angkutan operasional personel tambang (manhaul)' },
+  'menhaul': { standard: 'manhaul (kendaraan angkut personel)', explanation: 'Bus / sarana angkutan operasional personel tambang (manhaul)' },
+  'menhul': { standard: 'manhaul (kendaraan angkut personel)', explanation: 'Bus / sarana angkutan operasional personel tambang' },
+  'man haul': { standard: 'manhaul (kendaraan angkut personel)', explanation: 'Bus / sarana angkutan operasional personel tambang' },
+  'bus manhaul': { standard: 'bus manhaul (angkutan personel)', explanation: 'Bus operasional jemputan shift tambang' },
   'kompreser': { standard: 'kompresor', explanation: 'KBBI: kompresor udara' },
   'kompresur': { standard: 'kompresor', explanation: 'KBBI: kompresor' },
   'air compressor': { standard: 'kompresor udara (air compressor)', explanation: 'Kompresor pensuplai udara bertekanan PrepLab' },
@@ -187,9 +191,14 @@ export const KBBI_MAINTENANCE_DICTIONARY: Record<string, { standard: string; exp
   'saringan mesh': { standard: 'ayakan mesh (sieve)', explanation: 'Saringan sampel berstandar mesh' },
   'ayakan': { standard: 'ayakan mesh', explanation: 'Saringan sampel (sieve mesh)' },
   'mesh': { standard: 'ayakan mesh', explanation: 'Ukuran kehalusan saringan sampel nikel (cth: 200 mesh)' },
+  'oven': { standard: 'oven', explanation: 'KBBI: oven (ruang/alat pemanas pengering sampel)' },
+  'ofen': { standard: 'oven', explanation: 'KBBI: oven (baku memakai huruf v, bukan f)' },
+  'open': { standard: 'oven', explanation: 'KBBI: oven (alat pemanas/pengering sampel, bukan open)' },
+  'ovent': { standard: 'oven', explanation: 'KBBI: oven' },
   'oven dryer': { standard: 'oven dryer (pengering sampel nikel)', explanation: 'Oven pemanas pengering kadar air sampel (105°C)' },
   'ovendryer': { standard: 'oven dryer', explanation: 'Oven pengering laboratorium' },
   'draier': { standard: 'oven dryer', explanation: 'Oven dryer pengering sampel' },
+  'drayer': { standard: 'oven dryer', explanation: 'Oven dryer pengering sampel' },
   'dryer': { standard: 'oven dryer', explanation: 'Oven dryer pengering' },
   'baki sampel': { standard: 'baki pengering sampel (drying tray)', explanation: 'Nampan sampel nikel tahan karat' },
   'tray': { standard: 'baki pengering sampel (drying tray)', explanation: 'Baki nampan pengering sampel nikel' },
@@ -299,6 +308,81 @@ export const KBBI_MAINTENANCE_DICTIONARY: Record<string, { standard: string; exp
   'tta': { standard: 'TTA (Tindakan Tidak Aman)', explanation: 'Perilaku kerja berbahaya tidak sesuai SOP PrepLab' },
   'nearmiss': { standard: 'nearmiss (nyaris celaka)', explanation: 'Insiden nyaris celaka tanpa cedera di area PrepLab' },
 
+  // 5. Standardisasi KBBI: Variasi Huruf F, V, P & Istilah Serupa
+  'fentilasi': { standard: 'ventilasi', explanation: 'KBBI: ventilasi (memakai huruf v, bukan f)' },
+  'pentilasi': { standard: 'ventilasi', explanation: 'KBBI: ventilasi' },
+  'ventilasi': { standard: 'ventilasi', explanation: 'KBBI: ventilasi (sirkulasi udara)' },
+  'fentilator': { standard: 'ventilator', explanation: 'KBBI: ventilator' },
+  'pentilator': { standard: 'ventilator', explanation: 'KBBI: ventilator' },
+  'vakum': { standard: 'vakum', explanation: 'KBBI: vakum (hampa udara)' },
+  'facum': { standard: 'vakum', explanation: 'KBBI: vakum (memakai huruf v, bukan f)' },
+  'fakum': { standard: 'vakum', explanation: 'KBBI: vakum' },
+  'pakum': { standard: 'vakum', explanation: 'KBBI: vakum (memakai huruf v, bukan p)' },
+  'valv': { standard: 'valve (katup)', explanation: 'Katup valve fluida/udara' },
+  'falv': { standard: 'valve (katup)', explanation: 'Katup valve' },
+  'palve': { standard: 'valve (katup)', explanation: 'Katup valve' },
+  'pelp': { standard: 'valve (katup)', explanation: 'Katup valve' },
+  'falp': { standard: 'valve (katup)', explanation: 'Katup valve' },
+  'katub': { standard: 'katup', explanation: 'KBBI: katup (bukan katub)' },
+  'fariasi': { standard: 'variasi', explanation: 'KBBI: variasi' },
+  'fiskositas': { standard: 'viskositas', explanation: 'KBBI: viskositas (kekentalan)' },
+  'piskositas': { standard: 'viskositas', explanation: 'KBBI: viskositas' },
+  'vibrasi': { standard: 'vibrasi (getaran)', explanation: 'KBBI: vibrasi' },
+  'fibrasi': { standard: 'vibrasi (getaran)', explanation: 'KBBI: vibrasi' },
+  'pibrasi': { standard: 'vibrasi (getaran)', explanation: 'KBBI: vibrasi' },
+  'panbel': { standard: 'v-belt (tali kipas)', explanation: 'Tali puli (v-belt)' },
+  'fan belt': { standard: 'v-belt (tali kipas)', explanation: 'Tali puli (v-belt)' },
+  'fiting': { standard: 'fiting (fitting)', explanation: 'KBBI: fiting (dudukan lampu / sambungan pipa)' },
+  'piting': { standard: 'fiting (fitting)', explanation: 'KBBI: fiting' },
+  'fitting': { standard: 'fiting (fitting)', explanation: 'KBBI: fiting' },
+  'frekuensi': { standard: 'frekuensi', explanation: 'KBBI: frekuensi (bukan frekwensi/prekuensi)' },
+  'frekwensi': { standard: 'frekuensi', explanation: 'KBBI: frekuensi' },
+  'prekuensi': { standard: 'frekuensi', explanation: 'KBBI: frekuensi' },
+  'sistim': { standard: 'sistem', explanation: 'KBBI: sistem (bukan sistim)' },
+  'analisa': { standard: 'analisis', explanation: 'KBBI: analisis (bukan analisa)' },
+  'praktek': { standard: 'praktik', explanation: 'KBBI: praktik (bukan praktek)' },
+  'jadual': { standard: 'jadwal', explanation: 'KBBI: jadwal (bukan jadual)' },
+  'aktifitas': { standard: 'aktivitas', explanation: 'KBBI: aktivitas (memakai huruf v, bukan f)' },
+  'efektifitas': { standard: 'efektivitas', explanation: 'KBBI: efektivitas (memakai huruf v)' },
+  'standarisasi': { standard: 'standardisasi', explanation: 'KBBI: standardisasi' },
+  'standart': { standard: 'standar', explanation: 'KBBI: standar (bukan standart)' },
+  'kwalitas': { standard: 'kualitas', explanation: 'KBBI: kualitas (bukan kwalitas)' },
+  'kuwalitas': { standard: 'kualitas', explanation: 'KBBI: kualitas' },
+  'kwantitas': { standard: 'kuantitas', explanation: 'KBBI: kuantitas (bukan kwantitas)' },
+  'ijin': { standard: 'izin', explanation: 'KBBI: izin (bukan ijin)' },
+  'terimakasih': { standard: 'terima kasih', explanation: 'KBBI: terima kasih (ditulis terpisah)' },
+  'coper': { standard: 'penutup (cover)', explanation: 'Penutup / pelindung mesin (cover)' },
+  'coperan': { standard: 'penutup (cover)', explanation: 'Penutup mesin' },
+  'koper alat': { standard: 'penutup (cover)', explanation: 'Pelindung mesin' },
+  'eksaus': { standard: 'exhaust fan', explanation: 'Kipas pembuang udara (exhaust)' },
+  'eksos': { standard: 'exhaust fan', explanation: 'Exhaust fan' },
+  'exsos': { standard: 'exhaust fan', explanation: 'Exhaust fan' },
+  'burete': { standard: 'buret (alat titrasi)', explanation: 'KBBI: buret' },
+  'pipete': { standard: 'pipet (pipet ukur)', explanation: 'KBBI: pipet' },
+  'erlemeyer': { standard: 'labu erlenmeyer', explanation: 'Labu erlenmeyer' },
+  'elenmeyer': { standard: 'labu erlenmeyer', explanation: 'Labu erlenmeyer' },
+  'disikator': { standard: 'desikator', explanation: 'KBBI: desikator' },
+  'desicator': { standard: 'desikator', explanation: 'KBBI: desikator' },
+  'hotplet': { standard: 'pelat pemanas (hot plate)', explanation: 'Hotplate pelat pemanas' },
+  'biker glas': { standard: 'gelas piala (beaker glass)', explanation: 'Gelas piala kimia' },
+  'biker': { standard: 'gelas piala (beaker glass)', explanation: 'Beaker glass' },
+  'beker': { standard: 'gelas piala (beaker glass)', explanation: 'Gelas beker' },
+  'pernes': { standard: 'tanur muffle (furnace)', explanation: 'Tanur muffle' },
+  'centrifuge': { standard: 'sentrifugasi (centrifuge)', explanation: 'KBBI: sentrifugasi' },
+  'sentrifus': { standard: 'sentrifugasi (centrifuge)', explanation: 'KBBI: sentrifugasi' },
+  'kelahar': { standard: 'bearing (bantalan poros)', explanation: 'Bearing bantalan poros' },
+  'bering': { standard: 'bearing (bantalan poros)', explanation: 'Bearing' },
+  'puley': { standard: 'puli (pulley)', explanation: 'Roda puli pemutar v-belt' },
+  'pulley': { standard: 'puli (pulley)', explanation: 'Roda puli' },
+  'puli': { standard: 'puli (pulley)', explanation: 'Roda puli' },
+  'nozel': { standard: 'nosel (nozzle)', explanation: 'KBBI: nosel (ujung pipa semprot)' },
+  'nozzle': { standard: 'nosel (nozzle)', explanation: 'KBBI: nosel' },
+  'pilter': { standard: 'filter (penyaring)', explanation: 'KBBI: filter' },
+  'ciler': { standard: 'water chiller', explanation: 'Pendingin chiller' },
+  'chiler': { standard: 'water chiller', explanation: 'Water chiller' },
+  'slinder': { standard: 'silinder', explanation: 'KBBI: silinder hidrolik / pneumatik' },
+  'selinder': { standard: 'silinder', explanation: 'KBBI: silinder' },
+
   // --- Kata Sambung / Singkatan Percakapan Lapangan ---
   'ga': { standard: 'tidak', explanation: 'Baku: tidak' },
   'gak': { standard: 'tidak', explanation: 'Baku: tidak' },
@@ -366,6 +450,9 @@ export const MULTI_WORD_REPLACEMENTS: [RegExp, string][] = [
   [/\bpuck\s+pulve\b/gi, 'puck pulverizer'],
   [/\bpelat\s+rahang\b/gi, 'jaw plate (pelat rahang)'],
   [/\bcawan\s+platina\b/gi, 'cawan platina (platinum crucible)'],
+  [/\b(ofen|open)\s+(pengering|drayer|draier|sampel|laboratorium|lab)\b/gi, 'oven dryer pengering sampel'],
+  [/\b(ofen|open)\s+(rusak|mati|matii|matot|bocor|panas|tidak\s+panas)\b/gi, 'oven $2'],
+  [/\b(bus\s+)?(menhaul|manhaul|menhul)\s+(rusak|mogok|bocor|ac|panas|rem|ban|kopling|mati)\b/gi, 'manhaul $3'],
   [/\boven\s+(pengering|drayer|draier)\b/gi, 'oven dryer pengering sampel'],
   [/\blemari\s+asam\s+(mati|lemah|rusak)\b/gi, 'lemari asam (fume hood) daya hisap menurun'],
   [/\bmohon\s+di\s*bantu\s+cek\b/gi, 'mohon dilakukan pemeriksaan dan penanganan oleh tim maintenance'],
@@ -441,6 +528,21 @@ export const CANONICAL_TERMS: { root: string; standard: string; explanation: str
   { root: 'monitor', standard: 'layar monitor', explanation: 'Monitor komputer' },
   { root: 'printer', standard: 'printer cetak', explanation: 'Mesin pencetak' },
   { root: 'manhole', standard: 'manhole (lubang inspeksi)', explanation: 'Lubang inspeksi tangki udara kompresor / ducting' },
+  { root: 'manhaul', standard: 'manhaul (kendaraan angkut personel)', explanation: 'Bus/kendaraan operasional angkutan karyawan tambang' },
+  { root: 'oven', standard: 'oven', explanation: 'KBBI: oven (alat pemanas/pengering sampel)' },
+  { root: 'ventilasi', standard: 'ventilasi', explanation: 'KBBI: ventilasi' },
+  { root: 'vakum', standard: 'vakum', explanation: 'KBBI: vakum (hampa udara)' },
+  { root: 'valve', standard: 'valve (katup)', explanation: 'Katup pengatur fluida/udara' },
+  { root: 'buret', standard: 'buret', explanation: 'KBBI: buret (alat titrasi kimia)' },
+  { root: 'pipet', standard: 'pipet', explanation: 'KBBI: pipet (pipet ukur/tetes)' },
+  { root: 'erlenmeyer', standard: 'labu erlenmeyer', explanation: 'Labu erlenmeyer laboratorium' },
+  { root: 'hotplate', standard: 'hotplate (pelat pemanas)', explanation: 'Pelat pemanas laboratorium' },
+  { root: 'analisis', standard: 'analisis', explanation: 'KBBI: analisis (bukan analisa)' },
+  { root: 'kualitas', standard: 'kualitas', explanation: 'KBBI: kualitas (bukan kwalitas)' },
+  { root: 'aktivitas', standard: 'aktivitas', explanation: 'KBBI: aktivitas (bukan aktifitas)' },
+  { root: 'sistem', standard: 'sistem', explanation: 'KBBI: sistem (bukan sistim)' },
+  { root: 'praktik', standard: 'praktik', explanation: 'KBBI: praktik (bukan praktek)' },
+  { root: 'jadwal', standard: 'jadwal', explanation: 'KBBI: jadwal (bukan jadual)' },
   { root: 'limonit', standard: 'sampel limonit (kadar Fe tinggi)', explanation: 'Sampel batuan nikel limonit' },
   { root: 'saprolit', standard: 'sampel saprolit (kadar Ni tinggi)', explanation: 'Sampel batuan nikel saprolit' },
   { root: 'splitter', standard: 'riffle splitter (pembagi sampel)', explanation: 'Alat pembagi sampel representatif' },
@@ -493,6 +595,10 @@ export function detectTypos(text: string): WordCorrection[] {
     // 1. Exact Match Kamus
     if (KBBI_MAINTENANCE_DICTIONARY[clean]) {
       const entry = KBBI_MAINTENANCE_DICTIONARY[clean];
+      // Jika kata sudah baku (sama persis dengan standard tanpa embel-embel), bukan typo
+      if (entry.standard.toLowerCase() === clean) {
+        continue;
+      }
       if (!found.some(f => f.word.toLowerCase() === clean)) {
         found.push({
           word: w,
@@ -505,7 +611,7 @@ export function detectTypos(text: string): WordCorrection[] {
 
     // 2. Fuzzy Match (Damerau-Levenshtein) untuk typo seperti "ruask", "patah", "mecet"
     const fuzzy = findFuzzyMatch(clean);
-    if (fuzzy && !found.some(f => f.word.toLowerCase() === clean)) {
+    if (fuzzy && fuzzy.standard.toLowerCase() !== clean && !found.some(f => f.word.toLowerCase() === clean)) {
       found.push({
         word: w,
         suggestion: fuzzy.standard,
@@ -543,16 +649,31 @@ export function correctTextKBBI(text: string): {
 
   // 2. Ganti kata tunggal sesuai kamus dan fuzzy match
   const words = result.split(/(\s+|[.,;!?()]+)/);
-  const newWords = words.map(w => {
+  const newWords = words.map((w, idx) => {
     const clean = w.toLowerCase().trim();
     if (!clean) return w;
 
+    // Hindari duplikasi jika kata ini sudah bagian dari frasa baku (contoh: "oven dryer", "bus manhaul", "jaw crusher")
+    const prevWord = idx >= 2 ? words[idx - 2]?.toLowerCase().trim() : '';
+    if (prevWord === 'oven' && (clean === 'dryer' || clean === 'draier' || clean === 'drayer')) {
+      return w;
+    }
+    if (prevWord === 'bus' && (clean === 'manhaul' || clean === 'menhaul')) {
+      return 'manhaul';
+    }
+    if (prevWord === 'jaw' && clean === 'crusher') {
+      return w;
+    }
+
     let target = '';
     if (KBBI_MAINTENANCE_DICTIONARY[clean]) {
-      target = KBBI_MAINTENANCE_DICTIONARY[clean].standard;
+      const entry = KBBI_MAINTENANCE_DICTIONARY[clean];
+      if (entry.standard.toLowerCase() !== clean) {
+        target = entry.standard;
+      }
     } else {
       const fuzzy = findFuzzyMatch(clean);
-      if (fuzzy) {
+      if (fuzzy && fuzzy.standard.toLowerCase() !== clean) {
         target = fuzzy.standard;
       }
     }
