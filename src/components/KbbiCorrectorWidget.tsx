@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Sparkles, Check, Info, ArrowRight, Wand2, ChevronDown, ChevronUp, Layers } from 'lucide-react';
+import { Sparkles, Check, Info, ArrowRight, Wand2, ChevronDown, ChevronUp, Layers, Loader2 } from 'lucide-react';
 import { 
   detectTypos, 
   correctTextKBBI, 
@@ -24,6 +24,7 @@ export function KbbiCorrectorWidget({
   fieldName = 'Teks'
 }: KbbiCorrectorWidgetProps) {
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
+  const [isAiRefining, setIsAiRefining] = useState(false);
 
   // Deteksi typo secara realtime
   const detectedTypos = useMemo(() => {
@@ -39,25 +40,47 @@ export function KbbiCorrectorWidget({
     toast.success(`Mengganti "${item.word}" menjadi "${item.suggestion}"`);
   };
 
-  // Handle perbaiki seluruh teks otomatis
-  const handleFixAll = () => {
+  // Handle perbaiki seluruh teks otomatis (Aturan Baku Lokal + AI Refinement Provider non-Gemini)
+  const handleFixAll = async () => {
     if (!value || !value.trim()) {
       toast.info('Silakan ketik teks terlebih dahulu.');
       return;
     }
 
-    const { correctedText, changesCount, replacedWords } = correctTextKBBI(value);
-    if (changesCount === 0 && correctedText === value) {
-      toast.info('Teks Anda sudah rapi dan sesuai istilah baku KBBI.');
-      return;
+    // 1. Terapkan koreksi lokal terlebih dahulu (0 milidetik)
+    const { correctedText, changesCount } = correctTextKBBI(value);
+    const initialFix = correctedText !== value ? correctedText : value;
+    if (initialFix !== value) {
+      onChange(initialFix);
     }
 
-    onChange(correctedText);
-    toast.success(
-      changesCount > 0 
-        ? `Berhasil merapikan ${changesCount} kata/frasa sesuai standar KBBI & Maintenance!` 
-        : 'Format teks berhasil dirapikan!'
-    );
+    // 2. Cobakan penyempurnaan AI tingkat lanjut melalui API non-Gemini (Routr / Bandelbanget)
+    setIsAiRefining(true);
+    try {
+      const res = await fetch('/api/kbbi/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: initialFix })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.correctedText && data.correctedText.trim() && data.correctedText !== initialFix) {
+          onChange(data.correctedText);
+          toast.success(`Teks berhasil dibakukan sesuai standar KBBI & Maintenance! (${data.provider || 'AI'})`);
+          return;
+        }
+      }
+    } catch (e) {
+      // Abaikan jika offline / backend tidak merespon, hasil lokal sudah terpasang
+    } finally {
+      setIsAiRefining(false);
+    }
+
+    if (changesCount > 0) {
+      toast.success(`Berhasil merapikan ${changesCount} kata/frasa sesuai standar KBBI & Maintenance!`);
+    } else {
+      toast.info('Teks Anda sudah rapi dan sesuai istilah baku KBBI.');
+    }
   };
 
   // Handle insert template kerusakan
@@ -144,12 +167,19 @@ export function KbbiCorrectorWidget({
 
           <button
             type="button"
+            disabled={isAiRefining}
             onClick={handleFixAll}
-            className="text-[11px] font-bold px-3 py-1 rounded-lg bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white shadow-2xs hover:shadow-xs flex items-center gap-1.5 transition-all cursor-pointer group active:scale-95"
+            className={`text-[11px] font-bold px-3 py-1 rounded-lg bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white shadow-2xs hover:shadow-xs flex items-center gap-1.5 transition-all cursor-pointer group active:scale-95 ${
+              isAiRefining ? 'opacity-70 cursor-wait' : ''
+            }`}
             title="Koreksi otomatis typo, singkatan gaul, dan bahasa lapangan ke standar KBBI & Maintenance"
           >
-            <Wand2 className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
-            <span>Koreksi Otomatis KBBI</span>
+            {isAiRefining ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Wand2 className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
+            )}
+            <span>{isAiRefining ? 'Membakukan Teks...' : 'Koreksi Otomatis KBBI'}</span>
           </button>
         </div>
       </div>

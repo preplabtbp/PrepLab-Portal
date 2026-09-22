@@ -63,6 +63,7 @@ import { employeesRouter } from "./server/routes/employees.js";
 import { p5mRouter } from "./server/routes/p5m.js";
 import { financeRouter } from "./server/routes/finance.js";
 import { labbotRouter } from "./server/routes/labbot.js";
+import { kbbiRouter } from "./server/routes/kbbi.js";
 import { gamificationRouter } from "./server/routes/gamification.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
 
@@ -579,7 +580,8 @@ const app = express();
     '/api/induksi',
     '/api/changelog',
     '/api/gamification',
-    '/api/developers'
+    '/api/developers',
+    '/api/kbbi'
   ];
 
   app.use('/api', (req, res, next) => {
@@ -623,6 +625,7 @@ const app = express();
   app.use(feedbackRouter);
   app.use(financeRouter);
   app.use(labbotRouter);
+  app.use(kbbiRouter);
   app.use(changelogRouter);
   app.use("/api/gamification", gamificationRouter);
 
