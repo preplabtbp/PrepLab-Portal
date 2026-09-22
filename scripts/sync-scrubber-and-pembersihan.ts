@@ -196,11 +196,12 @@ async function syncPages() {
             console.log(`  Downloading attachment [${i + 1}/${allComments.length}]: ${filename}...`);
             const fileRes = await fetch(rawUrl);
             if (fileRes.ok) {
-              const arrayBuffer = await fileRes.arrayBuffer();
-              const buffer = Buffer.from(arrayBuffer);
-              const mimeType = fileRes.headers.get('content-type') || 'image/jpeg';
+              const rawMime = fileRes.headers.get('content-type') || '';
+              const safeMime = (rawMime && rawMime.includes('/')) 
+                ? rawMime.split(';')[0].trim() 
+                : (filename.endsWith('.png') ? 'image/png' : 'image/jpeg');
               
-              const uploaded = await uploadToDrive(driveToken, buffer, mimeType, filename);
+              const uploaded = await uploadToDrive(driveToken, buffer, safeMime, filename);
               console.log(`  ✓ Uploaded to Drive: ${uploaded.id}`);
               
               driveAttachments.push({

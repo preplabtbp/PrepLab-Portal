@@ -12,6 +12,10 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - **Accordion Thread Balasan Notion**: Menerapkan tata letak berjenjang Notion dengan toggle collapsible *"Show N replies"* / *"Sembunyikan balasan"*, foto profil inisial, badge tamu, dan stempel waktu relatif.
   - **Grid Lampiran Foto Cerdas**: Menampilkan thumbnail foto lampiran dengan indikator overflow `+N Foto Lagi` dan pratinjau langsung resolusi tinggi melalui Google Drive.
   - **Pencegahan Peringatan Duplikasi Key React**: Memastikan seluruh kunci iterasi komentar dan balasan unik (`key={comment-id-index}`).
+- **Pratinjau Layar Penuh Foto Galeri & Banner Dashboard (`src/components/TbpDashboard.tsx`)**:
+  - **Pratinjau Interaktif Resolusi Tinggi**: Ke-4 kartu kanvas galeri foto kegiatan dan header banner utama kini dapat diklik langsung untuk membuka modal pratinjau layar penuh (*Image Lightbox*) beresolusi tinggi.
+  - **Fitur Lengkap Pratinjau**: Mendukung *Zoom In / Zoom Out* (Ctrl + Scroll / tombol), geser posisi (*Pan & Drag*), putar arah (*Rotate*), unduh foto asli (*Download*), dan buka di tab baru.
+  - **Kontrol Tombol Aksi Cerdas**: Tombol *"Lihat Layar Penuh"* dan *"Lihat Banner"* kini tersedia berdampingan dengan *"Ganti Foto / Teks"* sehingga pengguna dapat menikmati dokumentasi visual site secara utuh.
 - **Penyempurnaan Navigasi Alias Dashboard (`src/components/TbpDashboard.tsx`)**:
   - Menambahkan dukungan alias pencarian untuk kategori seperti *Inventory* (*Warehouse / Inventory Control*) dan *General Issue*.
 

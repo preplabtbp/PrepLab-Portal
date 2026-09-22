@@ -49,10 +49,13 @@ import {
   Activity,
   Edit3,
   Eye,
-  EyeOff
+  EyeOff,
+  ZoomIn,
+  Maximize2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
+import { ImageModal } from './image-modal';
 
 const WeatherIcon = ({ code, className }: { code: number, className?: string }) => {
   if (code < 3) return <Sun className={`text-amber-400 ${className}`} />;
@@ -397,6 +400,7 @@ export function TbpDashboard({
   const [customizerTab, setCustomizerTab] = useState<'upload' | 'preset'>('preset');
   const [tempLabel, setTempLabel] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openSlotCustomizer = (slot: { key: keyof DashboardMediaSettings; label: string }) => {
@@ -759,8 +763,19 @@ export function TbpDashboard({
           </div>
         </div>
 
-        {/* Change Banner Button */}
-        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Banner Action Buttons */}
+        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 z-20">
+          <button
+            onClick={() => setPreviewImage({ 
+              url: mediaSettings.banner || DEFAULT_MEDIA.banner, 
+              title: 'Header Banner Utama • Prep & Analytical Lab Portal (Site Kawasi • Pulau Obi)' 
+            })}
+            className="px-3.5 py-1.5 rounded-xl bg-black/70 hover:bg-black/90 backdrop-blur-md text-white text-xs font-semibold border border-white/30 shadow-lg flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+          >
+            <ZoomIn className="w-3.5 h-3.5 text-teal-400" />
+            <span>Lihat Banner</span>
+          </button>
+
           <button
             onClick={() => setActiveSlot({ key: 'banner', label: 'Header Banner Utama' })}
             className="px-3.5 py-1.5 rounded-xl bg-black/70 hover:bg-black/90 backdrop-blur-md text-white text-xs font-semibold border border-white/30 shadow-lg flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
@@ -842,7 +857,7 @@ export function TbpDashboard({
           </div>
         </div>
 
-        {/* 2. Gallery Canvas Cards (4 Slots) */}
+        {/* 2. Gallery Canvas Cards (4 Slots) with Fullscreen Preview */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {([1, 2, 3, 4] as const).map((num) => {
             const slotKey = `gallery_${num}` as keyof DashboardMediaSettings;
@@ -855,7 +870,8 @@ export function TbpDashboard({
             return (
               <div 
                 key={num} 
-                className="aspect-video rounded-2xl overflow-hidden shadow-lg border relative group transition-all duration-300 hover:shadow-2xl hover:scale-[1.02]"
+                onClick={() => setPreviewImage({ url: imgSrc, title: currentLabel || `Gallery Foto #${num}` })}
+                className="aspect-video rounded-2xl overflow-hidden shadow-lg border relative group transition-all duration-300 hover:shadow-2xl hover:scale-[1.02] cursor-pointer"
                 style={{
                   backgroundColor: 'var(--card-bg, #161616)',
                   borderColor: 'var(--border-main, rgba(51, 65, 85, 0.5))'
@@ -863,7 +879,7 @@ export function TbpDashboard({
               >
                 <img 
                   src={imgSrc} 
-                  alt={`Gallery ${num}`} 
+                  alt={currentLabel || `Gallery ${num}`} 
                   className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-700" 
                 />
                 
@@ -874,17 +890,40 @@ export function TbpDashboard({
 
                 {/* Bottom label (conditional) */}
                 {showLabel && (
-                  <div className="absolute bottom-2.5 left-2.5 pointer-events-none max-w-[85%]">
+                  <div className="absolute bottom-2.5 left-2.5 pointer-events-none max-w-[85%] z-10">
                     <span className="px-2 py-0.5 rounded-lg bg-black/60 backdrop-blur-md text-white/90 text-[10px] font-semibold border border-white/20 shadow-md truncate block">
                       {currentLabel}
                     </span>
                   </div>
                 )}
 
-                {/* Overlay with Change Photo & Edit Label Button */}
-                <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 gap-2">
+                {/* Top-right Quick Zoom indicator */}
+                <div className="absolute top-2.5 right-2.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="p-1.5 rounded-lg bg-black/60 backdrop-blur-md text-white border border-white/20 shadow-md">
+                    <ZoomIn className="w-3.5 h-3.5 text-teal-300" />
+                  </div>
+                </div>
+
+                {/* Overlay with Preview and Change Photo Buttons */}
+                <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 gap-2 z-20">
                   <button
-                    onClick={() => openSlotCustomizer({ key: slotKey, label: `Gallery Canvas #${num}` })}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPreviewImage({ url: imgSrc, title: currentLabel || `Gallery Foto #${num}` });
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-black text-white text-[11px] font-bold border border-white/30 shadow-xl flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-sm"
+                  >
+                    <ZoomIn className="w-3 h-3 text-teal-400" />
+                    <span>Lihat Layar Penuh</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openSlotCustomizer({ key: slotKey, label: `Gallery Canvas #${num}` });
+                    }}
                     className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-bold border border-teal-400/50 shadow-xl flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-sm"
                   >
                     <Camera className="w-3 h-3 text-white" />
@@ -1872,6 +1911,14 @@ export function TbpDashboard({
           </div>
         </div>
       )}
+
+      {/* Fullscreen High-Resolution Image Preview Lightbox */}
+      <ImageModal
+        imageUrl={previewImage?.url || null}
+        title={previewImage?.title || 'Pratinjau Foto'}
+        isOpen={Boolean(previewImage)}
+        onClose={() => setPreviewImage(null)}
+      />
     </div>
   );
 }
