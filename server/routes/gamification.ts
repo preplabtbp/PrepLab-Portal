@@ -21,35 +21,38 @@ export function normalizeSection(sec?: string | null, dept?: string | null, pos?
   const p = (pos || '').toUpperCase();
 
   // 1. Quality Assurance
-  if (s.includes('QA') || s.includes('QUALITY') || p.includes('QA') || p.includes('QUALITY')) {
+  if (s.includes('QA') || s.includes('QUALITY') || p.includes('QA') || p.includes('QUALITY') || d.includes('QA') || d.includes('QUALITY')) {
     return 'Quality Assurance';
   }
-  // 2. Laboratory (Check section and position first before department, avoiding 'Preparation & Laboratory' confusion)
-  if (s.includes('LAB') || p.includes('LAB') || s.includes('KIMIA') || s.includes('XRF') || s.includes('WET LAB')) {
-    return 'Laboratory';
-  }
-  // 3. Maintenance
-  if (s.includes('MAINT') || p.includes('MAINT')) {
+  // 2. Maintenance (Evaluated before Lab/Prep because titles have 'Laboratory Maintenance Foreman/Crew')
+  if (s.includes('MAINT') || p.includes('MAINT') || d.includes('MAINT') || s.includes('BENGKEL') || p.includes('BENGKEL') || p.includes('MEKANIK') || p.includes('ELEKTRIK') || p.includes('LISTRIK')) {
     return 'Maintenance';
   }
-  // 4. Inventory Control
-  if (s.includes('INVENTORY') || p.includes('INVENTORY') || s.includes('LOGISTIC') || p.includes('LOGISTIC')) {
+  // 3. Inventory Control (Evaluated before Lab/Prep because titles have 'Admin, Inventory Control')
+  if (s.includes('INVENTORY') || p.includes('INVENTORY') || s.includes('LOGISTIC') || p.includes('LOGISTIC') || d.includes('INVENTORY') || d.includes('LOGISTIC') || s.includes('GUDANG') || p.includes('GUDANG')) {
     return 'Inventory Control';
   }
-  // 5. Administration
-  if (s.includes('ADMIN') || p.includes('ADMIN') || s.includes('FINANCE') || p.includes('FINANCE') || s.includes('HR') || p.includes('HR')) {
+  // 4. Administration (Evaluated before Lab/Prep because titles have 'Admin, Preparation & Laboratory')
+  if (s.includes('ADMIN') || p.includes('ADMIN') || s.includes('FINANCE') || p.includes('FINANCE') || s.includes('HR') || p.includes('HR') || d.includes('ADMIN') || d.includes('FINANCE')) {
     return 'Administration';
   }
-  // 6. Preparation
-  if (s.includes('PREP') || p.includes('PREP') || s.includes('WET') || s.includes('DRY')) {
+  // 5. Section Explicit Match (Laboratory vs Preparation)
+  if (s.includes('LAB') || s.includes('KIMIA') || s.includes('XRF') || s.includes('WET LAB')) {
+    return 'Laboratory';
+  }
+  if (s.includes('PREP') || s.includes('WET') || s.includes('DRY')) {
     return 'Preparation';
   }
 
-  // Department fallbacks (only if section/position didn't match specific roles)
-  if (d.includes('QA') || d.includes('QUALITY')) return 'Quality Assurance';
-  if (d.includes('MAINT')) return 'Maintenance';
-  if (d.includes('INVENTORY') || d.includes('LOGISTIC')) return 'Inventory Control';
-  if (d.includes('ADMIN') || d.includes('FINANCE') || d.includes('MANAGER')) return 'Administration';
+  // 6. Position Match (Laboratory vs Preparation)
+  if (p.includes('LAB') || p.includes('KIMIA') || p.includes('XRF') || p.includes('WET LAB') || p.includes('ANALIS') || p.includes('ASSAY')) {
+    return 'Laboratory';
+  }
+  if (p.includes('PREP') || p.includes('SAMPLE') || p.includes('CRUSH') || p.includes('PULVER') || p.includes('SPLIT')) {
+    return 'Preparation';
+  }
+
+  // 7. Department Fallbacks
   if (d.includes('LAB') && !d.includes('PREP')) return 'Laboratory';
   if (d.includes('PREP') && !d.includes('LAB')) return 'Preparation';
 

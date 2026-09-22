@@ -1,6 +1,23 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.20] - 2026-09-22
+
+### ⚡ Pemulihan Realtime Chat Room & Presensi Karyawan Online, Serta Pemisahan Seksi Maintenance & Administration
+
+- **Pemisahan Presisi Seksi Maintenance & Administration pada Leaderboard & Chat (`server/routes/gamification.ts`, `src/components/ChatScreen.tsx`)**:
+  - **Penyebab Masalah**: Sebelumnya kata kunci `LAB` / `PREP` dievaluasi terlalu agresif sehingga jabatan teknis majemuk (seperti *"Laboratory Maintenance Foreman"*, *"Crew, Laboratory Maintenance"*, *"Admin, Preparation & Laboratory"*) keliru diserap ke dalam seksi *Laboratory* dan *Preparation*, menyebabkan seksi *Maintenance* dan *Administration* kosong (0 personil).
+  - **Perbaikan Urutan Normalisasi (`normalizeSection`)**: Memprioritaskan kata kunci spesifik `Quality Assurance`, `Maintenance` (`MAINT`, `BENGKEL`, `MEKANIK`, `ELEKTRIK`), `Inventory Control`, dan `Administration` (`ADMIN`, `FINANCE`, `HR`) sebelum pencocokan umum `Laboratory` dan `Preparation`.
+  - **Hasil Evaluasi Riil**: Pemetaan personil kini akurat 100% pada Leaderboard: **Maintenance (22 personil)** (seperti La Alwino La Ode Pudu, Yulianus Tiku Mangando, Burhanudin La Wio), **Administration (4 personil)** (seperti Agung Adi Putra Prasetyo, Muhammad Iqbal), **Quality Assurance (2 personil)**, **Inventory Control (5 personil)**, **Preparation (122 personil)**, dan **Laboratory (107 personil)**.
+- **Infrastruktur Real-Time Chat & Presensi Karyawan Online Portal (`server.ts`, `src/lib/socketClient.ts`, `src/App.tsx`, `src/components/ChatScreen.tsx`)**:
+  - **Presensi Global Portal Real-Time**: Setiap karyawan yang membuka portal kini otomatis mendaftarkan status online ke server (`presence:join` & `presence:ping`) melalui singleton socket `src/lib/socketClient.ts`. Bilah obrolan chat room kini menampilkan dua indikator: *Pengguna di Room Ini* dan *Karyawan Online di Portal*.
+  - **Streaming Obrolan Real-Time Tanpa Reload**:
+    - Menghilangkan pemutusan socket (*socket.disconnect*) yang sebelumnya selalu memutus koneksi setiap kali pengguna berganti tab chat atau beralih seksi.
+    - Menambahkan mekanisme auto re-join ruangan obrolan aktif secara otomatis saat peramban tersambung kembali (*reconnect* / *wake from sleep*).
+    - Menerapkan *dual-path broadcast* (`new_message` dan `chat:broadcast`) pada backend serta *optimistic instant rendering* (0ms) di sisi pengirim.
+    - Dilengkapi *heartbeat polling fallback* otomatis setiap 3.5 detik dan sinkronisasi instan saat tab peramban kembali aktif (*focus* / *visibilitychange*), menjamin tidak ada pesan yang tertinggal meski jaringan area tambang sempat terputus.
+  - **Bilah Pemilih Pengguna Online**: Pengguna dapat dengan mudah beralih antara melihat personil di ruangan aktif (`Room (X)`) atau seluruh rekan kerja yang aktif di portal (`Semua Portal (Y)`), lengkap dengan fitur klik untuk *mention* langsung (`@Nama`).
+
 ## [2.9.19] - 2026-09-22
 
 ### 📖 Standardisasi KBBI Perawatan Pabrik & Integrasi AI Refine Khusus ROUTR & Bandelbanget (Tanpa Gemini & OpenAI)

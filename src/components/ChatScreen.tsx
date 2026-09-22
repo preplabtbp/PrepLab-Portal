@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, User, Users, Globe, Building2, X, Sparkles, 
   ShieldCheck, CheckCheck, MessageSquare, Flame, Filter, ChevronDown, AtSign,
   Trophy, Award, Megaphone
 } from 'lucide-react';
-import { io, Socket } from 'socket.io-client';
+import { Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 import { getFrameById } from '../lib/gamificationEngine';
 import { DynamicAvatarFrame } from './DynamicAvatarFrame';
+import { getGlobalSocket, joinRoom, leaveRoom } from '../lib/socketClient';
 
 const SECTIONS_LIST = [
   { id: 'preparation', name: 'Preparation', label: 'Prep' },
@@ -21,12 +22,12 @@ const SECTIONS_LIST = [
 
 function normalizeSection(rawSection?: string): string {
   const s = (rawSection || '').toLowerCase();
-  if (s.includes('prep') || s.includes('preparasi')) return 'preparation';
-  if (s.includes('lab') || s.includes('laboratorium')) return 'laboratory';
-  if (s.includes('maint') || s.includes('pemeliharaan')) return 'maintenance';
   if (s.includes('qa') || s.includes('quality')) return 'quality_assurance';
-  if (s.includes('admin') || s.includes('adm')) return 'administration';
-  if (s.includes('inv') || s.includes('inventory') || s.includes('gudang')) return 'inventory_control';
+  if (s.includes('maint') || s.includes('pemeliharaan') || s.includes('bengkel') || s.includes('teknisi')) return 'maintenance';
+  if (s.includes('inv') || s.includes('inventory') || s.includes('gudang') || s.includes('logistic')) return 'inventory_control';
+  if (s.includes('admin') || s.includes('adm') || s.includes('finance') || s.includes('hr')) return 'administration';
+  if (s.includes('lab') || s.includes('laboratorium') || s.includes('kimia') || s.includes('xrf')) return 'laboratory';
+  if (s.includes('prep') || s.includes('preparasi') || s.includes('sample') || s.includes('crush')) return 'preparation';
   return 'preparation';
 }
 
@@ -69,6 +70,8 @@ export default function ChatScreen({
   const [messages, setMessages] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+  const [portalOnlineUsers, setPortalOnlineUsers] = useState<any[]>([]);
+  const [onlineViewMode, setOnlineViewMode] = useState<'room' | 'portal'>('room');
   const [employeesList, setEmployeesList] = useState<any[]>([]);
   const [text, setText] = useState('');
   const [mentionedNiks, setMentionedNiks] = useState<Set<string>>(new Set());
@@ -79,11 +82,16 @@ export default function ChatScreen({
   const [mentionCursorIndex, setMentionCursorIndex] = useState(-1);
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
 
-  const socketRef = useRef<Socket | null>(null);
+  const activeRoomRef = useRef(activeRoom);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch employees list for mention candidates
+  // Sync activeRoomRef for event listener closures
+  useEffect(() => {
+    activeRoomRef.current = activeRoom;
+  }, [activeRoom]);
+
+  // Fetch employees list for mention candidates & initial portal presence snapshot
   useEffect(() => {
     fetch('/api/employees')
       .then(res => res.json())
@@ -95,65 +103,136 @@ export default function ChatScreen({
       .catch(err => {
         console.error('Failed to load employees for mention:', err);
       });
+
+    fetch('/api/presence/online')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.onlineUsers && Array.isArray(data.onlineUsers)) {
+          setPortalOnlineUsers(data.onlineUsers);
+        }
+      })
+      .catch(() => {});
   }, []);
 
-  // Connect socket once
+  // Fetch chat history with smooth merging
+  const fetchHistory = useCallback(async (isInitial = false) => {
+    if (isInitial) setLoadingHistory(true);
+    try {
+      const res = await fetch(`/api/chat/${activeRoom}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setMessages(prev => {
+            if (isInitial || prev.length === 0) return data;
+            const existingIds = new Set(prev.map(m => m.id));
+            const newItems = data.filter(m => !existingIds.has(m.id));
+            if (newItems.length > 0) {
+              return [...prev, ...newItems].sort((a, b) => (a.id || 0) - (b.id || 0));
+            }
+            return prev;
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load chat history:', err);
+    } finally {
+      if (isInitial) setLoadingHistory(false);
+    }
+  }, [activeRoom]);
+
+  // Join room and load history when activeRoom changes
   useEffect(() => {
-    const socket = io();
-    socketRef.current = socket;
-
-    socket.on('online_users', (users) => {
-      setOnlineUsers(users || []);
+    fetchHistory(true);
+    joinRoom(activeRoom, {
+      nik: inspectorNik,
+      name: inspectorName,
+      department: userProfile?.section || 'General',
+      avatar: userProfile?.avatar || undefined
     });
+  }, [activeRoom, inspectorNik, inspectorName, userProfile, fetchHistory]);
 
-    socket.on('new_message', (msg) => {
-      if (msg && msg.room === activeRoom) {
+  // Real-time Socket.IO listeners on singleton socket (resilient to reconnects)
+  useEffect(() => {
+    const socket = getGlobalSocket();
+
+    const handleRoomUsers = (users: any[]) => {
+      setOnlineUsers(users || []);
+    };
+
+    const handlePresence = (data: any) => {
+      if (data?.onlineUsers && Array.isArray(data.onlineUsers)) {
+        setPortalOnlineUsers(data.onlineUsers);
+      }
+    };
+
+    const handleIncomingMessage = (msg: any) => {
+      if (!msg) return;
+      if (msg.room === activeRoomRef.current) {
         setMessages(prev => {
-          if (prev.some(m => m.id === msg.id)) return prev;
+          if (prev.some(m => m.id === msg.id || (m.timestamp === msg.timestamp && m.senderNik === msg.senderNik && m.text === msg.text))) {
+            return prev;
+          }
           return [...prev, msg];
         });
       }
-    });
+    };
 
-    socket.on('chat:mention', (data) => {
+    const handleBroadcast = (payload: any) => {
+      if (payload?.newMsg) {
+        handleIncomingMessage(payload.newMsg);
+      }
+    };
+
+    const handleMention = (data: any) => {
       toast.info(`💬 ${data.senderName} menyebut Anda di chat: "${data.text?.slice(0, 80)}"`, {
         duration: 4500
       });
-    });
+    };
+
+    socket.on('online_users', handleRoomUsers);
+    socket.on('presence:update', handlePresence);
+    socket.on('presence:init', handlePresence);
+    socket.on('new_message', handleIncomingMessage);
+    socket.on('chat:broadcast', handleBroadcast);
+    socket.on('chat:mention', handleMention);
 
     return () => {
-      socket.disconnect();
+      socket.off('online_users', handleRoomUsers);
+      socket.off('presence:update', handlePresence);
+      socket.off('presence:init', handlePresence);
+      socket.off('new_message', handleIncomingMessage);
+      socket.off('chat:broadcast', handleBroadcast);
+      socket.off('chat:mention', handleMention);
     };
-  }, [activeRoom]);
+  }, []);
 
-  // Handle room changes & load chat history
+  // Real-time polling fallback (3.5s) & instant sync on window/tab focus
   useEffect(() => {
-    setLoadingHistory(true);
-    fetch(`/api/chat/${activeRoom}`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setMessages(data);
-        } else {
-          setMessages([]);
-        }
-      })
-      .catch(err => {
-        console.error('Failed to load chat history:', err);
-        setMessages([]);
-      })
-      .finally(() => setLoadingHistory(false));
+    const syncInterval = setInterval(() => {
+      fetchHistory(false);
+    }, 3500);
 
-    // Emit join room
-    if (socketRef.current) {
-      socketRef.current.emit('join', {
-        nik: inspectorNik,
-        name: inspectorName,
-        department: userProfile?.section || 'General',
-        room: activeRoom
-      });
-    }
-  }, [activeRoom, inspectorNik, inspectorName, userProfile]);
+    const handleVisibilitySync = () => {
+      if (document.visibilityState === 'visible') {
+        fetchHistory(false);
+        joinRoom(activeRoomRef.current, {
+          nik: inspectorNik,
+          name: inspectorName,
+          department: userProfile?.section || 'General',
+          avatar: userProfile?.avatar || undefined
+        });
+      }
+    };
+
+    window.addEventListener('focus', handleVisibilitySync);
+    document.addEventListener('visibilitychange', handleVisibilitySync);
+
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('focus', handleVisibilitySync);
+      document.removeEventListener('visibilitychange', handleVisibilitySync);
+    };
+  }, [fetchHistory, inspectorNik, inspectorName, userProfile]);
 
   // Auto-scroll on new message
   useEffect(() => {
@@ -302,12 +381,13 @@ export default function ChatScreen({
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || !socketRef.current) return;
+    if (!text.trim()) return;
 
     const equippedTitle = localStorage.getItem('preplab_equipped_title') || userProfile?.equippedTitle || 'Frontline Trainee';
     const equippedFrame = localStorage.getItem('preplab_equipped_frame') || userProfile?.equippedFrame || 'default';
 
-    socketRef.current.emit('send_message', {
+    const optimisticMsg = {
+      id: Date.now(),
       room: activeRoom,
       senderNik: inspectorNik,
       senderName: inspectorName,
@@ -315,8 +395,16 @@ export default function ChatScreen({
       senderFrame: equippedFrame,
       senderAvatar: userProfile?.avatar || undefined,
       text: text.trim(),
+      timestamp: new Date().toISOString(),
       mentionedNiks: Array.from(mentionedNiks)
-    });
+    };
+
+    // Optimistically display in sender's viewport immediately (0ms delay)
+    setMessages(prev => [...prev, optimisticMsg]);
+
+    const socket = getGlobalSocket();
+    socket.emit('send_message', optimisticMsg);
+
     setText('');
     setMentionedNiks(new Set());
     setShowMentionPopup(false);
@@ -388,9 +476,17 @@ export default function ChatScreen({
                   Live
                 </span>
               </div>
-              <p className="text-[11px] text-[var(--text-muted)]">
-                {onlineUsers.length} pengguna online di room ini
-              </p>
+              <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] flex-wrap">
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">{onlineUsers.length}</strong> online di room ini
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                  <strong className="text-teal-600 dark:text-teal-400 font-semibold">{portalOnlineUsers.length}</strong> karyawan online portal
+                </span>
+              </div>
             </div>
           </div>
 
@@ -450,18 +546,18 @@ export default function ChatScreen({
                     Aktif: <strong>{getSectionDisplayName(selectedSectionId)}</strong>
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-                  {SECTIONS_LIST.map((sec) => {
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                  {SECTIONS_LIST.map(sec => {
                     const isSelected = selectedSectionId === sec.id;
                     return (
                       <button
                         key={sec.id}
                         type="button"
                         onClick={() => setSelectedSectionId(sec.id)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all border cursor-pointer ${
+                        className={`py-1.5 px-2 rounded-xl text-[11px] font-bold border transition-all cursor-pointer truncate text-center ${
                           isSelected
-                            ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-2xs scale-105'
-                            : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:text-[var(--text-main)] hover:border-slate-300'
+                            ? 'bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-500/50 shadow-2xs font-extrabold'
+                            : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-500/30'
                         }`}
                       >
                         {sec.name}
@@ -483,39 +579,72 @@ export default function ChatScreen({
       </div>
 
       {/* ── ONLINE USERS BAR (Click to Mention) ── */}
-      {onlineUsers.length > 0 && (
-        <div 
-          className="px-4 sm:px-6 py-2 border-b flex items-center gap-2 overflow-x-auto scrollbar-hide text-xs"
-          style={{
-            backgroundColor: 'var(--card-bg, #FFFFFF)',
-            borderColor: 'var(--border-main, #E2E8F0)'
-          }}
-        >
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] shrink-0 flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Online:
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {onlineUsers.slice(0, 10).map((u, idx) => (
-              <button
-                key={`${u.nik}-${idx}`}
-                type="button"
-                onClick={() => handleMentionUser(u.name || u.nik, u.nik)}
-                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[var(--input-bg)] hover:bg-teal-500/15 border border-[var(--border-main)] hover:border-teal-500/40 text-[11px] font-medium transition-colors cursor-pointer"
-                title={`Klik untuk mention ${u.name || u.nik} (${u.department || 'User'})`}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span className="truncate max-w-[80px]">{u.name?.split(' ')[0] || u.nik}</span>
-              </button>
-            ))}
-            {onlineUsers.length > 10 && (
-              <span className="text-[10px] font-bold text-[var(--text-muted)]">
-                +{onlineUsers.length - 10} lainnya
-              </span>
-            )}
-          </div>
+      <div 
+        className="px-4 sm:px-6 py-2 border-b flex items-center justify-between gap-2 overflow-x-auto scrollbar-hide text-xs"
+        style={{
+          backgroundColor: 'var(--card-bg, #FFFFFF)',
+          borderColor: 'var(--border-main, #E2E8F0)'
+        }}
+      >
+        <div className="flex items-center gap-1.5 shrink-0 bg-[var(--input-bg)] p-0.5 rounded-lg border border-[var(--border-main)]">
+          <button
+            type="button"
+            onClick={() => setOnlineViewMode('room')}
+            className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+              onlineViewMode === 'room'
+                ? 'bg-emerald-600 text-white shadow-2xs'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            Room ({onlineUsers.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setOnlineViewMode('portal')}
+            className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+              onlineViewMode === 'portal'
+                ? 'bg-teal-600 text-white shadow-2xs'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            Semua Portal ({portalOnlineUsers.length})
+          </button>
         </div>
-      )}
+
+        <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto">
+          {((onlineViewMode === 'room' ? onlineUsers : portalOnlineUsers).length === 0) ? (
+            <span className="text-[11px] text-[var(--text-muted)] italic">
+              {onlineViewMode === 'room' ? 'Belum ada pengguna lain di room ini' : 'Memuat data karyawan online...'}
+            </span>
+          ) : (
+            (onlineViewMode === 'room' ? onlineUsers : portalOnlineUsers).slice(0, 12).map((u, idx) => {
+              const isCurrentMe = u.nik === inspectorNik;
+              return (
+                <button
+                  key={`${u.nik}-${idx}`}
+                  type="button"
+                  onClick={() => handleMentionUser(u.name || u.nik, u.nik)}
+                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium transition-colors cursor-pointer ${
+                    isCurrentMe
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-[var(--input-bg)] hover:bg-teal-500/15 border-[var(--border-main)] hover:border-teal-500/40'
+                  }`}
+                  title={`Klik untuk mention ${u.name || u.nik} (${u.department || u.section || 'Portal'})`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${isCurrentMe ? 'bg-emerald-500' : 'bg-teal-500 animate-pulse'} shrink-0`} />
+                  <span className="truncate max-w-[85px]">{u.name?.split(' ')[0] || u.nik}</span>
+                  {isCurrentMe && <span className="text-[9px] opacity-70 font-bold">(Anda)</span>}
+                </button>
+              );
+            })
+          )}
+          {(onlineViewMode === 'room' ? onlineUsers : portalOnlineUsers).length > 12 && (
+            <span className="text-[10px] font-bold text-[var(--text-muted)] shrink-0">
+              +{ (onlineViewMode === 'room' ? onlineUsers : portalOnlineUsers).length - 12 } lainnya
+            </span>
+          )}
+        </div>
+      </div>
 
       {/* ── MESSAGES FEED ── */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-3.5">

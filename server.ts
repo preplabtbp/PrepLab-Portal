@@ -321,30 +321,135 @@ const app = express();
   setIoInstance(io);
 
   // Teams Chat & System Socket.IO state
-  const onlineSockets = new Map(); // socket.id -> { nik, name, department, avatar, room, isQuiz, node }
+  const onlineSockets = new Map(); // socket.id -> { socketId, nik, name, department, section, avatar, room, isQuiz, node, lastActive }
   const chatMessagesMemory: any[] = [];
 
-  const broadcastOnlineNiks = () => {
-    const onlineNiks = Array.from(
-      new Set(
-        Array.from(onlineSockets.values())
-          .map((u: any) => u.nik)
-          .filter(Boolean)
-      )
-    );
-    io.emit("presence:update", { onlineNiks });
+  const getUniqueOnlineUsers = () => {
+    const userMap = new Map<string, any>();
+    for (const u of onlineSockets.values()) {
+      if (u && u.nik) {
+        if (!userMap.has(u.nik)) {
+          userMap.set(u.nik, {
+            nik: u.nik,
+            name: u.name || u.nik,
+            department: u.department || 'General',
+            section: u.section || u.department || 'General',
+            avatar: u.avatar || null,
+            room: u.room || null,
+            lastActive: u.lastActive || Date.now()
+          });
+        } else {
+          const existing = userMap.get(u.nik);
+          if (u.room && (!existing.room || existing.room === 'global')) {
+            existing.room = u.room;
+          }
+        }
+      }
+    }
+    return Array.from(userMap.values());
+  };
+
+  const broadcastPresence = () => {
+    const onlineUsers = getUniqueOnlineUsers();
+    const onlineNiks = onlineUsers.map((u: any) => u.nik);
+    io.emit("presence:update", { onlineNiks, onlineUsers, totalOnline: onlineUsers.length });
+  };
+
+  const emitRoomUsers = (room: string) => {
+    if (!room) return;
+    const usersInRoom = Array.from(onlineSockets.values()).filter((u: any) => u.room === room && u.nik);
+    const uniqueMap = new Map<string, any>();
+    for (const u of usersInRoom) {
+      if (!uniqueMap.has(u.nik)) {
+        uniqueMap.set(u.nik, {
+          nik: u.nik,
+          name: u.name || u.nik,
+          department: u.department || 'General',
+          section: u.section || u.department || 'General',
+          avatar: u.avatar || null,
+          room: u.room
+        });
+      }
+    }
+    io.to(room).emit('online_users', Array.from(uniqueMap.values()));
   };
 
   io.on('connection', (socket) => {
-    // User joins a room
-    socket.on('join', (user) => {
-      // user: { nik, name, department, room }
+    // Send immediate presence snapshot to newly connected socket
+    socket.emit('presence:init', { 
+      onlineUsers: getUniqueOnlineUsers(), 
+      totalOnline: getUniqueOnlineUsers().length 
+    });
+
+    // Register user presence across the portal
+    socket.on('presence:join', (user) => {
+      if (!user || !user.nik) return;
+      const existing = onlineSockets.get(socket.id) || {};
+      onlineSockets.set(socket.id, {
+        ...existing,
+        ...user,
+        socketId: socket.id,
+        lastActive: Date.now()
+      });
+      broadcastPresence();
+    });
+
+    socket.on('presence:ping', () => {
+      const user = onlineSockets.get(socket.id);
+      if (user) {
+        user.lastActive = Date.now();
+      }
+    });
+
+    socket.on('presence:leave', () => {
+      onlineSockets.delete(socket.id);
+      broadcastPresence();
+    });
+
+    // User joins/switches chat room
+    const handleChatJoin = (user: any) => {
+      if (!user) return;
       const room = user.room || 'global';
+      const existing = onlineSockets.get(socket.id) || {};
+      const oldRoom = existing.room;
+
+      if (oldRoom && oldRoom !== room) {
+        socket.leave(oldRoom);
+        onlineSockets.set(socket.id, {
+          ...existing,
+          ...user,
+          room,
+          socketId: socket.id,
+          lastActive: Date.now()
+        });
+        emitRoomUsers(oldRoom);
+      } else {
+        onlineSockets.set(socket.id, {
+          ...existing,
+          ...user,
+          room,
+          socketId: socket.id,
+          lastActive: Date.now()
+        });
+      }
+
       socket.join(room);
-      onlineSockets.set(socket.id, { ...user, room });
-      
-      const usersInRoom = Array.from(onlineSockets.values()).filter((u: any) => u.room === room);
-      io.to(room).emit('online_users', usersInRoom);
+      emitRoomUsers(room);
+      broadcastPresence();
+    };
+
+    socket.on('chat:join', handleChatJoin);
+    socket.on('join', handleChatJoin);
+
+    socket.on('chat:leave', () => {
+      const existing = onlineSockets.get(socket.id);
+      if (existing && existing.room) {
+        const oldRoom = existing.room;
+        socket.leave(oldRoom);
+        existing.room = null;
+        emitRoomUsers(oldRoom);
+        broadcastPresence();
+      }
     });
 
     socket.on('send_message', async (msg) => {
@@ -377,7 +482,10 @@ const app = express();
           // silently keep in-memory
         }
 
+        // 1. Emit to room members
         io.to(room).emit('new_message', newMsg);
+        // 2. Also broadcast globally so active chat drawers receive real-time updates seamlessly
+        io.emit('chat:broadcast', { room, newMsg });
         
         // --- PROCESS MENTIONS ---
         const targetMentionNiks = new Set<string>();
@@ -512,10 +620,9 @@ const app = express();
       const user = onlineSockets.get(socket.id);
       if (user) {
         onlineSockets.delete(socket.id);
-        broadcastOnlineNiks();
+        broadcastPresence();
         if (user.room) {
-          const usersInRoom = Array.from(onlineSockets.values()).filter((u: any) => u.room === user.room);
-          io.to(user.room).emit('online_users', usersInRoom);
+          emitRoomUsers(user.room);
         }
         if (user.isQuiz) {
           const quizPlayers = Array.from(onlineSockets.values()).filter((u: any) => u.isQuiz);
@@ -581,7 +688,9 @@ const app = express();
     '/api/changelog',
     '/api/gamification',
     '/api/developers',
-    '/api/kbbi'
+    '/api/kbbi',
+    '/api/chat',
+    '/api/presence'
   ];
 
   app.use('/api', (req, res, next) => {
@@ -628,6 +737,20 @@ const app = express();
   app.use(kbbiRouter);
   app.use(changelogRouter);
   app.use("/api/gamification", gamificationRouter);
+
+  // --- PRESENCE ROUTES ---
+  app.get('/api/presence/online', (req, res) => {
+    try {
+      const onlineUsers = getUniqueOnlineUsers();
+      res.json({
+        success: true,
+        onlineUsers,
+        totalOnline: onlineUsers.length
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // --- CHAT ROUTES ---
   app.get('/api/chat/:room', async (req, res) => {

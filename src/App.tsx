@@ -1,6 +1,7 @@
 import { NotificationBell } from "./components/notification-bell";
 import React, { useState, useEffect, Suspense, lazy, useRef, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { registerPresence, pingPresence, unregisterPresence } from './lib/socketClient';
 
 import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare, Trophy } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -253,6 +254,32 @@ export default function App() {
     if (userProfile?.avatar) return userProfile.avatar;
     return null;
   }, [inspectorNik, userProfile, syncTick]);
+
+  // Real-time Global Portal Presence Registration
+  useEffect(() => {
+    if (!inspectorNik) return;
+
+    const user = {
+      nik: inspectorNik,
+      name: inspectorName || inspectorNik,
+      department: userProfile?.section || userProfile?.department || 'General',
+      section: userProfile?.section || 'General',
+      avatar: headerAvatar || userProfile?.avatar || undefined,
+      equippedTitle: userProfile?.equippedTitle,
+      equippedFrame: userProfile?.equippedFrame
+    };
+
+    registerPresence(user);
+
+    const pingInterval = setInterval(() => {
+      pingPresence();
+    }, 25000);
+
+    return () => {
+      clearInterval(pingInterval);
+      unregisterPresence();
+    };
+  }, [inspectorNik, inspectorName, userProfile, headerAvatar]);
 
   const [developerList, setDeveloperList] = useState<any[]>([]);
 
