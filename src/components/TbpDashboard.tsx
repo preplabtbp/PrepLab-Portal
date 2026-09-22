@@ -491,7 +491,17 @@ export function TbpDashboard({
     if (post) {
       onSelectPost(post);
     } else {
-      alert(`Halaman '${title}' belum ditemukan.`);
+      // Seamlessly open Section Hub dashboard for this section
+      const normalizedTitle = title.trim();
+      const syntheticSectionPost = {
+        id: `section-${normalizedTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        title: normalizedTitle,
+        department: 'Prep & Lab',
+        category: normalizedTitle.toUpperCase(),
+        content: `# ${normalizedTitle}\n\n$INFO$\n\n$RULES$`,
+        pt: activeUniverse === 'GTS' ? 'GTS' : 'TBP'
+      };
+      onSelectPost(syntheticSectionPost);
     }
   };
 

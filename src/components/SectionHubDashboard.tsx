@@ -104,8 +104,15 @@ export function SectionHubDashboard({
     if (target) {
       onSelectPost(target);
     } else {
-      // Create fallback dummy view or alert
-      alert(`Halaman '${item.title}' belum memiliki data.`);
+      const fallbackPost = {
+        id: `doc-${item.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        title: item.title,
+        department: 'Prep & Lab',
+        category: sectionTitle,
+        content: `### ${item.title}\n\n*Halaman dokumentasi untuk ${item.title} (${sectionTitle}).*\n\nSilakan klik tombol **Edit Dokumen** di kanan atas untuk mulai menulis dokumen ini.`,
+        pt: currentUniverse
+      };
+      onSelectPost(fallbackPost);
     }
   };
 
