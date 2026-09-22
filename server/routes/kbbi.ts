@@ -19,9 +19,9 @@ kbbiRouter.post('/api/kbbi/refine', async (req, res) => {
       return res.status(400).json({ error: 'Teks wajib diisi!' });
     }
 
-    // Gunakan provider AI selain Gemini (Routr Cloud & Bandelbanget via OPENAI/ROUTR API KEY)
-    const routrKey = process.env.ROUTR_API_KEY || process.env.OPENAI_API_KEY || '';
-    const routrUrl = (process.env.ROUTR_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, '');
+    // Gunakan provider AI selain Gemini dan OpenAI (Routr Cloud & Bandelbanget via ROUTR/BANDELBANGET API KEY)
+    const routrKey = process.env.ROUTR_API_KEY || '';
+    const routrUrl = (process.env.ROUTR_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, '');
 
     const chatProviders = [
       {

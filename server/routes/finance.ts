@@ -23,11 +23,11 @@ financeRouter.post('/api/finance/scan-receipt', async (req, res) => {
       return res.status(400).json({ error: 'Data foto struk (imageBase64) wajib diisi!' });
     }
 
-    const routrKey = process.env.ROUTR_API_KEY || process.env.OPENAI_API_KEY;
+    const routrKey = process.env.ROUTR_API_KEY;
     const bandelbangetKey = process.env.BANDELBANGET_API_KEY;
 
     if (!routrKey && !bandelbangetKey) {
-      return res.status(500).json({ error: 'Belum ada API Key AI yang dikonfigurasi (ROUTR_API_KEY, OPENAI_API_KEY, atau BANDELBANGET_API_KEY).' });
+      return res.status(500).json({ error: 'Belum ada API Key AI yang dikonfigurasi (ROUTR_API_KEY atau BANDELBANGET_API_KEY).' });
     }
 
     // Clean base64 data URL prefix if present
@@ -60,30 +60,32 @@ Aturan parsing:
     // Racing Multi-Provider Vision AI (Bandelbanget & Routr Cloud)
     // Mencari jalan tercepat secara paralel menggunakan Promise.any
     const imgDataUrl = `data:${mimeType || 'image/jpeg'};base64,${cleanBase64}`;
+    const routrBaseUrl = (process.env.ROUTR_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, '');
+    const bandelbangetBaseUrl = (process.env.BANDELBANGET_BASE_URL || 'https://bandelbanget.xyz/v1').replace(/\/+$/, '');
 
     const candidateProviders = [
       // 1. Routr Cloud Claude Sonnet (Prioritas Utama Vision, cepat ~4s & sangat akurat)
       {
         name: 'Routr Cloud (Claude Sonnet 4.6)',
-        baseUrl: (process.env.ROUTR_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, ''),
-        apiKey: process.env.ROUTR_API_KEY || process.env.OPENAI_API_KEY || 'sk-ngw_ABLQuruepV8_gUcbdTltCoaoGTnbHaXPRqbp7o5gF6w',
+        baseUrl: routrBaseUrl,
+        apiKey: routrKey || '',
         model: 'claude-sonnet-4.6'
       },
       // 2. Bandelbanget Qwen Vision (Jika aktif, respons kilat ~1.5s)
       {
         name: 'Bandelbanget (Qwen-VL)',
-        baseUrl: (process.env.BANDELBANGET_BASE_URL || 'https://bandelbanget.xyz/v1').replace(/\/+$/, ''),
-        apiKey: process.env.BANDELBANGET_API_KEY || 'sk-qwen-7d3d24c4664c4f39c0599090e73aed18a8eb37e2b582b98e',
+        baseUrl: bandelbangetBaseUrl,
+        apiKey: bandelbangetKey || '',
         model: 'qwen-vl-max'
       },
       // 3. Routr Cloud Fallback (Kimi K3)
       {
         name: 'Routr Cloud (Kimi K3)',
-        baseUrl: (process.env.ROUTR_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, ''),
-        apiKey: process.env.ROUTR_API_KEY || process.env.OPENAI_API_KEY || 'sk-ngw_ABLQuruepV8_gUcbdTltCoaoGTnbHaXPRqbp7o5gF6w',
+        baseUrl: routrBaseUrl,
+        apiKey: routrKey || '',
         model: 'kimi-k3'
       }
-    ];
+    ].filter(p => !!p.apiKey);
 
     const executeCall = async (p: typeof candidateProviders[0]) => {
       const startTime = Date.now();

@@ -38,11 +38,6 @@ labbotRouter.post('/api/labbot/chat', async (req, res) => {
       return res.status(400).json({ error: 'Pesan chat wajib diisi!' });
     }
 
-    const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, '');
-    const apiKey = process.env.OPENAI_API_KEY || 'sk-ngw_ABLQuruepV8_gUcbdTltCoaoGTnbHaXPRqbp7o5gF6w';
-
-    const models = ['deepseek-v4-flash', 'deepseek-v4-pro', 'glm-5.3', 'claude-sonnet-4.6', 'kimi-k3'];
-
     // Format chat messages array
     const formattedMessages = [
       { role: 'system', content: LABBOT_SYSTEM_PROMPT },
@@ -53,22 +48,31 @@ labbotRouter.post('/api/labbot/chat', async (req, res) => {
       { role: 'user', content: message }
     ];
 
+    const routrKey = process.env.ROUTR_API_KEY;
+    const routrUrl = (process.env.ROUTR_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, '');
+    const bandelbangetKey = process.env.BANDELBANGET_API_KEY;
+    const bandelbangetUrl = (process.env.BANDELBANGET_BASE_URL || 'https://bandelbanget.xyz/v1').replace(/\/+$/, '');
+
     // Dual Provider Racing (Routr Cloud & Bandelbanget)
     // Dua engine dipanggil secara paralel, pemenang tercepat langsung ditampilkan ke user
     const chatProviders = [
       {
         name: 'Routr Cloud',
-        baseUrl: (process.env.ROUTR_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.routr.cloud/v1').replace(/\/+$/, ''),
-        apiKey: process.env.ROUTR_API_KEY || process.env.OPENAI_API_KEY || 'sk-ngw_ABLQuruepV8_gUcbdTltCoaoGTnbHaXPRqbp7o5gF6w',
-        model: 'deepseek-v4-flash'
+        baseUrl: routrUrl,
+        apiKey: routrKey || '',
+        model: 'glm-5.3'
       },
       {
         name: 'Bandelbanget',
-        baseUrl: (process.env.BANDELBANGET_BASE_URL || 'https://bandelbanget.xyz/v1').replace(/\/+$/, ''),
-        apiKey: process.env.BANDELBANGET_API_KEY || 'sk-qwen-7d3d24c4664c4f39c0599090e73aed18a8eb37e2b582b98e',
+        baseUrl: bandelbangetUrl,
+        apiKey: bandelbangetKey || '',
         model: 'deepseek-chat'
       }
-    ];
+    ].filter(p => !!p.apiKey);
+
+    if (chatProviders.length === 0) {
+      return res.status(500).json({ error: 'Tidak ada API Key (ROUTR_API_KEY atau BANDELBANGET_API_KEY) yang terkonfigurasi untuk LabBot.' });
+    }
 
     const executeChat = async (p: typeof chatProviders[0]) => {
       const startTime = Date.now();
