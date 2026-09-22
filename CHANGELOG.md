@@ -1,6 +1,15 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.22] - 2026-09-22
+
+### 🎯 Kartu Ringkasan Interaktif Status Laporan SAP Management (Sudah, Belum, Cuti, Total Wajib)
+
+- **Filter Cepat Berbasis Kartu Ringkasan (`src/components/GroupReportScreen.tsx`)**:
+  - **Interaktivitas Kartu Status**: Seluruh kartu ringkasan di bagian atas (*Total Wajib*, *Sudah*, *Belum*, dan *Sedang Cuti*) pada sub-tab **Rekap Inspeksi** dan **Rekap KTA/TTA** kini dapat diklik langsung untuk memfilter daftar personil secara instan.
+  - **Mekanisme Toggle Cerdas**: Mengklik kartu yang sedang aktif akan otomatis membatalkan filter dan mengembalikan tampilan ke seluruh personil (`Semua`), sedangkan mengklik kartu lain akan langsung memfilter personil sesuai status tersebut.
+  - **Sinkronisasi Visual & Feedback Indikator**: Kartu yang aktif kini dilengkapi dengan *ring highlight*, kontras latar belakang lebih tinggi, label status *"Aktif"*, efek *hover scale*, dan tersinkronisasi dua arah dengan tombol filter pil di bagian bawah.
+
 ## [2.9.21] - 2026-09-22
 
 ### 💬 Perbaikan Duplikasi Pesan Chat (3x) & Sinkronisasi Multi-Localhost / Identitas Pengirim

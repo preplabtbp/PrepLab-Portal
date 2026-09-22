@@ -1600,10 +1600,20 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           {/* ── SUB-VIEW A: REKAP KEPATUHAN INSPEKSI K3 ── */}
           {rekapSubTab === 'INSPEKSI' && (
             <div className="space-y-3">
-              {/* Summary Dashboard Cards */}
+              {/* Summary Dashboard Cards (Clickable Filters) */}
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                <Card className="p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] text-center">
-                  <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase">Total Wajib</p>
+                <Card 
+                  onClick={() => setRekapFilterStatus('ALL')}
+                  className={`p-2.5 text-center cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] select-none ${
+                    rekapFilterStatus === 'ALL'
+                      ? 'bg-[var(--primary)]/15 border-2 border-[var(--primary)] shadow-xs ring-2 ring-[var(--primary)]/20'
+                      : 'bg-[var(--card-bg)] border border-[var(--border-main)] hover:border-[var(--primary)]/50'
+                  }`}
+                  title="Klik untuk menampilkan semua personil (Wajib & Cuti)"
+                >
+                  <p className={`text-[10px] font-bold uppercase ${rekapFilterStatus === 'ALL' ? 'text-[var(--primary)] font-black' : 'text-[var(--text-muted)]'}`}>
+                    Total Wajib
+                  </p>
                   {loadingRekap ? (
                     <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-[var(--primary)]" /></div>
                   ) : (
@@ -1611,8 +1621,19 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                   )}
                 </Card>
 
-                <Card className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 text-center">
-                  <p className="text-[10px] text-emerald-600 font-bold uppercase">Sudah</p>
+                <Card 
+                  onClick={() => setRekapFilterStatus(rekapFilterStatus === 'SUDAH' ? 'ALL' : 'SUDAH')}
+                  className={`p-2.5 text-center cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] select-none ${
+                    rekapFilterStatus === 'SUDAH'
+                      ? 'bg-emerald-500/25 border-2 border-emerald-500 shadow-md ring-2 ring-emerald-500/30'
+                      : 'bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/60'
+                  }`}
+                  title="Klik untuk memfilter personil yang SUDAH inspeksi"
+                >
+                  <p className="text-[10px] text-emerald-600 font-bold uppercase flex items-center justify-center gap-1">
+                    <span>Sudah</span>
+                    {rekapFilterStatus === 'SUDAH' && <span className="text-[8px] font-black bg-emerald-600 text-white px-1 py-0.2 rounded-xs">Aktif</span>}
+                  </p>
                   {loadingRekap ? (
                     <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-emerald-500" /></div>
                   ) : (
@@ -1620,8 +1641,19 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                   )}
                 </Card>
 
-                <Card className="p-2.5 bg-amber-500/10 border border-amber-500/30 text-center">
-                  <p className="text-[10px] text-amber-600 font-bold uppercase">Belum</p>
+                <Card 
+                  onClick={() => setRekapFilterStatus(rekapFilterStatus === 'BELUM' ? 'ALL' : 'BELUM')}
+                  className={`p-2.5 text-center cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] select-none ${
+                    rekapFilterStatus === 'BELUM'
+                      ? 'bg-amber-500/25 border-2 border-amber-500 shadow-md ring-2 ring-amber-500/30'
+                      : 'bg-amber-500/10 border border-amber-500/30 hover:border-amber-500/60'
+                  }`}
+                  title="Klik untuk memfilter personil yang BELUM inspeksi"
+                >
+                  <p className="text-[10px] text-amber-600 font-bold uppercase flex items-center justify-center gap-1">
+                    <span>Belum</span>
+                    {rekapFilterStatus === 'BELUM' && <span className="text-[8px] font-black bg-amber-600 text-white px-1 py-0.2 rounded-xs">Aktif</span>}
+                  </p>
                   {loadingRekap ? (
                     <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-amber-500" /></div>
                   ) : (
@@ -1629,8 +1661,19 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                   )}
                 </Card>
 
-                <Card className="p-2.5 bg-purple-500/10 border border-purple-500/30 text-center">
-                  <p className="text-[10px] text-purple-600 font-bold uppercase">Sedang Cuti</p>
+                <Card 
+                  onClick={() => setRekapFilterStatus(rekapFilterStatus === 'CUTI' ? 'ALL' : 'CUTI')}
+                  className={`p-2.5 text-center cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] select-none ${
+                    rekapFilterStatus === 'CUTI'
+                      ? 'bg-purple-500/25 border-2 border-purple-500 shadow-md ring-2 ring-purple-500/30'
+                      : 'bg-purple-500/10 border border-purple-500/30 hover:border-purple-500/60'
+                  }`}
+                  title="Klik untuk memfilter personil yang SEDANG CUTI"
+                >
+                  <p className="text-[10px] text-purple-600 font-bold uppercase flex items-center justify-center gap-1">
+                    <span>Sedang Cuti</span>
+                    {rekapFilterStatus === 'CUTI' && <span className="text-[8px] font-black bg-purple-600 text-white px-1 py-0.2 rounded-xs">Aktif</span>}
+                  </p>
                   {loadingRekap ? (
                     <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-purple-500" /></div>
                   ) : (
@@ -2128,10 +2171,20 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           {/* ── SUB-VIEW B: REKAP KEPATUHAN KTA / TTA ── */}
           {rekapSubTab === 'KTA_TTA' && (
             <div className="space-y-3">
-              {/* Summary Dashboard Cards KTA */}
+              {/* Summary Dashboard Cards KTA (Clickable Filters) */}
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                <Card className="p-2.5 bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-main)] text-center">
-                  <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase">Total Wajib</p>
+                <Card 
+                  onClick={() => setRekapKtaFilterStatus('ALL')}
+                  className={`p-2.5 text-center cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] select-none ${
+                    rekapKtaFilterStatus === 'ALL'
+                      ? 'bg-amber-600/15 border-2 border-amber-600 shadow-xs ring-2 ring-amber-600/20'
+                      : 'bg-[var(--card-bg)] border border-[var(--border-main)] hover:border-amber-600/50'
+                  }`}
+                  title="Klik untuk menampilkan semua personil KTA/TTA (Wajib & Cuti)"
+                >
+                  <p className={`text-[10px] font-bold uppercase ${rekapKtaFilterStatus === 'ALL' ? 'text-amber-600 font-black' : 'text-[var(--text-muted)]'}`}>
+                    Total Wajib
+                  </p>
                   {loadingRekapKta ? (
                     <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-[var(--primary)]" /></div>
                   ) : (
@@ -2139,8 +2192,19 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                   )}
                 </Card>
 
-                <Card className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 text-center">
-                  <p className="text-[10px] text-emerald-600 font-bold uppercase">Sudah</p>
+                <Card 
+                  onClick={() => setRekapKtaFilterStatus(rekapKtaFilterStatus === 'SUDAH' ? 'ALL' : 'SUDAH')}
+                  className={`p-2.5 text-center cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] select-none ${
+                    rekapKtaFilterStatus === 'SUDAH'
+                      ? 'bg-emerald-500/25 border-2 border-emerald-500 shadow-md ring-2 ring-emerald-500/30'
+                      : 'bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/60'
+                  }`}
+                  title="Klik untuk memfilter personil yang SUDAH lapor KTA/TTA"
+                >
+                  <p className="text-[10px] text-emerald-600 font-bold uppercase flex items-center justify-center gap-1">
+                    <span>Sudah</span>
+                    {rekapKtaFilterStatus === 'SUDAH' && <span className="text-[8px] font-black bg-emerald-600 text-white px-1 py-0.2 rounded-xs">Aktif</span>}
+                  </p>
                   {loadingRekapKta ? (
                     <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-emerald-500" /></div>
                   ) : (
@@ -2148,8 +2212,19 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                   )}
                 </Card>
 
-                <Card className="p-2.5 bg-amber-500/10 border border-amber-500/30 text-center">
-                  <p className="text-[10px] text-amber-600 font-bold uppercase">Belum</p>
+                <Card 
+                  onClick={() => setRekapKtaFilterStatus(rekapKtaFilterStatus === 'BELUM' ? 'ALL' : 'BELUM')}
+                  className={`p-2.5 text-center cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] select-none ${
+                    rekapKtaFilterStatus === 'BELUM'
+                      ? 'bg-amber-500/25 border-2 border-amber-500 shadow-md ring-2 ring-amber-500/30'
+                      : 'bg-amber-500/10 border border-amber-500/30 hover:border-amber-500/60'
+                  }`}
+                  title="Klik untuk memfilter personil yang BELUM lapor KTA/TTA"
+                >
+                  <p className="text-[10px] text-amber-600 font-bold uppercase flex items-center justify-center gap-1">
+                    <span>Belum</span>
+                    {rekapKtaFilterStatus === 'BELUM' && <span className="text-[8px] font-black bg-amber-600 text-white px-1 py-0.2 rounded-xs">Aktif</span>}
+                  </p>
                   {loadingRekapKta ? (
                     <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-amber-500" /></div>
                   ) : (
@@ -2157,8 +2232,19 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                   )}
                 </Card>
 
-                <Card className="p-2.5 bg-purple-500/10 border border-purple-500/30 text-center">
-                  <p className="text-[10px] text-purple-600 font-bold uppercase">Sedang Cuti</p>
+                <Card 
+                  onClick={() => setRekapKtaFilterStatus(rekapKtaFilterStatus === 'CUTI' ? 'ALL' : 'CUTI')}
+                  className={`p-2.5 text-center cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] select-none ${
+                    rekapKtaFilterStatus === 'CUTI'
+                      ? 'bg-purple-500/25 border-2 border-purple-500 shadow-md ring-2 ring-purple-500/30'
+                      : 'bg-purple-500/10 border border-purple-500/30 hover:border-purple-500/60'
+                  }`}
+                  title="Klik untuk memfilter personil yang SEDANG CUTI"
+                >
+                  <p className="text-[10px] text-purple-600 font-bold uppercase flex items-center justify-center gap-1">
+                    <span>Sedang Cuti</span>
+                    {rekapKtaFilterStatus === 'CUTI' && <span className="text-[8px] font-black bg-purple-600 text-white px-1 py-0.2 rounded-xs">Aktif</span>}
+                  </p>
                   {loadingRekapKta ? (
                     <div className="py-1"><RefreshCw className="w-4 h-4 animate-spin mx-auto text-purple-500" /></div>
                   ) : (
