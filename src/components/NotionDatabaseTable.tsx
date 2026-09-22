@@ -45,7 +45,9 @@ import {
   Edit2, 
   Save,
   Upload,
-  Reply
+  Reply,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -60,44 +62,99 @@ export interface CommentAttachmentItem {
   directUrl?: string;
   driveViewUrl?: string;
   driveDownloadUrl?: string;
-  isImage: boolean;
+  isImage?: boolean;
   mimeType?: string;
   size?: number;
 }
 
+export function formatNotionCommentTime(dateStr: string): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  
+  if (diffMs < 0) return 'Just now';
+  
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffHours < 1) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays < 7) return `${diffDays}d`;
+  
+  if (date.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Ekstraksi Google Drive ID dari link / format Drive
 export const extractDriveId = (item: any): string | null => {
   if (!item) return null;
-  if (item?.id && typeof item.id === 'string' && item.id.length >= 10) return item.id;
-  if (item?.driveId && typeof item.driveId === 'string' && item.driveId.length >= 10) return item.driveId;
-  const str = item?.fileUrl || item?.directUrl || item?.url || item?.driveViewUrl || item?.driveDownloadUrl || (typeof item === 'string' ? item : '');
-  if (!str) return null;
-  const match = str.match(/\/file\/d\/([a-zA-Z0-9_-]{20,})/i) ||
-                str.match(/[?&]id=([a-zA-Z0-9_-]{20,})/i) ||
-                str.match(/\/d\/([a-zA-Z0-9_-]{20,})/i) ||
-                str.match(/\/api\/drive\/(?:view|download)\/([a-zA-Z0-9_-]{20,})/i);
-  return match ? match[1] : null;
+  if (typeof item === 'string') {
+    const directMatch = item.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (directMatch) return directMatch[1];
+    const idMatch = item.match(/id=([a-zA-Z0-9_-]+)/);
+    if (idMatch) return idMatch[1];
+    const viewMatch = item.match(/\/view\/([a-zA-Z0-9_-]+)/);
+    if (viewMatch) return viewMatch[1];
+    if (/^[a-zA-Z0-9_-]{25,}$/.test(item.trim())) return item.trim();
+    return null;
+  }
+  if (typeof item === 'object') {
+    if (item.id && /^[a-zA-Z0-9_-]{25,}$/.test(String(item.id).trim())) {
+      return String(item.id).trim();
+    }
+    const candidate = item.directUrl || item.url || item.driveViewUrl || item.fileUrl;
+    if (candidate && typeof candidate === 'string') {
+      return extractDriveId(candidate);
+    }
+  }
+  return null;
 };
 
-export const parseCommentAttachments = (fileUrl?: string | null, fileName?: string | null, contentText?: string | null): CommentAttachmentItem[] => {
-  if (!fileUrl && !contentText) return [];
+// Parser seragam untuk mengekstrak lampiran file dari komentar
+export const parseCommentAttachments = (fileUrl?: string | null, fileName?: string | null, content?: string | null): CommentAttachmentItem[] => {
+  let extractedUrl = fileUrl;
+  let extractedName = fileName;
 
-  // Ambil nama file dari teks content jika formatnya "📎 Lampiran Foto / Dokumen: filename.ext"
-  let extractedName = '';
-  if (contentText) {
-    const m = contentText.match(/📎\s*(?:Lampiran Foto \/ Dokumen|Lampiran Media|Lampiran):\s*([^\n\r]+)/i);
-    if (m && m[1]) {
-      extractedName = m[1].trim();
+  if (content && (!extractedUrl || extractedUrl.trim() === '')) {
+    const mdLinkMatch = content.match(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/);
+    if (mdLinkMatch) {
+      extractedName = mdLinkMatch[1];
+      extractedUrl = mdLinkMatch[2];
+    } else {
+      const rawUrlMatch = content.match(/(https?:\/\/[^\s]+)/);
+      if (rawUrlMatch) {
+        extractedUrl = rawUrlMatch[1];
+      }
     }
   }
 
-  if (fileUrl) {
+  const targetUrl = extractedUrl || fileUrl;
+  if (!targetUrl && !content) return [];
+
+  // Ambil nama file dari teks content jika formatnya "📎 Lampiran Foto / Dokumen: filename.ext"
+  let contentExtractedName = '';
+  if (content) {
+    const m = content.match(/📎\s*(?:Lampiran Foto \/ Dokumen|Lampiran Media|Lampiran):\s*([^\n\r]+)/i);
+    if (m && m[1]) {
+      contentExtractedName = m[1].trim();
+    }
+  }
+
+  if (targetUrl) {
     try {
-      const trimmed = fileUrl.trim();
+      const trimmed = targetUrl.trim();
       if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
         const parsed = JSON.parse(trimmed);
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((item: any) => {
-            const name = item.name || fileName || extractedName || 'Attachment';
+            const name = item.name || extractedName || contentExtractedName || 'Attachment';
             const driveId = extractDriveId(item);
             const isImg = 
               item.category === 'image' || 
@@ -125,19 +182,19 @@ export const parseCommentAttachments = (fileUrl?: string | null, fileName?: stri
       }
     } catch (e) {}
 
-    const driveId = extractDriveId({ fileUrl });
-    const name = fileName || extractedName || (driveId ? 'Foto / Dokumen Lampiran' : 'Attachment');
+    const driveId = extractDriveId({ fileUrl: targetUrl });
+    const name = extractedName || contentExtractedName || (driveId ? 'Foto / Dokumen Lampiran' : 'Attachment');
     const isDoc = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|txt|csv)$/i.test(name);
     const isImg = !isDoc && (
       /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(name) ||
-      /\.(jpg|jpeg|png|gif|webp|svg|bmp)/i.test(fileUrl) ||
-      fileUrl.startsWith('data:image/') ||
+      /\.(jpg|jpeg|png|gif|webp|svg|bmp)/i.test(targetUrl) ||
+      targetUrl.startsWith('data:image/') ||
       Boolean(driveId)
     );
 
-    const directUrl = driveId ? `/api/drive/view/${driveId}` : fileUrl;
-    const driveDownloadUrl = driveId ? `/api/drive/download/${driveId}` : fileUrl;
-    const driveViewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : fileUrl;
+    const directUrl = driveId ? `/api/drive/view/${driveId}` : targetUrl;
+    const driveDownloadUrl = driveId ? `/api/drive/download/${driveId}` : targetUrl;
+    const driveViewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : targetUrl;
 
     return [{
       id: driveId || undefined,
@@ -153,55 +210,49 @@ export const parseCommentAttachments = (fileUrl?: string | null, fileName?: stri
   return [];
 };
 
-export const AttachmentThumbnail = ({
+export const NotionAttachmentThumbnail = ({
   attachment,
-  onPreview
+  onPreview,
+  overlayBadge
 }: {
   attachment: CommentAttachmentItem;
   onPreview: (att: CommentAttachmentItem) => void;
+  overlayBadge?: string;
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
   const [fallbackStage, setFallbackStage] = useState(0);
 
   const driveId = attachment.id || extractDriveId(attachment.directUrl || attachment.url);
 
-  // Jika bukan gambar atau gagal me-render gambar, tampilkan kartu dokumen rapi
   if (!attachment.isImage || imgFailed) {
     return (
       <div
         onClick={() => onPreview(attachment)}
-        className="flex items-center gap-2.5 p-2 px-3 rounded-xl border hover:border-teal-500/60 transition-all cursor-pointer group shadow-xs max-w-sm"
+        className="flex items-center gap-1.5 p-1.5 px-2.5 rounded-lg border hover:border-teal-500/60 transition-all cursor-pointer group shadow-xs max-w-xs text-xs"
         style={{
           backgroundColor: 'var(--input-bg, #1a1a1a)',
           borderColor: 'var(--border-main, #334155)'
         }}
         title={`Buka / Unduh: ${attachment.name}`}
       >
-        <div className="w-8 h-8 rounded-lg bg-teal-950/80 border border-teal-700/50 flex items-center justify-center text-teal-400 shrink-0 group-hover:scale-105 transition-transform">
-          <FileText className="w-4 h-4" />
+        <div className="w-5 h-5 rounded bg-teal-950/80 border border-teal-700/50 flex items-center justify-center text-teal-400 shrink-0">
+          <FileText className="w-3 h-3" />
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold text-teal-300 truncate group-hover:underline">
-            {attachment.name}
-          </p>
-          <span className="text-[10px] text-slate-400 font-mono block">
-            {attachment.size ? `${(attachment.size / 1024).toFixed(0)} KB` : 'Lampiran Berkas'}
-          </span>
-        </div>
-        <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-teal-300 shrink-0" />
+        <span className="text-[11px] font-semibold text-teal-300 truncate max-w-[150px] group-hover:underline">
+          {attachment.name}
+        </span>
       </div>
     );
   }
 
-  // Tampilan gambar foto
   const primarySrc = attachment.directUrl || attachment.url;
 
   return (
     <div
       onClick={() => onPreview(attachment)}
-      className="relative rounded-xl overflow-hidden border hover:border-teal-500/60 max-w-xs sm:max-w-sm aspect-video block group cursor-pointer shadow-sm transition-all hover:scale-[1.01]"
+      className="relative rounded-lg overflow-hidden border hover:border-teal-500/80 w-14 h-14 sm:w-16 sm:h-16 block group cursor-pointer shadow-xs transition-all hover:scale-[1.03] shrink-0"
       style={{
-        backgroundColor: 'var(--input-bg, #141414)',
+        backgroundColor: 'var(--input-bg, #161616)',
         borderColor: 'var(--border-main, #334155)'
       }}
       title={`Klik untuk memperbesar: ${attachment.name}`}
@@ -211,7 +262,7 @@ export const AttachmentThumbnail = ({
         alt={attachment.name}
         loading="lazy"
         referrerPolicy="no-referrer"
-        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
         onError={(e) => {
           const target = e.target as HTMLImageElement;
           if (driveId) {
@@ -220,7 +271,7 @@ export const AttachmentThumbnail = ({
               target.src = `https://lh3.googleusercontent.com/d/${driveId}`;
             } else if (fallbackStage === 1) {
               setFallbackStage(2);
-              target.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`;
+              target.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w600`;
             } else {
               setImgFailed(true);
             }
@@ -229,12 +280,69 @@ export const AttachmentThumbnail = ({
           }
         }}
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2.5 justify-between">
-        <span className="text-[11px] text-white font-medium truncate max-w-[80%] drop-shadow-sm">
-          {attachment.name}
-        </span>
-        <Maximize2 className="w-3.5 h-3.5 text-teal-300 shrink-0" />
-      </div>
+      {overlayBadge ? (
+        <div className="absolute inset-0 bg-black/65 backdrop-blur-[1px] flex items-center justify-center text-white font-bold text-xs sm:text-sm tracking-wide">
+          {overlayBadge}
+        </div>
+      ) : (
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <Maximize2 className="w-3.5 h-3.5 text-white drop-shadow" />
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const NotionAttachmentGrid = ({
+  attachments,
+  onPreview
+}: {
+  attachments: CommentAttachmentItem[];
+  onPreview: (att: CommentAttachmentItem) => void;
+}) => {
+  if (!attachments || attachments.length === 0) return null;
+
+  const images = attachments.filter((a) => a.isImage);
+  const docs = attachments.filter((a) => !a.isImage);
+
+  const maxVisibleImages = 3;
+  const visibleImages = images.slice(0, maxVisibleImages);
+  const overflowImage = images.length > maxVisibleImages ? images[maxVisibleImages] : null;
+  const overflowCount = images.length - maxVisibleImages;
+
+  return (
+    <div className="space-y-1.5 pt-1">
+      {images.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {visibleImages.map((att, idx) => (
+            <NotionAttachmentThumbnail
+              key={att.id || idx}
+              attachment={att}
+              onPreview={onPreview}
+            />
+          ))}
+          {overflowImage && (
+            <NotionAttachmentThumbnail
+              key={overflowImage.id || 'overflow'}
+              attachment={overflowImage}
+              onPreview={onPreview}
+              overlayBadge={`+${overflowCount}`}
+            />
+          )}
+        </div>
+      )}
+
+      {docs.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+          {docs.map((att, idx) => (
+            <NotionAttachmentThumbnail
+              key={att.id || `doc-${idx}`}
+              attachment={att}
+              onPreview={onPreview}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -422,6 +530,7 @@ export function NotionDatabaseTable({
   const [selectedFile, setSelectedFile] = useState<{ name: string; url: string } | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; driveViewUrl?: string; driveDownloadUrl?: string } | null>(null);
+  const [showAllReplies, setShowAllReplies] = useState(false);
 
   // Replying state for threaded comments in discussion
   const [replyingTo, setReplyingTo] = useState<{
@@ -430,6 +539,11 @@ export function NotionDatabaseTable({
     authorName: string;
     content: string;
   } | null>(null);
+
+  useEffect(() => {
+    setShowAllReplies(false);
+    setReplyingTo(null);
+  }, [selectedRow]);
 
   const handleStartReply = (c: any) => {
     setReplyingTo({
@@ -576,6 +690,18 @@ export function NotionDatabaseTable({
     if (!selectedTopicTitle) return [];
     const q = selectedTopicTitle.toLowerCase().trim();
     return allComments.filter((c) => (c.topicTitle || '').toLowerCase().trim() === q);
+  }, [allComments, selectedTopicTitle]);
+
+  // Notion-style sorted comment stream (chronological oldest to newest)
+  const sortedTopicComments = useMemo(() => {
+    if (!selectedTopicTitle) return [];
+    const q = selectedTopicTitle.toLowerCase().trim();
+    const list = allComments.filter((c) => (c.topicTitle || '').toLowerCase().trim() === q);
+    return [...list].sort((a, b) => {
+      const tA = new Date(a.createdAt || 0).getTime();
+      const tB = new Date(b.createdAt || 0).getTime();
+      return tA - tB;
+    });
   }, [allComments, selectedTopicTitle]);
 
   // Ekstrak semua lampiran file dari komentar topik untuk Galeri Media
@@ -2644,16 +2770,21 @@ export function NotionDatabaseTable({
                     </div>
 
                     {/* ================================================================= */}
-                    {/* RIGHT COLUMN: DISKUSI PROGRESS & REALTIME TIMELINE                */}
+                    {/* RIGHT COLUMN: NOTION-STYLE DISCUSSION & REPLIES                   */}
                     {/* ================================================================= */}
                     <div className="lg:col-span-7 xl:col-span-7 space-y-4">
                       
-                      {/* Header Discussion */}
-                      <div className="flex items-center justify-between px-1">
-                        <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
-                          <MessageSquare className="w-4 h-4" />
-                          <span>Diskusi & Riwayat Progres ({activeTopicComments.length})</span>
-                        </h4>
+                      {/* Header Comments */}
+                      <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4 text-teal-500" />
+                          <h4 
+                            className="text-xs font-bold uppercase tracking-wider"
+                            style={{ color: 'var(--text-main, #0f172a)' }}
+                          >
+                            Comments ({sortedTopicComments.length})
+                          </h4>
+                        </div>
                         <span 
                           className="text-[10px] font-mono px-2 py-0.5 rounded-full border"
                           style={{
@@ -2662,30 +2793,372 @@ export function NotionDatabaseTable({
                             color: 'var(--text-muted, #94a3b8)'
                           }}
                         >
-                          ⚡ Realtime Feed
+                          ⚡ Threaded Replies
                         </span>
                       </div>
 
-                      {/* New Comment & Status Update Form */}
+                      {/* Comments Timeline Stream */}
+                      <div className="space-y-2 pt-1">
+                        {commentsLoading ? (
+                          <div className="text-center py-8" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-teal-400" />
+                            <p className="text-xs">Memuat riwayat diskusi...</p>
+                          </div>
+                        ) : sortedTopicComments.length === 0 ? (
+                          <div 
+                            className="text-center py-8 px-4 rounded-2xl border border-dashed"
+                            style={{
+                              backgroundColor: 'var(--card-bg, #151515)',
+                              borderColor: 'var(--border-main, #334155)',
+                              color: 'var(--text-muted, #94a3b8)'
+                            }}
+                          >
+                            <MessageSquare className="w-6 h-6 mx-auto mb-1.5 opacity-40 text-teal-400" />
+                            <p className="text-xs italic">Belum ada komentar atau update diskusi pada kegiatan ini.</p>
+                          </div>
+                        ) : sortedTopicComments.length <= 2 ? (
+                          sortedTopicComments.map((c, idx) => {
+                            const atts = parseCommentAttachments(c.fileUrl, c.fileName, c.content);
+                            return (
+                              <div 
+                                key={c.id ? `comment-${c.id}-${idx}` : `comment-${idx}`} 
+                                className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-slate-500/5 transition-colors group"
+                                style={{
+                                  borderBottom: '1px solid var(--border-main, rgba(51, 65, 85, 0.25))'
+                                }}
+                              >
+                                <div 
+                                  className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 shadow-xs"
+                                  style={{
+                                    backgroundColor: 'var(--input-bg, #f1f5f9)',
+                                    border: '1px solid var(--border-main, #cbd5e1)',
+                                    color: 'var(--text-main, #0f172a)'
+                                  }}
+                                >
+                                  {(c.authorName || 'U').charAt(0).toUpperCase()}
+                                </div>
+
+                                <div className="flex-1 min-w-0 space-y-1">
+                                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                                    <span 
+                                      className="font-bold text-xs"
+                                      style={{ color: 'var(--text-main, #0f172a)' }}
+                                    >
+                                      {c.authorName || 'Personil'}
+                                    </span>
+                                    <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 leading-tight">
+                                      Guest
+                                    </span>
+                                    <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>
+                                      {formatNotionCommentTime(c.createdAt)}
+                                    </span>
+
+                                    <div className="ml-auto flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleStartReply(c)}
+                                        className="opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-500/10 transition-opacity flex items-center gap-1 cursor-pointer font-medium"
+                                        title={`Balas tanggapan ${c.authorName}`}
+                                      >
+                                        <Reply className="w-2.5 h-2.5 rotate-180" />
+                                        <span>Balas</span>
+                                      </button>
+                                      {c.authorNik === currentAuthorNik && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteComment(c.id)}
+                                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
+                                          title="Hapus komentar ini"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
+                                    {c.content}
+                                  </p>
+
+                                  {atts.length > 0 && (
+                                    <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="space-y-2">
+                            {/* First / Earliest Comment */}
+                            {(() => {
+                              const c = sortedTopicComments[0];
+                              const atts = parseCommentAttachments(c.fileUrl, c.fileName, c.content);
+                              return (
+                                <div 
+                                  key={c.id ? `first-${c.id}` : 'first-item'} 
+                                  className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-slate-500/5 transition-colors group"
+                                  style={{
+                                    borderBottom: '1px solid var(--border-main, rgba(51, 65, 85, 0.25))'
+                                  }}
+                                >
+                                  <div 
+                                    className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 shadow-xs"
+                                    style={{
+                                      backgroundColor: 'var(--input-bg, #f1f5f9)',
+                                      border: '1px solid var(--border-main, #cbd5e1)',
+                                      color: 'var(--text-main, #0f172a)'
+                                    }}
+                                  >
+                                    {(c.authorName || 'U').charAt(0).toUpperCase()}
+                                  </div>
+
+                                  <div className="flex-1 min-w-0 space-y-1">
+                                    <div className="flex items-center gap-2 flex-wrap text-xs">
+                                      <span 
+                                        className="font-bold text-xs"
+                                        style={{ color: 'var(--text-main, #0f172a)' }}
+                                      >
+                                        {c.authorName || 'Personil'}
+                                      </span>
+                                      <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 leading-tight">
+                                        Guest
+                                      </span>
+                                      <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>
+                                        {formatNotionCommentTime(c.createdAt)}
+                                      </span>
+
+                                      <div className="ml-auto flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleStartReply(c)}
+                                          className="opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-500/10 transition-opacity flex items-center gap-1 cursor-pointer font-medium"
+                                          title={`Balas tanggapan ${c.authorName}`}
+                                        >
+                                          <Reply className="w-2.5 h-2.5 rotate-180" />
+                                          <span>Balas</span>
+                                        </button>
+                                        {c.authorNik === currentAuthorNik && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteComment(c.id)}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
+                                            title="Hapus komentar ini"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
+                                      {c.content}
+                                    </p>
+
+                                    {atts.length > 0 && (
+                                      <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Collapsible toggle bar */}
+                            <div className="pl-9 py-1">
+                              <button
+                                type="button"
+                                onClick={() => setShowAllReplies(!showAllReplies)}
+                                className="text-xs font-semibold flex items-center gap-1.5 py-1 px-2.5 -ml-2.5 rounded-lg transition-all cursor-pointer group border border-dashed hover:border-teal-500/50"
+                                style={{
+                                  color: 'var(--text-muted, #64748b)',
+                                  borderColor: 'var(--border-main, rgba(51, 65, 85, 0.4))'
+                                }}
+                              >
+                                {showAllReplies ? (
+                                  <>
+                                    <ChevronUp className="w-3.5 h-3.5 text-teal-500" />
+                                    <span>Sembunyikan {sortedTopicComments.length - 2} balasan</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="w-3.5 h-3.5 text-teal-500 group-hover:translate-y-0.5 transition-transform" />
+                                    <span style={{ color: 'var(--text-main, #0f172a)' }}>Show {sortedTopicComments.length - 2} replies</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {/* Intermediate comments */}
+                            <AnimatePresence>
+                              {showAllReplies && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  className="space-y-2 overflow-hidden"
+                                >
+                                  {sortedTopicComments.slice(1, sortedTopicComments.length - 1).map((c, midx) => {
+                                    const atts = parseCommentAttachments(c.fileUrl, c.fileName, c.content);
+                                    return (
+                                      <div 
+                                        key={c.id ? `mid-${c.id}-${midx}` : `mid-${midx}`} 
+                                        className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-slate-500/5 transition-colors group"
+                                        style={{
+                                          borderBottom: '1px solid var(--border-main, rgba(51, 65, 85, 0.25))'
+                                        }}
+                                      >
+                                        <div 
+                                          className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 shadow-xs"
+                                          style={{
+                                            backgroundColor: 'var(--input-bg, #f1f5f9)',
+                                            border: '1px solid var(--border-main, #cbd5e1)',
+                                            color: 'var(--text-main, #0f172a)'
+                                          }}
+                                        >
+                                          {(c.authorName || 'U').charAt(0).toUpperCase()}
+                                        </div>
+
+                                        <div className="flex-1 min-w-0 space-y-1">
+                                          <div className="flex items-center gap-2 flex-wrap text-xs">
+                                            <span 
+                                              className="font-bold text-xs"
+                                              style={{ color: 'var(--text-main, #0f172a)' }}
+                                            >
+                                              {c.authorName || 'Personil'}
+                                            </span>
+                                            <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 leading-tight">
+                                              Guest
+                                            </span>
+                                            <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>
+                                              {formatNotionCommentTime(c.createdAt)}
+                                            </span>
+
+                                            <div className="ml-auto flex items-center gap-1">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleStartReply(c)}
+                                                className="opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-500/10 transition-opacity flex items-center gap-1 cursor-pointer font-medium"
+                                                title={`Balas tanggapan ${c.authorName}`}
+                                              >
+                                                <Reply className="w-2.5 h-2.5 rotate-180" />
+                                                <span>Balas</span>
+                                              </button>
+                                              {c.authorNik === currentAuthorNik && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleDeleteComment(c.id)}
+                                                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
+                                                  title="Hapus komentar ini"
+                                                >
+                                                  <Trash2 className="w-3 h-3" />
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
+                                            {c.content}
+                                          </p>
+
+                                          {atts.length > 0 && (
+                                            <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+
+                            {/* Latest / Newest Comment */}
+                            {(() => {
+                              const c = sortedTopicComments[sortedTopicComments.length - 1];
+                              const atts = parseCommentAttachments(c.fileUrl, c.fileName, c.content);
+                              return (
+                                <div 
+                                  key={c.id ? `last-${c.id}` : 'last-item'} 
+                                  className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-slate-500/5 transition-colors group"
+                                  style={{
+                                    borderBottom: '1px solid var(--border-main, rgba(51, 65, 85, 0.25))'
+                                  }}
+                                >
+                                  <div 
+                                    className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 shadow-xs"
+                                    style={{
+                                      backgroundColor: 'var(--input-bg, #f1f5f9)',
+                                      border: '1px solid var(--border-main, #cbd5e1)',
+                                      color: 'var(--text-main, #0f172a)'
+                                    }}
+                                  >
+                                    {(c.authorName || 'U').charAt(0).toUpperCase()}
+                                  </div>
+
+                                  <div className="flex-1 min-w-0 space-y-1">
+                                    <div className="flex items-center gap-2 flex-wrap text-xs">
+                                      <span 
+                                        className="font-bold text-xs"
+                                        style={{ color: 'var(--text-main, #0f172a)' }}
+                                      >
+                                        {c.authorName || 'Personil'}
+                                      </span>
+                                      <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 leading-tight">
+                                        Guest
+                                      </span>
+                                      <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>
+                                        {formatNotionCommentTime(c.createdAt)}
+                                      </span>
+
+                                      <div className="ml-auto flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleStartReply(c)}
+                                          className="opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-500/10 transition-opacity flex items-center gap-1 cursor-pointer font-medium"
+                                          title={`Balas tanggapan ${c.authorName}`}
+                                        >
+                                          <Reply className="w-2.5 h-2.5 rotate-180" />
+                                          <span>Balas</span>
+                                        </button>
+                                        {c.authorNik === currentAuthorNik && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteComment(c.id)}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
+                                            title="Hapus komentar ini"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
+                                      {c.content}
+                                    </p>
+
+                                    {atts.length > 0 && (
+                                      <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Notion Bottom Comment Box */}
                       <form 
                         onSubmit={handlePostComment} 
-                        className="p-4 border rounded-2xl space-y-3 shadow-md"
+                        className="p-3.5 sm:p-4 border rounded-2xl space-y-2.5 shadow-md mt-4"
                         style={{
                           backgroundColor: 'var(--card-bg, #171717)',
                           borderColor: 'var(--border-main, #334155)'
                         }}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-main, #f1f5f9)' }}>
-                            <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-                            <span>{replyingTo ? `Balas Catatan: ${replyingTo.authorName}` : 'Kirim Update Progres / Catatan Baru'}</span>
-                          </span>
-                        </div>
-
                         {/* Replying banner */}
                         {replyingTo && (
                           <div 
-                            className="flex items-center justify-between p-2.5 px-3 rounded-xl border text-xs animate-in fade-in duration-150 shadow-xs"
+                            className="flex items-center justify-between p-2 px-3 rounded-xl border text-xs animate-in fade-in duration-150 shadow-xs"
                             style={{
                               backgroundColor: 'rgba(20, 184, 166, 0.12)',
                               borderColor: 'rgba(20, 184, 166, 0.35)',
@@ -2711,15 +3184,15 @@ export function NotionDatabaseTable({
 
                         <textarea
                           id="notion-comment-textarea"
-                          rows={3}
+                          rows={2}
                           value={commentText}
                           onChange={(e) => setCommentText(e.target.value)}
                           placeholder={
                             replyingTo 
                               ? `Tulis tanggapan untuk ${replyingTo.authorName}...` 
-                              : `Tuliskan update progres, temuan kendala, atau hasil tindakan untuk "${selectedTopicTitle}"...`
+                              : `Add a comment for "${selectedTopicTitle}"...`
                           }
-                          className="w-full p-3 rounded-xl border focus:border-teal-500 outline-none leading-relaxed text-xs"
+                          className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none leading-relaxed text-xs resize-none"
                           style={{
                             backgroundColor: 'var(--input-bg, #202020)',
                             borderColor: 'var(--border-main, #334155)',
@@ -2727,13 +3200,13 @@ export function NotionDatabaseTable({
                           }}
                         />
 
-                        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted, #94a3b8)' }}>Ubah Status:</span>
+                            <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted, #94a3b8)' }}>Status:</span>
                             <select
                               value={statusUpdateChoice}
                               onChange={(e) => setStatusUpdateChoice(e.target.value)}
-                              className="p-1.5 px-2.5 rounded-lg border text-xs outline-none cursor-pointer"
+                              className="p-1 px-2 rounded-lg border text-xs outline-none cursor-pointer"
                               style={{
                                 backgroundColor: 'var(--input-bg, #202020)',
                                 borderColor: 'var(--border-main, #334155)',
@@ -2751,200 +3224,13 @@ export function NotionDatabaseTable({
                           <Button
                             type="submit"
                             disabled={submittingComment || !commentText.trim()}
-                            className="!w-auto text-xs px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-lg cursor-pointer"
+                            className="!w-auto text-xs px-4 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-md cursor-pointer"
                           >
                             {submittingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : replyingTo ? <Reply className="w-3.5 h-3.5 mr-1.5 rotate-180" /> : <Send className="w-3.5 h-3.5 mr-1.5" />}
-                            <span>{replyingTo ? 'Kirim Balasan' : 'Kirim Update'}</span>
+                            <span>{replyingTo ? 'Kirim Balasan' : 'Comment'}</span>
                           </Button>
                         </div>
                       </form>
-
-                      {/* Activity / Comments Timeline Stream */}
-                      <div className="space-y-3 pt-1">
-                        {commentsLoading ? (
-                          <div className="text-center py-8" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-teal-400" />
-                            <p className="text-xs">Memuat riwayat diskusi...</p>
-                          </div>
-                        ) : rootComments.length === 0 ? (
-                          <div 
-                            className="text-center py-8 px-4 rounded-2xl border border-dashed"
-                            style={{
-                              backgroundColor: 'var(--card-bg, #151515)',
-                              borderColor: 'var(--border-main, #334155)',
-                              color: 'var(--text-muted, #94a3b8)'
-                            }}
-                          >
-                            <MessageSquare className="w-6 h-6 mx-auto mb-1.5 opacity-40 text-teal-400" />
-                            <p className="text-xs italic">Belum ada update progres atau catatan diskusi pada kegiatan ini.</p>
-                          </div>
-                        ) : (
-                          rootComments.map((root) => {
-                            const rootAtts = parseCommentAttachments(root.fileUrl, root.fileName, root.content);
-                            const threadReplies = repliesMap[root.id] || [];
-
-                            return (
-                              <div 
-                                key={root.id} 
-                                className="p-3.5 sm:p-4 border rounded-2xl space-y-2.5 shadow-sm transition-all"
-                                style={{
-                                  backgroundColor: 'var(--card-bg, #171717)',
-                                  borderColor: 'var(--border-main, #334155)'
-                                }}
-                              >
-                                {/* Header Komentar Utama */}
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2.5">
-                                    <span className="w-7 h-7 rounded-full bg-teal-900/90 border border-teal-700/60 text-teal-300 text-xs font-bold flex items-center justify-center shrink-0">
-                                      {(root.authorName || 'U').charAt(0).toUpperCase()}
-                                    </span>
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-bold text-xs block leading-tight" style={{ color: 'var(--text-main, #f1f5f9)' }}>
-                                          {root.authorName || 'Personil'}
-                                        </span>
-                                        {threadReplies.length > 0 && (
-                                          <span className="text-[9px] px-1.5 py-0.2 rounded-full font-mono bg-teal-950/80 text-teal-300 border border-teal-600/40 font-semibold">
-                                            {threadReplies.length} balasan
-                                          </span>
-                                        )}
-                                      </div>
-                                      <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                                        {new Date(root.createdAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleStartReply(root)}
-                                      className="px-2 py-0.5 rounded-lg hover:bg-teal-500/20 text-teal-400 hover:text-teal-300 font-semibold text-[11px] flex items-center gap-1 transition-colors cursor-pointer border border-teal-500/30"
-                                      title="Balas komentar utama ini"
-                                    >
-                                      <Reply className="w-3 h-3 rotate-180" />
-                                      <span>Balas</span>
-                                    </button>
-                                    {root.authorNik === currentAuthorNik && (
-                                      <button
-                                        onClick={() => handleDeleteComment(root.id)}
-                                        className="p-1.5 rounded-lg hover:opacity-80 hover:text-rose-400 transition-colors cursor-pointer"
-                                        style={{ color: 'var(--text-muted, #94a3b8)' }}
-                                        title="Hapus Catatan Ini"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Isi Komentar Utama */}
-                                <p className="text-xs whitespace-pre-line leading-relaxed pl-9" style={{ color: 'var(--text-main, #cbd5e1)' }}>
-                                  {root.content}
-                                </p>
-
-                                {/* Media preview if root comment has file_url */}
-                                {rootAtts.length > 0 && (
-                                  <div className="pl-9 pt-1 space-y-2">
-                                    {rootAtts.map((att, aIdx) => (
-                                      <AttachmentThumbnail 
-                                        key={att.id || aIdx} 
-                                        attachment={att} 
-                                        onPreview={handlePreviewAttachment} 
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-
-                                {/* THREADED REPLIES CONTAINER (BERSARANG DI DALAM KOMENTAR UTAMA) */}
-                                {threadReplies.length > 0 && (
-                                  <div className="mt-3 ml-2 sm:ml-6 pl-3 sm:pl-4 border-l-2 border-teal-500/40 space-y-2.5 pt-1">
-                                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-teal-400 mb-1">
-                                      <CornerDownRight className="w-3.5 h-3.5" />
-                                      <span>Balasan Diskusi ({threadReplies.length})</span>
-                                    </div>
-
-                                    {threadReplies.map((reply: any) => {
-                                      const replyAtts = parseCommentAttachments(reply.fileUrl, reply.fileName, reply.content);
-                                      return (
-                                        <div
-                                          key={reply.id}
-                                          className="p-3 rounded-xl border space-y-1.5 shadow-xs transition-all"
-                                          style={{
-                                            backgroundColor: 'var(--input-bg, #141414)',
-                                            borderColor: 'var(--border-main, #334155)'
-                                          }}
-                                        >
-                                          <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                              <span className="w-5 h-5 rounded-full bg-teal-900/90 border border-teal-600/50 text-teal-300 text-[10px] font-bold flex items-center justify-center shrink-0">
-                                                {(reply.authorName || 'U').charAt(0).toUpperCase()}
-                                              </span>
-                                              <div>
-                                                <div className="flex items-center gap-1.5 flex-wrap">
-                                                  <span className="font-bold text-[11px]" style={{ color: 'var(--text-main, #f1f5f9)' }}>
-                                                    {reply.authorName || 'Personil'}
-                                                  </span>
-                                                  {reply.replyToName && (
-                                                    <span className="text-[10px] text-teal-400 font-medium">
-                                                      membalas <span className="font-semibold">@{reply.replyToName}</span>
-                                                    </span>
-                                                  )}
-                                                </div>
-                                                <span className="text-[9px] font-mono block" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                                                  {new Date(reply.createdAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
-                                                </span>
-                                              </div>
-                                            </div>
-
-                                            <div className="flex items-center gap-1">
-                                              <button
-                                                type="button"
-                                                onClick={() => handleStartReply(reply)}
-                                                className="px-2 py-0.5 rounded-md hover:bg-teal-500/20 text-teal-400 font-semibold text-[10px] flex items-center gap-1 transition-colors cursor-pointer border border-teal-500/30"
-                                                title={`Balas tanggapan ${reply.authorName}`}
-                                              >
-                                                <Reply className="w-2.5 h-2.5 rotate-180" />
-                                                <span>Balas</span>
-                                              </button>
-                                              {reply.authorNik === currentAuthorNik && (
-                                                <button
-                                                  onClick={() => handleDeleteComment(reply.id)}
-                                                  className="p-1 rounded-md hover:opacity-80 hover:text-rose-400 transition-colors cursor-pointer"
-                                                  style={{ color: 'var(--text-muted, #94a3b8)' }}
-                                                  title="Hapus Tanggapan Ini"
-                                                >
-                                                  <Trash2 className="w-3 h-3" />
-                                                </button>
-                                              )}
-                                            </div>
-                                          </div>
-
-                                          <p className="text-xs whitespace-pre-line leading-relaxed pl-7" style={{ color: 'var(--text-main, #cbd5e1)' }}>
-                                            {reply.content}
-                                          </p>
-
-                                          {replyAtts.length > 0 && (
-                                            <div className="pl-7 pt-1 space-y-1.5">
-                                              {replyAtts.map((att, aIdx) => (
-                                                <AttachmentThumbnail
-                                                  key={att.id || aIdx}
-                                                  attachment={att}
-                                                  onPreview={handlePreviewAttachment}
-                                                />
-                                              ))}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
 
                     </div>
                   </div>

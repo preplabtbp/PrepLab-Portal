@@ -82,7 +82,7 @@ export const PromotionWelcomeModal: React.FC<PromotionWelcomeModalProps> = ({
 
   if (loading && !gamificationData) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
         <div className="p-8 rounded-3xl bg-slate-900 border border-amber-500/40 text-center space-y-3">
           <div className="w-10 h-10 border-3 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-sm font-bold text-amber-300">Menghubungkan Data Komando &amp; Pangkat...</p>
@@ -101,7 +101,7 @@ export const PromotionWelcomeModal: React.FC<PromotionWelcomeModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}

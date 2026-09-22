@@ -436,36 +436,51 @@ export function TbpDashboard({
   }, []);
 
   const handleNav = (title: string) => {
-    const searchStr = title.toLowerCase().trim();
+    const searchStr = (title || '').toLowerCase().trim();
     
     // 1. Exact match (cleaned of markdown formatting)
     let post = posts.find(p => {
-      const clean = (p.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+      const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
       return clean === searchStr;
     });
     
     // 2. Exact match with "Information " or "Section " prefix
     if (!post) {
       post = posts.find(p => {
-        const clean = (p.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+        const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
         return clean === `information ${searchStr}` || clean === `section ${searchStr}`;
       });
     }
 
-    // 3. Category / Section exact match
+    // 3. Synonym mapping (e.g. Inventory -> Warehouse, General Issue -> Non Routine General Issue)
+    if (!post) {
+      if (searchStr === 'inventory' || searchStr === 'warehouse') {
+        post = posts.find(p => {
+          const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+          return clean === 'warehouse' || clean === 'information warehouse' || clean === 'warehouse / inventory control' || clean.includes('warehouse') || clean.includes('inventory');
+        });
+      } else if (searchStr === 'general issue' || searchStr === 'general issues') {
+        post = posts.find(p => {
+          const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+          return clean === 'general issue' || clean.includes('general issue');
+        });
+      }
+    }
+
+    // 4. Category / Section exact match
     if (!post) {
       post = posts.find(p => {
-        const cat = (p.category || p.section || '').toLowerCase().trim();
-        const clean = (p.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+        const cat = (p?.category || p?.section || '').toLowerCase().trim();
+        const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
         return cat === searchStr && !clean.includes('identifikasi') && !clean.includes('pengecekan');
       });
     }
 
-    // 4. Fallback starting with searchStr (avoiding random substring matches)
+    // 5. Fallback starting with searchStr (avoiding random substring matches)
     if (!post) {
       post = posts.find(p => {
-        const clean = (p.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
-        return clean.startsWith(searchStr);
+        const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+        return clean.startsWith(searchStr) || clean.includes(searchStr);
       });
     }
 

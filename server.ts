@@ -709,11 +709,13 @@ const app = express();
     if (isPublic) {
       return next();
     }
-    // Allow public read-only (GET) access to P5M schedules, pool, and materi so all workers can view briefings & materials
+    // Allow public read-only (GET) access to P5M schedules, pool, materi, bulletin posts, and agenda
     if (req.method === 'GET' && (
       url.startsWith('/api/p5m/materi') || 
       url.startsWith('/api/p5m/schedules') || 
-      url.startsWith('/api/p5m/pool')
+      url.startsWith('/api/p5m/pool') ||
+      url.startsWith('/api/bulletin') ||
+      url.startsWith('/api/agenda')
     )) {
       return next();
     }

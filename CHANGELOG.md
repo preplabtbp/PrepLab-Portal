@@ -1,6 +1,31 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.24] - 2026-09-23
+
+### 🎖️ Perbaikan Layer Z-Index Modal Promosi Pangkat & Sinkronisasi Komentar / Lampiran Notion
+
+- **Layer Z-Index Modal Promosi Pangkat (`src/components/PromotionWelcomeModal.tsx`)**:
+  - **Akar Masalah**: Modal upacara promosi pangkat (`PromotionWelcomeModal`) sebelumnya menggunakan kelas `z-50`, sehingga saat tombol *"Promosi"* diklik di dalam Drawer Profil Karyawan (`z-[60]`), modal promosi tertutup dan berada di belakang panel profil.
+  - **Perbaikan Layer Stacking**: Meningkatkan z-index backdrop dan wadah modal ke `z-[150]`, memastikan seluruh animasi piala, medali, sertifikat pangkat komando, dan efek kembang api selalu tampil prima di atas drawer profil dan modal lainnya.
+- **Tampilan Balasan Komentar Bergaya Notion & Sinkronisasi Data (`src/components/NotionDatabaseTable.tsx`)**:
+  - **Accordion Thread Balasan Notion**: Menerapkan tata letak berjenjang Notion dengan toggle collapsible *"Show N replies"* / *"Sembunyikan balasan"*, foto profil inisial, badge tamu, dan stempel waktu relatif.
+  - **Grid Lampiran Foto Cerdas**: Menampilkan thumbnail foto lampiran dengan indikator overflow `+N Foto Lagi` dan pratinjau langsung resolusi tinggi melalui Google Drive.
+  - **Pencegahan Peringatan Duplikasi Key React**: Memastikan seluruh kunci iterasi komentar dan balasan unik (`key={comment-id-index}`).
+- **Penyempurnaan Navigasi Alias Dashboard (`src/components/TbpDashboard.tsx`)**:
+  - Menambahkan dukungan alias pencarian untuk kategori seperti *Inventory* (*Warehouse / Inventory Control*) dan *General Issue*.
+
+## [2.9.23] - 2026-09-22
+
+### 🔍 Perbaikan Tombol "Lihat SS" Inspeksi Mingguan (Pratinjau Langsung vs Form Upload)
+
+- **Pembukaan Langsung Pratinjau Bukti Screenshot (`src/components/InspectionScheduleCard.tsx`)**:
+  - **Akar Masalah**: Tombol *"Lihat SS"* sebelumnya memanggil `setShowSsModal(true)` yang merupakan dialog formulir upload/ganti screenshot. Di dalam dialog tersebut, variabel pratinjau gambar baru (`ssImagePreview`) bernilai `null` saat modal dibuka, sehingga dialog menampilkan area unggah kosong (*"Klik untuk pilih gambar atau tekan Ctrl + V"*) dan membuat pengguna merasa diminta mengunggah ulang padahal screenshot sudah tersimpan di server.
+  - **Pratinjau Instan Layar Penuh (Lightbox)**: Tombol *"Lihat SS"* kini terhubung ke `handleViewSsProof()` yang langsung membuka *lightbox modal* resolusi tinggi (`setLightboxUrl`) untuk melihat screenshot yang sudah tersimpan (`ssProofUrl`), baik dari memori, cache lokal, maupun sinkronisasi otomatis dari API `/api/inspection-proofs`.
+  - **Penyempurnaan Modal Upload/Ganti Screenshot**:
+    - Jika pengguna membuka dialog upload saat screenshot sudah ada, dialog kini secara eksplisit menampilkan screenshot aktif saat ini dengan status badge *"✓ Screenshot Sudah Terunggah"* dan tombol *"Lihat Layar Penuh"*, serta menyediakan opsi jelas *"Ganti dengan Screenshot Baru"*.
+  - **Kontrol Tambahan pada Lightbox**: Lightbox pratinjau kini dilengkapi tombol *"Ganti / Upload Ulang"*, *"Buka di Tab Baru"*, dan *"Tutup Pratinjau"*, memberikan alur interaksi yang sangat intuitif.
+
 ## [2.9.22] - 2026-09-22
 
 ### 🎯 Kartu Ringkasan Interaktif Status Laporan SAP Management (Sudah, Belum, Cuti, Total Wajib)

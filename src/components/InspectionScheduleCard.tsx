@@ -4,7 +4,7 @@ import {
   ExternalLink, Search, X, RefreshCw, Sparkles, CheckCircle2, AlertCircle, 
   Users, Camera, ShieldAlert, AlertTriangle, Image as ImageIcon, Send, Trash2, Check,
   ChevronDown, ChevronUp, Calendar, ClipboardList, ThermometerSun, ArrowRight, FileText,
-  Download, Eye, Sun
+  Download, Eye, Sun, Upload
 } from 'lucide-react';
 import { Button } from './ui';
 import { toast } from 'sonner';
@@ -453,6 +453,55 @@ export function InspectionScheduleCard({
     } catch (e) {
       console.warn('Failed to fetch inspection proofs:', e);
     }
+  };
+
+  // Handler untuk membuka Bukti Screenshot di Lightbox secara instan
+  const handleViewSsProof = async () => {
+    if (ssProofUrl) {
+      setLightboxUrl(ssProofUrl);
+      return;
+    }
+    const cachedUrl = localStorage.getItem('p2h_cached_ss_proof_url');
+    if (cachedUrl) {
+      setSsProofUrl(cachedUrl);
+      setLightboxUrl(cachedUrl);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/inspection-proofs?week=${currentWeekTag}`);
+      if (res.ok) {
+        const proofs: any[] = await res.json();
+        const cleanNik = (inspectorNik || '').trim().toLowerCase();
+        const cleanName = (inspectorName || '').trim().toLowerCase();
+        const found = proofs.find(p => {
+          const pNik = (p.nik || '').trim().toLowerCase();
+          const pName = (p.name || '').trim().toLowerCase();
+          if (cleanNik && pNik === cleanNik) return true;
+          if (cleanName && pName === cleanName) return true;
+          if (cleanName && pName) {
+            const selfParts = cleanName.split(/\s+/).filter(Boolean);
+            const pParts = pName.split(/\s+/).filter(Boolean);
+            if (selfParts.length >= 2 && pParts.length >= 2 && selfParts.every(part => pName.includes(part))) return true;
+            if (selfParts.length >= 2 && pParts.length >= 2 && pParts.every(part => cleanName.includes(part))) return true;
+          }
+          return false;
+        });
+
+        if (found?.imageUrl) {
+          setHasSsProof(true);
+          setSsProofUrl(found.imageUrl);
+          try {
+            localStorage.setItem('p2h_cached_has_ss_proof', 'true');
+            localStorage.setItem('p2h_cached_ss_proof_url', found.imageUrl);
+          } catch {}
+          setLightboxUrl(found.imageUrl);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to resolve screenshot image:', e);
+    }
+    setShowSsModal(true);
   };
 
   // Fetch KTA Status from /api/rekap-kta with silent background update
@@ -1135,9 +1184,14 @@ export function InspectionScheduleCard({
                       <Check className="w-3 h-3" /> Selesai
                     </span>
                   ) : hasSsProof ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={handleViewSsProof}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 border border-emerald-500/30 flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Klik untuk melihat bukti screenshot"
+                    >
                       <Check className="w-3 h-3" /> Bukti SS
-                    </span>
+                    </button>
                   ) : (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30">
                       Belum Selesai
@@ -1233,10 +1287,12 @@ export function InspectionScheduleCard({
                     {hasSsProof ? (
                       <button
                         type="button"
-                        onClick={() => setShowSsModal(true)}
-                        className={`py-2 px-2.5 rounded-xl border border-[var(--border-main)] bg-[var(--card-bg)] text-[var(--text-main)] text-[11px] font-semibold hover:bg-[var(--input-bg)] transition-colors cursor-pointer ${!hasAdminAccess ? 'flex-1' : ''}`}
+                        onClick={handleViewSsProof}
+                        className={`py-2 px-2.5 rounded-xl border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors cursor-pointer flex items-center justify-center gap-1 ${!hasAdminAccess ? 'flex-1' : ''}`}
+                        title="Lihat Bukti Screenshot"
                       >
-                        Lihat SS
+                        <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Lihat SS</span>
                       </button>
                     ) : (
                       <button
@@ -1264,10 +1320,12 @@ export function InspectionScheduleCard({
                     {hasSsProof ? (
                       <button
                         type="button"
-                        onClick={() => setShowSsModal(true)}
-                        className={`py-2 px-2.5 rounded-xl border border-[var(--border-main)] bg-[var(--card-bg)] text-[var(--text-main)] text-[11px] font-semibold hover:bg-[var(--input-bg)] transition-colors cursor-pointer ${!hasAdminAccess ? 'flex-1' : ''}`}
+                        onClick={handleViewSsProof}
+                        className={`py-2 px-2.5 rounded-xl border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors cursor-pointer flex items-center justify-center gap-1 ${!hasAdminAccess ? 'flex-1' : ''}`}
+                        title="Lihat Bukti Screenshot"
                       >
-                        Lihat SS
+                        <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Lihat SS</span>
                       </button>
                     ) : (
                       <button
@@ -1298,13 +1356,27 @@ export function InspectionScheduleCard({
                         <Download className="w-3 h-3" /> Unduh PDF
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setShowSsModal(true)}
-                      className="py-1.5 px-2.5 rounded-xl border border-[var(--border-main)] bg-[var(--card-bg)] text-[var(--text-main)] text-[11px] font-semibold hover:bg-[var(--input-bg)] transition-colors cursor-pointer"
-                    >
-                      {hasSsProof ? 'Lihat SS' : 'Bukti SS'}
-                    </button>
+                    {hasSsProof ? (
+                      <button
+                        type="button"
+                        onClick={handleViewSsProof}
+                        className="py-1.5 px-2.5 rounded-xl border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors cursor-pointer flex items-center gap-1"
+                        title="Lihat Bukti Screenshot"
+                      >
+                        <Eye className="w-3 h-3 text-emerald-600" />
+                        <span>Lihat SS</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowSsModal(true)}
+                        className="py-1.5 px-2.5 rounded-xl border border-[var(--border-main)] bg-[var(--card-bg)] text-[var(--text-main)] text-[11px] font-semibold hover:bg-[var(--input-bg)] transition-colors cursor-pointer flex items-center gap-1"
+                        title="Upload Bukti Screenshot"
+                      >
+                        <Camera className="w-3 h-3" />
+                        <span>Bukti SS</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={handleStartInspection}
@@ -2053,19 +2125,86 @@ export function InspectionScheduleCard({
                 </div>
 
                 {ssImagePreview ? (
-                  <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-500/40 bg-black/40 group aspect-video max-h-56 flex items-center justify-center shadow-md">
-                    <img
-                      src={ssImagePreview}
-                      alt="Pratinjau Screenshot Form General Inspeksi"
-                      className="w-full h-full object-contain"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => { setSsImageFile(null); setSsImagePreview(null); }}
-                      className="absolute top-2 right-2 px-2.5 py-1 rounded-xl bg-rose-500 text-white text-[10px] font-bold shadow-md hover:bg-rose-600 transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <Trash2 className="w-3 h-3" /> Hapus / Ganti
-                    </button>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[11px] text-blue-600 font-semibold">
+                      <span>Screenshot Baru Dipilih:</span>
+                      <span className="text-[10px] text-[var(--text-muted)]">Klik simpan di bawah untuk memperbarui</span>
+                    </div>
+                    <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-500/40 bg-black/40 group aspect-video max-h-56 flex items-center justify-center shadow-md">
+                      <img
+                        src={ssImagePreview}
+                        alt="Pratinjau Screenshot Form General Inspeksi"
+                        className="w-full h-full object-contain"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { setSsImageFile(null); setSsImagePreview(null); }}
+                        className="absolute top-2 right-2 px-2.5 py-1 rounded-xl bg-rose-500 text-white text-[10px] font-bold shadow-md hover:bg-rose-600 transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Trash2 className="w-3 h-3" /> Batal / Ganti Lain
+                      </button>
+                    </div>
+                  </div>
+                ) : ssProofUrl ? (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                        <Check className="w-4 h-4 text-emerald-500" /> Screenshot Sudah Terunggah
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setLightboxUrl(ssProofUrl)}
+                        className="text-[11px] text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> Lihat Layar Penuh
+                      </button>
+                    </div>
+
+                    {/* Pratinjau Gambar Tersimpan */}
+                    <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-500/40 bg-black/30 aspect-video max-h-52 flex items-center justify-center shadow-md group">
+                      <img
+                        src={ssProofUrl}
+                        alt="Screenshot Aktif General Inspeksi"
+                        className="w-full h-full object-contain cursor-pointer"
+                        onClick={() => setLightboxUrl(ssProofUrl)}
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setLightboxUrl(ssProofUrl)}
+                          className="px-3 py-1.5 rounded-xl bg-white/95 text-slate-800 text-xs font-bold flex items-center gap-1 shadow-md hover:bg-white transition-colors cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-blue-600" /> Lihat Layar Penuh
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Tombol / Area Ganti Screenshot */}
+                    <label className="border border-dashed border-[var(--border-main)] hover:border-blue-500 bg-[var(--input-bg)] rounded-2xl p-3 flex items-center justify-center gap-2 text-center cursor-pointer transition-colors group">
+                      <Upload className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform shrink-0" />
+                      <div className="text-left">
+                        <p className="text-xs font-bold text-[var(--text-main)] leading-tight">
+                          Ganti dengan Screenshot Baru
+                        </p>
+                        <p className="text-[10px] text-[var(--text-muted)] leading-tight">
+                          Klik untuk pilih berkas baru atau tekan Ctrl + V
+                        </p>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setSsImageFile(file);
+                            const reader = new FileReader();
+                            reader.onload = (re) => setSsImagePreview(re.target?.result as string);
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
                   </div>
                 ) : (
                   <label className="border-2 border-dashed border-[var(--border-main)] hover:border-blue-500 bg-[var(--input-bg)] rounded-2xl p-6 sm:p-7 flex flex-col items-center justify-center text-center cursor-pointer transition-colors group">
@@ -2103,7 +2242,7 @@ export function InspectionScheduleCard({
                   onClick={() => { setShowSsModal(false); setSsImageFile(null); setSsImagePreview(null); }}
                   className="flex-1 py-2.5 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-[var(--text-main)] text-xs font-bold hover:bg-[var(--bg-main)] transition-colors cursor-pointer"
                 >
-                  Batal
+                  {ssProofUrl && !ssImageFile ? 'Tutup' : 'Batal'}
                 </button>
 
                 <button
@@ -2115,6 +2254,16 @@ export function InspectionScheduleCard({
                     <>
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                       <span>Mengunggah...</span>
+                    </>
+                  ) : ssImageFile ? (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Simpan Screenshot Baru</span>
+                    </>
+                  ) : ssProofUrl ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-300" />
+                      <span>Screenshot Sudah Tersimpan</span>
                     </>
                   ) : (
                     <>
@@ -2416,19 +2565,62 @@ export function InspectionScheduleCard({
           onClick={() => setLightboxUrl(null)}
           className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200 cursor-pointer"
         >
-          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
+          <div className="relative max-w-4xl max-h-[92vh] w-full flex flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
+            {/* Header info in lightbox */}
+            <div className="w-full flex items-center justify-between pb-2 text-white/90 text-xs px-1">
+              <span className="font-bold flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                Bukti Screenshot General Inspeksi ({currentWeekTag})
+              </span>
+              <button
+                type="button"
+                onClick={() => setLightboxUrl(null)}
+                className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors cursor-pointer"
+                title="Tutup"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
             <img
               src={lightboxUrl}
               alt="Bukti Screenshot General Inspeksi"
-              className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/20"
+              className="max-h-[75vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/20 bg-black/40"
             />
-            <button
-              onClick={() => setLightboxUrl(null)}
-              className="mt-3 px-4 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-            >
-              <X className="w-3.5 h-3.5" />
-              <span>Tutup Pratinjau</span>
-            </button>
+
+            {/* Action buttons */}
+            <div className="mt-3 flex items-center gap-2 flex-wrap justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setLightboxUrl(null);
+                  setShowSsModal(true);
+                }}
+                className="px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-md"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>Ganti / Upload Ulang</span>
+              </button>
+
+              <a
+                href={lightboxUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Buka di Tab Baru</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={() => setLightboxUrl(null)}
+                className="px-3.5 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white/90 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Tutup Pratinjau</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
