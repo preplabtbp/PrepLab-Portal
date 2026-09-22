@@ -1069,64 +1069,116 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     ? cutiList 
     : (rekapFilterStatus === 'ALL' ? [...rekapList, ...cutiList] : rekapList);
 
-  const filteredRekap = sourceList.filter(emp => {
-    const rawNik = (emp.nik || '').toString().trim();
-    const rawName = (emp.name || '').toString().trim();
-    const rawSection = (emp.section || '').toString().trim();
-    const rawStatus = (emp.statusKaryawan || '').toString().trim().toUpperCase();
-    if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
-    if (rawSection.includes('#N/A') || rawSection.toUpperCase() === 'N/A') return false;
-    if (rawStatus.includes('RESIGN') || rawStatus.includes('PHK') || rawStatus.includes('KELUAR') || rawStatus.includes('INACTIVE')) return false;
-    if (['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'].includes(rawNik)) return false;
-
-    const nikLower = rawNik.toLowerCase();
-    const nameLower = rawName.toLowerCase();
-    if (
-      nikLower === 'demo123' || nikLower === 'demo' || nikLower.includes('demo') ||
-      nameLower.includes('demo') || nameLower.includes('staging') || nameLower.includes('test') ||
-      nikLower.includes('admin') || nameLower.includes('admin')
-    ) {
-      return false;
+  const getLatestUploadTimestamp = (emp: any): number => {
+    if (emp.isCuti) return -1;
+    let maxTime = 0;
+    if (emp.completedAt) {
+      const t = new Date(emp.completedAt).getTime();
+      if (!isNaN(t) && t > maxTime) maxTime = t;
     }
+    if (emp.checkDetails?.ssTimestamp) {
+      const t = new Date(emp.checkDetails.ssTimestamp).getTime();
+      if (!isNaN(t) && t > maxTime) maxTime = t;
+    }
+    if (emp.checkDetails?.pdfTimestamp) {
+      const t = new Date(emp.checkDetails.pdfTimestamp).getTime();
+      if (!isNaN(t) && t > maxTime) maxTime = t;
+    }
+    if (emp.checkDetails?.check1Timestamp) {
+      const t = new Date(emp.checkDetails.check1Timestamp).getTime();
+      if (!isNaN(t) && t > maxTime) maxTime = t;
+    }
+    if (emp.checkDetails?.check2Timestamp) {
+      const t = new Date(emp.checkDetails.check2Timestamp).getTime();
+      if (!isNaN(t) && t > maxTime) maxTime = t;
+    }
+    if (Array.isArray(emp.reports) && emp.reports.length > 0) {
+      emp.reports.forEach((r: any) => {
+        if (r?.timestamp) {
+          const t = new Date(r.timestamp).getTime();
+          if (!isNaN(t) && t > maxTime) maxTime = t;
+        }
+      });
+    }
+    return maxTime;
+  };
 
-    const matchSearch = nameLower.includes(searchRekap.toLowerCase()) || nikLower.includes(searchRekap.toLowerCase());
-    const matchStatus = rekapFilterStatus === 'ALL' 
-      ? true 
-      : (rekapFilterStatus === 'CUTI' ? emp.isCuti : emp.status === rekapFilterStatus);
-    return matchSearch && matchStatus;
-  });
+  const filteredRekap = sourceList
+    .filter(emp => {
+      const rawNik = (emp.nik || '').toString().trim();
+      const rawName = (emp.name || '').toString().trim();
+      const rawSection = (emp.section || '').toString().trim();
+      const rawStatus = (emp.statusKaryawan || '').toString().trim().toUpperCase();
+      if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
+      if (rawSection.includes('#N/A') || rawSection.toUpperCase() === 'N/A') return false;
+      if (rawStatus.includes('RESIGN') || rawStatus.includes('PHK') || rawStatus.includes('KELUAR') || rawStatus.includes('INACTIVE')) return false;
+      if (['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'].includes(rawNik)) return false;
+
+      const nikLower = rawNik.toLowerCase();
+      const nameLower = rawName.toLowerCase();
+      if (
+        nikLower === 'demo123' || nikLower === 'demo' || nikLower.includes('demo') ||
+        nameLower.includes('demo') || nameLower.includes('staging') || nameLower.includes('test') ||
+        nikLower.includes('admin') || nameLower.includes('admin')
+      ) {
+        return false;
+      }
+
+      const matchSearch = nameLower.includes(searchRekap.toLowerCase()) || nikLower.includes(searchRekap.toLowerCase());
+      const matchStatus = rekapFilterStatus === 'ALL' 
+        ? true 
+        : (rekapFilterStatus === 'CUTI' ? emp.isCuti : emp.status === rekapFilterStatus);
+      return matchSearch && matchStatus;
+    })
+    .sort((a, b) => {
+      const timeA = getLatestUploadTimestamp(a);
+      const timeB = getLatestUploadTimestamp(b);
+      if (timeA > 0 || timeB > 0) {
+        return timeB - timeA; // Paling atas selalu yang paling terbaru upload screenshot / laporan
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
 
   // Filter Rekap KTA / TTA
   const sourceKtaList = rekapKtaFilterStatus === 'CUTI' 
     ? cutiKtaList 
     : (rekapKtaFilterStatus === 'ALL' ? [...rekapKtaList, ...cutiKtaList] : rekapKtaList);
 
-  const filteredRekapKta = sourceKtaList.filter(emp => {
-    const rawNik = (emp.nik || '').toString().trim();
-    const rawName = (emp.name || '').toString().trim();
-    const rawSection = (emp.section || '').toString().trim();
-    const rawStatus = (emp.statusKaryawan || '').toString().trim().toUpperCase();
-    if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
-    if (rawSection.includes('#N/A') || rawSection.toUpperCase() === 'N/A') return false;
-    if (rawStatus.includes('RESIGN') || rawStatus.includes('PHK') || rawStatus.includes('KELUAR') || rawStatus.includes('INACTIVE')) return false;
-    if (['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'].includes(rawNik)) return false;
+  const filteredRekapKta = sourceKtaList
+    .filter(emp => {
+      const rawNik = (emp.nik || '').toString().trim();
+      const rawName = (emp.name || '').toString().trim();
+      const rawSection = (emp.section || '').toString().trim();
+      const rawStatus = (emp.statusKaryawan || '').toString().trim().toUpperCase();
+      if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
+      if (rawSection.includes('#N/A') || rawSection.toUpperCase() === 'N/A') return false;
+      if (rawStatus.includes('RESIGN') || rawStatus.includes('PHK') || rawStatus.includes('KELUAR') || rawStatus.includes('INACTIVE')) return false;
+      if (['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'].includes(rawNik)) return false;
 
-    const nikLower = rawNik.toLowerCase();
-    const nameLower = rawName.toLowerCase();
-    if (
-      nikLower === 'demo123' || nikLower === 'demo' || nikLower.includes('demo') ||
-      nameLower.includes('demo') || nameLower.includes('staging') || nameLower.includes('test') ||
-      nikLower.includes('admin') || nameLower.includes('admin')
-    ) {
-      return false;
-    }
+      const nikLower = rawNik.toLowerCase();
+      const nameLower = rawName.toLowerCase();
+      if (
+        nikLower === 'demo123' || nikLower === 'demo' || nikLower.includes('demo') ||
+        nameLower.includes('demo') || nameLower.includes('staging') || nameLower.includes('test') ||
+        nikLower.includes('admin') || nameLower.includes('admin')
+      ) {
+        return false;
+      }
 
-    const matchSearch = nameLower.includes(searchRekapKta.toLowerCase()) || nikLower.includes(searchRekapKta.toLowerCase());
-    const matchStatus = rekapKtaFilterStatus === 'ALL' 
-      ? true 
-      : (rekapKtaFilterStatus === 'CUTI' ? emp.isCuti : emp.status === rekapKtaFilterStatus);
-    return matchSearch && matchStatus;
-  });
+      const matchSearch = nameLower.includes(searchRekapKta.toLowerCase()) || nikLower.includes(searchRekapKta.toLowerCase());
+      const matchStatus = rekapKtaFilterStatus === 'ALL' 
+        ? true 
+        : (rekapKtaFilterStatus === 'CUTI' ? emp.isCuti : emp.status === rekapKtaFilterStatus);
+      return matchSearch && matchStatus;
+    })
+    .sort((a, b) => {
+      const timeA = getLatestUploadTimestamp(a);
+      const timeB = getLatestUploadTimestamp(b);
+      if (timeA > 0 || timeB > 0) {
+        return timeB - timeA; // Paling atas selalu yang paling terbaru upload screenshot / laporan
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
 
   return (
     <div className={`flex flex-col text-[var(--text-main)] ${isFloating ? 'h-full' : 'space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full max-w-4xl mx-auto px-2 sm:px-4'}`}>

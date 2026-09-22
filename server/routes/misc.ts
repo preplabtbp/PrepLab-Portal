@@ -1187,6 +1187,16 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       week: selectedWeek
     }));
 
+    // Urutkan rekap berdasarkan waktu upload screenshot/laporan terbaru (descending)
+    rekapList.sort((a, b) => {
+      const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+      const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      if (timeA > 0 || timeB > 0) {
+        return timeB - timeA;
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
     const total = rekapList.length;
     const sudah = rekapList.filter(r => r.status === 'SUDAH').length;
     const belum = total - sudah;
@@ -1676,6 +1686,16 @@ router.get('/api/rekap-kta', async (req, res) => {
       completedAt: null,
       week: selectedWeek
     }));
+
+    // Urutkan rekap KTA/TTA berdasarkan waktu upload screenshot/laporan terbaru (descending)
+    rekapList.sort((a, b) => {
+      const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+      const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      if (timeA > 0 || timeB > 0) {
+        return timeB - timeA;
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
 
     const total = rekapList.length;
     const sudah = rekapList.filter(r => r.status === 'SUDAH').length;
