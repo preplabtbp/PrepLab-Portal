@@ -13,15 +13,15 @@ const PROTECTED_ROUTES = [
   '/api/roster',
   '/api/inspections',
   '/api/notifications',
-  '/api/bulletin-posts',
-  '/api/agenda',
   '/api/workorders',
   '/api/admin/tables/employees'
 ];
 
 const ALLOWLIST_ROUTES = [
   { path: '/api/auth/check-nik', method: 'POST', body: { nik: '02D25000055' } },
-  { path: '/api/health', method: 'GET' }
+  { path: '/api/health', method: 'GET' },
+  { path: '/api/bulletin-posts', method: 'GET' },
+  { path: '/api/agenda', method: 'GET' }
 ];
 
 async function runSecurityTests() {
