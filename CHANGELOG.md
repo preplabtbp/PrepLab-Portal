@@ -1,6 +1,21 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.19] - 2026-09-22
+
+### 📖 Standardisasi KBBI Perawatan Pabrik & Integrasi AI Refine Non-Gemini (Routr Cloud & Bandelbanget)
+
+- **Standardisasi Kata Baku KBBI & Pemisahan Terminologi Lapangan (`src/utils/kbbi-maintenance-corrector.ts`)**:
+  - **Koreksi Oven & Variasi Fonem F/V/P**: Memperbaiki kata non-baku `ofen`, `open`, `ovent` menjadi kata baku KBBI `oven`. Memperluas pemetaan fonem teknis seperti `fentilasi` -> `ventilasi`, `facum/pakum` -> `vakum`, `valv/falv/pelp` -> `valve` / `katup`, `fiting` -> `fitting`, `kwalitas` -> `kualitas`, `analisa` -> `analisis`, `praktek` -> `praktik`, dan `jadual` -> `jadwal`.
+  - **Pemulihan Istilah Operasional Tambang `manhaul`**: Memulihkan dan mengamankan kata `manhaul` (*bus / kendaraan angkut personel tambang*) agar tidak terhapus atau tertukar dengan `manhole` (*lubang inspeksi tangki/cerobong*).
+  - **Kamus Peralatan & Gelas Laboratorium Preparasi**: Menambahkan istilah baku peralatan analitis dan lab basah (*buret, pipet, erlenmeyer, desikator, gelas beker, tanur muffle, sentrifugasi, hotplate*).
+  - **Pencegahan False Positive**: Memperbaiki mesin deteksi typo sehingga kata yang sudah baku (seperti `oven`, `rusak`, `bocor`) tidak lagi terdeteksi keliru sebagai typo, serta meniadakan duplikasi kata berulang saat proses penggantian.
+- **Penyempurnaan AI Laporan Maintenance Tanpa Gemini (`server/routes/kbbi.ts`, `server.ts`, `src/components/KbbiCorrectorWidget.tsx`)**:
+  - **Non-Gemini AI Engine**: Menghubungkan fitur *Koreksi Otomatis KBBI* ke API endpoint backend `POST /api/kbbi/refine` yang ditenagai oleh API Key non-Gemini yang telah ditanamkan (`ROUTR_API_KEY` / `OPENAI_API_KEY` dengan model `glm-5.3` dan `claude-sonnet-4.6`, serta fallback ke `BANDELBANGET_API_KEY` model `deepseek-chat`). Sama sekali tidak menggunakan `GEMINI_API_KEY`.
+  - **Respons Instan + Polishing Cerdas**: Koreksi aturan lokal berjalan seketika (0ms) di browser, disusul perapian tata bahasa AI dengan indikator loading animasi halus pada tombol widget.
+- **Pembersihan Referensi Gemini (`server/routes/finance.ts`)**:
+  - Menghapus pemeriksaan dan ketergantungan `GEMINI_API_KEY` pada modul scan struk keuangan, dialihkan penuh ke provider visi yang telah terpasang (`ROUTR_API_KEY` / `OPENAI_API_KEY` dan `BANDELBANGET_API_KEY`).
+
 ## [2.9.18] - 2026-09-22
 
 ### 🛡️ Perbaikan Resolusi Seksi Laboratory, Pemulihan Display Akumulasi EXP & Hak Akses Developer / SAP QA (Sukarman)

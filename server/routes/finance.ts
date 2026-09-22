@@ -23,12 +23,11 @@ financeRouter.post('/api/finance/scan-receipt', async (req, res) => {
       return res.status(400).json({ error: 'Data foto struk (imageBase64) wajib diisi!' });
     }
 
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
-    const openaiKey = process.env.OPENAI_API_KEY;
+    const routrKey = process.env.ROUTR_API_KEY || process.env.OPENAI_API_KEY;
+    const bandelbangetKey = process.env.BANDELBANGET_API_KEY;
 
-    if (!geminiKey && !anthropicKey && !openaiKey) {
-      return res.status(500).json({ error: 'Belum ada API Key AI yang dikonfigurasi (ANTHROPIC_API_KEY, GEMINI_API_KEY, atau OPENAI_API_KEY).' });
+    if (!routrKey && !bandelbangetKey) {
+      return res.status(500).json({ error: 'Belum ada API Key AI yang dikonfigurasi (ROUTR_API_KEY, OPENAI_API_KEY, atau BANDELBANGET_API_KEY).' });
     }
 
     // Clean base64 data URL prefix if present
