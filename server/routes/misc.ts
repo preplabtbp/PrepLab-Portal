@@ -633,6 +633,35 @@ export const getDateStringsForWeek = (weekTag: string, year: number = 2026): str
   return list;
 };
 
+export const getWorkdayDatesBeforeFriday = (weekTag: string, year: number = 2026): string[] => {
+  const weekNum = parseWeekNumber(weekTag);
+  if (weekNum <= 0) return [];
+
+  const simple = new Date(year, 0, 4);
+  const dayOfWeek = (simple.getDay() + 6) % 7;
+  const week1Monday = new Date(year, 0, 4 - dayOfWeek);
+  
+  const monday = new Date(week1Monday.getTime() + (weekNum - 1) * 7 * 86400000);
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const monthNamesEng = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  const list: string[] = [];
+  // First 4 days (Monday to Thursday) before Friday
+  for (let i = 0; i < 4; i++) {
+    const cur = new Date(monday.getTime() + i * 86400000);
+    const d = cur.getDate();
+    const m = cur.getMonth();
+    const yr = cur.getFullYear() % 100;
+    
+    list.push(`${d} ${monthNamesEng[m]} ${yr}`);
+    list.push(`${d.toString().padStart(2, '0')} ${monthNamesEng[m]} ${yr}`);
+    list.push(`${d} ${monthNames[m]} ${yr}`);
+    list.push(`${d.toString().padStart(2, '0')} ${monthNames[m]} ${yr}`);
+  }
+  return list;
+};
+
 export const isGolonganI = (emp: any): boolean => {
   const golStr = String(emp.gol || '').trim().toUpperCase();
   const jgStr = String(emp.jobGrade || '').trim().toUpperCase();
@@ -739,6 +768,7 @@ export async function getRekapPersonnelClassification(
   });
 
   const targetWeekDates = getDateStringsForWeek(selectedWeek);
+  const workDaysBeforeFriday = getWorkdayDatesBeforeFriday(selectedWeek);
 
   // Load persistent manual overrides for this week
   let manualOverrides: any[] = [];
@@ -840,24 +870,34 @@ export async function getRekapPersonnelClassification(
       return; // Do NOT add to onCutiSet -> stays active!
     }
 
+    // 4. Check roster for target dates in selectedWeek
+    // If person worked on site during the work days before Friday (Mon-Thu), they are STILL WAJIB!
+    const empRosters = rosterMap.get(cleanNik) || [];
+    const weekEntries = empRosters.filter(r => targetWeekDates.includes((r.date || '').trim()));
+    const workedBeforeFriday = weekEntries.some(r => {
+      const d = (r.date || '').trim();
+      return workDaysBeforeFriday.includes(d) && !isExplicitCutiCode(r.status);
+    });
+
+    if (workedBeforeFriday) {
+      // Worked on-site on Monday, Tuesday, Wednesday, or Thursday -> WAJIB for Inspeksi & KTA!
+      return;
+    }
+
     // If person is explicitly listed under the Cuti section in the schedule:
     if (matchesSheet(empName, sheetCutiNames)) {
       onCutiSet.add(cleanNik);
       return;
     }
 
-    // 4. Check roster ONLY for target dates in selectedWeek (Fallback / employees not in sheet)
-    const empRosters = rosterMap.get(cleanNik);
-    if (empRosters && empRosters.length > 0 && targetWeekDates.length > 0) {
-      const weekEntries = empRosters.filter(r => targetWeekDates.includes((r.date || '').trim()));
-      if (weekEntries.length > 0) {
-        const cutiDays = weekEntries.filter(r => isExplicitCutiCode(r.status));
-        // An employee is considered on Cuti for the week ONLY IF majority of the week (>= 4 days or >= half) is cuti.
-        // Example: Ryan M Rusli cuti on Saturday, but works Mon-Fri -> NOT cuti for the week!
-        const isMajorityCuti = cutiDays.length >= 4 || cutiDays.length >= Math.ceil(weekEntries.length / 2);
-        if (isMajorityCuti) {
-          onCutiSet.add(cleanNik);
-        }
+    // 5. Fallback roster check for employees not in sheet:
+    if (weekEntries.length > 0) {
+      const cutiDays = weekEntries.filter(r => isExplicitCutiCode(r.status));
+      // An employee is considered on Cuti for the week ONLY IF they did NOT work before Friday
+      // and majority or all of the week is cuti.
+      const isMajorityCuti = cutiDays.length >= 4 || cutiDays.length >= Math.ceil(weekEntries.length / 2);
+      if (isMajorityCuti) {
+        onCutiSet.add(cleanNik);
       }
     }
   });

@@ -1,6 +1,20 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.25] - 2026-09-23
+
+### 📋 Perbaikan Klasifikasi Kewajiban Inspeksi Mingguan & KTA/TTA untuk Personil Cuti Sebelum Jumat
+
+- **Kewajiban Tugas Mingguan Berdasarkan Hari Kerja Aktif (`server/routes/misc.ts`)**:
+  - **Aturan Operasional Lapangan**: Personil yang memiliki hari kerja aktif di site sebelum hari Jumat (Senin s.d. Kamis) tetap berstatus **WAJIB** menyelesaikan kewajiban tugas mingguan (Inspeksi Rutin Mingguan dan Laporan Observasi KTA/TTA), meskipun jadwal cuti/travel mereka dimulai pada pertengahan atau akhir pekan (misal: Kamis, Jumat, atau akhir pekan).
+  - **Penambahan Helper Hari Kerja Pra-Jumat (`getWorkdayDatesBeforeFriday`)**: Menyaring 4 hari kerja pertama (Senin - Kamis) dalam minggu berjalan untuk memvalidasi apakah karyawan sempat bertugas di site sebelum cuti.
+  - **Penyelarasan Klasifikasi Rekap (`getRekapPersonnelClassification`)**:
+    - Karyawan yang bertugas pada Senin s.d. Kamis (seperti Muhamad Alvin Febriansyah, Muhammad Nova Herisandi, Nyong Dokolamo, Ayup Riyan Redondo, M. Harits Asyardy, dll.) otomatis diklasifikasikan sebagai **WAJIB** pada Rekap Inspeksi dan Rekap KTA/TTA.
+    - Status **Cuti / Bebas Kewajiban** hanya diberikan kepada personil yang seluruh hari kerja efektifnya tercatat cuti penuh dari awal pekan.
+- **Penyelarasan Tampilan Dashboard Hub Kepatuhan (`src/components/InspectionScheduleCard.tsx`)**:
+  - **Pemisahan Logika Cuti Harian vs Cuti Mingguan**: Memisahkan status roster hari ini (`isRosterCutiToday` untuk checklist harian P2H/Pemantauan) dari status pembebasan kewajiban mingguan (`isWeeklyCuti` / `isWeeklyInspectionExempt`).
+  - **Tampilan Kartu Tugas Mingguan Akurat**: Karyawan yang wajib mingguan namun sedang dalam jadwal travel/cuti harian hari ini tidak lagi salah ditampilkan sebagai *"🏖️ Sedang Cuti / Libur Roster (Bebas Tugas)"* atau *"Kewajiban K3L Dinonaktifkan"*, melainkan tetap menampilkan penugasan inspeksi aktif, target observasi KTA/TTA, dan progress bar kepatuhan mingguan yang sesungguhnya.
+
 ## [2.9.24] - 2026-09-23
 
 ### 🎖️ Perbaikan Layer Z-Index Modal Promosi Pangkat & Sinkronisasi Komentar / Lampiran Notion

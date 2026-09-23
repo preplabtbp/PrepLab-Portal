@@ -302,41 +302,42 @@ export function InspectionScheduleCard({
   const isRosterCutiToday = useMemo(() => {
     if (isRosterOnsiteToday) return false;
     if (rosterToday) return Boolean(rosterToday.isCuti);
-    return Boolean(
-      mySchedule?.isCuti || 
-      mySchedule?.inspeksi?.toLowerCase().includes('cuti') ||
-      mySchedule?.shift?.toLowerCase().includes('cuti')
-    );
-  }, [rosterToday, isRosterOnsiteToday, mySchedule]);
+    return false;
+  }, [rosterToday, isRosterOnsiteToday]);
 
-  // Weekly inspection sheet status (made at start of week, e.g. Monday):
+  // Weekly inspection sheet status (made for the whole week):
+  // True ONLY IF the employee has a confirmed cuti status for the entire weekly inspection schedule
   const isWeeklyInspectionExempt = useMemo(() => {
+    if (!mySchedule) return false;
     return Boolean(
-      mySchedule?.isCuti || 
-      mySchedule?.inspeksi?.toLowerCase().includes('cuti') ||
-      mySchedule?.shift?.toLowerCase().includes('cuti')
+      mySchedule.isCuti || 
+      mySchedule.inspeksi?.toLowerCase().includes('cuti') ||
+      mySchedule.shift?.toLowerCase().includes('cuti')
     );
   }, [mySchedule]);
+
+  // isWeeklyCuti: True only if weekly duties are exempt
+  const isWeeklyCuti = isWeeklyInspectionExempt;
 
   // Transition from cuti:
   // User is already Onsite today (e.g. started Tuesday), but is exempt from weekly inspection/KTA
   // because on Monday they were still on leave when the weekly schedule was planned.
   const isTransitionFromCuti = useMemo(() => {
-    return isRosterOnsiteToday && isWeeklyInspectionExempt;
-  }, [isRosterOnsiteToday, isWeeklyInspectionExempt]);
+    return isRosterOnsiteToday && isWeeklyCuti;
+  }, [isRosterOnsiteToday, isWeeklyCuti]);
 
-  // isUserCuti legacy alias for genuine off-site leave
-  const isUserCuti = isRosterCutiToday;
+  // isUserCuti alias for weekly cards (Inspeksi & KTA)
+  const isUserCuti = isWeeklyCuti;
 
-  // Synchronize KTA cuti state immediately when inspection schedule is cuti
+  // Synchronize KTA cuti state only when weekly status is truly exempt
   useEffect(() => {
-    if (isWeeklyInspectionExempt || isRosterCutiToday) {
+    if (isWeeklyCuti) {
       setMyKtaRecord(prev => {
         if (prev?.isCuti && prev?.status === 'CUTI') return prev;
         return prev ? { ...prev, isCuti: true, status: 'CUTI' } : { isCuti: true, status: 'CUTI' };
       });
     }
-  }, [isWeeklyInspectionExempt, isRosterCutiToday]);
+  }, [isWeeklyCuti]);
 
   const hasP5mAssignment = useMemo(() => {
     return Boolean(
@@ -1031,38 +1032,31 @@ export function InspectionScheduleCard({
                   {isRosterOnsiteToday ? (
                     `Status Roster: ${rosterToday?.statusLabel || 'Onsite (Aktif Shift)'}`
                   ) : isRosterCutiToday ? (
-                    hasP5mAssignment 
-                      ? 'Status Roster: Cuti • Jadwal P5M Aktif'
-                      : 'Status Roster: Sedang Cuti (Off-Site)'
+                    `Status Roster: ${rosterToday?.statusLabel || 'Off-Site (Cuti)'}`
                   ) : (
                     `${progressStats.completed} dari ${progressStats.total} Aktivitas Selesai`
                   )}
                 </div>
                 <div className={`text-[11px] font-bold ${
-                  isRosterOnsiteToday
-                    ? (hasP5mAssignment
-                        ? (progressStats.p5mDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-purple-600 dark:text-purple-400')
-                        : isTransitionFromCuti
-                        ? 'text-teal-600 dark:text-teal-400'
-                        : progressStats.pct === 100 ? 'text-emerald-600' : 'text-teal-600'
-                      )
-                    : isRosterCutiToday
+                  isWeeklyCuti
                     ? (hasP5mAssignment 
                         ? (progressStats.p5mDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-purple-600 dark:text-purple-400')
                         : 'text-sky-600 dark:text-sky-400'
-                      ) 
+                      )
+                    : isTransitionFromCuti
+                    ? 'text-teal-600 dark:text-teal-400'
+                    : hasP5mAssignment
+                    ? (progressStats.p5mDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-purple-600 dark:text-purple-400')
                     : progressStats.pct === 100 ? 'text-emerald-600' : 'text-teal-600'
                 }`}>
-                  {isRosterOnsiteToday ? (
-                    hasP5mAssignment 
-                      ? (progressStats.p5mDone ? '✅ P5M Selesai • Onsite' : `🎙️ Pemateri: ${p5mAssignment.day || 'Jadwal P5M'}`)
-                      : isTransitionFromCuti
-                      ? '✓ Bebas Penugasan (Transisi Cuti)'
-                      : `${progressStats.pct}% Kepatuhan Tercapai`
-                  ) : isRosterCutiToday ? (
+                  {isWeeklyCuti ? (
                     hasP5mAssignment 
                       ? (progressStats.p5mDone ? '✅ P5M Selesai • Roster Bebas' : `🎙️ Pemateri: ${p5mAssignment.day || 'Jadwal P5M'}`)
                       : '🏖️ Bebas Kewajiban Periode Ini'
+                  ) : isTransitionFromCuti ? (
+                    '✓ Bebas Penugasan (Transisi Cuti)'
+                  ) : hasP5mAssignment ? (
+                    progressStats.p5mDone ? `${progressStats.pct}% Kepatuhan Tercapai` : `🎙️ Pemateri: ${p5mAssignment.day || 'Jadwal P5M'} (${progressStats.pct}%)`
                   ) : (
                     `${progressStats.pct}% Kepatuhan Tercapai`
                   )}
@@ -1096,36 +1090,29 @@ export function InspectionScheduleCard({
             <div className="w-full bg-[var(--input-bg)] h-2.5 rounded-full overflow-hidden border border-[var(--border-main)]/50 p-0.5">
               <div 
                 className={`h-full rounded-full transition-all duration-700 ease-out shadow-xs ${
-                  isRosterOnsiteToday
-                    ? (hasP5mAssignment && !progressStats.p5mDone
-                        ? 'bg-gradient-to-r from-teal-500 via-indigo-500 to-purple-600'
-                        : 'bg-gradient-to-r from-teal-500 via-emerald-500 to-indigo-600')
-                    : isRosterCutiToday 
+                  isWeeklyCuti
                     ? (hasP5mAssignment && !progressStats.p5mDone
                         ? 'bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500'
                         : 'bg-gradient-to-r from-sky-500 via-teal-500 to-emerald-500')
-                    : 'bg-gradient-to-r from-teal-500 via-emerald-500 to-indigo-600'
+                    : (hasP5mAssignment && !progressStats.p5mDone
+                        ? 'bg-gradient-to-r from-teal-500 via-indigo-500 to-purple-600'
+                        : 'bg-gradient-to-r from-teal-500 via-emerald-500 to-indigo-600')
                 }`}
-                style={{ width: `${Math.max(6, Math.min(100, isRosterCutiToday && !hasP5mAssignment ? 100 : progressStats.pct))}%` }}
+                style={{ width: `${Math.max(6, Math.min(100, isWeeklyCuti && !hasP5mAssignment ? 100 : progressStats.pct))}%` }}
               />
             </div>
             <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)] font-medium">
               <span>Tugas Mingguan: <strong className="text-[var(--text-main)]">{
-                isRosterOnsiteToday
-                  ? (isTransitionFromCuti
-                      ? (hasP5mAssignment && !progressStats.p5mDone ? '2/3 Bebas (Ada Tugas P5M)' : '3/3 Selesai (Transisi Cuti)')
-                      : `${progressStats.weeklyCompleted}/${progressStats.weeklyTotal} Selesai`
-                    )
-                  : isRosterCutiToday 
+                isWeeklyCuti
                   ? (hasP5mAssignment 
                       ? (progressStats.p5mDone ? '3/3 Selesai (P5M Selesai)' : '2/3 Bebas (Ada Tugas P5M)')
-                      : '3/3 Bebas Kewajiban (Cuti)') 
+                      : '3/3 Bebas Kewajiban (Cuti)')
+                  : isTransitionFromCuti
+                  ? (hasP5mAssignment && !progressStats.p5mDone ? '2/3 Bebas (Ada Tugas P5M)' : '3/3 Selesai (Transisi Cuti)')
                   : `${progressStats.weeklyCompleted}/${progressStats.weeklyTotal} Selesai`
               }</strong></span>
               <span className="sm:hidden font-bold text-teal-600 dark:text-teal-400">
-                {isRosterOnsiteToday
-                  ? (isTransitionFromCuti ? 'Onsite (Transisi)' : `${progressStats.pct}%`)
-                  : (isRosterCutiToday ? 'Cuti (100%)' : `${progressStats.pct}%`)}
+                {isWeeklyCuti ? 'Cuti (100%)' : isTransitionFromCuti ? 'Onsite (Transisi)' : `${progressStats.pct}%`}
               </span>
               {progressStats.dailyTotal > 0 && (
                 <span>Aktivitas Shift: <strong className="text-[var(--text-main)]">{
