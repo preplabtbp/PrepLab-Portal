@@ -865,7 +865,7 @@ export function InspectionScheduleCard({
       });
 
       if (res.ok) {
-        toast.success(`✅ Bukti Screenshot General Inspeksi (${currentWeekTag}) berhasil disimpan!`, { id: 'upload-ss', duration: 5000 });
+        toast.success(`✅ Bukti screenshot Form General Inspeksi (${currentWeekTag}) berhasil diunggah!`, { id: 'upload-ss', duration: 5000 });
         setShowSsModal(false);
         setSsImageFile(null);
         setSsImagePreview(null);
@@ -876,11 +876,12 @@ export function InspectionScheduleCard({
         fetchSsProof();
         window.dispatchEvent(new CustomEvent('refresh-group-reports'));
       } else {
-        const errData = await res.json();
-        toast.error(errData.error || 'Gagal menyimpan bukti SS Inspeksi', { id: 'upload-ss' });
+        toast.error('Gagal menyimpan bukti SS Inspeksi', { id: 'upload-ss' });
       }
     } catch (err: any) {
-      toast.error('Terjadi kesalahan: ' + err.message, { id: 'upload-ss' });
+      console.error('SS submit error:', err);
+      const msg = err?.message || (typeof err === 'string' ? err : 'Gagal mengunggah bukti screenshot. Silakan coba lagi.');
+      toast.error('Terjadi kesalahan: ' + msg, { id: 'upload-ss' });
     } finally {
       isSubmittingSsRef.current = false;
       setIsSubmittingSs(false);
@@ -907,7 +908,12 @@ export function InspectionScheduleCard({
 
       let base64Data = ktaImagePreview || '';
       if (ktaImageFile) {
-        base64Data = await compressImage(ktaImageFile);
+        try {
+          const compressed = await compressImage(ktaImageFile);
+          if (compressed) base64Data = compressed;
+        } catch (cErr) {
+          console.warn('Compression failed, using preview:', cErr);
+        }
       }
 
       let uploadedUrl = base64Data;
@@ -962,7 +968,9 @@ export function InspectionScheduleCard({
       fetchKtaStatus();
       window.dispatchEvent(new CustomEvent('refresh-group-reports'));
     } catch (err: any) {
-      toast.error('Terjadi kesalahan: ' + err.message, { id: 'upload-kta' });
+      console.error('KTA submit error:', err);
+      const msg = err?.message || (typeof err === 'string' ? err : 'Gagal mengunggah bukti formulir. Silakan coba lagi.');
+      toast.error('Terjadi kesalahan: ' + msg, { id: 'upload-kta' });
     } finally {
       isSubmittingKtaRef.current = false;
       setIsSubmittingKta(false);

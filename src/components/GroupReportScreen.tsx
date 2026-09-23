@@ -747,39 +747,56 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   };
 
   const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const reader = new FileReader();
-      reader.readAsDataURL(file);
       reader.onload = (ev) => {
-        const img = new Image();
-        img.src = ev.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          const maxDim = 1400;
-          if (width > maxDim || height > maxDim) {
-            if (width > height) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            } else {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
+        const rawDataUrl = (ev.target?.result as string) || '';
+        try {
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              let width = img.width;
+              let height = img.height;
+              const maxDim = 1200;
+              if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                } else {
+                  width = Math.round((width * maxDim) / height);
+                  height = maxDim;
+                }
+              }
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+              } else {
+                resolve(rawDataUrl);
+              }
+            } catch (cErr) {
+              console.warn('Canvas compression error, fallback to raw DataURL:', cErr);
+              resolve(rawDataUrl);
             }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', 0.85));
-          } else {
-            resolve(ev.target?.result as string);
-          }
-        };
-        img.onerror = (err) => reject(err);
+          };
+          img.onerror = () => {
+            console.warn('Image decode error, fallback to raw DataURL');
+            resolve(rawDataUrl);
+          };
+          img.src = rawDataUrl;
+        } catch (err) {
+          console.warn('Image process error, fallback to raw DataURL:', err);
+          resolve(rawDataUrl);
+        }
       };
-      reader.onerror = (err) => reject(err);
+      reader.onerror = () => {
+        console.warn('FileReader error');
+        resolve('');
+      };
+      reader.readAsDataURL(file);
     });
   };
 
@@ -804,9 +821,14 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
       setIsSubmittingKta(true);
       toast.loading('Mengunggah bukti screenshot form...', { id: 'upload-kta' });
 
-      let base64Data = ktaImagePreview;
+      let base64Data = ktaImagePreview || '';
       if (ktaImageFile) {
-        base64Data = await compressImage(ktaImageFile);
+        try {
+          const compressed = await compressImage(ktaImageFile);
+          if (compressed) base64Data = compressed;
+        } catch (compErr) {
+          console.warn('Compression failed, using preview:', compErr);
+        }
       }
 
       // Upload via /api/upload (1 single upload for all checked items)
@@ -883,10 +905,21 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           }
         }
       } else {
-        toast.error('Beberapa data laporan gagal disimpan', { id: 'upload-kta' });
+        let serverError = 'Beberapa data laporan gagal disimpan';
+        for (const r of responses) {
+          if (!r.ok) {
+            try {
+              const errJson = await r.json();
+              if (errJson?.error) serverError = errJson.error;
+            } catch {}
+          }
+        }
+        toast.error(serverError, { id: 'upload-kta' });
       }
     } catch (err: any) {
-      toast.error('Terjadi kesalahan: ' + err.message, { id: 'upload-kta' });
+      console.error('KTA submit error:', err);
+      const msg = err?.message || (typeof err === 'string' ? err : 'Gagal mengirim laporan. Periksa koneksi internet Anda.');
+      toast.error('Terjadi kesalahan: ' + msg, { id: 'upload-kta' });
     } finally {
       isSubmittingKtaRef.current = false;
       setIsSubmittingKta(false);
@@ -909,9 +942,14 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
       setIsSubmittingSs(true);
       toast.loading('Mengunggah bukti screenshot form general inspeksi...', { id: 'upload-ss' });
 
-      let base64Data = ssImagePreview;
+      let base64Data = ssImagePreview || '';
       if (ssImageFile) {
-        base64Data = await compressImage(ssImageFile);
+        try {
+          const compressed = await compressImage(ssImageFile);
+          if (compressed) base64Data = compressed;
+        } catch (compErr) {
+          console.warn('Compression failed, using preview:', compErr);
+        }
       }
 
       let uploadedUrl = base64Data;
@@ -960,7 +998,9 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
         toast.error(errData.error || 'Gagal menyimpan bukti SS Inspeksi', { id: 'upload-ss' });
       }
     } catch (err: any) {
-      toast.error('Terjadi kesalahan: ' + err.message, { id: 'upload-ss' });
+      console.error('SS submit error:', err);
+      const msg = err?.message || (typeof err === 'string' ? err : 'Gagal mengirim screenshot bukti. Periksa koneksi internet Anda.');
+      toast.error('Terjadi kesalahan: ' + msg, { id: 'upload-ss' });
     } finally {
       isSubmittingSsRef.current = false;
       setIsSubmittingSs(false);
