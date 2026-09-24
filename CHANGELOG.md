@@ -1,6 +1,27 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.27] - 2026-09-24
+
+### 🛡️ Perbaikan Aksesibilitas Modul APD, Navigasi Multi-Submodul, dan Pembukaan Guard Endpoint APD
+
+- **Pembukaan Guard Endpoint API APD (`server.ts`)**:
+  - **Penyebab Masalah Utama**: Endpoint `/api/apd/*` (`/api/apd/settings`, `/api/apd/history`, `/api/apd/documents`) sebelumnya terhalang oleh *Centralized API Auth Guard* dan menghasilkan status `401 Unauthorized` bagi pengguna, sehingga pemanggilan data master interval APD dan riwayat pengambilan gagal dimuat.
+  - **Daftar Allowlist GET Publik**: Menambahkan `url.startsWith('/api/apd')` ke dalam daftar allowlist metode GET publik di `server.ts` sehingga seluruh pengaturan interval APD dan riwayat pengambilan personil dapat diakses secara instan dan aman.
+
+- **Pembukaan Hak Akses Menu APD untuk Seluruh Personil (`src/components/modules-screen.tsx`, `src/components/ModulesDrawer.tsx`)**:
+  - Menghapus pembatasan seksi yang sebelumnya hanya memperbolehkan personil berlabel `Inventory Control` untuk melihat menu APD (`hasInventoryAccess`).
+  - Seluruh staf dari seksi *Preparation*, *Laboratory*, *Maintenance*, *QA*, *Administration*, *Superintendent*, hingga *Manager* kini dapat mengakses kategori menu **Inventory Control (APD)** baik dari halaman Semua Menu (`/modules`) maupun laci navigasi desktop/mobile (`ModulesDrawer`).
+
+- **Peningkatan Antarmuka & Navigasi Submodul APD Terpadu (`src/components/apd-input-screen.tsx`, `src/components/apd-monitoring-screen.tsx`, `src/components/apd-settings-screen.tsx`, `src/App.tsx`)**:
+  - **Bilah Navigasi Tab Terpadu**: Menambahkan tab switcher di bagian atas setiap halaman APD yang memungkinkan pengguna berpindah dengan satu klik antara:
+    1. **Distribusi APD** (`/apd-input`): Input dan pencatatan pengambilan APD baru.
+    2. **Monitoring Dokumen** (`/apd-monitoring`): Pelacakan status tanda tangan dan unggah scan formulir APD.
+    3. **Pengaturan Interval** (`/apd-settings`): Konfigurasi batas interval kelayakan pengambilan tiap jenis APD.
+  - **Tombol Kembali Terintegrasi**: Menyematkan tombol *"Kembali"* di sudut kiri atas seluruh layar APD yang mengarahkan pengguna kembali ke halaman utama portal (`home`).
+  - **Pencarian Mandiri Otomatis (Self-Check)**: Layar distribusi APD kini otomatis mendeteksi NIK pengguna yang sedang aktif dan menyediakan tombol cepat *"Cek Riwayat APD Saya"* untuk melihat status kelayakan APD tanpa perlu mengetik ulang NIK.
+  - **Pencegahan Crash Tipe Data (Safe Filtering)**: Menambahkan pemeriksaan null-safety `(emp.nama || emp.name || '')` pada penyaringan karyawan untuk mencegah crash browser akibat data karyawan yang tidak lengkap.
+
 ## [2.9.26] - 2026-09-24
 
 ### 🚀 Integrasi Data Riil 100% Dashboard Eksekutif SPT & Manager, Penambahan Modul P5M Lab di Home, dan Restrukturisasi Simulasi 10 Peran Operasional

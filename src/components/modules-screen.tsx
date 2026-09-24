@@ -53,7 +53,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
   const isDeveloper = isSuperAdmin || inspectorNik === 'preplabadmin' || developerList.includes(inspectorNik);
   const isLab = isMeetingRoom || userSection.toLowerCase().includes('laboratory') || isDeveloper;
   const isMaintenance = isMeetingRoom || userSection.toLowerCase().includes('maintenance') || isDeveloper;
-  const hasInventoryAccess = isMeetingRoom || userSection.toLowerCase().includes('inventory control') || isDeveloper;
+  const hasInventoryAccess = true;
   const isQA = isMeetingRoom || userSection.toLowerCase().includes('qa') || userSection.toLowerCase().includes('quality assurance') || isDeveloper;
   const isCrew = isMeetingRoom ? false : userJabatan.toLowerCase().includes('crew');
 

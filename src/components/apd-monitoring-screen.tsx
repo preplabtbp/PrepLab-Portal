@@ -1,11 +1,16 @@
 import { toast } from 'sonner';
 import React, { useState, useEffect } from 'react';
-import { Package, FileText, CheckCircle2, Upload, Loader2, Calendar } from 'lucide-react';
+import { Package, FileText, CheckCircle2, Upload, Loader2, Calendar, ArrowLeft } from 'lucide-react';
 import { Button, Select } from './ui';
 import { getPendingApdDocuments, uploadDocumentProof } from '../sheets-api';
 import { PageHeader } from './PageHeader';
 
-export function ApdMonitoringScreen() {
+export interface ApdMonitoringScreenProps {
+  onBack?: () => void;
+  onNav?: (tab: string) => void;
+}
+
+export function ApdMonitoringScreen({ onBack, onNav }: ApdMonitoringScreenProps = {}) {
   const [documents, setDocuments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending'>('pending');
@@ -65,7 +70,50 @@ export function ApdMonitoringScreen() {
   });
 
   return (
-    <div className="animate-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-5 animate-in slide-in-from-bottom-4 duration-500 pb-12 max-w-5xl mx-auto px-2 sm:px-4">
+      {/* Sub-module Navigation Bar */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="py-2 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--card-bg)] text-[var(--text-main)] text-xs font-bold hover:bg-[var(--input-bg)] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            >
+              <ArrowLeft className="w-4 h-4 text-purple-600" />
+              <span>Kembali</span>
+            </button>
+          )}
+          <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider hidden sm:inline">
+            Modul APD
+          </span>
+        </div>
+
+        {/* Tab switchers */}
+        <div className="flex items-center p-1 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] gap-1">
+          <button
+            type="button"
+            onClick={() => onNav ? onNav('apd-input') : window.location.assign('/apd-input')}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
+          >
+            Distribusi APD
+          </button>
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 text-white shadow-xs"
+          >
+            Monitoring Dokumen
+          </button>
+          <button
+            type="button"
+            onClick={() => onNav ? onNav('apd-settings') : window.location.assign('/apd-settings')}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
+          >
+            Pengaturan Interval
+          </button>
+        </div>
+      </div>
+
       <PageHeader 
         title="Daftar Form Pengambilan APD"
         description="List dokumen permintaan APD yang dicetak dan membutuhkan upload dokumen hasil scan ber-TTD."

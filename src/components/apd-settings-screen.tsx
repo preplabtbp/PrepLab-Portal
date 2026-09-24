@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import React, { useState, useEffect } from 'react';
-import { Settings2, Save, AlertCircle, Clock } from 'lucide-react';
+import { Settings2, Save, AlertCircle, Clock, ArrowLeft } from 'lucide-react';
 import { Button, Input } from './ui';
 import { PageHeader } from './PageHeader';
 import { getApdSettings, saveApdSettings } from '../sheets-api';
@@ -19,7 +19,12 @@ const APD_TYPES = [
   "Sepatu Safety"
 ];
 
-export function ApdSettingsScreen() {
+export interface ApdSettingsScreenProps {
+  onBack?: () => void;
+  onNav?: (tab: string) => void;
+}
+
+export function ApdSettingsScreen({ onBack, onNav }: ApdSettingsScreenProps = {}) {
   const [intervals, setIntervals] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -77,7 +82,50 @@ export function ApdSettingsScreen() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-8">
+    <div className="space-y-5 animate-in fade-in duration-500 pb-12 max-w-5xl mx-auto px-2 sm:px-4">
+      {/* Sub-module Navigation Bar */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="py-2 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--card-bg)] text-[var(--text-main)] text-xs font-bold hover:bg-[var(--input-bg)] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            >
+              <ArrowLeft className="w-4 h-4 text-purple-600" />
+              <span>Kembali</span>
+            </button>
+          )}
+          <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider hidden sm:inline">
+            Modul APD
+          </span>
+        </div>
+
+        {/* Tab switchers */}
+        <div className="flex items-center p-1 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] gap-1">
+          <button
+            type="button"
+            onClick={() => onNav ? onNav('apd-input') : window.location.assign('/apd-input')}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
+          >
+            Distribusi APD
+          </button>
+          <button
+            type="button"
+            onClick={() => onNav ? onNav('apd-monitoring') : window.location.assign('/apd-monitoring')}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
+          >
+            Monitoring Dokumen
+          </button>
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 text-white shadow-xs"
+          >
+            Pengaturan Interval
+          </button>
+        </div>
+      </div>
+
       <PageHeader 
         title="Pengaturan Interval APD"
         description="Atur batas waktu interval pengambilan (dalam bulan) untuk setiap jenis APD."

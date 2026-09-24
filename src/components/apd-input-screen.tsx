@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import React, { useState, useEffect } from 'react';
-import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText } from 'lucide-react';
+import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText, ArrowLeft, Shield } from 'lucide-react';
 import { ImageModal } from './image-modal';
 import { Button, Input, Select } from './ui';
 
@@ -34,7 +34,14 @@ const getIntervalIgnoreCase = (intervals: Record<string, number>, key: string) =
   return found ? intervals[found] : 0;
 };
 
-export function ApdInputScreen() {
+export interface ApdInputScreenProps {
+  onBack?: () => void;
+  onNav?: (tab: string) => void;
+  inspectorNik?: string;
+  inspectorName?: string;
+}
+
+export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: ApdInputScreenProps = {}) {
   const {
     searchQuery, setSearchQuery,
     isSearching, setIsSearching,
@@ -77,8 +84,13 @@ export function ApdInputScreen() {
     setShowAddEmployee(false);
     setShowDropdown(false);
     
-    // Validate if employee exists
-    const emp = employees.find(emp => emp.nik.toLowerCase() === query.toLowerCase() || emp.nama.toLowerCase() === query.toLowerCase());
+    // Validate if employee exists safely
+    const q = query.toLowerCase().trim();
+    const emp = employees.find(emp => {
+      const empNik = (emp.nik || '').toLowerCase().trim();
+      const empNama = (emp.nama || (emp as any).name || '').toLowerCase().trim();
+      return empNik === q || empNama === q;
+    });
     
     if (!emp) {
       setIsSearching(false);
@@ -133,10 +145,20 @@ export function ApdInputScreen() {
     }
   };
 
-  const filteredEmployees = employees.filter(emp => 
-    emp.nama.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    emp.nik.toLowerCase().includes(searchQuery.toLowerCase())
-  ).slice(0, 5);
+  const filteredEmployees = employees.filter(emp => {
+    const q = (searchQuery || '').toLowerCase().trim();
+    if (!q) return false;
+    const empNik = (emp.nik || '').toLowerCase().trim();
+    const empNama = (emp.nama || (emp as any).name || '').toLowerCase().trim();
+    return empNama.includes(q) || empNik.includes(q);
+  }).slice(0, 5);
+
+  // Auto-search current logged in employee when screen loads
+  useEffect(() => {
+    if (inspectorNik && !searchQuery && !employeeData && employees.length > 0) {
+      handleSearch(undefined, inspectorNik);
+    }
+  }, [inspectorNik, employees.length]);
 
   const getIntervalWarning = (apd: string, dateStr: string, history: any = null): string | null => {
     if (!history && employeeData) {
@@ -383,13 +405,74 @@ export function ApdInputScreen() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-8">
+    <div className="space-y-5 animate-in fade-in duration-500 pb-12 max-w-5xl mx-auto px-2 sm:px-4">
+      {/* Sub-module Navigation Bar */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="py-2 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--card-bg)] text-[var(--text-main)] text-xs font-bold hover:bg-[var(--input-bg)] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            >
+              <ArrowLeft className="w-4 h-4 text-purple-600" />
+              <span>Kembali</span>
+            </button>
+          )}
+          <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider hidden sm:inline">
+            Modul APD
+          </span>
+        </div>
+
+        {/* Tab switchers */}
+        <div className="flex items-center p-1 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] gap-1">
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 text-white shadow-xs"
+          >
+            Distribusi APD
+          </button>
+          <button
+            type="button"
+            onClick={() => onNav ? onNav('apd-monitoring') : window.location.assign('/apd-monitoring')}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
+          >
+            Monitoring Dokumen
+          </button>
+          <button
+            type="button"
+            onClick={() => onNav ? onNav('apd-settings') : window.location.assign('/apd-settings')}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
+          >
+            Pengaturan Interval
+          </button>
+        </div>
+      </div>
 
       <PageHeader 
-        title="Input Pengambilan APD"
-        description="Cari karyawan berdasarkan Nama atau NIK untuk mencatat pengambilan APD baru."
-        icon={<PlusCircle />}
+        title="Distribusi & Pengambilan APD"
+        description="Kelola dan pantau riwayat pengambilan Alat Pelindung Diri (APD) seluruh personil laboratorium & preparasi."
+        icon={<Shield />}
       />
+
+      {/* Quick Self-Check Banner */}
+      {inspectorNik && (!employeeData || employeeData.nik !== inspectorNik) && (
+        <div className="flex items-center justify-between p-3 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-xs">
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-purple-600 shrink-0" />
+            <span className="text-[var(--text-main)]">
+              Login sebagai <strong>{inspectorName || inspectorNik}</strong> ({inspectorNik})
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleSearch(undefined, inspectorNik)}
+            className="px-3 py-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] transition-colors cursor-pointer shrink-0"
+          >
+            Cek Riwayat APD Saya
+          </button>
+        </div>
+      )}
       <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200">
         
         <form onSubmit={(e) => handleSearch(e)} className="space-y-4 relative">

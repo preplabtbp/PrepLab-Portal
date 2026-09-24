@@ -1530,9 +1530,9 @@ export default function App() {
   <Route path="/quiz" element={<QuizScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
   <Route path="/apd" element={<Navigate to="/apd-input" replace />} />
   <Route path="/apd/*" element={<Navigate to="/apd-input" replace />} />
-  <Route path="/apd-input" element={<ApdInputScreen />} />
-  <Route path="/apd-settings" element={<ApdSettingsScreen />} />
-  <Route path="/apd-monitoring" element={<ApdMonitoringScreen />} />
+  <Route path="/apd-input" element={<ApdInputScreen onBack={() => handleNav('home')} onNav={handleNav} inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
+  <Route path="/apd-settings" element={<ApdSettingsScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
+  <Route path="/apd-monitoring" element={<ApdMonitoringScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
   <Route path="/induksi" element={<InduksiScreen />} />
   <Route path="/preplab-cloud" element={<PreplabCloudScreen onBack={() => handleNav('home')} userProfile={userProfile} inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
   <Route path="/manual" element={<UserManualScreen onBack={() => handleNav('home')} />} />
