@@ -81,6 +81,8 @@ const SECTION_OPTIONS = [
   'General'
 ];
 
+const PRIORITY_OPTIONS = ['Normal', 'High', 'Urgent', 'Low'];
+
 // Helper to format date string cleanly in Indonesian
 function formatDisplayTargetDate(dateStr?: string | null): string {
   if (!dateStr) return 'Hari ini';
