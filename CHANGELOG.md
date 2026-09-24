@@ -2,6 +2,45 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.30] - 2026-09-25
+
+### 🚀 Enterprise WYSIWYG Editor, Relokasi Progress Bar ke Kolom Status, Otomatisasi Status Tugas, & Interaksi Rincian Kegiatan Topik
+
+- **Perbaikan Rincian Kegiatan di Panel Diskusi Topik (`src/components/NotionDatabaseTable.tsx`, `src/components/notion/tasklist-utils.ts`)**:
+  - **Pembersihan Tag Raw HTML**: Mengeliminasi tampilan teks mentah `<br/>` yang sebelumnya tampak pada kartu rincian kegiatan dan mengonversinya secara mulus ke pemisah baris dan paragraf yang rapi dan responsif.
+  - **Checklist Subtask Interaktif di Drawer**: Jika kegiatan memiliki subtask (tasklist), kartu *Rincian & Keterangan Kegiatan* di panel samping kini menyajikan:
+    - *Badge* persentase dan rasio penyelesaian (`completed/total (%)`).
+    - *Progress bar* dinamis yang berubah warna sesuai persentase progres.
+    - Kotak centang interaktif (`CheckSquare` / `Square`) yang dapat diklik langsung di dalam drawer untuk menandai tugas selesai/belum dengan efek *strikethrough* seketika.
+  - **Sinkronisasi Dua Arah (*Two-Way Realtime Sync*)**: Menandai subtask di dalam drawer topik langsung menyinkronkan status, persentase kemajuan, dan tabel utama secara seketika tanpa perlu menutup panel.
+  - **Pemformatan Elegan Tipe Non-Task List**: Catatan kegiatan konvensional diformat rapi dengan parser poin (*bullet list*) dan pemisah baris tanpa kebocoran kode mentah.
+
+- **Relokasi Progress Bar ke Kolom Status & Pemisahan Bersih Kolom Keterangan (`src/components/NotionDatabaseTable.tsx`, `src/components/notion/NotionTasklistView.tsx`)**:
+  - **Pembersihan Kolom Keterangan**: Melepas header progress bar dari kolom keterangan menggunakan opsi `hideProgressBar={true}`, sehingga sel kolom keterangan fokus pada judul subtask dan checklist tanpa redundansi visual.
+  - **Penempatan Progress Bar di Kolom Status**: Progress bar dipindahkan ke kolom *Status* persis di bawah lencana/dropdown status kegiatan, menampilkan persentase (`X%`) dan jumlah tugas (`X/Y`) secara ringkas dan informatif.
+
+- **Otomatisasi Transisi Status Berdasarkan Progres Checklist**:
+  - **0% Selesai**: Status baris kegiatan otomatis ditetapkan menjadi **`Open`**.
+  - **> 0% & < 100% Selesai**: Status otomatis beralih menjadi **`On Progress`**.
+  - **100% Selesai**: Status otomatis beralih menjadi **`Closed`**.
+  - Perubahan ini otomatis berlaku baik saat pengguna mencentang subtask di tabel utama maupun melalui panel diskusi topik.
+
+- **Fleksibilitas Status & Opsi `Canceled` (`src/components/notion/NotionDropdownCell.tsx`)**:
+  - Menambahkan pilihan status **`Canceled`** pada opsi dropdown status, modal penyuntingan data kegiatan, filter tab status, dan kanban board.
+  - Pengguna memiliki keleluasaan penuh untuk mengubah status menjadi `Canceled` secara manual kapan saja.
+  - **Dukungan Baris Non-Task List**: Untuk kegiatan bertipe catatan biasa (tanpa checklist), kolom Status menyediakan pilihan lengkap: **`Open`**, **`On Progress`**, **`Closed`**, dan **`Canceled`** **tanpa menampilkan progress bar**.
+
+- **Enterprise WYSIWYG Editor (`src/components/notion/EnterpriseWysiwygEditor.tsx`)**:
+  - Editor catatan dan tugas dwifungsi kelas enterprise (*Mode Teks Bebas* vs *Mode Checklist Subtask*).
+  - Dilengkapi bilah format, pintasan keyboard (`Ctrl+Enter` untuk simpan, `Escape` untuk batal), template prasetel kegiatan laboratorium, serta live markdown preview.
+  - Menangani normalisasi tag `<br/>` dan pemisahan subtask secara otomatis.
+
+- **Sinkronisasi Logbook & Pemilihan PIC Cerdas (`src/components/logbook-screen.tsx`, `server/routes/logbook.ts`)**:
+  - Pencarian PIC dengan fitur ketik nama/NIK cerdas (searchable autocomplete dropdown).
+  - Otomatisasi penguncian seksi pelaksana sesuai seksi akun personil.
+  - Pemilihan tanggal fleksibel (*date picker*) untuk estimasi target penyelesaian.
+  - Sinkronisasi penambahan baris tugas baru ke baris pertama tabel markdown Buletin Manajemen Mutu.
+
 ## [2.9.29] - 2026-09-25
 
 ### 🎯 Penyesuaian Interaksi Diskusi, Editor Teks Native Terintegrasi, & Manajemen Kolom Dinamis Buletin
