@@ -106,6 +106,7 @@ const LeaderboardScreen = lazyWithRetry(() => import('./components/LeaderboardSc
 const EasterEggGame = lazyWithRetry(() => import('./components/easter-egg-game').then(m => ({ default: m.EasterEggGame })));
 const FinanceScreen = lazyWithRetry(() => import('./components/FinanceScreen').then(m => ({ default: m.FinanceScreen || m.default })));
 const ModulesScreen = lazyWithRetry(() => import('./components/modules-screen').then(m => ({ default: m.ModulesScreen })));
+const LogbookScreen = lazyWithRetry(() => import('./components/logbook-screen').then(m => ({ default: m.LogbookScreen })));
 import { ModulesDrawer } from './components/ModulesDrawer';
 import { LabBotWidget } from './components/LabBotWidget';
 
@@ -1561,6 +1562,7 @@ export default function App() {
   <Route path="/feedback-support" element={<FeedbackSupportScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/finance" element={<FinanceScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
   <Route path="/leaderboard" element={<LeaderboardScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} userProfile={userProfile} onBack={() => handleNav('home')} />} />
+  <Route path="/logbook" element={<LogbookScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onNav={handleNav} onBack={() => handleNav('home')} />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
   </AnimatePresence>

@@ -4,7 +4,8 @@ import {
   Activity, ThermometerSun, Wrench, PlusCircle, LineChart, ShieldCheck, 
   CheckSquare, Eye, AlertTriangle, ClipboardCheck, Package, Box, FileText, 
   Settings, BookOpen, Info, Briefcase, Users, Calendar, Clock, Utensils, 
-  Receipt, LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink, Sparkles
+  Receipt, LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink, Sparkles,
+  ClipboardList
 } from 'lucide-react';
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
@@ -66,6 +67,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
       bgIcon: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20',
       items: [
         { id: 'inspect', title: "Inspeksi Harian", desc: "Checklist P2H harian", icon: <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('inspect') },
+        { id: 'logbook', title: "Log Book Section", desc: "Briefing P5M & Evaluasi Task Harian", icon: <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('logbook') },
         ...(isLab ? [{ id: 'pemantauan', title: "Pantau Parameter", desc: "Suhu, kelembapan & gas", icon: <ThermometerSun className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('pemantauan') }] : []),
         ...(isMaintenance ? [{ id: 'wo-list', title: "Daftar Work Order", desc: "Status & riwayat WO", icon: <Wrench className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('wo-list') }] : []),
         { id: 'create-wo', title: "Buat Work Order", desc: "Form temuan kerusakan", icon: <PlusCircle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('create-wo') },

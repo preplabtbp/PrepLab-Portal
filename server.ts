@@ -65,6 +65,7 @@ import { financeRouter } from "./server/routes/finance.js";
 import { labbotRouter } from "./server/routes/labbot.js";
 import { kbbiRouter } from "./server/routes/kbbi.js";
 import { gamificationRouter } from "./server/routes/gamification.js";
+import { logbookRouter } from "./server/routes/logbook.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
 
 async function initDbSchema() {
@@ -190,6 +191,37 @@ async function initDbSchema() {
       created_at TIMESTAMP DEFAULT NOW()
     );`);
     await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_portal_logins_nik_date ON portal_logins(nik, login_date);`);
+
+    // Logbook & Meeting Pagi Section Tasks Table
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS logbook_tasks (
+      id SERIAL PRIMARY KEY,
+      universe TEXT DEFAULT 'TBP_GPS',
+      pt TEXT DEFAULT 'TBP',
+      section TEXT NOT NULL DEFAULT 'General',
+      bulletin_post_id INTEGER,
+      bulletin_topic_title TEXT,
+      title TEXT NOT NULL,
+      description TEXT,
+      assigned_by_nik TEXT NOT NULL,
+      assigned_by_name TEXT NOT NULL,
+      assignee_nik TEXT NOT NULL,
+      assignee_name TEXT NOT NULL,
+      status TEXT DEFAULT 'Open',
+      priority TEXT DEFAULT 'Normal',
+      activity_type TEXT DEFAULT 'Routine',
+      progress_percent INTEGER DEFAULT 0,
+      task_date TEXT NOT NULL,
+      target_date TEXT,
+      actual_completed_date TIMESTAMP,
+      yesterday_notes TEXT,
+      today_notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_logbook_tasks_date ON logbook_tasks(task_date);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_logbook_tasks_assignee ON logbook_tasks(assignee_nik);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_logbook_tasks_section ON logbook_tasks(section);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_logbook_tasks_bulletin ON logbook_tasks(bulletin_post_id);`);
 
     // Auto seed questions if table is empty
     const qCount = await db.select().from(questions).limit(1);
@@ -716,7 +748,8 @@ const app = express();
       url.startsWith('/api/p5m/pool') ||
       url.startsWith('/api/bulletin') ||
       url.startsWith('/api/agenda') ||
-      url.startsWith('/api/apd')
+      url.startsWith('/api/apd') ||
+      url.startsWith('/api/logbook')
     )) {
       return next();
     }
@@ -750,6 +783,7 @@ const app = express();
   app.use(kbbiRouter);
   app.use(changelogRouter);
   app.use("/api/gamification", gamificationRouter);
+  app.use(logbookRouter);
 
   // --- PRESENCE ROUTES ---
   app.get('/api/presence/online', (req, res) => {

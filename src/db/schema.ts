@@ -654,3 +654,35 @@ export const portalLogins = pgTable('portal_logins', {
   uniqueIndex('idx_portal_logins_nik_date').on(t.nik, t.loginDate),
 ]);
 
+// Define 'logbook_tasks' table (Tugas harian atasan-bawahan, meeting pagi & log book terintegrasi buletin)
+export const logbookTasks = pgTable('logbook_tasks', {
+  id: serial('id').primaryKey(),
+  universe: text('universe').default('TBP_GPS'),
+  pt: text('pt').default('TBP'),
+  section: text('section').notNull().default('General'), // 'Preparation', 'Laboratory', 'Maintenance', 'General', dll.
+  bulletinPostId: integer('bulletin_post_id'), // Link ke bulletin_posts
+  bulletinTopicTitle: text('bulletin_topic_title'), // Judul baris/kegiatan di buletin
+  title: text('title').notNull(), // Judul arahan / kegiatan tugas
+  description: text('description'), // Rincian arahan & checklist markdown (- [ ] item)
+  assignedByNik: text('assigned_by_nik').notNull(), // NIK Atasan
+  assignedByName: text('assigned_by_name').notNull(), // Nama Atasan
+  assigneeNik: text('assignee_nik').notNull(), // NIK Bawahan / PIC yang ditugaskan
+  assigneeName: text('assignee_name').notNull(), // Nama Bawahan / PIC
+  status: text('status').default('Open'), // 'Open', 'In Progress', 'Resolved', 'Closed', 'Done', 'Cancelled'
+  priority: text('priority').default('Normal'), // 'Low', 'Normal', 'Medium', 'High', 'Urgent'
+  activityType: text('activity_type').default('Routine'), // 'Routine', 'Non Routine', 'Periodic', 'Special Task'
+  progressPercent: integer('progress_percent').default(0),
+  taskDate: text('task_date').notNull(), // 'YYYY-MM-DD'
+  targetDate: text('target_date'), // Deadline / jam target
+  actualCompletedDate: timestamp('actual_completed_date'),
+  yesterdayNotes: text('yesterday_notes'), // Catatan evaluasi kemarin
+  todayNotes: text('today_notes'), // Catatan progres hari ini
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  index('idx_logbook_tasks_date').on(t.taskDate),
+  index('idx_logbook_tasks_assignee').on(t.assigneeNik),
+  index('idx_logbook_tasks_section').on(t.section),
+  index('idx_logbook_tasks_bulletin').on(t.bulletinPostId),
+]);
+

@@ -49,6 +49,7 @@ import {
   CalendarCheck,
   Minimize2,
   Maximize2,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useParams, useNavigate } from "react-router-dom";
@@ -1331,6 +1332,16 @@ ${aiMeetingNotes
                   <span className="hidden sm:inline">Focus Mode</span>
                 </>
               )}
+            </button>
+
+            {/* Direct Jump to Log Book Section */}
+            <button
+              onClick={() => navigate('/logbook')}
+              className="px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white hover:border-teal-500/50"
+              title="Buka Log Book Section (Meeting P5M & Task PIC)"
+            >
+              <ClipboardList className="w-3.5 h-3.5 text-teal-400" />
+              <span className="hidden md:inline">Log Book</span>
             </button>
 
             {selectedPost && !isEditing && (
