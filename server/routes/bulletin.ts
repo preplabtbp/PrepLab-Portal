@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../../src/db/index.js";
-import { eq, desc, or, inArray, isNull, and, gte, lte } from "drizzle-orm";
+import { eq, desc, or, inArray, isNull, and, gte, lte, sql } from "drizzle-orm";
 import { 
   chatMessages, employees, equipments, workOrders, users, tickets, downtime, 
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
@@ -20,11 +20,11 @@ export const router = Router();
 
 router.get("/api/bulletin", async (req, res) => {
     try {
-      let { pt, nik } = req.query as { pt?: string; nik?: string };
+      let { pt, nik, page, limit } = req.query as { pt?: string; nik?: string; page?: string; limit?: string };
       
       const isSuperUser = nik === '02D24000043' || nik === '02D25000055' || nik === 'preplabadmin';
       
-      let query: any = db.select().from(bulletinPosts);
+      const conditions: any[] = [];
       
       // If pt === 'ALL' or (isSuperUser and no pt specified), return all bulletin posts
       if (pt === 'ALL' || (isSuperUser && !pt)) {
@@ -33,11 +33,44 @@ router.get("/api/bulletin", async (req, res) => {
         // GPS and TBP share the same universe (TBP_GPS)
         // so GPS users see TBP data
         const targetPt = (pt === 'GPS' || !pt) ? 'TBP' : pt;
-        query = query.where(eq(bulletinPosts.pt, targetPt));
+        conditions.push(eq(bulletinPosts.pt, targetPt));
       }
-      query = query.orderBy(bulletinPosts.createdAt);
       
-      const data = await query;
+      let baseQuery = db.select().from(bulletinPosts);
+      if (conditions.length > 0) {
+        baseQuery = baseQuery.where(and(...conditions)) as any;
+      }
+      
+      const pageNum = page ? Math.max(1, parseInt(page as string, 10)) : null;
+      const limitNum = limit ? Math.max(1, parseInt(limit as string, 10)) : null;
+
+      if (pageNum && limitNum) {
+        const totalQuery = conditions.length > 0 
+          ? db.select({ count: sql<number>`count(*)` }).from(bulletinPosts).where(and(...conditions))
+          : db.select({ count: sql<number>`count(*)` }).from(bulletinPosts);
+        const totalRes = await totalQuery;
+        const total = Number(totalRes[0]?.count || 0);
+
+        const data = await (baseQuery as any)
+          .orderBy(desc(bulletinPosts.createdAt))
+          .limit(limitNum)
+          .offset((pageNum - 1) * limitNum);
+
+        console.log('[Bulletin API] Returning paginated', data.length, 'posts of', total, 'for pt:', pt, 'page:', pageNum);
+        return res.json({
+          status: "success",
+          data,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            totalPages: Math.ceil(total / limitNum),
+            hasMore: pageNum * limitNum < total
+          }
+        });
+      }
+      
+      const data = await (baseQuery as any).orderBy(bulletinPosts.createdAt);
       console.log('[Bulletin API] Returning', data.length, 'posts for pt:', pt, 'nik:', nik);
       res.json({ status: "success", data });
     } catch (error: any) {

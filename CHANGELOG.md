@@ -1,6 +1,57 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+
+## [2.9.29] - 2026-09-25
+
+### 🎯 Penyesuaian Interaksi Diskusi, Editor Teks Native Terintegrasi, & Manajemen Kolom Dinamis Buletin
+
+- **Interaktivitas Baris & Pembukaan Panel Diskusi Terarah (`src/components/NotionDatabaseTable.tsx`)**:
+  - **Penonaktifan Klik Baris Global**: Mengklik atau menyeleksi baris tabel kini tidak lagi memicu pembukaan panel samping diskusi secara tidak disengaja. Pengguna dapat dengan leluasa berinteraksi dengan sel tabel tanpa terganggu oleh drawer yang tiba-tiba terbuka.
+  - **Pemicu Diskusi Eksklusif**: Panel diskusi kini hanya akan terbuka secara terarah dan terencana saat tombol komentar (*badge* dengan ikon `MessageSquare` dan jumlah komentar) di samping judul kegiatan diklik atau ditap.
+
+- **Desain Editor Teks Native Menyatu dengan Sel (`src/components/notion/NotionInlineEditor.tsx`)**:
+  - **Eliminasi Tampilan "Tempelan" Mengambang**: Mendesain ulang antarmuka penyunting inline dari sebelumnya berupa kartu mengambang (*floating popover*) dengan bayangan tebal menjadi wadah tertanam langsung (*in-cell embedded container*) yang menyatu secara harmonis dengan batas sel tabel.
+  - **Adopsi Tema Sistem Portal**: Menggunakan variabel CSS tema portal (`var(--input-bg)`, `var(--card-bg)`, `var(--border-main)`, `var(--text-main)`) sehingga otomatis beradaptasi dengan mode gelap dan terang tanpa tabrakan warna latar belakang.
+  - **Bilah Alat (Toolbar) Terintegrasi**: Bilah pemformatan teks (*Bold*, *Italic*, *+ Tasklist*, *Bullet Point*) dan tombol aksi (*Batal*, *Terapkan*) tersusun rapi di dalam ruang sel dengan pintasan keyboard praktis `Ctrl+Enter` untuk menyimpan dan `Escape` untuk batal.
+
+- **Manajemen Kolom Dinamis (Tambah & Hapus Kolom) (`src/components/NotionDatabaseTable.tsx`)**:
+  - **Hapus Kolom Cepat**: Header kolom tabel non-utama kini dilengkapi tombol hapus (`X`) dengan konfirmasi cepat untuk membuang kolom yang tidak relevan bagi tim.
+  - **Tambah Kolom dari Template & Kustom**: Ditambahkan tombol `+` di ujung header tabel yang menampilkan menu popover interaktif untuk menambahkan kolom baru:
+    - *Template Kolom Populer*: Status, Priority, PIC, Activity, Deadline, Period, Lokasi, Departemen, Catatan, Biaya.
+    - *Kolom Kustom*: Input bebas untuk menentukan nama kolom baru sesuai kebutuhan operasional.
+  - **Serialisasi Markdown Otomatis**: Kolom baru maupun kolom yang dihapus secara otomatis disinkronisasikan dan disimpan ke format tabel Markdown saat pengguna menekan tombol *Simpan Perubahan*.
+
+## [2.9.28] - 2026-09-25
+
+### ⚡ Optimasi Performa & Modularisasi Buletin, Inline Editing Tabel Enterprise, Smart Tasklist Progress, dan Konfirmasi Simpan
+
+- **Paginasi Server-Side & Optimasi Pemuatan API Buletin (`server/routes/bulletin.ts`)**:
+  - **Dukungan Parameter Paginasi**: Menambahkan dukungan query `page` dan `limit` pada endpoint `GET /api/bulletin` dengan pemfilteran berbasis universe (`TBP_GPS` vs `GTS`) dan kalkulasi hitung cepat `count(*)`.
+  - **Respons Paginasi Terstruktur**: Mengembalikan metadata `{ page, limit, total, totalPages, hasMore }` sekaligus menjaga kompatibilitas mundur 100% untuk pemanggil yang membutuhkan seluruh data.
+  - **Peningkatan Kecepatan Initial Load**: Mengurangi ukuran payload HTTP secara drastis saat memuat artikel buletin pada jaringan lambat di lapangan.
+
+- **Modularisasi Komponen Notion Database Table (`src/components/notion/`)**:
+  - Memecah berkas raksasa menjadi modul-modul independen dan reusable:
+    1. **`tasklist-utils.ts`**: Utilitas parsing ekspresi reguler untuk mendeteksi item tasklist markdown, kalkulasi persentase kemajuan penyelesaian tugas, dan fungsi toggle status checklist tanpa merusak susunan teks.
+    2. **`NotionTasklistView.tsx`**: Komponen tampilan interaktif daftar tugas dengan mini progress bar dinamis, badge persentase berwarna adaptif (*Amber/Sky/Teal/Emerald*), serta checkbox yang dapat diklik langsung.
+    3. **`NotionDropdownCell.tsx`**: Dropdown sel inline bergaya Notion untuk perubahan instan kolom *Status*, *Activity (Routine / Non Routine)*, *Priority*, dan *Period*.
+    4. **`NotionInlineEditor.tsx`**: Antarmuka penyunting teks inline kelas enterprise dengan bilah format cepat (Bold, Italic, Sisipkan Tasklist, Sisipkan Poin Bullet) serta pintasan keyboard `Ctrl+Enter` dan `Escape`.
+    5. **`NotionSaveConfirmationModal.tsx`**: Dialog modal konfirmasi interaktif bertema gelap elegan yang menampilkan ringkasan jumlah baris yang diubah sebelum disimpan ke backend.
+
+- **Pengeditan Langsung di Tabel (Direct Inline Table Editing without Modal) (`src/components/NotionDatabaseTable.tsx`)**:
+  - **Dropdown Status & Tipe Tugas**: Personil dapat langsung mengganti status (*Open, In Progress, Resolved, Closed, Done, Cancelled*) dan kategori aktivitas (*Routine, Non Routine, Periodic, Special Task*) cukup dengan satu klik pada sel tabel tanpa perlu membuka menu modal detail.
+  - **Penyuntingan Judul & Keterangan Kelas Enterprise**: Pengguna dapat melakukan klik ganda (*double click*) atau menekan ikon pensil pada sel *Jenis Kegiatan* atau *Keterangan* untuk memunculkan editor inline lengkap dengan fitur format tebal, miring, dan checklist.
+  - **Smart Tasklist & Persentase Progres Otomatis**:
+    - Sistem otomatis membaca item checklist markdown (`- [ ]` vs `- [x]`) di kolom keterangan.
+    - Menghitung persentase progres secara real-time (`Math.round((completed / total) * 100)%`).
+    - Checkbox dapat langsung dicentang/dihapus centangnya secara interaktif di tabel, dan otomatis merekomendasikan status *Resolved* saat seluruh tugas telah selesai (100%).
+
+- **Deteksi Perubahan Langsung & Pop-up Konfirmasi Simpan (`src/components/NotionDatabaseTable.tsx`)**:
+  - **Pelacakan Baris Kotor (*Dirty Row Tracking*)**: Baris yang diubah secara langsung ditandai dengan aksen visual halus dan indikator titik animasi pada nomor baris.
+  - **Bilah Aksi Melayang (*Floating Save Bar*)**: Bilah simpan melayang muncul di bagian bawah tabel saat terdeteksi ada modifikasi sel yang belum disimpan.
+  - **Dialog Konfirmasi Penyimpanan**: Saat tombol *Simpan Perubahan* ditekan, sistem memunculkan pop-up modal: *"Apakah Anda ingin menyimpan perubahan?"* dengan rincian jumlah baris yang dimodifikasi, opsi *"Ya, Simpan Perubahan"*, serta opsi pembatalan / rollback ke data semula (*"Buang Perubahan"*).
+
 ## [2.9.27] - 2026-09-24
 
 ### 🛡️ Perbaikan Aksesibilitas Modul APD, Navigasi Multi-Submodul, dan Pembukaan Guard Endpoint APD
