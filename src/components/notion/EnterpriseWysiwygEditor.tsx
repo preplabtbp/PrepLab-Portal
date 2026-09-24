@@ -70,7 +70,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
   // Subtask drafts for checklist mode
   const [subtasks, setSubtasks] = useState<SubtaskItem[]>(() => {
     if (!value) return [{ id: '1', text: '', checked: false }];
-    const lines = value.split('\n');
+    const normalized = value.replace(/<br\s*\/?>/gi, '\n');
+    const lines = normalized.split('\n');
     const items: SubtaskItem[] = [];
     lines.forEach((line, idx) => {
       const match = line.match(/^[\s\t]*- \[([ xX])\]\s*(.*)$/);
@@ -88,7 +89,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
   // Notes draft (non-checklist part)
   const [notes, setNotes] = useState<string>(() => {
     if (!value) return '';
-    const nonChecklistLines = value
+    const normalized = value.replace(/<br\s*\/?>/gi, '\n');
+    const nonChecklistLines = normalized
       .split('\n')
       .filter(l => !/^[\s\t]*- \[([ xX])\]/.test(l))
       .join('\n')
@@ -97,11 +99,11 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
   });
 
   // Keep internal text state in sync
-  const [textContent, setTextContent] = useState<string>(value || '');
+  const [textContent, setTextContent] = useState<string>(() => (value || '').replace(/<br\s*\/?>/gi, '\n'));
 
   // Synchronize when value changes externally
   useEffect(() => {
-    setTextContent(value || '');
+    setTextContent((value || '').replace(/<br\s*\/?>/gi, '\n'));
   }, [value]);
 
   // Sync checklist state changes back to parent

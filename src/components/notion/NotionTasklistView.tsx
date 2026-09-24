@@ -7,13 +7,15 @@ interface NotionTasklistViewProps {
   onToggleTask?: (taskIndex: number) => void;
   compact?: boolean;
   disabled?: boolean;
+  hideProgressBar?: boolean;
 }
 
 export const NotionTasklistView: React.FC<NotionTasklistViewProps> = ({
   progress,
   onToggleTask,
   compact = false,
-  disabled = false
+  disabled = false,
+  hideProgressBar = false
 }) => {
   if (!progress.hasTasklist) return null;
 
@@ -37,22 +39,24 @@ export const NotionTasklistView: React.FC<NotionTasklistViewProps> = ({
   return (
     <div className="space-y-1.5 my-1 w-full max-w-sm">
       {/* Progress Header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60">
-            <div
-              className={`h-full transition-all duration-300 ${progressColor}`}
-              style={{ width: `${percentage}%` }}
-            />
+      {!hideProgressBar && (
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60">
+              <div
+                className={`h-full transition-all duration-300 ${progressColor}`}
+                style={{ width: `${percentage}%` }}
+              />
+            </div>
+            <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md font-semibold border ${badgeBorder}`}>
+              {percentage}%
+            </span>
           </div>
-          <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md font-semibold border ${badgeBorder}`}>
-            {percentage}%
+          <span className="text-[10px] font-mono text-slate-400">
+            {completed}/{total} {isAllCompleted ? 'Done' : 'Task'}
           </span>
         </div>
-        <span className="text-[10px] font-mono text-slate-400">
-          {completed}/{total} {isAllCompleted ? 'Done' : 'Task'}
-        </span>
-      </div>
+      )}
 
       {/* Task List Items */}
       <div className={`space-y-1 ${compact ? 'max-h-24 overflow-y-auto pr-1' : ''}`}>

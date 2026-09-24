@@ -27,8 +27,10 @@ export function parseTasklist(text?: string | null): TasklistProgress {
     return { hasTasklist: false, total: 0, completed: 0, percentage: 0, isAllCompleted: false, items: [] };
   }
 
+  // Normalize <br/>, <br>, <br /> tags into \n
+  const normalized = text.replace(/<br\s*\/?>/gi, '\n');
   const items: TaskItem[] = [];
-  const lines = text.split(/\r?\n|•/);
+  const lines = normalized.split(/\r?\n|•/);
   let itemIndex = 0;
 
   for (const line of lines) {
@@ -66,8 +68,12 @@ export function parseTasklist(text?: string | null): TasklistProgress {
 export function toggleTasklistItem(text: string, targetIndex: number): string {
   if (!text) return text;
 
+  const hasBr = /<br\s*\/?>/i.test(text);
+  const delimiter = hasBr ? '<br/>' : '\n';
+  const normalized = text.replace(/<br\s*\/?>/gi, '\n');
+
   let currentIndex = 0;
-  const lines = text.split('\n');
+  const lines = normalized.split('\n');
   const updatedLines = lines.map(line => {
     // Check if line contains a task item
     const match = line.match(/^(\s*[-*•]?\s*\[)([ xX])(\]\s*.+)$/);
@@ -84,9 +90,9 @@ export function toggleTasklistItem(text: string, targetIndex: number): string {
   });
 
   // If text had bullet-separated format (e.g. "• [ ] task1 • [x] task2")
-  if (currentIndex <= targetIndex && text.includes('•')) {
+  if (currentIndex <= targetIndex && normalized.includes('•')) {
     let bulletIdx = 0;
-    const bulletParts = text.split('•');
+    const bulletParts = normalized.split('•');
     const updatedParts = bulletParts.map(part => {
       const match = part.match(/^(\s*\[)([ xX])(\]\s*.+)$/);
       if (match) {
@@ -103,7 +109,7 @@ export function toggleTasklistItem(text: string, targetIndex: number): string {
     return updatedParts.join('•');
   }
 
-  return updatedLines.join('\n');
+  return updatedLines.join(delimiter);
 }
 
 /**
@@ -114,5 +120,7 @@ export function appendTasklistItem(text: string, taskTitle: string): string {
   if (!text || text.trim() === '' || text.trim() === '-') {
     return newTaskLine;
   }
-  return `${text.trim()}\n${newTaskLine}`;
+  const hasBr = /<br\s*\/?>/i.test(text);
+  const delimiter = hasBr ? '<br/>' : '\n';
+  return `${text.trim()}${delimiter}${newTaskLine}`;
 }

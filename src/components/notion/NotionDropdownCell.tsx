@@ -27,32 +27,20 @@ const STATUS_OPTIONS: DropdownOption[] = [
     icon: <Clock className="w-2.5 h-2.5 text-blue-500 dark:text-blue-400" />
   },
   {
-    value: 'In Progress',
-    label: 'In Progress',
+    value: 'On Progress',
+    label: 'On Progress',
     badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25',
     icon: <RotateCcw className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
   },
   {
-    value: 'Resolved',
-    label: 'Resolved',
-    badgeClass: 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/40 hover:bg-teal-500/25',
-    icon: <CheckCircle2 className="w-2.5 h-2.5 text-teal-600 dark:text-teal-400" />
-  },
-  {
     value: 'Closed',
     label: 'Closed',
-    badgeClass: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/40 hover:bg-purple-500/25',
-    icon: <Check className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400" />
-  },
-  {
-    value: 'Done',
-    label: 'Done',
     badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25',
     icon: <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
   },
   {
-    value: 'Cancelled',
-    label: 'Cancelled',
+    value: 'Canceled',
+    label: 'Canceled',
     badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/40 hover:bg-rose-500/25',
     icon: <AlertCircle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" />
   }
@@ -145,13 +133,29 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
 
   // Find matching option or fallback
   const currentValLower = (value || '').toLowerCase().trim();
-  const currentOpt = options.find(
+  let currentOpt = options.find(
     o => o.value.toLowerCase() === currentValLower || o.label.toLowerCase() === currentValLower
-  ) || {
-    value: value || '-',
-    label: value || '-',
-    badgeClass: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 hover:bg-slate-500/20'
-  };
+  );
+
+  if (!currentOpt && type === 'status') {
+    if (currentValLower.includes('progress') || currentValLower.includes('proses')) {
+      currentOpt = options.find(o => o.value === 'On Progress');
+    } else if (currentValLower.includes('close') || currentValLower.includes('selesai') || currentValLower.includes('done') || currentValLower.includes('resolved')) {
+      currentOpt = options.find(o => o.value === 'Closed');
+    } else if (currentValLower.includes('cancel') || currentValLower.includes('batal')) {
+      currentOpt = options.find(o => o.value === 'Canceled');
+    } else if (currentValLower.includes('open') || currentValLower.includes('baru')) {
+      currentOpt = options.find(o => o.value === 'Open');
+    }
+  }
+
+  if (!currentOpt) {
+    currentOpt = {
+      value: value || '-',
+      label: value || '-',
+      badgeClass: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 hover:bg-slate-500/20'
+    };
+  }
 
   // Update fixed portal position based on button coordinates
   const updatePosition = () => {
