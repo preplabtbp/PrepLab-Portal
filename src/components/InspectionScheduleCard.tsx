@@ -4,7 +4,7 @@ import {
   ExternalLink, Search, X, RefreshCw, Sparkles, CheckCircle2, AlertCircle, 
   Users, Camera, ShieldAlert, AlertTriangle, Image as ImageIcon, Send, Trash2, Check,
   ChevronDown, ChevronUp, Calendar, ClipboardList, ThermometerSun, ArrowRight, FileText,
-  Download, Eye, Sun, Upload
+  Download, Eye, Sun, Upload, Wrench
 } from 'lucide-react';
 import { Button } from './ui';
 import { toast } from 'sonner';
@@ -56,6 +56,7 @@ interface InspectionScheduleCardProps {
   onNavigateToP5m?: () => void;
   onNavigateToP2h?: () => void;
   onNavigateToPemantauan?: () => void;
+  onNavigateToWo?: () => void;
 }
 
 function getLocalISOWeekTag(d: Date = new Date(), advanceOnWeekend = true): string {
@@ -82,7 +83,8 @@ export function InspectionScheduleCard({
   onNavigateToKta,
   onNavigateToP5m,
   onNavigateToP2h,
-  onNavigateToPemantauan
+  onNavigateToPemantauan,
+  onNavigateToWo
 }: InspectionScheduleCardProps) {
   const [currentWeekTag, setCurrentWeekTag] = useState<string>(() => getLocalISOWeekTag(new Date(), true));
 
@@ -275,15 +277,23 @@ export function InspectionScheduleCard({
     }
   }, [isAdminOrDeveloper, inspectorNik]);
 
+  const isMaintenance = useMemo(() => {
+    const sec = userSection.toLowerCase();
+    return sec.includes('maint') || sec.includes('pemeliharaan');
+  }, [userSection]);
+
   const isPrepOrLabOrCrew = useMemo(() => {
     const sec = userSection.toLowerCase();
     const jab = userRole.toLowerCase();
-    return sec.includes('prep') || sec.includes('preparasi') || sec.includes('lab') || sec.includes('maint') || jab.includes('crew') || hasAdminAccess;
+    // Exclude maintenance from P2H daily inspection!
+    if (sec.includes('maint') || sec.includes('pemeliharaan')) return false;
+    return sec.includes('prep') || sec.includes('preparasi') || sec.includes('lab') || jab.includes('crew') || hasAdminAccess;
   }, [userSection, userRole, hasAdminAccess]);
 
   const isLabOrQA = useMemo(() => {
     const sec = userSection.toLowerCase();
-    return sec.includes('lab') || sec.includes('qa') || sec.includes('quality assurance') || sec.includes('maint') || hasAdminAccess;
+    if (sec.includes('maint') || sec.includes('pemeliharaan')) return false;
+    return sec.includes('lab') || sec.includes('qa') || sec.includes('quality assurance') || hasAdminAccess;
   }, [userSection, hasAdminAccess]);
 
   const rosterToday = dailyTasks?.rosterToday;
@@ -1137,7 +1147,7 @@ export function InspectionScheduleCard({
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 2xl:gap-5">
             {/* 1. INSPEKSI RUTIN MINGGUAN */}
             <div 
               className={`relative overflow-hidden rounded-2xl border p-4 shadow-xs flex flex-col justify-between transition-all duration-200 ${
@@ -1149,8 +1159,8 @@ export function InspectionScheduleCard({
               }`}
             >
               <div>
-                <div className="flex items-center justify-between mb-2.5">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-wrap sm:flex-nowrap items-start sm:items-center justify-between gap-2 mb-2.5">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center border shrink-0 ${
                       isTransitionFromCuti
                         ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/25'
@@ -1160,14 +1170,15 @@ export function InspectionScheduleCard({
                     }`}>
                       {isTransitionFromCuti ? <ShieldCheck className="w-4 h-4" /> : isUserCuti ? <Sun className="w-4 h-4" /> : <ClipboardCheck className="w-4 h-4" />}
                     </div>
-                    <div>
-                      <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] leading-tight">
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] leading-tight whitespace-nowrap">
                         Inspeksi Rutin Mingguan
                       </h4>
                       <p className="text-[10px] text-[var(--text-muted)] truncate">Preparation & Laboratory</p>
                     </div>
                   </div>
 
+<<<<<<< HEAD
                   {isTransitionFromCuti ? (
                     <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30 flex items-center gap-1 shadow-2xs">
                       <span>✓</span> Bebas Tugas (Transisi Cuti)
@@ -1194,6 +1205,31 @@ export function InspectionScheduleCard({
                       Belum Selesai
                     </span>
                   )}
+=======
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                    {isTransitionFromCuti ? (
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30 flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
+                        <span>✓</span> Bebas Tugas (Transisi Cuti)
+                      </span>
+                    ) : isUserCuti ? (
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
+                        <span>🏖️</span> Bebas Tugas (Cuti)
+                      </span>
+                    ) : mySchedule?.isCompleted ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap shrink-0">
+                        <Check className="w-3 h-3" /> Selesai
+                      </span>
+                    ) : hasSsProof ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap shrink-0">
+                        <Check className="w-3 h-3" /> Bukti SS
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30 whitespace-nowrap shrink-0">
+                        Belum Selesai
+                      </span>
+                    )}
+                  </div>
+>>>>>>> 1cd097a (feat: live database leadership dashboard, P5M module for lab home, and ethical 10-role simulation)
                 </div>
 
                 {/* Body Details */}
@@ -1353,6 +1389,7 @@ export function InspectionScheduleCard({
                         <Download className="w-3 h-3" /> Unduh PDF
                       </button>
                     )}
+<<<<<<< HEAD
                     {hasSsProof ? (
                       <button
                         type="button"
@@ -1374,6 +1411,38 @@ export function InspectionScheduleCard({
                         <span>Bukti SS</span>
                       </button>
                     )}
+=======
+                    {hasSsProof && ssProofUrl && (
+                      <div
+                        onClick={() => setLightboxUrl(ssProofUrl)}
+                        className="w-7 h-7 rounded-lg overflow-hidden border border-emerald-500/40 cursor-pointer hover:scale-110 transition-transform shrink-0 shadow-2xs"
+                        title="Klik untuk memperbesar screenshot bukti inspeksi"
+                      >
+                        <img
+                          src={formatKtaImageUrl(ssProofUrl)}
+                          alt="Thumbnail SS"
+                          onError={(e) => {
+                            const driveMatch = ssProofUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || ssProofUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                            if (driveMatch && !e.currentTarget.src.includes('uc?export=view')) {
+                              e.currentTarget.src = `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+                            }
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (hasSsProof && ssProofUrl) setLightboxUrl(ssProofUrl);
+                        else setShowSsModal(true);
+                      }}
+                      className="py-1.5 px-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold hover:bg-emerald-500/20 transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <Eye className="w-3 h-3 text-emerald-600" />
+                      <span>{hasSsProof ? 'Lihat Bukti SS' : 'Bukti SS'}</span>
+                    </button>
+>>>>>>> 1cd097a (feat: live database leadership dashboard, P5M module for lab home, and ethical 10-role simulation)
                     <button
                       type="button"
                       onClick={handleStartInspection}
@@ -1416,8 +1485,8 @@ export function InspectionScheduleCard({
               }`}
             >
               <div>
-                <div className="flex items-center justify-between mb-2.5">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-wrap sm:flex-nowrap items-start sm:items-center justify-between gap-2 mb-2.5">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center border shrink-0 ${
                       isTransitionFromCuti
                         ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/25'
@@ -1427,31 +1496,33 @@ export function InspectionScheduleCard({
                     }`}>
                       {isTransitionFromCuti ? <ShieldCheck className="w-4 h-4" /> : isUserCuti ? <ShieldCheck className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
                     </div>
-                    <div>
-                      <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] leading-tight">
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] leading-tight whitespace-nowrap">
                         Laporan Observasi
                       </h4>
                       <p className="text-[10px] text-[var(--text-muted)] truncate">Kondisi & Tindakan (KTA/TTA)</p>
                     </div>
                   </div>
 
-                  {isTransitionFromCuti ? (
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30 flex items-center gap-1 shadow-2xs">
-                      <span>✓</span> Bebas Target (Transisi Cuti)
-                    </span>
-                  ) : isUserCuti ? (
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 flex items-center gap-1 shadow-2xs">
-                      <span>🏖️</span> Bebas Target (Cuti)
-                    </span>
-                  ) : progressStats.ktaDone ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Terpenuhi
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30">
-                      Belum Lengkap
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                    {isTransitionFromCuti ? (
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30 flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
+                        <span>✓</span> Bebas Target (Transisi Cuti)
+                      </span>
+                    ) : isUserCuti ? (
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
+                        <span>🏖️</span> Bebas Target (Cuti)
+                      </span>
+                    ) : progressStats.ktaDone ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap shrink-0">
+                        <Check className="w-3 h-3" /> Terpenuhi
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30 whitespace-nowrap shrink-0">
+                        Belum Lengkap
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Body Details */}
@@ -1595,13 +1666,56 @@ export function InspectionScheduleCard({
                   </>
                 ) : (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => setShowKtaModal(true)}
-                      className="flex-1 py-1.5 px-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition-colors cursor-pointer"
-                    >
-                      <Camera className="w-3.5 h-3.5" /> Kirim Bukti SS
-                    </button>
+                    {(() => {
+                      const ktaProofUrl = myKtaRecord?.reports?.[0]?.imageUrl || myKtaRecord?.imageUrl || null;
+                      if (ktaProofUrl) {
+                        return (
+                          <>
+                            <div
+                              onClick={() => setLightboxUrl(ktaProofUrl)}
+                              className="w-7 h-7 rounded-lg overflow-hidden border border-amber-500/40 cursor-pointer hover:scale-110 transition-transform shrink-0 shadow-2xs"
+                              title="Klik untuk memperbesar screenshot KTA/TTA"
+                            >
+                              <img
+                                src={formatKtaImageUrl(ktaProofUrl)}
+                                alt="Thumbnail KTA"
+                                onError={(e) => {
+                                  const driveMatch = ktaProofUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || ktaProofUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                                  if (driveMatch && !e.currentTarget.src.includes('uc?export=view')) {
+                                    e.currentTarget.src = `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+                                  }
+                                }}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setLightboxUrl(ktaProofUrl)}
+                              className="py-1.5 px-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <Eye className="w-3 h-3 text-amber-600" />
+                              <span>Lihat Bukti SS</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowKtaModal(true)}
+                              className="text-[10px] text-[var(--text-muted)] hover:text-amber-600 underline py-1 px-1 cursor-pointer"
+                            >
+                              + Lapor Lagi
+                            </button>
+                          </>
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setShowKtaModal(true)}
+                          className="flex-1 py-1.5 px-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition-colors cursor-pointer"
+                        >
+                          <Camera className="w-3.5 h-3.5" /> Kirim Bukti SS
+                        </button>
+                      );
+                    })()}
                     <a
                       href={SAFETY_KTA_FORM_URL}
                       target="_blank"
@@ -1626,8 +1740,8 @@ export function InspectionScheduleCard({
               }`}
             >
               <div>
-                <div className="flex items-center justify-between mb-2.5">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-wrap sm:flex-nowrap items-start sm:items-center justify-between gap-2 mb-2.5">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center border shrink-0 ${
                       hasP5mAssignment
                         ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/25'
@@ -1637,8 +1751,8 @@ export function InspectionScheduleCard({
                     }`}>
                       <Users className="w-4 h-4" />
                     </div>
-                    <div>
-                      <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] leading-tight">
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] leading-tight whitespace-nowrap">
                         Jadwal Briefing P5M
                       </h4>
                       <p className="text-[10px] text-[var(--text-muted)] truncate">Pertemuan 5 Menit Keselamatan</p>
@@ -1646,31 +1760,31 @@ export function InspectionScheduleCard({
                   </div>
 
                   {hasP5mAssignment ? (
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 whitespace-nowrap shrink-0 shadow-2xs">
                         🎙️ Pemateri
                       </span>
                       {isUserCuti && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 whitespace-nowrap shrink-0 shadow-2xs">
                           Roster Cuti
                         </span>
                       )}
                       {isRosterOnsiteToday && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 whitespace-nowrap shrink-0 shadow-2xs">
                           Aktif Onsite
                         </span>
                       )}
                     </div>
                   ) : isUserCuti ? (
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 flex items-center gap-1 shadow-2xs">
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
                       <span>🏖️</span> Bebas Hadir (Cuti)
                     </span>
                   ) : isTransitionFromCuti ? (
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30 flex items-center gap-1 shadow-2xs">
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30 flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
                       👥 Peserta (Aktif Onsite)
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 border border-indigo-500/30">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 border border-indigo-500/30 whitespace-nowrap shrink-0">
                       👥 Peserta
                     </span>
                   )}
@@ -1805,8 +1919,8 @@ export function InspectionScheduleCard({
           </div>
         </div>
 
-        {/* ── BAGIAN 2: AKTIVITAS SHIFT HARIAN (P2H & PEMANTAUAN LAB) ── */}
-        {(isPrepOrLabOrCrew || isLabOrQA) && (
+        {/* ── BAGIAN 2: AKTIVITAS SHIFT HARIAN (P2H & PEMANTAUAN LAB / WO MAINTENANCE) ── */}
+        {(isPrepOrLabOrCrew || isLabOrQA || isMaintenance) && (
           <div className="space-y-2.5 pt-1">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
@@ -1820,8 +1934,79 @@ export function InspectionScheduleCard({
               </span>
             </div>
 
-            <div className={`grid grid-cols-1 ${isPrepOrLabOrCrew && isLabOrQA ? 'md:grid-cols-2' : 'md:grid-cols-1'} gap-3.5`}>
-              {/* 4. INSPEKSI HARIAN (P2H) */}
+            <div className={`grid grid-cols-1 ${((isPrepOrLabOrCrew && isLabOrQA) || (isMaintenance && (isPrepOrLabOrCrew || isLabOrQA))) ? 'md:grid-cols-2' : 'md:grid-cols-1'} gap-3.5 sm:gap-4 2xl:gap-5`}>
+              {/* WORK ORDER KHUSUS TIM MAINTENANCE */}
+              {isMaintenance && (
+                <div 
+                  className={`relative overflow-hidden rounded-2xl border p-4 shadow-xs flex flex-col justify-between transition-all duration-200 ${
+                    isUserCuti
+                      ? 'border-sky-500/30 bg-gradient-to-b from-sky-500/[0.08] via-[var(--card-bg)] to-[var(--card-bg)] hover:border-sky-500/50 hover:shadow-md hover:shadow-sky-500/5'
+                      : 'border-amber-500/30 bg-[var(--card-bg)] hover:border-amber-500/50 hover:shadow-md'
+                  }`}
+                >
+                  <div>
+                    <div className="flex flex-wrap sm:flex-nowrap items-start sm:items-center justify-between gap-2 mb-2.5">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center border shrink-0 ${
+                          isUserCuti
+                            ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25'
+                            : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                        }`}>
+                          <Wrench className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] leading-tight whitespace-nowrap">
+                            Work Order Maintenance
+                          </h4>
+                          <p className="text-[10px] text-[var(--text-muted)] truncate">Monitoring &amp; Penanganan Perbaikan Alat</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                        {isUserCuti ? (
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
+                            <span>🏖️</span> Bebas Tugas (Cuti)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 whitespace-nowrap shrink-0">
+                            ⚙️ Tim Maintenance
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 my-3 p-3 rounded-2xl bg-amber-500/5 border border-amber-500/15 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                          Tugas Pemeliharaan &amp; Perbaikan
+                        </span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-800 dark:text-amber-200">
+                          Aktif Onsite
+                        </span>
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-300 text-xs">
+                        Periksa daftar tiket kerusakan, update log perbaikan, dan pastikan kesiapan peralatan operasional laboratorium &amp; preparasi.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onNavigateToWo) onNavigateToWo();
+                        else window.location.href = '/wo-list';
+                      }}
+                      className="w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      <Wrench className="w-3.5 h-3.5" />
+                      <span>Buka Daftar Work Order</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 4. INSPEKSI HARIAN (P2H) - HANYA UNTUK TIM SECTION PREP & LAB */}
               {isPrepOrLabOrCrew && (
                 <div 
                   className={`relative overflow-hidden rounded-2xl border p-4 shadow-xs flex flex-col justify-between transition-all duration-200 ${
@@ -1831,8 +2016,8 @@ export function InspectionScheduleCard({
                   }`}
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-2.5">
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap sm:flex-nowrap items-start sm:items-center justify-between gap-2 mb-2.5">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <div className={`w-8 h-8 rounded-xl flex items-center justify-center border shrink-0 ${
                           isUserCuti
                             ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25'
@@ -1840,31 +2025,33 @@ export function InspectionScheduleCard({
                         }`}>
                           <ClipboardList className="w-4 h-4" />
                         </div>
-                        <div>
-                          <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] leading-tight">
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] leading-tight whitespace-nowrap">
                             Inspeksi Harian (P2H)
                           </h4>
                           <p className="text-[10px] text-[var(--text-muted)] truncate">Pemeriksaan Pra-Operasional Alat</p>
                         </div>
                       </div>
 
-                      {isUserCuti ? (
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 flex items-center gap-1 shadow-2xs">
-                          <span>🏖️</span> Bebas Tugas (Cuti)
-                        </span>
-                      ) : dailyTasks?.p2h?.completedToday ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Sudah Anda Periksa
-                        </span>
-                      ) : dailyTasks?.p2h?.deptCompletedToday ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-600 border border-teal-500/30 flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Diperiksa Tim
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30">
-                          ⏳ Belum Checklist
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                        {isUserCuti ? (
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
+                            <span>🏖️</span> Bebas Tugas (Cuti)
+                          </span>
+                        ) : dailyTasks?.p2h?.completedToday ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap shrink-0">
+                            <Check className="w-3 h-3" /> Sudah Anda Periksa
+                          </span>
+                        ) : dailyTasks?.p2h?.deptCompletedToday ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-600 border border-teal-500/30 flex items-center gap-1 whitespace-nowrap shrink-0">
+                            <Check className="w-3 h-3" /> Diperiksa Tim
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30 whitespace-nowrap shrink-0">
+                            ⏳ Belum Checklist
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Body Details */}
@@ -1942,8 +2129,8 @@ export function InspectionScheduleCard({
                   }`}
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-2.5">
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap sm:flex-nowrap items-start sm:items-center justify-between gap-2 mb-2.5">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <div className={`w-8 h-8 rounded-xl flex items-center justify-center border shrink-0 ${
                           isUserCuti
                             ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25'
@@ -1951,27 +2138,29 @@ export function InspectionScheduleCard({
                         }`}>
                           <ThermometerSun className="w-4 h-4" />
                         </div>
-                        <div>
-                          <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] leading-tight">
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] leading-tight whitespace-nowrap">
                             Pemantauan Harian Lab
                           </h4>
                           <p className="text-[10px] text-[var(--text-muted)] truncate">Suhu, Kelembaban & Gas Detector</p>
                         </div>
                       </div>
 
-                      {isUserCuti ? (
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 flex items-center gap-1 shadow-2xs">
-                          <span>🏖️</span> Bebas Tugas (Cuti)
-                        </span>
-                      ) : dailyTasks?.pemantauan?.completedToday ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Parameter Tercatat
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30">
-                          ⏳ Belum Tercatat
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                        {isUserCuti ? (
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
+                            <span>🏖️</span> Bebas Tugas (Cuti)
+                          </span>
+                        ) : dailyTasks?.pemantauan?.completedToday ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap shrink-0">
+                            <Check className="w-3 h-3" /> Parameter Tercatat
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30 whitespace-nowrap shrink-0">
+                            ⏳ Belum Tercatat
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Body Details */}

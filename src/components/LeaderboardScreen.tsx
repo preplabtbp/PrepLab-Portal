@@ -501,11 +501,13 @@ export function LeaderboardScreen({
   };
 
   const isFrameUnlocked = (frame: any) => {
-    if (!frame.isExclusive || !frame.sourceAchId) return true;
+    if (frame?.isGmOnly) return isCurrentUserDev;
+    if (!frame?.isExclusive || !frame?.sourceAchId) return true;
     return isBranchUnlocked(frame.sourceAchId);
   };
 
   const getFrameTierLevel = (frame: any): number => {
+    if (frame?.isGmOnly) return 4;
     if (!frame || !frame.sourceAchId) return 4;
     const br = userGamification?.branchResults?.find(
       (b: any) => b.branch?.id === frame.sourceAchId || b.branch?.code === frame.sourceAchId
@@ -2262,7 +2264,11 @@ export function LeaderboardScreen({
                         key={frame.id}
                         onClick={() => {
                           if (!unlocked) {
-                            toast.error(`🔒 Bingkai Eksklusif Terkunci! Ungkap secret achievement "${frame.sourceAchName}" untuk membuka kustomisasi ini.`);
+                            if (frame.isGmOnly) {
+                              toast.error('🔒 Otoritas Terbatas! Bingkai Abyssal Symbiote hanya dapat dipakai oleh personil berstatus Game Master / Developer.');
+                            } else {
+                              toast.error(`🔒 Bingkai Eksklusif Terkunci! Ungkap secret achievement "${frame.sourceAchName}" untuk membuka kustomisasi ini.`);
+                            }
                             return;
                           }
                           handleEquipFrame(frame.id);
@@ -2297,7 +2303,11 @@ export function LeaderboardScreen({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-bold text-xs truncate block">{frame.label}</span>
-                            {frame.isExclusive && (
+                            {frame.isGmOnly ? (
+                              <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 shrink-0">
+                                GM EXCLUSIVE
+                              </span>
+                            ) : frame.isExclusive && (
                               <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
                                 EKSKLUSIF
                               </span>

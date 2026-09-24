@@ -708,6 +708,7 @@ export interface CustomAvatarFrame {
   sourceAchId?: string; // ID cabang achievement yang membuka bingkai ini
   sourceAchName?: string;
   isExclusive?: boolean;
+  isGmOnly?: boolean;
 }
 
 export const AVAILABLE_FRAMES: CustomAvatarFrame[] = [
@@ -718,6 +719,19 @@ export const AVAILABLE_FRAMES: CustomAvatarFrame[] = [
   { id: 'emerald_aurora', label: 'Emerald Aurora', ringColor: 'border-emerald-400 ring-4 ring-emerald-400/40 shadow-lg shadow-emerald-500/30', effect: '' },
   { id: 'obsidian_dark', label: 'Obsidian Stealth', ringColor: 'border-slate-900 dark:border-white/80 ring-2 ring-slate-500/30', effect: '' },
   { id: 'commander_crimson', label: 'Commander Crimson', ringColor: 'border-rose-500 ring-4 ring-rose-500/50 shadow-xl shadow-rose-600/40', effect: 'animate-pulse' },
+
+  // ==========================================
+  // BINGKAI EKSKLUSIF SUPREME: GAME MASTER (VENOM SYMBIOTE)
+  // ==========================================
+  { 
+    id: 'frame_gm_symbiote', 
+    label: 'Abyssal Symbiote (Game Master)', 
+    ringColor: 'border-zinc-950 ring-4 ring-zinc-800/90 shadow-[0_0_16px_rgba(0,0,0,0.95)]', 
+    effect: 'animate-pulse',
+    sourceAchName: 'Game Master / Developer Exclusive',
+    isExclusive: true,
+    isGmOnly: true
+  },
 
   // Kosmetik Eksklusif Cabang Achievement (Hanya Terbuka Saat Achievement Diungkap)
   { 

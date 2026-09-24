@@ -269,7 +269,7 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
   }
 });
 
-router.get("/api/work-orders", async (req, res) => {
+router.get(["/api/work-orders", "/api/workorders"], async (req, res) => {
     try {
       const { pt } = req.query;
       let query: any = db.select().from(workOrders).orderBy(asc(workOrders.woId));

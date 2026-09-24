@@ -6,15 +6,21 @@ import {
   Wrench, CheckSquare, ShieldCheck, Eye, Activity, Info, 
   ArrowRight, Clock, ClipboardList, Briefcase, Users,
   Sparkles, ExternalLink, UploadCloud, LayoutGrid, Check, ChevronRight,
-  ShieldAlert, BarChart2, MessageSquare
+  ShieldAlert, BarChart2, MessageSquare, Camera
 } from 'lucide-react';
 import { Button } from './ui';
 import { getKtaUrl } from '../sheets-api';
 import { FoodReportModal } from './food-report-modal';
 import { UsernamePromptModal } from './UsernamePromptModal';
+import { SimplifiedInspectionModal } from './SimplifiedInspectionModal';
+import { SimplifiedP5mModal } from './SimplifiedP5mModal';
 import { getDailySkenaQuote } from '../utils/skena-quotes';
 import { DailyGreetingHero } from './DailyGreetingHero';
 import { InspectionScheduleCard } from './InspectionScheduleCard';
+import { useMobileMode } from '../utils/mobileMode';
+import { MobileSimpleHomeScreen } from './MobileSimpleHomeScreen';
+import { Smartphone } from 'lucide-react';
+import { isPicTemuanRole } from '../utils/inspection-pic-matcher';
 
 export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: { 
   inspectorName: string, 
@@ -26,6 +32,9 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
   const [showFoodReportModal, setShowFoodReportModal] = useState(false);
   const [showGtsIntipModal, setShowGtsIntipModal] = useState(false);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
+  const [showSimplifiedInspectionModal, setShowSimplifiedInspectionModal] = useState(false);
+  const [simplifiedInspectionTab, setSimplifiedInspectionTab] = useState<'weekly' | 'kta_tta' | 'findings' | 'p2h'>('weekly');
+  const [showSimplifiedP5mModal, setShowSimplifiedP5mModal] = useState(false);
   
   const [currentUsername, setCurrentUsername] = useState(() => {
     try {
@@ -49,6 +58,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
   }, [inspectorNik, currentUsername]);
   
   const userJabatan = localStorage.getItem('p2h_inspector_jabatan') || '';
+  const isPic = isPicTemuanRole(userJabatan);
   let userSection = '';
   try {
     const profile = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
@@ -85,13 +95,31 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
 
   const isMaintenance = userSection.toLowerCase().includes('maintenance') || isDeveloper;
 
+  const { isSimpleActive, isMobileWidth, mode: mobileMode, setMobileMode } = useMobileMode();
+
+  // If Simple Mode is active on mobile screen, render dedicated MobileSimpleHomeScreen
+  if (isSimpleActive) {
+    return (
+      <MobileSimpleHomeScreen
+        inspectorName={inspectorName}
+        inspectorNik={inspectorNik}
+        onNav={onNav}
+        userPt={userPt}
+        onSwitchToFullMode={() => {
+          setMobileMode('full');
+          toast.success('Beralih ke Mode Lengkap');
+        }}
+      />
+    );
+  }
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 15 }} 
       animate={{ opacity: 1, y: 0 }} 
       exit={{ opacity: 0, y: -15 }} 
       transition={{ duration: 0.3, ease: "easeOut" }} 
-      className="pb-24 px-3 sm:px-6 lg:px-8 w-full h-full max-w-7xl mx-auto space-y-6"
+      className="pb-24 px-3 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 w-full h-full space-y-6 transition-all duration-300"
     >
       {/* Dynamic Daily Greeting Hero with Skena Quotes */}
       <DailyGreetingHero 
@@ -100,25 +128,59 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
         onOpenUsernameModal={() => setShowUsernameModal(true)} 
       />
 
-      {/* Mobile Quick Action Strip: SAP Management (Admin/Dev) & Chat (All) */}
-      <div className="md:hidden flex items-center gap-2.5 p-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-main)] shadow-xs">
-        {(isDeveloper || isAdminRole) && (
+      {/* Mobile Switch Back to Simple Mode Pill (Visible only on mobile in Full Mode) */}
+      {isMobileWidth && mobileMode === 'full' && (
+        <div className="flex items-center justify-between p-2.5 px-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/25 text-xs shadow-2xs">
+          <div className="flex items-center gap-1.5 text-teal-700 dark:text-teal-300 font-semibold text-[11px]">
+            <Smartphone className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+            <span>Mode Lengkap Aktif (Mobile)</span>
+          </div>
           <button
             type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('open-sap-drawer'))}
-            className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-2xs"
+            onClick={() => {
+              setMobileMode('simple');
+              toast.success('Beralih ke Mode Sederhana');
+            }}
+            className="px-2.5 py-1 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-bold shadow-2xs active:scale-95 transition-all cursor-pointer"
           >
-            <BarChart2 className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>SAP Management</span>
+            Kembali ke Mode Sederhana
           </button>
-        )}
+        </div>
+      )}
+
+      {/* Mobile Quick Action Strip: Pengisian Inspeksi & Lapor KTA/TTA Disimplifikasi + Ruang Chat */}
+      <div className="md:hidden grid grid-cols-3 gap-2 p-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-main)] shadow-xs">
+        {/* 1. Pengisian Inspeksi & Temuan PIC Disimplifikasi */}
+        <button
+          type="button"
+          onClick={() => setShowSimplifiedInspectionModal(true)}
+          className="py-2.5 px-2 rounded-xl bg-gradient-to-b from-teal-500/15 to-emerald-500/15 hover:from-teal-500/25 hover:to-emerald-500/25 text-teal-800 dark:text-teal-200 border border-teal-500/30 text-[11px] font-bold flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-2xs text-center"
+        >
+          <ClipboardList className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+          <span className="leading-tight">{isPic ? 'Inspeksi & Temuan' : 'Isi Inspeksi'}</span>
+        </button>
+
+        {/* 2. Lapor KTA / TTA Disimplifikasi */}
+        <button
+          type="button"
+          onClick={() => {
+            setSimplifiedInspectionTab('kta_tta');
+            setShowSimplifiedInspectionModal(true);
+          }}
+          className="py-2.5 px-2 rounded-xl bg-gradient-to-b from-amber-500/15 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 text-amber-800 dark:text-amber-200 border border-amber-500/30 text-[11px] font-bold flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-2xs text-center"
+        >
+          <Camera className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <span className="leading-tight">Lapor KTA/TTA</span>
+        </button>
+
+        {/* 3. Ruang Chat */}
         <button
           type="button"
           onClick={() => window.dispatchEvent(new CustomEvent('open-chat-drawer'))}
-          className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-teal-500/15 via-teal-500/10 to-emerald-500/15 hover:from-teal-500/25 hover:to-emerald-500/25 text-teal-700 dark:text-teal-300 border border-teal-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-2xs"
+          className="py-2.5 px-2 rounded-xl bg-gradient-to-b from-sky-500/15 to-blue-500/15 hover:from-sky-500/25 hover:to-blue-500/25 text-sky-800 dark:text-sky-200 border border-sky-500/30 text-[11px] font-bold flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-2xs text-center"
         >
-          <MessageSquare className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
-          <span>Ruang Chat</span>
+          <MessageSquare className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+          <span className="leading-tight">Ruang Chat</span>
         </button>
       </div>
 
@@ -129,14 +191,33 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
           inspectorNik={inspectorNik}
           isAdminOrDeveloper={isDeveloper || isAdminRole}
           onNavigateToInspection={(formId, subArea) => {
-            if (formId) sessionStorage.setItem('preselected_form_id', formId);
-            if (subArea) sessionStorage.setItem('preselected_sub_area', subArea);
-            onNav('weekly-inspection');
+            if (isMobileWidth) {
+              setSimplifiedInspectionTab('weekly');
+              setShowSimplifiedInspectionModal(true);
+            } else {
+              if (formId) sessionStorage.setItem('preselected_form_id', formId);
+              if (subArea) sessionStorage.setItem('preselected_sub_area', subArea);
+              onNav('weekly-inspection');
+            }
           }}
-          onNavigateToKta={() => onNav('group-reports')}
-          onNavigateToP5m={() => onNav('p5m')}
+          onNavigateToKta={() => {
+            if (isMobileWidth) {
+              setSimplifiedInspectionTab('kta_tta');
+              setShowSimplifiedInspectionModal(true);
+            } else {
+              onNav('group-reports');
+            }
+          }}
+          onNavigateToP5m={() => {
+            if (isMobileWidth) {
+              setShowSimplifiedP5mModal(true);
+            } else {
+              onNav('p5m');
+            }
+          }}
           onNavigateToP2h={() => onNav('inspect')}
           onNavigateToPemantauan={() => onNav('pemantauan')}
+          onNavigateToWo={() => onNav('wo-list')}
         />
       </section>
 
@@ -199,38 +280,7 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
       {/* Quick Shift Utilities (Non-duplicated) */}
       <section className="space-y-3 pt-1">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {/* Lapor Makan Personil */}
-          <div 
-            className="group relative flex flex-col justify-between p-4 rounded-2xl border transition-all duration-200 shadow-xs hover:shadow-md hover:border-emerald-500/40"
-            style={{ 
-              backgroundColor: 'var(--card-bg, #ffffff)',
-              borderColor: 'var(--border-main, #e2e8f0)' 
-            }}
-          >
-            <div>
-              <div className="flex items-center justify-between mb-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center">
-                  <Utensils className="w-4 h-4" />
-                </div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                  Konsumsi Shift
-                </span>
-              </div>
-              <h3 className="font-bold text-sm text-[var(--text-main)] mb-1">
-                Lapor Makan Personil
-              </h3>
-              <p className="text-xs text-[var(--text-muted)] line-clamp-2 mb-3 leading-relaxed">
-                Konfirmasi penerimaan konsumsi atau pesanan makan untuk shift kerja Anda.
-              </p>
-            </div>
-            <button
-              onClick={() => setShowFoodReportModal(true)}
-              className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 text-xs font-bold hover:bg-emerald-600 hover:text-white transition-colors cursor-pointer"
-            >
-              <Utensils className="w-3.5 h-3.5" />
-              <span>Input Lapor Makan</span>
-            </button>
-          </div>
+          {/* Lapor Makan Personil (di-hide sementara karena belum operasional) */}
 
           {/* Rekap Tim & Koordinasi */}
           <div 
@@ -381,6 +431,30 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
         onUsernameUpdated={(newU) => {
           setCurrentUsername(newU);
         }}
+      />
+
+      {/* Simplified Inspection & KTA/TTA Modal */}
+      <SimplifiedInspectionModal
+        isOpen={showSimplifiedInspectionModal}
+        onClose={() => setShowSimplifiedInspectionModal(false)}
+        inspectorNik={inspectorNik}
+        inspectorName={inspectorName}
+        userSection={userSection}
+        userJabatan={userJabatan}
+        defaultTab={simplifiedInspectionTab}
+        onNav={onNav}
+        onSuccess={() => {
+          // Success callback
+        }}
+      />
+
+      {/* Simplified P5M Schedule & Material Modal */}
+      <SimplifiedP5mModal
+        isOpen={showSimplifiedP5mModal}
+        onClose={() => setShowSimplifiedP5mModal(false)}
+        inspectorNik={inspectorNik}
+        inspectorName={inspectorName}
+        onNav={onNav}
       />
     </motion.div>
   );

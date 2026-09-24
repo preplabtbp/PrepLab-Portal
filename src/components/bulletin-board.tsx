@@ -47,6 +47,8 @@ import {
   Send,
   Loader2,
   CalendarCheck,
+  Minimize2,
+  Maximize2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useParams, useNavigate } from "react-router-dom";
@@ -71,7 +73,7 @@ export function BulletinBoard({
   const isDev = Boolean(isDeveloper || isSuperAdmin);
   const userUniverse = userPt === 'GTS' ? 'GTS' : 'TBP';
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
   const [navHistory, setNavHistory] = useState<any[]>([]);
 
@@ -80,6 +82,18 @@ export function BulletinBoard({
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarTab, setSidebarTab] = useState<"all" | "folders">("all");
   const [showAllPostsView, setShowAllPostsView] = useState(false);
+  const [isFocusMode, setIsFocusMode] = useState(true);
+
+  // Sync focus mode state from portal layout
+  useEffect(() => {
+    const handleFocusChange = (e: any) => {
+      if (typeof e.detail?.focus === 'boolean') {
+        setIsFocusMode(e.detail.focus);
+      }
+    };
+    window.addEventListener('bulletin-focus-changed', handleFocusChange);
+    return () => window.removeEventListener('bulletin-focus-changed', handleFocusChange);
+  }, []);
 
   // Helper to determine active PT universe from route parameter (default TBP for TBP/GPS, GTS for GTS)
   const resolvePtFilter = useCallback((paramPt?: string): string => {
@@ -849,7 +863,11 @@ ${aiMeetingNotes
 
   return (
     <div 
-      className="flex h-[calc(100vh-80px)] rounded-xl shadow-lg border overflow-hidden select-none transition-colors"
+      className={`flex shadow-lg overflow-hidden select-none transition-all duration-300 ${
+        isFocusMode 
+          ? 'h-[100dvh] w-full rounded-none border-0' 
+          : 'h-[calc(100vh-80px)] rounded-xl border'
+      }`}
       style={{
         backgroundColor: 'var(--card-bg, #191919)',
         borderColor: 'var(--border-main, #2d2d2d)',
@@ -861,7 +879,7 @@ ${aiMeetingNotes
         {sidebarOpen && (
           <motion.div
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 250, opacity: 1 }}
+            animate={{ width: 280, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             className="flex-shrink-0 border-r overflow-y-auto flex flex-col font-sans select-none transition-colors"
             style={{
@@ -883,7 +901,7 @@ ${aiMeetingNotes
                 className="flex items-center gap-2 min-w-0 flex-1"
                 title="Buka Beranda Workspace"
               >
-                <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 font-bold text-[10px] flex-shrink-0 shadow-inner">
+                <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0 shadow-inner">
                   ☢
                 </div>
                 <div className="flex flex-col min-w-0">
@@ -891,23 +909,33 @@ ${aiMeetingNotes
                     Prep & Lab Bulletin
                   </span>
                   {isDev && (
-                    <span className="text-[9px] font-mono text-teal-400 font-semibold tracking-wider">
+                    <span className="text-xs font-mono text-teal-400 font-semibold tracking-wider">
                       ★ ALL ACCESS
                     </span>
                   )}
                 </div>
               </div>
-              <ChevronDown className="w-3.5 h-3.5 opacity-60 flex-shrink-0" />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSidebarOpen(false);
+                }}
+                className="p-1 rounded-md hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
+                title="Sembunyikan Sidebar"
+              >
+                <ChevronLeft className="w-4 h-4 opacity-75 hover:opacity-100" />
+              </button>
             </div>
 
             {/* SuperAdmin & Developer Universe Filter Selector vs Static Non-Dev Indicator */}
             {isDev ? (
               <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-main, #242424)' }}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Workspace Universe
                   </span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-teal-500/10 text-teal-400 font-bold border border-teal-500/20">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 font-bold border border-teal-500/20 whitespace-nowrap shrink-0">
                     {posts.length} Dokumen
                   </span>
                 </div>
@@ -940,7 +968,7 @@ ${aiMeetingNotes
                             }
                           }
                         }}
-                        className={`flex items-center justify-center gap-1 py-1 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                        className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all cursor-pointer overflow-hidden ${
                           isActive ? 'shadow-xs scale-[1.02]' : 'hover:opacity-80 opacity-70'
                         }`}
                         style={{
@@ -949,9 +977,11 @@ ${aiMeetingNotes
                         }}
                         title={`Tampilkan buletin ${ptKey}`}
                       >
-                        <span>{ptKey === 'ALL' ? 'Semua' : ptKey}</span>
-                        <span className={`text-[9px] font-mono ${isActive ? 'text-white/90' : 'opacity-60'}`}>
-                          ({count})
+                        <span className="text-xs font-bold leading-tight truncate max-w-full">
+                          {ptKey === 'ALL' ? 'Semua' : ptKey}
+                        </span>
+                        <span className={`text-[10px] font-mono leading-tight mt-0.5 whitespace-nowrap ${isActive ? 'text-white/95 font-bold' : 'opacity-70'}`}>
+                          {count}
                         </span>
                       </button>
                     );
@@ -959,11 +989,11 @@ ${aiMeetingNotes
                 </div>
               </div>
             ) : (
-              <div className="px-3 py-2 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-main, #242424)' }}>
-                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+              <div className="px-3 py-2 border-b flex items-center justify-between gap-2" style={{ borderColor: 'var(--border-main, #242424)' }}>
+                <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                   Workspace Universe
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 whitespace-nowrap shrink-0">
                   {userUniverse === 'GTS' ? 'PT GTS' : 'PT TBP / GPS'}
                 </span>
               </div>
@@ -1039,7 +1069,7 @@ ${aiMeetingNotes
 
             {/* Meetings Section (Integrated with Agenda Module) */}
             <div className="px-3 pt-3 pb-2 border-b" style={{ borderColor: 'var(--border-main, #242424)' }}>
-              <div className="text-[11px] font-semibold mb-1.5 tracking-wide" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+              <div className="text-xs font-semibold mb-1.5 tracking-wide" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                 Meetings
               </div>
 
@@ -1097,11 +1127,11 @@ ${aiMeetingNotes
 
             {/* Recents Section */}
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 custom-scrollbar">
-              <div className="text-[11px] font-semibold mb-1.5 tracking-wide flex items-center justify-between" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+              <div className="text-xs font-semibold mb-1.5 tracking-wide flex items-center justify-between" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                 <span>{showAllPostsView ? `Semua Dokumen (${selectedPtFilter !== "ALL" ? filteredPosts.length : posts.length})` : "Recents"}</span>
                 <button
                   onClick={() => setShowAllPostsView(!showAllPostsView)}
-                  className="text-[10px] text-teal-400 hover:underline cursor-pointer font-medium"
+                  className="text-xs text-teal-400 hover:underline cursor-pointer font-medium"
                 >
                   {showAllPostsView ? "Lihat Recents" : `Buka Semua (${selectedPtFilter !== "ALL" ? filteredPosts.length : posts.length})`}
                 </button>
@@ -1189,12 +1219,15 @@ ${aiMeetingNotes
           }}
         >
           <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
-            {/* Toggle Sidebar Button */}
+            {/* Toggle Sidebar Button (Tombol Garis 3) */}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-lg hover:opacity-80 transition-colors cursor-pointer"
-              style={{ color: 'var(--text-muted, #94a3b8)' }}
-              title="Toggle Sidebar"
+              className="p-1.5 rounded-lg hover:bg-white/10 transition-all cursor-pointer flex items-center justify-center shrink-0"
+              style={{ 
+                color: sidebarOpen ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
+                backgroundColor: sidebarOpen ? 'rgba(42, 157, 143, 0.15)' : 'transparent'
+              }}
+              title={sidebarOpen ? "Sembunyikan Sidebar" : "Buka Sidebar (Garis 3)"}
             >
               <Menu className="w-4 h-4" />
             </button>
@@ -1275,6 +1308,31 @@ ${aiMeetingNotes
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Toggle Focus Mode Button */}
+            <button
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('toggle-bulletin-focus'));
+              }}
+              className={`px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
+                isFocusMode
+                  ? 'bg-teal-500/15 border-teal-500/40 text-teal-400 font-bold hover:bg-teal-500/25'
+                  : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white'
+              }`}
+              title={isFocusMode ? "Buka Header & Menu Portal (Keluar Focus Mode)" : "Minimize Header & Sidebar (Masuk Focus Mode Diskusi)"}
+            >
+              {isFocusMode ? (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5 text-teal-400" />
+                  <span className="hidden sm:inline">Focus Mode</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="hidden sm:inline">Focus Mode</span>
+                </>
+              )}
+            </button>
+
             {selectedPost && !isEditing && (
               <>
                 <button

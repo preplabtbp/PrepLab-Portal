@@ -508,7 +508,7 @@ export function DailyGreetingHero({
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
-              className="relative z-10 w-full flex items-center justify-between max-w-7xl mx-auto"
+              className="relative z-10 w-full flex items-center justify-between px-2 sm:px-6"
             >
               <div className="flex items-center gap-3">
                 <div 
@@ -720,7 +720,7 @@ export function DailyGreetingHero({
               setQuotesModalTab('details');
               setShowQuotesPoolModal(true);
             }}
-            className="rounded-2xl p-4 sm:p-4.5 border relative group max-w-2xl shadow-md transition-all hover:border-teal-500/60 cursor-pointer"
+            className="rounded-2xl p-4 sm:p-4.5 border relative group w-full max-w-4xl 2xl:max-w-5xl shadow-md transition-all hover:border-teal-500/60 cursor-pointer"
             style={{
               backgroundColor: 'var(--input-bg, rgba(0,0,0,0.2))',
               borderColor: 'var(--border-main, rgba(255,255,255,0.1))'

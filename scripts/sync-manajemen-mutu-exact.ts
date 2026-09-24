@@ -193,8 +193,8 @@ async function syncAll() {
         enhancedHeader += `- ⚖️ **[Rules Kalibrasi & Uji Riksa](#)** - Standar Kalibrasi dan Uji Riksa Alat\n`;
         enhancedHeader += `- ☢️ **[Rules Perizinan XRF](#)** - Kepatuhan Keselamatan Radiasi & Izin BAPETEN\n\n`;
 
-        enhancedHeader += `## 🌟 HARITA CORE VALUE\n`;
-        enhancedHeader += `*Humble, Agile, Resilient, Integrity, Transparency, Accountability*\n\n`;
+        enhancedHeader += `## 🌟 HARITA WAYS (CORE VALUES)\n`;
+        enhancedHeader += `*(Humility) (Achievement oriented) (Respect for every individual) (Integrity) (Teamwork) (Accountability)*\n\n`;
         enhancedHeader += `---\n\n`;
 
         md = enhancedHeader + md;

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../../src/db/index.js";
-import { eq, desc, or, inArray, isNull, and, gte, lte } from "drizzle-orm";
+import { eq, desc, or, inArray, isNull, and, gte, lte, asc, sql } from "drizzle-orm";
 import { 
   chatMessages, employees, equipments, workOrders, users, tickets, downtime, 
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
@@ -1307,10 +1307,10 @@ router.post("/api/pemantauan/migrate", async (req, res) => {
 
 router.get("/api/pemantauan", async (req, res) => {
     try {
-      const { asc, sql } = require("drizzle-orm");
       const data = await db.select().from(pemantauan).orderBy(sql`tanggal ASC, jam ASC, id ASC`);
       res.json(data);
     } catch (error) {
+      console.error("Error fetching pemantauan:", error);
       res.status(500).json({ error: "Failed to fetch pemantauan" });
     }
   });

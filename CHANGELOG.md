@@ -1,6 +1,40 @@
 # Catatan Pembaruan (Changelog) - Prep & Lab Portal
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
+## [2.9.26] - 2026-09-24
+
+### 🚀 Integrasi Data Riil 100% Dashboard Eksekutif SPT & Manager, Penambahan Modul P5M Lab di Home, dan Restrukturisasi Simulasi 10 Peran Operasional
+
+- **Integrasi 100% Data Riil Database pada Dashboard Pimpinan (`src/components/LeadershipDashboardModal.tsx`, `server/routes/workOrders.ts`)**:
+  - **Penyebab Masalah Sebelumnya**: Pemanggilan endpoint work orders sebelumnya menggunakan path `/api/workorders` (tanpa tanda hubung) yang belum terdaftar di backend Express, sehingga Vite mengembalikan berkas HTML SPA (`<!doctype html>`). Hal ini memicu kegagalan parsing JSON dan menyebabkan antarmuka dashboard jatuh ke nilai fallback statis (dummy).
+  - **Dukungan Rute Ganda Backend**: Menambahkan alias `router.get(["/api/work-orders", "/api/workorders"], ...)` pada `server/routes/workOrders.ts` dan memasang parser `safeJson` dengan validasi `content-type: application/json` agar kebal dari respons HTML.
+  - **Pembersihan Seluruh Data Dummy & Fallback Statis**: Menghapus seluruh angka persentase palsu (seperti 92%, 95%, 94%, 85%, 91%, dan nilai suhu/kelembaban statis 22.4°C / 52%). Seluruh metrik kini 100% dihitung secara dinamis dari tabel database riil:
+    - **183 Tiket K3 / Temuan**: Indeks keselamatan LTI dihitung secara dinamis (*0 LTI / 100% Zero Accident*), lengkap dengan pelacakan temuan open dan closed.
+    - **538 Work Orders**: Tingkat resolusi perbaikan dihitung presisi dari status *Closed/Done* vs *Open/Progress*.
+    - **156 Peralatan & Aset**: Kesiapan alat berat preparasi dan instrumen lab dihitung langsung dari status *IN USE* vs *BREAKDOWN* di tabel `equipments`.
+    - **1.341 Baris Pemantauan Lingkungan**: Suhu, kelembaban, dan aliran gas diambil dari entri pencatatan aktual analis lab di tabel `pemantauan`.
+    - **266 Personil Roster & Rekap SAP Mingguan**: Menghubungkan kepatuhan SAP dan data penjadwalan roster secara langsung per seksi.
+  - **Indikator Pemuatan Telemetri**: Menambahkan animasi loading skeleton transparan saat data disinkronkan dari Cloud SQL sehingga antarmuka tidak pernah menampilkan angka kosong atau berkedip.
+
+- **Penambahan Modul Briefing P5M untuk Personil Laboratory & Inventory Control di Home (`src/components/MobileSimpleHomeScreen.tsx`)**:
+  - Menyediakan kartu **Briefing P5M** langsung di grid tugas harian Mode Sederhana untuk seluruh personil seksi *Laboratory* dan *Inventory Control*.
+  - Personil lab kini dapat langsung mengetuk kartu P5M untuk membuka modal interaktif `SimplifiedP5mModal`, meninjau giliran pemateri harian, membaca materi safety talk, serta mengunduh flyer P5M resmi.
+
+- **Restrukturisasi Simulasi 10 Peran Operasional Mandiri & Etis (`src/components/DevRoleplaySwitcher.tsx`, `src/components/MobileSimpleHomeScreen.tsx`)**:
+  - Menghapus skema peminjaman akun rekan kerja lain (seperti Deni Nugraha / Tigwa Anggawikara) yang dinilai tidak etis.
+  - Menerapkan fitur **"Simulasi Tampilan Peran" (View-As-Role Lens)** yang sepenuhnya mempertahankan nama dan NIK pengguna sendiri (`Muhammad Naufalsar` / `02D25000055`) dengan overlay jabatan dan seksi yang disimulasikan.
+  - Memperbarui daftar profil simulasi menjadi 10 peran operasional resmi PrepLab:
+    1. **Crew** (Preparasi & Operasi Umum - P2H, KTA/TTA, WO, P5M)
+    2. **Laboratory Foreman** (Pengawasan Analis & Pemantauan Lab)
+    3. **Preparation Foreman** (Pengawasan Crusher & Alat Berat Preparasi)
+    4. **Administration** (Pengelolaan Roster & SAP Management)
+    5. **Inventory Control** (Distribusi APD, Dokumen Digital, Stok)
+    6. **SPV Laboratory** (PIC Temuan Area Lab & Integritas Alat)
+    7. **SPV Preparation** (PIC Temuan Area Prep & Monitoring P2H)
+    8. **SPT Prep** (Dashboard Pengawasan Preparasi)
+    9. **SPT Lab** (Dashboard Pengawasan Laboratorium)
+    10. **Manager** (Executive Dashboard Helicopter View Seluruh Seksi)
+
 ## [2.9.25] - 2026-09-23
 
 ### 📋 Perbaikan Klasifikasi Kewajiban Inspeksi Mingguan & KTA/TTA untuk Personil Cuti Sebelum Jumat

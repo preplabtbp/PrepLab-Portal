@@ -232,22 +232,52 @@ export const INSPECTION_29_AGENDAS: InspectionAgendaItem[] = [
 ];
 
 /**
+ * Cek apakah jabatan pengguna termasuk PIC temuan inspeksi (SPV, Specialist, Superintendent, Manager, Lead)
+ */
+export function isPicTemuanRole(jabatan?: string | null): boolean {
+  if (!jabatan) return false;
+  const j = jabatan.toLowerCase().trim();
+  return (
+    j.includes('supervisor') ||
+    j.includes('spv') ||
+    j.includes('specialist') ||
+    j.includes('superintendent') ||
+    j.includes('manager') ||
+    j.includes('lead')
+  );
+}
+
+/**
  * Normalisasi jabatan karyawan menjadi salah satu peran PIC supervisor standar
  */
 export function normalizeUserRole(jabatan?: string | null): SupervisorRole {
   if (!jabatan) return 'Other';
   const j = jabatan.toLowerCase().trim();
 
-  if (j.includes('maintenance supervisor')) {
+  if (
+    j.includes('maintenance supervisor') ||
+    ((j.includes('maintenance') || j.includes('workshop')) && (j.includes('supervisor') || j.includes('spv') || j.includes('specialist')))
+  ) {
     return 'Laboratory Maintenance Supervisor';
   }
-  if (j.includes('inventory control supervisor')) {
+  if (
+    j.includes('inventory control supervisor') ||
+    ((j.includes('inventory') || j.includes('warehouse') || j.includes('gudang') || j.includes('logistic')) && (j.includes('supervisor') || j.includes('spv') || j.includes('specialist')))
+  ) {
     return 'Inventory Control Supervisor';
   }
-  if (j.includes('laboratory supervisor')) {
+  if (
+    j.includes('laboratory supervisor') ||
+    ((j.includes('lab') || j.includes('chemist') || j.includes('assay') || j.includes('qa')) && (j.includes('supervisor') || j.includes('spv') || j.includes('specialist')))
+  ) {
     return 'Laboratory Supervisor';
   }
-  if (j.includes('preparation supervisor') || j.includes('supervisor, wet') || j.includes('supervisor, dry')) {
+  if (
+    j.includes('preparation supervisor') ||
+    j.includes('supervisor, wet') ||
+    j.includes('supervisor, dry') ||
+    (j.includes('prep') && (j.includes('supervisor') || j.includes('spv') || j.includes('specialist')))
+  ) {
     return 'Preparation Supervisor';
   }
   if (j.includes('superintendent')) {
@@ -255,6 +285,10 @@ export function normalizeUserRole(jabatan?: string | null): SupervisorRole {
   }
   if (j.includes('manager')) {
     return 'Manager';
+  }
+  // Generic SPV atau Specialist yang tidak memiliki kata kunci spesifik diperlakukan mengawasi seluruh temuan
+  if (j.includes('supervisor') || j.includes('spv') || j.includes('specialist')) {
+    return 'Superintendent';
   }
   return 'Other';
 }

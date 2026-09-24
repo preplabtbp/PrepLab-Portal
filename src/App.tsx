@@ -3,7 +3,7 @@ import React, { useState, useEffect, Suspense, lazy, useRef, useMemo, useCallbac
 import { AnimatePresence, motion } from 'motion/react';
 import { registerPresence, pingPresence, unregisterPresence } from './lib/socketClient';
 
-import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare, Trophy } from 'lucide-react';
+import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare, Trophy, Maximize2, Minimize2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { appendRowsToSheet, getDowntimeRecords,updateDowntimeRepair, getEmployees, loginEmployee, getEquipments, ToolRecord, updateToolPhotoUrl, uploadPhotoToDrive } from './sheets-api';
@@ -25,6 +25,7 @@ import { PushNotificationPrompt } from './components/PushNotificationPrompt';
 import { PromotionWelcomeModal } from './components/PromotionWelcomeModal';
 import { GamificationAlertCenter } from './components/GamificationAlertCenter';
 import { MeetingRoomDevModal } from './components/MeetingRoomDevModal';
+import { FloatingFeedbackButton } from './components/FloatingFeedbackButton';
 import { initFontSize } from './utils/fontSize';
 
 // Initialize portal-wide font scale on boot
@@ -206,6 +207,28 @@ export default function App() {
   const location = useLocation();
   const activeTab = location.pathname === '/' ? 'home' : location.pathname.substring(1);
   const isBulletin = location.pathname.startsWith('/bulletin');
+  const [bulletinFocusMode, setBulletinFocusMode] = useState(true);
+
+  // Auto-minimize header and sidebar whenever user enters bulletin
+  useEffect(() => {
+    if (location.pathname.startsWith('/bulletin')) {
+      setBulletinFocusMode(true);
+      window.dispatchEvent(new CustomEvent('bulletin-focus-changed', { detail: { focus: true } }));
+    }
+  }, [location.pathname]);
+
+  // Support toggling focus mode from bulletin topbar or floating pill
+  useEffect(() => {
+    const handleToggle = () => {
+      setBulletinFocusMode((prev) => {
+        const next = !prev;
+        window.dispatchEvent(new CustomEvent('bulletin-focus-changed', { detail: { focus: next } }));
+        return next;
+      });
+    };
+    window.addEventListener('toggle-bulletin-focus', handleToggle);
+    return () => window.removeEventListener('toggle-bulletin-focus', handleToggle);
+  }, []);
 
   const [syncTick, setSyncTick] = useState(0);
 
@@ -1195,7 +1218,7 @@ export default function App() {
   return (
     <div className="flex w-full min-h-[100dvh] overflow-hidden" style={{ backgroundColor: 'var(--bg-main, #F4F7F6)' }}>
       <div 
-        className={`flex-1 relative transition-all duration-300 overflow-x-hidden overflow-y-auto h-[100dvh] ${showProfileScreen ? 'md:mr-[400px] lg:mr-[480px]' : ''}`}
+        className="flex-1 relative transition-all duration-300 overflow-x-hidden overflow-y-auto h-[100dvh]"
         style={{ backgroundColor: 'var(--bg-main, #F4F7F6)', color: 'var(--text-main, #333)' }}
       >
         {appEnv === 'staging' && (
@@ -1225,9 +1248,40 @@ export default function App() {
           
       <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-slate-200/50 to-transparent pointer-events-none"></div>
       
+      {/* Sleek Floating Focus Mode Pill when Header & Sidebar are Minimized */}
+      {isBulletin && bulletinFocusMode && (
+        <div className="fixed bottom-5 left-4 sm:top-2.5 sm:bottom-auto sm:right-5 sm:left-auto z-50 flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-full bg-slate-900/85 dark:bg-black/90 backdrop-blur-md text-white border border-teal-500/40 shadow-xl text-xs select-none transition-all hover:scale-[1.02]">
+          <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+          <span className="font-semibold text-slate-200 hidden sm:inline">Focus Mode • Diskusi Kerja</span>
+          <div className="h-3 w-px bg-white/20 hidden sm:block" />
+          <button
+            onClick={() => {
+              setBulletinFocusMode(false);
+              window.dispatchEvent(new CustomEvent('bulletin-focus-changed', { detail: { focus: false } }));
+            }}
+            className="text-teal-300 hover:text-white transition-colors cursor-pointer flex items-center gap-1 font-medium px-1.5 py-0.5 rounded hover:bg-white/10"
+            title="Tampilkan Header & Menu Portal"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Buka Menu</span>
+          </button>
+          <div className="h-3 w-px bg-white/20" />
+          <button
+            onClick={() => handleNav('home')}
+            className="text-slate-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/10"
+            title="Kembali ke Beranda Portal"
+          >
+            <Home className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Beranda</span>
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <header 
-        className="px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-50 backdrop-blur-md border-b w-full flex justify-center transition-colors"
+        className={`px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-50 backdrop-blur-md border-b w-full flex justify-center transition-all duration-300 ${
+          isBulletin && bulletinFocusMode ? 'hidden' : ''
+        }`}
         style={{
           backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
           borderColor: 'var(--border-main, #E2E8F0)'
@@ -1277,6 +1331,19 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-3">
+          {isBulletin && !bulletinFocusMode && (
+            <button
+              onClick={() => {
+                setBulletinFocusMode(true);
+                window.dispatchEvent(new CustomEvent('bulletin-focus-changed', { detail: { focus: true } }));
+              }}
+              className="px-2.5 py-1 rounded-full text-xs font-bold border border-teal-500/40 bg-teal-500/10 text-teal-600 dark:text-teal-400 hover:bg-teal-500/20 transition-all flex items-center gap-1 cursor-pointer"
+              title="Masuk ke Focus Mode Diskusi Kerja"
+            >
+              <Minimize2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Focus Mode</span>
+            </button>
+          )}
           <NotificationBell 
             userNik={inspectorNik || undefined} 
             userName={inspectorName || undefined}
@@ -1305,7 +1372,9 @@ export default function App() {
       <div className="flex-1 flex w-full relative">
         {/* Dedicated Left Rail for All Menus (Desktop View, Non-overlapping) */}
         <aside 
-          className="hidden md:flex flex-col items-center w-20 lg:w-24 shrink-0 border-r transition-colors sticky top-[57px] h-[calc(100dvh-57px)] z-30 select-none py-4 gap-2 justify-start overflow-y-auto"
+          className={`flex-col items-center w-20 lg:w-24 shrink-0 border-r transition-all duration-300 sticky top-[57px] h-[calc(100dvh-57px)] z-30 select-none py-4 gap-2 justify-start overflow-y-auto ${
+            isBulletin && bulletinFocusMode ? 'hidden' : 'hidden md:flex'
+          }`}
           style={{
             backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
             borderColor: 'var(--border-main, #E2E8F0)'
@@ -1419,7 +1488,9 @@ export default function App() {
         </aside>
 
         {/* Main Content Area */}
-        <main className="@container flex-1 flex flex-col w-full h-full bg-transparent min-w-0">
+        <main className={`@container flex-1 flex flex-col w-full bg-transparent min-w-0 transition-all duration-300 ${
+          isBulletin && bulletinFocusMode ? 'h-[100dvh] overflow-hidden p-0' : 'h-full'
+        }`}>
         
       <Suspense fallback={<div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
               <AnimatePresence mode="wait">
@@ -1457,6 +1528,8 @@ export default function App() {
   <Route path="/monitoring" element={<MonitoringDashboard inspectorNik={inspectorNik!} />} />
   <Route path="/quiz-admin" element={<QuizAdminScreen userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
   <Route path="/quiz" element={<QuizScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
+  <Route path="/apd" element={<Navigate to="/apd-input" replace />} />
+  <Route path="/apd/*" element={<Navigate to="/apd-input" replace />} />
   <Route path="/apd-input" element={<ApdInputScreen />} />
   <Route path="/apd-settings" element={<ApdSettingsScreen />} />
   <Route path="/apd-monitoring" element={<ApdMonitoringScreen />} />
@@ -1666,7 +1739,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      {!isCrewRole && (
+      {!isCrewRole && !(isBulletin && bulletinFocusMode) && (
         <nav 
           className="fixed bottom-0 w-full md:hidden backdrop-blur-xl border-t z-40 flex items-center justify-around h-[4.5rem] pb-safe transition-colors" 
           style={{ 
@@ -1955,6 +2028,19 @@ export default function App() {
           setShowMeetingRoomDevModal(false);
           navigate('/admin-dashboard');
         }}
+      />
+
+      {/* Floating Feedback & Suggestions Button */}
+      <FloatingFeedbackButton
+        inspectorNik={inspectorNik}
+        inspectorName={inspectorName}
+        userProfile={userProfile}
+        isHome={activeTab === 'home'}
+        isBulletin={isBulletin}
+        isBulletinFocusMode={bulletinFocusMode}
+        isCrewRole={isCrewRole}
+        currentPath={location.pathname}
+        onNavigate={handleNav}
       />
 
     </div>

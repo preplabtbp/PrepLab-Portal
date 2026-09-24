@@ -458,18 +458,33 @@ export function SectionHubDashboard({
         </div>
       </div>
 
-      {/* HARITA CORE VALUE Banner (Matches Notion page) */}
+      {/* HARITA WAYS Banner (Core Values) */}
       <div className="rounded-2xl border border-emerald-800/40 bg-gradient-to-r from-emerald-950/40 via-teal-950/30 to-emerald-950/40 p-4 shadow-lg flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-emerald-900/40 border border-emerald-600/40 text-emerald-400 text-base">
+        <div className="flex items-start sm:items-center gap-3 w-full">
+          <div className="p-2.5 rounded-xl bg-emerald-900/40 border border-emerald-600/40 text-emerald-400 text-base shrink-0 mt-0.5 sm:mt-0">
             🌟
           </div>
-          <div>
-            <h3 className="font-serif italic font-bold text-sm tracking-wider text-emerald-300">
-              HARITA CORE VALUE
-            </h3>
-            <p className="text-xs text-slate-300 font-medium">
-              <strong className="text-emerald-400">H</strong>umble • <strong className="text-emerald-400">A</strong>gile • <strong className="text-emerald-400">R</strong>esilient • <strong className="text-emerald-400">I</strong>ntegrity • <strong className="text-emerald-400">T</strong>ransparency • <strong className="text-emerald-400">A</strong>ccountability
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <h3 className="font-serif italic font-bold text-sm tracking-wider text-emerald-300">
+                HARITA WAYS
+              </h3>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold font-mono">
+                Core Values
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 font-medium leading-relaxed flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span>(<strong className="text-emerald-400 font-bold">H</strong>umility)</span>
+              <span className="text-emerald-600/60 hidden sm:inline">•</span>
+              <span>(<strong className="text-emerald-400 font-bold">A</strong>chievement oriented)</span>
+              <span className="text-emerald-600/60 hidden sm:inline">•</span>
+              <span>(<strong className="text-emerald-400 font-bold">R</strong>espect for every individual)</span>
+              <span className="text-emerald-600/60 hidden sm:inline">•</span>
+              <span>(<strong className="text-emerald-400 font-bold">I</strong>ntegrity)</span>
+              <span className="text-emerald-600/60 hidden sm:inline">•</span>
+              <span>(<strong className="text-emerald-400 font-bold">T</strong>eamwork)</span>
+              <span className="text-emerald-600/60 hidden sm:inline">•</span>
+              <span>(<strong className="text-emerald-400 font-bold">A</strong>ccountability)</span>
             </p>
           </div>
         </div>

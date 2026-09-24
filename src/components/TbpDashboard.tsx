@@ -966,22 +966,22 @@ export function TbpDashboard({
               >
                 <div className="flex items-center gap-3">
                   <div 
-                    className="w-9 h-9 rounded-xl flex items-center justify-center shadow-xs text-white"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shadow-xs text-white shrink-0"
                     style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
                   >
                     <Layers className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="font-display font-bold text-sm tracking-wide uppercase" style={{ color: 'var(--text-main, #0f172a)' }}>
+                    <h2 className="font-display font-bold text-sm sm:text-base tracking-wide uppercase" style={{ color: 'var(--text-main, #0f172a)' }}>
                       Workstation Sections
                     </h2>
-                    <p className="text-[11px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                    <p className="text-xs text-[var(--text-muted)]" style={{ color: 'var(--text-muted, #64748b)' }}>
                       Pusat dokumentasi & modul operasional departemen
                     </p>
                   </div>
                 </div>
                 <span 
-                  className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase border"
+                  className="px-2.5 py-1 rounded-full text-xs font-bold tracking-wider uppercase border"
                   style={{
                     backgroundColor: 'var(--input-bg, rgba(0,0,0,0.04))',
                     borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))',
@@ -1000,7 +1000,7 @@ export function TbpDashboard({
                     <button
                       key={idx}
                       onClick={() => handleNav(item.title)}
-                      className="w-full flex items-center justify-between p-2.5 rounded-xl transition-all duration-200 group text-left cursor-pointer border border-transparent hover:scale-[1.008] active:scale-[0.995]"
+                      className="w-full flex items-center justify-between p-2.5 sm:p-3 rounded-xl transition-all duration-200 group text-left cursor-pointer border border-transparent hover:scale-[1.008] active:scale-[0.995]"
                       onMouseEnter={(e) => {
                         e.currentTarget.style.backgroundColor = 'var(--input-bg, rgba(0, 0, 0, 0.03))';
                         e.currentTarget.style.borderColor = 'var(--border-main, rgba(148, 163, 184, 0.3))';
@@ -1010,25 +1010,25 @@ export function TbpDashboard({
                         e.currentTarget.style.borderColor = 'transparent';
                       }}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-9 h-9 rounded-xl ${item.bgClass} ${item.colorClass} flex items-center justify-center flex-shrink-0 transition-transform duration-200 group-hover:scale-110 shadow-xs border ${item.borderClass}`}>
-                          <Icon className="w-4 h-4" />
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl ${item.bgClass} ${item.colorClass} flex items-center justify-center flex-shrink-0 transition-transform duration-200 group-hover:scale-110 shadow-xs border ${item.borderClass}`}>
+                          <Icon className="w-5 h-5" />
                         </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-xs tracking-tight truncate group-hover:text-[var(--primary)] transition-colors" style={{ color: 'var(--text-main, #0f172a)' }}>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-sm sm:text-base tracking-tight truncate group-hover:text-[var(--primary)] transition-colors" style={{ color: 'var(--text-main, #0f172a)' }}>
                               {item.title}
                             </span>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${item.badgeBg}`}>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${item.badgeBg}`}>
                               {item.badge}
                             </span>
                           </div>
-                          <p className="text-[10px] truncate max-w-[240px] sm:max-w-[320px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                          <p className="text-xs sm:text-sm text-[var(--text-muted)] truncate max-w-[280px] sm:max-w-md mt-0.5" style={{ color: 'var(--text-muted, #64748b)' }}>
                             {item.subtitle}
                           </p>
                         </div>
                       </div>
-                      <ChevronRight className="w-4 h-4 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all flex-shrink-0" style={{ color: 'var(--text-muted, #64748b)' }} />
+                      <ChevronRight className="w-5 h-5 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" style={{ color: 'var(--text-muted, #64748b)' }} />
                     </button>
                   );
                 })}
@@ -1052,21 +1052,21 @@ export function TbpDashboard({
               >
                 <div className="flex items-center gap-3">
                   <div 
-                    className="w-9 h-9 rounded-xl flex items-center justify-center shadow-xs text-white"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shadow-xs text-white shrink-0"
                     style={{ backgroundColor: 'var(--accent, #E9930D)' }}
                   >
                     <ShieldCheck className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="font-display font-bold text-sm tracking-wide uppercase" style={{ color: 'var(--text-main, #0f172a)' }}>
+                    <h2 className="font-display font-bold text-sm sm:text-base tracking-wide uppercase" style={{ color: 'var(--text-main, #0f172a)' }}>
                       Golden Rules & Kepatuhan
                     </h2>
-                    <p className="text-[11px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                    <p className="text-xs text-[var(--text-muted)]" style={{ color: 'var(--text-muted, #64748b)' }}>
                       Standar keselamatan kerja & kepatuhan regulasi wajib
                     </p>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 flex items-center gap-1.5">
+                <span className="px-2.5 py-1 rounded-full text-xs font-extrabold tracking-wider uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                   Wajib Patuh
                 </span>
@@ -1079,7 +1079,7 @@ export function TbpDashboard({
                     <button
                       key={idx}
                       onClick={() => handleNav(`Rules ${item.target}`)}
-                      className="w-full flex items-center justify-between p-2.5 rounded-xl transition-all duration-200 group text-left cursor-pointer border border-transparent hover:scale-[1.008] active:scale-[0.995]"
+                      className="w-full flex items-center justify-between p-2.5 sm:p-3 rounded-xl transition-all duration-200 group text-left cursor-pointer border border-transparent hover:scale-[1.008] active:scale-[0.995]"
                       onMouseEnter={(e) => {
                         e.currentTarget.style.backgroundColor = 'var(--input-bg, rgba(0, 0, 0, 0.03))';
                         e.currentTarget.style.borderColor = 'var(--border-main, rgba(148, 163, 184, 0.3))';
@@ -1089,25 +1089,25 @@ export function TbpDashboard({
                         e.currentTarget.style.borderColor = 'transparent';
                       }}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-9 h-9 rounded-xl ${item.bgClass} ${item.colorClass} flex items-center justify-center flex-shrink-0 transition-transform duration-200 group-hover:scale-110 shadow-xs border ${item.borderClass}`}>
-                          <Icon className="w-4 h-4" />
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl ${item.bgClass} ${item.colorClass} flex items-center justify-center flex-shrink-0 transition-transform duration-200 group-hover:scale-110 shadow-xs border ${item.borderClass}`}>
+                          <Icon className="w-5 h-5" />
                         </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-xs tracking-tight truncate group-hover:text-[var(--accent)] transition-colors" style={{ color: 'var(--text-main, #0f172a)' }}>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-sm tracking-tight truncate group-hover:text-[var(--accent)] transition-colors" style={{ color: 'var(--text-main, #0f172a)' }}>
                               {item.title}
                             </span>
-                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                            <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
                               {item.badge}
                             </span>
                           </div>
-                          <p className="text-[10px] truncate max-w-[240px] sm:max-w-[320px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                          <p className="text-xs sm:text-sm text-[var(--text-muted)] truncate max-w-[280px] sm:max-w-md mt-0.5" style={{ color: 'var(--text-muted, #64748b)' }}>
                             {item.subtitle}
                           </p>
                         </div>
                       </div>
-                      <ChevronRight className="w-4 h-4 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all flex-shrink-0" style={{ color: 'var(--text-muted, #64748b)' }} />
+                      <ChevronRight className="w-5 h-5 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" style={{ color: 'var(--text-muted, #64748b)' }} />
                     </button>
                   );
                 })}
@@ -1144,15 +1144,15 @@ export function TbpDashboard({
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="font-display font-bold text-sm tracking-wide uppercase" style={{ color: 'var(--text-main, #0f172a)' }}>
-                        Kalender & Agenda Departemen
+                      <h2 className="font-display font-bold text-sm sm:text-base tracking-wide uppercase" style={{ color: 'var(--text-main, #0f172a)' }}>
+                        Kalender &amp; Agenda Departemen
                       </h2>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/20">
+                      <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/20">
                         {datesWithEvents.size} Hari Terjadwal
                       </span>
                     </div>
-                    <p className="text-[11px]" style={{ color: 'var(--text-muted, #64748b)' }}>
-                      Informasi jadwal inspeksi, meeting koordinasi, audit, & operasional terdekat
+                    <p className="text-xs text-[var(--text-muted)]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                      Informasi jadwal inspeksi, meeting koordinasi, audit, &amp; operasional terdekat
                     </p>
                   </div>
                 </div>
@@ -1194,7 +1194,7 @@ export function TbpDashboard({
                       </span>
                       <button
                         onClick={resetCalToToday}
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors cursor-pointer ml-1"
+                        className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors cursor-pointer ml-1"
                         title="Kembali ke Hari Ini"
                       >
                         Hari Ini
@@ -1213,7 +1213,7 @@ export function TbpDashboard({
                   {/* Days of Week Header */}
                   <div className="grid grid-cols-7 gap-1 text-center mb-1.5">
                     {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map((dayName, idx) => (
-                      <span key={idx} className="text-[10px] font-bold uppercase tracking-wider opacity-60" style={{ color: 'var(--text-muted, #64748b)' }}>
+                      <span key={idx} className="text-xs font-bold uppercase tracking-wider opacity-60" style={{ color: 'var(--text-muted, #64748b)' }}>
                         {dayName}
                       </span>
                     ))}
@@ -1244,7 +1244,7 @@ export function TbpDashboard({
                           }`}
                           title={`${cell.dateKey} ${cell.hasEvents ? `(${cell.eventCount} agenda)` : ''}`}
                         >
-                          <span className="text-[11px] leading-none">{cell.dayNum}</span>
+                          <span className="text-xs leading-none font-semibold">{cell.dayNum}</span>
                           {cell.hasEvents && (
                             <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-amber-300' : 'bg-teal-500'}`} />
                           )}
@@ -1254,7 +1254,7 @@ export function TbpDashboard({
                   </div>
 
                   {/* Calendar Legend */}
-                  <div className="mt-3 pt-2 border-t flex items-center justify-between text-[10px]" style={{ borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))', color: 'var(--text-muted, #64748b)' }}>
+                  <div className="mt-3 pt-2 border-t flex items-center justify-between text-xs" style={{ borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))', color: 'var(--text-muted, #64748b)' }}>
                     <div className="flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
                       <span>Ada Agenda</span>
@@ -1281,13 +1281,13 @@ export function TbpDashboard({
                       {selectedCalDateStr && (
                         <button
                           onClick={() => setSelectedCalDateStr(null)}
-                          className="text-[10px] text-teal-600 dark:text-teal-400 hover:underline cursor-pointer font-medium"
+                          className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer font-medium"
                         >
                           (Tampilkan Semua)
                         </button>
                       )}
                     </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-md font-mono" style={{ backgroundColor: 'var(--input-bg, rgba(0,0,0,0.04))', color: 'var(--text-muted, #64748b)' }}>
+                    <span className="text-xs px-2.5 py-0.5 rounded-md font-mono font-bold" style={{ backgroundColor: 'var(--input-bg, rgba(0,0,0,0.04))', color: 'var(--text-muted, #64748b)' }}>
                       {majorAgendasList.length} Kegiatan
                     </span>
                   </div>
@@ -1302,10 +1302,10 @@ export function TbpDashboard({
                         }}
                       >
                         <CalendarCheck className="w-8 h-8 text-teal-500/40" />
-                        <div className="text-xs font-semibold" style={{ color: 'var(--text-main, #0f172a)' }}>
+                        <div className="text-sm font-semibold" style={{ color: 'var(--text-main, #0f172a)' }}>
                           {selectedCalDateStr ? 'Tidak ada agenda di tanggal terpilih' : 'Tidak ada agenda departemen terdekat'}
                         </div>
-                        <p className="text-[10px] max-w-[240px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                        <p className="text-xs max-w-sm" style={{ color: 'var(--text-muted, #64748b)' }}>
                           {selectedCalDateStr ? 'Silakan pilih tanggal lain yang memiliki dot hijau atau lihat agenda mendatang.' : 'Semua kegiatan telah selesai atau belum ada jadwal baru yang ditambahkan.'}
                         </p>
                         {onOpenFullAgenda && (
@@ -1337,25 +1337,25 @@ export function TbpDashboard({
                             <div className="flex items-start justify-between gap-2 mb-1.5">
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                                  <span className={`text-[9px] px-2 py-0.5 rounded-full border ${rel.badgeClass}`}>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${rel.badgeClass}`}>
                                     {rel.text}
                                   </span>
                                   {agenda.kategori && (
-                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${catClass}`}>
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${catClass}`}>
                                       {agenda.kategori}
                                     </span>
                                   )}
                                 </div>
-                                <h3 className="font-bold text-xs tracking-tight group-hover:text-[var(--primary)] transition-colors line-clamp-1" style={{ color: 'var(--text-main, #0f172a)' }}>
+                                <h3 className="font-bold text-xs sm:text-sm tracking-tight group-hover:text-[var(--primary)] transition-colors line-clamp-1" style={{ color: 'var(--text-main, #0f172a)' }}>
                                   {agenda.title}
                                 </h3>
                               </div>
                               <ExternalLink className="w-3.5 h-3.5 opacity-30 group-hover:opacity-100 group-hover:text-teal-500 transition-opacity flex-shrink-0 mt-1" />
                             </div>
 
-                            <div className="flex items-center gap-3 text-[10px] flex-wrap" style={{ color: 'var(--text-muted, #64748b)' }}>
+                            <div className="flex items-center gap-3 text-xs flex-wrap" style={{ color: 'var(--text-muted, #64748b)' }}>
                               <div className="flex items-center gap-1 font-medium">
-                                <Clock className="w-3 h-3 text-teal-500/80" />
+                                <Clock className="w-3.5 h-3.5 text-teal-500/80" />
                                 <span>
                                   {evtDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
                                   {' • '}
@@ -1371,7 +1371,7 @@ export function TbpDashboard({
                               {agenda.lokasi && (
                                 <div className="flex items-center gap-1">
                                   <MapPin className="w-3 h-3 text-sky-500" />
-                                  <span className="truncate max-w-[120px]">{agenda.lokasi}</span>
+                                  <span className="truncate max-w-[140px]">{agenda.lokasi}</span>
                                 </div>
                               )}
                             </div>
@@ -1405,19 +1405,19 @@ export function TbpDashboard({
                     <MapPin className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <div className="font-bold text-xs tracking-tight flex items-center gap-1.5" style={{ color: 'var(--text-main, #0f172a)' }}>
+                    <div className="font-bold text-xs sm:text-sm tracking-tight flex items-center gap-1.5" style={{ color: 'var(--text-main, #0f172a)' }}>
                       <span>Kawasi, Pulau Obi</span>
-                      <span className="text-[10px] font-normal px-1.5 py-0.2 rounded-full bg-slate-500/10" style={{ color: 'var(--text-muted, #64748b)' }}>
+                      <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-slate-500/10" style={{ color: 'var(--text-muted, #64748b)' }}>
                         Halmahera Selatan
                       </span>
                     </div>
-                    <span className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                    <span className="text-xs text-[var(--text-muted)]">
                       Stasiun Cuaca Operasional Tambang & Lab
                     </span>
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
                   <span>LIVE WIT</span>
                 </div>
@@ -1436,10 +1436,10 @@ export function TbpDashboard({
                       </span>
                       <span className="text-base font-semibold" style={{ color: 'var(--text-muted, #64748b)' }}>C</span>
                     </div>
-                    <div className="text-xs font-semibold capitalize" style={{ color: 'var(--text-main, #0f172a)' }}>
+                    <div className="text-xs sm:text-sm font-semibold capitalize" style={{ color: 'var(--text-main, #0f172a)' }}>
                       Overcast Clouds
                     </div>
-                    <div className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                    <div className="text-xs text-[var(--text-muted)]">
                       Terasa seperti 26°C • Siang hari
                     </div>
                   </div>
@@ -1455,8 +1455,8 @@ export function TbpDashboard({
                     }}
                   >
                     <Droplets className="w-4 h-4 text-sky-500 mb-1" />
-                    <span className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>Lembab</span>
-                    <span className="font-bold text-xs" style={{ color: 'var(--text-main, #0f172a)' }}>78%</span>
+                    <span className="text-xs text-[var(--text-muted)]">Lembab</span>
+                    <span className="font-bold text-xs sm:text-sm" style={{ color: 'var(--text-main, #0f172a)' }}>78%</span>
                   </div>
 
                   <div 
@@ -1467,8 +1467,8 @@ export function TbpDashboard({
                     }}
                   >
                     <Wind className="w-4 h-4 text-teal-500 mb-1" />
-                    <span className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>Angin</span>
-                    <span className="font-bold text-xs" style={{ color: 'var(--text-main, #0f172a)' }}>12 km/h</span>
+                    <span className="text-xs text-[var(--text-muted)]">Angin</span>
+                    <span className="font-bold text-xs sm:text-sm" style={{ color: 'var(--text-main, #0f172a)' }}>12 km/h</span>
                   </div>
 
                   <div 
@@ -1479,8 +1479,8 @@ export function TbpDashboard({
                     }}
                   >
                     <Sun className="w-4 h-4 text-amber-500 mb-1" />
-                    <span className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>Indeks UV</span>
-                    <span className="font-bold text-xs" style={{ color: 'var(--text-main, #0f172a)' }}>3 Mod</span>
+                    <span className="text-xs text-[var(--text-muted)]">Indeks UV</span>
+                    <span className="font-bold text-xs sm:text-sm" style={{ color: 'var(--text-main, #0f172a)' }}>3 Mod</span>
                   </div>
                 </div>
               </div>
@@ -1488,10 +1488,10 @@ export function TbpDashboard({
               {/* 7-Day Forecast Strip */}
               <div className="relative z-10 pt-3 border-t" style={{ borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))' }}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted, #64748b)' }}>
+                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
                     Prakiraan 7 Hari Ke Depan
                   </span>
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                  <span className="text-xs text-[var(--text-muted)]">
                     Kondisi Tropis Pesisir
                   </span>
                 </div>
@@ -1508,12 +1508,12 @@ export function TbpDashboard({
                           backgroundColor: isToday ? undefined : 'var(--input-bg, rgba(0,0,0,0.02))'
                         }}
                       >
-                        <span className={`text-[10px] font-bold ${isToday ? 'text-teal-600 dark:text-teal-400 font-extrabold' : ''}`} style={{ color: isToday ? undefined : 'var(--text-main, #0f172a)' }}>
+                        <span className={`text-xs font-bold ${isToday ? 'text-teal-600 dark:text-teal-400 font-extrabold' : ''}`} style={{ color: isToday ? undefined : 'var(--text-main, #0f172a)' }}>
                           {day}
                         </span>
                         <WeatherIcon code={i % 3 === 0 ? 0 : 50} className="w-4 h-4 my-1.5" />
-                        <span className="text-[11px] font-bold" style={{ color: 'var(--text-main, #0f172a)' }}>29°</span>
-                        <span className="text-[9px] opacity-60" style={{ color: 'var(--text-muted, #64748b)' }}>23°</span>
+                        <span className="text-xs font-bold" style={{ color: 'var(--text-main, #0f172a)' }}>29°</span>
+                        <span className="text-xs opacity-60 text-[var(--text-muted)]">23°</span>
                       </div>
                     );
                   })}
@@ -1537,15 +1537,15 @@ export function TbpDashboard({
                       <Clock className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <span className="font-bold text-xs tracking-tight" style={{ color: 'var(--text-main, #0f172a)' }}>
+                      <span className="font-bold text-xs sm:text-sm tracking-tight" style={{ color: 'var(--text-main, #0f172a)' }}>
                         Waktu Operasional Site
                       </span>
-                      <div className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                      <div className="text-xs text-[var(--text-muted)]">
                         Stasiun Kawasi (UTC +09:00)
                       </div>
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20">
+                  <span className="px-2.5 py-0.5 rounded-md text-xs font-mono font-bold border bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20">
                     WIT
                   </span>
                 </div>
@@ -1603,7 +1603,7 @@ export function TbpDashboard({
                 </div>
 
                 {/* Footer Shift Status */}
-                <div className="pt-3 border-t flex items-center justify-between text-[11px]" style={{ borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))' }}>
+                <div className="pt-3 border-t flex items-center justify-between text-xs" style={{ borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))' }}>
                   <span className="flex items-center gap-1.5" style={{ color: 'var(--text-muted, #64748b)' }}>
                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                     <span>Shift Operasional:</span>
@@ -1629,10 +1629,10 @@ export function TbpDashboard({
                       <Music className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <span className="font-bold text-xs tracking-tight" style={{ color: 'var(--text-main, #0f172a)' }}>
+                      <span className="font-bold text-xs sm:text-sm tracking-tight" style={{ color: 'var(--text-main, #0f172a)' }}>
                         Lab Focus & Ambient
                       </span>
-                      <div className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                      <div className="text-xs text-[var(--text-muted)]">
                         Lofi Beats untuk Konsentrasi Kerja
                       </div>
                     </div>
@@ -1664,23 +1664,23 @@ export function TbpDashboard({
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <button
                         onClick={() => setActiveSlot({ key: 'lofi', label: 'Widget Canvas Cover' })}
-                        className="p-1 rounded-lg bg-black/80 hover:bg-teal-900 text-white text-[9px] border border-teal-500/50 cursor-pointer"
+                        className="p-1.5 rounded-lg bg-black/80 hover:bg-teal-900 text-white text-xs border border-teal-500/50 cursor-pointer"
                         title="Ganti cover"
                       >
-                        <Camera className="w-3 h-3 text-teal-300" />
+                        <Camera className="w-3.5 h-3.5 text-teal-300" />
                       </button>
                     </div>
                   </div>
                   
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold text-xs truncate" style={{ color: 'var(--text-main, #0f172a)' }}>
+                    <div className="font-bold text-xs sm:text-sm truncate" style={{ color: 'var(--text-main, #0f172a)' }}>
                       Kawasi Station Lofi Beats
                     </div>
-                    <div className="text-[10px] truncate" style={{ color: 'var(--text-muted, #64748b)' }}>
+                    <div className="text-xs truncate text-[var(--text-muted)]">
                       Deep Focus & Analytical Chill
                     </div>
-                    <div className="mt-1 flex items-center gap-1.5 text-[9px] font-mono text-teal-600 dark:text-teal-400 font-semibold">
-                      <Radio className="w-2.5 h-2.5" />
+                    <div className="mt-1 flex items-center gap-1.5 text-xs font-mono text-teal-600 dark:text-teal-400 font-semibold">
+                      <Radio className="w-3 h-3" />
                       <span>320kbps • High Quality Audio</span>
                     </div>
                   </div>

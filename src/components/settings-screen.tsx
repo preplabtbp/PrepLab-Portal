@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Input } from './ui';
-import { LogOut, User, Lock, Mail, Settings2, Palette, ShieldAlert, Settings, Bell, Sparkles, MessageSquarePlus, Type } from 'lucide-react';
+import { LogOut, User, Lock, Mail, Settings2, Palette, ShieldAlert, Settings, Bell, Sparkles, MessageSquarePlus, Type, Smartphone, Check, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAppSettings } from '../sheets-api';
 import { PageHeader } from './PageHeader';
 import { FONT_SIZE_OPTIONS, FontSizeOption, applyFontSize, getStoredFontSize } from '../utils/fontSize';
+import { useMobileMode } from '../utils/mobileMode';
 
 export function SettingsScreen({ 
   inspectorName, 
@@ -21,6 +22,7 @@ export function SettingsScreen({
 }) {
   const [profile, setProfile] = useState<any>(null);
   const [activeFontSize, setActiveFontSize] = useState<FontSizeOption>(() => getStoredFontSize());
+  const { mode: mobileMode, setMobileMode } = useMobileMode();
   
   const [email, setEmail] = useState('');
   const [soundEnabled, setSoundEnabled] = useState(() => {
@@ -332,6 +334,92 @@ export function SettingsScreen({
                 <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted, #64748B)' }}>
                   Skala font berlaku instan untuk semua modul, dashboard, tabel data, dan buletin portal.
                 </p>
+              </div>
+
+              {/* Mode Tampilan Mobile (Smartphone: Simple vs Full) */}
+              <div className="pt-3 border-t space-y-2.5" style={{ borderColor: 'var(--border-main, #E2E8F0)' }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Smartphone className="w-4 h-4 text-teal-600" />
+                    <span className="text-xs font-bold tracking-tight" style={{ color: 'var(--text-main, #1E293B)' }}>
+                      Mode Tampilan Mobile (Smartphone)
+                    </span>
+                  </div>
+                  <span 
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-2xs"
+                    style={{ 
+                      backgroundColor: 'var(--input-bg, #FFFFFF)', 
+                      borderColor: 'var(--border-main, #CBD5E1)',
+                      color: mobileMode === 'simple' ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #64748B)' 
+                    }}
+                  >
+                    {mobileMode === 'simple' ? '⚡ Mode Sederhana' : '🖥️ Mode Lengkap'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {/* Option 1: Simple Mode */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMode('simple');
+                      toast.success('Mode Sederhana diaktifkan untuk perangkat mobile');
+                    }}
+                    className={`p-3 rounded-2xl border text-left transition-all active:scale-[0.98] cursor-pointer ${
+                      mobileMode === 'simple'
+                        ? 'bg-teal-500/10 border-teal-500/50 ring-2 ring-teal-500/20 shadow-xs'
+                        : 'bg-[var(--input-bg,white)] border-[var(--border-main,#E2E8F0)] opacity-75 hover:opacity-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Smartphone className="w-4 h-4 text-teal-600" />
+                        <span className="font-bold text-xs" style={{ color: 'var(--text-main, #1E293B)' }}>
+                          Mode Sederhana
+                        </span>
+                      </div>
+                      {mobileMode === 'simple' && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-teal-600 text-white flex items-center gap-0.5">
+                          <Check className="w-3 h-3" /> Default
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] leading-snug" style={{ color: 'var(--text-muted, #64748B)' }}>
+                      Fokus tugas shift, tombol aksi besar, ringan &amp; cepat untuk personil di lapangan.
+                    </p>
+                  </button>
+
+                  {/* Option 2: Full Mode */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMode('full');
+                      toast.success('Mode Lengkap diaktifkan untuk perangkat mobile');
+                    }}
+                    className={`p-3 rounded-2xl border text-left transition-all active:scale-[0.98] cursor-pointer ${
+                      mobileMode === 'full'
+                        ? 'bg-teal-500/10 border-teal-500/50 ring-2 ring-teal-500/20 shadow-xs'
+                        : 'bg-[var(--input-bg,white)] border-[var(--border-main,#E2E8F0)] opacity-75 hover:opacity-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <LayoutGrid className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+                        <span className="font-bold text-xs" style={{ color: 'var(--text-main, #1E293B)' }}>
+                          Mode Lengkap
+                        </span>
+                      </div>
+                      {mobileMode === 'full' && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-teal-600 text-white flex items-center gap-0.5">
+                          <Check className="w-3 h-3" /> Aktif
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] leading-snug" style={{ color: 'var(--text-muted, #64748B)' }}>
+                      Menampilkan semua grafik analitik, tabel jadwal mingguan, dan widget seperti versi desktop.
+                    </p>
+                  </button>
+                </div>
               </div>
             </Card>
 

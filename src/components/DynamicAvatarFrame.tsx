@@ -1,4 +1,157 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
+
+/**
+ * GmSymbioteCanvas - Animasi Living Symbiote Tentacles khusus Game Master
+ * Diadaptasi dari simulasi canvas 2D dengan optimasi performa tinggi:
+ * - Hardware-accelerated CSS filter drop-shadow
+ * - Auto pause saat offscreen (IntersectionObserver) dan saat tab background (visibilitychange)
+ * - Skala dinamis tentakel berdasarkan prop `size`
+ */
+const GmSymbioteCanvas: React.FC<{ size: number; isLocked: boolean }> = ({ size, isLocked }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationId: number;
+    let isMounted = true;
+
+    // Ukuran kanvas dibuat hanya 1.35x dari diameter avatar agar sulur rapat dan tidak mekar terlalu jauh
+    const canvasSize = Math.max(50, Math.round(size * 1.35));
+    canvas.width = canvasSize;
+    canvas.height = canvasSize;
+
+    const cx = canvasSize / 2;
+    const cy = canvasSize / 2;
+
+    class Tentacle {
+      x: number;
+      y: number;
+      angle: number;
+      segments: number;
+      baseWidth: number;
+      time: number;
+      speed: number;
+
+      constructor(x: number, y: number, angle: number) {
+        this.x = x;
+        this.y = y;
+        this.angle = angle;
+        // Segmen pendek (6 sampai 9 ruas) agar panjangnya hanya sedikit keluar dari frame
+        this.segments = Math.floor(Math.random() * 4) + 6;
+        const scaleFactor = Math.max(0.6, size / 80);
+        this.baseWidth = (Math.random() * 1.6 + 2.0) * scaleFactor;
+        this.time = Math.random() * 100;
+        this.speed = Math.random() * 0.035 + 0.018; // Gerakan tenang dan berwibawa
+      }
+
+      update() {
+        this.time += this.speed;
+      }
+
+      draw(context: CanvasRenderingContext2D) {
+        let prevX = this.x;
+        let prevY = this.y;
+        let curAngle = this.angle;
+        const scale = Math.max(0.6, size / 80);
+
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        context.strokeStyle = isLocked ? '#475569' : '#030303'; // Hitam pekat obsidian
+
+        for (let i = 0; i < this.segments; i++) {
+          // Gelombang bergelung halus dan teratur (tidak liar)
+          const wave1 = Math.sin(this.time + i * 0.32) * 0.07;
+          const wave2 = Math.cos(this.time * 0.75 + i * 0.18) * 0.05;
+          curAngle += wave1 + wave2;
+
+          const segLen = (1.2 + i * 0.15) * scale;
+          const nextX = prevX + Math.cos(curAngle) * segLen;
+          const nextY = prevY + Math.sin(curAngle) * segLen;
+
+          // Tapering eksponensial: pangkal tebal (baseWidth), meruncing tajam bagai jarum di ujung (0.35px)
+          const t = i / this.segments;
+          const segWidth = Math.max(0.35, this.baseWidth * Math.pow(1 - t, 1.35));
+
+          context.beginPath();
+          context.moveTo(prevX, prevY);
+          context.lineTo(nextX, nextY);
+          context.lineWidth = segWidth;
+          context.stroke();
+
+          prevX = nextX;
+          prevY = nextY;
+        }
+      }
+    }
+
+    const tentacles: Tentacle[] = [];
+    const numTentacles = size > 60 ? 22 : 14;
+    const radius = size / 2;
+
+    for (let i = 0; i < numTentacles; i++) {
+      const angle = (i / numTentacles) * Math.PI * 2;
+      const startX = cx + Math.cos(angle) * (radius - 2);
+      const startY = cy + Math.sin(angle) * (radius - 2);
+      tentacles.push(new Tentacle(startX, startY, angle));
+    }
+
+    let isVisible = true;
+    let observer: IntersectionObserver | null = null;
+    if (typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver(([entry]) => {
+        isVisible = entry.isIntersecting;
+      });
+      observer.observe(canvas);
+    }
+
+    const handleVisibilityChange = () => {
+      isVisible = !document.hidden;
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const animate = () => {
+      if (!isMounted) return;
+      if (isVisible) {
+        ctx.clearRect(0, 0, canvasSize, canvasSize);
+
+        for (let i = 0; i < tentacles.length; i++) {
+          tentacles[i].update();
+          tentacles[i].draw(ctx);
+        }
+      }
+      animationId = requestAnimationFrame(animate);
+    };
+
+    animate();
+
+    return () => {
+      isMounted = false;
+      cancelAnimationFrame(animationId);
+      if (observer) observer.disconnect();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [size, isLocked]);
+
+  const canvasPx = Math.max(50, Math.round(size * 1.35));
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-0"
+      style={{
+        width: `${canvasPx}px`,
+        height: `${canvasPx}px`,
+        filter: isLocked 
+          ? 'grayscale(1) opacity(0.3)' 
+          : 'drop-shadow(0 0 5px rgba(0, 0, 0, 0.98)) drop-shadow(0 0 2px rgba(0, 0, 0, 1))'
+      }}
+    />
+  );
+};
 
 export interface DynamicAvatarFrameProps {
   frameId?: string | null;
@@ -664,6 +817,31 @@ export const DynamicAvatarFrame: React.FC<DynamicAvatarFrameProps> = ({
       }
 
       // =========================================================================
+      // SUPREME GM EXCLUSIVE: ABYSSAL SYMBIOTE (Venom Living Canvas Tentacles)
+      // =========================================================================
+      case 'frame_gm_symbiote': {
+        return (
+          <>
+            {/* Living Symbiote Tentacles Canvas (Rapat & Meruncing Tajam) */}
+            <GmSymbioteCanvas size={size} isLocked={isLocked} />
+
+            {/* Glowing Deep Obsidian Black Smoke Aura Ring (Rapat Membungkus Frame) */}
+            <div 
+              className={`absolute -inset-1 rounded-full pointer-events-none z-0 ${!isLocked ? 'shadow-[0_0_14px_rgba(0,0,0,0.95)]' : 'opacity-20'}`}
+              style={{
+                background: 'radial-gradient(circle, transparent 60%, rgba(0, 0, 0, 0.88) 86%, transparent 100%)'
+              }}
+            />
+
+            {/* Directional Stealth Black/Silver Core Ticks */}
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-0.5 bg-zinc-500 z-20 pointer-events-none shadow-[0_0_4px_rgba(0,0,0,0.9)]" />
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-0.5 bg-zinc-500 z-20 pointer-events-none shadow-[0_0_4px_rgba(0,0,0,0.9)]" />
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0.5 h-1.5 bg-zinc-500 z-20 pointer-events-none shadow-[0_0_4px_rgba(0,0,0,0.9)]" />
+          </>
+        );
+      }
+
+      // =========================================================================
       // STANDARD FRAMES
       // =========================================================================
       case 'golden_halo':
@@ -751,6 +929,8 @@ export const DynamicAvatarFrame: React.FC<DynamicAvatarFrameProps> = ({
         return 'border-rose-500 ring-2 ring-rose-500/70 shadow-[0_0_15px_rgba(244,63,94,0.7)]';
       case 'frame_shadow_eclipse':
         return 'border-purple-600 ring-2 ring-indigo-900/80 shadow-[0_0_18px_rgba(147,51,234,0.7)]';
+      case 'frame_gm_symbiote':
+        return 'border-zinc-950 ring-2 ring-zinc-800 shadow-[0_0_12px_rgba(0,0,0,0.95)]';
       default:
         return 'border-slate-300 dark:border-slate-700';
     }

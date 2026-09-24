@@ -593,7 +593,7 @@ export function ProfilePage({
 
   const activeFrameTier = useMemo(() => {
     const frameObj = getFrameById(activeAvatarFrame);
-    if (!frameObj.sourceAchId) return 4;
+    if (frameObj.isGmOnly || !frameObj.sourceAchId) return 4;
     const branch = earnedBranches.find((b: any) => b.branch?.id === frameObj.sourceAchId || b.branch?.code === frameObj.sourceAchId);
     return branch?.tierLevel || 1;
   }, [activeAvatarFrame, earnedBranches]);
@@ -706,9 +706,9 @@ export function ProfilePage({
 
       {/* Drawer Panel */}
       <motion.div 
-        initial={{ y: "100%", x: 0 }}
+        initial={{ y: isMobile ? "100%" : 0, x: isMobile ? 0 : "100%" }}
         animate={{ y: 0, x: 0 }}
-        exit={{ y: "100%", x: 0 }}
+        exit={{ y: isMobile ? "100%" : 0, x: isMobile ? 0 : "100%" }}
         transition={{ type: "spring", damping: 28, stiffness: 320 }}
         drag={isMobile ? "y" : false}
         dragControls={dragControls}
@@ -720,7 +720,7 @@ export function ProfilePage({
             onBack();
           }
         }}
-        className="fixed inset-x-0 bottom-0 top-10 md:top-0 md:left-auto md:right-0 z-[60] w-full md:w-[440px] lg:w-[500px] h-[calc(100dvh-2.5rem)] md:h-full rounded-t-[28px] md:rounded-none shadow-2xl md:border-l flex flex-col overflow-hidden transition-colors"
+        className="fixed inset-x-0 bottom-0 top-8 md:top-0 md:left-auto md:right-0 z-[60] w-full sm:w-[650px] md:w-[780px] lg:w-[960px] xl:w-[1100px] 2xl:w-[1240px] h-[calc(100dvh-2rem)] md:h-full rounded-t-[32px] md:rounded-l-3xl md:rounded-r-none shadow-2xl md:border-l flex flex-col overflow-hidden transition-colors"
         style={{
           backgroundColor: 'var(--bg-main, #F8FAFC)',
           borderColor: 'var(--border-main, #E2E8F0)',
@@ -740,7 +740,7 @@ export function ProfilePage({
 
         {/* Header Bar */}
         <div 
-          className="sticky top-0 z-20 backdrop-blur-md px-4 sm:px-6 py-3.5 flex items-center justify-between border-b shrink-0 select-none transition-colors"
+          className="sticky top-0 z-20 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between border-b shrink-0 select-none transition-colors"
           style={{
             backgroundColor: 'var(--bg-main, #F8FAFC)',
             borderColor: 'var(--border-main, #E2E8F0)'
@@ -753,39 +753,50 @@ export function ProfilePage({
           <div className="flex items-center gap-3">
             <button 
               onClick={onBack} 
-              className="p-2 -ml-2 rounded-full border transition-colors shadow-2xs active:scale-95 cursor-pointer"
+              className="p-2 -ml-1 rounded-xl border transition-all shadow-2xs hover:bg-[var(--input-bg)] active:scale-95 cursor-pointer"
               style={{
                 backgroundColor: 'var(--input-bg, #FFFFFF)',
                 borderColor: 'var(--border-main, #E2E8F0)',
                 color: 'var(--text-main, #1E293B)'
               }}
               aria-label="Kembali"
+              title="Kembali ke Portal"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-lg sm:text-xl font-display font-bold leading-tight" style={{ color: 'var(--text-main, #1E293B)' }}>
-                Profil Karyawan
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-display font-bold leading-tight" style={{ color: 'var(--text-main, #1E293B)' }}>
+                  Profil Personil &amp; Rekam Jejak
+                </h1>
+                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/25">
+                  SAP &amp; Gamification Dossier
+                </span>
+              </div>
               <p className="text-[11px] font-medium" style={{ color: 'var(--text-muted, #64748B)' }}>
-                Preparation & Laboratory Department
+                Preparation &amp; Laboratory Department · Mining &amp; Analytical Operations
               </p>
             </div>
           </div>
-          <button 
-            onClick={onBack} 
-            className="p-2 rounded-full border transition-colors md:hidden cursor-pointer shadow-2xs"
-            style={{
-              backgroundColor: 'var(--input-bg, #FFFFFF)',
-              borderColor: 'var(--border-main, #E2E8F0)',
-              color: 'var(--text-muted, #64748B)'
-            }}
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={onBack} 
+              className="p-2 rounded-xl border transition-all hover:bg-[var(--input-bg)] cursor-pointer shadow-2xs active:scale-95 flex items-center gap-1.5"
+              style={{
+                backgroundColor: 'var(--input-bg, #FFFFFF)',
+                borderColor: 'var(--border-main, #E2E8F0)',
+                color: 'var(--text-muted, #64748B)'
+              }}
+              title="Tutup (Esc / Klik Luar)"
+              aria-label="Tutup"
+            >
+              <X className="w-5 h-5" />
+              <span className="hidden sm:inline text-xs font-semibold pr-1">Tutup</span>
+            </button>
+          </div>
         </div>
 
-        <div className="p-4 sm:p-6 space-y-6 flex-1 overflow-y-auto overscroll-contain pb-28">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto overscroll-contain pb-28">
           {/* Hidden File Input for Avatar */}
           <input 
             type="file" 
@@ -814,7 +825,7 @@ export function ProfilePage({
           >
             {/* Top Banner Background & Wallpaper */}
             <div 
-              className="h-28 sm:h-36 relative overflow-hidden group/banner select-none transition-all duration-300"
+              className="h-36 sm:h-44 md:h-52 relative overflow-hidden group/banner select-none transition-all duration-300"
               style={{
                 background: cover 
                   ? (cover.startsWith('linear-gradient') ? cover : `url(${cover}) center / cover no-repeat`) 
@@ -822,14 +833,14 @@ export function ProfilePage({
               }}
             >
               {/* Overlay Gradient for contrast */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent pointer-events-none" />
 
               {/* Edit Background / Cover Button in Top Right */}
-              <div className="absolute top-2.5 right-2.5 z-10">
+              <div className="absolute top-3 right-3 z-10">
                 <button
                   type="button"
                   onClick={() => setShowCoverModal(true)}
-                  className="px-2.5 py-1 rounded-xl text-xs font-semibold backdrop-blur-md bg-black/40 hover:bg-black/60 text-white border border-white/20 shadow-md flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold backdrop-blur-md bg-black/40 hover:bg-black/60 text-white border border-white/20 shadow-md flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                   title="Kustomisasi Background / Cover Profil"
                 >
                   <ImageIcon className="w-3.5 h-3.5 text-amber-300" />
@@ -838,14 +849,14 @@ export function ProfilePage({
               </div>
             </div>
 
-            <div className="px-5 pb-5 relative">
-              <div className="flex justify-between items-end -mt-10 sm:-mt-12 mb-4">
+            <div className="px-5 sm:px-7 pb-6 relative">
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between -mt-12 sm:-mt-16 md:-mt-20 mb-5 gap-4">
                 {/* Avatar Box with Equipped Dynamic Frame Ring */}
-                <div className="relative group">
+                <div className="relative group shrink-0 self-start">
                   <DynamicAvatarFrame
                     frameId={activeAvatarFrame}
                     tierLevel={activeFrameTier}
-                    size={96}
+                    size={104}
                     isUnlocked={true}
                   >
                     {avatar ? (
@@ -856,7 +867,7 @@ export function ProfilePage({
                       />
                     ) : (
                       <div 
-                        className="w-full h-full rounded-full flex items-center justify-center text-2xl sm:text-3xl font-bold font-display"
+                        className="w-full h-full rounded-full flex items-center justify-center text-3xl font-bold font-display"
                         style={{
                           backgroundColor: 'var(--input-bg, rgba(42, 157, 143, 0.1))',
                           color: 'var(--primary, #2A9D8F)'
@@ -879,7 +890,7 @@ export function ProfilePage({
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="absolute -bottom-1 -right-1 p-2 text-white rounded-xl shadow-md transition-all active:scale-90 border-2 flex items-center justify-center group-hover:scale-105 cursor-pointer"
+                    className="absolute -bottom-1 -right-1 p-2 text-white rounded-xl shadow-md transition-all active:scale-90 border-2 flex items-center justify-center hover:scale-105 cursor-pointer z-30"
                     style={{
                       backgroundColor: 'var(--primary, #2A9D8F)',
                       borderColor: 'var(--card-bg, #FFFFFF)'
@@ -890,57 +901,54 @@ export function ProfilePage({
                   </button>
                 </div>
 
-                {/* Quick Action Buttons */}
-                <div className="flex items-center gap-1.5 sm:gap-2">
+                {/* Quick Action Buttons Toolbar */}
+                <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
                   <button 
                     type="button"
                     onClick={() => setShowPromotionModal(true)}
-                    className="rounded-xl flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 shadow-xs h-8 sm:h-9 text-xs font-bold border transition-all active:scale-95 cursor-pointer bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-700 dark:text-amber-300 border-amber-500/40"
+                    className="rounded-xl flex items-center gap-2 px-3.5 h-9 text-xs font-bold border transition-all active:scale-95 cursor-pointer bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-xs"
                     title="Buka Upacara Promosi Pangkat Resmi"
                   >
-                    <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span className="hidden xs:inline sm:inline">Upacara Promosi</span>
-                    <span className="xs:hidden sm:hidden">Promosi</span>
+                    <Award className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>Upacara Promosi</span>
                   </button>
 
                   <button 
                     type="button"
                     onClick={() => setIsPixelAvatarOpen(true)}
-                    className="rounded-xl flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 shadow-xs h-8 sm:h-9 text-xs font-bold border transition-all active:scale-95 cursor-pointer bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border-amber-500/40"
+                    className="rounded-xl flex items-center gap-2 px-3.5 h-9 text-xs font-bold border transition-all active:scale-95 cursor-pointer bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-xs"
                     title="Buka Pixel Avatar Studio"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse shrink-0" />
-                    <span className="hidden xs:inline sm:inline">Pixel Avatar Studio</span>
-                    <span className="xs:hidden sm:hidden">Studio</span>
+                    <Sparkles className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
+                    <span>Pixel Avatar Studio</span>
                   </button>
 
                   <Button 
                     onClick={onLogout} 
                     variant="danger" 
-                    className="rounded-xl flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 shadow-xs h-8 sm:h-9 text-xs font-bold cursor-pointer"
+                    className="rounded-xl flex items-center gap-2 px-3.5 h-9 text-xs font-bold cursor-pointer shadow-xs"
                   >
-                    <LogOut className="w-3.5 h-3.5 shrink-0" /> 
+                    <LogOut className="w-4 h-4 shrink-0" /> 
                     <span>Keluar</span>
                   </Button>
                 </div>
               </div>
               
-              <div className="space-y-3.5">
-                {/* Hero Identity: Logo Pangkat Seukuran Font Nama (Tanpa Background Hitam), Title di Bawah Nama, Username di Bawah Title */}
-                <div className="pt-1">
-                  {/* Baris 1: Logo Pangkat + Nama Lengkap */}
-                  <div className="flex items-center gap-2 flex-wrap">
+              <div className="space-y-4">
+                {/* Hero Identity: Logo Pangkat + Nama Lengkap + Status Aktif */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                  <div className="flex items-center gap-3 flex-wrap">
                     {/* Rank icon: show GM for devs, real rank otherwise */}
                     <div className="relative inline-flex shrink-0">
                       {loadingGamification && !gamificationData ? (
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-slate-300/40 dark:bg-slate-700/40 animate-pulse flex items-center justify-center">
-                          <Trophy className="w-3.5 h-3.5 text-slate-400" />
+                        <div className="w-8 h-8 rounded-xl bg-slate-300/40 dark:bg-slate-700/40 animate-pulse flex items-center justify-center">
+                          <Trophy className="w-4 h-4 text-slate-400" />
                         </div>
                       ) : (
                         <img 
                           src={rankInfo?.currentRank?.icon || '/assets/ranks/rank_01_trainee.svg'} 
                           alt={rankInfo?.currentRank?.name || 'Pangkat'}
-                          className="w-6 h-6 sm:w-7 sm:h-7 object-contain inline-block shrink-0 filter drop-shadow-sm cursor-pointer hover:scale-110 transition-transform"
+                          className="w-8 h-8 sm:w-9 sm:h-9 object-contain inline-block shrink-0 filter drop-shadow-sm cursor-pointer hover:scale-110 transition-transform"
                           title={`Pangkat Kehormatan: #${rankInfo?.currentRank?.id || 1} ${rankInfo?.currentRank?.name || 'Trainee'} (Klik untuk buka Hall of Fame)`}
                           onClick={() => {
                             onBack();
@@ -957,23 +965,32 @@ export function ProfilePage({
                         />
                       )}
                     </div>
-                    <h2 className="text-lg sm:text-2xl font-display font-bold tracking-tight text-[var(--text-main)] leading-snug break-words">
-                      {inspectorName}
-                    </h2>
+                    <div>
+                      <h2 className="text-xl sm:text-2xl lg:text-3xl font-display font-bold tracking-tight text-[var(--text-main)] leading-snug">
+                        {inspectorName}
+                      </h2>
+                    </div>
                   </div>
 
-                  {/* Baris 2: Title Kehormatan di Bawah Nama */}
-                  <div className="mt-1.5">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-bold shadow-2xs w-fit">
-                      <Award className="w-3 h-3 text-amber-500 shrink-0" />
-                      <span>[{activeMilitaryTitle}]</span>
+                  {/* Status Aktif */}
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-2xs">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                      Personil Aktif
                     </span>
                   </div>
+                </div>
 
-                  {/* Baris 3: Username / Callsign di Bawah Title */}
-                  <div className="flex items-center gap-2 mt-1.5">
+                {/* Baris 2: Title Kehormatan & Callsign */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold shadow-2xs">
+                    <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span>[{activeMilitaryTitle}]</span>
+                  </span>
+
+                  <div className="flex items-center gap-2">
                     <span 
-                      className="text-xs font-mono font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 w-fit"
+                      className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5"
                       style={{
                         backgroundColor: 'var(--input-bg, rgba(42, 157, 143, 0.1))',
                         borderColor: 'var(--border-main, #E2E8F0)',
@@ -1000,23 +1017,18 @@ export function ProfilePage({
                     {loadingGamification && !gamificationData ? 'Memuat Pangkat...' : (isDevUser ? '🛡️ Game Master' : (rankInfo?.currentRank?.name || 'Trainee'))}
                   </span>
 
-                  <span className="inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/25 font-mono whitespace-nowrap">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/25 font-mono whitespace-nowrap">
                     {loadingGamification && !gamificationData ? 'SYNC...' : (isDevUser ? 'DEVELOPER' : (rankInfo?.currentRank?.tierGroup || rankInfo?.currentRank?.tier || 'BRONZE'))}
                   </span>
 
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--border-main)] whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--border-main)] whitespace-nowrap">
                     <Building className="w-3.5 h-3.5 text-teal-500 shrink-0" />
                     {myRosterData?.pt || profile?.pt || 'TBP'} · {myRosterData?.section || profile?.section || 'Prep-Lab'}
                   </span>
 
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono font-medium bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] whitespace-nowrap">
-                    <Hash className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
-                    {inspectorNik || '-'}
-                  </span>
-
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 whitespace-nowrap">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                    Aktif
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] whitespace-nowrap">
+                    <Hash className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
+                    NIK: {inspectorNik || '-'}
                   </span>
                 </div>
 
@@ -1111,171 +1123,54 @@ export function ProfilePage({
 
           </Card>
 
-          {/* Card Showcase Prestasi & Medali Kehormatan */}
-          <Card 
-            className="p-5 sm:p-6 shadow-md space-y-4 border"
-            style={{
-              backgroundColor: 'var(--card-bg, #FFFFFF)',
-              borderColor: 'var(--border-main, #E2E8F0)'
-            }}
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3.5" style={{ borderColor: 'var(--border-main)' }}>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                    <Medal className="w-4 h-4" />
-                  </span>
-                  <h3 className="font-bold text-sm sm:text-base font-display text-[var(--text-main)]">
-                    Etalase Medali &amp; Prestasi Kehormatan
-                  </h3>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold">
-                    {earnedBranches.length}/{TIERED_ACHIEVEMENTS.length} Terbuka
-                  </span>
-                </div>
-                <p className="text-xs text-[var(--text-muted)] mt-1">
-                  Koleksi medali operasional dengan ketebalan border &amp; efek aura sesuai tingkatan kelas (Bronze 2px · Silver 3px · Gold 4px · Master 5px).
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  onBack();
-                  window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
-                }}
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer self-start sm:self-auto"
-              >
-                <span>Jelajahi 12 Cabang Lengkap</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {earnedBranches.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
-                {earnedBranches.map(({ branch, currentCount, progressInfo, tierStyle }) => (
-                  <div
-                    key={branch.id}
-                    onClick={() => {
-                      onBack();
-                      window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
-                    }}
-                    className={`p-4 rounded-2xl ${tierStyle.cardBorder} ${tierStyle.cardShadow} relative overflow-hidden flex flex-col justify-between cursor-pointer hover:scale-[1.02] transition-all bg-[var(--card-bg)]`}
-                  >
-                    {/* Ambient glow in corner */}
-                    <div className={`absolute -top-10 -right-10 w-28 h-28 bg-gradient-to-bl ${tierStyle.cardGlowAura} rounded-full blur-xl pointer-events-none`} />
-
-                    <div>
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className={`w-11 h-11 rounded-xl ${tierStyle.iconRing} flex items-center justify-center text-xl shadow-sm shrink-0`}>
-                          {branch.icon}
-                        </div>
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span className={`text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full ${tierStyle.badgePill} flex items-center gap-1`}>
-                            <span>{tierStyle.badgeEmoji}</span>
-                            <span>{tierStyle.tierName}</span>
-                          </span>
-                          <span className="text-[9px] font-mono text-[var(--text-muted)] font-bold">
-                            Tebal {tierStyle.borderThicknessPx}px · {tierStyle.metalLabel}
-                          </span>
-                        </div>
-                      </div>
-
-                      <h4 className="font-bold text-xs sm:text-sm font-display text-[var(--text-main)]">
-                        {branch.name}
-                      </h4>
-                      <p className="text-[11px] text-[var(--text-muted)] line-clamp-1 mt-0.5">
-                        {branch.description}
-                      </p>
-                    </div>
-
-                    <div className="pt-2.5 mt-2.5 border-t border-[var(--border-main)]/50 space-y-1.5 relative z-10">
-                      <div className="flex items-center justify-between text-[10px]">
-                        <span className="text-[var(--text-muted)]">Progres</span>
-                        <span className="font-bold text-[var(--text-main)] font-mono">{currentCount} / {progressInfo.targetCount} {branch.unit}</span>
-                      </div>
-                      <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full bg-gradient-to-r ${tierStyle.progressBarGradient}`}
-                          style={{ width: `${progressInfo.progressPercent}%` }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] pt-0.5">
-                        <span className="text-[var(--text-muted)]">Gelar:</span>
-                        <span className="font-bold text-amber-600 dark:text-amber-400 truncate max-w-[140px]">
-                          [{progressInfo.currentTier?.titleReward}]
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-6 rounded-2xl border border-dashed border-amber-500/30 bg-amber-500/5 text-center space-y-2">
-                <Sparkles className="w-8 h-8 text-amber-500 mx-auto" />
-                <p className="text-sm font-bold text-[var(--text-main)]">Belum Ada Medali Yang Terbuka</p>
-                <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto">
-                  Lakukan inspeksi, laporkan KTA, buat tema, atau ikuti briefing P5M untuk membuka achievement kelas Bronze, Silver, Gold, hingga Master!
-                </p>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    onBack();
-                    window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
-                  }}
-                  className="mt-2 text-xs font-bold cursor-pointer"
-                >
-                  Jelajahi 12 Cabang Achievement
-                </Button>
-              </div>
-            )}
-          </Card>
-
-          {profile && (
-            <div className="space-y-4">
+          {/* Main Dossier Content: Responsive 2-Column Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Column (5 of 12): HR, Employment & Roster Info */}
+            <div className="lg:col-span-5 space-y-6">
               {/* Card Informasi Pekerjaan */}
               <Card 
-                className="p-5 shadow-xs space-y-4 border"
+                className="p-5 sm:p-6 shadow-xs space-y-4 border"
                 style={{
                   backgroundColor: 'var(--card-bg, #FFFFFF)',
                   borderColor: 'var(--border-main, #E2E8F0)'
                 }}
               >
                 <h3 
-                  className="font-bold text-sm flex items-center gap-2 border-b pb-3"
+                  className="font-bold text-sm sm:text-base flex items-center gap-2 border-b pb-3 font-display"
                   style={{
                     color: 'var(--text-main, #1E293B)',
                     borderColor: 'var(--border-main, #E2E8F0)'
                   }}
                 >
-                  <UserCircle2 className="w-4 h-4" style={{ color: 'var(--primary, #2A9D8F)' }} />
+                  <UserCircle2 className="w-4 h-4 text-teal-600" />
                   Informasi Pekerjaan
                 </h3>
                 <div className="space-y-3.5 pt-1">
-                  <InfoItem icon={<Briefcase />} label="Jabatan" value={profile.jabatan} />
-                  <InfoItem icon={<Users />} label="Section" value={profile.section} />
-                  <InfoItem icon={<Building />} label="Perusahaan" value={profile.pt} />
-                  <InfoItem icon={<Hash />} label="Job Grade / Gol" value={profile.jobGrade && profile.gol ? `${profile.jobGrade} / ${profile.gol}` : (profile.jobGrade || profile.gol)} />
-                  <InfoItem icon={<MapPin />} label="Point of Hire (POH)" value={profile.poh} />
+                  <InfoItem icon={<Briefcase />} label="Jabatan" value={profile?.jabatan || myRosterData?.jabatan} />
+                  <InfoItem icon={<Users />} label="Section" value={profile?.section || myRosterData?.section} />
+                  <InfoItem icon={<Building />} label="Perusahaan" value={profile?.pt || myRosterData?.pt} />
+                  <InfoItem icon={<Hash />} label="Job Grade / Gol" value={profile?.jobGrade && profile?.gol ? `${profile.jobGrade} / ${profile.gol}` : (profile?.jobGrade || profile?.gol || myRosterData?.gol)} />
+                  <InfoItem icon={<MapPin />} label="Point of Hire (POH)" value={profile?.poh || myRosterData?.poh} />
                 </div>
               </Card>
 
               {/* Card Informasi Cuti & Roster */}
               <Card 
-                className="p-5 shadow-xs flex flex-col border"
+                className="p-5 sm:p-6 shadow-xs flex flex-col border"
                 style={{
                   backgroundColor: 'var(--card-bg, #FFFFFF)',
                   borderColor: 'var(--border-main, #E2E8F0)'
                 }}
               >
                 <h3 
-                  className="font-bold text-sm flex items-center gap-2 border-b pb-3 mb-4"
+                  className="font-bold text-sm sm:text-base flex items-center gap-2 border-b pb-3 mb-4 font-display"
                   style={{
                     color: 'var(--text-main, #1E293B)',
                     borderColor: 'var(--border-main, #E2E8F0)'
                   }}
                 >
-                  <Plane className="w-4 h-4" style={{ color: 'var(--primary, #2A9D8F)' }} />
-                  Informasi Cuti & Roster
+                  <Plane className="w-4 h-4 text-teal-600" />
+                  Informasi Cuti &amp; Roster
                 </h3>
                 
                 <div className="flex-1 flex flex-col gap-3.5">
@@ -1297,7 +1192,7 @@ export function ProfilePage({
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-[10px] sm:text-[11px] uppercase font-extrabold tracking-wider flex items-center gap-1.5" style={{ color: 'var(--primary, #2A9D8F)' }}>
                             <Plane className="w-3.5 h-3.5" />
-                            Sisa CT & Jatuh Tempo Cuti Tahunan
+                            Sisa CT &amp; Jatuh Tempo Cuti
                           </p>
                           <span 
                             className="text-[9px] font-extrabold px-2.5 py-0.5 rounded-full border shrink-0 shadow-2xs"
@@ -1337,7 +1232,7 @@ export function ProfilePage({
                             <span className="text-[10px] font-extrabold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-muted, #64748B)' }}>
                               Jatuh Tempo CT
                             </span>
-                            <p className="text-sm sm:text-base font-black" style={{ color: 'var(--text-main, #1E293B)' }}>
+                            <p className="text-sm sm:text-base font-black truncate" style={{ color: 'var(--text-main, #1E293B)' }}>
                               {profile?.jatuhTempoCt || myRosterData?.jatuh_tempo_ct || myRosterData?.jatuhTempoCt || '-'}
                             </p>
                           </div>
@@ -1414,7 +1309,129 @@ export function ProfilePage({
                 </div>
               </Card>
             </div>
-          )}
+
+            {/* Right Column (7 of 12): Achievements & Honor Medals Showcase */}
+            <div className="lg:col-span-7 space-y-6">
+              {/* Card Showcase Prestasi & Medali Kehormatan */}
+              <Card 
+                className="p-5 sm:p-6 shadow-md space-y-4 border"
+                style={{
+                  backgroundColor: 'var(--card-bg, #FFFFFF)',
+                  borderColor: 'var(--border-main, #E2E8F0)'
+                }}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3.5" style={{ borderColor: 'var(--border-main)' }}>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                        <Medal className="w-4 h-4" />
+                      </span>
+                      <h3 className="font-bold text-sm sm:text-base font-display text-[var(--text-main)]">
+                        Etalase Medali &amp; Prestasi Kehormatan
+                      </h3>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold">
+                        {earnedBranches.length}/{TIERED_ACHIEVEMENTS.length} Terbuka
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">
+                      Koleksi medali operasional dengan ketebalan border &amp; efek aura sesuai tingkatan kelas (Bronze 2px · Silver 3px · Gold 4px · Master 5px).
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onBack();
+                      window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer self-start sm:self-auto shrink-0"
+                  >
+                    <span>Jelajahi 12 Cabang Lengkap</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {earnedBranches.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                    {earnedBranches.map(({ branch, currentCount, progressInfo, tierStyle }) => (
+                      <div
+                        key={branch.id}
+                        onClick={() => {
+                          onBack();
+                          window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
+                        }}
+                        className={`p-4 rounded-2xl ${tierStyle.cardBorder} ${tierStyle.cardShadow} relative overflow-hidden flex flex-col justify-between cursor-pointer hover:scale-[1.02] transition-all bg-[var(--card-bg)]`}
+                      >
+                        {/* Ambient glow in corner */}
+                        <div className={`absolute -top-10 -right-10 w-28 h-28 bg-gradient-to-bl ${tierStyle.cardGlowAura} rounded-full blur-xl pointer-events-none`} />
+
+                        <div>
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className={`w-11 h-11 rounded-xl ${tierStyle.iconRing} flex items-center justify-center text-xl shadow-sm shrink-0`}>
+                              {branch.icon}
+                            </div>
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className={`text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full ${tierStyle.badgePill} flex items-center gap-1`}>
+                                <span>{tierStyle.badgeEmoji}</span>
+                                <span>{tierStyle.tierName}</span>
+                              </span>
+                              <span className="text-[9px] font-mono text-[var(--text-muted)] font-bold">
+                                Tebal {tierStyle.borderThicknessPx}px · {tierStyle.metalLabel}
+                              </span>
+                            </div>
+                          </div>
+
+                          <h4 className="font-bold text-xs sm:text-sm font-display text-[var(--text-main)]">
+                            {branch.name}
+                          </h4>
+                          <p className="text-[11px] text-[var(--text-muted)] line-clamp-1 mt-0.5">
+                            {branch.description}
+                          </p>
+                        </div>
+
+                        <div className="pt-2.5 mt-2.5 border-t border-[var(--border-main)]/50 space-y-1.5 relative z-10">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-[var(--text-muted)]">Progres</span>
+                            <span className="font-bold text-[var(--text-main)] font-mono">{currentCount} / {progressInfo.targetCount} {branch.unit}</span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full bg-gradient-to-r ${tierStyle.progressBarGradient}`}
+                              style={{ width: `${progressInfo.progressPercent}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] pt-0.5">
+                            <span className="text-[var(--text-muted)]">Gelar:</span>
+                            <span className="font-bold text-amber-600 dark:text-amber-400 truncate max-w-[140px]">
+                              [{progressInfo.currentTier?.titleReward}]
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-6 rounded-2xl border border-dashed border-amber-500/30 bg-amber-500/5 text-center space-y-2">
+                    <Sparkles className="w-8 h-8 text-amber-500 mx-auto" />
+                    <p className="text-sm font-bold text-[var(--text-main)]">Belum Ada Medali Yang Terbuka</p>
+                    <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto">
+                      Lakukan inspeksi, laporkan KTA, buat tema, atau ikuti briefing P5M untuk membuka achievement kelas Bronze, Silver, Gold, hingga Master!
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        onBack();
+                        window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
+                      }}
+                      className="mt-2 text-xs font-bold cursor-pointer"
+                    >
+                      Jelajahi 12 Cabang Achievement
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </div>
+          </div>
         </div>
       </motion.div>
 
