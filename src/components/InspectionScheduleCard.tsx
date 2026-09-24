@@ -1178,34 +1178,6 @@ export function InspectionScheduleCard({
                     </div>
                   </div>
 
-<<<<<<< HEAD
-                  {isTransitionFromCuti ? (
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30 flex items-center gap-1 shadow-2xs">
-                      <span>✓</span> Bebas Tugas (Transisi Cuti)
-                    </span>
-                  ) : isUserCuti ? (
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 flex items-center gap-1 shadow-2xs">
-                      <span>🏖️</span> Bebas Tugas (Cuti)
-                    </span>
-                  ) : mySchedule?.isCompleted ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Selesai
-                    </span>
-                  ) : hasSsProof ? (
-                    <button
-                      type="button"
-                      onClick={handleViewSsProof}
-                      className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 border border-emerald-500/30 flex items-center gap-1 cursor-pointer transition-colors"
-                      title="Klik untuk melihat bukti screenshot"
-                    >
-                      <Check className="w-3 h-3" /> Bukti SS
-                    </button>
-                  ) : (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30">
-                      Belum Selesai
-                    </span>
-                  )}
-=======
                   <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
                     {isTransitionFromCuti ? (
                       <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30 flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
@@ -1220,16 +1192,20 @@ export function InspectionScheduleCard({
                         <Check className="w-3 h-3" /> Selesai
                       </span>
                     ) : hasSsProof ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleViewSsProof}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 border border-emerald-500/30 flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap shrink-0"
+                        title="Klik untuk melihat bukti screenshot"
+                      >
                         <Check className="w-3 h-3" /> Bukti SS
-                      </span>
+                      </button>
                     ) : (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30 whitespace-nowrap shrink-0">
                         Belum Selesai
                       </span>
                     )}
                   </div>
->>>>>>> 1cd097a (feat: live database leadership dashboard, P5M module for lab home, and ethical 10-role simulation)
                 </div>
 
                 {/* Body Details */}
@@ -1389,7 +1365,25 @@ export function InspectionScheduleCard({
                         <Download className="w-3 h-3" /> Unduh PDF
                       </button>
                     )}
-<<<<<<< HEAD
+                    {hasSsProof && ssProofUrl && (
+                      <div
+                        onClick={handleViewSsProof}
+                        className="w-7 h-7 rounded-lg overflow-hidden border border-emerald-500/40 cursor-pointer hover:scale-110 transition-transform shrink-0 shadow-2xs"
+                        title="Klik untuk memperbesar screenshot bukti inspeksi"
+                      >
+                        <img
+                          src={formatKtaImageUrl(ssProofUrl)}
+                          alt="Thumbnail SS"
+                          onError={(e) => {
+                            const driveMatch = ssProofUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || ssProofUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                            if (driveMatch && !e.currentTarget.src.includes('uc?export=view')) {
+                              e.currentTarget.src = `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+                            }
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
                     {hasSsProof ? (
                       <button
                         type="button"
@@ -1411,38 +1405,6 @@ export function InspectionScheduleCard({
                         <span>Bukti SS</span>
                       </button>
                     )}
-=======
-                    {hasSsProof && ssProofUrl && (
-                      <div
-                        onClick={() => setLightboxUrl(ssProofUrl)}
-                        className="w-7 h-7 rounded-lg overflow-hidden border border-emerald-500/40 cursor-pointer hover:scale-110 transition-transform shrink-0 shadow-2xs"
-                        title="Klik untuk memperbesar screenshot bukti inspeksi"
-                      >
-                        <img
-                          src={formatKtaImageUrl(ssProofUrl)}
-                          alt="Thumbnail SS"
-                          onError={(e) => {
-                            const driveMatch = ssProofUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || ssProofUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-                            if (driveMatch && !e.currentTarget.src.includes('uc?export=view')) {
-                              e.currentTarget.src = `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
-                            }
-                          }}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (hasSsProof && ssProofUrl) setLightboxUrl(ssProofUrl);
-                        else setShowSsModal(true);
-                      }}
-                      className="py-1.5 px-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold hover:bg-emerald-500/20 transition-colors cursor-pointer flex items-center gap-1"
-                    >
-                      <Eye className="w-3 h-3 text-emerald-600" />
-                      <span>{hasSsProof ? 'Lihat Bukti SS' : 'Bukti SS'}</span>
-                    </button>
->>>>>>> 1cd097a (feat: live database leadership dashboard, P5M module for lab home, and ethical 10-role simulation)
                     <button
                       type="button"
                       onClick={handleStartInspection}
