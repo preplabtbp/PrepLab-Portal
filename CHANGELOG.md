@@ -15,12 +15,16 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - **Adopsi Tema Sistem Portal**: Menggunakan variabel CSS tema portal (`var(--input-bg)`, `var(--card-bg)`, `var(--border-main)`, `var(--text-main)`) sehingga otomatis beradaptasi dengan mode gelap dan terang tanpa tabrakan warna latar belakang.
   - **Bilah Alat (Toolbar) Terintegrasi**: Bilah pemformatan teks (*Bold*, *Italic*, *+ Tasklist*, *Bullet Point*) dan tombol aksi (*Batal*, *Terapkan*) tersusun rapi di dalam ruang sel dengan pintasan keyboard praktis `Ctrl+Enter` untuk menyimpan dan `Escape` untuk batal.
 
-- **Manajemen Kolom Dinamis (Tambah & Hapus Kolom) (`src/components/NotionDatabaseTable.tsx`)**:
-  - **Hapus Kolom Cepat**: Header kolom tabel non-utama kini dilengkapi tombol hapus (`X`) dengan konfirmasi cepat untuk membuang kolom yang tidak relevan bagi tim.
-  - **Tambah Kolom dari Template & Kustom**: Ditambahkan tombol `+` di ujung header tabel yang menampilkan menu popover interaktif untuk menambahkan kolom baru:
-    - *Template Kolom Populer*: Status, Priority, PIC, Activity, Deadline, Period, Lokasi, Departemen, Catatan, Biaya.
-    - *Kolom Kustom*: Input bebas untuk menentukan nama kolom baru sesuai kebutuhan operasional.
-  - **Serialisasi Markdown Otomatis**: Kolom baru maupun kolom yang dihapus secara otomatis disinkronisasikan dan disimpan ke format tabel Markdown saat pengguna menekan tombol *Simpan Perubahan*.
+- **Hierarki Urutan Kolom Standar Notion & Fitur Reordering Kolom (`src/components/NotionDatabaseTable.tsx`)**:
+  - **Penataan Kolom Terstruktur (Canonical Notion Layout)**: Mengatasi susunan kolom mentah acak dari dokumen markdown dengan algoritma canonical weighting: Kolom *Nomor (#)* selalu berada di indeks paling awal, diikuti *Jenis Kegiatan (Judul)*, *Keterangan/Tasklist*, *PIC*, *Status*, *Priority*, *Aktivitas*, *Target Selesai*, *Aktual Selesai*, *Period*, *Group/Kategori*, kolom kustom, dan diakhiri oleh *Created Time*.
+  - **Kontrol Geser Kolom Interaktif**: Ditambahkan tombol geser ke kiri (`<`) dan ke kanan (`>`) pada setiap header kolom saat di-hover sehingga personil dapat menyesuaikan posisi kolom tabel secara fleksibel.
+  - **Tombol "Rapikan Kolom" Sekali Klik**: Ditambahkan tombol aksi cepat *Rapikan Kolom* pada bilah filter untuk langsung merestorasi seluruh susunan kolom ke standar hierarki Notion.
+
+- **Eliminasi Efek Transparan Dropdown via React Portal & Solid Palette (`src/components/notion/NotionDropdownCell.tsx`)**:
+  - **Penyebab Masalah**: Elemen baris tabel berikutnya (`<tr>`) secara alami memiliki stacking context CSS yang saling menumpuk, menyebabkan tombol dari baris bawah terlukis di atas menu dropdown baris atasnya sehingga tampak "tembus pandang" / transparan. Ditambah teks `text-slate-300` yang kehilangan kontras pada tema terang.
+  - **Rendering Bebas Stacking via `createPortal`**: Popover menu dropdown kini dirender langsung ke `document.body` menggunakan `createPortal` dengan koordinat `fixed` presisi dari tombol pemicu dan `z-index: 99999`, sehingga tidak pernah tertimpa atau terpotong oleh baris dan kontainer tabel.
+  - **Desain Kartu Solid & Kontras Tinggi**: Menghapus efek `backdrop-blur` semi-transparan dan menerapkan latar belakang solid opaque `var(--card-bg, #ffffff)` dengan teks kontras tinggi `var(--text-main)` yang adaptif di mode terang maupun gelap.
+  - **Penyesuaian Posisi Cerdas**: Menu otomatis membuka ke atas jika ruang vertikal di bawah tombol tidak mencukupi, serta tertutup otomatis saat jendela digulir (*on-scroll auto close*).
 
 ## [2.9.28] - 2026-09-25
 

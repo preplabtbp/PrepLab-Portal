@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   ChevronDown, 
   Check, 
@@ -6,8 +7,7 @@ import {
   AlertCircle, 
   CheckCircle2, 
   AlertTriangle,
-  RotateCcw,
-  Sparkles
+  RotateCcw
 } from 'lucide-react';
 
 export type DropdownType = 'status' | 'activity' | 'priority' | 'period';
@@ -23,38 +23,38 @@ const STATUS_OPTIONS: DropdownOption[] = [
   {
     value: 'Open',
     label: 'Open',
-    badgeClass: 'bg-blue-500/15 text-blue-400 border-blue-500/40 hover:bg-blue-500/25',
-    icon: <Clock className="w-2.5 h-2.5 text-blue-400" />
+    badgeClass: 'bg-blue-500/15 text-blue-500 dark:text-blue-400 border-blue-500/40 hover:bg-blue-500/25',
+    icon: <Clock className="w-2.5 h-2.5 text-blue-500 dark:text-blue-400" />
   },
   {
     value: 'In Progress',
     label: 'In Progress',
-    badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/40 hover:bg-amber-500/25',
-    icon: <RotateCcw className="w-2.5 h-2.5 text-amber-400 animate-spin-slow" />
+    badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25',
+    icon: <RotateCcw className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
   },
   {
     value: 'Resolved',
     label: 'Resolved',
-    badgeClass: 'bg-teal-500/15 text-teal-400 border-teal-500/40 hover:bg-teal-500/25',
-    icon: <CheckCircle2 className="w-2.5 h-2.5 text-teal-400" />
+    badgeClass: 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/40 hover:bg-teal-500/25',
+    icon: <CheckCircle2 className="w-2.5 h-2.5 text-teal-600 dark:text-teal-400" />
   },
   {
     value: 'Closed',
     label: 'Closed',
-    badgeClass: 'bg-purple-500/15 text-purple-400 border-purple-500/40 hover:bg-purple-500/25',
-    icon: <Check className="w-2.5 h-2.5 text-purple-400" />
+    badgeClass: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/40 hover:bg-purple-500/25',
+    icon: <Check className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400" />
   },
   {
     value: 'Done',
     label: 'Done',
-    badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25',
-    icon: <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
+    badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25',
+    icon: <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
   },
   {
     value: 'Cancelled',
     label: 'Cancelled',
-    badgeClass: 'bg-rose-500/15 text-rose-400 border-rose-500/40 hover:bg-rose-500/25',
-    icon: <AlertCircle className="w-2.5 h-2.5 text-rose-400" />
+    badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/40 hover:bg-rose-500/25',
+    icon: <AlertCircle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" />
   }
 ];
 
@@ -62,22 +62,22 @@ const ACTIVITY_OPTIONS: DropdownOption[] = [
   {
     value: 'Routine',
     label: 'Routine',
-    badgeClass: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/25'
+    badgeClass: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/25'
   },
   {
     value: 'Non Routine',
     label: 'Non Routine',
-    badgeClass: 'bg-purple-500/15 text-purple-400 border-purple-500/40 hover:bg-purple-500/25'
+    badgeClass: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/40 hover:bg-purple-500/25'
   },
   {
     value: 'Periodic',
     label: 'Periodic',
-    badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
+    badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
   },
   {
     value: 'Special Task',
     label: 'Special Task',
-    badgeClass: 'bg-rose-500/15 text-rose-400 border-rose-500/40 hover:bg-rose-500/25'
+    badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/40 hover:bg-rose-500/25'
   }
 ];
 
@@ -85,39 +85,39 @@ const PRIORITY_OPTIONS: DropdownOption[] = [
   {
     value: 'Low',
     label: 'Low',
-    badgeClass: 'bg-slate-500/15 text-slate-400 border-slate-500/40 hover:bg-slate-500/25'
+    badgeClass: 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/40 hover:bg-slate-500/25'
   },
   {
     value: 'Normal',
     label: 'Normal',
-    badgeClass: 'bg-teal-500/15 text-teal-400 border-teal-500/40 hover:bg-teal-500/25'
+    badgeClass: 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/40 hover:bg-teal-500/25'
   },
   {
     value: 'Medium',
     label: 'Medium',
-    badgeClass: 'bg-blue-500/15 text-blue-400 border-blue-500/40 hover:bg-blue-500/25'
+    badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/40 hover:bg-blue-500/25'
   },
   {
     value: 'High',
     label: 'High',
-    badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/40 hover:bg-amber-500/25',
-    icon: <AlertTriangle className="w-2.5 h-2.5 text-amber-400" />
+    badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25',
+    icon: <AlertTriangle className="w-2.5 h-2.5 text-amber-500 dark:text-amber-400" />
   },
   {
     value: 'Urgent',
     label: 'Urgent',
-    badgeClass: 'bg-rose-500/20 text-rose-400 border-rose-500/50 hover:bg-rose-500/30 animate-pulse',
-    icon: <AlertCircle className="w-2.5 h-2.5 text-rose-400" />
+    badgeClass: 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/50 hover:bg-rose-500/30 font-bold',
+    icon: <AlertCircle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" />
   }
 ];
 
 const PERIOD_OPTIONS: DropdownOption[] = [
-  { value: 'Daily', label: 'Daily', badgeClass: 'bg-slate-800 text-slate-300 border-slate-700' },
-  { value: 'Weekly', label: 'Weekly', badgeClass: 'bg-slate-800 text-slate-300 border-slate-700' },
-  { value: 'Monthly', label: 'Monthly', badgeClass: 'bg-slate-800 text-slate-300 border-slate-700' },
-  { value: 'Quarterly', label: 'Quarterly', badgeClass: 'bg-slate-800 text-slate-300 border-slate-700' },
-  { value: 'Yearly', label: 'Yearly', badgeClass: 'bg-slate-800 text-slate-300 border-slate-700' },
-  { value: 'Ad-hoc', label: 'Ad-hoc', badgeClass: 'bg-slate-800 text-slate-300 border-slate-700' }
+  { value: 'Daily', label: 'Daily', badgeClass: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700' },
+  { value: 'Weekly', label: 'Weekly', badgeClass: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700' },
+  { value: 'Monthly', label: 'Monthly', badgeClass: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700' },
+  { value: 'Quarterly', label: 'Quarterly', badgeClass: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700' },
+  { value: 'Yearly', label: 'Yearly', badgeClass: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700' },
+  { value: 'Ad-hoc', label: 'Ad-hoc', badgeClass: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700' }
 ];
 
 interface NotionDropdownCellProps {
@@ -134,7 +134,9 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
   compact = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ top: number; left: number; openUpwards: boolean } | null>(null);
 
   const options = 
     type === 'status' ? STATUS_OPTIONS :
@@ -148,20 +150,60 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
   ) || {
     value: value || '-',
     label: value || '-',
-    badgeClass: 'bg-slate-800/80 text-slate-400 border-slate-700 hover:bg-slate-800'
+    badgeClass: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 hover:bg-slate-500/20'
   };
 
-  // Close dropdown when clicking outside
+  // Update fixed portal position based on button coordinates
+  const updatePosition = () => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const anticipatedMenuHeight = 240;
+    const openUpwards = (rect.bottom + anticipatedMenuHeight) > window.innerHeight && rect.top > anticipatedMenuHeight;
+
+    setPosition({
+      top: openUpwards ? (rect.top - 6) : (rect.bottom + 6),
+      left: Math.max(8, Math.min(window.innerWidth - 170, rect.left)),
+      openUpwards
+    });
+  };
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isOpen) {
+      updatePosition();
+      setIsOpen(true);
+    } else {
+      setIsOpen(false);
+    }
+  };
+
+  // Close dropdown on outside click or window resize/scroll
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        buttonRef.current && !buttonRef.current.contains(target) &&
+        menuRef.current && !menuRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+
+    const handleScrollOrResize = () => {
+      setIsOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('resize', handleScrollOrResize);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+    };
   }, [isOpen]);
 
   const handleSelect = (val: string, e: React.MouseEvent) => {
@@ -171,13 +213,11 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
   };
 
   return (
-    <div className="relative inline-block" ref={containerRef}>
+    <div className="inline-block">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
+        onClick={handleToggle}
         title="Klik untuk ubah langsung"
         className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-medium transition-all group/btn cursor-pointer ${currentOpt.badgeClass} ${
           compact ? 'text-[10px] px-1.5 py-0.2' : ''
@@ -188,20 +228,36 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
         <ChevronDown className="w-2.5 h-2.5 opacity-60 group-hover/btn:opacity-100 group-hover/btn:translate-y-0.2 transition-all shrink-0" />
       </button>
 
-      {/* Popover Menu */}
-      {isOpen && (
+      {/* Popover Menu Rendered in Body via React Portal (Never Covered by Sibling Rows, 100% Solid) */}
+      {isOpen && position && createPortal(
         <div
+          ref={menuRef}
           onClick={(e) => e.stopPropagation()}
-          className="absolute z-50 mt-1 min-w-[140px] rounded-xl shadow-2xl border p-1 bg-slate-900 border-slate-700/80 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 font-sans"
+          className="fixed rounded-xl border p-1 font-sans animate-in fade-in zoom-in-95 duration-100"
           style={{
-            backgroundColor: 'var(--card-bg, #1a1a1a)',
-            borderColor: 'var(--border-main, #334155)',
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)'
+            top: position.openUpwards ? undefined : `${position.top}px`,
+            bottom: position.openUpwards ? `${window.innerHeight - position.top}px` : undefined,
+            left: `${position.left}px`,
+            minWidth: '150px',
+            maxWidth: '220px',
+            zIndex: 99999,
+            backgroundColor: 'var(--card-bg, #ffffff)',
+            borderColor: 'var(--border-main, #cbd5e1)',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.15)'
           }}
         >
-          <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 border-b border-slate-800 mb-1">
+          {/* Header Title */}
+          <div 
+            className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider border-b mb-1 font-bold"
+            style={{
+              borderColor: 'var(--border-main, #e2e8f0)',
+              color: 'var(--text-muted, #64748b)'
+            }}
+          >
             Pilih {type}
           </div>
+
+          {/* Options List */}
           <div className="space-y-0.5">
             {options.map((opt) => {
               const isSelected = opt.value.toLowerCase() === currentValLower;
@@ -210,20 +266,26 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
                   key={opt.value}
                   type="button"
                   onClick={(e) => handleSelect(opt.value, e)}
-                  className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer ${
-                    isSelected ? 'bg-teal-500/20 text-teal-300 font-semibold' : 'text-slate-300 hover:bg-slate-800'
+                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer ${
+                    isSelected 
+                      ? 'bg-teal-500/15 text-teal-600 dark:text-teal-300 font-bold' 
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
+                  style={{
+                    color: isSelected ? undefined : 'var(--text-main, #0f172a)'
+                  }}
                 >
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
                     {opt.icon}
-                    <span>{opt.label}</span>
+                    <span className="font-medium">{opt.label}</span>
                   </div>
-                  {isSelected && <Check className="w-3 h-3 text-teal-400 shrink-0" />}
+                  {isSelected && <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />}
                 </button>
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

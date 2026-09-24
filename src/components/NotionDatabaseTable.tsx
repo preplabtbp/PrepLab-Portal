@@ -47,7 +47,8 @@ import {
   Upload,
   Reply,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -592,30 +593,61 @@ export function NotionDatabaseTable({
     { name: 'Estimasi Biaya', icon: '💰', defaultValue: '-', desc: 'Anggaran atau estimasi biaya (opsional)' },
   ];
 
-  // Dynamic Table Headers State (Allows Adding & Deleting Columns)
-  const [tableHeaders, setTableHeaders] = useState<string[]>(() => {
-    if (headers && headers.length > 0) {
-      return headers;
+  // Helper to establish logical Notion canonical order for database columns
+  const normalizeAndOrderHeaders = useCallback((inputHeaders: string[]): string[] => {
+    if (!inputHeaders || inputHeaders.length === 0) {
+      return [
+        'number',
+        'Jenis kegiatan',
+        'Keterangan',
+        'PIC',
+        'Status',
+        'Priority',
+        'Activity (routine/non routine)',
+        'period',
+        'Created Time'
+      ];
     }
-    return [
-      'number',
-      'Jenis kegiatan',
-      'Keterangan',
-      'PIC',
-      'Priority',
-      'Status',
-      'Created Time',
-      'Kategori',
-      'Activity (routine/non routine)',
-      'period'
-    ];
+
+    // Ensure 'number' exists
+    const hasNumber = inputHeaders.some(h => {
+      const l = h.toLowerCase().trim();
+      return l === 'number' || l === 'no' || l === 'no.' || l === '#';
+    });
+
+    const headersWithNumber = hasNumber ? inputHeaders : ['number', ...inputHeaders];
+
+    // Priority ordering weight for clean Notion standard layout
+    const getColOrder = (colName: string): number => {
+      const l = colName.toLowerCase().trim();
+      if (l === 'number' || l === 'no' || l === 'no.' || l === '#') return 0;
+      if (l.includes('jenis kegiatan') || l === 'task' || l === 'judul' || l === 'name' || l === 'nama') return 1;
+      if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('rincian')) return 2;
+      if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 3;
+      if (l.includes('status')) return 4;
+      if (l.includes('priority') || l.includes('prioritas')) return 5;
+      if (l.includes('activity') || l.includes('aktivitas')) return 6;
+      if (l.includes('target') || l.includes('deadline') || l.includes('jatuh tempo')) return 7;
+      if (l.includes('aktual') || l.includes('selesai') || l.includes('actual')) return 8;
+      if (l.includes('period') || l.includes('periode')) return 9;
+      if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 10;
+      if (l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat')) return 90;
+      return 20; // other custom columns placed between standard meta and timestamp
+    };
+
+    return [...headersWithNumber].sort((a, b) => getColOrder(a) - getColOrder(b));
+  }, []);
+
+  // Dynamic Table Headers State (Allows Adding, Deleting, and Reordering Columns)
+  const [tableHeaders, setTableHeaders] = useState<string[]>(() => {
+    return normalizeAndOrderHeaders(headers || []);
   });
 
   useEffect(() => {
     if (headers && headers.length > 0) {
-      setTableHeaders(headers);
+      setTableHeaders(normalizeAndOrderHeaders(headers));
     }
-  }, [headers]);
+  }, [headers, normalizeAndOrderHeaders]);
 
   const displayHeaders = tableHeaders;
 
@@ -668,6 +700,29 @@ export function NotionDatabaseTable({
     setTableHeaders(prev => prev.filter(h => h !== colName));
     setDirtyRowIndices(new Set(Array.from({ length: localRows.length }, (_, i) => i)));
     toast.info(`Kolom "${colName}" telah dihapus. Jangan lupa simpan perubahan.`);
+  };
+
+  const handleMoveColumn = (colName: string, direction: 'left' | 'right') => {
+    const idx = tableHeaders.indexOf(colName);
+    if (idx === -1) return;
+
+    // Prevent moving 'number' or moving to/before 'number' (keep index 0 for number)
+    const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
+    if (targetIdx <= 0 || targetIdx >= tableHeaders.length) return;
+
+    const newHeaders = [...tableHeaders];
+    const [moved] = newHeaders.splice(idx, 1);
+    newHeaders.splice(targetIdx, 0, moved);
+
+    setTableHeaders(newHeaders);
+    setDirtyRowIndices(new Set(Array.from({ length: localRows.length }, (_, i) => i)));
+    toast.success(`Kolom "${colName}" digeser ke ${direction === 'left' ? 'kiri' : 'kanan'}`);
+  };
+
+  const handleResetColumnOrder = () => {
+    setTableHeaders(prev => normalizeAndOrderHeaders(prev));
+    setDirtyRowIndices(new Set(Array.from({ length: localRows.length }, (_, i) => i)));
+    toast.success('Urutan kolom berhasil dirapikan sesuai standar Notion!');
   };
 
   // Helper to read row property with fuzzy matching across header aliases
@@ -1769,6 +1824,22 @@ export function NotionDatabaseTable({
             <option value="NORMAL">🟡 Normal Priority</option>
             <option value="LOW">🔵 Low Priority</option>
           </select>
+
+          {/* Quick Action: Reset & Organize Column Order to Notion Canonical */}
+          <button
+            type="button"
+            onClick={handleResetColumnOrder}
+            title="Susun ulang kolom ke urutan standar Notion (No, Judul, Keterangan, PIC, Status, dll.)"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all hover:border-teal-500 hover:text-teal-400 cursor-pointer shrink-0"
+            style={{
+              backgroundColor: 'var(--card-bg, #262626)',
+              borderColor: 'var(--border-main, #334155)',
+              color: 'var(--text-muted, #94a3b8)'
+            }}
+          >
+            <SlidersHorizontal className="w-3 h-3 text-teal-400" />
+            <span>Rapikan Kolom</span>
+          </button>
         </div>
       </div>
 
@@ -1798,6 +1869,7 @@ export function NotionDatabaseTable({
                   const isNum = colHeader.toLowerCase() === 'number' || colHeader.toLowerCase() === 'no';
                   const isJudul = colHeader.toLowerCase().includes('jenis kegiatan') || colHeader.toLowerCase() === 'task' || colHeader.toLowerCase() === 'judul';
                   const colLower = colHeader.toLowerCase();
+                  const colIdx = displayHeaders.indexOf(colHeader);
 
                   // Column width classes based on fitPageMode
                   let widthClass = 'whitespace-nowrap px-3 py-2.5';
@@ -1837,19 +1909,54 @@ export function NotionDatabaseTable({
                           )}
                         </div>
 
-                        {/* Delete Column Button (for non-protected columns) */}
-                        {!isNum && !isJudul && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteColumn(colHeader);
-                            }}
-                            title={`Hapus kolom "${colHeader}"`}
-                            className="opacity-0 group-hover/th:opacity-100 p-0.5 rounded hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-all shrink-0 cursor-pointer"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
+                        {/* Column Reorder (< and >) and Delete (X) Actions */}
+                        {!isNum && (
+                          <div className="opacity-0 group-hover/th:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0">
+                            {/* Geser Kiri */}
+                            {colIdx > 1 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveColumn(colHeader, 'left');
+                                }}
+                                title={`Geser kolom "${colHeader}" ke kiri`}
+                                className="p-0.5 rounded hover:bg-slate-700/50 text-slate-400 hover:text-teal-300 transition-all cursor-pointer"
+                              >
+                                <ChevronLeft className="w-3 h-3" />
+                              </button>
+                            )}
+
+                            {/* Geser Kanan */}
+                            {colIdx < displayHeaders.length - 1 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveColumn(colHeader, 'right');
+                                }}
+                                title={`Geser kolom "${colHeader}" ke kanan`}
+                                className="p-0.5 rounded hover:bg-slate-700/50 text-slate-400 hover:text-teal-300 transition-all cursor-pointer"
+                              >
+                                <ChevronRight className="w-3 h-3" />
+                              </button>
+                            )}
+
+                            {/* Hapus Kolom (Non-protected) */}
+                            {!isJudul && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteColumn(colHeader);
+                                }}
+                                title={`Hapus kolom "${colHeader}"`}
+                                className="p-0.5 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </th>
@@ -1870,25 +1977,42 @@ export function NotionDatabaseTable({
                     <Plus className="w-3.5 h-3.5" />
                   </button>
 
-                  {/* Add Column Popover Dropdown */}
+                  {/* Add Column Popover Dropdown (100% Solid Card) */}
                   {showAddColumnPopover && (
                     <div
                       onClick={(e) => e.stopPropagation()}
-                      className="absolute right-0 z-50 mt-1 w-64 rounded-2xl border shadow-2xl p-2.5 backdrop-blur-md text-left text-xs font-sans animate-in fade-in zoom-in-95 duration-150"
+                      className="absolute right-0 z-50 mt-1 w-64 rounded-2xl border shadow-2xl p-2.5 text-left text-xs font-sans animate-in fade-in zoom-in-95 duration-150"
                       style={{
-                        backgroundColor: 'var(--card-bg, #1e1e1e)',
-                        borderColor: 'var(--border-main, #334155)',
-                        color: 'var(--text-main, #f8fafc)'
+                        backgroundColor: 'var(--card-bg, #ffffff)',
+                        borderColor: 'var(--border-main, #cbd5e1)',
+                        color: 'var(--text-main, #0f172a)',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.15)'
                       }}
                     >
-                      <div className="px-1.5 py-1 text-[11px] font-bold text-slate-300 border-b border-slate-800 pb-1.5 mb-1.5 flex items-center justify-between">
+                      <div 
+                        className="px-1.5 py-1 text-[11px] font-bold border-b pb-1.5 mb-1.5 flex items-center justify-between"
+                        style={{
+                          borderColor: 'var(--border-main, #e2e8f0)',
+                          color: 'var(--text-main, #0f172a)'
+                        }}
+                      >
                         <span>Tambah Kolom Baru</span>
-                        <span className="text-[10px] text-teal-400 font-mono">Notion Table</span>
                       </div>
 
                       {/* Custom Column Input */}
-                      <div className="p-1.5 mb-2 bg-slate-900/60 rounded-xl border border-slate-800">
-                        <label className="text-[10px] text-slate-400 block px-1 mb-1 font-medium">Kolom Kustom</label>
+                      <div 
+                        className="p-1.5 mb-2 rounded-xl border"
+                        style={{
+                          backgroundColor: 'var(--input-bg, #f8fafc)',
+                          borderColor: 'var(--border-main, #e2e8f0)'
+                        }}
+                      >
+                        <label 
+                          className="text-[10px] block px-1 mb-1 font-semibold"
+                          style={{ color: 'var(--text-muted, #64748b)' }}
+                        >
+                          Kolom Kustom
+                        </label>
                         <div className="flex items-center gap-1">
                           <input
                             type="text"
@@ -1903,15 +2027,15 @@ export function NotionDatabaseTable({
                             placeholder="Nama kolom..."
                             className="flex-1 text-xs px-2 py-1 rounded-lg border outline-none font-medium"
                             style={{
-                              backgroundColor: 'var(--input-bg, #242424)',
-                              borderColor: 'var(--border-main, #334155)',
-                              color: 'var(--text-main, #f8fafc)'
+                              backgroundColor: 'var(--card-bg, #ffffff)',
+                              borderColor: 'var(--border-main, #cbd5e1)',
+                              color: 'var(--text-main, #0f172a)'
                             }}
                           />
                           <button
                             type="button"
                             onClick={() => handleAddColumn(customColumnName)}
-                            className="px-2 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shrink-0 cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shrink-0 cursor-pointer shadow-xs transition-colors"
                           >
                             Tambah
                           </button>
@@ -1919,7 +2043,10 @@ export function NotionDatabaseTable({
                       </div>
 
                       {/* Template Options */}
-                      <div className="text-[10px] text-slate-400 px-1 mb-1 font-semibold uppercase tracking-wider">
+                      <div 
+                        className="text-[10px] px-1 mb-1 font-bold uppercase tracking-wider"
+                        style={{ color: 'var(--text-muted, #64748b)' }}
+                      >
                         Template Kolom Populer
                       </div>
                       <div className="space-y-0.5 max-h-48 overflow-y-auto pr-1">
@@ -1934,20 +2061,23 @@ export function NotionDatabaseTable({
                               className={`w-full flex items-center justify-between p-1.5 rounded-lg text-left transition-colors cursor-pointer ${
                                 isAlreadyAdded 
                                   ? 'opacity-40 cursor-not-allowed'
-                                  : 'hover:bg-teal-500/10 hover:text-teal-300'
+                                  : 'hover:bg-slate-100 dark:hover:bg-slate-800'
                               }`}
+                              style={{
+                                color: 'var(--text-main, #0f172a)'
+                              }}
                             >
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <span className="text-sm shrink-0">{tmpl.icon}</span>
                                 <div className="min-w-0">
                                   <p className="font-semibold text-xs truncate">{tmpl.name}</p>
-                                  <p className="text-[10px] text-slate-400 truncate">{tmpl.desc}</p>
+                                  <p className="text-[10px] truncate" style={{ color: 'var(--text-muted, #64748b)' }}>{tmpl.desc}</p>
                                 </div>
                               </div>
                               {isAlreadyAdded ? (
-                                <span className="text-[10px] text-slate-400 italic">Ada</span>
+                                <span className="text-[10px] italic" style={{ color: 'var(--text-muted, #94a3b8)' }}>Ada</span>
                               ) : (
-                                <Plus className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                                <Plus className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
                               )}
                             </button>
                           );
