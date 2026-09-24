@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   ClipboardCheck, 
   Calendar, 
@@ -81,8 +81,539 @@ const SECTION_OPTIONS = [
   'General'
 ];
 
-const PRIORITY_OPTIONS = ['Normal', 'Urgent', 'High', 'Medium', 'Low'];
-const ACTIVITY_OPTIONS = ['Routine', 'Non Routine', 'Periodic', 'Special Task'];
+// Helper to format date string cleanly in Indonesian
+function formatDisplayTargetDate(dateStr?: string | null): string {
+  if (!dateStr) return 'Hari ini';
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      if (dateStr === todayStr) return 'Hari Ini';
+      return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+  }
+  return dateStr;
+}
+
+interface SubtaskDraft {
+  id: string;
+  text: string;
+  checked: boolean;
+}
+
+// 1. Searchable Combobox for Employee / PIC
+interface SearchablePicSelectProps {
+  valueNik: string;
+  valueName: string;
+  onChange: (nik: string, name: string) => void;
+  employees: any[];
+}
+
+function SearchablePicSelect({ valueNik, valueName, onChange, employees }: SearchablePicSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredEmployees = useMemo(() => {
+    if (!searchTerm.trim()) return employees.slice(0, 50);
+    const q = searchTerm.toLowerCase();
+    return employees.filter(emp => {
+      const name = (emp.name || '').toLowerCase();
+      const nik = (emp.nik || '').toLowerCase();
+      const sec = (emp.section || emp.department || emp.jabatan || '').toLowerCase();
+      return name.includes(q) || nik.includes(q) || sec.includes(q);
+    }).slice(0, 50);
+  }, [employees, searchTerm]);
+
+  return (
+    <div ref={wrapperRef} className="relative space-y-1">
+      <label className="text-xs font-bold block flex items-center justify-between">
+        <span>Pilih PIC Bawahan *</span>
+        <span className="text-[10px] text-teal-600 dark:text-teal-400 font-normal">Cari cepat nama/NIK</span>
+      </label>
+
+      {valueNik && !isOpen ? (
+        <div 
+          onClick={() => { setIsOpen(true); setSearchTerm(''); }}
+          className="w-full flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer hover:border-teal-500/80 group"
+          style={{
+            backgroundColor: 'var(--input-bg, #f8fafc)',
+            borderColor: 'var(--border-main, #cbd5e1)'
+          }}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold flex items-center justify-center text-xs shrink-0">
+              {valueName.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="font-bold text-xs truncate text-slate-900 dark:text-slate-100 group-hover:text-teal-600 transition-colors">
+                {valueName}
+              </div>
+              <div className="text-[10px] text-slate-500 font-mono">
+                NIK: {valueNik}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange('', '');
+              setSearchTerm('');
+              setIsOpen(true);
+            }}
+            className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 transition-colors"
+            title="Ganti PIC"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : (
+        <div className="relative">
+          <div className="relative flex items-center">
+            <Search className="w-3.5 h-3.5 absolute left-3 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              autoFocus={isOpen}
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                if (!isOpen) setIsOpen(true);
+              }}
+              onFocus={() => setIsOpen(true)}
+              placeholder="Ketik nama atau NIK karyawan..."
+              className="w-full pl-8 pr-8 py-2 rounded-xl border outline-none text-xs font-medium focus:border-teal-500 transition-all"
+              style={{
+                backgroundColor: 'var(--input-bg, #f8fafc)',
+                borderColor: 'var(--border-main, #cbd5e1)'
+              }}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 p-0.5 rounded text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Autocomplete Dropdown */}
+          {isOpen && (
+            <div 
+              className="absolute left-0 right-0 top-full mt-1.5 rounded-xl border shadow-xl z-50 max-h-56 overflow-y-auto divide-y animate-in fade-in zoom-in-95 duration-150"
+              style={{
+                backgroundColor: 'var(--card-bg, #ffffff)',
+                borderColor: 'var(--border-main, #cbd5e1)'
+              }}
+            >
+              {filteredEmployees.length === 0 ? (
+                <div className="p-3 text-center text-xs text-slate-400 italic">
+                  Tidak ditemukan karyawan dengan kata kunci "{searchTerm}"
+                </div>
+              ) : (
+                filteredEmployees.map(emp => {
+                  const isSelected = emp.nik === valueNik;
+                  return (
+                    <div
+                      key={emp.nik}
+                      onClick={() => {
+                        onChange(emp.nik, emp.name);
+                        setIsOpen(false);
+                        setSearchTerm('');
+                      }}
+                      className={`p-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors hover:bg-teal-500/10 ${
+                        isSelected ? 'bg-teal-500/15' : ''
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate">
+                          {emp.name}
+                        </div>
+                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono">NIK: {emp.nik}</span>
+                          <span>•</span>
+                          <span className="truncate">{emp.section || emp.department || emp.jabatan || 'Personil'}</span>
+                        </div>
+                      </div>
+                      {isSelected && (
+                        <Check className="w-4 h-4 text-teal-600 shrink-0" />
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 2. Searchable Combobox for Bulletin Post Linking
+interface SearchableBulletinSelectProps {
+  selectedId: string;
+  bulletinList: any[];
+  onSelect: (postId: string) => void;
+}
+
+function SearchableBulletinSelect({ selectedId, bulletinList, onSelect }: SearchableBulletinSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectedPost = useMemo(() => {
+    if (!selectedId) return null;
+    return bulletinList.find(b => String(b.id) === String(selectedId));
+  }, [selectedId, bulletinList]);
+
+  const filteredBulletins = useMemo(() => {
+    if (!searchTerm.trim()) return bulletinList.slice(0, 40);
+    const q = searchTerm.toLowerCase();
+    return bulletinList.filter(b => {
+      const title = (b.title || '').toLowerCase();
+      const category = (b.category || '').toLowerCase();
+      const dept = (b.department || '').toLowerCase();
+      const idStr = String(b.id || '');
+      return title.includes(q) || category.includes(q) || dept.includes(q) || idStr.includes(q);
+    }).slice(0, 40);
+  }, [bulletinList, searchTerm]);
+
+  return (
+    <div ref={wrapperRef} className="relative space-y-1">
+      <label className="text-xs font-bold block flex items-center justify-between">
+        <span>Hubungkan ke Tabel Buletin (Opsional)</span>
+        <span className="text-[10px] text-teal-600 dark:text-teal-400 font-normal">Sinkronisasi 2 arah</span>
+      </label>
+
+      {selectedPost && !isOpen ? (
+        <div 
+          onClick={() => { setIsOpen(true); setSearchTerm(''); }}
+          className="w-full flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer hover:border-teal-500/80 group"
+          style={{
+            backgroundColor: 'var(--input-bg, #f8fafc)',
+            borderColor: 'var(--border-main, #cbd5e1)'
+          }}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold bg-teal-500/15 text-teal-700 dark:text-teal-300 shrink-0">
+              #{selectedPost.id}
+            </span>
+            <div className="min-w-0">
+              <div className="font-bold text-xs truncate text-slate-900 dark:text-slate-100 group-hover:text-teal-600 transition-colors">
+                {selectedPost.title || selectedPost.category}
+              </div>
+              <div className="text-[10px] text-slate-500 truncate">
+                {selectedPost.department || 'General'} • Universe {selectedPost.pt || 'TBP'}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect('');
+            }}
+            className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 transition-colors"
+            title="Lepas tautan buletin"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : (
+        <div className="relative">
+          <div className="relative flex items-center">
+            <Search className="w-3.5 h-3.5 absolute left-3 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              autoFocus={isOpen}
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                if (!isOpen) setIsOpen(true);
+              }}
+              onFocus={() => setIsOpen(true)}
+              placeholder="Ketik judul buletin untuk mencari & menautkan..."
+              className="w-full pl-8 pr-8 py-2 rounded-xl border outline-none text-xs font-medium focus:border-teal-500 transition-all"
+              style={{
+                backgroundColor: 'var(--input-bg, #f8fafc)',
+                borderColor: 'var(--border-main, #cbd5e1)'
+              }}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 p-0.5 rounded text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {isOpen && (
+            <div 
+              className="absolute left-0 right-0 top-full mt-1.5 rounded-xl border shadow-xl z-50 max-h-56 overflow-y-auto divide-y animate-in fade-in zoom-in-95 duration-150"
+              style={{
+                backgroundColor: 'var(--card-bg, #ffffff)',
+                borderColor: 'var(--border-main, #cbd5e1)'
+              }}
+            >
+              <div
+                onClick={() => {
+                  onSelect('');
+                  setIsOpen(false);
+                }}
+                className="p-2.5 flex items-center justify-between text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <span>-- Simpan di Log Book Saja (Tanpa Buletin) --</span>
+                {!selectedId && <Check className="w-4 h-4 text-teal-600 shrink-0" />}
+              </div>
+
+              {filteredBulletins.map(b => {
+                const isSelected = String(b.id) === String(selectedId);
+                return (
+                  <div
+                    key={b.id}
+                    onClick={() => {
+                      onSelect(String(b.id));
+                      setIsOpen(false);
+                      setSearchTerm('');
+                    }}
+                    className={`p-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors hover:bg-teal-500/10 ${
+                      isSelected ? 'bg-teal-500/15' : ''
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-slate-500/10 text-slate-600 dark:text-slate-300">
+                          #{b.id}
+                        </span>
+                        <span className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate">
+                          {b.title || b.category}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        {b.department || 'General'} • Universe {b.pt || 'TBP'}
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <Check className="w-4 h-4 text-teal-600 shrink-0" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+      <p className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+        Jika ditautkan, update progress subtask & status akan otomatis tersinkronisasi ke tabel dokumen buletin tersebut.
+      </p>
+    </div>
+  );
+}
+
+// 3. WYSIWYG Subtask Checklist Builder
+interface WysiwygChecklistBuilderProps {
+  items: SubtaskDraft[];
+  onChange: (items: SubtaskDraft[]) => void;
+  notes: string;
+  onNotesChange: (notes: string) => void;
+}
+
+function WysiwygChecklistBuilder({ items, onChange, notes, onNotesChange }: WysiwygChecklistBuilderProps) {
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const handleTextChange = (index: number, newText: string) => {
+    const updated = items.map((it, idx) => idx === index ? { ...it, text: newText } : it);
+    onChange(updated);
+  };
+
+  const handleToggleCheck = (index: number) => {
+    const updated = items.map((it, idx) => idx === index ? { ...it, checked: !it.checked } : it);
+    onChange(updated);
+  };
+
+  const handleAddItem = (initialText = '', focusIndex?: number) => {
+    const newItem: SubtaskDraft = {
+      id: Math.random().toString(36).substring(2, 9),
+      text: initialText,
+      checked: false
+    };
+    const nextItems = [...items, newItem];
+    onChange(nextItems);
+    setTimeout(() => {
+      const idx = focusIndex !== undefined ? focusIndex : nextItems.length - 1;
+      inputRefs.current[idx]?.focus();
+    }, 50);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    if (items.length <= 1) {
+      onChange([{ id: Math.random().toString(36).substring(2, 9), text: '', checked: false }]);
+      return;
+    }
+    const updated = items.filter((_, idx) => idx !== index);
+    onChange(updated);
+    setTimeout(() => {
+      const prevIdx = Math.max(0, index - 1);
+      inputRefs.current[prevIdx]?.focus();
+    }, 50);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const newItem: SubtaskDraft = {
+        id: Math.random().toString(36).substring(2, 9),
+        text: '',
+        checked: false
+      };
+      const updated = [...items.slice(0, index + 1), newItem, ...items.slice(index + 1)];
+      onChange(updated);
+      setTimeout(() => {
+        inputRefs.current[index + 1]?.focus();
+      }, 50);
+    } else if (e.key === 'Backspace' && items[index].text === '' && items.length > 1) {
+      e.preventDefault();
+      handleRemoveItem(index);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-bold flex items-center gap-1.5">
+          <CheckSquare className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+          <span>Subtask Checklist (WYSIWYG)</span>
+        </label>
+        <span className="text-[10px] text-slate-500 font-medium">
+          Tekan <kbd className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-[9px] font-mono">Enter</kbd> untuk baris baru
+        </span>
+      </div>
+
+      <div 
+        className="rounded-2xl border p-2.5 sm:p-3 space-y-1.5 shadow-2xs"
+        style={{
+          backgroundColor: 'var(--input-bg, #f8fafc)',
+          borderColor: 'var(--border-main, #cbd5e1)'
+        }}
+      >
+        {items.map((item, idx) => (
+          <div 
+            key={item.id}
+            className="flex items-center gap-2 group/item transition-colors px-1.5 py-1 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800/50"
+          >
+            <button
+              type="button"
+              onClick={() => handleToggleCheck(idx)}
+              className="text-slate-400 hover:text-teal-600 transition-colors shrink-0 cursor-pointer"
+              title={item.checked ? "Tandai belum selesai" : "Tandai selesai"}
+            >
+              {item.checked ? (
+                <CheckSquare className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+              ) : (
+                <Square className="w-4 h-4" />
+              )}
+            </button>
+
+            <input
+              ref={el => inputRefs.current[idx] = el}
+              type="text"
+              value={item.text}
+              placeholder={`Langkah subtask ${idx + 1}...`}
+              onChange={(e) => handleTextChange(idx, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(e, idx)}
+              className={`flex-1 bg-transparent border-none outline-none text-xs ${
+                item.checked ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200 font-medium'
+              }`}
+            />
+
+            <button
+              type="button"
+              onClick={() => handleRemoveItem(idx)}
+              className="opacity-0 group-hover/item:opacity-100 p-1 text-slate-400 hover:text-rose-500 rounded transition-all cursor-pointer"
+              title="Hapus baris subtask"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+
+        <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => handleAddItem()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 text-xs font-bold transition-all cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Tambah Item Subtask</span>
+          </button>
+
+          <div className="flex items-center gap-1 text-[10px]">
+            <span className="text-slate-400 hidden sm:inline">Template:</span>
+            <button
+              type="button"
+              onClick={() => {
+                onChange([
+                  { id: '1', text: 'Persiapan alat & APD lengkap', checked: false },
+                  { id: '2', text: 'Eksekusi operasional sesuai SOP', checked: false },
+                  { id: '3', text: 'Pencatatan data & pelaporan ke atasan', checked: false },
+                ]);
+              }}
+              className="px-2 py-0.5 rounded-md border border-dashed border-teal-500/40 text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 cursor-pointer"
+            >
+              + 3 Tahapan Standar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Catatan Tambahan (Opsional) */}
+      <div className="pt-1">
+        <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+          Catatan Tambahan / Instruksi Khusus (Opsional)
+        </label>
+        <textarea
+          rows={2}
+          value={notes}
+          onChange={(e) => onNotesChange(e.target.value)}
+          placeholder="Catatan tambahan bila diperlukan..."
+          className="w-full px-3 py-1.5 rounded-xl border outline-none text-xs focus:border-teal-500"
+          style={{
+            backgroundColor: 'var(--input-bg, #f8fafc)',
+            borderColor: 'var(--border-main, #cbd5e1)'
+          }}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function LogbookScreen({
   inspectorNik,
@@ -100,11 +631,43 @@ export function LogbookScreen({
     return `${y}-${m}-${day}`;
   };
 
+  // User profile & section
+  const userProfile = useMemo(() => {
+    try {
+      const p = localStorage.getItem('p2h_inspector_profile');
+      return p ? JSON.parse(p) : null;
+    } catch (e) {
+      return null;
+    }
+  }, [inspectorNik]);
+
+  const isSuperAdmin = 
+    inspectorNik === '02D25000055' || 
+    inspectorNik === '02D24000043' || 
+    inspectorNik === '04D21001047' || 
+    inspectorNik === '04D24000042' ||
+    inspectorNik === 'preplabadmin';
+
+  const userSection = useMemo(() => {
+    const raw = (userProfile?.section || '').trim();
+    if (!raw) return 'Preparation';
+    if (raw.toLowerCase().includes('preparation') || raw.toLowerCase().includes('prep')) return 'Preparation';
+    if (raw.toLowerCase().includes('laboratory') || raw.toLowerCase().includes('lab')) return 'Laboratory';
+    if (raw.toLowerCase().includes('maintenance')) return 'Maintenance';
+    if (raw.toLowerCase().includes('qa') || raw.toLowerCase().includes('quality')) return 'Quality Assurance';
+    return raw;
+  }, [userProfile]);
+
   const [selectedDate, setSelectedDate] = useState<string>(getTodayStr());
-  const [selectedSection, setSelectedSection] = useState<string>('Semua Seksi');
+  const [selectedSection, setSelectedSection] = useState<string>(userSection);
   const [selectedPt, setSelectedPt] = useState<string>(userPt === 'GTS' ? 'GTS' : 'TBP');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [picFilter, setPicFilter] = useState<string>('ALL');
+
+  // Keep selectedSection in sync if userSection resolves after boot
+  useEffect(() => {
+    if (userSection) setSelectedSection(userSection);
+  }, [userSection]);
 
   // Loading & Data states
   const [loading, setLoading] = useState(true);
@@ -121,15 +684,32 @@ export function LogbookScreen({
   // Quick Assign Task State
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [newSection, setNewSection] = useState(selectedSection !== 'Semua Seksi' ? selectedSection : 'Preparation');
+  const [checklistDrafts, setChecklistDrafts] = useState<SubtaskDraft[]>([
+    { id: '1', text: '', checked: false }
+  ]);
+  const [newNotes, setNewNotes] = useState('');
   const [newAssigneeNik, setNewAssigneeNik] = useState('');
   const [newAssigneeName, setNewAssigneeName] = useState('');
   const [newPriority, setNewPriority] = useState('Normal');
   const [newActivityType, setNewActivityType] = useState('Routine');
-  const [newTargetDate, setNewTargetDate] = useState('17:00 WITA');
+  const [newTargetDate, setNewTargetDate] = useState(getTodayStr());
   const [selectedBulletinPostId, setSelectedBulletinPostId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const openAssignModal = () => {
+    setNewTitle('');
+    setChecklistDrafts([
+      { id: '1', text: '', checked: false }
+    ]);
+    setNewNotes('');
+    setNewAssigneeNik('');
+    setNewAssigneeName('');
+    setNewPriority('Normal');
+    setNewActivityType('Routine');
+    setNewTargetDate(selectedDate || getTodayStr());
+    setSelectedBulletinPostId('');
+    setShowAssignModal(true);
+  };
 
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
@@ -203,6 +783,15 @@ export function LogbookScreen({
       return;
     }
 
+    const checklistMarkdown = checklistDrafts
+      .filter(item => item.text.trim())
+      .map(item => `- [${item.checked ? 'x' : ' '}] ${item.text.trim()}`)
+      .join('\n');
+
+    const finalDescription = newNotes.trim()
+      ? (checklistMarkdown ? `${newNotes.trim()}\n\n${checklistMarkdown}` : newNotes.trim())
+      : checklistMarkdown;
+
     try {
       setIsSubmitting(true);
       toast.loading('Menugaskan arahan kegiatan & menyinkronkan ke Buletin...', { id: 'assign-task' });
@@ -212,8 +801,8 @@ export function LogbookScreen({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTitle.trim(),
-          description: newDescription.trim(),
-          section: newSection,
+          description: finalDescription,
+          section: userSection, // Locked automatically to user's section
           assigneeNik: newAssigneeNik,
           assigneeName: newAssigneeName,
           assignedByNik: inspectorNik || 'SUPERVISOR',
@@ -221,7 +810,7 @@ export function LogbookScreen({
           priority: newPriority,
           activityType: newActivityType,
           taskDate: selectedDate,
-          targetDate: newTargetDate.trim() || '17:00 WITA',
+          targetDate: newTargetDate || selectedDate,
           pt: selectedPt,
           bulletinPostId: selectedBulletinPostId ? parseInt(selectedBulletinPostId) : null
         })
@@ -232,7 +821,8 @@ export function LogbookScreen({
         toast.success(`Tugas berhasil ditugaskan ke ${newAssigneeName}!`, { id: 'assign-task' });
         setShowAssignModal(false);
         setNewTitle('');
-        setNewDescription('');
+        setChecklistDrafts([{ id: '1', text: '', checked: false }]);
+        setNewNotes('');
         fetchTasks();
       } else {
         toast.error(json.message || 'Gagal menugaskan task', { id: 'assign-task' });
@@ -461,7 +1051,7 @@ export function LogbookScreen({
             </button>
 
             <button
-              onClick={() => setShowAssignModal(true)}
+              onClick={openAssignModal}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs tracking-wide transition-all shadow-md active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -525,21 +1115,36 @@ export function LogbookScreen({
 
             {/* Section & Universe Filters */}
             <div className="flex flex-wrap items-center gap-2">
-              {/* Section Filter */}
-              <select
-                value={selectedSection}
-                onChange={(e) => setSelectedSection(e.target.value)}
-                className="px-2.5 py-1 rounded-xl border text-xs font-semibold outline-none cursor-pointer"
-                style={{
-                  backgroundColor: 'var(--card-bg, #ffffff)',
-                  borderColor: 'var(--border-main, #cbd5e1)',
-                  color: 'var(--text-main, #0f172a)'
-                }}
-              >
-                {SECTION_OPTIONS.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+              {/* Section Filter / Display */}
+              {isSuperAdmin ? (
+                <select
+                  value={selectedSection}
+                  onChange={(e) => setSelectedSection(e.target.value)}
+                  className="px-2.5 py-1 rounded-xl border text-xs font-semibold outline-none cursor-pointer"
+                  style={{
+                    backgroundColor: 'var(--card-bg, #ffffff)',
+                    borderColor: 'var(--border-main, #cbd5e1)',
+                    color: 'var(--text-main, #0f172a)'
+                  }}
+                >
+                  {SECTION_OPTIONS.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              ) : (
+                <div 
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs font-bold"
+                  style={{
+                    backgroundColor: 'var(--card-bg, #ffffff)',
+                    borderColor: 'var(--border-main, #cbd5e1)',
+                    color: 'var(--text-main, #0f172a)'
+                  }}
+                  title="Seksi Anda otomatis terdeteksi dari profil"
+                >
+                  <span className="w-2 h-2 rounded-full bg-teal-500" />
+                  <span>Seksi: {userSection}</span>
+                </div>
+              )}
 
               {/* PT / Universe Filter */}
               <select
@@ -748,6 +1353,11 @@ export function LogbookScreen({
                             }`}>
                               {task.priority}
                             </span>
+                            {task.targetDate && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-md font-medium bg-blue-500/10 text-blue-600">
+                                Target: {formatDisplayTargetDate(task.targetDate)}
+                              </span>
+                            )}
                           </div>
                           <h3 className="font-bold text-xs sm:text-sm leading-tight text-slate-900 dark:text-slate-100">
                             {task.title}
@@ -830,7 +1440,7 @@ export function LogbookScreen({
                 </p>
               </div>
               <button
-                onClick={() => setShowAssignModal(true)}
+                onClick={openAssignModal}
                 className="p-1.5 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-600 dark:text-teal-400 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
                 title="Tambah arahan tugas baru"
               >
@@ -842,7 +1452,7 @@ export function LogbookScreen({
             {/* Today Task List */}
             {filteredToday.length === 0 ? (
               <div className="py-12 text-center text-xs italic" style={{ color: 'var(--text-muted, #64748b)' }}>
-                Belum ada tugas yang ditugaskan untuk hari ini. Klik <strong className="text-teal-600 cursor-pointer" onClick={() => setShowAssignModal(true)}>+ Arahan Tugas Baru</strong> untuk menambahkan.
+                Belum ada tugas yang ditugaskan untuk hari ini. Klik <strong className="text-teal-600 cursor-pointer" onClick={openAssignModal}>+ Arahan Tugas Baru</strong> untuk menambahkan.
               </div>
             ) : (
               <div className="space-y-3.5">
@@ -873,7 +1483,7 @@ export function LogbookScreen({
                               {task.priority}
                             </span>
                             <span className="text-[10px] px-2 py-0.5 rounded-md font-medium bg-blue-500/10 text-blue-600">
-                              Target: {task.targetDate || 'Hari ini'}
+                              Target: {formatDisplayTargetDate(task.targetDate)}
                             </span>
                           </div>
                           
@@ -1005,52 +1615,37 @@ export function LogbookScreen({
                 />
               </div>
 
-              {/* Seksi & PIC Bawahan */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold block">Seksi Pelaksana</label>
-                  <select
-                    value={newSection}
-                    onChange={(e) => setNewSection(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-semibold cursor-pointer"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)'
-                    }}
-                  >
-                    {SECTION_OPTIONS.filter(s => s !== 'Semua Seksi').map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
+              {/* Seksi Pelaksana (Auto-Locked ke Seksi User) */}
+              <div 
+                className="p-3 rounded-2xl border flex items-center justify-between"
+                style={{
+                  backgroundColor: 'var(--input-bg, #f8fafc)',
+                  borderColor: 'var(--border-main, #cbd5e1)'
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
+                  <span className="text-xs font-bold">Seksi Pelaksana:</span>
+                  <span className="text-xs font-extrabold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-2.5 py-0.5 rounded-md border border-teal-500/20">
+                    {userSection}
+                  </span>
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold block">Pilih PIC Bawahan *</label>
-                  <select
-                    required
-                    value={newAssigneeNik}
-                    onChange={(e) => {
-                      setNewAssigneeNik(e.target.value);
-                      const emp = employeesList.find(x => x.nik === e.target.value);
-                      if (emp) setNewAssigneeName(emp.name);
-                    }}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-semibold cursor-pointer"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)'
-                    }}
-                  >
-                    <option value="">-- Pilih Karyawan PIC --</option>
-                    {employeesList.map(emp => (
-                      <option key={emp.nik} value={emp.nik}>
-                        {emp.name} ({emp.section || emp.department || 'Personil'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <span className="text-[10px] text-slate-500 italic">Otomatis terkunci</span>
               </div>
 
-              {/* Prioritas & Target Jam */}
+              {/* Pilih PIC Bawahan (Searchable Combobox) */}
+              <SearchablePicSelect
+                valueNik={newAssigneeNik}
+                valueName={newAssigneeName}
+                onChange={(nik, name) => {
+                  setNewAssigneeNik(nik);
+                  setNewAssigneeName(name);
+                }}
+                employees={employeesList}
+                defaultSection={userSection}
+              />
+
+              {/* Prioritas & Target Tanggal Selesai */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold block">Prioritas</label>
@@ -1070,74 +1665,38 @@ export function LogbookScreen({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold block">Target Waktu Selesai</label>
+                  <label className="text-xs font-bold block">Target Tanggal Selesai</label>
                   <input
-                    type="text"
-                    placeholder="Contoh: 17:00 WITA atau Besok Siang"
+                    type="date"
                     value={newTargetDate}
                     onChange={(e) => setNewTargetDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-medium focus:border-teal-500"
+                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
                     style={{
                       backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)'
+                      borderColor: 'var(--border-main, #cbd5e1)',
+                      color: 'var(--text-main, #0f172a)'
                     }}
                   />
+                  <p className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                    Bebas pilih tanggal target penyelesaian
+                  </p>
                 </div>
               </div>
 
-              {/* Rincian Arahan & Subtask Checklist */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold block">Rincian & Subtask Checklist</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewDescription(prev => (prev ? prev + '\n- [ ] ' : '- [ ] '));
-                    }}
-                    className="text-[10px] text-teal-600 dark:text-teal-400 font-bold hover:underline cursor-pointer"
-                  >
-                    + Sisipkan Checklist
-                  </button>
-                </div>
-                <textarea
-                  rows={4}
-                  placeholder={`Contoh:\n- [ ] Siapkan sampel standar\n- [ ] Lakukan verifikasi timbangan analitik\n- [ ] Input data ke portal`}
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-mono focus:border-teal-500"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #f8fafc)',
-                    borderColor: 'var(--border-main, #cbd5e1)'
-                  }}
-                />
-                <p className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
-                  Gunakan format <code>- [ ]</code> untuk membuat item checklist yang bisa diceklis bawahan.
-                </p>
-              </div>
+              {/* WYSIWYG Interactive Checklist Builder */}
+              <WysiwygChecklistBuilder
+                items={checklistDrafts}
+                onChange={setChecklistDrafts}
+                notes={newNotes}
+                onNotesChange={setNewNotes}
+              />
 
-              {/* Hubungkan ke Dokumen Buletin (Sinkronisasi Otomatis) */}
-              <div className="space-y-1 pt-1">
-                <label className="text-xs font-bold block">Hubungkan ke Tabel Buletin (Opsional)</label>
-                <select
-                  value={selectedBulletinPostId}
-                  onChange={(e) => setSelectedBulletinPostId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-medium cursor-pointer"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #f8fafc)',
-                    borderColor: 'var(--border-main, #cbd5e1)'
-                  }}
-                >
-                  <option value="">-- Buat di Log Book Saja (Tanpa Buletin Tertentu) --</option>
-                  {bulletinList.map(b => (
-                    <option key={b.id} value={b.id}>
-                      #{b.id} {b.title || b.category} ({b.department})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
-                  Jika dipilih, tugas akan otomatis disisipkan ke tabel database dokumen buletin tersebut.
-                </p>
-              </div>
+              {/* Hubungkan ke Dokumen Buletin (Searchable Combobox) */}
+              <SearchableBulletinSelect
+                selectedId={selectedBulletinPostId}
+                bulletinList={bulletinList}
+                onSelect={setSelectedBulletinPostId}
+              />
 
               {/* Modal Buttons */}
               <div className="pt-3 border-t flex items-center justify-end gap-2" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
