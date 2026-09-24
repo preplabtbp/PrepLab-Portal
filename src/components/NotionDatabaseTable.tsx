@@ -60,6 +60,7 @@ import { NotionTasklistView } from './notion/NotionTasklistView';
 import { NotionDropdownCell } from './notion/NotionDropdownCell';
 import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
+import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 
 export interface CommentAttachmentItem {
   id?: string;
@@ -2765,22 +2766,15 @@ export function NotionDatabaseTable({
                 />
               </div>
 
-              {/* Keterangan */}
+              {/* Keterangan & Rincian (Enterprise WYSIWYG Editor) */}
               <div>
-                <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                  Keterangan & Rincian
-                </label>
-                <textarea
-                  rows={3}
+                <EnterpriseWysiwygEditor
                   value={rowFormData['Keterangan'] || ''}
-                  onChange={(e) => setRowFormData({ ...rowFormData, Keterangan: e.target.value })}
-                  className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none leading-relaxed"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #141414)',
-                    borderColor: 'var(--border-main, #334155)',
-                    color: 'var(--text-main, #f1f5f9)'
-                  }}
-                  placeholder="Deskripsi langkah, catatan temuan, atau hasil pekerjaan..."
+                  onChange={(val) => setRowFormData({ ...rowFormData, Keterangan: val })}
+                  label="Keterangan & Rincian Kegiatan"
+                  allowModeSwitch={true}
+                  placeholder="Deskripsi langkah, catatan temuan, atau checklist subtask..."
+                  rows={3}
                 />
               </div>
 

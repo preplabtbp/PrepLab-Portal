@@ -36,6 +36,7 @@ import { toast } from 'sonner';
 import { Button } from './ui';
 import { parseTasklist, toggleTasklistItem } from './notion/tasklist-utils';
 import { NotionDropdownCell } from './notion/NotionDropdownCell';
+import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 
 interface LogbookTask {
   id: number;
@@ -97,12 +98,6 @@ function formatDisplayTargetDate(dateStr?: string | null): string {
     }
   }
   return dateStr;
-}
-
-interface SubtaskDraft {
-  id: string;
-  text: string;
-  checked: boolean;
 }
 
 // 1. Searchable Combobox for Employee / PIC
@@ -440,183 +435,6 @@ function SearchableBulletinSelect({ selectedId, bulletinList, onSelect }: Search
   );
 }
 
-// 3. WYSIWYG Subtask Checklist Builder
-interface WysiwygChecklistBuilderProps {
-  items: SubtaskDraft[];
-  onChange: (items: SubtaskDraft[]) => void;
-  notes: string;
-  onNotesChange: (notes: string) => void;
-}
-
-function WysiwygChecklistBuilder({ items, onChange, notes, onNotesChange }: WysiwygChecklistBuilderProps) {
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-
-  const handleTextChange = (index: number, newText: string) => {
-    const updated = items.map((it, idx) => idx === index ? { ...it, text: newText } : it);
-    onChange(updated);
-  };
-
-  const handleToggleCheck = (index: number) => {
-    const updated = items.map((it, idx) => idx === index ? { ...it, checked: !it.checked } : it);
-    onChange(updated);
-  };
-
-  const handleAddItem = (initialText = '', focusIndex?: number) => {
-    const newItem: SubtaskDraft = {
-      id: Math.random().toString(36).substring(2, 9),
-      text: initialText,
-      checked: false
-    };
-    const nextItems = [...items, newItem];
-    onChange(nextItems);
-    setTimeout(() => {
-      const idx = focusIndex !== undefined ? focusIndex : nextItems.length - 1;
-      inputRefs.current[idx]?.focus();
-    }, 50);
-  };
-
-  const handleRemoveItem = (index: number) => {
-    if (items.length <= 1) {
-      onChange([{ id: Math.random().toString(36).substring(2, 9), text: '', checked: false }]);
-      return;
-    }
-    const updated = items.filter((_, idx) => idx !== index);
-    onChange(updated);
-    setTimeout(() => {
-      const prevIdx = Math.max(0, index - 1);
-      inputRefs.current[prevIdx]?.focus();
-    }, 50);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const newItem: SubtaskDraft = {
-        id: Math.random().toString(36).substring(2, 9),
-        text: '',
-        checked: false
-      };
-      const updated = [...items.slice(0, index + 1), newItem, ...items.slice(index + 1)];
-      onChange(updated);
-      setTimeout(() => {
-        inputRefs.current[index + 1]?.focus();
-      }, 50);
-    } else if (e.key === 'Backspace' && items[index].text === '' && items.length > 1) {
-      e.preventDefault();
-      handleRemoveItem(index);
-    }
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-bold flex items-center gap-1.5">
-          <CheckSquare className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-          <span>Subtask Checklist (WYSIWYG)</span>
-        </label>
-        <span className="text-[10px] text-slate-500 font-medium">
-          Tekan <kbd className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-[9px] font-mono">Enter</kbd> untuk baris baru
-        </span>
-      </div>
-
-      <div 
-        className="rounded-2xl border p-2.5 sm:p-3 space-y-1.5 shadow-2xs"
-        style={{
-          backgroundColor: 'var(--input-bg, #f8fafc)',
-          borderColor: 'var(--border-main, #cbd5e1)'
-        }}
-      >
-        {items.map((item, idx) => (
-          <div 
-            key={item.id}
-            className="flex items-center gap-2 group/item transition-colors px-1.5 py-1 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800/50"
-          >
-            <button
-              type="button"
-              onClick={() => handleToggleCheck(idx)}
-              className="text-slate-400 hover:text-teal-600 transition-colors shrink-0 cursor-pointer"
-              title={item.checked ? "Tandai belum selesai" : "Tandai selesai"}
-            >
-              {item.checked ? (
-                <CheckSquare className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-              ) : (
-                <Square className="w-4 h-4" />
-              )}
-            </button>
-
-            <input
-              ref={el => inputRefs.current[idx] = el}
-              type="text"
-              value={item.text}
-              placeholder={`Langkah subtask ${idx + 1}...`}
-              onChange={(e) => handleTextChange(idx, e.target.value)}
-              onKeyDown={(e) => handleKeyDown(e, idx)}
-              className={`flex-1 bg-transparent border-none outline-none text-xs ${
-                item.checked ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200 font-medium'
-              }`}
-            />
-
-            <button
-              type="button"
-              onClick={() => handleRemoveItem(idx)}
-              className="opacity-0 group-hover/item:opacity-100 p-1 text-slate-400 hover:text-rose-500 rounded transition-all cursor-pointer"
-              title="Hapus baris subtask"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ))}
-
-        <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-800">
-          <button
-            type="button"
-            onClick={() => handleAddItem()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 text-xs font-bold transition-all cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Tambah Item Subtask</span>
-          </button>
-
-          <div className="flex items-center gap-1 text-[10px]">
-            <span className="text-slate-400 hidden sm:inline">Template:</span>
-            <button
-              type="button"
-              onClick={() => {
-                onChange([
-                  { id: '1', text: 'Persiapan alat & APD lengkap', checked: false },
-                  { id: '2', text: 'Eksekusi operasional sesuai SOP', checked: false },
-                  { id: '3', text: 'Pencatatan data & pelaporan ke atasan', checked: false },
-                ]);
-              }}
-              className="px-2 py-0.5 rounded-md border border-dashed border-teal-500/40 text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 cursor-pointer"
-            >
-              + 3 Tahapan Standar
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Catatan Tambahan (Opsional) */}
-      <div className="pt-1">
-        <label className="text-[11px] font-semibold text-slate-500 block mb-1">
-          Catatan Tambahan / Instruksi Khusus (Opsional)
-        </label>
-        <textarea
-          rows={2}
-          value={notes}
-          onChange={(e) => onNotesChange(e.target.value)}
-          placeholder="Catatan tambahan bila diperlukan..."
-          className="w-full px-3 py-1.5 rounded-xl border outline-none text-xs focus:border-teal-500"
-          style={{
-            backgroundColor: 'var(--input-bg, #f8fafc)',
-            borderColor: 'var(--border-main, #cbd5e1)'
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
 export function LogbookScreen({
   inspectorNik,
   inspectorName,
@@ -686,10 +504,7 @@ export function LogbookScreen({
   // Quick Assign Task State
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [checklistDrafts, setChecklistDrafts] = useState<SubtaskDraft[]>([
-    { id: '1', text: '', checked: false }
-  ]);
-  const [newNotes, setNewNotes] = useState('');
+  const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newAssigneeNik, setNewAssigneeNik] = useState('');
   const [newAssigneeName, setNewAssigneeName] = useState('');
   const [newPriority, setNewPriority] = useState('Normal');
@@ -700,10 +515,7 @@ export function LogbookScreen({
 
   const openAssignModal = () => {
     setNewTitle('');
-    setChecklistDrafts([
-      { id: '1', text: '', checked: false }
-    ]);
-    setNewNotes('');
+    setNewTaskDescription('');
     setNewAssigneeNik('');
     setNewAssigneeName('');
     setNewPriority('Normal');
@@ -785,15 +597,6 @@ export function LogbookScreen({
       return;
     }
 
-    const checklistMarkdown = checklistDrafts
-      .filter(item => item.text.trim())
-      .map(item => `- [${item.checked ? 'x' : ' '}] ${item.text.trim()}`)
-      .join('\n');
-
-    const finalDescription = newNotes.trim()
-      ? (checklistMarkdown ? `${newNotes.trim()}\n\n${checklistMarkdown}` : newNotes.trim())
-      : checklistMarkdown;
-
     try {
       setIsSubmitting(true);
       toast.loading('Menugaskan arahan kegiatan & menyinkronkan ke Buletin...', { id: 'assign-task' });
@@ -803,7 +606,7 @@ export function LogbookScreen({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTitle.trim(),
-          description: finalDescription,
+          description: newTaskDescription.trim(),
           section: userSection, // Locked automatically to user's section
           assigneeNik: newAssigneeNik,
           assigneeName: newAssigneeName,
@@ -823,8 +626,7 @@ export function LogbookScreen({
         toast.success(`Tugas berhasil ditugaskan ke ${newAssigneeName}!`, { id: 'assign-task' });
         setShowAssignModal(false);
         setNewTitle('');
-        setChecklistDrafts([{ id: '1', text: '', checked: false }]);
-        setNewNotes('');
+        setNewTaskDescription('');
         fetchTasks();
       } else {
         toast.error(json.message || 'Gagal menugaskan task', { id: 'assign-task' });
@@ -1685,13 +1487,18 @@ export function LogbookScreen({
                 </div>
               </div>
 
-              {/* WYSIWYG Interactive Checklist Builder */}
-              <WysiwygChecklistBuilder
-                items={checklistDrafts}
-                onChange={setChecklistDrafts}
-                notes={newNotes}
-                onNotesChange={setNewNotes}
-              />
+              {/* Enterprise WYSIWYG Editor (Mode Teks Standar vs Mode Checklist Subtask) */}
+              <div>
+                <EnterpriseWysiwygEditor
+                  value={newTaskDescription}
+                  onChange={setNewTaskDescription}
+                  label="Rincian Tugas & Subtask"
+                  placeholder="Tulis arahan kegiatan... (Beralih ke 'Checklist Subtask' jika ingin membuat poin-poin ceklis)"
+                  allowModeSwitch={true}
+                  defaultMode="text"
+                  rows={4}
+                />
+              </div>
 
               {/* Hubungkan ke Dokumen Buletin (Searchable Combobox) */}
               <SearchableBulletinSelect

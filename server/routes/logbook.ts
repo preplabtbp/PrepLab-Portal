@@ -264,8 +264,12 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
           if (parsed && parsed.headers.length > 0) {
             // Check if row already exists
             const existingRowIdx = parsed.rows.findIndex(r => {
-              const rTitle = (r['Jenis kegiatan'] || r['task'] || r['judul'] || '').toLowerCase().trim();
-              return rTitle === title.toLowerCase().trim();
+              const rTitle = Object.keys(r).reduce((acc, k) => {
+                const kl = k.toLowerCase().trim();
+                if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') return (r[k] || '').toLowerCase().trim();
+                return acc;
+              }, '');
+              return rTitle && rTitle === title.toLowerCase().trim();
             });
 
             if (existingRowIdx === -1) {
@@ -274,7 +278,7 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
               parsed.headers.forEach(h => {
                 const hl = h.toLowerCase().trim();
                 if (hl === 'number' || hl === 'no' || hl === '#') {
-                  newRow[h] = String(parsed.rows.length + 1);
+                  newRow[h] = '1';
                 } else if (hl.includes('jenis kegiatan') || hl === 'task' || hl === 'judul') {
                   newRow[h] = title.trim();
                 } else if (hl.includes('keterangan') || hl.includes('catatan') || hl.includes('deskripsi')) {
@@ -283,23 +287,39 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
                   newRow[h] = assigneeName;
                 } else if (hl.includes('status')) {
                   newRow[h] = 'Open';
-                } else if (hl.includes('priority')) {
+                } else if (hl.includes('priority') || hl.includes('prioritas')) {
                   newRow[h] = priority;
-                } else if (hl.includes('activity')) {
+                } else if (hl.includes('activity') || hl.includes('aktivitas')) {
                   newRow[h] = activityType;
                 } else if (hl.includes('target') || hl.includes('deadline')) {
                   newRow[h] = targetDate || '-';
                 } else if (hl.includes('created')) {
                   newRow[h] = assignedDate;
+                } else if (hl.includes('group')) {
+                  newRow[h] = section || '-';
+                } else if (hl.includes('aktual')) {
+                  newRow[h] = '-';
                 } else {
                   newRow[h] = '-';
                 }
               });
 
-              parsed.rows.push(newRow);
+              // Prepend at the TOP so it appears immediately on newest-first view
+              parsed.rows.unshift(newRow);
+
+              // Re-index number column if present
+              parsed.rows.forEach((r, idx) => {
+                Object.keys(r).forEach(k => {
+                  const kl = k.toLowerCase().trim();
+                  if (kl === 'number' || kl === 'no' || kl === '#') {
+                    r[k] = String(idx + 1);
+                  }
+                });
+              });
+
               const updatedContent = serializeMarkdownTable(parsed.headers, parsed.rows, parsed.beforeText, parsed.afterText);
               await db.update(bulletinPosts).set({ content: updatedContent }).where(eq(bulletinPosts.id, post.id));
-              console.log(`[Logbook Sync] Synced new task "${title}" to bulletin post #${post.id}`);
+              console.log(`[Logbook Sync] Synced new task "${title}" to top of bulletin post #${post.id}`);
             }
           }
         }
@@ -380,39 +400,43 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
           const post = postArr[0];
           const parsed = parseMarkdownTableRows(post.content);
           if (parsed && parsed.headers.length > 0) {
-            const targetTitle = (taskResult.bulletinTopicTitle || taskResult.title).toLowerCase().trim();
-            let rowFound = false;
+            const targetTitle = (taskResult.bulletinTopicTitle || taskResult.title || '').toLowerCase().trim();
+            if (targetTitle && targetTitle.length >= 2) {
+              const targetIdx = parsed.rows.findIndex(r => {
+                const rTitle = Object.keys(r).reduce((acc, k) => {
+                  const kl = k.toLowerCase().trim();
+                  if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') {
+                    return (r[k] || '').toLowerCase().trim();
+                  }
+                  return acc;
+                }, '');
+                if (!rTitle || rTitle.length < 2) return false;
+                return rTitle === targetTitle || (rTitle.length >= 4 && targetTitle.length >= 4 && (rTitle.startsWith(targetTitle) || targetTitle.startsWith(rTitle)));
+              });
 
-            parsed.rows = parsed.rows.map(r => {
-              const rTitle = (r['Jenis kegiatan'] || r['task'] || r['judul'] || '').toLowerCase().trim();
-              if (rTitle === targetTitle || targetTitle.includes(rTitle) || rTitle.includes(targetTitle)) {
-                rowFound = true;
-                const newRow = { ...r };
-                // Update status
-                Object.keys(newRow).forEach(k => {
+              if (targetIdx !== -1) {
+                const targetRow = { ...parsed.rows[targetIdx] };
+                Object.keys(targetRow).forEach(k => {
                   const kl = k.toLowerCase().trim();
                   if (kl.includes('status')) {
-                    newRow[k] = taskResult.status || newRow[k];
+                    targetRow[k] = taskResult.status || targetRow[k];
                   }
-                  if (kl.includes('keterangan') && updatePayload.description) {
-                    newRow[k] = updatePayload.description;
+                  if (kl.includes('keterangan') && updatePayload.description !== undefined) {
+                    targetRow[k] = updatePayload.description;
                   }
-                  if (kl.includes('priority') && updatePayload.priority) {
-                    newRow[k] = updatePayload.priority;
+                  if ((kl.includes('priority') || kl.includes('prioritas')) && updatePayload.priority) {
+                    targetRow[k] = updatePayload.priority;
                   }
                   if (kl.includes('aktual') && (taskResult.status === 'Resolved' || taskResult.status === 'Done')) {
-                    newRow[k] = formatDateStr(new Date());
+                    targetRow[k] = formatDateStr(new Date());
                   }
                 });
-                return newRow;
-              }
-              return r;
-            });
+                parsed.rows[targetIdx] = targetRow;
 
-            if (rowFound) {
-              const updatedContent = serializeMarkdownTable(parsed.headers, parsed.rows, parsed.beforeText, parsed.afterText);
-              await db.update(bulletinPosts).set({ content: updatedContent }).where(eq(bulletinPosts.id, post.id));
-              console.log(`[Logbook Sync] Synced update of task #${taskResult.id} back to bulletin post #${post.id}`);
+                const updatedContent = serializeMarkdownTable(parsed.headers, parsed.rows, parsed.beforeText, parsed.afterText);
+                await db.update(bulletinPosts).set({ content: updatedContent }).where(eq(bulletinPosts.id, post.id));
+                console.log(`[Logbook Sync] Synced update of task #${taskResult.id} strictly to row #${targetIdx} of bulletin post #${post.id}`);
+              }
             }
           }
         }
