@@ -29,11 +29,16 @@ router.get("/api/bulletin", async (req, res) => {
       // If pt === 'ALL' or (isSuperUser and no pt specified), return all bulletin posts
       if (pt === 'ALL' || (isSuperUser && !pt)) {
         console.log('[Bulletin API] Unrestricted access granted for user:', nik, 'pt:', pt);
+      } else if (pt === 'GTS') {
+        conditions.push(eq(bulletinPosts.pt, 'GTS'));
       } else {
-        // GPS and TBP share the same universe (TBP_GPS)
-        // so GPS users see TBP data
-        const targetPt = (pt === 'GPS' || !pt) ? 'TBP' : pt;
-        conditions.push(eq(bulletinPosts.pt, targetPt));
+        // GPS and TBP share the same universe (TBP & GPS bersamaan)
+        conditions.push(or(
+          eq(bulletinPosts.pt, 'TBP'),
+          eq(bulletinPosts.pt, 'GPS'),
+          eq(bulletinPosts.pt, 'TBP_GPS'),
+          isNull(bulletinPosts.pt)
+        ));
       }
       
       let baseQuery = db.select().from(bulletinPosts);
@@ -92,7 +97,17 @@ router.get("/api/bulletin/search", async (req, res) => {
       // Get all posts for department and target PT
       let conditions: any[] = [];
       if (pt !== 'ALL') {
-        conditions.push(eq(bulletinPosts.pt, pt === 'GPS' ? 'TBP' : pt));
+        if (pt === 'GTS') {
+          conditions.push(eq(bulletinPosts.pt, 'GTS'));
+        } else {
+          // GPS and TBP share the same universe (TBP & GPS bersamaan)
+          conditions.push(or(
+            eq(bulletinPosts.pt, 'TBP'),
+            eq(bulletinPosts.pt, 'GPS'),
+            eq(bulletinPosts.pt, 'TBP_GPS'),
+            isNull(bulletinPosts.pt)
+          ));
+        }
       }
       if (department) {
         conditions.push(eq(bulletinPosts.department, String(department)));

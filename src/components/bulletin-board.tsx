@@ -103,7 +103,8 @@ export function BulletinBoard({
     if (paramPt === 'TBP' || paramPt === 'GPS') return 'TBP';
     if (paramPt === 'ALL') return 'ALL';
     const saved = localStorage.getItem('bulletin_active_universe');
-    if (saved === 'ALL' || saved === 'TBP' || saved === 'GTS') return saved;
+    if (saved === 'ALL' || saved === 'GTS') return saved;
+    if (saved === 'TBP' || saved === 'GPS') return 'TBP';
     return userUniverse;
   }, [isDev, userUniverse]);
 
@@ -559,7 +560,11 @@ export function BulletinBoard({
   const filteredPosts = useMemo(() => {
     let list = posts;
     if (selectedPtFilter !== "ALL") {
-      list = list.filter((p) => (p.pt === "GTS" ? "GTS" : "TBP") === selectedPtFilter);
+      list = list.filter((p) => {
+        const pPt = (p.pt || 'TBP').toUpperCase();
+        if (selectedPtFilter === 'GTS') return pPt === 'GTS';
+        return pPt === 'TBP' || pPt === 'GPS' || pPt === 'TBP_GPS';
+      });
     }
     if (sidebarTab === "folders") {
       list = list.filter(isFolderPost);
@@ -574,7 +579,11 @@ export function BulletinBoard({
 
   const folderCount = useMemo(() => {
     const list = selectedPtFilter !== "ALL"
-      ? posts.filter((p) => (p.pt === "GTS" ? "GTS" : "TBP") === selectedPtFilter)
+      ? posts.filter((p) => {
+          const pPt = (p.pt || 'TBP').toUpperCase();
+          if (selectedPtFilter === 'GTS') return pPt === 'GTS';
+          return pPt === 'TBP' || pPt === 'GPS' || pPt === 'TBP_GPS';
+        })
       : posts;
     return list.filter(isFolderPost).length;
   }, [posts, isFolderPost, selectedPtFilter]);
@@ -1394,7 +1403,11 @@ ${aiMeetingNotes
         <div className="flex-1 p-4 md:p-6 lg:p-8 w-full pb-32">
           {!selectedPost && !isEditing ? (
             <TbpDashboard
-              posts={selectedPtFilter !== "ALL" ? posts.filter((p) => (p.pt === "GTS" ? "GTS" : "TBP") === selectedPtFilter) : posts}
+              posts={selectedPtFilter !== "ALL" ? posts.filter((p) => {
+                const pPt = (p.pt || 'TBP').toUpperCase();
+                if (selectedPtFilter === 'GTS') return pPt === 'GTS';
+                return pPt === 'TBP' || pPt === 'GPS' || pPt === 'TBP_GPS';
+              }) : posts}
               onSelectPost={(post) => navigateToPost(post)}
               agendaEvents={agendaEventsList}
               onOpenFullAgenda={() => setShowFullAgendaModal(true)}

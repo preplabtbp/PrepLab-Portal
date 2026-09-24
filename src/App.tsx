@@ -1426,8 +1426,9 @@ export default function App() {
             {/* Buletin */}
             <button
               onClick={() => {
+                const activeUniv = localStorage.getItem('bulletin_active_universe');
                 const targetUniverse = isDeveloper
-                  ? (localStorage.getItem('bulletin_active_universe') || userProfile?.pt || 'TBP')
+                  ? (activeUniv === 'GTS' ? 'GTS' : 'TBP')
                   : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
                 handleNav(`bulletin/${targetUniverse}`);
               }}
@@ -1555,8 +1556,9 @@ export default function App() {
   <Route path="/pelanggaran-dashboard" element={<PelanggaranDashboard />} />
   <Route path="/wo-maintenance-dashboard" element={<WOMaintenanceDashboard onBack={() => handleNav('home')} inspectorNik={inspectorNik!} />} />
   <Route path="/wo-dashboard" element={<WOMaintenanceDashboard onBack={() => handleNav('home')} inspectorNik={inspectorNik!} />} />
+  <Route path="/bulletin/GPS" element={<Navigate to="/bulletin/TBP" replace />} />
   <Route path="/bulletin/:pt" element={<BulletinBoard inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} userPt={userProfile?.pt || 'TBP'} />} />
-  <Route path="/bulletin" element={<Navigate to={`/bulletin/${isDeveloper ? (localStorage.getItem('bulletin_active_universe') || userProfile?.pt || 'TBP') : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP')}`} replace />} />
+  <Route path="/bulletin" element={<Navigate to={`/bulletin/${isDeveloper ? (localStorage.getItem('bulletin_active_universe') === 'GTS' ? 'GTS' : 'TBP') : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP')}`} replace />} />
   <Route path="/agenda" element={<AgendaDashboard key="agenda" inspectorNik={inspectorNik!} inspectorName={inspectorName!} userDept={userDept || undefined} isDeveloper={isDeveloper} />} />
   <Route path="/p5m" element={<P5MScreen onBack={() => handleNav('home')} userProfile={userProfile} />} />
   <Route path="/feedback-support" element={<FeedbackSupportScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
@@ -1760,8 +1762,9 @@ export default function App() {
             label="Buletin" 
             active={activeTab.startsWith('bulletin')} 
             onClick={() => { 
+              const activeUniv = localStorage.getItem('bulletin_active_universe');
               const targetUniverse = isDeveloper
-                ? (localStorage.getItem('bulletin_active_universe') || userProfile?.pt || 'TBP')
+                ? (activeUniv === 'GTS' ? 'GTS' : 'TBP')
                 : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
               handleNav(`bulletin/${targetUniverse}`);
             }} 

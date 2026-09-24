@@ -245,12 +245,12 @@ export function LogbookScreen({
   };
 
   // Toggle Subtask Checklist in Description
-  const handleToggleSubtask = async (task: LogbookTask, subtaskText: string, currentCompleted: boolean) => {
-    const updatedDesc = toggleTasklistItem(task.description || '', subtaskText, !currentCompleted);
-    const progress = calculateProgress(updatedDesc);
+  const handleToggleSubtask = async (task: LogbookTask, itemIndex: number) => {
+    const updatedDesc = toggleTasklistItem(task.description || '', itemIndex);
+    const progress = parseTasklist(updatedDesc);
 
     // Optimistic UI Update
-    setTodayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, progressPercent: progress.percent } : t));
+    setTodayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, progressPercent: progress.percentage } : t));
 
     try {
       await fetch(`/api/logbook/tasks/${task.id}`, {
@@ -258,7 +258,7 @@ export function LogbookScreen({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           description: updatedDesc,
-          progressPercent: progress.percent,
+          progressPercent: progress.percentage,
           updaterNik: inspectorNik
         })
       });
@@ -897,26 +897,26 @@ export function LogbookScreen({
                         <div className="mt-3 p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-2">
                           <div className="flex items-center justify-between text-[10px] font-mono">
                             <span className="font-semibold text-slate-500">Progress Checklist:</span>
-                            <span className="font-bold text-teal-600 dark:text-teal-400">{parsed.completed}/{parsed.total} ({parsed.percent}%)</span>
+                            <span className="font-bold text-teal-600 dark:text-teal-400">{parsed.completed}/{parsed.total} ({parsed.percentage}%)</span>
                           </div>
                           <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-teal-500 rounded-full transition-all duration-300" style={{ width: `${parsed.percent}%` }} />
+                            <div className="h-full bg-teal-500 rounded-full transition-all duration-300" style={{ width: `${parsed.percentage}%` }} />
                           </div>
 
                           <div className="space-y-1.5 pt-1">
-                            {parsed.items.map((item, i) => (
+                            {parsed.items.map((item) => (
                               <label
-                                key={i}
+                                key={item.index}
                                 onClick={(e) => e.stopPropagation()}
                                 className="flex items-start gap-2 text-xs cursor-pointer select-none group/item hover:text-teal-600 transition-colors"
                               >
                                 <input
                                   type="checkbox"
-                                  checked={item.completed}
-                                  onChange={() => handleToggleSubtask(task, item.text, item.completed)}
+                                  checked={item.checked}
+                                  onChange={() => handleToggleSubtask(task, item.index)}
                                   className="mt-0.5 w-4 h-4 rounded text-teal-600 focus:ring-teal-500 cursor-pointer"
                                 />
-                                <span className={`flex-1 ${item.completed ? 'line-through opacity-50' : 'font-medium'}`}>
+                                <span className={`flex-1 ${item.checked ? 'line-through opacity-50' : 'font-medium'}`}>
                                   {item.text}
                                 </span>
                               </label>

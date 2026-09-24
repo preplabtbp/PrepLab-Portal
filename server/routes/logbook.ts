@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../../src/db/index.js";
-import { eq, desc, and, or, inArray, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, and, or, inArray, gte, lte, sql, isNull } from "drizzle-orm";
 import { 
   logbookTasks, employees, bulletinPosts, notifications 
 } from "../../src/db/schema.js";
@@ -112,8 +112,16 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
     // Build base conditions
     const conditions: any[] = [];
     if (pt && pt !== 'ALL') {
-      const cleanPt = pt === 'GPS' ? 'TBP' : pt;
-      conditions.push(eq(logbookTasks.pt, cleanPt));
+      if (pt === 'GTS') {
+        conditions.push(eq(logbookTasks.pt, 'GTS'));
+      } else {
+        // TBP and GPS are unified
+        conditions.push(or(
+          eq(logbookTasks.pt, 'TBP'),
+          eq(logbookTasks.pt, 'GPS'),
+          isNull(logbookTasks.pt)
+        ));
+      }
     }
     if (section && section !== 'ALL' && section !== 'Semua') {
       conditions.push(eq(logbookTasks.section, section));
