@@ -36,12 +36,13 @@ import {
   AlertTriangle,
   Maximize2,
   Minimize2,
-  Monitor
+  Monitor,
+  GripVertical
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui';
-import { parseTasklist, toggleTasklistItem, markdownToVisualHtml } from './notion/tasklist-utils';
-import { NotionDropdownCell } from './notion/NotionDropdownCell';
+import { parseTasklist, toggleTasklistItem, markdownToVisualHtml, reorderTasklistItems } from './notion/tasklist-utils';
+import { NotionDropdownCell, DropdownOption } from './notion/NotionDropdownCell';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 
 interface LogbookTask {
@@ -71,6 +72,7 @@ interface LogbookTask {
   pendingPicNik?: string | null;
   pendingPicName?: string | null;
   pendingReason?: string | null;
+  draftChange?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -808,6 +810,193 @@ export function LogbookScreen({
     setShowAssignModal(true);
   };
 
+  // State: Edit Task & Draft Proposal (Role-Based)
+  const [editingTask, setEditingTask] = useState<LogbookTask | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editPriority, setEditPriority] = useState('Normal');
+  const [editTargetDate, setEditTargetDate] = useState('');
+  const [editTargetTime, setEditTargetTime] = useState('');
+  const [editAssigneeNik, setEditAssigneeNik] = useState('');
+  const [editAssigneeName, setEditAssigneeName] = useState('');
+  const [editChangeReason, setEditChangeReason] = useState('');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  // State: Review Draft Modal (for Task Creator)
+  const [reviewingTask, setReviewingTask] = useState<LogbookTask | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // State: Card Checklist Drag-and-Drop
+  const [cardDragIdx, setCardDragIdx] = useState<{ taskId: number; itemIdx: number } | null>(null);
+  const [cardDragOverIdx, setCardDragOverIdx] = useState<{ taskId: number; itemIdx: number } | null>(null);
+
+  const openEditModal = (task: LogbookTask) => {
+    setEditingTask(task);
+    setEditTitle(task.title);
+    setEditDescription(task.description || '');
+    setEditPriority(task.priority || 'Normal');
+    setEditTargetDate(task.targetDate || selectedDate || getTodayStr());
+    setEditTargetTime(task.targetTime || '23:59');
+    setEditAssigneeNik(task.assigneeNik);
+    setEditAssigneeName(task.assigneeName);
+    setEditChangeReason('');
+  };
+
+  const openReviewModal = (task: LogbookTask) => {
+    setReviewingTask(task);
+    setRejectReason('');
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTask) return;
+
+    const isCreator = editingTask.assignedByNik === inspectorNik || isSupervisor;
+    const isAssignee = String(editingTask.assigneeNik || '').split(',').map(s => s.trim()).includes(inspectorNik) || editingTask.pendingPicNik === inspectorNik;
+
+    if (!isCreator && !isAssignee) {
+      toast.error('Anda tidak memiliki izin untuk mengedit tugas ini.');
+      return;
+    }
+
+    if (!editTitle.trim()) {
+      toast.error('Judul tugas tidak boleh kosong.');
+      return;
+    }
+
+    if (!isCreator && !editChangeReason.trim()) {
+      toast.error('Mohon isi alasan / keterangan penyesuaian untuk direview pemberi tugas.');
+      return;
+    }
+
+    try {
+      setIsSubmittingEdit(true);
+      if (isCreator) {
+        // Direct Edit by Task Creator
+        const res = await fetch(`/api/logbook/tasks/${editingTask.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            isDirectEdit: true,
+            clearDraft: true,
+            updaterNik: inspectorNik,
+            title: editTitle.trim(),
+            description: editDescription.trim(),
+            priority: editPriority,
+            targetDate: editTargetDate,
+            targetTime: editTargetTime || '23:59',
+            assigneeNik: editAssigneeNik,
+            assigneeName: editAssigneeName
+          })
+        });
+        const json = await res.json();
+        if (json.status === 'success') {
+          toast.success('Tugas berhasil diperbarui');
+          setEditingTask(null);
+          fetchTasks();
+        } else {
+          toast.error(json.message || 'Gagal memperbarui tugas');
+        }
+      } else {
+        // Draft Proposal by PIC
+        const draftPayload = {
+          proposedByNik: inspectorNik,
+          proposedByName: inspectorName,
+          proposedAt: new Date().toISOString(),
+          title: editTitle.trim(),
+          description: editDescription.trim(),
+          priority: editPriority,
+          targetDate: editTargetDate,
+          targetTime: editTargetTime || '23:59',
+          assigneeNik: editAssigneeNik,
+          assigneeName: editAssigneeName,
+          changeReason: editChangeReason.trim()
+        };
+
+        const res = await fetch(`/api/logbook/tasks/${editingTask.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            isDraftProposal: true,
+            proposerName: inspectorName,
+            draftChange: JSON.stringify(draftPayload)
+          })
+        });
+        const json = await res.json();
+        if (json.status === 'success') {
+          toast.success('Draft perubahan berhasil diajukan ke pemberi tugas!');
+          setEditingTask(null);
+          fetchTasks();
+        } else {
+          toast.error(json.message || 'Gagal mengajukan draft');
+        }
+      }
+    } catch (err: any) {
+      console.error('Error submitting edit:', err);
+      toast.error('Terjadi kesalahan saat memproses perubahan tugas');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleReviewDraft = async (action: 'approve' | 'reject') => {
+    if (!reviewingTask) return;
+    try {
+      setIsSubmittingReview(true);
+      const res = await fetch(`/api/logbook/tasks/${reviewingTask.id}/review-draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          reviewerNik: inspectorNik,
+          reviewerName: inspectorName,
+          reviewNotes: rejectReason.trim()
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'success') {
+        toast.success(action === 'approve' ? 'Draft perubahan disetujui & diterapkan!' : 'Draft perubahan telah ditolak.');
+        setReviewingTask(null);
+        fetchTasks();
+      } else {
+        toast.error(json.message || 'Gagal memproses review draft');
+      }
+    } catch (e: any) {
+      console.error('Error reviewing draft:', e);
+      toast.error('Terjadi kesalahan saat review draft');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const handleDropCardSubtask = (task: LogbookTask, targetIdx: number) => {
+    if (!cardDragIdx || cardDragIdx.taskId !== task.id || cardDragIdx.itemIdx === targetIdx) {
+      setCardDragIdx(null);
+      setCardDragOverIdx(null);
+      return;
+    }
+    const parsed = parseTasklist(task.description || '');
+    const reordered = [...parsed.items];
+    const [moved] = reordered.splice(cardDragIdx.itemIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    const newDesc = reorderTasklistItems(task.description || '', reordered);
+
+    // Optimistic update
+    setTodayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: newDesc } : t));
+    setYesterdayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: newDesc } : t));
+
+    // Send update to server
+    fetch(`/api/logbook/tasks/${task.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: newDesc, updaterNik: inspectorNik })
+    }).catch(e => console.warn('Failed to save subtask order:', e));
+
+    setCardDragIdx(null);
+    setCardDragOverIdx(null);
+  };
+
   // Fetch employees list
   useEffect(() => {
     fetch('/api/employees')
@@ -881,6 +1070,17 @@ export function LogbookScreen({
       setIsSubmitting(true);
       toast.loading('Menugaskan arahan kegiatan & menyinkronkan ke Buletin...', { id: 'assign-task' });
 
+      // Auto compute initial status if subtask mode is used
+      const parsedNew = parseTasklist(newTaskDescription);
+      let initStatus = isAssignPending ? 'Pending' : 'Open';
+      let initPercent = 0;
+      if (parsedNew.hasTasklist && parsedNew.total > 0 && !isAssignPending) {
+        if (parsedNew.completed === 0) initStatus = 'Open';
+        else if (parsedNew.completed === parsedNew.total) initStatus = 'Closed';
+        else initStatus = 'On Progress';
+        initPercent = parsedNew.percentage;
+      }
+
       const res = await fetch('/api/logbook/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -897,6 +1097,8 @@ export function LogbookScreen({
           taskDate: selectedDate,
           targetDate: newTargetDate || selectedDate,
           targetTime: newTargetTime.trim() || '23:59',
+          status: initStatus,
+          progressPercent: initPercent,
           pt: selectedPt,
           bulletinPostId: selectedBulletinPostId ? parseInt(selectedBulletinPostId) : null,
           isPending: isAssignPending,
@@ -930,9 +1132,32 @@ export function LogbookScreen({
     const updatedDesc = toggleTasklistItem(task.description || '', itemIndex);
     const progress = parseTasklist(updatedDesc);
 
+    // Automation: if task has subtasks, auto update status:
+    // 0 checked -> 'Open', 1..total-1 checked -> 'On Progress', all checked -> 'Closed'
+    let autoStatus = task.status;
+    if (progress.hasTasklist && progress.total > 0) {
+      if (progress.completed === 0) {
+        autoStatus = 'Open';
+      } else if (progress.completed === progress.total) {
+        autoStatus = 'Closed';
+      } else {
+        autoStatus = 'On Progress';
+      }
+    }
+
     // Optimistic UI Update
-    setTodayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, progressPercent: progress.percentage } : t));
-    setYesterdayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, progressPercent: progress.percentage } : t));
+    setTodayTasks(prev => prev.map(t => t.id === task.id ? { 
+      ...t, 
+      description: updatedDesc, 
+      progressPercent: progress.percentage,
+      status: autoStatus 
+    } : t));
+    setYesterdayTasks(prev => prev.map(t => t.id === task.id ? { 
+      ...t, 
+      description: updatedDesc, 
+      progressPercent: progress.percentage,
+      status: autoStatus 
+    } : t));
 
     try {
       await fetch(`/api/logbook/tasks/${task.id}`, {
@@ -941,9 +1166,18 @@ export function LogbookScreen({
         body: JSON.stringify({
           description: updatedDesc,
           progressPercent: progress.percentage,
+          status: autoStatus,
           updaterNik: inspectorNik
         })
       });
+
+      if (autoStatus === 'Closed' && task.status !== 'Closed') {
+        toast.success(`Checklist 100% selesai! Status otomatis menjadi [Closed]`);
+      } else if (autoStatus === 'On Progress' && task.status !== 'On Progress') {
+        toast.info(`Subtask dicentang (${progress.completed}/${progress.total}), status otomatis [On Progress]`);
+      } else if (autoStatus === 'Open' && task.status !== 'Open') {
+        toast.info(`Semua subtask belum dicentang, status otomatis [Open]`);
+      }
     } catch (e) {
       console.error('Failed to sync checklist update:', e);
       toast.error('Gagal menyinkronkan checklist ke server');
@@ -1144,29 +1378,73 @@ export function LogbookScreen({
     toast.success('Notulensi Morning Briefing berhasil disalin ke clipboard! Siap dibagikan ke WhatsApp.');
   };
 
-  // Filtered Today & Yesterday Lists
+  // Priority / Urgency ranking: Urgent (1) > High (2) > Normal/Medium (3) > Low (4) > Other (5)
+  const getPriorityWeight = (priority: string) => {
+    const p = (priority || '').toLowerCase().trim();
+    if (p === 'urgent') return 1;
+    if (p === 'high') return 2;
+    if (p === 'normal' || p === 'medium' || p === 'sedang') return 3;
+    if (p === 'low' || p === 'rendah') return 4;
+    return 5;
+  };
+
+  // Sort tasks by Urgency first (Urgent > High > Normal > Low), then FIFO (earliest created / lowest id first)
+  const sortTasksByUrgencyAndFifo = (a: LogbookTask, b: LogbookTask) => {
+    const weightA = getPriorityWeight(a.priority);
+    const weightB = getPriorityWeight(b.priority);
+    if (weightA !== weightB) {
+      return weightA - weightB; // Lower weight = more urgent
+    }
+    // FIFO: earliest created first (oldest task first)
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : a.id;
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : b.id;
+    if (timeA !== timeB) {
+      return timeA - timeB;
+    }
+    return a.id - b.id;
+  };
+
+  // Calculate task progress percentage helper
+  const calculateTaskProgress = (task: LogbookTask) => {
+    const parsed = parseTasklist(task.description || '');
+    if (parsed.hasTasklist && parsed.total > 0) {
+      return parsed.percentage;
+    }
+    const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
+    if (isDone) return 100;
+    if (task.status === 'In Progress') {
+      return task.progressPercent && task.progressPercent > 0 ? task.progressPercent : 50;
+    }
+    return task.progressPercent || 0;
+  };
+
+  // Filtered Today & Yesterday Lists (Sorted by Urgency then FIFO)
   const filteredToday = useMemo(() => {
-    return todayTasks.filter(t => {
-      const matchSearch = !searchQuery || 
-        t.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        t.assigneeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (t.pendingPicName && t.pendingPicName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchPic = picFilter === 'ALL' || t.assigneeNik.includes(picFilter) || t.assigneeName.includes(picFilter) || (t.pendingPicNik && t.pendingPicNik.includes(picFilter));
-      return matchSearch && matchPic;
-    });
+    return todayTasks
+      .filter(t => {
+        const matchSearch = !searchQuery || 
+          t.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+          t.assigneeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (t.pendingPicName && t.pendingPicName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
+        const matchPic = picFilter === 'ALL' || t.assigneeNik.includes(picFilter) || t.assigneeName.includes(picFilter) || (t.pendingPicNik && t.pendingPicNik.includes(picFilter));
+        return matchSearch && matchPic;
+      })
+      .sort(sortTasksByUrgencyAndFifo);
   }, [todayTasks, searchQuery, picFilter]);
 
   const filteredYesterday = useMemo(() => {
-    return yesterdayTasks.filter(t => {
-      const matchSearch = !searchQuery || 
-        t.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        t.assigneeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (t.pendingPicName && t.pendingPicName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchPic = picFilter === 'ALL' || t.assigneeNik.includes(picFilter) || t.assigneeName.includes(picFilter) || (t.pendingPicNik && t.pendingPicNik.includes(picFilter));
-      return matchSearch && matchPic;
-    });
+    return yesterdayTasks
+      .filter(t => {
+        const matchSearch = !searchQuery || 
+          t.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+          t.assigneeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (t.pendingPicName && t.pendingPicName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
+        const matchPic = picFilter === 'ALL' || t.assigneeNik.includes(picFilter) || t.assigneeName.includes(picFilter) || (t.pendingPicNik && t.pendingPicNik.includes(picFilter));
+        return matchSearch && matchPic;
+      })
+      .sort(sortTasksByUrgencyAndFifo);
   }, [yesterdayTasks, searchQuery, picFilter]);
 
   // Active Section for Presentation Focus Highlight ('yesterday' | 'today')
@@ -1221,28 +1499,58 @@ export function LogbookScreen({
   };
 
   const toggleProjectorMode = () => {
-    setIsProjectorMode(prev => {
-      const nextVal = !prev;
-      if (nextVal) {
-        // Auto-expand all tasks when entering projector mode
-        const allIds = new Set<number>([
-          ...filteredYesterday.map(t => t.id),
-          ...filteredToday.map(t => t.id)
-        ]);
-        setExpandedTaskIds(allIds);
-      }
-      return nextVal;
-    });
+    setIsProjectorMode(prev => !prev);
   };
 
-  // Enterprise Task Card Renderer with Projector High-Contrast Readability
+  // Enterprise Minimalist Task Row Renderer with Click-to-Expand Details
   const renderTaskCard = (task: LogbookTask, isCarryOver: boolean) => {
     const parsed = parseTasklist(task.description || '');
+    const hasSubtasks = parsed.hasTasklist && parsed.total > 0;
     const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
     const isPending = task.isPending || task.status === 'Pending';
-    const isInProgress = task.status === 'In Progress';
+    const isInProgress = task.status === 'In Progress' || task.status === 'On Progress';
     const isExpanded = expandedTaskIds.has(task.id);
     const picList = parsePicList(task.assigneeNik, task.assigneeName);
+    const isOverdue = isTaskOverdue(task.targetDate, task.targetTime, task.status);
+    const progressPercent = calculateTaskProgress(task);
+
+    // Mode Subtask Status Automation:
+    // Jika ada subtask: otomatis Open (0 ceklis), On Progress (1..N-1 ceklis), Closed (full ceklis), dengan pilihan khusus Canceled.
+    // Jika tanpa subtask: full manual (Open, On Progress, Closed, Canceled).
+    const autoStatus = parsed.completed === 0 ? 'Open' : parsed.completed === parsed.total ? 'Closed' : 'On Progress';
+    const isCanceled = (task.status || '').toLowerCase() === 'canceled';
+
+    const statusOptionsOverride: DropdownOption[] | undefined = hasSubtasks
+      ? isCanceled
+        ? [
+            {
+              value: autoStatus,
+              label: `Pulihkan ke [${autoStatus}]`,
+              badgeClass: autoStatus === 'Closed' ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/40' : autoStatus === 'On Progress' ? 'bg-amber-500/15 text-amber-600 border-amber-500/40' : 'bg-blue-500/15 text-blue-500 border-blue-500/40',
+              icon: <RotateCcw className="w-2.5 h-2.5" />
+            },
+            {
+              value: 'Canceled',
+              label: 'Canceled (Batal)',
+              badgeClass: 'bg-rose-500/15 text-rose-600 border-rose-500/40',
+              icon: <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
+            }
+          ]
+        : [
+            {
+              value: autoStatus,
+              label: `${autoStatus} (Auto Checklist: ${parsed.completed}/${parsed.total})`,
+              badgeClass: autoStatus === 'Closed' ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/40' : autoStatus === 'On Progress' ? 'bg-amber-500/15 text-amber-600 border-amber-500/40' : 'bg-blue-500/15 text-blue-500 border-blue-500/40',
+              icon: autoStatus === 'Closed' ? <CheckCircle2 className="w-2.5 h-2.5" /> : autoStatus === 'On Progress' ? <RotateCcw className="w-2.5 h-2.5" /> : <Clock className="w-2.5 h-2.5" />
+            },
+            {
+              value: 'Canceled',
+              label: 'Canceled (Batalkan)',
+              badgeClass: 'bg-rose-500/15 text-rose-600 border-rose-500/40',
+              icon: <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
+            }
+          ]
+      : undefined;
 
     // Dynamic Section Badge Palette (Masculine Pastel High Contrast)
     const sectionBadgeClass = 
@@ -1252,180 +1560,227 @@ export function LogbookScreen({
       task.section.includes('QA') || task.section.includes('Quality') ? 'bg-cyan-100 text-cyan-950 border border-cyan-300' :
       'bg-slate-200 text-slate-800 border border-slate-300';
 
-    const isOverdue = isTaskOverdue(task.targetDate, task.targetTime, task.status);
-
     return (
       <div 
         key={task.id}
-        className={`rounded-2xl border-2 transition-all duration-200 shadow-xs hover:shadow-md overflow-hidden ${
-          isDone 
-            ? 'border-emerald-300 bg-emerald-50/50' 
+        className={`rounded-xl border transition-all duration-200 overflow-hidden ${
+          isExpanded 
+            ? 'border-teal-400 bg-white shadow-md ring-2 ring-teal-500/10' 
+            : isDone 
+            ? 'border-emerald-200 bg-emerald-50/20 hover:border-emerald-300 hover:bg-emerald-50/40' 
             : isPending
-            ? 'border-amber-300 bg-amber-50/50'
+            ? 'border-amber-200 bg-amber-50/20 hover:border-amber-300 hover:bg-amber-50/40'
             : isInProgress
-            ? 'border-sky-300 bg-sky-50/50'
-            : 'border-slate-300 bg-white'
+            ? 'border-sky-200 bg-sky-50/20 hover:border-sky-300 hover:bg-sky-50/40'
+            : 'border-slate-200 bg-white hover:border-teal-300 hover:bg-slate-50/50 shadow-2xs'
         }`}
       >
-        {/* Card Header Top */}
-        <div className={`p-4 space-y-3 ${isProjectorMode ? 'sm:p-5 sm:space-y-4' : ''}`}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-2 flex-1 min-w-0">
-              {/* Badges Bar (Masculine Pastel) */}
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                <span className={`text-xs px-2.5 py-1 rounded-lg font-mono font-bold shadow-2xs tracking-wide ${sectionBadgeClass}`}>
-                  {task.section}
-                </span>
+        {/* Minimalist Baris Header (Clickable anywhere to expand/collapse) */}
+        <div 
+          onClick={() => toggleExpand(task.id)}
+          className="p-3 sm:px-4 sm:py-2.5 flex items-center justify-between gap-3 cursor-pointer select-none transition-colors group"
+        >
+          {/* Left: Chevron + Priority Badge + Judul Utama Task */}
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            {/* Expand indicator icon */}
+            <div className={`p-1 rounded-md text-slate-400 group-hover:text-teal-700 transition-transform duration-200 shrink-0 ${
+              isExpanded ? 'rotate-90 text-teal-700 bg-teal-50' : 'hover:bg-slate-100'
+            }`}>
+              <ChevronRight className="w-4 h-4" />
+            </div>
 
-                <span className={`text-xs px-2.5 py-1 rounded-lg font-black shadow-2xs ${
-                  task.priority === 'Urgent' 
-                    ? 'bg-rose-100 text-rose-800 border-2 border-rose-300 uppercase tracking-wider animate-pulse' :
-                  task.priority === 'High' 
-                    ? 'bg-amber-100 text-amber-900 border border-amber-300 uppercase tracking-wider' :
-                    'bg-slate-100 text-slate-700 border border-slate-300 font-bold'
-                }`}>
-                  {task.priority}
-                </span>
+            {/* Urgency Badge */}
+            <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0 shadow-2xs ${
+              task.priority === 'Urgent' 
+                ? 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse' :
+              task.priority === 'High' 
+                ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+              task.priority === 'Low'
+                ? 'bg-slate-100 text-slate-500 border border-slate-200' :
+                'bg-slate-100 text-slate-700 border border-slate-300 font-bold'
+            }`}>
+              {task.priority}
+            </span>
 
-                {isCarryOver ? (
-                  <span className="text-xs px-2.5 py-1 rounded-lg font-bold bg-indigo-50 text-indigo-900 border border-indigo-200 flex items-center gap-1 shadow-2xs">
-                    <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Asal: {formatDisplayTargetDate(task.taskDate)}</span>
-                  </span>
-                ) : (
-                  <span className={`text-xs px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 shadow-2xs ${
-                    isOverdue 
-                      ? 'bg-rose-50 text-rose-900 border-rose-300' 
-                      : 'bg-sky-50 text-sky-900 border-sky-200'
-                  }`}>
-                    <Calendar className={`w-3.5 h-3.5 ${isOverdue ? 'text-rose-600' : 'text-sky-600'}`} />
-                    <span>Target: {formatDisplayTargetDate(task.targetDate)}</span>
-                    <span className={`font-mono text-[11px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                      isOverdue ? 'bg-rose-200/80 text-rose-950' : 'bg-sky-200/70 text-sky-950'
-                    }`}>
-                      <Clock className="w-3 h-3 text-slate-700" />
-                      {task.targetTime && task.targetTime !== '23:59' ? `${task.targetTime} WIB` : '12 Malam (23:59)'}
-                    </span>
-                  </span>
-                )}
-
-                {isOverdue && !isDone && (
-                  <span className="text-[10px] sm:text-xs px-2.5 py-1 rounded-lg font-black bg-rose-600 text-white shadow-2xs animate-pulse flex items-center gap-1 uppercase tracking-wider">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>Lewat Batas Jam</span>
-                  </span>
-                )}
-
-                {task.isPending && (
-                  <span className="text-xs px-2.5 py-1 rounded-lg font-black bg-amber-100 text-amber-950 border border-amber-300 flex items-center gap-1.5 shadow-2xs">
-                    <Clock className="w-3.5 h-3.5 text-amber-700" />
-                    <span>Job Pending: {task.pendingPicName || 'Pending'}</span>
-                  </span>
-                )}
-
-                {task.bulletinPostId && (
-                  <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-teal-900 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg shadow-2xs">
-                    <FileText className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Buletin #{task.bulletinPostId}</span>
-                  </span>
-                )}
-              </div>
-
-              {/* Task Title (Deep Black on Pastel Background for Maximum Readability) */}
-              <h3 className={`font-black leading-snug text-slate-900 tracking-tight ${
-                isProjectorMode ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'
+            {/* Judul Utama Task */}
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <h3 className={`font-bold leading-snug text-slate-900 tracking-tight text-sm sm:text-base truncate ${
+                isDone ? 'line-through text-slate-400 font-normal' : ''
               }`}>
                 {task.title}
               </h3>
-            </div>
 
-            {/* Status Notion Dropdown + Delete Button */}
-            <div className="flex items-center gap-2 shrink-0">
-              <NotionDropdownCell
-                type="status"
-                value={task.status}
-                onChange={(newVal) => handleStatusChange(task.id, newVal)}
-              />
-              <button
-                type="button"
-                onClick={() => setTaskToDelete(task)}
-                title="Hapus kegiatan ini (sinkron ke Buletin)"
-                className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer border border-transparent hover:border-rose-200"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* PIC & Delegator Box (Masculine Pastel Eucalyptus) */}
-          <div className="p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-slate-800 font-bold text-xs flex items-center gap-1">
-                <Users className="w-3.5 h-3.5 text-teal-700" />
-                PIC Pelaksana:
-              </span>
-              {picList.map((p, pIdx) => (
-                <span 
-                  key={pIdx} 
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-700 text-white font-black text-xs shadow-xs"
-                >
-                  <span>{p.name}</span>
-                  {p.nik && <span className="text-[10px] opacity-80 font-mono">({p.nik})</span>}
+              {/* Notice indicators on collapsed row */}
+              {task.draftChange && (
+                <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 shrink-0">
+                  Draft Usulan
                 </span>
-              ))}
+              )}
+              {isOverdue && !isDone && (
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300 shrink-0">
+                  <AlertTriangle className="w-3 h-3 text-rose-600" />
+                  Lewat Batas
+                </span>
+              )}
             </div>
-            <span className="text-slate-600 text-xs font-semibold ml-auto flex items-center gap-1">
-              <span>Oleh:</span>
-              <strong className="text-slate-900 font-bold">{task.assignedByName}</strong>
-            </span>
           </div>
 
-          {/* Subtask Progress Summary & Expand Button */}
-          {parsed.hasTasklist ? (
-            <div className="pt-2.5 border-t flex items-center justify-between gap-3 border-slate-200">
-              <div className="flex-1 space-y-1.5">
-                <div className="flex items-center justify-between text-xs sm:text-sm font-mono">
-                  <span className="font-bold text-slate-700">Progress Checklist:</span>
-                  <span className="font-black text-teal-700 text-sm sm:text-base">
-                    {parsed.completed}/{parsed.total} ({parsed.percentage}%)
-                  </span>
-                </div>
-                <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden border border-slate-300 shadow-inner">
-                  <div 
-                    className="h-full bg-gradient-to-r from-teal-600 to-emerald-600 rounded-full transition-all duration-300 shadow-xs" 
-                    style={{ width: `${parsed.percentage}%` }} 
-                  />
-                </div>
-              </div>
+          {/* Right: Status Dropdown & Mini Progress Bar (di bagian bawah status) */}
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className="flex flex-col items-end gap-1 shrink-0"
+          >
+            {/* Status Dropdown (Automated if subtask mode, manual if non-subtask) */}
+            <NotionDropdownCell
+              type="status"
+              value={task.status}
+              onChange={(newVal) => handleStatusChange(task.id, newVal)}
+              optionsOverride={statusOptionsOverride}
+            />
 
-              <button
-                type="button"
-                onClick={() => toggleExpand(task.id)}
-                className="px-3.5 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-xs sm:text-sm font-bold text-slate-800 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs active:scale-95"
-              >
-                <span>{isExpanded ? 'Tutup Checklist' : `Lihat Checklist (${parsed.total})`}</span>
-                {isExpanded ? <ChevronUp className="w-4 h-4 text-teal-600" /> : <ChevronDown className="w-4 h-4 text-teal-600" />}
-              </button>
+            {/* Progress bar kecil di ujung kanan di bagian bawah status */}
+            <div className="flex items-center justify-end gap-1.5 w-24 sm:w-28 mt-0.5">
+              <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
+                <div 
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    isDone 
+                      ? 'bg-emerald-500' 
+                      : isInProgress 
+                      ? 'bg-teal-600' 
+                      : progressPercent > 0 
+                      ? 'bg-sky-500' 
+                      : 'bg-slate-300'
+                  }`}
+                  style={{ width: `${progressPercent}%` }} 
+                />
+              </div>
+              <span className="text-[10px] font-mono font-bold text-slate-600 min-w-[28px] text-right">
+                {progressPercent}%
+              </span>
             </div>
-          ) : task.description ? (
-            <div className="pt-2 border-t flex items-center justify-between border-slate-200">
-              <span className="text-xs text-slate-500 italic">Rincian petunjuk kerja</span>
-              <button
-                type="button"
-                onClick={() => toggleExpand(task.id)}
-                className="px-3 py-1 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-xs font-bold text-teal-700 flex items-center gap-1 cursor-pointer shadow-xs"
-              >
-                <span>{isExpanded ? 'Tutup Rincian' : 'Buka Rincian'}</span>
-                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          ) : null}
+          </div>
         </div>
 
-        {/* Expandable Body: Subtask Checklist & Job Pending Note */}
+        {/* Expandable Details (Hanya muncul saat task diklik) */}
         {isExpanded && (
-          <div className="px-4 pb-4 pt-3 border-t space-y-3 bg-white border-slate-200 animate-in fade-in duration-150">
-            {/* If Job Pending: Show explanation banner */}
+          <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50/50 space-y-4 animate-in fade-in duration-150">
+            {/* Badges Bar (Seksi, Tanggal Target / Asal, Overdue, Buletin) */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`text-xs px-2.5 py-1 rounded-lg font-mono font-bold shadow-2xs tracking-wide ${sectionBadgeClass}`}>
+                {task.section}
+              </span>
+
+              {isCarryOver ? (
+                <span className="text-xs px-2.5 py-1 rounded-lg font-bold bg-indigo-50 text-indigo-900 border border-indigo-200 flex items-center gap-1 shadow-2xs">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Asal: {formatDisplayTargetDate(task.taskDate)}</span>
+                </span>
+              ) : (
+                <span className={`text-xs px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 shadow-2xs ${
+                  isOverdue 
+                    ? 'bg-rose-50 text-rose-900 border-rose-300' 
+                    : 'bg-sky-50 text-sky-900 border-sky-200'
+                }`}>
+                  <Calendar className={`w-3.5 h-3.5 ${isOverdue ? 'text-rose-600' : 'text-sky-600'}`} />
+                  <span>Target: {formatDisplayTargetDate(task.targetDate)}</span>
+                  <span className={`font-mono text-[11px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                    isOverdue ? 'bg-rose-200/80 text-rose-950' : 'bg-sky-200/70 text-sky-950'
+                  }`}>
+                    <Clock className="w-3 h-3 text-slate-700" />
+                    {task.targetTime && task.targetTime !== '23:59' ? `${task.targetTime} WIB` : '12 Malam (23:59)'}
+                  </span>
+                </span>
+              )}
+
+              {isOverdue && !isDone && (
+                <span className="text-[10px] sm:text-xs px-2.5 py-1 rounded-lg font-black bg-rose-600 text-white shadow-2xs animate-pulse flex items-center gap-1 uppercase tracking-wider">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Lewat Batas Jam</span>
+                </span>
+              )}
+
+              {task.bulletinPostId && (
+                <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-teal-900 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg shadow-2xs">
+                  <FileText className="w-3.5 h-3.5 text-teal-600" />
+                  <span>Buletin #{task.bulletinPostId}</span>
+                </span>
+              )}
+            </div>
+
+            {/* Draft Change Notice Banner (If PIC submitted a draft change) */}
+            {(() => {
+              let draftData: any = null;
+              if (task.draftChange) {
+                try {
+                  draftData = typeof task.draftChange === 'string' ? JSON.parse(task.draftChange) : task.draftChange;
+                } catch (e) {
+                  draftData = null;
+                }
+              }
+              if (!draftData) return null;
+
+              const isCreator = task.assignedByNik === inspectorNik || isSupervisor;
+              return (
+                <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shadow-xs animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2.5">
+                    <span className="p-1 px-2 rounded-lg bg-amber-500 text-white font-black text-[10px] tracking-wider uppercase shadow-2xs">
+                      DRAFT PERUBAHAN
+                    </span>
+                    <div>
+                      <p className="text-xs font-black text-amber-950">
+                        Diajukan oleh {draftData.proposedByName || 'PIC'}
+                      </p>
+                      {draftData.changeReason && (
+                        <p className="text-[11px] text-amber-900 font-medium line-clamp-1">
+                          <strong>Alasan:</strong> {draftData.changeReason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    {isCreator ? (
+                      <button
+                        type="button"
+                        onClick={() => openReviewModal(task)}
+                        className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Review & Setujui</span>
+                      </button>
+                    ) : (
+                      <span className="text-[11px] font-bold text-amber-800 bg-amber-100/80 px-2.5 py-1 rounded-lg border border-amber-200">
+                        ⏳ Menunggu Review Pemberi Tugas
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* PIC Pelaksana & Delegator Box */}
+            <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-wrap items-center justify-between gap-2.5 shadow-2xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-slate-800 font-bold text-xs flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5 text-teal-700" />
+                  PIC Pelaksana:
+                </span>
+                {picList.map((p, pIdx) => (
+                  <span 
+                    key={pIdx} 
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-700 text-white font-black text-xs shadow-xs"
+                  >
+                    <span>{p.name}</span>
+                    {p.nik && <span className="text-[10px] opacity-80 font-mono">({p.nik})</span>}
+                  </span>
+                ))}
+              </div>
+              <span className="text-slate-600 text-xs font-semibold ml-auto flex items-center gap-1">
+                <span>Pemberi Tugas:</span>
+                <strong className="text-slate-900 font-bold">{task.assignedByName}</strong>
+              </span>
+            </div>
+
+            {/* Job Pending Note Banner */}
             {task.isPending && (
               <div className="p-3 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-950 text-xs space-y-1">
                 <div className="font-black text-sm flex items-center gap-1.5 text-amber-900">
@@ -1440,44 +1795,85 @@ export function LogbookScreen({
               </div>
             )}
 
-            {/* Subtasks Checklist */}
+            {/* Subtasks Checklist with HTML5 Drag & Drop */}
             {parsed.hasTasklist && (
-              <div className="space-y-2">
-                <div className="text-xs sm:text-sm font-black text-slate-900">
-                  Checklist Subtask (Klik checkbox untuk update langsung):
+              <div className="space-y-2 bg-white p-3.5 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between text-xs sm:text-sm font-black text-slate-900 pb-1 border-b border-slate-100">
+                  <span className="flex items-center gap-1.5">
+                    <CheckSquare className="w-4 h-4 text-teal-600" />
+                    <span>Checklist Subtask ({parsed.completed}/{parsed.total})</span>
+                  </span>
+                  <span className="text-[11px] font-normal text-slate-500">Geser ikon titik untuk atur posisi</span>
                 </div>
-                <div className="space-y-1.5">
-                  {parsed.items.map((item) => (
-                    <label
+                <div className="space-y-1.5 pt-1">
+                  {parsed.items.map((item, idx) => (
+                    <div
                       key={item.index}
-                      onClick={(e) => e.stopPropagation()}
-                      className={`flex items-start gap-3 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
-                        item.checked
-                          ? 'bg-slate-100 border-slate-200'
+                      draggable={true}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/plain', String(idx));
+                        setCardDragIdx({ taskId: task.id, itemIdx: idx });
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx !== idx) {
+                          setCardDragOverIdx({ taskId: task.id, itemIdx: idx });
+                        }
+                      }}
+                      onDragLeave={() => {
+                        if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === idx) {
+                          setCardDragOverIdx(null);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleDropCardSubtask(task, idx);
+                      }}
+                      onDragEnd={() => {
+                        setCardDragIdx(null);
+                        setCardDragOverIdx(null);
+                      }}
+                      className={`flex items-start gap-2 p-2 rounded-xl border transition-all select-none ${
+                        cardDragIdx?.taskId === task.id && cardDragIdx?.itemIdx === idx
+                          ? 'opacity-40 border-2 border-dashed border-teal-500 bg-teal-50/50'
+                          : item.checked
+                          ? 'bg-slate-50 border-slate-200'
                           : 'bg-white border-slate-300 hover:border-teal-500 hover:shadow-xs'
+                      } ${
+                        cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === idx && cardDragIdx?.itemIdx !== idx
+                          ? 'border-t-2 border-teal-600 bg-teal-50/40'
+                          : ''
                       }`}
                     >
+                      <div 
+                        className="cursor-grab active:cursor-grabbing p-0.5 text-slate-400 hover:text-teal-600 transition-colors shrink-0 mt-0.5"
+                        title="Geser untuk mengatur urutan subtask (Drag & Drop)"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
                       <input
                         type="checkbox"
                         checked={item.checked}
                         onChange={() => handleToggleSubtask(task, item.index)}
-                        className="mt-0.5 w-5 h-5 rounded border-2 border-slate-400 text-teal-600 focus:ring-teal-500 cursor-pointer shrink-0"
+                        className="mt-0.5 w-4 h-4 rounded border-2 border-slate-400 text-teal-600 focus:ring-teal-500 cursor-pointer shrink-0"
                       />
-                      <span className={`flex-1 text-sm sm:text-base leading-snug ${
+                      <span className={`flex-1 text-xs sm:text-sm leading-snug ${
                         item.checked 
                           ? 'line-through text-slate-400 font-normal' 
                           : 'font-bold text-slate-900'
                       }`}>
                         {item.text}
                       </span>
-                    </label>
+                    </div>
                   ))}
                 </div>
               </div>
             )}
-            {/* If task has checklist and clean description text */}
+
+            {/* Clean description text (if task has checklist and clean text) */}
             {parsed.hasTasklist && parsed.cleanText && (
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="p-3 rounded-xl bg-white border border-slate-200">
                 <div 
                   className="text-xs sm:text-sm font-medium text-slate-800 whitespace-pre-wrap leading-relaxed"
                   dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(parsed.cleanText) }}
@@ -1487,7 +1883,7 @@ export function LogbookScreen({
 
             {/* If task has no checklist but has description */}
             {!parsed.hasTasklist && task.description && (
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="p-3 rounded-xl bg-white border border-slate-200">
                 <div 
                   className="text-xs sm:text-sm font-medium text-slate-800 whitespace-pre-wrap leading-relaxed"
                   dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(task.description) }}
@@ -1495,22 +1891,44 @@ export function LogbookScreen({
               </div>
             )}
 
-            {/* Action Buttons in Expanded View */}
+            {/* Action Buttons Toolbar in Expanded View */}
             <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-2.5 border-slate-200">
-              <button
-                type="button"
-                onClick={() => openJobPendingModal(task)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 transition-all cursor-pointer shadow-xs"
-              >
-                <Clock className="w-3.5 h-3.5 text-amber-600" />
-                <span>{task.isPending ? 'Ubah PIC Job Pending' : 'Set PIC Job Pending'}</span>
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => openJobPendingModal(task)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 transition-all cursor-pointer shadow-xs"
+                >
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                  <span>{task.isPending ? 'Ubah PIC Pending' : 'Set Job Pending'}</span>
+                </button>
+
+                {(task.assignedByNik === inspectorNik || isSupervisor || String(task.assigneeNik || '').split(',').map(s => s.trim()).includes(inspectorNik) || task.pendingPicNik === inspectorNik) && (
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(task)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-all cursor-pointer shadow-xs"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-teal-600" />
+                    <span>{(task.assignedByNik === inspectorNik || isSupervisor) ? 'Edit Tugas' : 'Ajukan Perubahan'}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setTaskToDelete(task)}
+                  title="Hapus kegiatan ini"
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer border border-transparent hover:border-rose-200"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
 
               {isCarryOver && !isDone && (
                 <button
                   type="button"
                   onClick={() => handleCarryOverTask(task)}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-black bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white transition-all cursor-pointer shadow-sm active:scale-95"
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white transition-all cursor-pointer shadow-xs active:scale-95"
                 >
                   <ArrowRight className="w-4 h-4" />
                   <span>Lanjutkan ke Fokus Hari Ini</span>
@@ -2036,7 +2454,7 @@ export function LogbookScreen({
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2.5">
                 {displayedYesterdayTasks.map((task) => renderTaskCard(task, true))}
               </div>
             )}
@@ -2126,7 +2544,7 @@ export function LogbookScreen({
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2.5">
                 {filteredToday.map((task) => renderTaskCard(task, false))}
               </div>
             )}
@@ -2543,6 +2961,391 @@ export function LogbookScreen({
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: EDIT TASK & DRAFT PERUBAHAN (ROLE-BASED PERMISSION)              */}
+      {/* ========================================================================= */}
+      {editingTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-3xl rounded-3xl border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]"
+            style={{
+              backgroundColor: 'var(--card-bg, #ffffff)',
+              borderColor: 'var(--border-main, #cbd5e1)',
+              color: 'var(--text-main, #0f172a)'
+            }}
+          >
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                  <Edit3 className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-bold text-base flex items-center gap-2">
+                    <span>
+                      {(editingTask.assignedByNik === inspectorNik || isSupervisor)
+                        ? 'Edit & Penyesuaian Tugas'
+                        : 'Ajukan Draft Perubahan Tugas'}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-teal-100 text-teal-800 border border-teal-300">
+                      {(editingTask.assignedByNik === inspectorNik || isSupervisor) ? 'Pemberi Tugas' : 'Role: PIC'}
+                    </span>
+                  </h3>
+                  <p className="text-[11px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                    {(editingTask.assignedByNik === inspectorNik || isSupervisor)
+                      ? 'Perubahan akan langsung diperbarui dan disinkronkan ke dokumen Buletin'
+                      : 'Perubahan akan disimpan sebagai draft dan dikirim ke pemberi tugas untuk di-review & approve'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingTask(null)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleEditSubmit} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
+              {/* If PIC: notice banner */}
+              {!(editingTask.assignedByNik === inspectorNik || isSupervisor) && (
+                <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 text-sky-950 text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">Mode Pengajuan PIC (Draft Perubahan):</p>
+                    <p className="text-slate-600 text-[11px]">
+                      Sebagai PIC, Anda dapat menyesuaikan rincian, checklist, atau target. Pemberi tugas ({editingTask.assignedByName}) akan menerima notifikasi dan dapat menyetujuinya dengan 1-klik review.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Judul Kegiatan */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold block">Judul Kegiatan / Arahan *</label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-medium focus:border-teal-500"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #f8fafc)',
+                    borderColor: 'var(--border-main, #cbd5e1)'
+                  }}
+                />
+              </div>
+
+              {/* PIC Selection: editable if creator, read-only if PIC */}
+              {(editingTask.assignedByNik === inspectorNik || isSupervisor) ? (
+                <SearchableMultiPicSelect
+                  valueNiks={editAssigneeNik}
+                  valueNames={editAssigneeName}
+                  onChange={(niks, names) => {
+                    setEditAssigneeNik(niks);
+                    setEditAssigneeName(names);
+                  }}
+                  employees={employeesList}
+                  label="PIC Pelaksana (Dapat Memilih Lebih Dari 1 Personil) *"
+                />
+              ) : (
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+                  <span className="font-bold text-slate-700 block">PIC Pelaksana Saat Ini:</span>
+                  <span className="font-extrabold text-teal-800">{editAssigneeName}</span>
+                </div>
+              )}
+
+              {/* Prioritas & Target Selesai */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold block">Prioritas</label>
+                  <select
+                    value={editPriority}
+                    onChange={(e) => setEditPriority(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #f8fafc)',
+                      borderColor: 'var(--border-main, #cbd5e1)',
+                      color: 'var(--text-main, #0f172a)'
+                    }}
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Normal">Normal</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Urgent">Urgent</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold block">Target Tanggal Selesai</label>
+                  <input
+                    type="date"
+                    value={editTargetDate}
+                    onChange={(e) => setEditTargetDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #f8fafc)',
+                      borderColor: 'var(--border-main, #cbd5e1)',
+                      color: 'var(--text-main, #0f172a)'
+                    }}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold block">Target Jam</label>
+                    <span className="text-[10px] text-teal-700 font-bold">Default: 23:59</span>
+                  </div>
+                  <input
+                    type="time"
+                    value={editTargetTime}
+                    onChange={(e) => setEditTargetTime(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500 font-mono"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #f8fafc)',
+                      borderColor: 'var(--border-main, #cbd5e1)',
+                      color: 'var(--text-main, #0f172a)'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Enterprise WYSIWYG Editor with Drag & Drop Checklist */}
+              <div>
+                <EnterpriseWysiwygEditor
+                  value={editDescription}
+                  onChange={setEditDescription}
+                  label="Rincian Tugas & Checklist Subtask (Drag & drop untuk urutan)"
+                  placeholder="Sesuaikan petunjuk kerja atau urutan checklist..."
+                  allowModeSwitch={true}
+                  defaultMode={editDescription.includes('- [') ? 'checklist' : 'text'}
+                  rows={4}
+                />
+              </div>
+
+              {/* If PIC: Required Alasan Perubahan */}
+              {!(editingTask.assignedByNik === inspectorNik || isSupervisor) && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold block text-amber-900">
+                    Alasan / Keterangan Penyesuaian (Wajib untuk Pemberi Tugas) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Perubahan sampel batch, reagen kalibrasi diganti, jadwal diundur 1 jam..."
+                    value={editChangeReason}
+                    onChange={(e) => setEditChangeReason(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border-2 border-amber-300 outline-none text-xs font-medium focus:border-amber-500 bg-amber-50/50"
+                  />
+                </div>
+              )}
+
+              {/* Footer */}
+              <div className="pt-3 border-t flex items-center justify-end gap-2" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingTask(null)}
+                  className="px-4 py-2 rounded-xl border text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
+                  style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingEdit}
+                  className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingEdit
+                    ? 'Menyimpan...'
+                    : (editingTask.assignedByNik === inspectorNik || isSupervisor)
+                    ? 'Simpan Perubahan Langsung'
+                    : 'Ajukan Draft Perubahan ke Pemberi Tugas'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: REVIEW DRAFT PERUBAHAN (UNTUK PEMBERI TUGAS / ATASAN)             */}
+      {/* ========================================================================= */}
+      {reviewingTask && (() => {
+        let draftObj: any = null;
+        try {
+          draftObj = typeof reviewingTask.draftChange === 'string' ? JSON.parse(reviewingTask.draftChange) : reviewingTask.draftChange;
+        } catch (e) {
+          draftObj = null;
+        }
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-3xl rounded-3xl border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]"
+              style={{
+                backgroundColor: 'var(--card-bg, #ffffff)',
+                borderColor: 'var(--border-main, #cbd5e1)',
+                color: 'var(--text-main, #0f172a)'
+              }}
+            >
+              {/* Header */}
+              <div className="p-4 sm:p-5 border-b flex items-center justify-between bg-amber-50/70" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 rounded-xl bg-amber-500 text-white">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="font-black text-base text-amber-950 flex items-center gap-2">
+                      <span>Review Pengajuan Draft Perubahan</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-amber-200 text-amber-900 border border-amber-400">
+                        Persetujuan Atasan
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-amber-800">
+                      Diajukan oleh: <strong>{draftObj?.proposedByName || 'PIC'}</strong>
+                      {draftObj?.proposedAt && ` • ${formatDateDisplay(draftObj.proposedAt)}`}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReviewingTask(null)}
+                  className="p-1.5 rounded-lg hover:bg-amber-100 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4 text-amber-900" />
+                </button>
+              </div>
+
+              {/* Body Comparison */}
+              <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+                {/* Alasan Perubahan */}
+                <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block">
+                    Alasan / Keterangan Penyesuaian oleh PIC:
+                  </span>
+                  <p className="text-xs sm:text-sm font-bold text-amber-950">
+                    "{draftObj?.changeReason || 'Tidak ada catatan tambahan'}"
+                  </p>
+                </div>
+
+                {/* Perbandingan Data: Saat Ini vs Draft Baru */}
+                <div className="space-y-3">
+                  <h4 className="font-black text-xs uppercase tracking-wider text-slate-500">
+                    Rincian Perbandingan (Sebelum vs Sesudah):
+                  </h4>
+
+                  {/* Judul Perbandingan */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="p-3 rounded-xl bg-slate-100 border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-500 block mb-1">Judul Saat Ini:</span>
+                      <p className="font-bold text-slate-800">{reviewingTask.title}</p>
+                    </div>
+                    <div className={`p-3 rounded-xl border ${
+                      draftObj?.title !== reviewingTask.title
+                        ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-300/40'
+                        : 'bg-slate-50 border-slate-200'
+                    }`}>
+                      <span className="text-[10px] font-bold text-emerald-800 block mb-1">
+                        Judul Diajukan: {draftObj?.title !== reviewingTask.title && '(Berubah)'}
+                      </span>
+                      <p className="font-bold text-emerald-950">{draftObj?.title || reviewingTask.title}</p>
+                    </div>
+                  </div>
+
+                  {/* Prioritas & Target Perbandingan */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="p-3 rounded-xl bg-slate-100 border border-slate-200 space-y-1">
+                      <span className="text-[10px] font-bold text-slate-500 block">Target & Prioritas Saat Ini:</span>
+                      <p className="font-semibold text-slate-800">
+                        {reviewingTask.priority} • Target: {reviewingTask.targetDate} ({reviewingTask.targetTime || '23:59'})
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 space-y-1">
+                      <span className="text-[10px] font-bold text-emerald-800 block">Target & Prioritas Diajukan:</span>
+                      <p className="font-bold text-emerald-950">
+                        {draftObj?.priority || reviewingTask.priority} • Target: {draftObj?.targetDate || reviewingTask.targetDate} ({draftObj?.targetTime || reviewingTask.targetTime || '23:59'})
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Keterangan & Checklist Perbandingan */}
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-bold text-slate-500 block">Perubahan Keterangan / Checklist:</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="p-3 rounded-xl bg-slate-100 border border-slate-200 max-h-[220px] overflow-y-auto">
+                        <span className="text-[10px] font-bold text-slate-500 block mb-1">Versi Saat Ini:</span>
+                        <div 
+                          className="text-xs leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(reviewingTask.description) }}
+                        />
+                      </div>
+                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 max-h-[220px] overflow-y-auto">
+                        <span className="text-[10px] font-bold text-emerald-800 block mb-1">Versi Draft Diajukan:</span>
+                        <div 
+                          className="text-xs leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(draftObj?.description) }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Catatan Penolakan (Opsional jika ingin menolak) */}
+                <div className="pt-2 border-t space-y-1" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+                  <label className="text-[11px] font-bold block text-slate-700">
+                    Catatan Penolakan (Hanya diisi jika menolak draft):
+                  </label>
+                  <input
+                    type="text"
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Contoh: Tolong pertahankan target jam 15:00 karena ada inspeksi sore..."
+                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs focus:border-rose-400 bg-slate-50"
+                  />
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-4 sm:p-5 border-t flex flex-wrap items-center justify-between gap-2" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+                <button
+                  type="button"
+                  onClick={() => setReviewingTask(null)}
+                  className="px-4 py-2 rounded-xl border text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
+                  style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                >
+                  Tutup
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isSubmittingReview}
+                    onClick={() => handleReviewDraft('reject')}
+                    className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmittingReview ? 'Memproses...' : '❌ Tolak Draft'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmittingReview}
+                    onClick={() => handleReviewDraft('approve')}
+                    className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{isSubmittingReview ? 'Memproses...' : '✅ Setujui & Terapkan Perubahan'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

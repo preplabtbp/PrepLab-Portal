@@ -131,6 +131,23 @@ export function appendTasklistItem(text: string, taskTitle: string): string {
 }
 
 /**
+ * Reorders tasklist items in text given a new array of TaskItems
+ */
+export function reorderTasklistItems(originalText: string, newItems: TaskItem[]): string {
+  if (!originalText) return '';
+  const parsed = parseTasklist(originalText);
+  const checklistLines = newItems.map(item => `- [${item.checked ? 'x' : ' '}] ${item.text}`);
+  const delimiter = /<br\s*\/?>/i.test(originalText) ? '<br/>' : '\n';
+
+  if (!parsed.cleanText || !parsed.cleanText.trim()) {
+    return checklistLines.join(delimiter);
+  }
+
+  // If there was clean text, combine clean text and checklist lines
+  return `${parsed.cleanText.trim()}${delimiter}${delimiter}${checklistLines.join(delimiter)}`;
+}
+
+/**
  * Converts markdown text into visual HTML for the WYSIWYG contentEditable editor and rich text viewers.
  * Ensures the user sees bold, italic, lists, and badges visually instead of raw tokens like **bold**.
  */

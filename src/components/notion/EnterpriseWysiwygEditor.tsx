@@ -20,7 +20,8 @@ import {
   Square,
   FileText,
   CornerDownLeft,
-  Info
+  Info,
+  GripVertical
 } from 'lucide-react';
 import { parseTasklist, toggleTasklistItem, markdownToVisualHtml, visualHtmlToMarkdown } from './tasklist-utils';
 
@@ -226,6 +227,25 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
     sel.removeAllRanges();
     sel.addRange(range);
     syncEditorContent();
+  };
+
+  // Drag and drop state for subtasks reordering
+  const [draggedSubtaskIdx, setDraggedSubtaskIdx] = useState<number | null>(null);
+  const [dragOverSubtaskIdx, setDragOverSubtaskIdx] = useState<number | null>(null);
+
+  const handleDropSubtask = (targetIndex: number) => {
+    if (draggedSubtaskIdx === null || draggedSubtaskIdx === targetIndex) {
+      setDraggedSubtaskIdx(null);
+      setDragOverSubtaskIdx(null);
+      return;
+    }
+    const reordered = [...subtasks];
+    const [moved] = reordered.splice(draggedSubtaskIdx, 1);
+    reordered.splice(targetIndex, 0, moved);
+    setSubtasks(reordered);
+    emitChecklistChange(reordered, notes);
+    setDraggedSubtaskIdx(null);
+    setDragOverSubtaskIdx(null);
   };
 
   // Subtask Checklist interactions
@@ -694,8 +714,43 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               {subtasks.map((item, index) => (
                 <div 
                   key={item.id}
-                  className="flex items-center gap-2 group/row p-1 rounded-xl hover:bg-slate-100/60 transition-colors"
+                  draggable={true}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', String(index));
+                    setDraggedSubtaskIdx(index);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dragOverSubtaskIdx !== index) setDragOverSubtaskIdx(index);
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverSubtaskIdx === index) setDragOverSubtaskIdx(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleDropSubtask(index);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedSubtaskIdx(null);
+                    setDragOverSubtaskIdx(null);
+                  }}
+                  className={`flex items-center gap-1.5 group/row p-1 rounded-xl transition-all ${
+                    draggedSubtaskIdx === index 
+                      ? 'opacity-40 border-2 border-dashed border-teal-500 bg-teal-50/50' 
+                      : 'hover:bg-slate-100/60'
+                  } ${
+                    dragOverSubtaskIdx === index && draggedSubtaskIdx !== index 
+                      ? 'border-t-2 border-teal-600 bg-teal-50/40' 
+                      : ''
+                  }`}
                 >
+                  <div 
+                    className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-teal-600 transition-colors shrink-0"
+                    title="Geser untuk mengatur urutan subtask (Drag & Drop)"
+                  >
+                    <GripVertical className="w-3.5 h-3.5" />
+                  </div>
                   <button
                     type="button"
                     onClick={() => handleToggleSubtask(index)}

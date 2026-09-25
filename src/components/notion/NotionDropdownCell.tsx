@@ -12,14 +12,14 @@ import {
 
 export type DropdownType = 'status' | 'activity' | 'priority' | 'period';
 
-interface DropdownOption {
+export interface DropdownOption {
   value: string;
   label: string;
   badgeClass: string;
   icon?: React.ReactNode;
 }
 
-const STATUS_OPTIONS: DropdownOption[] = [
+export const STATUS_OPTIONS: DropdownOption[] = [
   {
     value: 'Open',
     label: 'Open',
@@ -113,13 +113,15 @@ interface NotionDropdownCellProps {
   value: string;
   onChange: (newValue: string) => void;
   compact?: boolean;
+  optionsOverride?: DropdownOption[];
 }
 
 export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
   type,
   value,
   onChange,
-  compact = false
+  compact = false,
+  optionsOverride
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -127,9 +129,10 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
   const [position, setPosition] = useState<{ top: number; left: number; openUpwards: boolean } | null>(null);
 
   const options = 
-    type === 'status' ? STATUS_OPTIONS :
+    optionsOverride ||
+    (type === 'status' ? STATUS_OPTIONS :
     type === 'activity' ? ACTIVITY_OPTIONS :
-    type === 'priority' ? PRIORITY_OPTIONS : PERIOD_OPTIONS;
+    type === 'priority' ? PRIORITY_OPTIONS : PERIOD_OPTIONS);
 
   // Find matching option or fallback
   const currentValLower = (value || '').toLowerCase().trim();
