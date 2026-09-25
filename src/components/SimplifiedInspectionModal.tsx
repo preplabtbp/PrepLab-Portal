@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { compressImage } from '../features/inspections/hooks/useInspection';
 import { triggerExpGain } from '../lib/gamificationEvents';
 import { isPicTemuanRole, getOpenFindingsForSupervisor } from '../utils/inspection-pic-matcher';
+import { getISOWeekKey } from '../utils/iso-week';
 
 const SAFETY_KTA_FORM_URL = 'https://docs.google.com/forms/d/1YMympG3aA-8l978aAlRJFSoi-SVQAKiS7KmJjNRfuBI/viewform?edit_requested=true';
 
@@ -273,7 +274,21 @@ export function SimplifiedInspectionModal({
 
       if (res.ok) {
         toast.success('✅ Bukti SS General Inspeksi berhasil disimpan!', { id: 'upload-weekly-ss', duration: 4000 });
-        triggerExpGain(50, 'Inspeksi Selesai!', 'Bukti SS General Inspeksi Tersimpan');
+        
+        const currentWeekKey = getISOWeekKey(new Date());
+        const userKey = (inspectorNik || (typeof window !== 'undefined' ? localStorage.getItem('preplab_nik') : null) || inspectorName || 'GUEST').trim().toUpperCase();
+        const weeklyQuotaKey = `preplab_insp_exp_week_${userKey}`;
+        const lastAwardedWeek = typeof window !== 'undefined' ? localStorage.getItem(weeklyQuotaKey) : null;
+
+        if (lastAwardedWeek === currentWeekKey) {
+          toast.info('Bukti SS disimpan! Kuota EXP inspeksi (1x/minggu) sudah terpenuhi untuk minggu ini.', { duration: 4000 });
+        } else {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(weeklyQuotaKey, currentWeekKey);
+          }
+          triggerExpGain(50, 'Inspeksi Selesai!', 'Bukti SS General Inspeksi Tersimpan');
+        }
+
         window.dispatchEvent(new Event('gamification_updated'));
         window.dispatchEvent(new CustomEvent('refresh-group-reports'));
 

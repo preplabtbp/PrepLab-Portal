@@ -79,6 +79,14 @@ export function formatISOWeekLabel(dateInput: Date | string | number): string {
   return `W${String(w).padStart(2, '0')} (${y})`;
 }
 
+export function getISOWeekKey(dateInput: Date | string | number | null | undefined): string {
+  const d = parseDateSafe(dateInput);
+  if (!d) return '';
+  const w = getISOWeek(d);
+  const y = getISOWeekYear(d);
+  return `${y}-W${String(w).padStart(2, '0')}`;
+}
+
 /**
  * Returns options for dropdown select (e.g. current week, last week, and all individual ISO weeks for this year)
  */

@@ -87,6 +87,7 @@ export function ExpAuditModal({
         publicRank: g.publicRank || rankData.currentRank,
         badgesCount: g.badgesEarned || 0,
         inspectionCount: g.stats?.inspectionCount || 0,
+        rawInspectionCount: g.stats?.rawInspectionCount ?? g.stats?.inspectionCount ?? 0,
         defectsCount: g.stats?.defectsCount || 0,
         sDefectsCount: g.seasonStats?.defectsCount || 0,
         ktaCount: g.stats?.ktaCount || 0,
@@ -110,6 +111,7 @@ export function ExpAuditModal({
         baseActionsXp: g.baseActionsXp || 0,
         sKtaCount: g.seasonStats?.ktaCount || 0,
         sInspectionCount: g.seasonStats?.inspectionCount || 0,
+        sRawInspectionCount: g.seasonStats?.rawInspectionCount ?? g.seasonStats?.inspectionCount ?? 0,
         sWoCreateCount: g.seasonStats?.woCreateCount || 0,
         sWoResolveCount: g.seasonStats?.woResolveCount || 0,
         sFeedbackCount: g.seasonStats?.feedbackCount || 0,
@@ -158,13 +160,21 @@ export function ExpAuditModal({
 
     return EXP_SOURCES_CONFIG.map(src => {
       let count = 0;
+      let extraNote: string | undefined = undefined;
       switch (src.key) {
         case 'KTA':
           count = isCareer ? (targetUser.ktaCount || 0) : (targetUser.sKtaCount ?? targetUser.ktaCount ?? 0);
           break;
-        case 'INSPECTION':
+        case 'INSPECTION': {
           count = isCareer ? (targetUser.inspectionCount || 0) : (targetUser.sInspectionCount ?? targetUser.inspectionCount ?? 0);
+          const rawCount = isCareer
+            ? (targetUser.rawInspectionCount ?? targetUser.inspectionCount ?? 0)
+            : (targetUser.sRawInspectionCount ?? targetUser.sInspectionCount ?? 0);
+          if (rawCount > count) {
+            extraNote = `Total ${rawCount} formulir diselesaikan (${count} minggu aktif dihitung)`;
+          }
           break;
+        }
         case 'DEFECTS':
           count = isCareer ? (targetUser.defectsCount || 0) : (targetUser.sDefectsCount ?? 0);
           break;
@@ -209,7 +219,8 @@ export function ExpAuditModal({
       return {
         ...src,
         count,
-        subtotal
+        subtotal,
+        extraNote
       };
     });
   }, [targetUser, period]);
@@ -615,6 +626,11 @@ export function ExpAuditModal({
                                   <span className="text-[11px] text-[var(--text-muted)] block">
                                     {row.description}
                                   </span>
+                                  {row.extraNote && (
+                                    <span className="text-[10.5px] text-teal-600 dark:text-teal-400 font-medium block mt-0.5">
+                                      ℹ️ {row.extraNote}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </td>

@@ -38,6 +38,7 @@ export interface LeaderboardUser {
   currentRank: PBRank;
   badgesCount: number;
   inspectionCount: number;
+  rawInspectionCount?: number;
   defectsCount?: number;
   ktaCount: number;
   woCreateCount?: number;
@@ -62,6 +63,7 @@ export interface LeaderboardUser {
   publicRank?: any;
   sKtaCount?: number;
   sInspectionCount?: number;
+  sRawInspectionCount?: number;
   sDefectsCount?: number;
   sWoCreateCount?: number;
   sWoResolveCount?: number;

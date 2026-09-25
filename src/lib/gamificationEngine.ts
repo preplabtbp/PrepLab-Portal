@@ -61,12 +61,12 @@ export const EXP_SOURCES_CONFIG: ExpSourceDefinition[] = [
   },
   {
     key: 'INSPECTION',
-    name: 'Inspeksi & Patroli Rutin K3',
+    name: 'Inspeksi & Patroli Rutin K3 (Maks 1x/Minggu)',
     category: 'safety',
     icon: '📋',
-    unit: 'Inspeksi',
+    unit: 'Minggu',
     weight: 50,
-    description: 'Pengisian formulir checklist inspeksi APD, Kotak P3K, Tangga, dll.'
+    description: 'Pengisian checklist inspeksi APD, Kotak P3K, Tangga, dll (maksimal perolehan EXP 1x per minggu kalender)'
   },
   {
     key: 'DEFECTS',

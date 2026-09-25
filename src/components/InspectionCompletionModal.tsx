@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { getAppSettings } from '../sheets-api';
 import { triggerExpGain } from '../lib/gamificationEvents';
+import { getISOWeekKey } from '../utils/iso-week';
 
 export const GENERAL_INSPECTION_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform';
 
@@ -49,7 +50,22 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
       const completionKey = `${data.id || ''}_${data.formTitle || ''}`;
       if (alertedRef.current !== completionKey) {
         alertedRef.current = completionKey;
-        triggerExpGain(50, 'Inspeksi Berhasil Diselesaikan!', data.formTitle || 'Inspeksi Lapangan');
+
+        const currentWeekKey = getISOWeekKey(new Date());
+        const userKey = (data.inspectorNik || (typeof window !== 'undefined' ? localStorage.getItem('preplab_nik') : null) || data.inspectorName || 'GUEST').trim().toUpperCase();
+        const weeklyQuotaKey = `preplab_insp_exp_week_${userKey}`;
+        const lastAwardedWeek = typeof window !== 'undefined' ? localStorage.getItem(weeklyQuotaKey) : null;
+
+        if (lastAwardedWeek === currentWeekKey) {
+          toast.info('Form inspeksi tercatat! Kuota EXP mingguan inspeksi (1x/minggu) sudah terpenuhi untuk minggu ini.', {
+            duration: 4000
+          });
+        } else {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(weeklyQuotaKey, currentWeekKey);
+          }
+          triggerExpGain(50, 'Inspeksi Berhasil Diselesaikan!', data.formTitle || 'Inspeksi Lapangan');
+        }
         window.dispatchEvent(new Event('gamification_updated'));
       }
 

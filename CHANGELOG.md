@@ -2,6 +2,24 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.31] - 2026-09-25
+
+### 🛡️ Pembatasan Perolehan EXP Inspeksi K3 Maksimal 1x per Minggu Kalender & Audit Transparansi Gamifikasi
+
+- **Pembatasan Kuota Perolehan EXP Inspeksi Lapangan (Maks 1x/Minggu)**:
+  - **Deduplikasi Berbasis ISO 8601 Week (`server/routes/gamification.ts`, `src/utils/iso-week.ts`)**: Sistem gamifikasi kini mengelompokkan riwayat pengisian inspeksi personil berdasarkan minggu kalender standar (zona waktu WIT / `Asia/Jayapura`).
+  - **Pemberian EXP Konsisten (50 EXP / Minggu)**: Dalam satu minggu kalender yang sama, personil hanya memperoleh maksimal +50 EXP dari aktivitas inspeksi, terlepas dari berapa banyak formulir inspeksi yang diisi pada minggu tersebut. Ini mencegah eksploitasi perolehan EXP instan dari pengisian formulir berulang dalam satu pekan.
+  - **Dukungan Karir dan Musim (*Season*)**: Pembatasan 1x/minggu kalender diterapkan seragam baik untuk perhitungan Karir (*All-Time EXP*) maupun Musim Berjalan (*Season EXP*).
+  - **Preservasi Akumulasi Badge & Gelar (`rawInspectionCount`)**: Total formulir fisik yang telah diisi tetap dicatat seutuhnya (`rawInspectionCount`) untuk syarat pencapaian gelar milestone (*Bronze, Silver, Gold, Master Branch Inspection*), sehingga dedikasi teknis personil tetap terakui sepenuhnya.
+
+- **Transparansi Audit EXP & Satuan Pengukuran (`src/lib/gamificationEngine.ts`, `src/components/ExpAuditModal.tsx`)**:
+  - Satuan baris inspeksi diubah secara resmi menjadi **`Minggu`** (misal: *2 Minggu × 50 = +100 EXP*).
+  - Modal Audit EXP kini menampilkan catatan informatif jika personil menyelesaikan lebih banyak formulir daripada jumlah minggu aktifnya (contoh: *Total 5 formulir diselesaikan (2 minggu aktif dihitung)*).
+
+- **Pemberitahuan Kuota Interaktif pada Frontend (`src/components/InspectionCompletionModal.tsx`, `src/components/SimplifiedInspectionModal.tsx`)**:
+  - Modal penyelesaian inspeksi dan modal unggah bukti SS mingguan kini memverifikasi kuota EXP mingguan pengguna saat itu juga.
+  - Jika pengguna telah mengklaim jatah EXP inspeksi di minggu yang sama, sistem menampilkan notifikasi informatif (*"Form inspeksi tercatat! Kuota EXP mingguan inspeksi (1x/minggu) sudah terpenuhi untuk minggu ini."*) dan tidak lagi memunculkan pop-up perolehan EXP yang berlebih.
+
 ## [2.9.30] - 2026-09-25
 
 ### 🚀 Enterprise WYSIWYG Editor, Relokasi Progress Bar ke Kolom Status, Otomatisasi Status Tugas, & Interaksi Rincian Kegiatan Topik

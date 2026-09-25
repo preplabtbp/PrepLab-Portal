@@ -105,6 +105,25 @@ export function calculateStreak(dates: string[]): number {
   return maxStreak;
 }
 
+// Helper to compute standard ISO 8601 week key (YYYY-Www) in Asia/Jayapura (WIT) time
+export function getISOWeekKey(dateInput: Date | string | number | null | undefined): string {
+  if (!dateInput) return '';
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(d.getTime())) return '';
+  const witDateStr = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
+  const [yStr, mStr, dStr] = witDateStr.split('-');
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10) - 1;
+  const dayNum = parseInt(dStr, 10);
+
+  const target = new Date(Date.UTC(y, m, dayNum));
+  const dayNr = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - dayNr);
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${target.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
 // Shared action weights for gamification base EXP calculation
 // NOTE: Cuti Site (CS) gives 0 EXP. It is purely a hidden achievement with titles and cosmetic border rewards.
 export const ACTION_XP_WEIGHTS = {
@@ -473,7 +492,18 @@ export async function computeUserGamification(nik: string, userName?: string) {
 
     ktaCount = Number(ktaRes[0]?.count || 0);
     userInspList = inspsRes;
-    inspectionCount = userInspList.length;
+    const rawInspectionCount = userInspList.length;
+
+    // Perolehan EXP dari inspeksi dibatasi maksimal hanya 1x dalam 1 minggu (ISO Week)
+    const inspWeekSet = new Set<string>();
+    for (const item of userInspList) {
+      if (item.date) {
+        const wKey = getISOWeekKey(item.date);
+        if (wKey) inspWeekSet.add(wKey);
+      }
+    }
+    // inspectionCount yang dihitung ke baseActionsXp adalah minggu unik yang memenuhi syarat
+    inspectionCount = inspWeekSet.size;
 
     for (const item of userInspList) {
       if (item.date) {
@@ -559,7 +589,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
   // Map metric counts to achievement branch codes
   const countsMap: Record<string, number> = {
     BRANCH_KTA: ktaCount,
-    BRANCH_INSPECTION: inspectionCount,
+    BRANCH_INSPECTION: rawInspectionCount, // total checklist fisik untuk gelar milestone
     BRANCH_DEFECTS: defectsCount,
     BRANCH_WO_CREATE: woCreateCount,
     BRANCH_WO_RESOLVE: woResolveCount,
@@ -754,9 +784,19 @@ export async function computeUserGamification(nik: string, userName?: string) {
       ? (sThemesCount * ACTION_XP_WEIGHTS.THEMES)
       : (THEMES_XP_CAP_COUNT * ACTION_XP_WEIGHTS.THEMES) + ((sThemesCount - THEMES_XP_CAP_COUNT) * THEMES_POST_CAP_XP);
 
+    // Hitung minggu inspeksi season untuk pembatasan kuota EXP: maksimal 1x per minggu
+    const sInspWeekSet = new Set<string>();
+    for (const item of sInsp) {
+      if (item.date) {
+        const wKey = getISOWeekKey(item.date);
+        if (wKey) sInspWeekSet.add(wKey);
+      }
+    }
+    const sInspectionCount = sInspWeekSet.size;
+
     seasonXp = 
       (sKtaCount * ACTION_XP_WEIGHTS.KTA) +
-      (sInsp.length * ACTION_XP_WEIGHTS.INSPECTION) +
+      (sInspectionCount * ACTION_XP_WEIGHTS.INSPECTION) +
       (sDefects * ACTION_XP_WEIGHTS.DEFECTS) +
       (sWoCreateCount * ACTION_XP_WEIGHTS.WO_CREATE) +
       (sWoResolve * ACTION_XP_WEIGHTS.WO_RESOLVE) +
@@ -771,7 +811,8 @@ export async function computeUserGamification(nik: string, userName?: string) {
 
     seasonStats = {
       ktaCount: sKtaCount,
-      inspectionCount: sInsp.length,
+      inspectionCount: sInspectionCount,
+      rawInspectionCount: sInsp.length,
       defectsCount: sDefects,
       woCreateCount: sWoCreateCount,
       woResolveCount: sWoResolve,
@@ -803,7 +844,8 @@ export async function computeUserGamification(nik: string, userName?: string) {
     baseActionsXp,
     stats: {
       ktaCount,
-      inspectionCount,
+      inspectionCount, // Jumlah minggu inspeksi berhak EXP (maksimal 1x/minggu)
+      rawInspectionCount, // Total fisik seluruh formulir inspeksi yang disubmit
       defectsCount,
       woCreateCount,
       woResolveCount,
@@ -1196,7 +1238,7 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
         }
       }
 
-      const inspCountMap = new Map<string, number>();
+      const inspRawDatesMap = new Map<string, Date[]>();
       const nightCountMap = new Map<string, number>();
       const dawnCountMap = new Map<string, number>();
       const weekendCountMap = new Map<string, number>();
@@ -1205,10 +1247,11 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
       inspList.forEach(item => {
         const nameKey = (item.inspectorName || '').trim().toUpperCase();
         if (!nameKey) return;
-        inspCountMap.set(nameKey, (inspCountMap.get(nameKey) || 0) + 1);
+        if (!inspRawDatesMap.has(nameKey)) inspRawDatesMap.set(nameKey, []);
 
         if (item.date) {
           const d = new Date(item.date);
+          inspRawDatesMap.get(nameKey)!.push(d);
           const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
           if (!inspDatesMap.has(nameKey)) inspDatesMap.set(nameKey, []);
           inspDatesMap.get(nameKey)!.push(dateStr);
@@ -1229,7 +1272,7 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
         }
       });
 
-      const sInspCountMap = new Map<string, number>();
+      const sInspRawDatesMap = new Map<string, Date[]>();
       const sNightCountMap = new Map<string, number>();
       const sDawnCountMap = new Map<string, number>();
       const sWeekendCountMap = new Map<string, number>();
@@ -1237,10 +1280,11 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
       sInspList.forEach(item => {
         const nameKey = (item.inspectorName || '').trim().toUpperCase();
         if (!nameKey) return;
-        sInspCountMap.set(nameKey, (sInspCountMap.get(nameKey) || 0) + 1);
+        if (!sInspRawDatesMap.has(nameKey)) sInspRawDatesMap.set(nameKey, []);
 
         if (item.date) {
           const d = new Date(item.date);
+          sInspRawDatesMap.get(nameKey)!.push(d);
           const h = d.getHours();
           const m = d.getMinutes();
           if (h >= 1 && h <= 4) {
@@ -1294,22 +1338,32 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
         const quotesCount = rawQuotes;
         const themesCount = rawThemes;
 
-        let inspectionCount = 0;
+        let rawInspectionCount = 0;
+        const matchingInspDates: Date[] = [];
         let nightCount = 0;
         let dawnCount = 0;
         let weekendCount = 0;
         const datesCombined: string[] = [];
 
-        for (const [inspName, cnt] of inspCountMap.entries()) {
+        for (const [inspName, dates] of inspRawDatesMap.entries()) {
           if (inspName.includes(cleanName) || cleanName.includes(inspName) || (cleanNik && inspName.includes(cleanNik))) {
-            inspectionCount += cnt;
+            rawInspectionCount += dates.length;
+            matchingInspDates.push(...dates);
             nightCount += nightCountMap.get(inspName) || 0;
             dawnCount += dawnCountMap.get(inspName) || 0;
             weekendCount += weekendCountMap.get(inspName) || 0;
-            const dates = inspDatesMap.get(inspName) || [];
-            datesCombined.push(...dates);
+            const strDates = inspDatesMap.get(inspName) || [];
+            datesCombined.push(...strDates);
           }
         }
+
+        // Perolehan EXP dari inspeksi dibatasi maksimal hanya 1x dalam 1 minggu (ISO Week)
+        const inspWeekSet = new Set<string>();
+        for (const d of matchingInspDates) {
+          const wKey = getISOWeekKey(d);
+          if (wKey) inspWeekSet.add(wKey);
+        }
+        const inspectionCount = inspWeekSet.size;
 
         const userLogins = loginsMap.get(cleanNik) || [];
         datesCombined.push(...userLogins);
@@ -1365,7 +1419,7 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
           let currentVal = 0;
           switch (ach.code) {
             case 'BRANCH_KTA': currentVal = ktaCount; break;
-            case 'BRANCH_INSPECTION': currentVal = inspectionCount; break;
+            case 'BRANCH_INSPECTION': currentVal = rawInspectionCount; break;
             case 'BRANCH_DEFECTS': currentVal = defectsCount; break;
             case 'BRANCH_WO_CREATE': currentVal = woCreateCount; break;
             case 'BRANCH_WO_RESOLVE': currentVal = woResolveCount; break;
@@ -1449,18 +1503,28 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
           }
         }
 
-        let sInspectionCount = 0;
+        let sRawInspectionCount = 0;
+        const matchingSInspDates: Date[] = [];
         let sNightCount = 0;
         let sDawnCount = 0;
         let sWeekendCount = 0;
-        for (const [inspName, cnt] of sInspCountMap.entries()) {
+        for (const [inspName, dates] of sInspRawDatesMap.entries()) {
           if (inspName.includes(cleanName) || cleanName.includes(inspName) || (cleanNik && inspName.includes(cleanNik))) {
-            sInspectionCount += cnt;
+            sRawInspectionCount += dates.length;
+            matchingSInspDates.push(...dates);
             sNightCount += sNightCountMap.get(inspName) || 0;
             sDawnCount += sDawnCountMap.get(inspName) || 0;
             sWeekendCount += sWeekendCountMap.get(inspName) || 0;
           }
         }
+
+        // Perolehan season EXP dari inspeksi dibatasi maksimal hanya 1x dalam 1 minggu (ISO Week)
+        const sInspWeekSet = new Set<string>();
+        for (const d of matchingSInspDates) {
+          const wKey = getISOWeekKey(d);
+          if (wKey) sInspWeekSet.add(wKey);
+        }
+        const sInspectionCount = sInspWeekSet.size;
 
         const sCappedQuotesXp = sQuotesCount <= QUOTES_XP_CAP_COUNT
           ? (sQuotesCount * ACTION_XP_WEIGHTS.QUOTES)
@@ -1500,6 +1564,7 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
           achievementBonusXp,
           baseActionsXp,
           inspectionCount,
+          rawInspectionCount,
           defectsCount,
           sDefectsCount,
           ktaCount,
@@ -1519,6 +1584,7 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
           polymathCount,
           sKtaCount,
           sInspectionCount,
+          sRawInspectionCount,
           sWoCreateCount,
           sWoResolveCount,
           sFeedbackCount,
