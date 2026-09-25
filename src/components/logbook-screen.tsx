@@ -1757,27 +1757,21 @@ export function LogbookScreen({
               );
             })()}
 
-            {/* PIC Pelaksana & Delegator Box */}
-            <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-wrap items-center justify-between gap-2.5 shadow-2xs">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-slate-800 font-bold text-xs flex items-center gap-1">
-                  <Users className="w-3.5 h-3.5 text-teal-700" />
-                  PIC Pelaksana:
-                </span>
-                {picList.map((p, pIdx) => (
-                  <span 
-                    key={pIdx} 
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-700 text-white font-black text-xs shadow-xs"
-                  >
-                    <span>{p.name}</span>
-                    {p.nik && <span className="text-[10px] opacity-80 font-mono">({p.nik})</span>}
-                  </span>
-                ))}
-              </div>
-              <span className="text-slate-600 text-xs font-semibold ml-auto flex items-center gap-1">
-                <span>Pemberi Tugas:</span>
-                <strong className="text-slate-900 font-bold">{task.assignedByName}</strong>
+            {/* PIC Pelaksana Box */}
+            <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-wrap items-center gap-2 shadow-2xs">
+              <span className="text-slate-800 font-bold text-xs flex items-center gap-1">
+                <Users className="w-3.5 h-3.5 text-teal-700" />
+                PIC Pelaksana:
               </span>
+              {picList.map((p, pIdx) => (
+                <span 
+                  key={pIdx} 
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-700 text-white font-black text-xs shadow-xs"
+                >
+                  <span>{p.name}</span>
+                  {p.nik && <span className="text-[10px] opacity-80 font-mono">({p.nik})</span>}
+                </span>
+              ))}
             </div>
 
             {/* Job Pending Note Banner */}
@@ -3018,7 +3012,7 @@ export function LogbookScreen({
                   <div>
                     <p className="font-bold">Mode Pengajuan PIC (Draft Perubahan):</p>
                     <p className="text-slate-600 text-[11px]">
-                      Sebagai PIC, Anda dapat menyesuaikan rincian, checklist, atau target. Pemberi tugas ({editingTask.assignedByName}) akan menerima notifikasi dan dapat menyetujuinya dengan 1-klik review.
+                      Sebagai PIC, Anda dapat menyesuaikan rincian, checklist, atau target. Draft penyesuaian akan dikirim untuk direview dan disetujui dengan 1-klik approval.
                     </p>
                   </div>
                 </div>
