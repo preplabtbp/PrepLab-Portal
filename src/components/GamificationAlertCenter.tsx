@@ -157,7 +157,7 @@ export function GamificationAlertCenter({
                 tierLevel: curTier,
                 tierName: b.tierName || (isMaster ? 'Master Tier' : `Tier ${curTier}`),
                 titleReward: tierInfo.titleReward || b.titleReward || 'Vanguard Specialist',
-                xpReward: tierInfo.xpReward || (isMaster ? 500 : 150),
+                xpReward: tierInfo.xpReward || (isMaster ? 200 : 25),
                 frameReward: tierInfo.frameReward || b.frameReward,
                 isMaster
               });
@@ -195,7 +195,7 @@ export function GamificationAlertCenter({
           tierLevel: 2,
           tierName: 'Silver Vanguard',
           titleReward: 'Safety Pioneer',
-          xpReward: 200,
+          xpReward: 40,
           isMaster: false
         }
       }));
@@ -208,7 +208,7 @@ export function GamificationAlertCenter({
           tierLevel: 4,
           tierName: 'Supreme Master',
           titleReward: 'Grand Auditor',
-          xpReward: 500,
+          xpReward: 180,
           rewardFrame: 'cyber_gold',
           isMaster: true
         }

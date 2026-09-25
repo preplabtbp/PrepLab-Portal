@@ -191,10 +191,10 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     isHidden: false,
     howToGet: 'Buka menu K3 > Laporan Bahaya, lalu laporkan temuan Kondisi Tidak Aman (KTA) atau Tindakan Tidak Aman (TTA) di area operasional.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 5, xpReward: 150, titleReward: 'Frontline Scout', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 25, xpReward: 350, titleReward: 'Hazard Observer', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 60, xpReward: 750, titleReward: 'Vanguard Sentinel', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 120, xpReward: 1500, titleReward: 'Supreme Hazard Hunter', badgeColor: 'border-cyan-400 bg-cyan-500/30 text-cyan-200 shadow-cyan-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 5, xpReward: 20, titleReward: 'Frontline Scout', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 25, xpReward: 40, titleReward: 'Hazard Observer', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 60, xpReward: 80, titleReward: 'Vanguard Sentinel', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 120, xpReward: 160, titleReward: 'Supreme Hazard Hunter', badgeColor: 'border-cyan-400 bg-cyan-500/30 text-cyan-200 shadow-cyan-500/40 animate-pulse' }
     ]
   },
 
@@ -210,10 +210,10 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     isHidden: false,
     howToGet: 'Buka menu K3 > Inspeksi Keselamatan, pilih jenis inspeksi (APD, Umum, Tangga, Kotak P3K), lalu isi dan kirimkan checklist.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 10, xpReward: 200, titleReward: 'Patrol Officer', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 30, xpReward: 450, titleReward: 'Chief Inspector', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 60, xpReward: 850, titleReward: 'Master of Inspection', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 100, xpReward: 1800, titleReward: 'Grand Field Marshal', badgeColor: 'border-rose-400 bg-rose-500/30 text-rose-200 shadow-rose-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 10, xpReward: 20, titleReward: 'Patrol Officer', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 30, xpReward: 45, titleReward: 'Chief Inspector', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 60, xpReward: 90, titleReward: 'Master of Inspection', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 100, xpReward: 180, titleReward: 'Grand Field Marshal', badgeColor: 'border-rose-400 bg-rose-500/30 text-rose-200 shadow-rose-500/40 animate-pulse' }
     ]
   },
 
@@ -229,10 +229,10 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     isHidden: false,
     howToGet: 'Buka menu Tiket / Temuan Inspeksi di portal, pilih temuan hasil inspeksi yang ditugaskan kepada Anda atau tim Anda, lakukan perbaikan fisik di lapangan, unggah foto bukti closing, dan ubah status tiket menjadi CLOSED.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 150, titleReward: 'Remediation Specialist', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 5, xpReward: 350, titleReward: 'Hazard Neutralizer', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 15, xpReward: 800, titleReward: 'Corrective Action Master', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 30, xpReward: 1600, titleReward: 'Zero Defect Guardian', badgeColor: 'border-emerald-400 bg-emerald-500/30 text-emerald-200 shadow-emerald-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 20, titleReward: 'Remediation Specialist', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 5, xpReward: 40, titleReward: 'Hazard Neutralizer', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 15, xpReward: 80, titleReward: 'Corrective Action Master', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 30, xpReward: 160, titleReward: 'Zero Defect Guardian', badgeColor: 'border-emerald-400 bg-emerald-500/30 text-emerald-200 shadow-emerald-500/40 animate-pulse' }
     ]
   },
 
@@ -256,7 +256,7 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     ]
   },
 
-  // 4. Inovasi & Masukan Pengembangan Portal (app_feedbacks) - NON-HIDDEN TASK RUTIN
+  // 5. Inovasi & Masukan Pengembangan Portal (app_feedbacks) - NON-HIDDEN TASK RUTIN
   {
     id: 'ach_feedback',
     code: 'BRANCH_FEEDBACK',
@@ -268,14 +268,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     isHidden: false,
     howToGet: 'Buka menu Bantuan & Saran (pada sidebar atau profil), tuliskan masukan, ide inovasi fitur, atau evaluasi sistem portal.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 150, titleReward: 'System Contributor', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 5, xpReward: 350, titleReward: 'System Strategist', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 15, xpReward: 750, titleReward: 'Chief Innovation Officer', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 30, xpReward: 1500, titleReward: 'Supreme Architect', badgeColor: 'border-emerald-400 bg-emerald-500/30 text-emerald-200 shadow-emerald-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 15, titleReward: 'System Contributor', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 5, xpReward: 35, titleReward: 'System Strategist', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 15, xpReward: 75, titleReward: 'Chief Innovation Officer', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 30, xpReward: 150, titleReward: 'Supreme Architect', badgeColor: 'border-emerald-400 bg-emerald-500/30 text-emerald-200 shadow-emerald-500/40 animate-pulse' }
     ]
   },
 
-  // 5. Quotes Komunitas & Semangat Kerja (community_quotes) - NON-HIDDEN TASK RUTIN
+  // 6. Quotes Komunitas & Semangat Kerja (community_quotes) - NON-HIDDEN TASK RUTIN
   {
     id: 'ach_quotes',
     code: 'BRANCH_QUOTES',
@@ -287,14 +287,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     isHidden: false,
     howToGet: 'Buka menu Komunitas > Quotes Motivasi di halaman depan, lalu buat dan bagikan kata-kata motivasi atau inspirasi kerja.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 120, titleReward: 'Morale Officer', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 5, xpReward: 300, titleReward: 'Propaganda Commander', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 15, xpReward: 650, titleReward: 'Voice of the Legion', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 30, xpReward: 1400, titleReward: 'Grand Philosopher', badgeColor: 'border-fuchsia-400 bg-fuchsia-500/30 text-fuchsia-200 shadow-fuchsia-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 15, titleReward: 'Morale Officer', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 5, xpReward: 30, titleReward: 'Propaganda Commander', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 15, xpReward: 65, titleReward: 'Voice of the Legion', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 30, xpReward: 140, titleReward: 'Grand Philosopher', badgeColor: 'border-fuchsia-400 bg-fuchsia-500/30 text-fuchsia-200 shadow-fuchsia-500/40 animate-pulse' }
     ]
   },
 
-  // 6. Pembuat Tema Portal (user_themes) - NON-HIDDEN TASK RUTIN
+  // 7. Pembuat Tema Portal (user_themes) - NON-HIDDEN TASK RUTIN
   {
     id: 'ach_themes',
     code: 'BRANCH_THEMES',
@@ -306,14 +306,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     isHidden: false,
     howToGet: 'Buka Pengaturan Tema (ikon kuas palet warna di navbar atas), buat tema kustom Anda sendiri, lalu simpan preset.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 150, titleReward: 'Camouflage Specialist', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 3, xpReward: 350, titleReward: 'Visual Architect', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 8, xpReward: 700, titleReward: 'Chromatic Artisan', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 15, xpReward: 1500, titleReward: 'Aesthetic Warlord', badgeColor: 'border-violet-400 bg-violet-500/30 text-violet-200 shadow-violet-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 15, titleReward: 'Camouflage Specialist', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 3, xpReward: 35, titleReward: 'Visual Architect', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 8, xpReward: 70, titleReward: 'Chromatic Artisan', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 15, xpReward: 150, titleReward: 'Aesthetic Warlord', badgeColor: 'border-violet-400 bg-violet-500/30 text-violet-200 shadow-violet-500/40 animate-pulse' }
     ]
   },
 
-  // 7. Komunikasi & Buletin Kerja (bulletin_comments & posts) - NON-HIDDEN TASK RUTIN
+  // 8. Komunikasi & Buletin Kerja (bulletin_comments & posts) - NON-HIDDEN TASK RUTIN
   {
     id: 'ach_bulletin',
     code: 'BRANCH_BULLETIN',
@@ -325,14 +325,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     isHidden: false,
     howToGet: 'Buka menu Papan Buletin, kirimkan komentar tanggapan, konfirmasi pekerjaan, atau update informasi pada postingan buletin.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 5, xpReward: 100, titleReward: 'Field Correspondent', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 25, xpReward: 250, titleReward: 'Intelligence Operative', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 75, xpReward: 600, titleReward: 'Communications Chief', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 150, xpReward: 1200, titleReward: 'Information Warlord', badgeColor: 'border-sky-400 bg-sky-500/30 text-sky-200 shadow-sky-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 5, xpReward: 15, titleReward: 'Field Correspondent', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 25, xpReward: 30, titleReward: 'Intelligence Operative', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 75, xpReward: 60, titleReward: 'Communications Chief', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 150, xpReward: 120, titleReward: 'Information Warlord', badgeColor: 'border-sky-400 bg-sky-500/30 text-sky-200 shadow-sky-500/40 animate-pulse' }
     ]
   },
 
-  // 8. Pemateri Safety Briefing P5M (p5m_schedules speaker) - NON-HIDDEN TASK RUTIN
+  // 9. Pemateri Safety Briefing P5M (p5m_schedules speaker) - NON-HIDDEN TASK RUTIN
   {
     id: 'ach_p5m_speaker',
     code: 'BRANCH_P5M_SPEAKER',
@@ -344,14 +344,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     isHidden: false,
     howToGet: 'Bertindak sebagai pemateri atau pembawa safety talk harian pada jadwal briefing P5M regu shift Anda.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 200, titleReward: 'Briefing Officer', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 10, xpReward: 450, titleReward: 'Briefing Commander', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 25, xpReward: 900, titleReward: 'Supreme Orator', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 50, xpReward: 1800, titleReward: 'Voice of Command', badgeColor: 'border-teal-400 bg-teal-500/30 text-teal-200 shadow-teal-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 20, titleReward: 'Briefing Officer', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 10, xpReward: 45, titleReward: 'Briefing Commander', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 25, xpReward: 90, titleReward: 'Supreme Orator', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 50, xpReward: 180, titleReward: 'Voice of Command', badgeColor: 'border-teal-400 bg-teal-500/30 text-teal-200 shadow-teal-500/40 animate-pulse' }
     ]
   },
 
-  // 9. Pembuatan Work Order Perbaikan (work_orders created) - NON-HIDDEN TASK RUTIN
+  // 10. Pembuatan Work Order Perbaikan (work_orders created) - NON-HIDDEN TASK RUTIN
   {
     id: 'ach_wo_create',
     code: 'BRANCH_WO_CREATE',
@@ -363,14 +363,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     isHidden: false,
     howToGet: 'Buka menu Work Order > Buat Laporan Kerusakan, lengkapi identitas alat dan deskripsi kerusakan, lalu submit laporan perbaikan.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 150, titleReward: 'Maintenance Dispatcher', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 10, xpReward: 350, titleReward: 'Operational Herald', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 25, xpReward: 800, titleReward: 'Equipment Overseer', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 50, xpReward: 1600, titleReward: 'Supreme Dispatcher', badgeColor: 'border-orange-400 bg-orange-500/30 text-orange-200 shadow-orange-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 20, titleReward: 'Maintenance Dispatcher', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 10, xpReward: 40, titleReward: 'Operational Herald', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 25, xpReward: 80, titleReward: 'Equipment Overseer', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 50, xpReward: 160, titleReward: 'Supreme Dispatcher', badgeColor: 'border-orange-400 bg-orange-500/30 text-orange-200 shadow-orange-500/40 animate-pulse' }
     ]
   },
 
-  // 10. Penyelesaian & Penuntasan Work Order (work_orders status Closed) - NON-HIDDEN TASK RUTIN
+  // 11. Penyelesaian & Penuntasan Work Order (work_orders status Closed) - NON-HIDDEN TASK RUTIN
   {
     id: 'ach_wo_resolve',
     code: 'BRANCH_WO_RESOLVE',
@@ -382,14 +382,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     isHidden: false,
     howToGet: 'Lakukan perbaikan pada alat yang mengalami kendala, lalu selesaikan Work Order dengan status Closed beserta tindakan perbaikan.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 200, titleReward: 'Fixer Specialist', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 10, xpReward: 500, titleReward: 'Master Technician', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 25, xpReward: 1100, titleReward: 'Restoration Champion', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 50, xpReward: 2200, titleReward: 'Apex Engineer', badgeColor: 'border-cyan-400 bg-cyan-500/30 text-cyan-200 shadow-cyan-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 25, titleReward: 'Fixer Specialist', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 10, xpReward: 50, titleReward: 'Master Technician', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 25, xpReward: 110, titleReward: 'Restoration Champion', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 50, xpReward: 220, titleReward: 'Apex Engineer', badgeColor: 'border-cyan-400 bg-cyan-500/30 text-cyan-200 shadow-cyan-500/40 animate-pulse' }
     ]
   },
 
-  // 11. Kuis K3 Sempurna (quiz_scores nilai 100) - NON-HIDDEN TASK RUTIN
+  // 12. Kuis K3 Sempurna (quiz_scores nilai 100) - NON-HIDDEN TASK RUTIN
   {
     id: 'ach_quiz',
     code: 'BRANCH_QUIZ',
@@ -401,14 +401,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     isHidden: false,
     howToGet: 'Buka menu Kuis K3, kerjakan tes pemahaman SOP & keselamatan berkala, dan selesaikan dengan nilai sempurna 100%.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 250, titleReward: 'Tactical Marksman', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 3, xpReward: 500, titleReward: 'Sharpshooter', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 6, xpReward: 1000, titleReward: 'Elite Sniper of Safety', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 12, xpReward: 2000, titleReward: 'Flawless Strategist', badgeColor: 'border-rose-400 bg-rose-500/30 text-rose-200 shadow-rose-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 25, titleReward: 'Tactical Marksman', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 3, xpReward: 50, titleReward: 'Sharpshooter', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 6, xpReward: 100, titleReward: 'Elite Sniper of Safety', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 12, xpReward: 200, titleReward: 'Flawless Strategist', badgeColor: 'border-rose-400 bg-rose-500/30 text-rose-200 shadow-rose-500/40 animate-pulse' }
     ]
   },
 
-  // 12. Kehadiran Berturut-turut Portal Login Streak (7 hari, 30 hari, 90 hari, 365 hari) - HIDDEN ACHIEVEMENT
+  // 13. Kehadiran Berturut-turut Portal Login Streak (7 hari, 30 hari, 90 hari, 365 hari) - HIDDEN ACHIEVEMENT
   {
     id: 'ach_login_streak',
     code: 'BRANCH_LOGIN_STREAK',
@@ -421,14 +421,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     hiddenHint: 'Pencapaian rahasia disiplin baja: Kehadiran operasional di portal berturut-turut setiap hari tanpa pernah terputus satu hari pun.',
     howToGet: 'Pencapaian rahasia: Buka dan aktif di portal PrepLab setiap hari berturut-turut tanpa jeda: Tier I (7 hari / 1 minggu), Tier II (30 hari / 1 bulan), Tier III (90 hari / 3 bulan), Tier IV (365 hari / 1 tahun penuh).',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 7, xpReward: 150, titleReward: 'Weekly Vigilant', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 30, xpReward: 500, titleReward: 'Monthly Ironclad', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 90, xpReward: 1200, titleReward: 'Centurion Sentinel', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 365, xpReward: 3000, titleReward: 'The Eternal Sentinel', badgeColor: 'border-red-500 bg-red-600/30 text-red-200 shadow-red-500/50 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 7, xpReward: 25, titleReward: 'Weekly Vigilant', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 30, xpReward: 50, titleReward: 'Monthly Ironclad', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 90, xpReward: 120, titleReward: 'Centurion Sentinel', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 365, xpReward: 300, titleReward: 'The Eternal Sentinel', badgeColor: 'border-red-500 bg-red-600/30 text-red-200 shadow-red-500/50 animate-pulse' }
     ]
   },
 
-  // 13. Operasi Khusus Shift Malam (Shift 3 pukul 01:00 - 04:00) - HIDDEN ACHIEVEMENT
+  // 14. Operasi Khusus Shift Malam (Shift 3 pukul 01:00 - 04:00) - HIDDEN ACHIEVEMENT
   {
     id: 'ach_night',
     code: 'BRANCH_NIGHT',
@@ -441,14 +441,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     hiddenHint: 'Pencapaian rahasia waktu operasional: Menjalankan tugas pengawasan pada jam-jam hening dini hari.',
     howToGet: 'Pencapaian rahasia: Selesaikan dan kirimkan formulir inspeksi pada rentang waktu dini hari (pukul 01:00 hingga 04:00).',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 5, xpReward: 250, titleReward: 'Night Recon', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 20, xpReward: 550, titleReward: 'Shadow Operative', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 50, xpReward: 1100, titleReward: 'Phantom Sentinel', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 100, xpReward: 2200, titleReward: 'Lord of the Eclipse', badgeColor: 'border-purple-400 bg-purple-500/30 text-purple-200 shadow-purple-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 5, xpReward: 25, titleReward: 'Night Recon', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 20, xpReward: 50, titleReward: 'Shadow Operative', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 50, xpReward: 100, titleReward: 'Phantom Sentinel', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 100, xpReward: 200, titleReward: 'Lord of the Eclipse', badgeColor: 'border-purple-400 bg-purple-500/30 text-purple-200 shadow-purple-500/40 animate-pulse' }
     ]
   },
 
-  // 14. Penjaga Fajar Subuh (Inspeksi/KTA Subuh 04:30 - 06:30) - HIDDEN ACHIEVEMENT
+  // 15. Penjaga Fajar Subuh (Inspeksi/KTA Subuh 04:30 - 06:30) - HIDDEN ACHIEVEMENT
   {
     id: 'ach_dawn',
     code: 'BRANCH_DAWN',
@@ -461,14 +461,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     hiddenHint: 'Pencapaian rahasia penjaga fajar: Menjalankan tugas pengawasan di waktu subuh menjelang pergantian shift pagi.',
     howToGet: 'Pencapaian rahasia: Selesaikan dan kirimkan inspeksi atau pelaporan keselamatan pada waktu subuh (pukul 04:30 hingga 06:30).',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 200, titleReward: 'Dawn Patrol', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 10, xpReward: 500, titleReward: 'Morning Glory', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 25, xpReward: 1000, titleReward: 'Solar Harbinger', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 50, xpReward: 2000, titleReward: 'Master of Aurora', badgeColor: 'border-amber-300 bg-amber-400/30 text-amber-100 shadow-amber-400/50 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 20, titleReward: 'Dawn Patrol', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 10, xpReward: 50, titleReward: 'Morning Glory', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 25, xpReward: 100, titleReward: 'Solar Harbinger', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 50, xpReward: 200, titleReward: 'Master of Aurora', badgeColor: 'border-amber-300 bg-amber-400/30 text-amber-100 shadow-amber-400/50 animate-pulse' }
     ]
   },
 
-  // 15. Penjelajah Simulator Mini-Game Retro - HIDDEN ACHIEVEMENT
+  // 16. Penjelajah Simulator Mini-Game Retro - HIDDEN ACHIEVEMENT
   {
     id: 'ach_easter_egg',
     code: 'BRANCH_EASTER_EGG',
@@ -481,14 +481,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     hiddenHint: 'Pencapaian rahasia penjelajah sistem: Menemukan dan menembus protokol mini-game retro rahasia PrepLab.',
     howToGet: 'Pencapaian rahasia: Temukan akses tersembunyi retro mini-game PrepLab dan selesaikan tantangan simulator hingga tuntas.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 250, titleReward: 'Arcade Sleuth', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 3, xpReward: 600, titleReward: 'Retro Hacker', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 5, xpReward: 1200, titleReward: 'Cyber Challenger', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 10, xpReward: 2500, titleReward: 'Virtual Overlord', badgeColor: 'border-lime-400 bg-lime-500/30 text-lime-200 shadow-lime-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 25, titleReward: 'Arcade Sleuth', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 3, xpReward: 50, titleReward: 'Retro Hacker', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 5, xpReward: 100, titleReward: 'Cyber Challenger', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 10, xpReward: 200, titleReward: 'Virtual Overlord', badgeColor: 'border-lime-400 bg-lime-500/30 text-lime-200 shadow-lime-500/40 animate-pulse' }
     ]
   },
 
-  // 16. Juara Musim Leaderboard (Peringkat 1 Bulanan) - NON-HIDDEN TASK
+  // 17. Juara Musim Leaderboard (Peringkat 1 Bulanan) - NON-HIDDEN TASK
   {
     id: 'ach_season',
     code: 'BRANCH_SEASON',
@@ -500,13 +500,13 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     isHidden: false,
     howToGet: 'Kumpulkan perolehan EXP bulanan (Season XP) tertinggi dan raih Peringkat #1 pada penutupan klasemen musim bulanan PrepLab.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 1000, titleReward: 'Brigade Commander', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 3, xpReward: 2000, titleReward: 'Legion Warlord', badgeColor: 'border-rose-500 bg-rose-500/30 text-rose-200 shadow-rose-500/40' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 6, xpReward: 3500, titleReward: 'Undefeated Overlord', badgeColor: 'border-amber-300 bg-gradient-to-r from-red-600/30 to-amber-500/30 text-amber-200 shadow-amber-400/50 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 1, xpReward: 100, titleReward: 'Brigade Commander', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 3, xpReward: 200, titleReward: 'Legion Warlord', badgeColor: 'border-rose-500 bg-rose-500/30 text-rose-200 shadow-rose-500/40' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 6, xpReward: 350, titleReward: 'Undefeated Overlord', badgeColor: 'border-amber-300 bg-gradient-to-r from-red-600/30 to-amber-500/30 text-amber-200 shadow-amber-400/50 animate-pulse' }
     ]
   },
 
-  // 17. Dedikasi Akhir Pekan (Sabtu & Minggu) - HIDDEN ACHIEVEMENT
+  // 18. Dedikasi Akhir Pekan (Sabtu & Minggu) - HIDDEN ACHIEVEMENT
   {
     id: 'ach_weekend',
     code: 'BRANCH_WEEKEND',
@@ -519,14 +519,14 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     hiddenHint: 'Di saat roda dunia melambat dan gemuruh hening, ada kesatria yang tetap menjaga mesin menyala di hari perhentian.',
     howToGet: 'Pencapaian rahasia: Selesaikan inspeksi lapangan, pelaporan KTA, atau penutupan Work Order di hari Sabtu atau Minggu.',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 200, titleReward: 'Weekend Vigilante', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 10, xpReward: 500, titleReward: 'Saturday Ironclad', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 25, xpReward: 1200, titleReward: 'Sunday Vanguard', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 50, xpReward: 2500, titleReward: 'The Restless Sentinel', badgeColor: 'border-yellow-300 bg-yellow-500/30 text-yellow-200 shadow-yellow-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 20, titleReward: 'Weekend Vigilante', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 10, xpReward: 50, titleReward: 'Saturday Ironclad', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 25, xpReward: 120, titleReward: 'Sunday Vanguard', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 50, xpReward: 220, titleReward: 'The Restless Sentinel', badgeColor: 'border-yellow-300 bg-yellow-500/30 text-yellow-200 shadow-yellow-500/40 animate-pulse' }
     ]
   },
 
-  // 18. Master Segala Lini (Omni-Discipline Polymath) - HIDDEN ACHIEVEMENT
+  // 19. Master Segala Lini (Omni-Discipline Polymath) - HIDDEN ACHIEVEMENT
   {
     id: 'ach_polymath',
     code: 'BRANCH_POLYMATH',
@@ -539,10 +539,10 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     hiddenHint: 'Seorang komandan sejati tidak hanya menguasai satu bilah senjata, melainkan memahami denyut nadi di setiap penjuru benteng komando.',
     howToGet: 'Pencapaian rahasia: Miliki kontribusi aktif minimal di 3, 5, 8, hingga 10 modul berbeda dari total 13 modul operasional PrepLab (KTA, Inspeksi, Penuntasan Temuan, Buat WO, Selesai WO, Cuti Site, Feedback, Quotes, Tema K3, Buletin, P5M, Kuis 100, Login Streak).',
     tiers: [
-      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 300, titleReward: 'Versatile Operator', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
-      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 5, xpReward: 750, titleReward: 'Tactical Polymath', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
-      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 8, xpReward: 1600, titleReward: 'Omni-Discipline Specialist', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
-      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 10, xpReward: 3000, titleReward: 'Apex PrepLab Polymath', badgeColor: 'border-fuchsia-400 bg-fuchsia-500/30 text-fuchsia-200 shadow-fuchsia-500/40 animate-pulse' }
+      { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 30, titleReward: 'Versatile Operator', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
+      { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 5, xpReward: 75, titleReward: 'Tactical Polymath', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
+      { tierLevel: 3, tierName: 'Tier III (Gold)', requiredCount: 8, xpReward: 150, titleReward: 'Omni-Discipline Specialist', badgeColor: 'border-amber-400 bg-amber-500/25 text-amber-300 shadow-amber-500/30' },
+      { tierLevel: 4, tierName: 'Tier IV (Master)', requiredCount: 10, xpReward: 250, titleReward: 'Apex PrepLab Polymath', badgeColor: 'border-fuchsia-400 bg-fuchsia-500/30 text-fuchsia-200 shadow-fuchsia-500/40 animate-pulse' }
     ]
   }
 ];

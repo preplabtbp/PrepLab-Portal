@@ -376,6 +376,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
   // 1-12. Run ALL lifetime metrics in ONE concurrent batch
   let ktaCount = 0;
   let inspectionCount = 0;
+  let rawInspectionCount = 0;
   let nightCount = 0;
   let dawnCount = 0;
   let weekendCount = 0;
@@ -492,7 +493,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
 
     ktaCount = Number(ktaRes[0]?.count || 0);
     userInspList = inspsRes;
-    const rawInspectionCount = userInspList.length;
+    rawInspectionCount = userInspList.length;
 
     // Perolehan EXP dari inspeksi dibatasi maksimal hanya 1x dalam 1 minggu (ISO Week)
     const inspWeekSet = new Set<string>();
@@ -684,6 +685,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
   let seasonStats = {
     ktaCount: 0,
     inspectionCount: 0,
+    rawInspectionCount: 0,
     defectsCount: 0,
     woCreateCount: 0,
     woResolveCount: 0,
@@ -944,6 +946,22 @@ gamificationRouter.post("/reset-season", async (req, res) => {
   } catch (e: any) {
     console.error("Error resetting gamification season:", e);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/gamification/recalculate (Hitung ulang seluruh perolehan EXP personil & bersihkan cache)
+gamificationRouter.post("/recalculate", async (_req, res) => {
+  try {
+    invalidateGamificationCache();
+    const result = await computeAndCacheLeaderboard();
+    res.json({
+      success: true,
+      message: "Perolehan EXP dan peringkat seluruh personil berhasil dihitung ulang secara balanced.",
+      totalPersonnel: result?.leaderboard?.length || 0
+    });
+  } catch (err: any) {
+    console.error("Recalculate gamification error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 

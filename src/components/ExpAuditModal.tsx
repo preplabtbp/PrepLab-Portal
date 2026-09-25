@@ -268,6 +268,24 @@ export function ExpAuditModal({
     setTimeout(() => setIsCopied(false), 2500);
   };
 
+  const [isRecalculating, setIsRecalculating] = useState(false);
+  const handleRecalculate = async () => {
+    setIsRecalculating(true);
+    try {
+      const res = await fetch('/api/gamification/recalculate', { method: 'POST' });
+      if (res.ok) {
+        toast.success('EXP seluruh personil berhasil dihitung ulang secara balanced!');
+        window.dispatchEvent(new CustomEvent('gamification_updated'));
+      } else {
+        toast.error('Gagal menghitung ulang EXP');
+      }
+    } catch {
+      toast.error('Terjadi kesalahan koneksi saat menghitung ulang');
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -305,6 +323,18 @@ export function ExpAuditModal({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleRecalculate}
+              disabled={isRecalculating}
+              className="p-2 rounded-xl border text-xs font-bold transition-all hover:bg-slate-100 dark:hover:bg-slate-800 text-[var(--text-muted)] hover:text-teal-600 dark:hover:text-teal-400 cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              style={{ borderColor: 'var(--border-main)' }}
+              title="Hitung Ulang &amp; Sinkronkan EXP Seluruh Personil"
+            >
+              <RefreshCw className={`w-4 h-4 text-teal-500 ${isRecalculating ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Sinkronkan EXP</span>
+            </button>
+
             <button
               type="button"
               onClick={handleCopySummary}
