@@ -96,6 +96,7 @@ export function ExpAuditModal({
         csCount: g.stats?.csCount || 0,
         feedbackCount: g.stats?.feedbackCount || 0,
         quotesCount: g.stats?.quotesCount || 0,
+        rawQuotesCount: g.stats?.rawQuotesCount ?? g.stats?.quotesCount ?? 0,
         themesCount: g.stats?.themesCount || 0,
         bulletinCount: g.stats?.bulletinCount || 0,
         p5mSpeakerCount: g.stats?.p5mSpeakerCount || 0,
@@ -116,6 +117,7 @@ export function ExpAuditModal({
         sWoResolveCount: g.seasonStats?.woResolveCount || 0,
         sFeedbackCount: g.seasonStats?.feedbackCount || 0,
         sQuotesCount: g.seasonStats?.quotesCount || 0,
+        sRawQuotesCount: g.seasonStats?.rawQuotesCount ?? g.seasonStats?.quotesCount ?? 0,
         sThemesCount: g.seasonStats?.themesCount || 0,
         sBulletinCount: g.seasonStats?.bulletinCount || 0,
         sQuiz100Count: g.seasonStats?.quiz100Count || 0,
@@ -187,9 +189,16 @@ export function ExpAuditModal({
         case 'FEEDBACK':
           count = isCareer ? (targetUser.feedbackCount || 0) : (targetUser.sFeedbackCount ?? 0);
           break;
-        case 'QUOTES':
+        case 'QUOTES': {
           count = isCareer ? (targetUser.quotesCount || 0) : (targetUser.sQuotesCount ?? 0);
+          const rawCount = isCareer
+            ? (targetUser.rawQuotesCount ?? targetUser.quotesCount ?? 0)
+            : (targetUser.sRawQuotesCount ?? targetUser.sQuotesCount ?? 0);
+          if (rawCount > count) {
+            extraNote = `Total ${rawCount} quotes dibuat (${count} quotes valid per kuota 1/hari & 10/bulan)`;
+          }
           break;
+        }
         case 'THEMES':
           count = isCareer ? (targetUser.themesCount || 0) : (targetUser.sThemesCount ?? 0);
           break;

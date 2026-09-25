@@ -140,19 +140,18 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
       .where(conditions.length > 0 ? and(...conditions) : sql`1=1`)
       .orderBy(desc(logbookTasks.createdAt));
 
-    // Separate tasks for Today and Yesterday
-    // Today tasks:
-    // 1) Task with taskDate === targetDateStr
-    // 2) Task from previous days that are STILL OPEN / IN PROGRESS (carry-over focus)
-    const todayTasks = allMatching.filter(t => {
-      if (t.taskDate === targetDateStr) return true;
-      if (t.taskDate < targetDateStr && (t.status === 'Open' || t.status === 'In Progress')) return true;
-      return false;
-    });
+    // STRICT SEPARATION:
+    // 1. Today tasks: ONLY tasks for targetDateStr
+    const todayTasks = allMatching.filter(t => t.taskDate === targetDateStr);
 
-    // Yesterday tasks (evaluation of work done on yesterdayDateStr):
-    const yesterdayTasks = allMatching.filter(t => {
-      return t.taskDate === yesterdayDateStr;
+    // 2. Carry Over tasks:
+    // Past unfinished tasks (Open, In Progress, Pending) from earlier dates,
+    // plus tasks from yesterdayDateStr for evaluation.
+    const carryOverTasks = allMatching.filter(t => {
+      if (t.taskDate === targetDateStr) return false;
+      if (t.taskDate === yesterdayDateStr) return true;
+      if (t.taskDate < targetDateStr && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed') return true;
+      return false;
     });
 
     // Calculate Summary Statistics
@@ -163,9 +162,13 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
       openToday: todayTasks.filter(t => t.status === 'Open').length,
       inProgressToday: todayTasks.filter(t => t.status === 'In Progress').length,
       completedToday: todayTasks.filter(t => t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed').length,
-      totalYesterday: yesterdayTasks.length,
-      completedYesterday: yesterdayTasks.filter(t => t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed').length,
-      pendingYesterday: yesterdayTasks.filter(t => t.status === 'Open' || t.status === 'In Progress').length,
+      totalCarryOver: carryOverTasks.length,
+      completedCarryOver: carryOverTasks.filter(t => t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed').length,
+      pendingCarryOver: carryOverTasks.filter(t => t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').length,
+      // Backwards compatibility for UI reading yesterday properties
+      totalYesterday: carryOverTasks.length,
+      completedYesterday: carryOverTasks.filter(t => t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed').length,
+      pendingYesterday: carryOverTasks.filter(t => t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').length,
     };
 
     res.json({
@@ -173,7 +176,8 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
       data: {
         summary,
         todayTasks,
-        yesterdayTasks,
+        yesterdayTasks: carryOverTasks,
+        carryOverTasks
       }
     });
   } catch (error: any) {
@@ -197,9 +201,14 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
       activityType = 'Routine',
       taskDate,
       targetDate,
+      targetTime,
       pt = 'TBP',
       bulletinPostId,
-      bulletinTopicTitle
+      bulletinTopicTitle,
+      isPending = false,
+      pendingPicNik,
+      pendingPicName,
+      pendingReason
     } = req.body;
 
     if (!title || !title.trim()) {
@@ -210,6 +219,7 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
     }
 
     const assignedDate = taskDate || formatDateStr(new Date());
+    const finalTargetTime = targetTime && targetTime.trim() ? targetTime.trim() : '23:59';
 
     // Insert into logbook_tasks
     const inserted = await db.insert(logbookTasks).values({
@@ -224,32 +234,54 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
       activityType,
       taskDate: assignedDate,
       targetDate: targetDate || '-',
-      status: 'Open',
+      targetTime: finalTargetTime,
+      status: isPending ? 'Pending' : 'Open',
       progressPercent: 0,
       pt: pt === 'GPS' ? 'TBP' : pt,
       universe: pt === 'GTS' ? 'GTS' : 'TBP_GPS',
       bulletinPostId: bulletinPostId ? parseInt(String(bulletinPostId)) : null,
       bulletinTopicTitle: bulletinTopicTitle || title.trim(),
+      isPending: Boolean(isPending),
+      pendingPicNik: pendingPicNik || null,
+      pendingPicName: pendingPicName || null,
+      pendingReason: pendingReason || null,
       createdAt: new Date(),
       updatedAt: new Date()
     }).returning();
 
     const createdTask = inserted[0];
 
-    // Notification: Kirim Notifikasi Instan ke Bawahan yang Ditugaskan
+    // Notification: Kirim Notifikasi Instan ke Bawahan yang Ditugaskan (Mendukung Multi-PIC)
     try {
-      const notifData = [{
-        userId: assigneeNik,
+      const nikList = String(assigneeNik).split(',').map(s => s.trim()).filter(Boolean);
+      const timeLabel = finalTargetTime !== '23:59' ? ` pukul ${finalTargetTime}` : ' (Batas 23:59)';
+      const notifData: any[] = nikList.map(nik => ({
+        userId: nik,
         role: section || 'Prep & Lab',
         title: `📋 Tugas Baru Ditugaskan (${priority})`,
-        message: `${assignedByName || 'Atasan'} menugaskan: "${title}". Target: ${targetDate || 'Hari ini'}`,
+        message: `${assignedByName || 'Atasan'} menugaskan: "${title}". Target: ${targetDate || 'Hari ini'}${timeLabel}`,
         type: priority === 'Urgent' || priority === 'High' ? 'warning' : 'info',
         link: `/logbook?date=${assignedDate}&section=${encodeURIComponent(section || '')}`,
         isRead: false
-      }];
+      }));
 
-      const notifRes = await db.insert(notifications).values(notifData).returning();
-      sendWebPush(notifRes);
+      // Jika ada PIC Job Pending yang berbeda, kirim notifikasi khusus kepadanya
+      if (isPending && pendingPicNik && !nikList.includes(pendingPicNik)) {
+        notifData.push({
+          userId: pendingPicNik,
+          role: section || 'Prep & Lab',
+          title: `⏳ Penugasan Job Pending (${title})`,
+          message: `${assignedByName || 'Atasan'} menugaskan Anda sebagai PIC Job Pending untuk "${title}". Alasan: ${pendingReason || '-'}`,
+          type: 'warning',
+          link: `/logbook?date=${assignedDate}&section=${encodeURIComponent(section || '')}`,
+          isRead: false
+        });
+      }
+
+      if (notifData.length > 0) {
+        const notifRes = await db.insert(notifications).values(notifData).returning();
+        sendWebPush(notifRes);
+      }
     } catch (notifErr) {
       console.warn("[Logbook API] Notification error:", notifErr);
     }
@@ -351,15 +383,20 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
     const currentTask = existingArr[0];
     const updatePayload: Record<string, any> = { ...req.body, updatedAt: new Date() };
 
-    // Auto set actualCompletedDate if marked as resolved/done
+    // Auto set actualCompletedDate and pending status flags
     if (
       updatePayload.status && 
-      (updatePayload.status === 'Resolved' || updatePayload.status === 'Done' || updatePayload.status === 'Closed') &&
-      !currentTask.actualCompletedDate
+      (updatePayload.status === 'Resolved' || updatePayload.status === 'Done' || updatePayload.status === 'Closed')
     ) {
-      updatePayload.actualCompletedDate = new Date();
+      if (!currentTask.actualCompletedDate) updatePayload.actualCompletedDate = new Date();
+      updatePayload.isPending = false;
     } else if (updatePayload.status && (updatePayload.status === 'Open' || updatePayload.status === 'In Progress')) {
       updatePayload.actualCompletedDate = null;
+      if (updatePayload.isPending === undefined && !updatePayload.pendingPicNik) {
+        updatePayload.isPending = false;
+      }
+    } else if (updatePayload.status === 'Pending' || updatePayload.pendingPicNik) {
+      updatePayload.isPending = true;
     }
 
     const updated = await db
@@ -456,12 +493,67 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
   }
 });
 
-// 4. DELETE /api/logbook/tasks/:id - Hapus Task
+// 4. DELETE /api/logbook/tasks/:id - Hapus Task (Sinkronisasi Otomatis ke Dokumen Buletin)
 logbookRouter.delete("/api/logbook/tasks/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const existingArr = await db.select().from(logbookTasks).where(eq(logbookTasks.id, id)).limit(1);
+    if (existingArr.length === 0) {
+      return res.status(404).json({ status: "error", message: "Kegiatan logbook tidak ditemukan" });
+    }
+
+    const task = existingArr[0];
+
+    // Auto-Sync Hapus Baris di Dokumen Buletin Terkait
+    if (task.bulletinPostId) {
+      try {
+        const postArr = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, task.bulletinPostId)).limit(1);
+        if (postArr.length > 0) {
+          const post = postArr[0];
+          const parsed = parseMarkdownTableRows(post.content);
+          if (parsed && parsed.headers.length > 0) {
+            const targetTitle = (task.bulletinTopicTitle || task.title || '').toLowerCase().trim();
+            if (targetTitle && targetTitle.length >= 2) {
+              const targetIdx = parsed.rows.findIndex(r => {
+                const rTitle = Object.keys(r).reduce((acc, k) => {
+                  const kl = k.toLowerCase().trim();
+                  if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') {
+                    return (r[k] || '').toLowerCase().trim();
+                  }
+                  return acc;
+                }, '');
+                if (!rTitle || rTitle.length < 2) return false;
+                return rTitle === targetTitle || (rTitle.length >= 4 && targetTitle.length >= 4 && (rTitle.startsWith(targetTitle) || targetTitle.startsWith(rTitle)));
+              });
+
+              if (targetIdx !== -1) {
+                // Hapus baris dari tabel
+                parsed.rows.splice(targetIdx, 1);
+
+                // Urutkan kembali nomor (# / no / number)
+                parsed.rows.forEach((r, idx) => {
+                  Object.keys(r).forEach(k => {
+                    const kl = k.toLowerCase().trim();
+                    if (kl === 'number' || kl === 'no' || kl === '#') {
+                      r[k] = String(idx + 1);
+                    }
+                  });
+                });
+
+                const updatedContent = serializeMarkdownTable(parsed.headers, parsed.rows, parsed.beforeText, parsed.afterText);
+                await db.update(bulletinPosts).set({ content: updatedContent }).where(eq(bulletinPosts.id, post.id));
+                console.log(`[Logbook Delete Sync] Berhasil menghapus baris "${task.title}" dari Buletin #${post.id}`);
+              }
+            }
+          }
+        }
+      } catch (syncErr) {
+        console.warn("[Logbook Delete Sync] Error deleting row from bulletin:", syncErr);
+      }
+    }
+
     await db.delete(logbookTasks).where(eq(logbookTasks.id, id));
-    res.json({ status: "success", message: "Task berhasil dihapus" });
+    res.json({ status: "success", message: "Kegiatan berhasil dihapus dan disinkronkan ke Buletin" });
   } catch (error: any) {
     console.error("[Logbook API DELETE] Error:", error);
     res.status(500).json({ status: "error", message: error.message });

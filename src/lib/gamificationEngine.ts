@@ -38,15 +38,15 @@ export const ACTION_XP_WEIGHTS = {
   WO_CREATE: 40,
   WO_RESOLVE: 60,
   CS: 0, // Cuti Site gives 0 EXP (pure hidden achievement & titles)
-  FEEDBACK: 100,
-  QUOTES: 20,
+  FEEDBACK: 35, // Diturunkan dari 100 ke 35 (Anti-Spam Soft-Cap)
+  QUOTES: 15, // Diturunkan dari 20 ke 15 (Anti-Spam Daily & Monthly Cap)
   THEMES: 40,
   BULLETIN: 10,
   P5M_SPEAKER: 60,
   QUIZ_100: 250,
-  NIGHT_SHIFT: 50,
-  DAWN_SHIFT: 50,
-  WEEKEND_SHIFT: 50
+  NIGHT_SHIFT: 0, // Dinonaktifkan: adil bagi non-shift / roster
+  DAWN_SHIFT: 0, // Dinonaktifkan: adil bagi non-shift / roster
+  WEEKEND_SHIFT: 0 // Dinonaktifkan: adil bagi non-shift / roster
 };
 
 export const EXP_SOURCES_CONFIG: ExpSourceDefinition[] = [
@@ -79,12 +79,12 @@ export const EXP_SOURCES_CONFIG: ExpSourceDefinition[] = [
   },
   {
     key: 'WO_CREATE',
-    name: 'Pembuatan Tiket Work Order',
+    name: 'Pengajuan Work Order Non-Draft (Maks 3/Minggu)',
     category: 'operational',
     icon: '📝',
     unit: 'Tiket WO',
     weight: 40,
-    description: 'Pengajuan tiket perawatan dan perbaikan peralatan/mesin operasional'
+    description: 'Pengajuan tiket perawatan dan perbaikan peralatan operasional yang valid (maksimal perolehan EXP 3 WO per minggu kalender)'
   },
   {
     key: 'WO_RESOLVE',
@@ -97,21 +97,21 @@ export const EXP_SOURCES_CONFIG: ExpSourceDefinition[] = [
   },
   {
     key: 'FEEDBACK',
-    name: 'Ide Inovasi & Masukan Sistem',
+    name: 'Ide Inovasi & Masukan Sistem (Maks 5/Bulan)',
     category: 'community',
     icon: '💡',
     unit: 'Masukan',
-    weight: 100,
-    description: 'Pengiriman evaluasi, saran penyempurnaan, dan ide inovasi portal'
+    weight: 35,
+    description: 'Pengiriman evaluasi dan masukan sistem portal (maksimal perolehan EXP 5 feedback per bulan kalender)'
   },
   {
     key: 'QUOTES',
-    name: 'Safety Quotes & Motivasi Harian',
+    name: 'Safety Quotes & Motivasi (Maks 1/Hari, 10/Bulan)',
     category: 'community',
     icon: '💬',
     unit: 'Quotes',
-    weight: 20,
-    description: 'Penyusunan kata mutiara motivasi dan pesan keselamatan harian'
+    weight: 15,
+    description: 'Penyusunan kata mutiara motivasi dan pesan K3 harian (maksimal perolehan EXP 1 quote/hari dan maksimal 10 quote/bulan)'
   },
   {
     key: 'THEMES',
@@ -124,12 +124,12 @@ export const EXP_SOURCES_CONFIG: ExpSourceDefinition[] = [
   },
   {
     key: 'BULLETIN',
-    name: 'Diskusi & Baca Buletin K3',
+    name: 'Diskusi & Baca Buletin K3 (Maks 5/Hari)',
     category: 'community',
     icon: '📰',
     unit: 'Komentar',
     weight: 10,
-    description: 'Membaca dan berdiskusi pada papan artikel buletin K3'
+    description: 'Membaca dan berdiskusi pada artikel buletin K3 (maksimal perolehan EXP 5 komentar per hari kalender)'
   },
   {
     key: 'P5M_SPEAKER',
@@ -142,39 +142,39 @@ export const EXP_SOURCES_CONFIG: ExpSourceDefinition[] = [
   },
   {
     key: 'QUIZ_100',
-    name: 'Kuis K3 Nilai Sempurna (100%)',
+    name: 'Kuis K3 Nilai Sempurna 100% (1x/Materi)',
     category: 'safety',
     icon: '🎓',
-    unit: 'Kuis 100%',
+    unit: 'Materi Kuis',
     weight: 250,
-    description: 'Menyelesaikan kuis evaluasi pemahaman SOP K3 dengan skor 100%'
+    description: 'Menyelesaikan kuis evaluasi pemahaman SOP K3 dengan skor 100% (reward 1x per versi materi kuis)'
   },
   {
     key: 'NIGHT_SHIFT',
-    name: 'Operasional Shift Malam (22:00-06:00)',
+    name: 'Operasional Shift Malam (Gelar Militer Saja)',
     category: 'special',
     icon: '🌙',
     unit: 'Shift Malam',
-    weight: 50,
-    description: 'Aktivitas operasional / inspeksi di jam hening malam hari'
+    weight: 0,
+    description: 'Reward rutin operasional dinonaktifkan demi keadilan sistem roster shift (dihitung per malam unik untuk lencana pencapaian)'
   },
   {
     key: 'DAWN_SHIFT',
-    name: 'Patroli Subuh / Fajar (04:00-07:00)',
+    name: 'Patroli Subuh / Fajar (Gelar Militer Saja)',
     category: 'special',
     icon: '🌅',
     unit: 'Patroli Subuh',
-    weight: 50,
-    description: 'Aktivitas pengawasan keselamatan fajar menjelang pergantian shift'
+    weight: 0,
+    description: 'Reward rutin operasional dinonaktifkan demi keadilan sistem roster shift (dihitung per hari unik untuk lencana pencapaian)'
   },
   {
     key: 'WEEKEND_SHIFT',
-    name: 'Dedikasi Akhir Pekan (Sabtu & Minggu)',
+    name: 'Dedikasi Akhir Pekan (Gelar Militer Saja)',
     category: 'special',
     icon: '⚡',
     unit: 'Tugas Weekend',
-    weight: 50,
-    description: 'Menjalankan inspeksi atau tugas operasional di hari libur akhir pekan'
+    weight: 0,
+    description: 'Reward rutin operasional dinonaktifkan demi keadilan sistem roster shift (dihitung per hari libur unik untuk lencana pencapaian)'
   }
 ];
 

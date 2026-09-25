@@ -125,7 +125,7 @@ export function getISOWeekKey(dateInput: Date | string | number | null | undefin
 }
 
 // Shared action weights for gamification base EXP calculation
-// NOTE: Cuti Site (CS) gives 0 EXP. It is purely a hidden achievement with titles and cosmetic border rewards.
+// NOTE: Cuti Site (CS), Shift Malam, Subuh, dan Akhir Pekan memberi 0 EXP rutin operasional (keadilan non-shift / roster).
 export const ACTION_XP_WEIGHTS = {
   KTA: 35,
   INSPECTION: 50,
@@ -133,16 +133,23 @@ export const ACTION_XP_WEIGHTS = {
   WO_CREATE: 40,
   WO_RESOLVE: 60,
   CS: 0, // Cuti Site gives 0 EXP (Hidden achievement only)
-  FEEDBACK: 100,
-  QUOTES: 20,
+  FEEDBACK: 35, // Diturunkan dari 100 ke 35 (Anti-Spam Soft-Cap)
+  QUOTES: 15, // Diturunkan dari 20 ke 15 (Anti-Spam Daily & Monthly Cap)
   THEMES: 40,
   BULLETIN: 10,
   P5M_SPEAKER: 60,
   QUIZ_100: 250,
-  NIGHT_SHIFT: 50,
-  DAWN_SHIFT: 50,
-  WEEKEND_SHIFT: 50
+  NIGHT_SHIFT: 0, // Dinonaktifkan: adil bagi non-shift / roster
+  DAWN_SHIFT: 0, // Dinonaktifkan: adil bagi non-shift / roster
+  WEEKEND_SHIFT: 0 // Dinonaktifkan: adil bagi non-shift / roster
 };
+
+// Anti-Spam Quota Caps
+export const FEEDBACK_MONTHLY_CAP_COUNT = 5; // Maksimal 5 feedback per bulan kalender yang berhak atas EXP
+export const BULLETIN_DAILY_CAP_COUNT = 5; // Maksimal 5 komentar per hari kalender yang berhak atas EXP
+export const WO_WEEKLY_CAP_COUNT = 3; // Maksimal 3 WO per minggu kalender yang berhak atas EXP
+export const QUOTES_DAILY_CAP_COUNT = 1; // Maksimal 1 quote per hari kalender yang berhak atas EXP
+export const QUOTES_MONTHLY_CAP_COUNT = 10; // Maksimal 10 quotes per bulan kalender yang berhak atas EXP
 
 // In-memory cache for leaderboard
 let cachedLeaderboardData: {
@@ -390,6 +397,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
   let csCount = 0;
   let feedbackCount = 0;
   let quotesCount = 0;
+  let rawQuotesCount = 0;
   let themesCount = 0;
   let bulletinCount = 0;
   let p5mSpeakerCount = 0;
@@ -413,9 +421,17 @@ export async function computeUserGamification(nik: string, userName?: string) {
       .from(inspections)
       .where(or(...inspConditions)),
 
-      db.select({ count: count() })
-        .from(workOrders)
-        .where(sql`UPPER(${workOrders.requestorNik}) = ${cleanNik}`),
+      // Anti-Spam: Hanya hitung WO aktif / valid (bukan draft, cancelled, batal)
+      db.select({
+        id: workOrders.id,
+        createdAt: workOrders.createdAt,
+        status: workOrders.status
+      })
+      .from(workOrders)
+      .where(and(
+        sql`UPPER(${workOrders.requestorNik}) = ${cleanNik}`,
+        sql`COALESCE(UPPER(${workOrders.status}), '') NOT IN ('CANCELLED', 'BATAL', 'DRAFT')`
+      )),
 
       db.select({
         technicianPic: workOrders.technicianPic,
@@ -450,13 +466,21 @@ export async function computeUserGamification(nik: string, userName?: string) {
           )
         )),
 
-      db.select({ count: count() })
-        .from(appFeedbacks)
-        .where(sql`UPPER(${appFeedbacks.authorNik}) = ${cleanNik}`),
+      // Anti-Spam: Ambil tanggal feedback untuk penerapan monthly soft-cap
+      db.select({
+        id: appFeedbacks.id,
+        createdAt: appFeedbacks.createdAt
+      })
+      .from(appFeedbacks)
+      .where(sql`UPPER(${appFeedbacks.authorNik}) = ${cleanNik}`),
 
-      db.select({ count: count() })
-        .from(communityQuotes)
-        .where(sql`UPPER(${communityQuotes.authorNik}) = ${cleanNik}`)
+      // Anti-Spam: Ambil tanggal quotes untuk penerapan daily cap (maks 1/hari) dan monthly cap (maks 10/bulan)
+      db.select({
+        id: communityQuotes.id,
+        createdAt: communityQuotes.createdAt
+      })
+      .from(communityQuotes)
+      .where(sql`UPPER(${communityQuotes.authorNik}) = ${cleanNik}`)
     ]);
 
     // Chunk 3: Community engagement (Themes, Bulletin, P5M, Quiz, Logins, Easter Egg)
@@ -467,19 +491,26 @@ export async function computeUserGamification(nik: string, userName?: string) {
       .from(userThemes)
       .where(sql`UPPER(${userThemes.nik}) = ${cleanNik}`),
 
-      db.select({ count: count() })
-        .from(bulletinComments)
-        .where(sql`UPPER(${bulletinComments.authorNik}) = ${cleanNik}`),
+      // Anti-Spam: Ambil tanggal komentar buletin untuk penerapan daily cap
+      db.select({
+        id: bulletinComments.id,
+        createdAt: bulletinComments.createdAt
+      })
+      .from(bulletinComments)
+      .where(sql`UPPER(${bulletinComments.authorNik}) = ${cleanNik}`),
 
       db.select({ scheduleData: p5mSchedules.scheduleData })
         .from(p5mSchedules),
 
-      db.select({ count: count() })
-        .from(quizScores)
-        .where(and(
-          sql`UPPER(${quizScores.nik}) = ${cleanNik}`,
-          eq(quizScores.percentage, 100)
-        )),
+      // Anti-Spam: Hitung distinct quizVersion agar pengulangan materi yang sama tidak melipatgandakan EXP
+      db.select({
+        count: sql<number>`count(distinct coalesce(nullif(trim(${quizScores.quizVersion}), ''), ${quizScores.id}::text))::int`
+      })
+      .from(quizScores)
+      .where(and(
+        sql`UPPER(${quizScores.nik}) = ${cleanNik}`,
+        sql`${quizScores.percentage} >= 100`
+      )),
 
       db.select({ loginDate: portalLogins.loginDate })
         .from(portalLogins)
@@ -506,22 +537,44 @@ export async function computeUserGamification(nik: string, userName?: string) {
     // inspectionCount yang dihitung ke baseActionsXp adalah minggu unik yang memenuhi syarat
     inspectionCount = inspWeekSet.size;
 
+    // Anti-Spam: Hitung Shift Malam, Subuh, dan Weekend berbasis COUNT(DISTINCT DATE)
+    const nightDateSet = new Set<string>();
+    const dawnDateSet = new Set<string>();
+    const weekendDateSet = new Set<string>();
+
     for (const item of userInspList) {
       if (item.date) {
         const d = new Date(item.date);
-        activityDates.push(d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' }));
+        const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
+        activityDates.push(dateStr);
         const h = d.getHours();
         const m = d.getMinutes();
-        if (h >= 1 && h <= 4) nightCount++;
-        if ((h === 4 && m >= 30) || h === 5 || (h === 6 && m <= 30)) dawnCount++;
+        if (h >= 1 && h <= 4) nightDateSet.add(dateStr);
+        if ((h === 4 && m >= 30) || h === 5 || (h === 6 && m <= 30)) dawnDateSet.add(dateStr);
 
         const witD = new Date(d.getTime() + (9 * 60 * 60 * 1000));
         const day = witD.getUTCDay();
-        if (day === 0 || day === 6) weekendCount++;
+        if (day === 0 || day === 6) weekendDateSet.add(dateStr);
       }
     }
+    nightCount = nightDateSet.size;
+    dawnCount = dawnDateSet.size;
+    weekendCount = weekendDateSet.size;
 
-    woCreateCount = Number(woCreatedRes[0]?.count || 0);
+    // Anti-Spam: Batasi perolehan EXP pembuatan WO maksimal 3 tiket per minggu
+    const woWeekMap = new Map<string, number>();
+    for (const wo of woCreatedRes) {
+      const wKey = getISOWeekKey(wo.createdAt || new Date());
+      if (wKey) {
+        woWeekMap.set(wKey, (woWeekMap.get(wKey) || 0) + 1);
+      }
+    }
+    let cappedWoCreateCount = 0;
+    for (const cnt of woWeekMap.values()) {
+      cappedWoCreateCount += Math.min(WO_WEEKLY_CAP_COUNT, cnt);
+    }
+    woCreateCount = cappedWoCreateCount;
+
     closedWOs = closedWOsRes;
     const searchName = (resolvedName || cleanNik).toUpperCase();
     for (const wo of closedWOs) {
@@ -541,10 +594,54 @@ export async function computeUserGamification(nik: string, userName?: string) {
     }
 
     csCount = Number(csRes[0]?.count || 0);
-    feedbackCount = Number(fbRes[0]?.count || 0);
-    quotesCount = Number(qRes[0]?.count || 0);
+
+    // Anti-Spam: Batasi perolehan EXP feedback maksimal 5 feedback per bulan (Soft-Cap)
+    const fbMonthMap = new Map<string, number>();
+    for (const fb of fbRes) {
+      const d = fb.createdAt ? new Date(fb.createdAt) : new Date();
+      const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      fbMonthMap.set(mKey, (fbMonthMap.get(mKey) || 0) + 1);
+    }
+    let cappedFeedbackCount = 0;
+    for (const cnt of fbMonthMap.values()) {
+      cappedFeedbackCount += Math.min(FEEDBACK_MONTHLY_CAP_COUNT, cnt);
+    }
+    feedbackCount = cappedFeedbackCount;
+
+    // Anti-Spam: Batasi perolehan EXP Safety Quotes maksimal 1 quote per hari dan 10 quotes per bulan
+    rawQuotesCount = qRes.length;
+    const quoteDayMap = new Map<string, number>();
+    for (const q of qRes) {
+      const d = q.createdAt ? new Date(q.createdAt) : new Date();
+      const dayKey = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
+      quoteDayMap.set(dayKey, (quoteDayMap.get(dayKey) || 0) + 1);
+    }
+    const quoteMonthMap = new Map<string, number>();
+    for (const [dayKey, cnt] of quoteDayMap.entries()) {
+      const mKey = dayKey.substring(0, 7);
+      const dailyValid = Math.min(QUOTES_DAILY_CAP_COUNT, cnt);
+      quoteMonthMap.set(mKey, (quoteMonthMap.get(mKey) || 0) + dailyValid);
+    }
+    let cappedQuotesCount = 0;
+    for (const mCount of quoteMonthMap.values()) {
+      cappedQuotesCount += Math.min(QUOTES_MONTHLY_CAP_COUNT, mCount);
+    }
+    quotesCount = cappedQuotesCount;
+
     themesCount = Number(thRes[0]?.count || 0);
-    bulletinCount = Number(bcRes[0]?.count || 0);
+
+    // Anti-Spam: Batasi perolehan EXP komentar buletin maksimal 5 komentar per hari
+    const commentDayMap = new Map<string, number>();
+    for (const bc of bcRes) {
+      const d = bc.createdAt ? new Date(bc.createdAt) : new Date();
+      const dayKey = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
+      commentDayMap.set(dayKey, (commentDayMap.get(dayKey) || 0) + 1);
+    }
+    let cappedBulletinCount = 0;
+    for (const cnt of commentDayMap.values()) {
+      cappedBulletinCount += Math.min(BULLETIN_DAILY_CAP_COUNT, cnt);
+    }
+    bulletinCount = cappedBulletinCount;
 
     for (const row of allSchedules) {
       if (row.scheduleData && typeof row.scheduleData === 'object') {
@@ -596,7 +693,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
     BRANCH_WO_RESOLVE: woResolveCount,
     BRANCH_CS: csCount,
     BRANCH_FEEDBACK: feedbackCount,
-    BRANCH_QUOTES: quotesCount,
+    BRANCH_QUOTES: rawQuotesCount,
     BRANCH_THEMES: themesCount,
     BRANCH_BULLETIN: bulletinCount,
     BRANCH_P5M_SPEAKER: p5mSpeakerCount,
@@ -628,14 +725,8 @@ export async function computeUserGamification(nik: string, userName?: string) {
     };
   });
 
-  const QUOTES_XP_CAP_COUNT = 30;
   const THEMES_XP_CAP_COUNT = 15;
-  const QUOTES_POST_CAP_XP = 5;
   const THEMES_POST_CAP_XP = 10;
-
-  const cappedQuotesXp = quotesCount <= QUOTES_XP_CAP_COUNT
-    ? (quotesCount * ACTION_XP_WEIGHTS.QUOTES)
-    : (QUOTES_XP_CAP_COUNT * ACTION_XP_WEIGHTS.QUOTES) + ((quotesCount - QUOTES_XP_CAP_COUNT) * QUOTES_POST_CAP_XP);
 
   const cappedThemesXp = themesCount <= THEMES_XP_CAP_COUNT
     ? (themesCount * ACTION_XP_WEIGHTS.THEMES)
@@ -649,7 +740,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
     (woResolveCount * ACTION_XP_WEIGHTS.WO_RESOLVE) +
     (csCount * ACTION_XP_WEIGHTS.CS) +
     (feedbackCount * ACTION_XP_WEIGHTS.FEEDBACK) +
-    cappedQuotesXp +
+    (quotesCount * ACTION_XP_WEIGHTS.QUOTES) +
     cappedThemesXp +
     (bulletinCount * ACTION_XP_WEIGHTS.BULLETIN) +
     (p5mSpeakerCount * ACTION_XP_WEIGHTS.P5M_SPEAKER) +
@@ -691,6 +782,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
     woResolveCount: 0,
     feedbackCount: 0,
     quotesCount: 0,
+    rawQuotesCount: 0,
     themesCount: 0,
     bulletinCount: 0,
     p5mSpeakerCount: 0,
@@ -706,21 +798,26 @@ export async function computeUserGamification(nik: string, userName?: string) {
       return new Date(item.date) >= seasonStart;
     });
 
-    let sNight = 0;
-    let sDawn = 0;
-    let sWeekend = 0;
+    // Anti-Spam: Hitung Shift Malam, Subuh, dan Weekend season berbasis COUNT(DISTINCT DATE)
+    const sNightDateSet = new Set<string>();
+    const sDawnDateSet = new Set<string>();
+    const sWeekendDateSet = new Set<string>();
     for (const item of sInsp) {
       if (item.date) {
         const d = new Date(item.date);
+        const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
         const h = d.getHours();
         const m = d.getMinutes();
-        if (h >= 1 && h <= 4) sNight++;
-        if ((h === 4 && m >= 30) || h === 5 || (h === 6 && m <= 30)) sDawn++;
+        if (h >= 1 && h <= 4) sNightDateSet.add(dateStr);
+        if ((h === 4 && m >= 30) || h === 5 || (h === 6 && m <= 30)) sDawnDateSet.add(dateStr);
         const witD = new Date(d.getTime() + (9 * 60 * 60 * 1000));
         const day = witD.getUTCDay();
-        if (day === 0 || day === 6) sWeekend++;
+        if (day === 0 || day === 6) sWeekendDateSet.add(dateStr);
       }
     }
+    const sNight = sNightDateSet.size;
+    const sDawn = sDawnDateSet.size;
+    const sWeekend = sWeekendDateSet.size;
 
     const searchName = (resolvedName || cleanNik).toUpperCase();
     let sWoResolve = 0;
@@ -748,40 +845,118 @@ export async function computeUserGamification(nik: string, userName?: string) {
       db.select({ count: count() })
         .from(ktaReports)
         .where(and(sql`UPPER(${ktaReports.nik}) = ${cleanNik}`, sql`${ktaReports.createdAt} >= ${seasonStart}`)),
-      db.select({ count: count() })
-        .from(workOrders)
-        .where(and(sql`UPPER(${workOrders.requestorNik}) = ${cleanNik}`, sql`${workOrders.createdAt} >= ${seasonStart}`)),
-      db.select({ count: count() })
-        .from(appFeedbacks)
-        .where(and(sql`UPPER(${appFeedbacks.authorNik}) = ${cleanNik}`, sql`${appFeedbacks.createdAt} >= ${seasonStart}`))
+      // Anti-Spam: WO season hanya yang non-draft/non-batal
+      db.select({
+        id: workOrders.id,
+        createdAt: workOrders.createdAt,
+        status: workOrders.status
+      })
+      .from(workOrders)
+      .where(and(
+        sql`UPPER(${workOrders.requestorNik}) = ${cleanNik}`,
+        sql`COALESCE(UPPER(${workOrders.status}), '') NOT IN ('CANCELLED', 'BATAL', 'DRAFT')`,
+        sql`${workOrders.createdAt} >= ${seasonStart}`
+      )),
+      // Anti-Spam: Feedback season
+      db.select({
+        id: appFeedbacks.id,
+        createdAt: appFeedbacks.createdAt
+      })
+      .from(appFeedbacks)
+      .where(and(sql`UPPER(${appFeedbacks.authorNik}) = ${cleanNik}`, sql`${appFeedbacks.createdAt} >= ${seasonStart}`))
     ]);
 
     const [sQuotesRows, sThemesRows, sCommentsRows, sQuizRows] = await Promise.all([
-      db.select({ count: count() })
-        .from(communityQuotes)
-        .where(and(sql`UPPER(${communityQuotes.authorNik}) = ${cleanNik}`, sql`${communityQuotes.createdAt} >= ${seasonStart}`)),
+      db.select({
+        id: communityQuotes.id,
+        createdAt: communityQuotes.createdAt
+      })
+      .from(communityQuotes)
+      .where(and(sql`UPPER(${communityQuotes.authorNik}) = ${cleanNik}`, sql`${communityQuotes.createdAt} >= ${seasonStart}`)),
       db.select({ count: count() })
         .from(userThemes)
         .where(and(sql`UPPER(${userThemes.nik}) = ${cleanNik}`, sql`${userThemes.createdAt} >= ${seasonStart}`)),
-      db.select({ count: count() })
-        .from(bulletinComments)
-        .where(and(sql`UPPER(${bulletinComments.authorNik}) = ${cleanNik}`, sql`${bulletinComments.createdAt} >= ${seasonStart}`)),
-      db.select({ count: count() })
-        .from(quizScores)
-        .where(and(sql`UPPER(${quizScores.nik}) = ${cleanNik}`, eq(quizScores.percentage, 100), sql`${quizScores.timestamp} >= ${seasonStart}`))
+      // Anti-Spam: Komentar buletin season
+      db.select({
+        id: bulletinComments.id,
+        createdAt: bulletinComments.createdAt
+      })
+      .from(bulletinComments)
+      .where(and(sql`UPPER(${bulletinComments.authorNik}) = ${cleanNik}`, sql`${bulletinComments.createdAt} >= ${seasonStart}`)),
+      // Anti-Spam: Quiz season distinct version
+      db.select({
+        count: sql<number>`count(distinct coalesce(nullif(trim(${quizScores.quizVersion}), ''), ${quizScores.id}::text))::int`
+      })
+      .from(quizScores)
+      .where(and(
+        sql`UPPER(${quizScores.nik}) = ${cleanNik}`,
+        sql`${quizScores.percentage} >= 100`,
+        sql`${quizScores.timestamp} >= ${seasonStart}`
+      ))
     ]);
 
     const sKtaCount = Number(sKtaRows[0]?.count || 0);
-    const sWoCreateCount = Number(sWoCreateRows[0]?.count || 0);
-    const sFbCount = Number(sFbRows[0]?.count || 0);
-    const sQuotesCount = Number(sQuotesRows[0]?.count || 0);
+
+    // Anti-Spam: Hitung capped WO season (maks 3/minggu)
+    const sWoWeekMap = new Map<string, number>();
+    for (const wo of sWoCreateRows) {
+      const wKey = getISOWeekKey(wo.createdAt || new Date());
+      if (wKey) {
+        sWoWeekMap.set(wKey, (sWoWeekMap.get(wKey) || 0) + 1);
+      }
+    }
+    let sWoCreateCount = 0;
+    for (const cnt of sWoWeekMap.values()) {
+      sWoCreateCount += Math.min(WO_WEEKLY_CAP_COUNT, cnt);
+    }
+
+    // Anti-Spam: Hitung capped feedback season (maks 5/bulan)
+    const sFbMonthMap = new Map<string, number>();
+    for (const fb of sFbRows) {
+      const d = fb.createdAt ? new Date(fb.createdAt) : new Date();
+      const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      sFbMonthMap.set(mKey, (sFbMonthMap.get(mKey) || 0) + 1);
+    }
+    let sFbCount = 0;
+    for (const cnt of sFbMonthMap.values()) {
+      sFbCount += Math.min(FEEDBACK_MONTHLY_CAP_COUNT, cnt);
+    }
+
+    // Anti-Spam: Batasi perolehan EXP Safety Quotes season (maks 1/hari, 10/bulan)
+    const sRawQuotesCount = sQuotesRows.length;
+    const sQuoteDayMap = new Map<string, number>();
+    for (const q of sQuotesRows) {
+      const d = q.createdAt ? new Date(q.createdAt) : new Date();
+      const dayKey = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
+      sQuoteDayMap.set(dayKey, (sQuoteDayMap.get(dayKey) || 0) + 1);
+    }
+    const sQuoteMonthMap = new Map<string, number>();
+    for (const [dayKey, cnt] of sQuoteDayMap.entries()) {
+      const mKey = dayKey.substring(0, 7);
+      const dailyValid = Math.min(QUOTES_DAILY_CAP_COUNT, cnt);
+      sQuoteMonthMap.set(mKey, (sQuoteMonthMap.get(mKey) || 0) + dailyValid);
+    }
+    let sCappedQuotesCount = 0;
+    for (const mCount of sQuoteMonthMap.values()) {
+      sCappedQuotesCount += Math.min(QUOTES_MONTHLY_CAP_COUNT, mCount);
+    }
+    const sQuotesCount = sCappedQuotesCount;
     const sThemesCount = Number(sThemesRows[0]?.count || 0);
-    const sCommentsCount = Number(sCommentsRows[0]?.count || 0);
+
+    // Anti-Spam: Hitung capped komentar buletin season (maks 5/hari)
+    const sCommentDayMap = new Map<string, number>();
+    for (const bc of sCommentsRows) {
+      const d = bc.createdAt ? new Date(bc.createdAt) : new Date();
+      const dayKey = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
+      sCommentDayMap.set(dayKey, (sCommentDayMap.get(dayKey) || 0) + 1);
+    }
+    let sCommentsCount = 0;
+    for (const cnt of sCommentDayMap.values()) {
+      sCommentsCount += Math.min(BULLETIN_DAILY_CAP_COUNT, cnt);
+    }
+
     const sQuizCount = Number(sQuizRows[0]?.count || 0);
 
-    const sCappedQuotesXp = sQuotesCount <= QUOTES_XP_CAP_COUNT
-      ? (sQuotesCount * ACTION_XP_WEIGHTS.QUOTES)
-      : (QUOTES_XP_CAP_COUNT * ACTION_XP_WEIGHTS.QUOTES) + ((sQuotesCount - QUOTES_XP_CAP_COUNT) * QUOTES_POST_CAP_XP);
     const sCappedThemesXp = sThemesCount <= THEMES_XP_CAP_COUNT
       ? (sThemesCount * ACTION_XP_WEIGHTS.THEMES)
       : (THEMES_XP_CAP_COUNT * ACTION_XP_WEIGHTS.THEMES) + ((sThemesCount - THEMES_XP_CAP_COUNT) * THEMES_POST_CAP_XP);
@@ -803,7 +978,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
       (sWoCreateCount * ACTION_XP_WEIGHTS.WO_CREATE) +
       (sWoResolve * ACTION_XP_WEIGHTS.WO_RESOLVE) +
       (sFbCount * ACTION_XP_WEIGHTS.FEEDBACK) +
-      sCappedQuotesXp +
+      (sQuotesCount * ACTION_XP_WEIGHTS.QUOTES) +
       sCappedThemesXp +
       (sCommentsCount * ACTION_XP_WEIGHTS.BULLETIN) +
       (sQuizCount * ACTION_XP_WEIGHTS.QUIZ_100) +
@@ -820,6 +995,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
       woResolveCount: sWoResolve,
       feedbackCount: sFbCount,
       quotesCount: sQuotesCount,
+      rawQuotesCount: sRawQuotesCount,
       themesCount: sThemesCount,
       bulletinCount: sCommentsCount,
       p5mSpeakerCount: 0,
@@ -854,6 +1030,7 @@ export async function computeUserGamification(nik: string, userName?: string) {
       csCount,
       feedbackCount,
       quotesCount,
+      rawQuotesCount,
       themesCount,
       bulletinCount,
       p5mSpeakerCount,
@@ -1106,13 +1283,23 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
           ))
           .groupBy(sql`UPPER(${roster.nik})`),
 
-        db.select({ nik: sql<string>`UPPER(${appFeedbacks.authorNik})`, count: sql<number>`count(*)::int` })
-          .from(appFeedbacks)
-          .groupBy(sql`UPPER(${appFeedbacks.authorNik})`),
+        // Anti-Spam: Group feedback per bulan per NIK
+        db.select({
+          nik: sql<string>`UPPER(${appFeedbacks.authorNik})`,
+          month: sql<string>`to_char(${appFeedbacks.createdAt}, 'YYYY-MM')`,
+          count: sql<number>`count(*)::int`
+        })
+        .from(appFeedbacks)
+        .groupBy(sql`UPPER(${appFeedbacks.authorNik})`, sql`to_char(${appFeedbacks.createdAt}, 'YYYY-MM')`),
 
-        db.select({ nik: sql<string>`UPPER(${communityQuotes.authorNik})`, count: sql<number>`count(*)::int` })
-          .from(communityQuotes)
-          .groupBy(sql`UPPER(${communityQuotes.authorNik})`)
+        // Anti-Spam: Group quotes per NIK dan tanggal Jayapura
+        db.select({
+          nik: sql<string>`UPPER(${communityQuotes.authorNik})`,
+          day: sql<string>`to_char(timezone('Asia/Jayapura', ${communityQuotes.createdAt}), 'YYYY-MM-DD')`,
+          count: sql<number>`count(*)::int`
+        })
+        .from(communityQuotes)
+        .groupBy(sql`UPPER(${communityQuotes.authorNik})`, sql`to_char(timezone('Asia/Jayapura', ${communityQuotes.createdAt}), 'YYYY-MM-DD')`)
       ]);
 
       // Safe batch 3 (4 queries): Themes, Bulletin, Quiz, P5M
@@ -1124,24 +1311,38 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
         .from(userThemes)
         .groupBy(sql`UPPER(${userThemes.nik})`),
 
-        db.select({ nik: sql<string>`UPPER(${bulletinComments.authorNik})`, count: sql<number>`count(*)::int` })
-          .from(bulletinComments)
-          .groupBy(sql`UPPER(${bulletinComments.authorNik})`),
+        // Anti-Spam: Group komentar buletin per hari
+        db.select({
+          nik: sql<string>`UPPER(${bulletinComments.authorNik})`,
+          day: sql<string>`to_char(timezone('Asia/Jayapura', ${bulletinComments.createdAt}), 'YYYY-MM-DD')`,
+          count: sql<number>`count(*)::int`
+        })
+        .from(bulletinComments)
+        .groupBy(sql`UPPER(${bulletinComments.authorNik})`, sql`to_char(timezone('Asia/Jayapura', ${bulletinComments.createdAt}), 'YYYY-MM-DD')`),
 
-        db.select({ nik: sql<string>`UPPER(${quizScores.nik})`, count: sql<number>`count(*)::int` })
-          .from(quizScores)
-          .where(sql`${quizScores.percentage} >= 100`)
-          .groupBy(sql`UPPER(${quizScores.nik})`),
+        // Anti-Spam: Hitung distinct quizVersion (1x per materi kuis seumur hidup)
+        db.select({
+          nik: sql<string>`UPPER(${quizScores.nik})`,
+          count: sql<number>`count(distinct coalesce(nullif(trim(${quizScores.quizVersion}), ''), ${quizScores.id}::text))::int`
+        })
+        .from(quizScores)
+        .where(sql`${quizScores.percentage} >= 100`)
+        .groupBy(sql`UPPER(${quizScores.nik})`),
 
         db.select({ scheduleData: p5mSchedules.scheduleData })
           .from(p5mSchedules)
       ]);
 
       // Safe batch 4 (4 queries): Work Orders, Closed Tickets, Logins, Easter Egg
-      const [woCreateGroups, closedWOs, closedTicketsAll, portalLoginRows] = await Promise.all([
-        db.select({ nik: sql<string>`UPPER(${workOrders.requestorNik})`, count: sql<number>`count(*)::int` })
-          .from(workOrders)
-          .groupBy(sql`UPPER(${workOrders.requestorNik})`),
+      const [woRows, closedWOs, closedTicketsAll, portalLoginRows] = await Promise.all([
+        // Anti-Spam: Hanya ambil WO aktif/valid (bukan draft, cancelled, batal)
+        db.select({
+          nik: sql<string>`UPPER(${workOrders.requestorNik})`,
+          createdAt: workOrders.createdAt,
+          status: workOrders.status
+        })
+        .from(workOrders)
+        .where(sql`COALESCE(UPPER(${workOrders.status}), '') NOT IN ('CANCELLED', 'BATAL', 'DRAFT')`),
 
         db.select({ technicianPic: workOrders.technicianPic, requestorNik: workOrders.requestorNik, repairEnd: workOrders.repairEnd })
           .from(workOrders)
@@ -1190,15 +1391,25 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
 
       // Safe batch 6 (3 queries): Season Feedback, Quotes, Themes
       const [sFbGroups, sQuoteGroups, sThemeGroups] = await Promise.all([
-        db.select({ nik: sql<string>`UPPER(${appFeedbacks.authorNik})`, count: sql<number>`count(*)::int` })
-          .from(appFeedbacks)
-          .where(sql`${appFeedbacks.createdAt} >= ${seasonStart}`)
-          .groupBy(sql`UPPER(${appFeedbacks.authorNik})`),
+        // Anti-Spam: Season Feedback grouped per month
+        db.select({
+          nik: sql<string>`UPPER(${appFeedbacks.authorNik})`,
+          month: sql<string>`to_char(${appFeedbacks.createdAt}, 'YYYY-MM')`,
+          count: sql<number>`count(*)::int`
+        })
+        .from(appFeedbacks)
+        .where(sql`${appFeedbacks.createdAt} >= ${seasonStart}`)
+        .groupBy(sql`UPPER(${appFeedbacks.authorNik})`, sql`to_char(${appFeedbacks.createdAt}, 'YYYY-MM')`),
 
-        db.select({ nik: sql<string>`UPPER(${communityQuotes.authorNik})`, count: sql<number>`count(*)::int` })
-          .from(communityQuotes)
-          .where(sql`${communityQuotes.createdAt} >= ${seasonStart}`)
-          .groupBy(sql`UPPER(${communityQuotes.authorNik})`),
+        // Anti-Spam: Season quotes per NIK dan tanggal Jayapura
+        db.select({
+          nik: sql<string>`UPPER(${communityQuotes.authorNik})`,
+          day: sql<string>`to_char(timezone('Asia/Jayapura', ${communityQuotes.createdAt}), 'YYYY-MM-DD')`,
+          count: sql<number>`count(*)::int`
+        })
+        .from(communityQuotes)
+        .where(sql`${communityQuotes.createdAt} >= ${seasonStart}`)
+        .groupBy(sql`UPPER(${communityQuotes.authorNik})`, sql`to_char(timezone('Asia/Jayapura', ${communityQuotes.createdAt}), 'YYYY-MM-DD')`),
 
         db.select({ 
           nik: sql<string>`UPPER(${userThemes.nik})`, 
@@ -1209,22 +1420,28 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
         .groupBy(sql`UPPER(${userThemes.nik})`)
       ]);
 
-      // Safe batch 7 (3 queries): Season Comments, Quiz, WO Create
-      const [sCommentGroups, sQuizGroups, sWoCreateGroups] = await Promise.all([
-        db.select({ nik: sql<string>`UPPER(${bulletinComments.authorNik})`, count: sql<number>`count(*)::int` })
-          .from(bulletinComments)
-          .where(sql`${bulletinComments.createdAt} >= ${seasonStart}`)
-          .groupBy(sql`UPPER(${bulletinComments.authorNik})`),
+      // Safe batch 7 (3 queries): Season Comments, Quiz, Dummy
+      const [sCommentGroups, sQuizGroups] = await Promise.all([
+        // Anti-Spam: Season Komentar buletin grouped per day
+        db.select({
+          nik: sql<string>`UPPER(${bulletinComments.authorNik})`,
+          day: sql<string>`to_char(timezone('Asia/Jayapura', ${bulletinComments.createdAt}), 'YYYY-MM-DD')`,
+          count: sql<number>`count(*)::int`
+        })
+        .from(bulletinComments)
+        .where(sql`${bulletinComments.createdAt} >= ${seasonStart}`)
+        .groupBy(sql`UPPER(${bulletinComments.authorNik})`, sql`to_char(timezone('Asia/Jayapura', ${bulletinComments.createdAt}), 'YYYY-MM-DD')`),
 
-        db.select({ nik: sql<string>`UPPER(${quizScores.nik})`, count: sql<number>`count(*)::int` })
-          .from(quizScores)
-          .where(and(sql`${quizScores.percentage} >= 100`, sql`${quizScores.timestamp} >= ${seasonStart}`))
-          .groupBy(sql`UPPER(${quizScores.nik})`),
+        // Anti-Spam: Season Quiz distinct quizVersion
+        db.select({
+          nik: sql<string>`UPPER(${quizScores.nik})`,
+          count: sql<number>`count(distinct coalesce(nullif(trim(${quizScores.quizVersion}), ''), ${quizScores.id}::text))::int`
+        })
+        .from(quizScores)
+        .where(and(sql`${quizScores.percentage} >= 100`, sql`${quizScores.timestamp} >= ${seasonStart}`))
+        .groupBy(sql`UPPER(${quizScores.nik})`),
 
-        db.select({ nik: sql<string>`UPPER(${workOrders.requestorNik})`, count: sql<number>`count(*)::int` })
-          .from(workOrders)
-          .where(sql`${workOrders.createdAt} >= ${seasonStart}`)
-          .groupBy(sql`UPPER(${workOrders.requestorNik})`)
+        Promise.resolve([])
       ]);
 
       // Reuse closedWOs filtered for season without extra query
@@ -1232,21 +1449,132 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
 
       const ktaMap = new Map(ktaGroups.map(g => [g.nik, g.count]));
       const csMap = new Map(csGroups.map(g => [g.nik, g.count]));
-      const fbMap = new Map(fbGroups.map(g => [g.nik, g.count]));
-      const quoteMap = new Map(quoteGroups.map(g => [g.nik, g.count]));
+
+      // Anti-Spam: Feedback Map with monthly cap (maks 5 per bulan)
+      const fbMap = new Map<string, number>();
+      for (const row of fbGroups) {
+        if (!row.nik) continue;
+        const capped = Math.min(FEEDBACK_MONTHLY_CAP_COUNT, row.count);
+        fbMap.set(row.nik, (fbMap.get(row.nik) || 0) + capped);
+      }
+
+      // Anti-Spam: Quote Map with daily cap (maks 1/hari) dan monthly cap (maks 10/bulan)
+      const quoteMap = new Map<string, number>();
+      const rawQuoteMap = new Map<string, number>();
+      const quoteUserMonthMap = new Map<string, Map<string, number>>();
+
+      for (const row of quoteGroups) {
+        if (!row.nik || !row.day) continue;
+        const cnt = row.count || 0;
+        rawQuoteMap.set(row.nik, (rawQuoteMap.get(row.nik) || 0) + cnt);
+
+        const mKey = row.day.substring(0, 7);
+        const dailyValid = Math.min(QUOTES_DAILY_CAP_COUNT, cnt);
+        if (!quoteUserMonthMap.has(row.nik)) quoteUserMonthMap.set(row.nik, new Map());
+        const uMonthMap = quoteUserMonthMap.get(row.nik)!;
+        uMonthMap.set(mKey, (uMonthMap.get(mKey) || 0) + dailyValid);
+      }
+
+      for (const [nik, uMonthMap] of quoteUserMonthMap.entries()) {
+        let totalCapped = 0;
+        for (const mCount of uMonthMap.values()) {
+          totalCapped += Math.min(QUOTES_MONTHLY_CAP_COUNT, mCount);
+        }
+        quoteMap.set(nik, totalCapped);
+      }
       const themeMap = new Map(themeGroups.map(g => [g.nik, g.count]));
-      const commentMap = new Map(commentGroups.map(g => [g.nik, g.count]));
+
+      // Anti-Spam: Bulletin Comments Map with daily cap (maks 5 per hari)
+      const commentMap = new Map<string, number>();
+      for (const row of commentGroups) {
+        if (!row.nik) continue;
+        const capped = Math.min(BULLETIN_DAILY_CAP_COUNT, row.count);
+        commentMap.set(row.nik, (commentMap.get(row.nik) || 0) + capped);
+      }
+
       const quizMap = new Map(quizGroups.map(g => [g.nik, g.count]));
-      const woCreateMap = new Map(woCreateGroups.map(g => [g.nik, g.count]));
+
+      // Anti-Spam: WO Create Map with weekly cap (maks 3 per minggu) & non-draft/non-batal
+      const woUserWeekMap = new Map<string, Map<string, number>>();
+      const sWoUserWeekMap = new Map<string, Map<string, number>>();
+      for (const wo of woRows) {
+        if (!wo.nik) continue;
+        const wKey = getISOWeekKey(wo.createdAt || new Date());
+        if (!wKey) continue;
+        if (!woUserWeekMap.has(wo.nik)) woUserWeekMap.set(wo.nik, new Map());
+        const userMap = woUserWeekMap.get(wo.nik)!;
+        userMap.set(wKey, (userMap.get(wKey) || 0) + 1);
+
+        if (wo.createdAt && new Date(wo.createdAt) >= seasonStart) {
+          if (!sWoUserWeekMap.has(wo.nik)) sWoUserWeekMap.set(wo.nik, new Map());
+          const sUserMap = sWoUserWeekMap.get(wo.nik)!;
+          sUserMap.set(wKey, (sUserMap.get(wKey) || 0) + 1);
+        }
+      }
+      const woCreateMap = new Map<string, number>();
+      for (const [nik, weekMap] of woUserWeekMap.entries()) {
+        let total = 0;
+        for (const cnt of weekMap.values()) {
+          total += Math.min(WO_WEEKLY_CAP_COUNT, cnt);
+        }
+        woCreateMap.set(nik, total);
+      }
+      const sWoCreateMap = new Map<string, number>();
+      for (const [nik, weekMap] of sWoUserWeekMap.entries()) {
+        let total = 0;
+        for (const cnt of weekMap.values()) {
+          total += Math.min(WO_WEEKLY_CAP_COUNT, cnt);
+        }
+        sWoCreateMap.set(nik, total);
+      }
+
       const easterEggMap = new Map(easterEggRows.map(g => [g.nik, g.node || 1]));
 
       const sKtaMap = new Map(sKtaGroups.map(g => [g.nik, g.count]));
-      const sFbMap = new Map(sFbGroups.map(g => [g.nik, g.count]));
-      const sQuoteMap = new Map(sQuoteGroups.map(g => [g.nik, g.count]));
+
+      // Anti-Spam: Season Feedback Map with monthly cap
+      const sFbMap = new Map<string, number>();
+      for (const row of sFbGroups) {
+        if (!row.nik) continue;
+        const capped = Math.min(FEEDBACK_MONTHLY_CAP_COUNT, row.count);
+        sFbMap.set(row.nik, (sFbMap.get(row.nik) || 0) + capped);
+      }
+
+      // Anti-Spam: Season Quote Map with daily cap (maks 1/hari) dan monthly cap (maks 10/bulan)
+      const sQuoteMap = new Map<string, number>();
+      const sRawQuoteMap = new Map<string, number>();
+      const sQuoteUserMonthMap = new Map<string, Map<string, number>>();
+
+      for (const row of sQuoteGroups) {
+        if (!row.nik || !row.day) continue;
+        const cnt = row.count || 0;
+        sRawQuoteMap.set(row.nik, (sRawQuoteMap.get(row.nik) || 0) + cnt);
+
+        const mKey = row.day.substring(0, 7);
+        const dailyValid = Math.min(QUOTES_DAILY_CAP_COUNT, cnt);
+        if (!sQuoteUserMonthMap.has(row.nik)) sQuoteUserMonthMap.set(row.nik, new Map());
+        const uMonthMap = sQuoteUserMonthMap.get(row.nik)!;
+        uMonthMap.set(mKey, (uMonthMap.get(mKey) || 0) + dailyValid);
+      }
+
+      for (const [nik, uMonthMap] of sQuoteUserMonthMap.entries()) {
+        let totalCapped = 0;
+        for (const mCount of uMonthMap.values()) {
+          totalCapped += Math.min(QUOTES_MONTHLY_CAP_COUNT, mCount);
+        }
+        sQuoteMap.set(nik, totalCapped);
+      }
       const sThemeMap = new Map(sThemeGroups.map(g => [g.nik, g.count]));
-      const sCommentMap = new Map(sCommentGroups.map(g => [g.nik, g.count]));
+
+      // Anti-Spam: Season Bulletin Comments Map with daily cap
+      const sCommentMap = new Map<string, number>();
+      for (const row of sCommentGroups) {
+        if (!row.nik) continue;
+        const capped = Math.min(BULLETIN_DAILY_CAP_COUNT, row.count);
+        sCommentMap.set(row.nik, (sCommentMap.get(row.nik) || 0) + capped);
+      }
+
       const sQuizMap = new Map(sQuizGroups.map(g => [g.nik, g.count]));
-      const sWoCreateMap = new Map(sWoCreateGroups.map(g => [g.nik, g.count]));
 
       const loginsMap = new Map<string, string[]>();
       for (const row of portalLoginRows) {
@@ -1256,10 +1584,11 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
         }
       }
 
+      // Anti-Spam: Shift Malam, Subuh, Weekend berbasis COUNT(DISTINCT DATE)
       const inspRawDatesMap = new Map<string, Date[]>();
-      const nightCountMap = new Map<string, number>();
-      const dawnCountMap = new Map<string, number>();
-      const weekendCountMap = new Map<string, number>();
+      const nightDatesMap = new Map<string, Set<string>>();
+      const dawnDatesMap = new Map<string, Set<string>>();
+      const weekendDatesMap = new Map<string, Set<string>>();
       const inspDatesMap = new Map<string, string[]>();
 
       inspList.forEach(item => {
@@ -1277,23 +1606,26 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
           const h = d.getHours();
           const m = d.getMinutes();
           if (h >= 1 && h <= 4) {
-            nightCountMap.set(nameKey, (nightCountMap.get(nameKey) || 0) + 1);
+            if (!nightDatesMap.has(nameKey)) nightDatesMap.set(nameKey, new Set());
+            nightDatesMap.get(nameKey)!.add(dateStr);
           }
           if ((h === 4 && m >= 30) || h === 5 || (h === 6 && m <= 30)) {
-            dawnCountMap.set(nameKey, (dawnCountMap.get(nameKey) || 0) + 1);
+            if (!dawnDatesMap.has(nameKey)) dawnDatesMap.set(nameKey, new Set());
+            dawnDatesMap.get(nameKey)!.add(dateStr);
           }
           const witD = new Date(d.getTime() + (9 * 60 * 60 * 1000));
           const day = witD.getUTCDay();
           if (day === 0 || day === 6) {
-            weekendCountMap.set(nameKey, (weekendCountMap.get(nameKey) || 0) + 1);
+            if (!weekendDatesMap.has(nameKey)) weekendDatesMap.set(nameKey, new Set());
+            weekendDatesMap.get(nameKey)!.add(dateStr);
           }
         }
       });
 
       const sInspRawDatesMap = new Map<string, Date[]>();
-      const sNightCountMap = new Map<string, number>();
-      const sDawnCountMap = new Map<string, number>();
-      const sWeekendCountMap = new Map<string, number>();
+      const sNightDatesMap = new Map<string, Set<string>>();
+      const sDawnDatesMap = new Map<string, Set<string>>();
+      const sWeekendDatesMap = new Map<string, Set<string>>();
 
       sInspList.forEach(item => {
         const nameKey = (item.inspectorName || '').trim().toUpperCase();
@@ -1303,18 +1635,22 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
         if (item.date) {
           const d = new Date(item.date);
           sInspRawDatesMap.get(nameKey)!.push(d);
+          const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
           const h = d.getHours();
           const m = d.getMinutes();
           if (h >= 1 && h <= 4) {
-            sNightCountMap.set(nameKey, (sNightCountMap.get(nameKey) || 0) + 1);
+            if (!sNightDatesMap.has(nameKey)) sNightDatesMap.set(nameKey, new Set());
+            sNightDatesMap.get(nameKey)!.add(dateStr);
           }
           if ((h === 4 && m >= 30) || h === 5 || (h === 6 && m <= 30)) {
-            sDawnCountMap.set(nameKey, (sDawnCountMap.get(nameKey) || 0) + 1);
+            if (!sDawnDatesMap.has(nameKey)) sDawnDatesMap.set(nameKey, new Set());
+            sDawnDatesMap.get(nameKey)!.add(dateStr);
           }
           const witD = new Date(d.getTime() + (9 * 60 * 60 * 1000));
           const day = witD.getUTCDay();
           if (day === 0 || day === 6) {
-            sWeekendCountMap.set(nameKey, (sWeekendCountMap.get(nameKey) || 0) + 1);
+            if (!sWeekendDatesMap.has(nameKey)) sWeekendDatesMap.set(nameKey, new Set());
+            sWeekendDatesMap.get(nameKey)!.add(dateStr);
           }
         }
       });
@@ -1332,9 +1668,7 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
         }
       }
 
-      const QUOTES_XP_CAP_COUNT = 30;
       const THEMES_XP_CAP_COUNT = 15;
-      const QUOTES_POST_CAP_XP = 5;
       const THEMES_POST_CAP_XP = 10;
 
       const leaderboard = activeEmps.map(emp => {
@@ -1344,7 +1678,8 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
         const ktaCount = ktaMap.get(cleanNik) || 0;
         const csCount = csMap.get(cleanNik) || 0;
         const rawFeedback = fbMap.get(cleanNik) || 0;
-        const rawQuotes = quoteMap.get(cleanNik) || 0;
+        const quotesCount = quoteMap.get(cleanNik) || 0;
+        const rawQuotes = rawQuoteMap.get(cleanNik) || 0;
         const rawThemes = themeMap.get(cleanNik) || 0;
         const bulletinCount = commentMap.get(cleanNik) || 0;
         const quiz100Count = quizMap.get(cleanNik) || 0;
@@ -1353,27 +1688,32 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
         const p5mSpeakerCount = p5mSpeakerMap.get(cleanNik) || 0;
 
         const feedbackCount = rawFeedback;
-        const quotesCount = rawQuotes;
         const themesCount = rawThemes;
 
         let rawInspectionCount = 0;
         const matchingInspDates: Date[] = [];
-        let nightCount = 0;
-        let dawnCount = 0;
-        let weekendCount = 0;
+        const matchingNightDates = new Set<string>();
+        const matchingDawnDates = new Set<string>();
+        const matchingWeekendDates = new Set<string>();
         const datesCombined: string[] = [];
 
         for (const [inspName, dates] of inspRawDatesMap.entries()) {
           if (inspName.includes(cleanName) || cleanName.includes(inspName) || (cleanNik && inspName.includes(cleanNik))) {
             rawInspectionCount += dates.length;
             matchingInspDates.push(...dates);
-            nightCount += nightCountMap.get(inspName) || 0;
-            dawnCount += dawnCountMap.get(inspName) || 0;
-            weekendCount += weekendCountMap.get(inspName) || 0;
+            const nSet = nightDatesMap.get(inspName);
+            if (nSet) nSet.forEach(d => matchingNightDates.add(d));
+            const dSet = dawnDatesMap.get(inspName);
+            if (dSet) dSet.forEach(d => matchingDawnDates.add(d));
+            const wSet = weekendDatesMap.get(inspName);
+            if (wSet) wSet.forEach(d => matchingWeekendDates.add(d));
             const strDates = inspDatesMap.get(inspName) || [];
             datesCombined.push(...strDates);
           }
         }
+        const nightCount = matchingNightDates.size;
+        const dawnCount = matchingDawnDates.size;
+        const weekendCount = matchingWeekendDates.size;
 
         // Perolehan EXP dari inspeksi dibatasi maksimal hanya 1x dalam 1 minggu (ISO Week)
         const inspWeekSet = new Set<string>();
@@ -1443,7 +1783,7 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
             case 'BRANCH_WO_RESOLVE': currentVal = woResolveCount; break;
             case 'BRANCH_CS': currentVal = csCount; break;
             case 'BRANCH_FEEDBACK': currentVal = feedbackCount; break;
-            case 'BRANCH_QUOTES': currentVal = quotesCount; break;
+            case 'BRANCH_QUOTES': currentVal = rawQuotes; break;
             case 'BRANCH_THEMES': currentVal = themesCount; break;
             case 'BRANCH_BULLETIN': currentVal = bulletinCount; break;
             case 'BRANCH_P5M_SPEAKER': currentVal = p5mSpeakerCount; break;
@@ -1465,10 +1805,6 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
           });
         });
 
-        const cappedQuotesXp = quotesCount <= QUOTES_XP_CAP_COUNT
-          ? (quotesCount * ACTION_XP_WEIGHTS.QUOTES)
-          : (QUOTES_XP_CAP_COUNT * ACTION_XP_WEIGHTS.QUOTES) + ((quotesCount - QUOTES_XP_CAP_COUNT) * QUOTES_POST_CAP_XP);
-
         const cappedThemesXp = themesCount <= THEMES_XP_CAP_COUNT
           ? (themesCount * ACTION_XP_WEIGHTS.THEMES)
           : (THEMES_XP_CAP_COUNT * ACTION_XP_WEIGHTS.THEMES) + ((themesCount - THEMES_XP_CAP_COUNT) * THEMES_POST_CAP_XP);
@@ -1481,7 +1817,7 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
           (woResolveCount * ACTION_XP_WEIGHTS.WO_RESOLVE) +
           (csCount * ACTION_XP_WEIGHTS.CS) +
           (feedbackCount * ACTION_XP_WEIGHTS.FEEDBACK) +
-          cappedQuotesXp +
+          (quotesCount * ACTION_XP_WEIGHTS.QUOTES) +
           cappedThemesXp +
           (bulletinCount * ACTION_XP_WEIGHTS.BULLETIN) +
           (p5mSpeakerCount * ACTION_XP_WEIGHTS.P5M_SPEAKER) +
@@ -1508,6 +1844,7 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
         const sKtaCount = sKtaMap.get(cleanNik) || 0;
         const sFeedbackCount = sFbMap.get(cleanNik) || 0;
         const sQuotesCount = sQuoteMap.get(cleanNik) || 0;
+        const sRawQuotesCount = sRawQuoteMap.get(cleanNik) || 0;
         const sThemesCount = sThemeMap.get(cleanNik) || 0;
         const sBulletinCount = sCommentMap.get(cleanNik) || 0;
         const sQuiz100Count = sQuizMap.get(cleanNik) || 0;
@@ -1523,18 +1860,24 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
 
         let sRawInspectionCount = 0;
         const matchingSInspDates: Date[] = [];
-        let sNightCount = 0;
-        let sDawnCount = 0;
-        let sWeekendCount = 0;
+        const matchingSNightDates = new Set<string>();
+        const matchingSDawnDates = new Set<string>();
+        const matchingSWeekendDates = new Set<string>();
         for (const [inspName, dates] of sInspRawDatesMap.entries()) {
           if (inspName.includes(cleanName) || cleanName.includes(inspName) || (cleanNik && inspName.includes(cleanNik))) {
             sRawInspectionCount += dates.length;
             matchingSInspDates.push(...dates);
-            sNightCount += sNightCountMap.get(inspName) || 0;
-            sDawnCount += sDawnCountMap.get(inspName) || 0;
-            sWeekendCount += sWeekendCountMap.get(inspName) || 0;
+            const nSet = sNightDatesMap.get(inspName);
+            if (nSet) nSet.forEach(d => matchingSNightDates.add(d));
+            const dSet = sDawnDatesMap.get(inspName);
+            if (dSet) dSet.forEach(d => matchingSDawnDates.add(d));
+            const wSet = sWeekendDatesMap.get(inspName);
+            if (wSet) wSet.forEach(d => matchingSWeekendDates.add(d));
           }
         }
+        const sNightCount = matchingSNightDates.size;
+        const sDawnCount = matchingSDawnDates.size;
+        const sWeekendCount = matchingSWeekendDates.size;
 
         // Perolehan season EXP dari inspeksi dibatasi maksimal hanya 1x dalam 1 minggu (ISO Week)
         const sInspWeekSet = new Set<string>();
@@ -1543,10 +1886,6 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
           if (wKey) sInspWeekSet.add(wKey);
         }
         const sInspectionCount = sInspWeekSet.size;
-
-        const sCappedQuotesXp = sQuotesCount <= QUOTES_XP_CAP_COUNT
-          ? (sQuotesCount * ACTION_XP_WEIGHTS.QUOTES)
-          : (QUOTES_XP_CAP_COUNT * ACTION_XP_WEIGHTS.QUOTES) + ((sQuotesCount - QUOTES_XP_CAP_COUNT) * QUOTES_POST_CAP_XP);
 
         const sCappedThemesXp = sThemesCount <= THEMES_XP_CAP_COUNT
           ? (sThemesCount * ACTION_XP_WEIGHTS.THEMES)
@@ -1559,7 +1898,7 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
           (sWoCreateCount * ACTION_XP_WEIGHTS.WO_CREATE) +
           (sWoResolveCount * ACTION_XP_WEIGHTS.WO_RESOLVE) +
           (sFeedbackCount * ACTION_XP_WEIGHTS.FEEDBACK) +
-          sCappedQuotesXp +
+          (sQuotesCount * ACTION_XP_WEIGHTS.QUOTES) +
           sCappedThemesXp +
           (sBulletinCount * ACTION_XP_WEIGHTS.BULLETIN) +
           (sQuiz100Count * ACTION_XP_WEIGHTS.QUIZ_100) +
@@ -1591,6 +1930,7 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
           csCount,
           feedbackCount,
           quotesCount,
+          rawQuotesCount: rawQuotes,
           themesCount,
           bulletinCount,
           p5mSpeakerCount,
@@ -1607,6 +1947,7 @@ export async function computeAndCacheLeaderboard(): Promise<any> {
           sWoResolveCount,
           sFeedbackCount,
           sQuotesCount,
+          sRawQuotesCount,
           sThemesCount,
           sBulletinCount,
           sQuiz100Count,
@@ -1742,6 +2083,25 @@ gamificationRouter.get("/leaderboard", async (_req, res) => {
   }
 });
 
+// POST /api/gamification/recalculate (Force clear all caches & recalculate fresh balanced EXP)
+gamificationRouter.post("/recalculate", async (_req, res) => {
+  try {
+    cachedLeaderboardData = null;
+    leaderboardCalculationPromise = null;
+    userGamificationCache.clear();
+    const data = await computeAndCacheLeaderboard();
+    res.json({
+      success: true,
+      message: "EXP seluruh personil berhasil dihitung ulang dan leaderboard telah diperbarui secara balanced!",
+      totalPersonnel: data?.leaderboard?.length || 0,
+      timestamp: Date.now()
+    });
+  } catch (err: any) {
+    console.error("Recalculation error:", err);
+    res.status(500).json({ error: "Gagal menghitung ulang leaderboard: " + (err.message || String(err)) });
+  }
+});
+
 // Pre-warm leaderboard cache after server start
 setTimeout(() => {
   computeAndCacheLeaderboard().then(() => {
@@ -1750,3 +2110,4 @@ setTimeout(() => {
     console.warn("Failed to pre-warm gamification leaderboard:", err);
   });
 }, 2500);
+

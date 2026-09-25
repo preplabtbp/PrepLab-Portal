@@ -46,6 +46,7 @@ export interface LeaderboardUser {
   csCount?: number;
   feedbackCount?: number;
   quotesCount?: number;
+  rawQuotesCount?: number;
   themesCount?: number;
   bulletinCount?: number;
   p5mSpeakerCount?: number;
@@ -69,6 +70,7 @@ export interface LeaderboardUser {
   sWoResolveCount?: number;
   sFeedbackCount?: number;
   sQuotesCount?: number;
+  sRawQuotesCount?: number;
   sThemesCount?: number;
   sBulletinCount?: number;
   sQuiz100Count?: number;

@@ -22,7 +22,7 @@ import {
   CornerDownLeft,
   Info
 } from 'lucide-react';
-import { parseTasklist, toggleTasklistItem } from './tasklist-utils';
+import { parseTasklist, toggleTasklistItem, markdownToVisualHtml, visualHtmlToMarkdown } from './tasklist-utils';
 
 export interface EnterpriseWysiwygEditorProps {
   value: string;
@@ -65,7 +65,7 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
   );
 
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   // Subtask drafts for checklist mode
   const [subtasks, setSubtasks] = useState<SubtaskItem[]>(() => {
@@ -101,10 +101,26 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
   // Keep internal text state in sync
   const [textContent, setTextContent] = useState<string>(() => (value || '').replace(/<br\s*\/?>/gi, '\n'));
 
-  // Synchronize when value changes externally
+  // Synchronize visual HTML to markdown
+  const syncEditorContent = () => {
+    if (!editorRef.current) return;
+    const html = editorRef.current.innerHTML;
+    const md = visualHtmlToMarkdown(html);
+    setTextContent(md);
+    onChange(md);
+  };
+
+  // Synchronize when value changes externally or mode switch
   useEffect(() => {
-    setTextContent((value || '').replace(/<br\s*\/?>/gi, '\n'));
-  }, [value]);
+    const norm = (value || '').replace(/<br\s*\/?>/gi, '\n');
+    setTextContent(norm);
+    if (editorRef.current && mode === 'text') {
+      const currentMd = visualHtmlToMarkdown(editorRef.current.innerHTML);
+      if (currentMd !== norm) {
+        editorRef.current.innerHTML = markdownToVisualHtml(norm);
+      }
+    }
+  }, [value, mode]);
 
   // Sync checklist state changes back to parent
   const emitChecklistChange = (newItems: SubtaskItem[], newNotesText: string) => {
@@ -126,62 +142,90 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
     onChange(combined);
   };
 
-  // Text Mode Formatting helper
-  const insertFormatting = (prefix: string, suffix: string, placeholder = 'teks') => {
-    const el = textareaRef.current;
-    if (!el) return;
-
-    const start = el.selectionStart || 0;
-    const end = el.selectionEnd || 0;
-    const selected = textContent.substring(start, end) || placeholder;
-    const replacement = `${prefix}${selected}${suffix}`;
-    const nextText = textContent.substring(0, start) + replacement + textContent.substring(end);
-
-    setTextContent(nextText);
-    onChange(nextText);
-
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
-    }, 15);
+  // Visual Rich Text Actions (Never insert raw ** tokens!)
+  const handleFormatBold = (e: React.MouseEvent) => {
+    e.preventDefault();
+    document.execCommand('bold', false);
+    syncEditorContent();
   };
 
-  const insertLinePrefix = (prefix: string, defaultText = 'Poin catatan') => {
-    const el = textareaRef.current;
-    if (!el) return;
-
-    const start = el.selectionStart || 0;
-    const isAtStartOrNewline = start === 0 || textContent[start - 1] === '\n';
-    const finalPrefix = isAtStartOrNewline ? prefix : `\n${prefix}`;
-    const nextText = textContent.substring(0, start) + `${finalPrefix}${defaultText}` + textContent.substring(start);
-
-    setTextContent(nextText);
-    onChange(nextText);
-
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(start + finalPrefix.length, start + finalPrefix.length + defaultText.length);
-    }, 15);
+  const handleFormatItalic = (e: React.MouseEvent) => {
+    e.preventDefault();
+    document.execCommand('italic', false);
+    syncEditorContent();
   };
 
-  // Keyboard shortcut handler
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Escape' && onCancel) {
-      e.preventDefault();
-      onCancel();
-    } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      onSave?.(textContent);
-    } else if (e.key === 'b' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      insertFormatting('**', '**', 'teks tebal');
-    } else if (e.key === 'i' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      insertFormatting('*', '*', 'teks miring');
-    } else if (e.key === 'u' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      insertFormatting('<u>', '</u>', 'teks bergaris bawah');
+  const handleFormatUnderline = (e: React.MouseEvent) => {
+    e.preventDefault();
+    document.execCommand('underline', false);
+    syncEditorContent();
+  };
+
+  const handleFormatStrike = (e: React.MouseEvent) => {
+    e.preventDefault();
+    document.execCommand('strikeThrough', false);
+    syncEditorContent();
+  };
+
+  const handleFormatCode = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    const text = range.toString() || 'kode';
+    const codeNode = document.createElement('code');
+    codeNode.className = 'px-1.5 py-0.5 bg-slate-200/80 text-teal-800 rounded font-mono text-[11px]';
+    codeNode.textContent = text;
+    range.deleteContents();
+    range.insertNode(codeNode);
+    range.setStartAfter(codeNode);
+    range.setEndAfter(codeNode);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    syncEditorContent();
+  };
+
+  const handleFormatBullet = (e: React.MouseEvent) => {
+    e.preventDefault();
+    document.execCommand('insertUnorderedList', false);
+    syncEditorContent();
+  };
+
+  const handleFormatNumbered = (e: React.MouseEvent) => {
+    e.preventDefault();
+    document.execCommand('insertOrderedList', false);
+    syncEditorContent();
+  };
+
+  const handleFormatQuote = (e: React.MouseEvent) => {
+    e.preventDefault();
+    document.execCommand('formatBlock', false, 'blockquote');
+    syncEditorContent();
+  };
+
+  const handleInsertBadge = (type: 'Done' | 'OPEN') => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    if (type === 'Done') {
+      span.className = 'badge-done inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 mr-1 select-none';
+      span.textContent = 'DONE';
+    } else {
+      span.className = 'badge-open inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 mr-1 select-none';
+      span.textContent = 'OPEN';
     }
+    range.deleteContents();
+    range.insertNode(span);
+    const space = document.createTextNode(' ');
+    range.setStartAfter(span);
+    range.insertNode(space);
+    range.setStartAfter(space);
+    range.setEndAfter(space);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    syncEditorContent();
   };
 
   // Subtask Checklist interactions
@@ -374,7 +418,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
           <div className="flex items-center gap-0.5 flex-wrap">
             <button
               type="button"
-              onClick={() => insertFormatting('**', '**', 'teks tebal')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleFormatBold}
               title="Tebal (Ctrl+B)"
               className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
               style={{ color: 'var(--text-main, #1e293b)' }}
@@ -383,7 +428,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
             </button>
             <button
               type="button"
-              onClick={() => insertFormatting('*', '*', 'teks miring')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleFormatItalic}
               title="Miring (Ctrl+I)"
               className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
               style={{ color: 'var(--text-main, #1e293b)' }}
@@ -392,7 +438,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
             </button>
             <button
               type="button"
-              onClick={() => insertFormatting('<u>', '</u>', 'garis bawah')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleFormatUnderline}
               title="Garis Bawah (Ctrl+U)"
               className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
               style={{ color: 'var(--text-main, #1e293b)' }}
@@ -401,7 +448,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
             </button>
             <button
               type="button"
-              onClick={() => insertFormatting('~~', '~~', 'coret')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleFormatStrike}
               title="Coret (Strikethrough)"
               className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
               style={{ color: 'var(--text-main, #1e293b)' }}
@@ -410,7 +458,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
             </button>
             <button
               type="button"
-              onClick={() => insertFormatting('`', '`', 'kode')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleFormatCode}
               title="Inline Code"
               className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
               style={{ color: 'var(--text-main, #1e293b)' }}
@@ -422,7 +471,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
 
             <button
               type="button"
-              onClick={() => insertLinePrefix('• ', 'Poin catatan')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleFormatBullet}
               title="Poin Bullet (•)"
               className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
               style={{ color: 'var(--text-main, #1e293b)' }}
@@ -431,7 +481,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
             </button>
             <button
               type="button"
-              onClick={() => insertLinePrefix('1. ', 'Langkah pertama')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleFormatNumbered}
               title="Daftar Bernomor (1.)"
               className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
               style={{ color: 'var(--text-main, #1e293b)' }}
@@ -440,7 +491,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
             </button>
             <button
               type="button"
-              onClick={() => insertLinePrefix('> ', 'Catatan penting atau kutipan')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleFormatQuote}
               title="Kutipan / Blockquote (>)"
               className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
               style={{ color: 'var(--text-main, #1e293b)' }}
@@ -453,14 +505,16 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
             {/* Quick Badge Helpers */}
             <button
               type="button"
-              onClick={() => insertFormatting('**(Done)** ', '', '')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleInsertBadge('Done')}
               className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300/80 transition-all cursor-pointer shadow-2xs active:scale-95"
             >
               + Done
             </button>
             <button
               type="button"
-              onClick={() => insertFormatting('**(OPEN)** ', '', '')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleInsertBadge('OPEN')}
               className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300/80 transition-all cursor-pointer shadow-2xs active:scale-95"
             >
               + OPEN
@@ -478,6 +532,15 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
 
       {/* 3. EDITOR BODY */}
       <div className="p-3 sm:p-4">
+        <style>{`
+          .enterprise-wysiwyg-content:empty::before {
+            content: attr(data-placeholder);
+            color: #94a3b8;
+            pointer-events: none;
+            display: block;
+          }
+        `}</style>
+
         {activeTab === 'preview' ? (
           /* Live Markdown & Tasklist Preview */
           <div 
@@ -515,31 +578,40 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
                   ))}
                 </div>
                 {parsedPreview.cleanText && (
-                  <div className="mt-3 pt-2 border-t whitespace-pre-wrap font-medium" style={{ borderColor: 'var(--border-main, #e2e8f0)', color: 'var(--text-main, #0f172a)' }}>
-                    {parsedPreview.cleanText}
-                  </div>
+                  <div 
+                    className="mt-3 pt-2 border-t whitespace-pre-wrap font-medium" 
+                    style={{ borderColor: 'var(--border-main, #e2e8f0)', color: 'var(--text-main, #0f172a)' }}
+                    dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(parsedPreview.cleanText) }}
+                  />
                 )}
               </div>
             ) : (
-              <div className="whitespace-pre-wrap font-sans font-medium" style={{ color: 'var(--text-main, #0f172a)' }}>
-                {textContent}
-              </div>
+              <div 
+                className="whitespace-pre-wrap font-sans font-medium text-xs leading-relaxed" 
+                style={{ color: 'var(--text-main, #0f172a)' }}
+                dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(textContent) }}
+              />
             )}
           </div>
         ) : mode === 'text' ? (
-          /* Text Mode: Enterprise Rich Text Area */
+          /* Text Mode: Enterprise Visual Rich Text WYSIWYG Area */
           <div className="space-y-1">
-            <textarea
-              ref={textareaRef}
-              rows={rows}
-              value={textContent}
-              onChange={(e) => {
-                setTextContent(e.target.value);
-                onChange(e.target.value);
+            <div
+              ref={editorRef}
+              contentEditable={true}
+              suppressContentEditableWarning={true}
+              onInput={syncEditorContent}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && onCancel) {
+                  e.preventDefault();
+                  onCancel();
+                } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  onSave?.(textContent);
+                }
               }}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              className="w-full text-xs font-sans p-3 rounded-xl border outline-none leading-relaxed resize-y focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all shadow-inner"
+              data-placeholder={placeholder}
+              className="enterprise-wysiwyg-content w-full min-h-[140px] max-h-[350px] overflow-y-auto text-xs font-sans p-3 rounded-xl border outline-none leading-relaxed focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all shadow-inner"
               style={{
                 backgroundColor: 'var(--input-bg, #ffffff)',
                 borderColor: 'var(--border-main, #cbd5e1)',
@@ -550,7 +622,7 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               className="text-[11px] font-medium flex items-center justify-between mt-1 px-1"
               style={{ color: 'var(--text-muted, #475569)' }}
             >
-              <span>Mendukung format paragraf, poin bullet, dan penomoran standar.</span>
+              <span>Visual WYSIWYG aktif: Format tebal, miring, dan badge langsung tampil visual.</span>
               <span className="font-mono font-bold">{textContent.length} karakter</span>
             </p>
           </div>

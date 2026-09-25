@@ -222,6 +222,11 @@ async function initDbSchema() {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_logbook_tasks_assignee ON logbook_tasks(assignee_nik);`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_logbook_tasks_section ON logbook_tasks(section);`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_logbook_tasks_bulletin ON logbook_tasks(bulletin_post_id);`);
+    await db.execute(sql`ALTER TABLE logbook_tasks ADD COLUMN IF NOT EXISTS target_time TEXT DEFAULT '23:59';`);
+    await db.execute(sql`ALTER TABLE logbook_tasks ADD COLUMN IF NOT EXISTS is_pending BOOLEAN DEFAULT false;`);
+    await db.execute(sql`ALTER TABLE logbook_tasks ADD COLUMN IF NOT EXISTS pending_pic_nik TEXT;`);
+    await db.execute(sql`ALTER TABLE logbook_tasks ADD COLUMN IF NOT EXISTS pending_pic_name TEXT;`);
+    await db.execute(sql`ALTER TABLE logbook_tasks ADD COLUMN IF NOT EXISTS pending_reason TEXT;`);
 
     // Auto seed questions if table is empty
     const qCount = await db.select().from(questions).limit(1);

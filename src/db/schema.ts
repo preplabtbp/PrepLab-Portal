@@ -673,10 +673,15 @@ export const logbookTasks = pgTable('logbook_tasks', {
   activityType: text('activity_type').default('Routine'), // 'Routine', 'Non Routine', 'Periodic', 'Special Task'
   progressPercent: integer('progress_percent').default(0),
   taskDate: text('task_date').notNull(), // 'YYYY-MM-DD'
-  targetDate: text('target_date'), // Deadline / jam target
+  targetDate: text('target_date'), // Deadline / tanggal target
+  targetTime: text('target_time').default('23:59'), // Batas jam penyelesaian (HH:mm), default '23:59' (jam 12 malam)
   actualCompletedDate: timestamp('actual_completed_date'),
   yesterdayNotes: text('yesterday_notes'), // Catatan evaluasi kemarin
   todayNotes: text('today_notes'), // Catatan progres hari ini
+  isPending: boolean('is_pending').default(false), // Flag PIC Job Pending
+  pendingPicNik: text('pending_pic_nik'), // NIK PIC yang bertanggung jawab atas job pending
+  pendingPicName: text('pending_pic_name'), // Nama PIC Job Pending
+  pendingReason: text('pending_reason'), // Alasan / kendala / keterangan pending
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (t) => [
