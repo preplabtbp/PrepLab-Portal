@@ -273,67 +273,88 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
     >
       {/* 1. TOP HEADER & ENTERPRISE MODE SWITCHER */}
       <div 
-        className="px-3.5 py-2 border-b flex flex-wrap items-center justify-between gap-2 text-xs"
+        className="px-3.5 py-2.5 border-b flex flex-wrap items-center justify-between gap-2 text-xs"
         style={{
           backgroundColor: 'var(--input-bg, #f8fafc)',
           borderColor: 'var(--border-main, #e2e8f0)'
         }}
       >
         <div className="flex items-center gap-2">
-          <span className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-            <Edit3 className="w-3.5 h-3.5 text-teal-500" />
+          <span 
+            className="font-bold flex items-center gap-1.5 text-xs tracking-tight"
+            style={{ color: 'var(--text-main, #0f172a)' }}
+          >
+            <Edit3 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
             <span>{label}</span>
           </span>
 
           {allowModeSwitch && (
-            <div className="flex items-center p-0.5 rounded-lg border bg-slate-200/60 dark:bg-slate-800 border-slate-300 dark:border-slate-700">
+            <div 
+              className="flex items-center p-0.5 rounded-lg border shadow-2xs"
+              style={{
+                backgroundColor: 'var(--card-bg, #ffffff)',
+                borderColor: 'var(--border-main, #cbd5e1)'
+              }}
+            >
               <button
                 type="button"
                 onClick={() => handleSwitchMode('text')}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
                   mode === 'text'
-                    ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'hover:bg-slate-100 hover:text-slate-900'
                 }`}
+                style={mode === 'text' ? undefined : { color: 'var(--text-muted, #475569)' }}
               >
-                📝 Mode Teks
+                <span>📝</span>
+                <span>Mode Teks</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleSwitchMode('checklist')}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
                   mode === 'checklist'
-                    ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'hover:bg-slate-100 hover:text-slate-900'
                 }`}
+                style={mode === 'checklist' ? undefined : { color: 'var(--text-muted, #475569)' }}
               >
-                ☑️ Checklist Subtask
+                <span>☑️</span>
+                <span>Checklist Subtask</span>
               </button>
             </div>
           )}
         </div>
 
         {/* Tab Switcher: Editor vs Live Preview */}
-        <div className="flex items-center gap-1">
+        <div 
+          className="flex items-center p-0.5 rounded-lg border shadow-2xs"
+          style={{
+            backgroundColor: 'var(--card-bg, #ffffff)',
+            borderColor: 'var(--border-main, #cbd5e1)'
+          }}
+        >
           <button
             type="button"
             onClick={() => setActiveTab('editor')}
-            className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
               activeTab === 'editor'
-                ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'bg-teal-100 text-teal-900 border border-teal-300/60 shadow-2xs'
+                : 'hover:bg-slate-100 hover:text-slate-900'
             }`}
+            style={activeTab === 'editor' ? undefined : { color: 'var(--text-muted, #475569)' }}
           >
             Editor
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('preview')}
-            className={`px-2 py-0.5 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
               activeTab === 'preview'
-                ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'bg-teal-100 text-teal-900 border border-teal-300/60 shadow-2xs'
+                : 'hover:bg-slate-100 hover:text-slate-900'
             }`}
+            style={activeTab === 'preview' ? undefined : { color: 'var(--text-muted, #475569)' }}
           >
             <Eye className="w-3 h-3" />
             <span>Pratinjau</span>
@@ -344,15 +365,19 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
       {/* 2. ENTERPRISE FORMATTING TOOLBAR (TEXT MODE ONLY) */}
       {mode === 'text' && activeTab === 'editor' && (
         <div 
-          className="px-3 py-1.5 border-b flex flex-wrap items-center justify-between gap-1 text-slate-600 dark:text-slate-300 text-xs bg-slate-50/50 dark:bg-slate-900/30"
-          style={{ borderColor: 'var(--border-main, #e2e8f0)' }}
+          className="px-3 py-1.5 border-b flex flex-wrap items-center justify-between gap-1.5 text-xs shadow-2xs"
+          style={{ 
+            backgroundColor: 'var(--input-bg, #f1f5f9)',
+            borderColor: 'var(--border-main, #cbd5e1)'
+          }}
         >
           <div className="flex items-center gap-0.5 flex-wrap">
             <button
               type="button"
               onClick={() => insertFormatting('**', '**', 'teks tebal')}
               title="Tebal (Ctrl+B)"
-              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
+              style={{ color: 'var(--text-main, #1e293b)' }}
             >
               <Bold className="w-3.5 h-3.5" />
             </button>
@@ -360,7 +385,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               type="button"
               onClick={() => insertFormatting('*', '*', 'teks miring')}
               title="Miring (Ctrl+I)"
-              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
+              style={{ color: 'var(--text-main, #1e293b)' }}
             >
               <Italic className="w-3.5 h-3.5" />
             </button>
@@ -368,7 +394,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               type="button"
               onClick={() => insertFormatting('<u>', '</u>', 'garis bawah')}
               title="Garis Bawah (Ctrl+U)"
-              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
+              style={{ color: 'var(--text-main, #1e293b)' }}
             >
               <Underline className="w-3.5 h-3.5" />
             </button>
@@ -376,7 +403,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               type="button"
               onClick={() => insertFormatting('~~', '~~', 'coret')}
               title="Coret (Strikethrough)"
-              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
+              style={{ color: 'var(--text-main, #1e293b)' }}
             >
               <Strikethrough className="w-3.5 h-3.5" />
             </button>
@@ -384,18 +412,20 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               type="button"
               onClick={() => insertFormatting('`', '`', 'kode')}
               title="Inline Code"
-              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
+              style={{ color: 'var(--text-main, #1e293b)' }}
             >
               <Code className="w-3.5 h-3.5" />
             </button>
 
-            <div className="w-[1px] h-3.5 bg-slate-300 dark:bg-slate-700 mx-1" />
+            <div className="w-[1px] h-4 mx-1" style={{ backgroundColor: 'var(--border-main, #cbd5e1)' }} />
 
             <button
               type="button"
               onClick={() => insertLinePrefix('• ', 'Poin catatan')}
               title="Poin Bullet (•)"
-              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
+              style={{ color: 'var(--text-main, #1e293b)' }}
             >
               <List className="w-3.5 h-3.5" />
             </button>
@@ -403,7 +433,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               type="button"
               onClick={() => insertLinePrefix('1. ', 'Langkah pertama')}
               title="Daftar Bernomor (1.)"
-              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
+              style={{ color: 'var(--text-main, #1e293b)' }}
             >
               <ListOrdered className="w-3.5 h-3.5" />
             </button>
@@ -411,31 +442,35 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               type="button"
               onClick={() => insertLinePrefix('> ', 'Catatan penting atau kutipan')}
               title="Kutipan / Blockquote (>)"
-              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-teal-700"
+              style={{ color: 'var(--text-main, #1e293b)' }}
             >
               <Quote className="w-3.5 h-3.5" />
             </button>
 
-            <div className="w-[1px] h-3.5 bg-slate-300 dark:bg-slate-700 mx-1" />
+            <div className="w-[1px] h-4 mx-1" style={{ backgroundColor: 'var(--border-main, #cbd5e1)' }} />
 
             {/* Quick Badge Helpers */}
             <button
               type="button"
               onClick={() => insertFormatting('**(Done)** ', '', '')}
-              className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+              className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300/80 transition-all cursor-pointer shadow-2xs active:scale-95"
             >
               + Done
             </button>
             <button
               type="button"
               onClick={() => insertFormatting('**(OPEN)** ', '', '')}
-              className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer"
+              className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300/80 transition-all cursor-pointer shadow-2xs active:scale-95"
             >
               + OPEN
             </button>
           </div>
 
-          <span className="text-[10px] text-slate-400 font-mono hidden md:inline">
+          <span 
+            className="text-[11px] font-mono font-medium hidden md:inline"
+            style={{ color: 'var(--text-muted, #475569)' }}
+          >
             Ctrl+Enter Simpan
           </span>
         </div>
@@ -445,38 +480,48 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
       <div className="p-3 sm:p-4">
         {activeTab === 'preview' ? (
           /* Live Markdown & Tasklist Preview */
-          <div className="min-h-[120px] max-h-[300px] overflow-y-auto space-y-2 p-3 rounded-xl border bg-slate-500/5 text-xs leading-relaxed" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+          <div 
+            className="min-h-[120px] max-h-[300px] overflow-y-auto space-y-2 p-3 rounded-xl border text-xs leading-relaxed" 
+            style={{ 
+              backgroundColor: 'var(--input-bg, #f8fafc)',
+              borderColor: 'var(--border-main, #e2e8f0)',
+              color: 'var(--text-main, #0f172a)'
+            }}
+          >
             {!textContent.trim() ? (
-              <p className="text-slate-400 italic">Belum ada keterangan untuk ditampilkan.</p>
+              <p className="italic" style={{ color: 'var(--text-muted, #64748b)' }}>Belum ada keterangan untuk ditampilkan.</p>
             ) : parsedPreview.hasTasklist ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-[11px] font-mono pb-1 border-b" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
-                  <span className="font-bold text-slate-500">Progress Tasklist:</span>
-                  <span className="font-bold text-teal-600 dark:text-teal-400">{parsedPreview.completed}/{parsedPreview.total} ({parsedPreview.percentage}%)</span>
+                  <span className="font-bold" style={{ color: 'var(--text-muted, #475569)' }}>Progress Tasklist:</span>
+                  <span className="font-bold text-teal-700">{parsedPreview.completed}/{parsedPreview.total} ({parsedPreview.percentage}%)</span>
                 </div>
-                <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-teal-500 rounded-full transition-all" style={{ width: `${parsedPreview.percentage}%` }} />
+                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden border border-slate-300">
+                  <div className="h-full bg-teal-600 rounded-full transition-all" style={{ width: `${parsedPreview.percentage}%` }} />
                 </div>
                 <div className="space-y-1.5 pt-1">
                   {parsedPreview.items.map(item => (
                     <div key={item.index} className="flex items-start gap-2">
-                      <span className="mt-0.5 text-teal-500 font-mono font-bold">
+                      <span className="mt-0.5 text-teal-600 font-mono font-bold">
                         {item.checked ? '☑' : '☐'}
                       </span>
-                      <span className={item.checked ? 'line-through text-slate-400' : 'font-medium'}>
+                      <span 
+                        className={item.checked ? 'line-through opacity-60 font-normal' : 'font-semibold'}
+                        style={{ color: item.checked ? 'var(--text-muted, #64748b)' : 'var(--text-main, #0f172a)' }}
+                      >
                         {item.text}
                       </span>
                     </div>
                   ))}
                 </div>
                 {parsedPreview.cleanText && (
-                  <div className="mt-3 pt-2 border-t text-slate-600 dark:text-slate-300 whitespace-pre-wrap" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+                  <div className="mt-3 pt-2 border-t whitespace-pre-wrap font-medium" style={{ borderColor: 'var(--border-main, #e2e8f0)', color: 'var(--text-main, #0f172a)' }}>
                     {parsedPreview.cleanText}
                   </div>
                 )}
               </div>
             ) : (
-              <div className="whitespace-pre-wrap font-sans text-slate-800 dark:text-slate-200">
+              <div className="whitespace-pre-wrap font-sans font-medium" style={{ color: 'var(--text-main, #0f172a)' }}>
                 {textContent}
               </div>
             )}
@@ -494,25 +539,31 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               }}
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
-              className="w-full text-xs font-sans p-3 rounded-xl border outline-none leading-relaxed resize-y focus:border-teal-500 transition-colors"
+              className="w-full text-xs font-sans p-3 rounded-xl border outline-none leading-relaxed resize-y focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all shadow-inner"
               style={{
-                backgroundColor: 'var(--input-bg, #f8fafc)',
+                backgroundColor: 'var(--input-bg, #ffffff)',
                 borderColor: 'var(--border-main, #cbd5e1)',
                 color: 'var(--text-main, #0f172a)'
               }}
             />
-            <p className="text-[10px] text-slate-500 flex items-center justify-between">
+            <p 
+              className="text-[11px] font-medium flex items-center justify-between mt-1 px-1"
+              style={{ color: 'var(--text-muted, #475569)' }}
+            >
               <span>Mendukung format paragraf, poin bullet, dan penomoran standar.</span>
-              <span className="font-mono">{textContent.length} karakter</span>
+              <span className="font-mono font-bold">{textContent.length} karakter</span>
             </p>
           </div>
         ) : (
           /* Checklist Mode: Interactive Notion/Todoist Style Tasklist Builder */
           <div className="space-y-3">
             {/* Quick Templates Bar */}
-            <div className="flex flex-wrap items-center gap-1.5 pb-1">
-              <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-500" />
+            <div className="flex flex-wrap items-center gap-1.5 pb-2">
+              <span 
+                className="text-[11px] font-bold flex items-center gap-1 shrink-0"
+                style={{ color: 'var(--text-main, #0f172a)' }}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                 <span>Template Cepat:</span>
               </span>
               <button
@@ -523,8 +574,12 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
                   'Pencatatan data pengujian ke portal Prep & Lab',
                   'Pelaporan hasil ke Supervisor Seksi'
                 ])}
-                className="px-2 py-0.5 rounded-lg border text-[10px] font-medium hover:border-teal-500 hover:text-teal-600 transition-all cursor-pointer"
-                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                className="px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shadow-2xs hover:bg-teal-50 hover:text-teal-800 hover:border-teal-400"
+                style={{
+                  backgroundColor: 'var(--card-bg, #ffffff)',
+                  borderColor: 'var(--border-main, #cbd5e1)',
+                  color: 'var(--text-main, #1e293b)'
+                }}
               >
                 Pemeriksaan Standar
               </button>
@@ -535,8 +590,12 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
                   'Pembuatan reagen & standarisasi larutan',
                   'Validasi pembacaan blanko dan duplicate'
                 ])}
-                className="px-2 py-0.5 rounded-lg border text-[10px] font-medium hover:border-teal-500 hover:text-teal-600 transition-all cursor-pointer"
-                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                className="px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shadow-2xs hover:bg-teal-50 hover:text-teal-800 hover:border-teal-400"
+                style={{
+                  backgroundColor: 'var(--card-bg, #ffffff)',
+                  borderColor: 'var(--border-main, #cbd5e1)',
+                  color: 'var(--text-main, #1e293b)'
+                }}
               >
                 Kalibrasi & Uji
               </button>
@@ -547,8 +606,12 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
                   'Pemilahan limbah kimia & wadah sampel',
                   'Pengecekan stok APD personil shift'
                 ])}
-                className="px-2 py-0.5 rounded-lg border text-[10px] font-medium hover:border-teal-500 hover:text-teal-600 transition-all cursor-pointer"
-                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                className="px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shadow-2xs hover:bg-teal-50 hover:text-teal-800 hover:border-teal-400"
+                style={{
+                  backgroundColor: 'var(--card-bg, #ffffff)',
+                  borderColor: 'var(--border-main, #cbd5e1)',
+                  color: 'var(--text-main, #1e293b)'
+                }}
               >
                 Housekeeping & 5R
               </button>
@@ -559,18 +622,18 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               {subtasks.map((item, index) => (
                 <div 
                   key={item.id}
-                  className="flex items-center gap-2 group/row p-1 rounded-xl hover:bg-slate-500/5 transition-colors"
+                  className="flex items-center gap-2 group/row p-1 rounded-xl hover:bg-slate-100/60 transition-colors"
                 >
                   <button
                     type="button"
                     onClick={() => handleToggleSubtask(index)}
-                    className="p-1 rounded text-teal-600 hover:bg-teal-500/10 cursor-pointer shrink-0 transition-colors"
+                    className="p-1 rounded text-teal-600 hover:bg-teal-50 cursor-pointer shrink-0 transition-colors"
                     title={item.checked ? "Tandai belum selesai" : "Tandai selesai"}
                   >
                     {item.checked ? (
                       <CheckSquare className="w-4 h-4 text-teal-600" />
                     ) : (
-                      <Square className="w-4 h-4 text-slate-400 group-hover/row:text-teal-500" />
+                      <Square className="w-4 h-4 group-hover/row:text-teal-600" style={{ color: 'var(--text-muted, #64748b)' }} />
                     )}
                   </button>
 
@@ -589,18 +652,20 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
                     }}
                     placeholder={`Item tugas #${index + 1}...`}
                     className={`flex-1 px-2.5 py-1.5 text-xs rounded-lg border outline-none transition-all focus:border-teal-500 ${
-                      item.checked ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-100 font-medium'
+                      item.checked ? 'line-through opacity-60 font-normal' : 'font-semibold'
                     }`}
                     style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)'
+                      backgroundColor: 'var(--input-bg, #ffffff)',
+                      borderColor: 'var(--border-main, #cbd5e1)',
+                      color: 'var(--text-main, #0f172a)'
                     }}
                   />
 
                   <button
                     type="button"
                     onClick={() => handleDeleteSubtask(index)}
-                    className="p-1 rounded opacity-0 group-hover/row:opacity-100 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-opacity cursor-pointer shrink-0"
+                    className="p-1 rounded opacity-0 group-hover/row:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-opacity cursor-pointer shrink-0"
+                    style={{ color: 'var(--text-muted, #94a3b8)' }}
                     title="Hapus baris ini"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -614,20 +679,26 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               <button
                 type="button"
                 onClick={() => handleAddSubtask()}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-teal-700 hover:text-teal-800 hover:bg-teal-50 border border-teal-200 transition-all cursor-pointer shadow-2xs"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Tambah Baris Tugas (Enter)</span>
               </button>
 
-              <span className="text-[11px] font-mono text-slate-500">
+              <span 
+                className="text-[11px] font-mono font-bold"
+                style={{ color: 'var(--text-muted, #475569)' }}
+              >
                 {completedSubtasks}/{totalSubtasks} Checklist Selesai
               </span>
             </div>
 
             {/* Supplementary Notes Section */}
             <div className="pt-2 border-t space-y-1" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+              <label 
+                className="text-[10px] font-bold uppercase tracking-wider block"
+                style={{ color: 'var(--text-muted, #475569)' }}
+              >
                 Catatan Tambahan (Opsional)
               </label>
               <textarea
@@ -640,7 +711,7 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
                 placeholder="Instruksi khusus, lokasi alat, atau referensi SOP..."
                 className="w-full text-xs font-sans p-2 rounded-xl border outline-none resize-none focus:border-teal-500"
                 style={{
-                  backgroundColor: 'var(--input-bg, #f8fafc)',
+                  backgroundColor: 'var(--input-bg, #ffffff)',
                   borderColor: 'var(--border-main, #cbd5e1)',
                   color: 'var(--text-main, #0f172a)'
                 }}
@@ -653,13 +724,16 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
       {/* 4. FOOTER ACTIONS (IF ONSAVE / ONCANCEL PROVIDED) */}
       {(onSave || onCancel) && (
         <div 
-          className="px-3.5 py-2 border-t flex items-center justify-between gap-2"
+          className="px-3.5 py-2.5 border-t flex items-center justify-between gap-2"
           style={{
             backgroundColor: 'var(--input-bg, #f8fafc)',
             borderColor: 'var(--border-main, #e2e8f0)'
           }}
         >
-          <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+          <span 
+            className="text-[11px] font-mono font-medium hidden sm:inline"
+            style={{ color: 'var(--text-muted, #475569)' }}
+          >
             Tekan Esc untuk batal • Ctrl+Enter untuk simpan
           </span>
           <div className="flex items-center gap-2 ml-auto">
@@ -667,8 +741,12 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               <button
                 type="button"
                 onClick={onCancel}
-                className="px-3 py-1 text-xs rounded-xl border font-semibold hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                className="px-3.5 py-1.5 text-xs rounded-xl border font-bold hover:bg-slate-100 transition-all cursor-pointer shadow-2xs"
+                style={{ 
+                  backgroundColor: 'var(--card-bg, #ffffff)',
+                  borderColor: 'var(--border-main, #cbd5e1)',
+                  color: 'var(--text-main, #1e293b)'
+                }}
               >
                 Batal
               </button>
@@ -677,7 +755,7 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               <button
                 type="button"
                 onClick={() => onSave(textContent)}
-                className="inline-flex items-center gap-1.5 px-4 py-1 text-xs rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-md transition-all active:scale-95 cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>Simpan Keterangan</span>

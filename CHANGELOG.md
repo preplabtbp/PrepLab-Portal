@@ -34,10 +34,13 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Menyesuaikan posisi pil melayang (*floating pill*) *Focus Mode • Diskusi Kerja* pada tampilan desktop (`sm:` dan ke atas) dari yang semula di pojok kanan atas menjadi di pojok kiri bawah (`bottom-5 left-4 sm:bottom-6 sm:left-6`).
   - Menjaga area kerja tabel buletin dan kontrol navigasi atas tetap lapang dan bebas halangan pandang.
 
-- **Enterprise WYSIWYG Editor (`src/components/notion/EnterpriseWysiwygEditor.tsx`)**:
-  - Editor catatan dan tugas dwifungsi kelas enterprise (*Mode Teks Bebas* vs *Mode Checklist Subtask*).
-  - Dilengkapi bilah format, pintasan keyboard (`Ctrl+Enter` untuk simpan, `Escape` untuk batal), template prasetel kegiatan laboratorium, serta live markdown preview.
-  - Menangani normalisasi tag `<br/>` dan pemisahan subtask secara otomatis.
+- **Enterprise WYSIWYG Editor & Peningkatan Readability (`src/components/notion/EnterpriseWysiwygEditor.tsx`, `src/components/notion/NotionInlineEditor.tsx`)**:
+  - **Overhaul Kontras & Warna (WCAG AA Compliant)**: Memperbaiki masalah keterbacaan (*readability*) yang buruk akibat benturan kelas `dark:*` Tailwind dengan variabel tema terang portal.
+  - **Judul Header Jelas & Tajam**: Mengganti warna judul modal/kartu yang sebelumnya memudar menjadi teks arang kontras tinggi (`var(--text-main, #0f172a)`).
+  - **Pilihan Mode Teks & Checklist Subtask Terang & Jelas**: Mendesain ulang tombol peralihan mode agar memiliki indikator aktif berbasis teal tegas (`bg-teal-600 text-white font-bold`) dan latar belakang netral yang bersih, mengeliminasi kotak hitam pekat yang tidak terbaca.
+  - **Bilah Tombol Format (*Toolbar*) Bersih & Kontras**: Ikon tebal, miring, garis bawah, coret, kode, dan daftar poin kini menggunakan warna teks tajam dengan latar belakang lembut (`var(--input-bg)`), serta lencana `+ Done` dan `+ OPEN` dengan warna tegas yang tidak saling bertubrukan.
+  - **Keterangan Pintasan & Tombol Aksi Nyaman Dibaca**: Teks panduan tombol pintas (`Tekan Esc untuk batal • Ctrl+Enter untuk simpan`) diselaraskan ke `var(--text-muted, #475569)` yang nyaman di mata tanpa buram, dengan tombol aksi `Batal` dan `Simpan Keterangan` yang kontras dan kokoh.
+  - Editor catatan dan tugas dwifungsi kelas enterprise (*Mode Teks Bebas* vs *Mode Checklist Subtask*) dilengkapi bilah format, pintasan keyboard (`Ctrl+Enter` untuk simpan, `Escape` untuk batal), template prasetel kegiatan laboratorium, serta live markdown preview.
 
 - **Sinkronisasi Logbook & Pemilihan PIC Cerdas (`src/components/logbook-screen.tsx`, `server/routes/logbook.ts`)**:
   - Pencarian PIC dengan fitur ketik nama/NIK cerdas (searchable autocomplete dropdown).

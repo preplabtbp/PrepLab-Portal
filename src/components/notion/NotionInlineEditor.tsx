@@ -62,9 +62,9 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
       onClick={(e) => e.stopPropagation()}
       className="w-full my-1 p-1.5 rounded-xl border-2 transition-all shadow-md font-sans text-xs select-text animate-in fade-in duration-150 flex items-center gap-1.5"
       style={{
-        backgroundColor: 'var(--input-bg, #1a1a1a)',
-        borderColor: '#14b8a6',
-        color: 'var(--text-main, #f1f5f9)'
+        backgroundColor: 'var(--card-bg, #ffffff)',
+        borderColor: '#0d9488',
+        color: 'var(--text-main, #0f172a)'
       }}
     >
       <input
@@ -76,15 +76,20 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
         placeholder={`Tulis ${fieldLabel.toLowerCase()}...`}
         className="flex-1 text-xs font-semibold p-1.5 rounded-lg border outline-none transition-colors"
         style={{
-          backgroundColor: 'var(--card-bg, #222)',
-          color: 'var(--text-main, #f1f5f9)',
-          borderColor: 'var(--border-main, #334155)'
+          backgroundColor: 'var(--input-bg, #f8fafc)',
+          color: 'var(--text-main, #0f172a)',
+          borderColor: 'var(--border-main, #cbd5e1)'
         }}
       />
       <button
         type="button"
         onClick={onCancel}
-        className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+        className="p-1.5 rounded-lg border font-bold hover:bg-slate-100 transition-colors cursor-pointer"
+        style={{
+          backgroundColor: 'var(--card-bg, #ffffff)',
+          borderColor: 'var(--border-main, #cbd5e1)',
+          color: 'var(--text-main, #1e293b)'
+        }}
         title="Batal (Esc)"
       >
         <X className="w-3.5 h-3.5" />
@@ -92,7 +97,7 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
       <button
         type="button"
         onClick={() => onSave(text)}
-        className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold transition-all cursor-pointer shadow-xs"
+        className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold transition-all cursor-pointer shadow-xs"
         title="Simpan (Enter)"
       >
         <Check className="w-3.5 h-3.5" />
