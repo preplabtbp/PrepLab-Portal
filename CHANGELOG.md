@@ -30,6 +30,10 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Pengguna memiliki keleluasaan penuh untuk mengubah status menjadi `Canceled` secara manual kapan saja.
   - **Dukungan Baris Non-Task List**: Untuk kegiatan bertipe catatan biasa (tanpa checklist), kolom Status menyediakan pilihan lengkap: **`Open`**, **`On Progress`**, **`Closed`**, dan **`Canceled`** **tanpa menampilkan progress bar**.
 
+- **Relokasi Floating Focus Mode Pill ke Pojok Kiri Bawah (`src/App.tsx`)**:
+  - Menyesuaikan posisi pil melayang (*floating pill*) *Focus Mode • Diskusi Kerja* pada tampilan desktop (`sm:` dan ke atas) dari yang semula di pojok kanan atas menjadi di pojok kiri bawah (`bottom-5 left-4 sm:bottom-6 sm:left-6`).
+  - Menjaga area kerja tabel buletin dan kontrol navigasi atas tetap lapang dan bebas halangan pandang.
+
 - **Enterprise WYSIWYG Editor (`src/components/notion/EnterpriseWysiwygEditor.tsx`)**:
   - Editor catatan dan tugas dwifungsi kelas enterprise (*Mode Teks Bebas* vs *Mode Checklist Subtask*).
   - Dilengkapi bilah format, pintasan keyboard (`Ctrl+Enter` untuk simpan, `Escape` untuk batal), template prasetel kegiatan laboratorium, serta live markdown preview.

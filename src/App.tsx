@@ -1251,7 +1251,7 @@ export default function App() {
       
       {/* Sleek Floating Focus Mode Pill when Header & Sidebar are Minimized */}
       {isBulletin && bulletinFocusMode && (
-        <div className="fixed bottom-5 left-4 sm:top-2.5 sm:bottom-auto sm:right-5 sm:left-auto z-50 flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-full bg-slate-900/85 dark:bg-black/90 backdrop-blur-md text-white border border-teal-500/40 shadow-xl text-xs select-none transition-all hover:scale-[1.02]">
+        <div className="fixed bottom-5 left-4 sm:bottom-6 sm:left-6 sm:top-auto sm:right-auto z-50 flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-full bg-slate-900/85 dark:bg-black/90 backdrop-blur-md text-white border border-teal-500/40 shadow-2xl text-xs select-none transition-all hover:scale-[1.02]">
           <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
           <span className="font-semibold text-slate-200 hidden sm:inline">Focus Mode • Diskusi Kerja</span>
           <div className="h-3 w-px bg-white/20 hidden sm:block" />
