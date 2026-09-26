@@ -155,24 +155,28 @@ function parsePicList(nikStr?: string | null, nameStr?: string | null): Array<{ 
 // 1. Searchable Multi-PIC Select Component (Bisa tambah lebih dari 1 PIC)
 // ============================================================================
 interface SearchableMultiPicSelectProps {
-  selectedNiks: string[];
-  selectedNames: string[];
+  selectedNiks?: string[];
+  selectedNames?: string[];
   onChange: (niks: string[], names: string[]) => void;
-  employees: any[];
+  employees?: any[];
   defaultSection?: string;
   label?: string;
   required?: boolean;
 }
 
 function SearchableMultiPicSelect({
-  selectedNiks,
-  selectedNames,
+  selectedNiks = [],
+  selectedNames = [],
   onChange,
-  employees,
+  employees = [],
   defaultSection,
   label = 'Pilih PIC Bawahan (Bisa lebih dari 1) *',
   required = true
 }: SearchableMultiPicSelectProps) {
+  const safeNiks = useMemo(() => Array.isArray(selectedNiks) ? selectedNiks : [], [selectedNiks]);
+  const safeNames = useMemo(() => Array.isArray(selectedNames) ? selectedNames : [], [selectedNames]);
+  const safeEmployees = useMemo(() => Array.isArray(employees) ? employees : [], [employees]);
+
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -189,28 +193,29 @@ function SearchableMultiPicSelect({
   }, []);
 
   const filteredEmployees = useMemo(() => {
-    if (!searchTerm.trim()) return employees.slice(0, 50);
+    if (!searchTerm.trim()) return safeEmployees.slice(0, 50);
     const q = searchTerm.toLowerCase();
-    return employees.filter(emp => {
+    return safeEmployees.filter(emp => {
       const name = (emp.name || '').toLowerCase();
       const nik = (emp.nik || '').toLowerCase();
       const sec = (emp.section || emp.department || emp.jabatan || '').toLowerCase();
       return name.includes(q) || nik.includes(q) || sec.includes(q);
     }).slice(0, 50);
-  }, [employees, searchTerm]);
+  }, [safeEmployees, searchTerm]);
 
   const addPic = (emp: any) => {
-    if (selectedNiks.includes(emp.nik)) return;
-    onChange([...selectedNiks, emp.nik], [...selectedNames, emp.name]);
+    if (!emp || !emp.nik) return;
+    if (safeNiks.includes(emp.nik)) return;
+    onChange([...safeNiks, emp.nik], [...safeNames, emp.name || emp.nik]);
     setSearchTerm('');
     inputRef.current?.focus();
   };
 
   const removePic = (nik: string) => {
-    const idx = selectedNiks.indexOf(nik);
+    const idx = safeNiks.indexOf(nik);
     if (idx !== -1) {
-      const newNiks = [...selectedNiks];
-      const newNames = [...selectedNames];
+      const newNiks = [...safeNiks];
+      const newNames = [...safeNames];
       newNiks.splice(idx, 1);
       newNames.splice(idx, 1);
       onChange(newNiks, newNames);
@@ -222,7 +227,7 @@ function SearchableMultiPicSelect({
       <div className="flex items-center justify-between">
         <label className="text-xs font-bold block">{label}</label>
         <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium">
-          {selectedNiks.length} PIC Dipilih
+          {safeNiks.length} PIC Dipilih
         </span>
       </div>
 
@@ -232,18 +237,18 @@ function SearchableMultiPicSelect({
         className="min-h-10 w-full p-1.5 rounded-xl border flex flex-wrap items-center gap-1.5 cursor-text transition-all focus-within:border-teal-500"
         style={{
           backgroundColor: 'var(--input-bg, #f8fafc)',
-          borderColor: selectedNiks.length === 0 && required ? 'var(--border-main, #cbd5e1)' : 'var(--border-main, #cbd5e1)'
+          borderColor: safeNiks.length === 0 && required ? 'var(--border-main, #cbd5e1)' : 'var(--border-main, #cbd5e1)'
         }}
       >
-        {selectedNiks.map((nik, idx) => (
+        {safeNiks.map((nik, idx) => (
           <span 
             key={nik}
             className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg bg-teal-500/15 border border-teal-500/30 text-teal-800 dark:text-teal-200 text-xs font-bold animate-in fade-in zoom-in-95 duration-100"
           >
             <div className="w-4 h-4 rounded-full bg-teal-600 text-white flex items-center justify-center text-[9px] font-black">
-              {(selectedNames[idx] || 'P').charAt(0).toUpperCase()}
+              {((safeNames[idx] || nik || 'P')).charAt(0).toUpperCase()}
             </div>
-            <span className="truncate max-w-[130px]">{selectedNames[idx] || nik}</span>
+            <span className="truncate max-w-[130px]">{safeNames[idx] || nik}</span>
             <button
               type="button"
               onClick={(e) => {
@@ -269,7 +274,7 @@ function SearchableMultiPicSelect({
               if (!isOpen) setIsOpen(true);
             }}
             onFocus={() => setIsOpen(true)}
-            placeholder={selectedNiks.length === 0 ? "Ketik nama / NIK untuk menambah PIC..." : "Tambah PIC lain..."}
+            placeholder={safeNiks.length === 0 ? "Ketik nama / NIK untuk menambah PIC..." : "Tambah PIC lain..."}
             className="w-full bg-transparent outline-none text-xs font-medium placeholder:text-slate-400 py-1"
           />
         </div>
@@ -290,7 +295,7 @@ function SearchableMultiPicSelect({
             </div>
           ) : (
             filteredEmployees.map(emp => {
-              const isSelected = selectedNiks.includes(emp.nik);
+              const isSelected = safeNiks.includes(emp.nik);
               return (
                 <div
                   key={emp.nik}
@@ -339,22 +344,23 @@ function SearchableMultiPicSelect({
 // 2. Searchable Single-PIC Select Component (Khusus PIC Job Pending)
 // ============================================================================
 interface SearchableSinglePicSelectProps {
-  valueNik: string;
-  valueName: string;
+  valueNik?: string;
+  valueName?: string;
   onChange: (nik: string, name: string) => void;
-  employees: any[];
+  employees?: any[];
   label?: string;
   placeholder?: string;
 }
 
 function SearchableSinglePicSelect({ 
-  valueNik, 
-  valueName, 
+  valueNik = '', 
+  valueName = '', 
   onChange, 
-  employees,
+  employees = [],
   label = 'Pilih PIC Job Pending *',
   placeholder = 'Ketik nama / NIK penanggung jawab pending...'
 }: SearchableSinglePicSelectProps) {
+  const safeEmployees = useMemo(() => Array.isArray(employees) ? employees : [], [employees]);
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -370,15 +376,15 @@ function SearchableSinglePicSelect({
   }, []);
 
   const filteredEmployees = useMemo(() => {
-    if (!searchTerm.trim()) return employees.slice(0, 50);
+    if (!searchTerm.trim()) return safeEmployees.slice(0, 50);
     const q = searchTerm.toLowerCase();
-    return employees.filter(emp => {
+    return safeEmployees.filter(emp => {
       const name = (emp.name || '').toLowerCase();
       const nik = (emp.nik || '').toLowerCase();
       const sec = (emp.section || emp.department || emp.jabatan || '').toLowerCase();
       return name.includes(q) || nik.includes(q) || sec.includes(q);
     }).slice(0, 50);
-  }, [employees, searchTerm]);
+  }, [safeEmployees, searchTerm]);
 
   return (
     <div ref={wrapperRef} className="relative space-y-1">
@@ -398,7 +404,7 @@ function SearchableSinglePicSelect({
         >
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold flex items-center justify-center text-xs shrink-0">
-              {valueName.charAt(0).toUpperCase()}
+              {(valueName || 'P').charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
               <div className="font-bold text-xs truncate text-slate-900 dark:text-slate-100 group-hover:text-amber-600 transition-colors">
@@ -510,12 +516,13 @@ function SearchableSinglePicSelect({
 // 3. Searchable Combobox for Bulletin Post Linking
 // ============================================================================
 interface SearchableBulletinSelectProps {
-  selectedId: string;
-  bulletinList: any[];
+  selectedId?: string;
+  bulletinList?: any[];
   onSelect: (postId: string) => void;
 }
 
-function SearchableBulletinSelect({ selectedId, bulletinList, onSelect }: SearchableBulletinSelectProps) {
+function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect }: SearchableBulletinSelectProps) {
+  const safeBulletins = useMemo(() => Array.isArray(bulletinList) ? bulletinList : [], [bulletinList]);
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -532,20 +539,20 @@ function SearchableBulletinSelect({ selectedId, bulletinList, onSelect }: Search
 
   const selectedPost = useMemo(() => {
     if (!selectedId) return null;
-    return bulletinList.find(b => String(b.id) === String(selectedId));
-  }, [selectedId, bulletinList]);
+    return safeBulletins.find(b => String(b.id) === String(selectedId));
+  }, [selectedId, safeBulletins]);
 
   const filteredBulletins = useMemo(() => {
-    if (!searchTerm.trim()) return bulletinList.slice(0, 40);
+    if (!searchTerm.trim()) return safeBulletins.slice(0, 40);
     const q = searchTerm.toLowerCase();
-    return bulletinList.filter(b => {
+    return safeBulletins.filter(b => {
       const title = (b.title || '').toLowerCase();
       const category = (b.category || '').toLowerCase();
       const dept = (b.department || '').toLowerCase();
       const idStr = String(b.id || '');
       return title.includes(q) || category.includes(q) || dept.includes(q) || idStr.includes(q);
     }).slice(0, 40);
-  }, [bulletinList, searchTerm]);
+  }, [safeBulletins, searchTerm]);
 
   return (
     <div ref={wrapperRef} className="relative space-y-1">
@@ -860,13 +867,13 @@ export function LogbookScreen({
 
   const openEditModal = (task: LogbookTask) => {
     setEditingTask(task);
-    setEditTitle(task.title);
+    setEditTitle(task.title || '');
     setEditDescription(task.description || '');
     setEditPriority(task.priority || 'Normal');
     setEditTargetDate(task.targetDate || selectedDate || getTodayStr());
     setEditTargetTime(task.targetTime || '23:59');
-    setEditAssigneeNik(task.assigneeNik);
-    setEditAssigneeName(task.assigneeName);
+    setEditAssigneeNik(task.assigneeNik || '');
+    setEditAssigneeName(task.assigneeName || '');
     setEditChangeReason('');
   };
 
@@ -3064,8 +3071,8 @@ export function LogbookScreen({
               {/* PIC Selection: editable if creator, read-only if PIC */}
               {(editingTask.assignedByNik === inspectorNik || isSupervisor) ? (
                 <SearchableMultiPicSelect
-                  selectedNiks={editAssigneeNik ? editAssigneeNik.split(',').map(s => s.trim()).filter(Boolean) : []}
-                  selectedNames={editAssigneeName ? editAssigneeName.split(',').map(s => s.trim()).filter(Boolean) : []}
+                  selectedNiks={String(editAssigneeNik || '').split(',').map(s => s.trim()).filter(Boolean)}
+                  selectedNames={String(editAssigneeName || '').split(',').map(s => s.trim()).filter(Boolean)}
                   onChange={(niks, names) => {
                     setEditAssigneeNik(niks.join(', '));
                     setEditAssigneeName(names.join(', '));
@@ -3076,7 +3083,7 @@ export function LogbookScreen({
               ) : (
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
                   <span className="font-bold text-slate-700 block">PIC Pelaksana Saat Ini:</span>
-                  <span className="font-extrabold text-teal-800">{editAssigneeName}</span>
+                  <span className="font-extrabold text-teal-800">{editAssigneeName || '-'}</span>
                 </div>
               )}
 
@@ -3144,7 +3151,7 @@ export function LogbookScreen({
                   label="Rincian Tugas & Checklist Subtask (Drag & drop untuk urutan)"
                   placeholder="Sesuaikan petunjuk kerja atau urutan checklist..."
                   allowModeSwitch={true}
-                  defaultMode={editDescription.includes('- [') ? 'checklist' : 'text'}
+                  defaultMode={(editDescription || '').includes('- [') ? 'checklist' : 'text'}
                   rows={4}
                 />
               </div>
