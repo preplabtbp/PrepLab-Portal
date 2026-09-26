@@ -318,8 +318,8 @@ export function LeaderboardScreen({
 
   // For public display: show GM rank if user is a developer
   const isCurrentUserDev = userGamification?.isDevUser === true ||
-    ['19980101', 'DEV001', 'ADMIN', 'SYSTEM', '02D24000043', '02D25000055', '04D21001047', '04D24000042'].includes(String(currentNik).trim().toUpperCase()) ||
-    ['adryansyah', 'alvin', 'admin', 'sukarman'].includes(String(inspectorName || userProfile?.name || '').trim().toLowerCase());
+    ['19980101', 'DEV001', 'ADMIN', 'SYSTEM', '02D24000043', '02D25000055', '04D21001047', '04D24000042', 'M0403240177'].includes(String(currentNik).trim().toUpperCase()) ||
+    ['adryansyah', 'alvin', 'admin', 'sukarman', 'aldy'].includes(String(inspectorName || userProfile?.name || '').trim().toLowerCase());
   const userPublicRank = isCurrentUserDev
     ? (userGamification?.publicRank || { id: 0, name: 'Game Master', icon: '/assets/ranks/rank_special_gm.svg', isGM: true })
     : userRankData.currentRank;

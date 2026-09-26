@@ -805,7 +805,7 @@ export default function ChatScreen({
                         [{senderTitle}]
                       </span>
 
-                      {(msg.senderNik === '02D25000055' || msg.senderNik === '02D24000043' || msg.senderNik === 'preplabadmin') && (
+                      {(msg.senderNik === '02D25000055' || msg.senderNik === '02D24000043' || msg.senderNik === 'M0403240177' || msg.senderNik === 'preplabadmin') && (
                         <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                           DEV
                         </span>

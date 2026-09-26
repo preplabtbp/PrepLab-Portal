@@ -78,7 +78,7 @@ export function WorkOrderDetailModal({
       userJabatan = profile.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '';
     } catch (e) {}
 
-    const isSuperAdmin = currentNik === '02D25000055' || currentNik === '02D24000043' || currentNik === 'preplabadmin';
+    const isSuperAdmin = currentNik === '02D25000055' || currentNik === '02D24000043' || currentNik === 'M0403240177' || currentNik === 'preplabadmin';
     const isMaintenance = userSection.toLowerCase().includes('maintenance') || isSuperAdmin;
     const isLeader = userJabatan.toLowerCase().includes('spv') || userJabatan.toLowerCase().includes('supervisor') || userJabatan.toLowerCase().includes('leader') || userJabatan.toLowerCase().includes('foreman') || isSuperAdmin;
     const isRequestor = !!(currentNik && wo?.requestorNik && currentNik.toLowerCase() === String(wo.requestorNik).toLowerCase());

@@ -20,7 +20,7 @@ const MODULES = [
 ];
 
 export function AdminDashboard({ inspectorNik }: { inspectorNik?: string }) {
-  const isSuperAdmin = inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin';
+  const isSuperAdmin = inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'M0403240177' || inspectorNik === 'preplabadmin';
   const queryClient = useQueryClient();
 
   const visibleModules = MODULES.map(mod => {

@@ -81,7 +81,8 @@ export function HomeScreen({ inspectorName, inspectorNik, onNav, userPt }: {
     inspectorNik === '02D25000055' || 
     inspectorNik === '02D24000043' || 
     inspectorNik === '04D21001047' || // Sukarman A. Akil, ST
-    inspectorNik === '04D24000042';   // Junjunan Muhammad Syukur
+    inspectorNik === '04D24000042' || // Junjunan Muhammad Syukur
+    inspectorNik === 'M0403240177';   // Aldy Aldersun Puluh
   const isDeveloper = isSuperAdmin || inspectorNik === 'preplabadmin' || developerList.includes(inspectorNik);
   const isAdminRole = 
     userJabatan.toLowerCase().includes('admin') || 

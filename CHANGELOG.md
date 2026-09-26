@@ -44,6 +44,11 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - **Perbaikan Hak Akses Akun Ruang Rapat (*Meeting Room*)**: Memperbaiki kendala eksepsi `isSupervisor is not defined` saat akun ruang rapat membuka tugas, serta memberikan izin setara Supervisor kepada akun ruang rapat agar dapat mengelola agenda rapat dengan leluasa.
   - **Perbaikan Galat Null-Safety Edit Modal**: Memperbaiki eksepsi `Cannot read properties of undefined (reading 'length')` pada saat membuka modal edit tugas maupun memilih PIC dengan pengamanan array yang kokoh.
 
+- **Pemberian Hak Akses Developer & Superadmin untuk Aldy Aldersun Puluh (`M0403240177`)**:
+  - **Registrasi Basis Data**: Mendaftarkan identitas Aldy ke dalam tabel database `developer_users` PostgreSQL secara permanen.
+  - **Otorisasi Backend JWT**: Menambahkan NIK `M0403240177` ke daftar inti *developer & superadmin* pada middleware otentikasi (`server/middleware/auth.ts`), endpoint developer fallback (`server/routes/misc.ts`), rute bulletin (`server/routes/bulletin.ts`), rute notifikasi broadcast (`server/routes/notifications.ts`), serta rute administrasi roster (`server/routes/roster.ts`).
+  - **Akses Penuh Frontend & UI**: Mengaktifkan hak akses Developer di seluruh portal (`src/App.tsx`, `AdminDashboard`, `Home`, `ModulesDrawer`, `LeaderboardScreen` dengan badge GM, `DevModeAccordion`, `NotificationBell`, dan `PrepLab Cloud`).
+
 ## [2.9.31] - 2026-09-25
 
 ### 🛡️ Pembatasan Perolehan EXP Inspeksi K3 Maksimal 1x per Minggu Kalender & Audit Transparansi Gamifikasi

@@ -120,7 +120,7 @@ export function RosterAdminScreen() {
   const requestorNik = currentUser?.nik || localStorage.getItem('p2h_inspector_nik') || '';
   const requestorPt = currentUser?.pt || '';
 
-  const isSuperAdmin = requestorNik === '02D25000055' || requestorNik === '02D24000043' || requestorNik === 'preplabadmin';
+  const isSuperAdmin = requestorNik === '02D25000055' || requestorNik === '02D24000043' || requestorNik === 'M0403240177' || requestorNik === 'preplabadmin';
   const isDeveloper = isSuperAdmin || requestorNik === 'preplabadmin' || developerList.includes(requestorNik);
 
   const isAdministration = 

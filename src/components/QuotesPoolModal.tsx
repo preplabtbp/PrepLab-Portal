@@ -102,7 +102,7 @@ export default function QuotesPoolModal({
   const currentAuthorName = profile.name || profile.nama || inspectorName || localStorage.getItem('p2h_inspector_username') || 'Personil PrepLab';
   const currentRole = profile.jabatan || 'Staff';
   const currentSection = profile.section || profile.department || 'Prep & Lab';
-  const isDeveloper = currentNik === '02D25000055' || currentNik === '02D24000043' || currentNik === 'preplabadmin' || developerList.includes(currentNik);
+  const isDeveloper = currentNik === '02D25000055' || currentNik === '02D24000043' || currentNik === 'M0403240177' || currentNik === 'preplabadmin' || developerList.includes(currentNik);
 
   // Load Quotes from server
   const loadQuotes = async () => {

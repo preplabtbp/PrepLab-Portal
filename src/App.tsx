@@ -352,6 +352,7 @@ export default function App() {
       inspectorNik === '02D24000043' ||
       inspectorNik === '04D21001047' || // Sukarman A. Akil, ST
       inspectorNik === '04D24000042' || // Junjunan Muhammad Syukur
+      inspectorNik === 'M0403240177' || // Aldy Aldersun Puluh
       inspectorNik === 'preplabadmin'
     ) return true;
     return developerList.some(d => d.nik === inspectorNik);

@@ -178,6 +178,11 @@ async function syncStagingDb() {
     VALUES ('02D25000055', 'Muhamad Anugrah Ramadhan', 'Developer') 
     ON CONFLICT (nik) DO NOTHING
   `);
+  await poolStaging.query(`
+    INSERT INTO developer_users (nik, name, role) 
+    VALUES ('M0403240177', 'Aldy Aldersun Puluh', 'Developer') 
+    ON CONFLICT (nik) DO NOTHING
+  `);
   console.log('✅ Developer accounts verified on staging.');
 
   // 6. Create indexes on roster in staging

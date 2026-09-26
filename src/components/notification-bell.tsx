@@ -23,7 +23,7 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
   const [selectedWoId, setSelectedWoId] = useState<string | null>(null);
   const [showWoModal, setShowWoModal] = useState(false);
 
-  const isDev = userNik === '02D25000055' || userNik === '02D24000043' || userNik === 'preplabadmin';
+  const isDev = userNik === '02D25000055' || userNik === '02D24000043' || userNik === 'M0403240177' || userNik === 'preplabadmin';
   const userJabatan = (() => {
     try {
       const p = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');

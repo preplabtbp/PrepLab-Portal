@@ -70,7 +70,7 @@ export function BulletinBoard({
 }) {
   const { pt } = useParams();
   const navigate = useNavigate();
-  const isSuperAdmin = inspectorNik === '02D24000043' || inspectorNik === '02D25000055' || inspectorNik === 'preplabadmin';
+  const isSuperAdmin = inspectorNik === '02D24000043' || inspectorNik === '02D25000055' || inspectorNik === 'M0403240177' || inspectorNik === 'preplabadmin';
   const isDev = Boolean(isDeveloper || isSuperAdmin);
   const userUniverse = userPt === 'GTS' ? 'GTS' : 'TBP';
 

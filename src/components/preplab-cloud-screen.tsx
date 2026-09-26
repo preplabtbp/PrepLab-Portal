@@ -156,6 +156,7 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
     const isSuperNik = 
       cleanNik === '02D24000043' || 
       cleanNik === '02D25000055' || 
+      cleanNik === 'M0403240177' || 
       cleanNik === '04D25000064' || 
       cleanNik === 'PREPLABADMIN' || 
       cleanNik === 'ADMIN' ||

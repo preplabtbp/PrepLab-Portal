@@ -22,7 +22,7 @@ router.get("/api/bulletin", async (req, res) => {
     try {
       let { pt, nik, page, limit } = req.query as { pt?: string; nik?: string; page?: string; limit?: string };
       
-      const isSuperUser = nik === '02D24000043' || nik === '02D25000055' || nik === 'preplabadmin';
+      const isSuperUser = nik === '02D24000043' || nik === '02D25000055' || nik === 'M0403240177' || nik === 'preplabadmin';
       
       const conditions: any[] = [];
       

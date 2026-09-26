@@ -25,7 +25,7 @@ async function isAuthorizedRosterEditor(editorNik?: string): Promise<boolean> {
   if (!nik) return false;
 
   // Superadmins / Default Developer accounts
-  if (nik === '02D25000055' || nik === '02D24000043' || nik === 'preplabadmin') return true;
+  if (nik === '02D25000055' || nik === '02D24000043' || nik === 'M0403240177' || nik === 'preplabadmin') return true;
 
   // Check Developer Users table
   try {

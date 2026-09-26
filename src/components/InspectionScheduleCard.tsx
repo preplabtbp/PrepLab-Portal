@@ -269,7 +269,7 @@ export function InspectionScheduleCard({
       const jab = (profile.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
       const sec = (profile.section || '').toLowerCase();
       const nik = (inspectorNik || '').toUpperCase();
-      const isDev = nik === '02D25000055' || nik === '02D24000043' || nik === 'PREPLABADMIN' || nik === 'SPVDEMO';
+      const isDev = nik === '02D25000055' || nik === '02D24000043' || nik === 'M0403240177' || nik === 'PREPLABADMIN' || nik === 'SPVDEMO';
       const isAdmin = jab.includes('admin') || jab.includes('manager') || jab.includes('superintendent') || sec.includes('admin') || sec.includes('administrasi');
       return isDev || isAdmin;
     } catch {

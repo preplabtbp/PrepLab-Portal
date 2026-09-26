@@ -26,6 +26,7 @@ export function AgendaDashboard({
     isDeveloper || 
     inspectorNik === '02D24000043' || 
     inspectorNik === '02D25000055' || 
+    inspectorNik === 'M0403240177' || 
     inspectorNik === 'preplabadmin'
   );
   const [events, setEvents] = useState<any[]>([]);

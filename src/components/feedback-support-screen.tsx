@@ -77,7 +77,7 @@ export function FeedbackSupportScreen({
       .catch(() => {});
   }, []);
 
-  const isDeveloper = inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin' || developerList.includes(inspectorNik);
+  const isDeveloper = inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'M0403240177' || inspectorNik === 'preplabadmin' || developerList.includes(inspectorNik);
 
   // User Profile
   const profile = useMemo(() => {

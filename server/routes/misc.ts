@@ -29,7 +29,8 @@ router.get('/api/developers', async (req, res) => {
     console.error("Error fetching developers:", err);
     res.json([
       { nik: '02D25000055', name: 'Muhamad Anugrah Ramadhan' },
-      { nik: '02D24000043', name: 'Muhamad Alvin Febriansyah' }
+      { nik: '02D24000043', name: 'Muhamad Alvin Febriansyah' },
+      { nik: 'M0403240177', name: 'Aldy Aldersun Puluh' }
     ]);
   }
 });

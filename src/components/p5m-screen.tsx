@@ -393,7 +393,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const currentName = String(userProfile?.nama || userProfile?.name || localStorage.getItem('p2h_inspector_name') || '').trim();
 
   const isDeveloper = useMemo(() => {
-    if (currentNik === '02D25000055' || currentNik === '02D24000043' || currentNik === 'preplabadmin') return true;
+    if (currentNik === '02D25000055' || currentNik === '02D24000043' || currentNik === 'M0403240177' || currentNik === 'preplabadmin') return true;
     return developerList.some(d => d.nik === currentNik);
   }, [currentNik, developerList]);
 

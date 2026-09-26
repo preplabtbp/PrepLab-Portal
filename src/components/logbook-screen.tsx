@@ -723,6 +723,7 @@ export function LogbookScreen({
     inspectorNik === '02D24000043' || 
     inspectorNik === '04D21001047' || 
     inspectorNik === '04D24000042' ||
+    inspectorNik === 'M0403240177' ||
     inspectorNik === 'preplabadmin';
 
   const isMeetingRoom = useMemo(() => {

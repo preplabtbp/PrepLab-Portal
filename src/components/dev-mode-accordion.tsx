@@ -21,7 +21,7 @@ interface DevModeAccordionProps {
 }
 
 export function DevModeAccordion({ inspectorNik, devOptions, setDevOptions, onTriggerAutoFill }: DevModeAccordionProps) {
-  const isDevUser = inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin';
+  const isDevUser = inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'M0403240177' || inspectorNik === 'preplabadmin';
   const [isOpen, setIsOpen] = useState(false);
 
   if (!isDevUser) return null;
@@ -128,7 +128,7 @@ export function DevModeAccordion({ inspectorNik, devOptions, setDevOptions, onTr
 }
 
 export function useDevOptions(inspectorNik: string | null) {
-  const isDevUser = inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'preplabadmin';
+  const isDevUser = inspectorNik === '02D25000055' || inspectorNik === '02D24000043' || inspectorNik === 'M0403240177' || inspectorNik === 'preplabadmin';
   const [devOptions, setDevOptions] = useState({
     db: true,
     pdf: true,

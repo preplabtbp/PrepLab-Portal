@@ -23,7 +23,7 @@ router.get("/api/notifications", async (req, res) => {
       let data = [];
       const userId = req.query.userId as string;
       if (userId) {
-        const isDev = userId === '02D25000055' || userId === '02D24000043' || userId === 'preplabadmin';
+        const isDev = userId === '02D25000055' || userId === '02D24000043' || userId === 'M0403240177' || userId === 'preplabadmin';
         if (isDev) {
           data = await db.select().from(notifications).orderBy(desc(notifications.createdAt));
           return res.json(data);

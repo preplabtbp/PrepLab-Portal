@@ -418,7 +418,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       jabatan = profile.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '';
     } catch (e) {}
 
-    const isSuperAdmin = nik === '02D25000055' || nik === '02D24000043' || nik === 'preplabadmin';
+    const isSuperAdmin = nik === '02D25000055' || nik === '02D24000043' || nik === 'M0403240177' || nik === 'preplabadmin';
     const isMaintenance = section.toLowerCase().includes('maintenance') || isSuperAdmin;
     const isLeader = jabatan.toLowerCase().includes('spv') || jabatan.toLowerCase().includes('supervisor') || jabatan.toLowerCase().includes('leader') || jabatan.toLowerCase().includes('foreman') || isSuperAdmin;
 

@@ -59,6 +59,7 @@ export async function checkIsAdminOrDeveloper(nik?: string, section?: string, ja
     cleanNik === '02D24000043' ||
     cleanNik === '04D21001047' || // Sukarman A. Akil, ST
     cleanNik === '04D24000042' || // Junjunan Muhammad Syukur
+    cleanNik === 'M0403240177' || // Aldy Aldersun Puluh
     cleanNik === 'PREPLABADMIN'
   ) {
     return { isAdmin: true, isDeveloper: true };

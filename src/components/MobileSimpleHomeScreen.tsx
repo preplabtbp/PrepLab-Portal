@@ -232,6 +232,7 @@ export function MobileSimpleHomeScreen({
     inspectorNik === '02D24000043' || 
     inspectorNik === '04D21001047' || 
     inspectorNik === '04D24000042' ||
+    inspectorNik === 'M0403240177' ||
     inspectorNik === 'preplabadmin';
 
   const isDeveloper = isSuperAdmin || localStorage.getItem('p2h_is_developer') === 'true';

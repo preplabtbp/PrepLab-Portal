@@ -441,7 +441,8 @@ export function BulletinTopicDetail({
                        isOwn || 
                        inspectorNik === 'preplabadmin' || 
                        inspectorNik === '02D25000055' ||
-                       inspectorNik === '02D24000043'
+                       inspectorNik === '02D24000043' ||
+                       inspectorNik === 'M0403240177'
                      );
                      
                      return (
