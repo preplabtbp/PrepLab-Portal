@@ -718,6 +718,33 @@ export function LogbookScreen({
     inspectorNik === '04D24000042' ||
     inspectorNik === 'preplabadmin';
 
+  const isMeetingRoom = useMemo(() => {
+    const nik = (inspectorNik || '').toUpperCase().trim();
+    const name = (inspectorName || '').toUpperCase().trim();
+    return nik === 'MEETINGROOM' || nik === 'MEETING' || name.includes('MEETING ROOM') || name.includes('MEETING');
+  }, [inspectorNik, inspectorName]);
+
+  const isSupervisor = useMemo(() => {
+    if (isMeetingRoom) return true;
+    if (isSuperAdmin) return true;
+    if (!userProfile) return false;
+    const j = (userProfile.jabatan || '').toLowerCase();
+    const r = (userProfile.role || '').toLowerCase();
+    const s = (userProfile.section || '').toLowerCase();
+    return (
+      j.includes('supervisor') ||
+      j.includes('spv') ||
+      j.includes('superintendent') ||
+      j.includes('manager') ||
+      j.includes('lead') ||
+      j.includes('kepala') ||
+      r.includes('supervisor') ||
+      r.includes('spv') ||
+      r.includes('admin') ||
+      s.includes('supervisor')
+    );
+  }, [isMeetingRoom, isSuperAdmin, userProfile]);
+
   const userSection = useMemo(() => {
     const raw = (userProfile?.section || '').trim();
     if (!raw) return 'Preparation';
@@ -3037,11 +3064,11 @@ export function LogbookScreen({
               {/* PIC Selection: editable if creator, read-only if PIC */}
               {(editingTask.assignedByNik === inspectorNik || isSupervisor) ? (
                 <SearchableMultiPicSelect
-                  valueNiks={editAssigneeNik}
-                  valueNames={editAssigneeName}
+                  selectedNiks={editAssigneeNik ? editAssigneeNik.split(',').map(s => s.trim()).filter(Boolean) : []}
+                  selectedNames={editAssigneeName ? editAssigneeName.split(',').map(s => s.trim()).filter(Boolean) : []}
                   onChange={(niks, names) => {
-                    setEditAssigneeNik(niks);
-                    setEditAssigneeName(names);
+                    setEditAssigneeNik(niks.join(', '));
+                    setEditAssigneeName(names.join(', '));
                   }}
                   employees={employeesList}
                   label="PIC Pelaksana (Dapat Memilih Lebih Dari 1 Personil) *"
