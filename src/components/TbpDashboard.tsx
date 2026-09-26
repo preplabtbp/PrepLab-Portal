@@ -439,6 +439,76 @@ export function TbpDashboard({
     return () => clearInterval(timer);
   }, []);
 
+  // Realtime Weather for Kawasi, Pulau Obi (Halmahera Selatan - WIT UTC+9)
+  const [weatherData, setWeatherData] = useState<{
+    temp: number;
+    feelsLike: number;
+    humidity: number;
+    windSpeed: number;
+    uvIndex: number;
+    conditionText: string;
+    weatherCode: number;
+    dailyForecast: Array<{ day: string; code: number; maxTemp: number; minTemp: number }>;
+  } | null>(null);
+
+  useEffect(() => {
+    const fetchKawasiWeather = async () => {
+      try {
+        const res = await fetch(
+          'https://api.open-meteo.com/v1/forecast?latitude=-1.57&longitude=127.48&current_weather=true&hourly=relative_humidity_2m,apparent_temperature,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FJayapura'
+        );
+        const data = await res.json();
+        if (data && data.current_weather) {
+          const currentHour = new Date().getHours();
+          const humidity = data.hourly?.relative_humidity_2m?.[currentHour] ?? 78;
+          const feelsLike = Math.round(data.hourly?.apparent_temperature?.[currentHour] ?? data.current_weather.temperature);
+          const uvIndex = Math.round(data.hourly?.uv_index?.[currentHour] ?? 3);
+          const code = data.current_weather.weathercode ?? 1;
+
+          const getConditionDesc = (c: number) => {
+            if (c === 0) return 'Cerah / Clear Sky';
+            if (c === 1 || c === 2) return 'Cerah Berawan';
+            if (c === 3) return 'Berawan / Overcast';
+            if (c === 45 || c === 48) return 'Berkabut / Hazy';
+            if (c >= 51 && c <= 55) return 'Gerimis Ringan';
+            if (c >= 61 && c <= 65) return 'Hujan Tropis';
+            if (c >= 80 && c <= 82) return 'Hujan Lebat';
+            if (c >= 95) return 'Hujan Petir';
+            return 'Berawan';
+          };
+
+          const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+          const daily = (data.daily?.time || []).slice(0, 7).map((tStr: string, idx: number) => {
+            const d = new Date(tStr);
+            return {
+              day: dayNames[d.getDay()],
+              code: data.daily?.weather_code?.[idx] ?? 1,
+              maxTemp: Math.round(data.daily?.temperature_2m_max?.[idx] ?? 30),
+              minTemp: Math.round(data.daily?.temperature_2m_min?.[idx] ?? 23)
+            };
+          });
+
+          setWeatherData({
+            temp: Math.round(data.current_weather.temperature),
+            feelsLike,
+            humidity,
+            windSpeed: Math.round(data.current_weather.windspeed),
+            uvIndex,
+            conditionText: getConditionDesc(code),
+            weatherCode: code,
+            dailyForecast: daily
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to fetch real-time Kawasi weather:', err);
+      }
+    };
+
+    fetchKawasiWeather();
+    const interval = setInterval(fetchKawasiWeather, 15 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleNav = (title: string) => {
     const searchStr = (title || '').toLowerCase().trim();
     
@@ -1014,19 +1084,9 @@ export function TbpDashboard({
                         <div className={`w-10 h-10 rounded-xl ${item.bgClass} ${item.colorClass} flex items-center justify-center flex-shrink-0 transition-transform duration-200 group-hover:scale-110 shadow-xs border ${item.borderClass}`}>
                           <Icon className="w-5 h-5" />
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-sm sm:text-base tracking-tight truncate group-hover:text-[var(--primary)] transition-colors" style={{ color: 'var(--text-main, #0f172a)' }}>
-                              {item.title}
-                            </span>
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${item.badgeBg}`}>
-                              {item.badge}
-                            </span>
-                          </div>
-                          <p className="text-xs sm:text-sm text-[var(--text-muted)] truncate max-w-[280px] sm:max-w-md mt-0.5" style={{ color: 'var(--text-muted, #64748b)' }}>
-                            {item.subtitle}
-                          </p>
-                        </div>
+                        <span className="font-bold text-sm sm:text-base tracking-tight truncate group-hover:text-[var(--primary)] transition-colors" style={{ color: 'var(--text-main, #0f172a)' }}>
+                          {item.title}
+                        </span>
                       </div>
                       <ChevronRight className="w-5 h-5 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" style={{ color: 'var(--text-muted, #64748b)' }} />
                     </button>
@@ -1427,20 +1487,20 @@ export function TbpDashboard({
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center mb-5 relative z-10">
                 <div className="sm:col-span-6 flex items-center gap-4">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-400/20 to-indigo-500/10 border border-sky-400/30 flex items-center justify-center shadow-inner">
-                    <Cloud className="w-9 h-9 text-sky-400 animate-pulse" />
+                    <WeatherIcon code={weatherData ? weatherData.weatherCode : 1} className="w-9 h-9 animate-pulse" />
                   </div>
                   <div>
                     <div className="flex items-baseline gap-1">
                       <span className="font-display font-black text-4xl tracking-tight" style={{ color: 'var(--text-main, #0f172a)' }}>
-                        24°
+                        {weatherData ? `${weatherData.temp}°` : '27°'}
                       </span>
                       <span className="text-base font-semibold" style={{ color: 'var(--text-muted, #64748b)' }}>C</span>
                     </div>
                     <div className="text-xs sm:text-sm font-semibold capitalize" style={{ color: 'var(--text-main, #0f172a)' }}>
-                      Overcast Clouds
+                      {weatherData ? weatherData.conditionText : 'Cerah Berawan'}
                     </div>
                     <div className="text-xs text-[var(--text-muted)]">
-                      Terasa seperti 26°C • Siang hari
+                      {weatherData ? `Terasa seperti ${weatherData.feelsLike}°C • Halmahera Selatan` : 'Stasiun Cuaca Pulau Obi • WIT'}
                     </div>
                   </div>
                 </div>
@@ -1456,7 +1516,9 @@ export function TbpDashboard({
                   >
                     <Droplets className="w-4 h-4 text-sky-500 mb-1" />
                     <span className="text-xs text-[var(--text-muted)]">Lembab</span>
-                    <span className="font-bold text-xs sm:text-sm" style={{ color: 'var(--text-main, #0f172a)' }}>78%</span>
+                    <span className="font-bold text-xs sm:text-sm" style={{ color: 'var(--text-main, #0f172a)' }}>
+                      {weatherData ? `${weatherData.humidity}%` : '78%'}
+                    </span>
                   </div>
 
                   <div 
@@ -1468,7 +1530,9 @@ export function TbpDashboard({
                   >
                     <Wind className="w-4 h-4 text-teal-500 mb-1" />
                     <span className="text-xs text-[var(--text-muted)]">Angin</span>
-                    <span className="font-bold text-xs sm:text-sm" style={{ color: 'var(--text-main, #0f172a)' }}>12 km/h</span>
+                    <span className="font-bold text-xs sm:text-sm" style={{ color: 'var(--text-main, #0f172a)' }}>
+                      {weatherData ? `${weatherData.windSpeed} km/h` : '5 km/h'}
+                    </span>
                   </div>
 
                   <div 
@@ -1480,7 +1544,9 @@ export function TbpDashboard({
                   >
                     <Sun className="w-4 h-4 text-amber-500 mb-1" />
                     <span className="text-xs text-[var(--text-muted)]">Indeks UV</span>
-                    <span className="font-bold text-xs sm:text-sm" style={{ color: 'var(--text-main, #0f172a)' }}>3 Mod</span>
+                    <span className="font-bold text-xs sm:text-sm" style={{ color: 'var(--text-main, #0f172a)' }}>
+                      {weatherData ? `${weatherData.uvIndex} Mod` : '3 Mod'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1492,15 +1558,26 @@ export function TbpDashboard({
                     Prakiraan 7 Hari Ke Depan
                   </span>
                   <span className="text-xs text-[var(--text-muted)]">
-                    Kondisi Tropis Pesisir
+                    Kondisi Tropis Pesisir Kawasi
                   </span>
                 </div>
                 <div className="grid grid-cols-7 gap-1.5">
-                  {['Sab', 'Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum'].map((day, i) => {
-                    const isToday = i === 4; // Wednesday
+                  {(weatherData?.dailyForecast && weatherData.dailyForecast.length > 0
+                    ? weatherData.dailyForecast
+                    : [
+                        { day: 'Sab', code: 1, maxTemp: 30, minTemp: 24 },
+                        { day: 'Min', code: 2, maxTemp: 31, minTemp: 24 },
+                        { day: 'Sen', code: 61, maxTemp: 29, minTemp: 23 },
+                        { day: 'Sel', code: 1, maxTemp: 30, minTemp: 24 },
+                        { day: 'Rab', code: 2, maxTemp: 31, minTemp: 24 },
+                        { day: 'Kam', code: 3, maxTemp: 30, minTemp: 23 },
+                        { day: 'Jum', code: 61, maxTemp: 29, minTemp: 23 }
+                      ]
+                  ).map((fc, i) => {
+                    const isToday = i === 0;
                     return (
                       <div 
-                        key={day} 
+                        key={i} 
                         className={`flex flex-col items-center py-2 px-1 rounded-xl border transition-all duration-200 hover:scale-105 cursor-default ${
                           isToday ? 'border-teal-500/50 bg-teal-500/10 shadow-xs' : 'border-transparent hover:border-[var(--border-main)]'
                         }`}
@@ -1509,11 +1586,11 @@ export function TbpDashboard({
                         }}
                       >
                         <span className={`text-xs font-bold ${isToday ? 'text-teal-600 dark:text-teal-400 font-extrabold' : ''}`} style={{ color: isToday ? undefined : 'var(--text-main, #0f172a)' }}>
-                          {day}
+                          {fc.day}
                         </span>
-                        <WeatherIcon code={i % 3 === 0 ? 0 : 50} className="w-4 h-4 my-1.5" />
-                        <span className="text-xs font-bold" style={{ color: 'var(--text-main, #0f172a)' }}>29°</span>
-                        <span className="text-xs opacity-60 text-[var(--text-muted)]">23°</span>
+                        <WeatherIcon code={fc.code} className="w-4 h-4 my-1.5" />
+                        <span className="text-xs font-bold" style={{ color: 'var(--text-main, #0f172a)' }}>{fc.maxTemp}°</span>
+                        <span className="text-xs opacity-60 text-[var(--text-muted)]">{fc.minTemp}°</span>
                       </div>
                     );
                   })}
