@@ -31,6 +31,7 @@ import {
   Clock,
   Music,
   Volume2,
+  VolumeX,
   Wind,
   Droplets,
   MapPin,
@@ -162,6 +163,58 @@ const PRESET_WALLPAPERS = [
     category: 'Vibes',
     url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1600&q=80',
     thumb: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=300&q=60'
+  }
+];
+
+export interface FocusStation {
+  id: string;
+  title: string;
+  channel: string;
+  category: string;
+  videoId: string;
+  coverUrl: string;
+}
+
+export const FOCUS_STATIONS: FocusStation[] = [
+  {
+    id: 'lofi-girl',
+    title: 'Lofi Girl • 24/7 Beats to Relax/Work',
+    channel: 'Lofi Girl Live',
+    category: 'Lofi Hip Hop',
+    videoId: 'jfKfPfyJRdk',
+    coverUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=300&q=80'
+  },
+  {
+    id: 'synthwave-chill',
+    title: 'Synthwave Chill • Retro Beats',
+    channel: 'Lofi Girl Synthwave',
+    category: 'Synthwave',
+    videoId: '4xDzrJKXOOY',
+    coverUrl: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=300&q=80'
+  },
+  {
+    id: 'deep-focus-ambient',
+    title: 'Deep Focus • 432Hz Alpha Waves',
+    channel: 'Lab Focus Audio',
+    category: 'Binaural Focus',
+    videoId: 'WPni755-Krg',
+    coverUrl: 'https://images.unsplash.com/photo-1507668077129-56e32842fceb?auto=format&fit=crop&w=300&q=80'
+  },
+  {
+    id: 'rain-nature',
+    title: 'Rain & Thunderstorm • Tropical Ambience',
+    channel: 'Nature Atmosphere',
+    category: 'Natural Sound',
+    videoId: 'mPZkdNFkNps',
+    coverUrl: 'https://images.unsplash.com/photo-1534274988757-a28bf1a57c17?auto=format&fit=crop&w=300&q=80'
+  },
+  {
+    id: 'classical-piano',
+    title: 'Peaceful Piano • Concentration Study',
+    channel: 'Acoustic Lab',
+    category: 'Classical Piano',
+    videoId: 'jgpJVI3tDbY',
+    coverUrl: 'https://images.unsplash.com/photo-1520523839898-5071282543e9?auto=format&fit=crop&w=300&q=80'
   }
 ];
 
@@ -662,7 +715,61 @@ export function TbpDashboard({
     reader.readAsDataURL(file);
   };
 
+  // Lab Focus & Ambient (YouTube Audio Stream Engine)
+  const [stationIndex, setStationIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(80);
+  const [isMuted, setIsMuted] = useState(false);
+  const [showStationPicker, setShowStationPicker] = useState(false);
+  const [showVideoPreview, setShowVideoPreview] = useState(false);
+  const ytIframeRef = useRef<HTMLIFrameElement>(null);
+
+  const currentStation = FOCUS_STATIONS[stationIndex] || FOCUS_STATIONS[0];
+
+  const sendYtCommand = (func: string, args: any = '') => {
+    if (ytIframeRef.current && ytIframeRef.current.contentWindow) {
+      ytIframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: 'command', func, args }),
+        '*'
+      );
+    }
+  };
+
+  const togglePlayAudio = () => {
+    if (!isPlaying) {
+      setIsPlaying(true);
+      sendYtCommand('playVideo');
+      toast.success(`Memutar: ${currentStation.title}`, { id: 'ambient-player' });
+    } else {
+      setIsPlaying(false);
+      sendYtCommand('pauseVideo');
+      toast.info('Audio focus dijeda', { id: 'ambient-player' });
+    }
+  };
+
+  const changeStation = (newIdx: number) => {
+    const safeIdx = (newIdx + FOCUS_STATIONS.length) % FOCUS_STATIONS.length;
+    setStationIndex(safeIdx);
+    setIsPlaying(true);
+    toast.success(`Beralih ke: ${FOCUS_STATIONS[safeIdx].title}`, { id: 'ambient-player' });
+  };
+
+  const handleVolumeChange = (newVol: number) => {
+    setVolume(newVol);
+    if (isMuted && newVol > 0) setIsMuted(false);
+    sendYtCommand('setVolume', [newVol]);
+  };
+
+  const toggleMute = () => {
+    if (isMuted) {
+      setIsMuted(false);
+      sendYtCommand('unMute');
+      sendYtCommand('setVolume', [volume || 80]);
+    } else {
+      setIsMuted(true);
+      sendYtCommand('mute');
+    }
+  };
 
   const sectionItems = [
     {
@@ -1691,7 +1798,7 @@ export function TbpDashboard({
                 </div>
               </div>
 
-              {/* FOCUS LOFI / AUDIO PLAYER WIDGET */}
+              {/* FOCUS LOFI / YOUTUBE AUDIO PLAYER WIDGET */}
               <div 
                 className="rounded-2xl border shadow-xl backdrop-blur-xl p-5 flex flex-col justify-between transition-all duration-300 relative overflow-hidden"
                 style={{
@@ -1699,34 +1806,79 @@ export function TbpDashboard({
                   borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
                 }}
               >
+                {/* Embedded YouTube Player (Invisible by default, visible if user expands preview) */}
+                <div className={showVideoPreview ? "mb-3 rounded-xl overflow-hidden aspect-video bg-black shadow-inner relative" : "hidden"}>
+                  <iframe
+                    ref={ytIframeRef}
+                    id="ambient-yt-player"
+                    width="100%"
+                    height="100%"
+                    src={`https://www.youtube-nocookie.com/embed/${currentStation.videoId}?enablejsapi=1&autoplay=${isPlaying ? 1 : 0}&rel=0&playsinline=1`}
+                    title={currentStation.title}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    className="w-full h-full border-0"
+                  />
+                </div>
+
+                {/* If preview is hidden, keep iframe active in DOM so audio stream continues */}
+                {!showVideoPreview && (
+                  <div className="sr-only pointer-events-none" aria-hidden="true">
+                    <iframe
+                      ref={ytIframeRef}
+                      width="1"
+                      height="1"
+                      src={`https://www.youtube-nocookie.com/embed/${currentStation.videoId}?enablejsapi=1&autoplay=${isPlaying ? 1 : 0}&rel=0&playsinline=1`}
+                      title={currentStation.title}
+                      allow="autoplay; encrypted-media"
+                    />
+                  </div>
+                )}
+
                 {/* Header */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-pink-500/10 text-pink-500 flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center">
                       <Music className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <span className="font-bold text-xs sm:text-sm tracking-tight" style={{ color: 'var(--text-main, #0f172a)' }}>
-                        Lab Focus & Ambient
+                      <span className="font-bold text-xs sm:text-sm tracking-tight flex items-center gap-1.5" style={{ color: 'var(--text-main, #0f172a)' }}>
+                        <span>Lab Focus & Ambient</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+                          YT AUDIO
+                        </span>
                       </span>
                       <div className="text-xs text-[var(--text-muted)]">
-                        Lofi Beats untuk Konsentrasi Kerja
+                        {currentStation.category} • Kawasi Station
                       </div>
                     </div>
                   </div>
                   
-                  {/* Animated Sound Waveform (bounces when playing) */}
-                  <div className="flex items-center gap-0.5 h-4 px-2 py-1 rounded-md bg-slate-500/10">
-                    <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-300 ${isPlaying ? 'h-3 animate-pulse' : 'h-1'}`} />
-                    <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-200 ${isPlaying ? 'h-4 animate-bounce' : 'h-2'}`} />
-                    <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-350 ${isPlaying ? 'h-2.5 animate-pulse' : 'h-1'}`} />
-                    <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-150 ${isPlaying ? 'h-4 animate-bounce' : 'h-1.5'}`} />
-                    <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-300 ${isPlaying ? 'h-3 animate-pulse' : 'h-1'}`} />
+                  {/* Actions Header (Station selector + Video Toggle + Animated Sound Waveform) */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setShowVideoPreview(!showVideoPreview)}
+                      className={`p-1.5 rounded-lg border text-xs transition-all cursor-pointer ${
+                        showVideoPreview 
+                          ? 'bg-teal-500/20 text-teal-600 border-teal-500/40' 
+                          : 'hover:bg-slate-500/10 border-transparent text-[var(--text-muted)]'
+                      }`}
+                      title={showVideoPreview ? 'Sembunyikan Video' : 'Tampilkan Video Visual'}
+                    >
+                      {showVideoPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+
+                    <div className="flex items-center gap-0.5 h-4 px-2 py-1 rounded-md bg-slate-500/10">
+                      <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-300 ${isPlaying ? 'h-3 animate-pulse' : 'h-1'}`} />
+                      <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-200 ${isPlaying ? 'h-4 animate-bounce' : 'h-2'}`} />
+                      <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-350 ${isPlaying ? 'h-2.5 animate-pulse' : 'h-1'}`} />
+                      <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-150 ${isPlaying ? 'h-4 animate-bounce' : 'h-1.5'}`} />
+                      <div className={`w-0.5 bg-teal-500 rounded-full transition-all duration-300 ${isPlaying ? 'h-3 animate-pulse' : 'h-1'}`} />
+                    </div>
                   </div>
                 </div>
 
                 {/* Album Cover & Track Details */}
-                <div className="flex items-center gap-3.5 mb-3 p-2 rounded-xl border"
+                <div className="flex items-center gap-3.5 mb-3 p-2 rounded-xl border relative group"
                   style={{
                     backgroundColor: 'var(--input-bg, rgba(0,0,0,0.02))',
                     borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
@@ -1734,15 +1886,15 @@ export function TbpDashboard({
                 >
                   <div className="relative w-14 h-14 rounded-xl overflow-hidden shadow-md flex-shrink-0 group">
                     <img 
-                      src={mediaSettings.lofi || DEFAULT_MEDIA.lofi} 
-                      alt="Lofi Widget" 
+                      src={mediaSettings.lofi || currentStation.coverUrl || DEFAULT_MEDIA.lofi} 
+                      alt="Station Cover" 
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <button
                         onClick={() => setActiveSlot({ key: 'lofi', label: 'Widget Canvas Cover' })}
                         className="p-1.5 rounded-lg bg-black/80 hover:bg-teal-900 text-white text-xs border border-teal-500/50 cursor-pointer"
-                        title="Ganti cover"
+                        title="Ganti cover gambar"
                       >
                         <Camera className="w-3.5 h-3.5 text-teal-300" />
                       </button>
@@ -1751,57 +1903,112 @@ export function TbpDashboard({
                   
                   <div className="min-w-0 flex-1">
                     <div className="font-bold text-xs sm:text-sm truncate" style={{ color: 'var(--text-main, #0f172a)' }}>
-                      Kawasi Station Lofi Beats
+                      {currentStation.title}
                     </div>
                     <div className="text-xs truncate text-[var(--text-muted)]">
-                      Deep Focus & Analytical Chill
+                      {currentStation.channel} • Channel {stationIndex + 1}/{FOCUS_STATIONS.length}
                     </div>
-                    <div className="mt-1 flex items-center gap-1.5 text-xs font-mono text-teal-600 dark:text-teal-400 font-semibold">
-                      <Radio className="w-3 h-3" />
-                      <span>320kbps • High Quality Audio</span>
+                    <div className="mt-1 flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 font-mono text-teal-600 dark:text-teal-400 font-semibold">
+                        <Radio className="w-3 h-3" />
+                        <span>{isPlaying ? 'Streaming Online' : 'Siap Diputar'}</span>
+                      </span>
+                      <button
+                        onClick={() => setShowStationPicker(!showStationPicker)}
+                        className="text-[11px] font-bold text-teal-600 hover:underline cursor-pointer flex items-center gap-0.5"
+                      >
+                        <Sliders className="w-2.5 h-2.5" />
+                        <span>Ganti Channel</span>
+                      </button>
                     </div>
                   </div>
                 </div>
 
+                {/* Station Selection Dropdown (If toggled) */}
+                {showStationPicker && (
+                  <div className="mb-3 p-2 rounded-xl border bg-slate-900/90 text-white text-xs space-y-1 animate-in fade-in duration-150">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 pb-1 border-b border-slate-800 flex items-center justify-between">
+                      <span>Pilih Saluran Audio YouTube</span>
+                      <button onClick={() => setShowStationPicker(false)} className="text-slate-400 hover:text-white">✕</button>
+                    </div>
+                    {FOCUS_STATIONS.map((st, i) => (
+                      <button
+                        key={st.id}
+                        onClick={() => {
+                          changeStation(i);
+                          setShowStationPicker(false);
+                        }}
+                        className={`w-full text-left p-1.5 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${
+                          stationIndex === i ? 'bg-teal-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300'
+                        }`}
+                      >
+                        <span className="truncate pr-2">{st.title}</span>
+                        <span className="text-[10px] font-mono opacity-80 shrink-0">{st.category}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {/* Player Controls */}
                 <div className="space-y-2 pt-1">
-                  {/* Progress Bar */}
-                  <div className="w-full h-1.5 rounded-full overflow-hidden bg-slate-300/30 dark:bg-slate-700/50 relative cursor-pointer group">
-                    <div 
-                      className="h-full rounded-full transition-all duration-300"
-                      style={{
-                        width: isPlaying ? '65%' : '35%',
-                        backgroundColor: 'var(--primary, #2A9D8F)'
-                      }}
-                    />
-                  </div>
-
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    {/* Media playback buttons */}
+                    <div className="flex items-center gap-1.5">
                       <button 
-                        onClick={() => setIsPlaying(!isPlaying)}
+                        onClick={() => changeStation(stationIndex - 1)}
+                        className="p-1.5 rounded-lg hover:bg-slate-500/10 text-[var(--text-muted)] transition-colors cursor-pointer"
+                        title="Channel Sebelumnya"
+                      >
+                        <SkipBack className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button 
+                        onClick={togglePlayAudio}
                         className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer"
                         style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
-                        title={isPlaying ? 'Pause' : 'Play'}
+                        title={isPlaying ? 'Pause Audio' : 'Play YouTube Audio'}
                       >
                         {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
                       </button>
 
                       <button 
-                        onClick={() => toast.info('Memuat ulang audio stream...')}
-                        className="p-1.5 rounded-lg hover:opacity-80 transition-colors cursor-pointer"
-                        style={{ color: 'var(--text-muted, #64748b)' }}
-                        title="Restart Stream"
+                        onClick={() => changeStation(stationIndex + 1)}
+                        className="p-1.5 rounded-lg hover:bg-slate-500/10 text-[var(--text-muted)] transition-colors cursor-pointer"
+                        title="Channel Berikutnya"
+                      >
+                        <SkipForward className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button 
+                        onClick={() => {
+                          sendYtCommand('seekTo', 0);
+                          toast.info('Memutar ulang dari awal');
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-slate-500/10 text-[var(--text-muted)] transition-colors cursor-pointer"
+                        title="Restart Track"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                       </button>
                     </div>
 
+                    {/* Volume Slider */}
                     <div className="flex items-center gap-2">
-                      <Volume2 className="w-3.5 h-3.5" style={{ color: 'var(--text-muted, #64748b)' }} />
-                      <div className="w-16 h-1 rounded-full bg-slate-300/40 dark:bg-slate-700/50 overflow-hidden">
-                        <div className="w-3/4 h-full bg-teal-500 rounded-full" />
-                      </div>
+                      <button 
+                        onClick={toggleMute}
+                        className="p-1 rounded-md text-[var(--text-muted)] hover:text-teal-600 transition-colors cursor-pointer"
+                        title={isMuted ? 'Unmute' : 'Mute'}
+                      >
+                        {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-500" /> : <Volume2 className="w-3.5 h-3.5" />}
+                      </button>
+                      <input 
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={isMuted ? 0 : volume}
+                        onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+                        className="w-16 h-1.5 rounded-lg appearance-none cursor-pointer bg-slate-300 dark:bg-slate-700 accent-teal-600"
+                        title={`Volume: ${isMuted ? 'Muted' : `${volume}%`}`}
+                      />
                     </div>
                   </div>
                 </div>
