@@ -2,6 +2,48 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.32] - 2026-09-26
+
+### 🎧 Audio Ambient YouTube Lab Focus, Cuaca Real-Time Kawasi, Desain Minimalis Buletin & Optimalisasi Modul Logbook Rapat
+
+- **Integrasi Mesin Audio YouTube pada Widget Lab Focus & Ambient (`src/components/TbpDashboard.tsx`)**:
+  - **Kurasi 5 Saluran Audio Fokus Laboratorium**: Menghadirkan saluran streaming berkualitas tinggi tanpa jeda:
+    1. *Lofi Girl 24/7* (Lofi Beats)
+    2. *Synthwave Radio* (Chill Synth)
+    3. *Deep Focus Alpha Waves 432Hz* (Binaural Beats)
+    4. *Tropical Rain & Thunder* (Ambient Nature)
+    5. *Peaceful Classical Piano* (Instrumental Piano)
+  - **Kontrol Pemutar Lengkap & Interaktif**:
+    - Tombol *Play/Pause*, *Next/Previous Station*, dan *Restart Track*.
+    - Menu dropdown pemilih saluran audio YouTube dengan kategori genre.
+    - Penggeser volume interaktif (0–100%) dengan tombol *Mute/Unmute* cepat.
+    - Animasi visual bilah gelombang suara (*sound waveform animation*) saat audio aktif.
+  - **Pratinjau Video & Pemutaran di Latar Belakang (*Background Playback*)**: Tombol saklar pratinjau video (`Eye`/`EyeOff`) memungkinkan personil menyembunyikan video YouTube untuk menghemat ruang pandang sementara audio tetap mengalir lancar di latar belakang.
+
+- **Stasiun Cuaca Real-Time Kawasi, Pulau Obi (`src/components/TbpDashboard.tsx`)**:
+  - **Integrasi Langsung Open-Meteo API**: Menggantikan data cuaca tiruan (dummy) dengan data meteorologi riil berdasarkan koordinat lintang & bujur kawasan industri tambang Kawasi, Pulau Obi (`-1.57, 127.48`, zona waktu WIT / `Asia/Jayapura`).
+  - **Metrik Cuaca Komprehensif**: Menampilkan suhu aktual (°C), suhu yang dirasakan (*apparent temp*), kelembapan udara (%), kecepatan angin (km/h), dan indeks sinar UV matahari.
+  - **Prakiraan 7 Hari**: Menghadirkan ramalan cuaca mingguan dengan ikon kondisi cuaca dinamis (cerah, berawan, hujan tropis, dsb.).
+
+- **Penyederhanaan Tampilan Workstation Section Buletin (`src/components/TbpDashboard.tsx`)**:
+  - Menghilangkan teks deskripsi/subtitle sekunder dan label tags di sebelah kanan tiap judul workstation yang sebelumnya terlihat mengganggu dan tidak serasi.
+  - Tampilan workstation kini tampil ultra-bersih, elegan, dan proporsional: hanya memuat ikon/logo workstation resmi, nama workstation yang jelas, serta panah navigasi (*chevron*).
+
+- **Penyempurnaan Modul Morning Briefing & Logbook Harian (`src/components/logbook-screen.tsx`, `server/routes/logbook.ts`)**:
+  - **Sistem Peran Sunting Tugas & Draf Usulan Revisi (*Edit vs Review Draft*)**:
+    - Pembuat tugas (*Creator*) dan Supervisor memiliki kewenangan penuh menyunting rincian tugas secara langsung.
+    - Personil yang ditugaskan (*PIC*) dapat menyusun draf usulan perubahan (*change draft*) yang tersimpan sebagai draf untuk ditinjau oleh pembuat tugas, sehingga pemberi tugas cukup melakukan *review & approve*.
+  - **Pengurutan Drag & Drop pada Subtask**: Memungkinkan pengguna mengubah urutan prioritas subtask dengan mudah melalui interaksi seret-dan-lepas (*drag and drop*).
+  - **Tampilan Baris Minimalis & Pengurutan Tugas Otomatis (Urgency + FIFO)**:
+    - Baris daftar tugas disederhanakan dengan tata letak minimalis (menampilkan judul utama, status, dan *progress bar* ringkas di pojok kanan bawah badge status). Rincian detail tugas hanya ditampilkan saat baris diklik (*expand on click*).
+    - Sortir otomatis memprioritaskan tingkat urgensi (*High > Medium > Low*) dipadukan dengan prinsip *FIFO (First In, First Out)* berdasarkan waktu pembuatan tugas.
+  - **Otomatisasi Transisi Status Tugas Berbasis Progres Subtask**:
+    - *Mode Subtask*: Status otomatis **`Open`** jika belum ada subtask dicentang, otomatis **`On Progress`** jika minimal 1 subtask dicentang, dan otomatis **`Closed`** ketika seluruh subtask selesai. Opsi **`Canceled`** tetap tersedia untuk dipilih sewaktu-waktu.
+    - *Mode Non-Subtask (Teks Biasa)*: Fleksibilitas manual penuh untuk menentukan status (`Open`, `On Progress`, `Closed`, atau `Canceled`).
+  - **Pembersihan Bagian Pemberi Tugas**: Mengeliminasi kolom atau label teks "Pemberi Tugas" dari kartu tampilan tugas dan modal ringkasan untuk menjaga kesederhanaan informasi.
+  - **Perbaikan Hak Akses Akun Ruang Rapat (*Meeting Room*)**: Memperbaiki kendala eksepsi `isSupervisor is not defined` saat akun ruang rapat membuka tugas, serta memberikan izin setara Supervisor kepada akun ruang rapat agar dapat mengelola agenda rapat dengan leluasa.
+  - **Perbaikan Galat Null-Safety Edit Modal**: Memperbaiki eksepsi `Cannot read properties of undefined (reading 'length')` pada saat membuka modal edit tugas maupun memilih PIC dengan pengamanan array yang kokoh.
+
 ## [2.9.31] - 2026-09-25
 
 ### 🛡️ Pembatasan Perolehan EXP Inspeksi K3 Maksimal 1x per Minggu Kalender & Audit Transparansi Gamifikasi
