@@ -74,6 +74,7 @@ export interface CommentAttachmentItem {
   isImage?: boolean;
   mimeType?: string;
   size?: number;
+  caption?: string;
 }
 
 export function formatNotionCommentTime(dateStr: string): string {
@@ -147,12 +148,20 @@ export const parseCommentAttachments = (fileUrl?: string | null, fileName?: stri
   const targetUrl = extractedUrl || fileUrl;
   if (!targetUrl && !content) return [];
 
-  // Ambil nama file dari teks content jika formatnya "📎 Lampiran Foto / Dokumen: filename.ext"
+  // Ambil nama file & caption dari teks content jika formatnya "📎 Lampiran Foto / Dokumen: filename.ext"
   let contentExtractedName = '';
+  let fallbackCaption = '';
   if (content) {
     const m = content.match(/📎\s*(?:Lampiran Foto \/ Dokumen|Lampiran Media|Lampiran):\s*([^\n\r]+)/i);
     if (m && m[1]) {
       contentExtractedName = m[1].trim();
+    }
+    const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length > 1 && lines[0].startsWith('📎')) {
+      fallbackCaption = lines.slice(1).join(' ').replace(/^caption:\s*/i, '');
+    } else {
+      const capMatch = content.match(/(?:caption|keterangan):\s*([^\n\r]+)/i);
+      if (capMatch) fallbackCaption = capMatch[1].trim();
     }
   }
 
@@ -184,7 +193,8 @@ export const parseCommentAttachments = (fileUrl?: string | null, fileName?: stri
               driveDownloadUrl,
               isImage: Boolean(isImg),
               mimeType: item.mimeType,
-              size: item.size
+              size: item.size,
+              caption: item.caption || item.description || fallbackCaption || undefined
             };
           });
         }
@@ -212,7 +222,8 @@ export const parseCommentAttachments = (fileUrl?: string | null, fileName?: stri
       directUrl,
       driveViewUrl,
       driveDownloadUrl,
-      isImage: Boolean(isImg)
+      isImage: Boolean(isImg),
+      caption: fallbackCaption || undefined
     }];
   }
 
@@ -235,21 +246,28 @@ export const NotionAttachmentThumbnail = ({
 
   if (!attachment.isImage || imgFailed) {
     return (
-      <div
-        onClick={() => onPreview(attachment)}
-        className="flex items-center gap-1.5 p-1.5 px-2.5 rounded-lg border hover:border-teal-500/60 transition-all cursor-pointer group shadow-xs max-w-xs text-xs"
-        style={{
-          backgroundColor: 'var(--input-bg, #1a1a1a)',
-          borderColor: 'var(--border-main, #334155)'
-        }}
-        title={`Buka / Unduh: ${attachment.name}`}
-      >
-        <div className="w-5 h-5 rounded bg-teal-950/80 border border-teal-700/50 flex items-center justify-center text-teal-400 shrink-0">
-          <FileText className="w-3 h-3" />
+      <div className="flex flex-col items-start gap-1">
+        <div
+          onClick={() => onPreview(attachment)}
+          className="flex items-center gap-1.5 p-1.5 px-2.5 rounded-lg border hover:border-teal-500/60 transition-all cursor-pointer group shadow-xs max-w-xs text-xs"
+          style={{
+            backgroundColor: 'var(--input-bg, #1a1a1a)',
+            borderColor: 'var(--border-main, #334155)'
+          }}
+          title={`Buka / Unduh: ${attachment.name}`}
+        >
+          <div className="w-5 h-5 rounded bg-teal-950/80 border border-teal-700/50 flex items-center justify-center text-teal-400 shrink-0">
+            <FileText className="w-3 h-3" />
+          </div>
+          <span className="text-[11px] font-semibold text-teal-300 truncate max-w-[150px] group-hover:underline">
+            {attachment.name}
+          </span>
         </div>
-        <span className="text-[11px] font-semibold text-teal-300 truncate max-w-[150px] group-hover:underline">
-          {attachment.name}
-        </span>
+        {attachment.caption && (
+          <span className="text-[10px] text-teal-300/80 italic font-normal line-clamp-2 max-w-[200px] pl-1">
+            "{attachment.caption}"
+          </span>
+        )}
       </div>
     );
   }
@@ -257,17 +275,18 @@ export const NotionAttachmentThumbnail = ({
   const primarySrc = attachment.directUrl || attachment.url;
 
   return (
-    <div
-      onClick={() => onPreview(attachment)}
-      className="relative rounded-lg overflow-hidden border hover:border-teal-500/80 w-14 h-14 sm:w-16 sm:h-16 block group cursor-pointer shadow-xs transition-all hover:scale-[1.03] shrink-0"
-      style={{
-        backgroundColor: 'var(--input-bg, #161616)',
-        borderColor: 'var(--border-main, #334155)'
-      }}
-      title={`Klik untuk memperbesar: ${attachment.name}`}
-    >
-      <img
-        src={primarySrc}
+    <div className="flex flex-col items-start gap-1">
+      <div
+        onClick={() => onPreview(attachment)}
+        className="relative rounded-lg overflow-hidden border hover:border-teal-500/80 w-16 h-16 sm:w-20 sm:h-20 block group cursor-pointer shadow-xs transition-all hover:scale-[1.03] shrink-0"
+        style={{
+          backgroundColor: 'var(--input-bg, #161616)',
+          borderColor: 'var(--border-main, #334155)'
+        }}
+        title={`Klik untuk memperbesar: ${attachment.name}${attachment.caption ? ` - ${attachment.caption}` : ''}`}
+      >
+        <img
+          src={primarySrc}
         alt={attachment.name}
         loading="lazy"
         referrerPolicy="no-referrer"
@@ -297,6 +316,12 @@ export const NotionAttachmentThumbnail = ({
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
           <Maximize2 className="w-3.5 h-3.5 text-white drop-shadow" />
         </div>
+      )}
+      </div>
+      {attachment.caption && (
+        <span className="text-[10px] text-teal-300/90 italic font-medium line-clamp-2 max-w-[160px] leading-tight" title={attachment.caption}>
+          "{attachment.caption}"
+        </span>
       )}
     </div>
   );
@@ -548,10 +573,21 @@ export function NotionDatabaseTable({
   const [commentText, setCommentText] = useState('');
   const [statusUpdateChoice, setStatusUpdateChoice] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<{ name: string; url: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ name: string; url: string; previewUrl?: string; isImage?: boolean } | null>(null);
+  const [commentFileCaption, setCommentFileCaption] = useState('');
+  const [isUploadingCommentFile, setIsUploadingCommentFile] = useState(false);
+  const commentFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; driveViewUrl?: string; driveDownloadUrl?: string } | null>(null);
   const [showAllReplies, setShowAllReplies] = useState(false);
+
+  // Pending file upload with caption for Gallery
+  const [pendingUploadFile, setPendingUploadFile] = useState<{
+    file: File;
+    previewUrl: string;
+    caption: string;
+    isImage: boolean;
+  } | null>(null);
 
   // Replying state for threaded comments in discussion
   const [replyingTo, setReplyingTo] = useState<{
@@ -890,7 +926,7 @@ export function NotionDatabaseTable({
     if (att.isImage) {
       setPreviewImage({
         url: att.directUrl || att.url,
-        title: att.name,
+        title: att.caption ? `${att.name} — "${att.caption}"` : att.name,
         driveViewUrl: att.driveViewUrl,
         driveDownloadUrl: att.driveDownloadUrl
       });
@@ -1240,7 +1276,9 @@ export function NotionDatabaseTable({
   // Submit comment / progress update
   const handlePostComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!commentText.trim() || !postId || !selectedRow) return;
+    const finalContent = commentText.trim() || (commentFileCaption.trim() ? `📎 ${selectedFile?.name}\n\n${commentFileCaption.trim()}` : (selectedFile ? `📎 Lampiran: ${selectedFile.name}` : ''));
+    if (!finalContent && !selectedFile) return;
+    if (!postId || !selectedRow) return;
 
     const topicTitleVal = selectedTopicTitle || 'Topik';
     const picVal = (getRowVal(selectedRow, 'PIC') || '').trim();
@@ -1248,12 +1286,20 @@ export function NotionDatabaseTable({
 
     try {
       setSubmittingComment(true);
+      const fileUrlPayload = selectedFile ? JSON.stringify([{
+        url: selectedFile.url,
+        name: selectedFile.name,
+        caption: commentFileCaption.trim(),
+        directUrl: selectedFile.url,
+        isImage: selectedFile.isImage
+      }]) : null;
+
       const res = await fetch(`/api/bulletin/${postId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           postId,
-          content: commentText.trim(),
+          content: finalContent,
           topicTitle: topicTitleVal,
           topicId: topicTitleVal.toLowerCase().replace(/\s+/g, '-'),
           section: activeSection,
@@ -1263,7 +1309,7 @@ export function NotionDatabaseTable({
           authorName: currentAuthorName || 'Personil',
           picNik: picVal || null,
           pt: pt || 'TBP',
-          fileUrl: selectedFile?.url || null,
+          fileUrl: fileUrlPayload,
           fileName: selectedFile?.name || null,
           replyToId: replyingTo?.id || null,
           replyToNik: replyingTo?.authorNik || null,
@@ -1282,6 +1328,7 @@ export function NotionDatabaseTable({
         setCommentText('');
         setStatusUpdateChoice('');
         setSelectedFile(null);
+        setCommentFileCaption('');
         setReplyingTo(null);
         
         // Update local row status if changed
@@ -1306,6 +1353,88 @@ export function NotionDatabaseTable({
     }
   };
 
+  // Upload file inside discussion comment box with caption
+  const handleCommentFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingCommentFile(true);
+    toast.loading('Mengompres dan mengunggah lampiran...', { id: 'upload-comment-file' });
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64Raw = ev.target?.result as string;
+        let finalBase64 = base64Raw;
+        const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
+
+        if (isImg) {
+          const img = new Image();
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.src = base64Raw;
+          });
+
+          const canvas = document.createElement('canvas');
+          const maxW = 1600;
+          const maxH = 1200;
+          let w = img.width;
+          let h = img.height;
+
+          if (w > maxW || h > maxH) {
+            if (w > h) {
+              h = Math.round((h * maxW) / w);
+              w = maxW;
+            } else {
+              w = Math.round((w * maxH) / h);
+              h = maxH;
+            }
+          }
+
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            finalBase64 = canvas.toDataURL('image/jpeg', 0.85);
+          }
+        }
+
+        let uploadedUrl = finalBase64;
+        try {
+          const upRes = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              base64Data: finalBase64,
+              mimeType: file.type || 'image/jpeg',
+              filename: file.name,
+              folderName: 'Bulletin Attachments'
+            })
+          });
+          const upJson = await upRes.json();
+          if (upJson.url) {
+            uploadedUrl = upJson.url;
+          }
+        } catch (uErr) {}
+
+        setSelectedFile({
+          name: file.name,
+          url: uploadedUrl,
+          previewUrl: isImg ? finalBase64 : undefined,
+          isImage: isImg
+        });
+        toast.success('Lampiran berhasil diunggah! Anda dapat menambahkan caption di bawah.', { id: 'upload-comment-file' });
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      toast.error('Gagal mengunggah file', { id: 'upload-comment-file' });
+    } finally {
+      setIsUploadingCommentFile(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
   // Delete comment
   const handleDeleteComment = async (commentId: number) => {
     if (!confirm('Hapus update/komentar ini?')) return;
@@ -1326,10 +1455,32 @@ export function NotionDatabaseTable({
   const galleryFileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingGallery, setIsUploadingGallery] = useState(false);
 
-  const handleGalleryFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Gallery file select: opens Caption modal before submitting
+  const handleGalleryFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !postId || !selectedRow) return;
 
+    const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
+    let previewUrl = '';
+    if (isImg) {
+      previewUrl = URL.createObjectURL(file);
+    }
+
+    setPendingUploadFile({
+      file,
+      previewUrl,
+      caption: '',
+      isImage: isImg
+    });
+
+    if (e.target) e.target.value = '';
+  };
+
+  // Execute upload after user enters caption in Gallery modal
+  const handleExecuteGalleryUpload = async () => {
+    if (!pendingUploadFile || !postId || !selectedRow) return;
+
+    const { file, caption, isImage: isImg, previewUrl } = pendingUploadFile;
     setIsUploadingGallery(true);
     toast.loading('Mengompres dan mengunggah lampiran foto...', { id: 'upload-gallery' });
 
@@ -1340,7 +1491,7 @@ export function NotionDatabaseTable({
         let finalBase64 = base64Raw;
 
         // If image, compress with canvas
-        if (file.type.startsWith('image/')) {
+        if (isImg) {
           const img = new Image();
           await new Promise((resolve) => {
             img.onload = resolve;
@@ -1393,7 +1544,7 @@ export function NotionDatabaseTable({
           // Fallback to compressed base64
         }
 
-        // Post as an attachment comment for this topic
+        // Post as an attachment comment with caption for this topic
         const topicTitleVal = selectedTopicTitle || 'Topik';
         const activeSection = section || getRowVal(selectedRow, 'Kategori') || 'Prep & Lab';
 
@@ -1402,8 +1553,14 @@ export function NotionDatabaseTable({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             postId,
-            content: `📎 Lampiran Foto / Dokumen: ${file.name}`,
-            fileUrl: uploadedUrl,
+            content: caption.trim() ? `📎 ${file.name}\n\n${caption.trim()}` : `📎 Lampiran Foto / Dokumen: ${file.name}`,
+            fileUrl: JSON.stringify([{
+              url: uploadedUrl,
+              name: file.name,
+              caption: caption.trim(),
+              directUrl: uploadedUrl,
+              isImage: isImg
+            }]),
             fileName: file.name,
             topicTitle: topicTitleVal,
             topicId: topicTitleVal.toLowerCase().replace(/\s+/g, '-'),
@@ -1416,7 +1573,11 @@ export function NotionDatabaseTable({
 
         toast.dismiss('upload-gallery');
         if (cRes.ok) {
-          toast.success('Foto / lampiran berhasil ditambahkan ke galeri!');
+          toast.success('Foto dengan caption berhasil ditambahkan ke galeri!');
+          if (previewUrl && previewUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(previewUrl);
+          }
+          setPendingUploadFile(null);
           await fetchComments();
         } else {
           toast.error('Gagal menambahkan lampiran ke topik.');
@@ -1428,7 +1589,6 @@ export function NotionDatabaseTable({
       toast.error('Gagal mengunggah foto / file');
     } finally {
       setIsUploadingGallery(false);
-      if (e.target) e.target.value = '';
     }
   };
 
@@ -3452,7 +3612,7 @@ export function NotionDatabaseTable({
                           <input
                             type="file"
                             ref={galleryFileInputRef}
-                            onChange={handleGalleryFileUpload}
+                            onChange={handleGalleryFileSelect}
                             accept="image/*,.pdf,.doc,.docx"
                             className="hidden"
                           />
@@ -3481,7 +3641,7 @@ export function NotionDatabaseTable({
                                     backgroundColor: 'var(--input-bg, #121212)',
                                     borderColor: 'var(--border-main, #334155)'
                                   }}
-                                  title={`Klik untuk melihat: ${item.attachment.name}`}
+                                  title={`Klik untuk melihat: ${item.attachment.name}${item.attachment.caption ? ` (${item.attachment.caption})` : ''}`}
                                 >
                                   {item.attachment.isImage ? (
                                     <img 
@@ -3507,9 +3667,23 @@ export function NotionDatabaseTable({
                                       <span className="text-[10px] text-teal-300 font-semibold truncate w-full px-1">{item.attachment.name}</span>
                                     </div>
                                   )}
-                                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
-                                    <span className="text-[10px] font-bold text-white truncate">{item.attachment.name}</span>
-                                    <span className="text-[9px] text-teal-300 font-mono">{item.authorName}</span>
+                                  {item.attachment.caption && (
+                                    <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[9px] text-teal-300 font-medium z-10">
+                                      💬 Caption
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2.5">
+                                    {item.attachment.caption ? (
+                                      <>
+                                        <span className="text-[11px] font-bold text-white line-clamp-2 leading-tight">
+                                          "{item.attachment.caption}"
+                                        </span>
+                                        <span className="text-[9px] text-slate-300 truncate mt-0.5">{item.attachment.name}</span>
+                                      </>
+                                    ) : (
+                                      <span className="text-[10px] font-bold text-white truncate">{item.attachment.name}</span>
+                                    )}
+                                    <span className="text-[9px] text-teal-300 font-mono mt-0.5">{item.authorName}</span>
                                   </div>
                                 </div>
                               );
@@ -3950,6 +4124,57 @@ export function NotionDatabaseTable({
                           </div>
                         )}
 
+                        {/* Selected Attachment Preview with Caption */}
+                        {selectedFile && (
+                          <div 
+                            className="p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center gap-2.5 animate-in fade-in shadow-xs"
+                            style={{
+                              backgroundColor: 'var(--input-bg, #1a1a1a)',
+                              borderColor: 'rgba(20, 184, 166, 0.45)'
+                            }}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              {selectedFile.isImage && (selectedFile.previewUrl || selectedFile.url) ? (
+                                <img 
+                                  src={selectedFile.previewUrl || selectedFile.url} 
+                                  alt={selectedFile.name} 
+                                  className="w-11 h-11 object-cover rounded-lg border border-teal-500/40 shrink-0 shadow-2xs" 
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-lg bg-teal-950/80 border border-teal-700/50 flex items-center justify-center text-teal-400 shrink-0">
+                                  <Paperclip className="w-4 h-4" />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <span className="text-xs font-semibold text-teal-300 block truncate max-w-[160px]" title={selectedFile.name}>{selectedFile.name}</span>
+                                <span className="text-[10px] text-teal-400/80 font-medium">Lampiran siap dikirim</span>
+                              </div>
+                            </div>
+                            <div className="flex-1 flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                value={commentFileCaption}
+                                onChange={(e) => setCommentFileCaption(e.target.value)}
+                                placeholder="Tambahkan caption gambar (opsional)..."
+                                className="w-full text-xs px-2.5 py-1.5 rounded-lg border focus:border-teal-500 outline-none leading-relaxed"
+                                style={{
+                                  backgroundColor: 'var(--card-bg, #141414)',
+                                  borderColor: 'var(--border-main, #334155)',
+                                  color: 'var(--text-main, #f1f5f9)'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => { setSelectedFile(null); setCommentFileCaption(''); }}
+                                className="p-1.5 hover:bg-slate-700/50 rounded-lg text-slate-400 hover:text-rose-400 transition-colors shrink-0 cursor-pointer"
+                                title="Hapus Lampiran"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         <textarea
                           id="notion-comment-textarea"
                           rows={2}
@@ -3958,6 +4183,8 @@ export function NotionDatabaseTable({
                           placeholder={
                             replyingTo 
                               ? `Tulis tanggapan untuk ${replyingTo.authorName}...` 
+                              : selectedFile
+                              ? `Tulis catatan tambahan untuk lampiran (opsional)...`
                               : `Add a comment for "${selectedTopicTitle}"...`
                           }
                           className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none leading-relaxed text-xs resize-none"
@@ -3970,6 +4197,29 @@ export function NotionDatabaseTable({
 
                         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                           <div className="flex items-center gap-2">
+                            <input
+                              type="file"
+                              ref={commentFileInputRef}
+                              onChange={handleCommentFileSelect}
+                              accept="image/*,.pdf,.doc,.docx"
+                              className="hidden"
+                            />
+                            <button
+                              type="button"
+                              disabled={isUploadingCommentFile}
+                              onClick={() => commentFileInputRef.current?.click()}
+                              className="p-1 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 hover:border-teal-500/60 transition-colors cursor-pointer"
+                              style={{
+                                backgroundColor: 'var(--input-bg, #202020)',
+                                borderColor: 'var(--border-main, #334155)',
+                                color: 'var(--text-muted, #94a3b8)'
+                              }}
+                              title="Lampirkan foto atau dokumen ke diskusi"
+                            >
+                              {isUploadingCommentFile ? <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-400" /> : <Paperclip className="w-3.5 h-3.5 text-teal-400" />}
+                              <span>{isUploadingCommentFile ? 'Mengunggah...' : 'Lampirkan Foto'}</span>
+                            </button>
+
                             <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted, #94a3b8)' }}>Status:</span>
                             <select
                               value={statusUpdateChoice}
@@ -3991,8 +4241,8 @@ export function NotionDatabaseTable({
 
                           <Button
                             type="submit"
-                            disabled={submittingComment || !commentText.trim()}
-                            className="!w-auto text-xs px-4 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-md cursor-pointer"
+                            disabled={submittingComment || isUploadingCommentFile || (!commentText.trim() && !selectedFile)}
+                            className="!w-auto text-xs px-4 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {submittingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : replyingTo ? <Reply className="w-3.5 h-3.5 mr-1.5 rotate-180" /> : <Send className="w-3.5 h-3.5 mr-1.5" />}
                             <span>{replyingTo ? 'Kirim Balasan' : 'Comment'}</span>
@@ -4005,6 +4255,161 @@ export function NotionDatabaseTable({
                 </div>
               </motion.div>
             </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Upload Lampiran / Foto dengan Caption (Gallery) */}
+      <AnimatePresence>
+        {pendingUploadFile && (
+          <div className="fixed inset-0 z-[150] overflow-y-auto flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => {
+                if (!isUploadingGallery) {
+                  if (pendingUploadFile.previewUrl && pendingUploadFile.previewUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(pendingUploadFile.previewUrl);
+                  }
+                  setPendingUploadFile(null);
+                }
+              }}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="relative w-full max-w-lg rounded-2xl border shadow-2xl p-5 z-10 space-y-4"
+              style={{
+                backgroundColor: 'var(--card-bg, #1a1a1a)',
+                borderColor: 'var(--border-main, #334155)',
+                color: 'var(--text-main, #f1f5f9)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400">
+                    <ImageIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-teal-300">Upload Lampiran dengan Caption</h3>
+                    <p className="text-[11px] text-slate-400">Tambahkan penjelasan atau caption untuk foto ini</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isUploadingGallery}
+                  onClick={() => {
+                    if (pendingUploadFile.previewUrl && pendingUploadFile.previewUrl.startsWith('blob:')) {
+                      URL.revokeObjectURL(pendingUploadFile.previewUrl);
+                    }
+                    setPendingUploadFile(null);
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Preview Thumbnail */}
+              <div className="space-y-3">
+                {pendingUploadFile.isImage && pendingUploadFile.previewUrl ? (
+                  <div className="relative rounded-xl overflow-hidden border max-h-56 flex items-center justify-center bg-black/40" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                    <img 
+                      src={pendingUploadFile.previewUrl} 
+                      alt={pendingUploadFile.file.name} 
+                      className="w-full h-full max-h-56 object-contain" 
+                    />
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl border flex items-center gap-3 bg-slate-900/60" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                    <div className="w-10 h-10 rounded-xl bg-teal-950 border border-teal-700/50 flex items-center justify-center text-teal-400 shrink-0">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-semibold text-xs text-teal-300 block truncate">{pendingUploadFile.file.name}</span>
+                      <span className="text-[10px] text-slate-400">{(pendingUploadFile.file.size / 1024).toFixed(0)} KB</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-[11px] text-slate-400 truncate flex items-center justify-between">
+                  <span className="truncate max-w-[300px]"><strong>File:</strong> {pendingUploadFile.file.name}</span>
+                  <span>{(pendingUploadFile.file.size / 1024).toFixed(0)} KB</span>
+                </div>
+
+                {/* Caption Input */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-teal-300">
+                    Caption / Keterangan Gambar (Opsional):
+                  </label>
+                  <textarea
+                    rows={3}
+                    autoFocus
+                    value={pendingUploadFile.caption}
+                    onChange={(e) => setPendingUploadFile({ ...pendingUploadFile, caption: e.target.value })}
+                    placeholder="Contoh: Kondisi bearing motor setelah dibersihkan dan siap dipasang kembali..."
+                    className="w-full p-2.5 rounded-xl border text-xs outline-none focus:border-teal-500 leading-relaxed resize-none"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                        handleExecuteGalleryUpload();
+                      }
+                    }}
+                  />
+                  <span className="text-[10px] text-slate-500 italic block">
+                    Tekan Ctrl+Enter atau klik tombol di bawah untuk mengunggah.
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                <button
+                  type="button"
+                  disabled={isUploadingGallery}
+                  onClick={() => {
+                    if (pendingUploadFile.previewUrl && pendingUploadFile.previewUrl.startsWith('blob:')) {
+                      URL.revokeObjectURL(pendingUploadFile.previewUrl);
+                    }
+                    setPendingUploadFile(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                  style={{ borderColor: 'var(--border-main, #334155)' }}
+                >
+                  Batal
+                </button>
+                <Button
+                  type="button"
+                  disabled={isUploadingGallery}
+                  onClick={handleExecuteGalleryUpload}
+                  className="!w-auto text-xs px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  {isUploadingGallery ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Mengunggah...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload & Simpan Caption</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>
