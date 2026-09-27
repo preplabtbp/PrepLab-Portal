@@ -140,35 +140,63 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
       .where(conditions.length > 0 ? and(...conditions) : sql`1=1`)
       .orderBy(desc(logbookTasks.createdAt));
 
-    // STRICT SEPARATION:
+    // STRICT SEPARATION & METRICS:
     // 1. Today tasks: ONLY tasks for targetDateStr
     const todayTasks = allMatching.filter(t => t.taskDate === targetDateStr);
 
-    // 2. Carry Over tasks:
-    // Past unfinished tasks (Open, In Progress, Pending) from earlier dates,
-    // plus tasks from yesterdayDateStr for evaluation.
+    // 2. Strict Yesterday tasks (H-1): Tasks scheduled for yesterday OR completed on yesterday
+    const yesterdayTasks = allMatching.filter(t => {
+      if (t.taskDate === yesterdayDateStr) return true;
+      if (t.actualCompletedDate) {
+        try {
+          const compStr = formatDateStr(new Date(t.actualCompletedDate));
+          if (compStr === yesterdayDateStr) return true;
+        } catch (e) {}
+      }
+      return false;
+    });
+
+    // 3. Carry Over tasks: All past unfinished tasks (Open, In Progress, Pending) before targetDateStr
     const carryOverTasks = allMatching.filter(t => {
       if (t.taskDate === targetDateStr) return false;
-      if (t.taskDate === yesterdayDateStr) return true;
       if (t.taskDate < targetDateStr && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed') return true;
       return false;
     });
 
-    // Calculate Summary Statistics
+    // Calculate Summary Statistics for Management & Briefing
+    const completedYesterdayCount = yesterdayTasks.filter(t => t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed').length;
+    const inProgressYesterdayCount = yesterdayTasks.filter(t => t.status === 'In Progress' || t.status === 'On Progress').length;
+    const pendingYesterdayCount = yesterdayTasks.filter(t => t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').length;
+    
+    // Average progress percent for yesterday tasks
+    const yesterdayAvgPercent = yesterdayTasks.length > 0
+      ? Math.round(
+          yesterdayTasks.reduce((acc, t) => {
+            if (t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed') return acc + 100;
+            return acc + (t.progressPercent || 0);
+          }, 0) / yesterdayTasks.length
+        )
+      : 0;
+
     const summary = {
       todayDate: targetDateStr,
       yesterdayDate: yesterdayDateStr,
       totalToday: todayTasks.length,
       openToday: todayTasks.filter(t => t.status === 'Open').length,
-      inProgressToday: todayTasks.filter(t => t.status === 'In Progress').length,
+      inProgressToday: todayTasks.filter(t => t.status === 'In Progress' || t.status === 'On Progress').length,
       completedToday: todayTasks.filter(t => t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed').length,
+      
+      // Strict Yesterday Metrics for Management Reporting
+      totalYesterday: yesterdayTasks.length,
+      completedYesterday: completedYesterdayCount,
+      inProgressYesterday: inProgressYesterdayCount,
+      pendingYesterday: pendingYesterdayCount,
+      yesterdayProgressPercent: yesterdayAvgPercent,
+
+      // Cumulative Carry-Over Metrics
       totalCarryOver: carryOverTasks.length,
       completedCarryOver: carryOverTasks.filter(t => t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed').length,
       pendingCarryOver: carryOverTasks.filter(t => t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').length,
-      // Backwards compatibility for UI reading yesterday properties
-      totalYesterday: carryOverTasks.length,
-      completedYesterday: carryOverTasks.filter(t => t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed').length,
-      pendingYesterday: carryOverTasks.filter(t => t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').length,
     };
 
     res.json({
@@ -176,7 +204,7 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
       data: {
         summary,
         todayTasks,
-        yesterdayTasks: carryOverTasks,
+        yesterdayTasks,
         carryOverTasks
       }
     });
@@ -739,6 +767,7 @@ logbookRouter.post("/api/logbook/tasks/:id/review-draft", async (req, res) => {
       if (draftObj.description !== undefined) applyPayload.description = draftObj.description;
       if (draftObj.priority) applyPayload.priority = draftObj.priority;
       if (draftObj.activityType) applyPayload.activityType = draftObj.activityType;
+      if (draftObj.taskDate) applyPayload.taskDate = draftObj.taskDate;
       if (draftObj.targetDate) applyPayload.targetDate = draftObj.targetDate;
       if (draftObj.targetTime) applyPayload.targetTime = draftObj.targetTime;
       if (draftObj.assigneeNik) applyPayload.assigneeNik = draftObj.assigneeNik;

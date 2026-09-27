@@ -861,6 +861,7 @@ export function LogbookScreen({
   const [loading, setLoading] = useState(true);
   const [todayTasks, setTodayTasks] = useState<LogbookTask[]>([]);
   const [yesterdayTasks, setYesterdayTasks] = useState<LogbookTask[]>([]);
+  const [carryOverTasks, setCarryOverTasks] = useState<LogbookTask[]>([]);
   const [summaryData, setSummaryData] = useState<any>(null);
 
   // Expanded card state (accordion per-task in Carry Over & Today)
@@ -900,6 +901,7 @@ export function LogbookScreen({
   const [newAssigneeNames, setNewAssigneeNames] = useState<string[]>([]);
   const [newPriority, setNewPriority] = useState('Normal');
   const [newActivityType, setNewActivityType] = useState('Routine');
+  const [newTaskDate, setNewTaskDate] = useState(getTodayStr());
   const [newTargetDate, setNewTargetDate] = useState(getTodayStr());
   const [newTargetTime, setNewTargetTime] = useState('');
   const [selectedBulletinPostId, setSelectedBulletinPostId] = useState<string>('');
@@ -918,6 +920,7 @@ export function LogbookScreen({
     setNewAssigneeNames([]);
     setNewPriority('Normal');
     setNewActivityType('Routine');
+    setNewTaskDate(selectedDate || getTodayStr());
     setNewTargetDate(selectedDate || getTodayStr());
     setNewTargetTime('');
     setSelectedBulletinPostId('');
@@ -950,7 +953,8 @@ export function LogbookScreen({
     setNewTaskDescription(task.description || '');
     setNewPriority(task.priority || 'Normal');
     setNewActivityType(task.activityType || 'Routine');
-    setNewTargetDate(selectedDate || getTodayStr());
+    setNewTaskDate(task.taskDate || selectedDate || getTodayStr());
+    setNewTargetDate(task.targetDate || selectedDate || getTodayStr());
     setNewTargetTime(task.targetTime || '23:59');
     setSelectedBulletinPostId(task.bulletinPostId ? String(task.bulletinPostId) : '');
     if (task.assigneeNik) {
@@ -1022,6 +1026,7 @@ export function LogbookScreen({
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editPriority, setEditPriority] = useState('Normal');
+  const [editTaskDate, setEditTaskDate] = useState('');
   const [editTargetDate, setEditTargetDate] = useState('');
   const [editTargetTime, setEditTargetTime] = useState('');
   const [editAssigneeNik, setEditAssigneeNik] = useState('');
@@ -1044,6 +1049,7 @@ export function LogbookScreen({
     setEditTitle(task.title || '');
     setEditDescription(task.description || '');
     setEditPriority(task.priority || 'Normal');
+    setEditTaskDate(task.taskDate || selectedDate || getTodayStr());
     setEditTargetDate(task.targetDate || selectedDate || getTodayStr());
     setEditTargetTime(task.targetTime || '23:59');
     setEditAssigneeNik(task.assigneeNik || '');
@@ -1093,6 +1099,7 @@ export function LogbookScreen({
             title: editTitle.trim(),
             description: editDescription.trim(),
             priority: editPriority,
+            taskDate: editTaskDate || editingTask.taskDate,
             targetDate: editTargetDate,
             targetTime: editTargetTime || '23:59',
             assigneeNik: editAssigneeNik,
@@ -1118,6 +1125,7 @@ export function LogbookScreen({
           title: editTitle.trim(),
           description: editDescription.trim(),
           priority: editPriority,
+          taskDate: editTaskDate || editingTask.taskDate,
           targetDate: editTargetDate,
           targetTime: editTargetTime || '23:59',
           assigneeNik: editAssigneeNik,
@@ -1245,7 +1253,8 @@ export function LogbookScreen({
       const json = await res.json();
       if (json.status === 'success' && json.data) {
         setTodayTasks(json.data.todayTasks || []);
-        setYesterdayTasks(json.data.yesterdayTasks || json.data.carryOverTasks || []);
+        setYesterdayTasks(json.data.yesterdayTasks || []);
+        setCarryOverTasks(json.data.carryOverTasks || []);
         setSummaryData(json.data.summary || null);
       }
     } catch (e) {
@@ -1307,7 +1316,7 @@ export function LogbookScreen({
           assignedByName: inspectorName || 'Atasan / Manajemen',
           priority: newPriority,
           activityType: newActivityType,
-          taskDate: selectedDate,
+          taskDate: newTaskDate || selectedDate || getTodayStr(),
           targetDate: newTargetDate || selectedDate,
           targetTime: newTargetTime.trim() || '23:59',
           status: initStatus,
@@ -1646,8 +1655,15 @@ export function LogbookScreen({
       .sort(sortTasksByUrgencyAndFifo);
   }, [todayTasks, searchQuery, picFilter]);
 
+  // Scope selector for Evaluation Column: 'yesterday' (strict H-1) vs 'all_carryover' (all historical carry overs)
+  const [evalScope, setEvalScope] = useState<'yesterday' | 'all_carryover'>('yesterday');
+
+  const evalSourceTasks = useMemo(() => {
+    return evalScope === 'yesterday' ? yesterdayTasks : carryOverTasks;
+  }, [evalScope, yesterdayTasks, carryOverTasks]);
+
   const filteredYesterday = useMemo(() => {
-    return yesterdayTasks
+    return evalSourceTasks
       .filter(t => {
         const matchSearch = !searchQuery || 
           t.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -1658,7 +1674,7 @@ export function LogbookScreen({
         return matchSearch && matchPic;
       })
       .sort(sortTasksByUrgencyAndFifo);
-  }, [yesterdayTasks, searchQuery, picFilter]);
+  }, [evalSourceTasks, searchQuery, picFilter]);
 
   // Active Section for Presentation Focus Highlight ('yesterday' | 'today')
   const [activeSection, setActiveSection] = useState<'yesterday' | 'today'>('yesterday');
@@ -1681,10 +1697,62 @@ export function LogbookScreen({
     return filteredYesterday.filter(t => t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').length;
   }, [filteredYesterday]);
 
+  // Copy Yesterday Progress Report specifically tailored for Management
+  const handleCopyYesterdayManagementReport = () => {
+    const yDate = summaryData?.yesterdayDate || '';
+    const formattedYDate = yDate ? formatDisplayTargetDate(yDate) : 'Hari Kemarin (H-1)';
+    const total = yesterdayTasks.length;
+    const completed = yesterdayTasks.filter(t => t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed');
+    const inProgress = yesterdayTasks.filter(t => t.status === 'In Progress' || t.status === 'On Progress');
+    const pending = yesterdayTasks.filter(t => t.isPending || t.status === 'Pending');
+    const unfinished = yesterdayTasks.filter(t => t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed');
+    const percent = summaryData?.yesterdayProgressPercent ?? (total > 0 ? Math.round((completed.length / total) * 100) : 0);
+
+    let report = `*📊 REKAP PROGRESS PEKERJAAN KEMARIN (H-1)*\n`;
+    report += `📅 *Hari/Tanggal*: ${formattedYDate}\n`;
+    report += `🏢 *Seksi*: ${selectedSection} (${selectedPt})\n`;
+    report += `📈 *Capaian Progres Kemarin*: ${percent}% (${completed.length} dari ${total} kegiatan terselesaikan)\n\n`;
+
+    report += `*RINGKASAN STATUS KEMARIN:*\n`;
+    report += `• Selesai (Closed/Done): ${completed.length} kegiatan\n`;
+    report += `• On Progress: ${inProgress.length} kegiatan\n`;
+    report += `• Pending (Job Pending): ${pending.length} kegiatan\n\n`;
+
+    report += `✅ *DAFTAR TUGAS SELESAI (${completed.length}):*\n`;
+    if (completed.length === 0) {
+      report += `- Tidak ada tugas yang diselesaikan kemarin.\n`;
+    } else {
+      completed.forEach((t, i) => {
+        report += `${i + 1}. [${t.priority}] ${t.title} [100%]\n   - PIC: ${t.assigneeName}\n`;
+      });
+    }
+
+    report += `\n⏳ *DAFTAR TUGAS ON PROGRESS / CARRY-OVER (${unfinished.length}):*\n`;
+    if (unfinished.length === 0) {
+      report += `- Nihil (Semua tugas kemarin telah tuntas 100%).\n`;
+    } else {
+      unfinished.forEach((t, i) => {
+        const prog = calculateTaskProgress(t);
+        const pendingNote = t.isPending ? ` [Job Pending: ${t.pendingPicName || ''} - ${t.pendingReason || ''}]` : '';
+        report += `${i + 1}. [${t.priority}] ${t.title} [Progres: ${prog}% - Status: ${t.status}]${pendingNote}\n   - PIC: ${t.assigneeName}\n   - Target: ${formatDisplayTargetDate(t.targetDate)} (${t.targetTime || '23:59'})\n`;
+      });
+    }
+
+    if (carryOverTasks.length > unfinished.length) {
+      const olderCount = carryOverTasks.length - unfinished.length;
+      report += `\n📌 *Catatan*: Terdapat ${olderCount} carry-over tambahan dari hari sebelumnya yang masih aktif berjalan.\n`;
+    }
+
+    report += `\n_Laporan resmi dibuat via Prep & Lab Portal Log Book_`;
+
+    navigator.clipboard.writeText(report);
+    toast.success('Laporan Progress Kemarin untuk Manajemen berhasil disalin ke clipboard! Siap kirim via WhatsApp.');
+  };
+
   // Unique PICs in current tasks for the filter dropdown
   const uniquePics = useMemo(() => {
     const map = new Map<string, string>();
-    [...todayTasks, ...yesterdayTasks].forEach(t => {
+    [...todayTasks, ...yesterdayTasks, ...carryOverTasks].forEach(t => {
       const pics = parsePicList(t.assigneeNik, t.assigneeName);
       pics.forEach(p => {
         if (p.nik && p.name) map.set(p.nik, p.name);
@@ -1694,7 +1762,7 @@ export function LogbookScreen({
       }
     });
     return Array.from(map.entries()).map(([nik, name]) => ({ nik, name }));
-  }, [todayTasks, yesterdayTasks]);
+  }, [todayTasks, yesterdayTasks, carryOverTasks]);
 
   // Enterprise Morning Briefing & Projector Presentation Mode (Default ON as requested)
   const [isProjectorMode, setIsProjectorMode] = useState<boolean>(true);
@@ -1896,27 +1964,27 @@ export function LogbookScreen({
                 {task.section}
               </span>
 
-              {isCarryOver ? (
-                <span className="text-xs px-2.5 py-1 rounded-lg font-bold bg-indigo-50 text-indigo-900 border border-indigo-200 flex items-center gap-1 shadow-2xs">
-                  <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Asal: {formatDisplayTargetDate(task.taskDate)}</span>
-                </span>
-              ) : (
-                <span className={`text-xs px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 shadow-2xs ${
-                  isOverdue 
-                    ? 'bg-rose-50 text-rose-900 border-rose-300' 
-                    : 'bg-sky-50 text-sky-900 border-sky-200'
+              {/* Tanggal Dimulai (Start Date) Badge */}
+              <span className="text-xs px-2.5 py-1 rounded-lg font-bold bg-slate-100 text-slate-800 border border-slate-300 flex items-center gap-1 shadow-2xs" title="Tanggal Dimulai (Start Date)">
+                <Calendar className="w-3.5 h-3.5 text-slate-600" />
+                <span>Mulai: {formatDisplayTargetDate(task.taskDate)}</span>
+              </span>
+
+              {/* Target Selesai (Deadline) Badge */}
+              <span className={`text-xs px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 shadow-2xs ${
+                isOverdue 
+                  ? 'bg-rose-50 text-rose-900 border-rose-300' 
+                  : 'bg-sky-50 text-sky-900 border-sky-200'
+              }`}>
+                <Calendar className={`w-3.5 h-3.5 ${isOverdue ? 'text-rose-600' : 'text-sky-600'}`} />
+                <span>Target: {formatDisplayTargetDate(task.targetDate)}</span>
+                <span className={`font-mono text-[11px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                  isOverdue ? 'bg-rose-200/80 text-rose-950' : 'bg-sky-200/70 text-sky-950'
                 }`}>
-                  <Calendar className={`w-3.5 h-3.5 ${isOverdue ? 'text-rose-600' : 'text-sky-600'}`} />
-                  <span>Target: {formatDisplayTargetDate(task.targetDate)}</span>
-                  <span className={`font-mono text-[11px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                    isOverdue ? 'bg-rose-200/80 text-rose-950' : 'bg-sky-200/70 text-sky-950'
-                  }`}>
-                    <Clock className="w-3 h-3 text-slate-700" />
-                    {task.targetTime && task.targetTime !== '23:59' ? `${task.targetTime} WIB` : '12 Malam (23:59)'}
-                  </span>
+                  <Clock className="w-3 h-3 text-slate-700" />
+                  {task.targetTime && task.targetTime !== '23:59' ? `${task.targetTime} WIB` : '12 Malam (23:59)'}
                 </span>
-              )}
+              </span>
 
               {isOverdue && !isDone && (
                 <span className="text-[10px] sm:text-xs px-2.5 py-1 rounded-lg font-black bg-rose-600 text-white shadow-2xs animate-pulse flex items-center gap-1 uppercase tracking-wider">
@@ -2559,29 +2627,37 @@ export function LogbookScreen({
               </div>
             </div>
 
-            {/* Card 3: Carry Over Task */}
+            {/* Card 3: Progres Kemarin (H-1) & Carry Over */}
             <div 
-              onClick={() => setActiveSection('yesterday')}
-              title="Klik untuk menyorot bagian Evaluasi & Progres Kemarin"
+              onClick={() => {
+                setActiveSection('yesterday');
+                setEvalScope('yesterday');
+              }}
+              title="Klik untuk menyorot capaian progres pekerjaan kemarin"
               className={`p-4 rounded-2xl border-2 border-t-4 border-t-amber-600 bg-gradient-to-b from-amber-50/60 to-white shadow-xs transition-all cursor-pointer ${
                 activeSection === 'yesterday' ? 'border-amber-400 ring-2 ring-amber-400/40 shadow-md scale-[1.01]' : 'border-amber-200 hover:border-amber-300'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black tracking-wider uppercase text-slate-700">
-                  Carry Over Task
+                  Progres Kemarin (H-1)
                 </span>
                 <span className="p-2 rounded-xl bg-amber-100 text-amber-800">
-                  <RotateCcw className="w-4 h-4 stroke-[2.5]" />
+                  <TrendingUp className="w-4 h-4 stroke-[2.5]" />
                 </span>
               </div>
-              <p className="text-2xl sm:text-3xl font-black mt-2 text-slate-900">
-                {summaryData.completedCarryOver || summaryData.completedYesterday || 0} / {summaryData.totalCarryOver || summaryData.totalYesterday || 0}
-              </p>
+              <div className="flex items-baseline gap-2 mt-2">
+                <p className="text-2xl sm:text-3xl font-black text-slate-900">
+                  {summaryData?.completedYesterday || 0} / {summaryData?.totalYesterday || 0}
+                </p>
+                <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                  {summaryData?.yesterdayProgressPercent || 0}% Selesai
+                </span>
+              </div>
               <div className="flex items-center gap-2 mt-1">
                 <span className="inline-block w-2 h-2 rounded-full bg-amber-500" />
                 <p className="text-xs text-amber-900 font-bold">
-                  {summaryData.pendingCarryOver || summaryData.pendingYesterday || 0} tugas carry-over
+                  {summaryData?.totalCarryOver || 0} total carry-over berjalan
                 </p>
               </div>
             </div>
@@ -2656,45 +2732,138 @@ export function LogbookScreen({
                 </p>
               </div>
 
-              {/* Sub-Filters for Step 1 */}
+              {/* Scope Switcher: Kemarin (H-1) vs Semua Carry-Over */}
               <div 
                 onClick={(e) => e.stopPropagation()} 
-                className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
+                className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto bg-slate-100 p-1 rounded-xl border border-slate-200"
               >
                 <button
                   type="button"
-                  onClick={() => setYesterdaySubFilter('all')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    yesterdaySubFilter === 'all'
-                      ? 'bg-slate-800 text-white font-black'
-                      : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                  onClick={() => setEvalScope('yesterday')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    evalScope === 'yesterday'
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
+                  title="Tampilkan khusus pekerjaan shift/hari kemarin (H-1)"
                 >
-                  Semua ({filteredYesterday.length})
+                  📅 Kemarin ({yesterdayTasks.length})
                 </button>
                 <button
                   type="button"
-                  onClick={() => setYesterdaySubFilter('pending')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    yesterdaySubFilter === 'pending'
-                      ? 'bg-amber-500 text-white font-black shadow-xs'
-                      : 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
+                  onClick={() => setEvalScope('all_carryover')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    evalScope === 'all_carryover'
+                      ? 'bg-slate-800 text-white font-black shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
+                  title="Tampilkan seluruh akumulasi carry-over / backlog dari hari-hari sebelumnya"
                 >
-                  ⏳ Carry-Over ({yesterdayPendingCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setYesterdaySubFilter('completed')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    yesterdaySubFilter === 'completed'
-                      ? 'bg-teal-700 text-white font-black shadow-xs'
-                      : 'bg-teal-50 text-teal-900 border border-teal-300 hover:bg-teal-100'
-                  }`}
-                >
-                  ✅ Selesai ({yesterdayCompletedCount})
+                  ⏳ Semua Backlog ({carryOverTasks.length})
                 </button>
               </div>
+            </div>
+
+            {/* Executive Recap Banner for Management */}
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="p-3.5 rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50/50 to-white shadow-2xs space-y-2.5"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-amber-500 text-white">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-slate-900">
+                      Rekap Progress Kemarin ({summaryData?.yesterdayDate ? formatDisplayTargetDate(summaryData.yesterdayDate) : 'H-1'})
+                    </h3>
+                    <p className="text-[11px] font-semibold text-amber-900/80">
+                      Laporan transparan saat manajemen menanyakan progres pekerjaan kemarin
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCopyYesterdayManagementReport}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0"
+                  title="Salin ringkasan progres kemarin dalam format chat resmi untuk WhatsApp Management"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Salin Laporan Manajemen</span>
+                </button>
+              </div>
+
+              {/* Progress Bar & Badges */}
+              <div className="space-y-1.5 pt-1 border-t border-amber-200/60">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="text-slate-700">Tingkat Capaian Kemarin:</span>
+                  <span className="text-amber-950 font-black font-mono">
+                    {summaryData?.yesterdayProgressPercent || 0}% Tercapai
+                  </span>
+                </div>
+                <div className="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-amber-500 to-emerald-600 transition-all duration-500 rounded-full"
+                    style={{ width: `${Math.min(100, Math.max(0, summaryData?.yesterdayProgressPercent || 0))}%` }}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold pt-1">
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    ✅ {summaryData?.completedYesterday || 0} Selesai
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 border border-blue-300">
+                    🔄 {summaryData?.inProgressYesterday || 0} On Progress
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
+                    ⏳ {summaryData?.pendingYesterday || 0} Carry-Over
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-300 font-mono">
+                    Total {summaryData?.totalYesterday || 0} Kegiatan
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub-Filters for Step 1 */}
+            <div 
+              onClick={(e) => e.stopPropagation()} 
+              className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
+            >
+              <button
+                type="button"
+                onClick={() => setYesterdaySubFilter('all')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  yesterdaySubFilter === 'all'
+                    ? 'bg-slate-800 text-white font-black'
+                    : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                }`}
+              >
+                Semua ({filteredYesterday.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setYesterdaySubFilter('pending')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  yesterdaySubFilter === 'pending'
+                    ? 'bg-amber-500 text-white font-black shadow-xs'
+                    : 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
+                }`}
+              >
+                ⏳ Carry-Over ({yesterdayPendingCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setYesterdaySubFilter('completed')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  yesterdaySubFilter === 'completed'
+                    ? 'bg-teal-700 text-white font-black shadow-xs'
+                    : 'bg-teal-50 text-teal-900 border border-teal-300 hover:bg-teal-100'
+                }`}
+              >
+                ✅ Selesai ({yesterdayCompletedCount})
+              </button>
             </div>
 
             {/* Task List (Evaluasi & Progres Kemarin) */}
@@ -2993,7 +3162,7 @@ export function LogbookScreen({
               </div>
 
               {/* Prioritas, Target Tanggal, & Target Jam Selesai */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold block">Prioritas</label>
                   <select
@@ -3012,7 +3181,28 @@ export function LogbookScreen({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold block">Target Tanggal</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold block text-slate-800 dark:text-slate-200">Tanggal Dimulai</label>
+                    <span className="text-[10px] text-teal-700 dark:text-teal-400 font-bold">Bisa tgl lampau</span>
+                  </div>
+                  <input
+                    type="date"
+                    value={newTaskDate}
+                    onChange={(e) => setNewTaskDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #f8fafc)',
+                      borderColor: 'var(--border-main, #cbd5e1)',
+                      color: 'var(--text-main, #0f172a)'
+                    }}
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    Bisa dipilih tanggal lampau jika project sudah on-going.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold block">Target Selesai (Deadline)</label>
                   <input
                     type="date"
                     value={newTargetDate}
@@ -3043,7 +3233,7 @@ export function LogbookScreen({
                     }}
                   />
                   <p className="text-[10px] text-slate-500">
-                    Bila kosong: otomatis jam 12 malam hari (23:59).
+                    Bila kosong: otomatis 23:59.
                   </p>
                 </div>
               </div>
@@ -3369,7 +3559,7 @@ export function LogbookScreen({
               )}
 
               {/* Prioritas & Target Selesai */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold block">Prioritas</label>
                   <select
@@ -3388,6 +3578,27 @@ export function LogbookScreen({
                     <option value="High">High</option>
                     <option value="Urgent">Urgent</option>
                   </select>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold block text-slate-800 dark:text-slate-200">Tanggal Dimulai</label>
+                    <span className="text-[10px] text-teal-700 dark:text-teal-400 font-bold">Bisa tgl lampau</span>
+                  </div>
+                  <input
+                    type="date"
+                    value={editTaskDate}
+                    onChange={(e) => setEditTaskDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #f8fafc)',
+                      borderColor: 'var(--border-main, #cbd5e1)',
+                      color: 'var(--text-main, #0f172a)'
+                    }}
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    Ubah tgl mulai jika project sudah on-going sejak lampau.
+                  </p>
                 </div>
 
                 <div className="space-y-1">
