@@ -589,6 +589,77 @@ p5mRouter.post("/materi/sync", async (req, res) => {
   }
 });
 
+// Helper to upload and save P5M flyer / document
+async function saveMateriFile(filename: string, base64Data: string, cleanJudul: string, isInternal: boolean): Promise<string> {
+  const base64Clean = base64Data.replace(/^data:.*?;base64,/, "");
+  const buffer = Buffer.from(base64Clean, 'base64');
+  const safeId = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+  
+  const ext = path.extname(filename || '').toLowerCase() || '.png';
+  const localFileName = `p5m_${safeId}${ext}`;
+  const localPath = path.join(process.cwd(), 'public', 'uploads', 'p5m', localFileName);
+
+  let mimeType = 'image/png';
+  if (ext === '.xlsx') mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  else if (ext === '.xls') mimeType = 'application/vnd.ms-excel';
+  else if (ext === '.pdf') mimeType = 'application/pdf';
+  else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+  else if (ext === '.webp') mimeType = 'image/webp';
+
+  try {
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'p5m');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    fs.writeFileSync(localPath, buffer);
+  } catch (fErr: any) {
+    console.warn("Local cache write failed:", fErr.message);
+  }
+
+  let finalFileUrl = `/uploads/p5m/${localFileName}`;
+
+  try {
+    const isInternalVal = Boolean(isInternal);
+    const folderId = isInternalVal 
+      ? (process.env.GDRIVE_BRIEFING_INTERNAL_FOLDER_ID || '1850C4AAefTc_lgx7Jlg9fM7SpyGlQn-9')
+      : (process.env.GDRIVE_BRIEFING_EXTERNAL_FOLDER_ID || '1a0yxvL7KTPQQK_qhxtl-PpHQNTsqoAUV');
+
+    const stream = new Readable();
+    stream.push(buffer);
+    stream.push(null);
+
+    const driveRes = await drive.files.create({
+      requestBody: {
+        name: filename || `P5M_${cleanJudul.replace(/[^a-zA-Z0-9_-]/g, '_')}${ext}`,
+        parents: [folderId]
+      },
+      media: { mimeType, body: stream },
+      fields: 'id, webViewLink',
+      supportsAllDrives: true
+    });
+
+    const driveFileId = driveRes.data.id;
+    if (driveFileId) {
+      try {
+        await drive.permissions.create({
+          fileId: driveFileId,
+          requestBody: { role: 'reader', type: 'anyone' },
+          supportsAllDrives: true
+        });
+      } catch (pErr: any) {}
+      if (ext === '.xlsx' || ext === '.xls' || ext === '.pdf') {
+        finalFileUrl = `/uploads/p5m/${localFileName}`;
+      } else {
+        finalFileUrl = `https://lh3.googleusercontent.com/d/${driveFileId}`;
+      }
+    }
+  } catch (dErr: any) {
+    console.warn("Drive upload failed, using local fallback URL:", dErr.message);
+  }
+
+  return finalFileUrl;
+}
+
 p5mRouter.post("/materi", async (req, res) => {
   try {
     const { judul, kategori, subKategori, divisi, fileUrl, isInternal, base64Data, filename } = req.body;
@@ -599,81 +670,8 @@ p5mRouter.post("/materi", async (req, res) => {
     const cleanJudul = judul.trim();
     let finalFileUrl: string | null = fileUrl || null;
 
-    // If file (base64) provided, upload to Google Drive & save local copy
-    if (base64Data) {
-      const base64Clean = base64Data.replace(/^data:.*?;base64,/, "");
-      const buffer = Buffer.from(base64Clean, 'base64');
-      const safeId = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
-      
-      const ext = path.extname(filename || '').toLowerCase() || '.png';
-      const localFileName = `p5m_${safeId}${ext}`;
-      const localPath = path.join(process.cwd(), 'public', 'uploads', 'p5m', localFileName);
-
-      let mimeType = 'image/png';
-      if (ext === '.xlsx') mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      else if (ext === '.xls') mimeType = 'application/vnd.ms-excel';
-      else if (ext === '.pdf') mimeType = 'application/pdf';
-      else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
-      else if (ext === '.webp') mimeType = 'image/webp';
-
-      // Save local copy
-      try {
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'p5m');
-        if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        fs.writeFileSync(localPath, buffer);
-      } catch (fErr: any) {
-        console.warn("Local cache write failed:", fErr.message);
-      }
-
-      finalFileUrl = `/uploads/p5m/${localFileName}`;
-
-      // Upload to Google Drive: External vs Internal Briefing Flyer folder
-      try {
-        const isInternalVal = Boolean(isInternal);
-        const folderId = isInternalVal 
-          ? (process.env.GDRIVE_BRIEFING_INTERNAL_FOLDER_ID || '1850C4AAefTc_lgx7Jlg9fM7SpyGlQn-9')
-          : (process.env.GDRIVE_BRIEFING_EXTERNAL_FOLDER_ID || '1a0yxvL7KTPQQK_qhxtl-PpHQNTsqoAUV');
-
-        const stream = new Readable();
-        stream.push(buffer);
-        stream.push(null);
-
-        const driveRes = await drive.files.create({
-          requestBody: {
-            name: filename || `P5M_${cleanJudul.replace(/[^a-zA-Z0-9_-]/g, '_')}${ext}`,
-            parents: [folderId]
-          },
-          media: {
-            mimeType,
-            body: stream
-          },
-          fields: 'id, webViewLink',
-          supportsAllDrives: true
-        });
-
-        const driveFileId = driveRes.data.id;
-        if (driveFileId) {
-          try {
-            await drive.permissions.create({
-              fileId: driveFileId,
-              requestBody: { role: 'reader', type: 'anyone' },
-              supportsAllDrives: true
-            });
-          } catch (pErr: any) {
-            // Permission inherited
-          }
-          if (ext === '.xlsx' || ext === '.xls' || ext === '.pdf') {
-            finalFileUrl = `/uploads/p5m/${localFileName}`;
-          } else {
-            finalFileUrl = `https://lh3.googleusercontent.com/d/${driveFileId}`;
-          }
-        }
-      } catch (dErr: any) {
-        console.warn("Drive upload failed, using local fallback URL:", dErr.message);
-        finalFileUrl = `/uploads/p5m/${localFileName}`;
-      }
+    if (base64Data && filename) {
+      finalFileUrl = await saveMateriFile(filename, base64Data, cleanJudul, Boolean(isInternal));
     }
 
     const inserted = await db.insert(p5mMateri).values({
@@ -693,7 +691,7 @@ p5mRouter.post("/materi", async (req, res) => {
   }
 });
 
-// Bulk Insert P5M Materi with optional bulk prefix
+// Bulk Insert P5M Materi with optional bulk prefix and file attachments
 p5mRouter.post("/materi/bulk", async (req, res) => {
   try {
     const { 
@@ -708,18 +706,19 @@ p5mRouter.post("/materi/bulk", async (req, res) => {
       stripNumbering = true
     } = req.body;
 
-    let titleList: string[] = [];
+    let itemList: any[] = [];
 
-    if (typeof rawText === 'string') {
-      titleList = rawText
+    if (Array.isArray(items) && items.length > 0) {
+      itemList = items;
+    } else if (typeof rawText === 'string') {
+      itemList = rawText
         .split('\n')
         .map(line => line.trim())
-        .filter(line => line.length > 0);
-    } else if (Array.isArray(items)) {
-      titleList = items.map(item => (typeof item === 'string' ? item : item.judul || '')).filter(t => t.trim().length > 0);
+        .filter(line => line.length > 0)
+        .map(judul => ({ judul }));
     }
 
-    if (titleList.length === 0) {
+    if (itemList.length === 0) {
       return res.status(400).json({ success: false, message: "Daftar judul materi tidak boleh kosong" });
     }
 
@@ -740,7 +739,8 @@ p5mRouter.post("/materi/bulk", async (req, res) => {
     let skippedCount = 0;
     const addedTitles = new Set<string>();
 
-    for (let rawTitle of titleList) {
+    for (let rawItem of itemList) {
+      const rawTitle = typeof rawItem === 'string' ? rawItem : rawItem.judul || '';
       let cleanTitle = rawTitle.trim();
 
       // Automatically strip numbers/bullet markers (e.g. "1. ", "1) ", "- ", "• ")
@@ -768,9 +768,10 @@ p5mRouter.post("/materi/bulk", async (req, res) => {
       addedTitles.add(lowerJudul);
 
       // Determine category, subcategory, division
-      let kat = defaultKategori;
-      let subKat = defaultSubKategori;
-      let div = defaultDivisi;
+      let kat = (typeof rawItem !== 'string' && rawItem.kategori) || defaultKategori;
+      let subKat = (typeof rawItem !== 'string' && rawItem.subKategori) || defaultSubKategori;
+      let div = (typeof rawItem !== 'string' && rawItem.divisi) || defaultDivisi;
+      const itemIsInternal = typeof rawItem !== 'string' && rawItem.isInternal !== undefined ? Boolean(rawItem.isInternal) : Boolean(isInternal);
 
       if (!kat || kat === 'auto') {
         const classified = classifyTopic(finalJudul);
@@ -779,13 +780,23 @@ p5mRouter.post("/materi/bulk", async (req, res) => {
         div = classified.divisi;
       }
 
+      // Handle attached file if present
+      let itemFileUrl: string | null = (typeof rawItem !== 'string' && rawItem.fileUrl) || null;
+      if (typeof rawItem !== 'string' && rawItem.base64Data && rawItem.filename) {
+        try {
+          itemFileUrl = await saveMateriFile(rawItem.filename, rawItem.base64Data, finalJudul, itemIsInternal);
+        } catch (e: any) {
+          console.error("Error saving bulk file:", e);
+        }
+      }
+
       toInsert.push({
         judul: finalJudul,
         kategori: kat,
         subKategori: subKat,
         divisi: div,
-        fileUrl: null,
-        isInternal: Boolean(isInternal),
+        fileUrl: itemFileUrl,
+        isInternal: itemIsInternal,
         lastUsed: null
       });
     }

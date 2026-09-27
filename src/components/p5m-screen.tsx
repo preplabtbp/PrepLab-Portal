@@ -5,7 +5,8 @@ import {
   BookOpen, History, Users, Sparkles, Filter, Search, X, Layers,
   ChevronLeft, ArrowRight, ArrowLeft, Shield, ShieldAlert, Award, CheckCircle2, FileText,
   Briefcase, Loader2, Star, Eye, RefreshCw, Image as ImageIcon, ExternalLink,
-  Building2, FileSpreadsheet, Tag, CheckSquare, Square
+  Building2, FileSpreadsheet, Tag, CheckSquare, Square,
+  UploadCloud, Paperclip
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import * as XLSX from 'xlsx';
@@ -13,6 +14,20 @@ import { Card, Button, Input } from './ui';
 import { toast } from 'sonner';
 import { getFlyerInfo } from '../lib/p5m-flyer';
 import { ExcelViewer } from './ExcelViewer';
+
+// Helper to clean file names into well-formatted material titles
+export const cleanFilenameToTitle = (filename: string, stripNumbering = true): string => {
+  if (!filename) return '';
+  // 1. Remove file extension
+  let name = filename.replace(/\.[^/.]+$/, '');
+  // 2. Strip leading numbers or bullet markers like "01. ", "01 - ", "1_", "1. ", "• "
+  if (stripNumbering) {
+    name = name.replace(/^(\d+[\.\)\-:_]|\-|\*|•)\s*/, '');
+  }
+  // 3. Replace underscores and multiple spaces with a clean single space
+  name = name.replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return name;
+};
 
 // ============================================================
 // KONSTANTA & STRUKTUR DEFAULT
@@ -368,8 +383,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
   // Bulk Materi States
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkMode, setBulkMode] = useState<'files' | 'text'>('files');
   const [bulkPrefix, setBulkPrefix] = useState('');
   const [bulkRawText, setBulkRawText] = useState('');
+  const [bulkAttachedFiles, setBulkAttachedFiles] = useState<Array<{
+    file: File;
+    filename: string;
+    rawTitle: string;
+    base64Data: string;
+    sizeFormatted: string;
+    isImage: boolean;
+    isExcel: boolean;
+    isPdf: boolean;
+  }>>([]);
+  const [isReadingBulkFiles, setIsReadingBulkFiles] = useState(false);
   const [bulkDefaultKategori, setBulkDefaultKategori] = useState('auto');
   const [bulkDefaultSubKategori, setBulkDefaultSubKategori] = useState('General');
   const [bulkDefaultDivisi, setBulkDefaultDivisi] = useState('All');
@@ -1126,13 +1153,99 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
     }
   };
 
-  // Live calculation of bulk parsed items
+  // Multi-file selection handler for Bulk Materi Modal
+  const handleBulkFilesSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsReadingBulkFiles(true);
+    try {
+      const fileList = Array.from(files);
+      const newItems: typeof bulkAttachedFiles = [];
+
+      for (const file of fileList) {
+        if (file.size > 30 * 1024 * 1024) {
+          toast.warning(`File "${file.name}" dilewati karena lebih dari 30MB`);
+          continue;
+        }
+
+        const isImg = file.type.startsWith('image/');
+        const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+        const isPdf = !isExcel && file.name.endsWith('.pdf');
+
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        const sizeFormatted = file.size < 1024 * 1024 
+          ? `${(file.size / 1024).toFixed(1)} KB` 
+          : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+
+        newItems.push({
+          file,
+          filename: file.name,
+          rawTitle: cleanFilenameToTitle(file.name, bulkStripNumbering),
+          base64Data,
+          sizeFormatted,
+          isImage: isImg,
+          isExcel,
+          isPdf
+        });
+      }
+
+      setBulkAttachedFiles(prev => [...prev, ...newItems]);
+      toast.success(`Berhasil membaca ${newItems.length} berkas. Nama file otomatis dijadikan judul materi.`);
+    } catch (err: any) {
+      toast.error('Gagal membaca berkas lampiran: ' + err.message);
+    } finally {
+      setIsReadingBulkFiles(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveBulkFile = (idx: number) => {
+    setBulkAttachedFiles(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  // Live calculation of bulk parsed items (from attached files or text)
   const parsedBulkItems = useMemo(() => {
-    if (!bulkRawText.trim()) return [];
-    const lines = bulkRawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const cleanPrefix = bulkPrefix.trim();
     const existingJudulSet = new Set(materiList.map(m => (m.judul || '').trim().toLowerCase()));
     const seenInBatch = new Set<string>();
+
+    // 1. If in files mode (or files are attached)
+    if (bulkMode === 'files') {
+      if (bulkAttachedFiles.length === 0) return [];
+      return bulkAttachedFiles.map((bf) => {
+        let clean = cleanFilenameToTitle(bf.filename, bulkStripNumbering);
+        let finalTitle = clean;
+        if (cleanPrefix) {
+          if (!clean.toLowerCase().startsWith(cleanPrefix.toLowerCase())) {
+            finalTitle = `${cleanPrefix} ${clean}`.trim();
+          }
+        }
+        const lower = finalTitle.toLowerCase();
+        const isDuplicateInDb = existingJudulSet.has(lower);
+        const isDuplicateInBatch = seenInBatch.has(lower);
+        seenInBatch.add(lower);
+
+        return {
+          original: bf.filename,
+          title: finalTitle,
+          isDuplicate: isDuplicateInDb || isDuplicateInBatch,
+          isExistingInDb: isDuplicateInDb,
+          hasFile: true,
+          fileInfo: bf
+        };
+      });
+    }
+
+    // 2. If in text mode
+    if (!bulkRawText.trim()) return [];
+    const lines = bulkRawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
     return lines.map((raw) => {
       let clean = raw;
@@ -1154,38 +1267,68 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         original: raw,
         title: finalTitle,
         isDuplicate: isDuplicateInDb || isDuplicateInBatch,
-        isExistingInDb: isDuplicateInDb
+        isExistingInDb: isDuplicateInDb,
+        hasFile: false,
+        fileInfo: null
       };
     });
-  }, [bulkRawText, bulkPrefix, bulkStripNumbering, materiList]);
+  }, [bulkMode, bulkAttachedFiles, bulkRawText, bulkPrefix, bulkStripNumbering, materiList]);
 
   const handleSaveBulkMateri = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bulkRawText.trim()) {
+    if (bulkMode === 'files' && bulkAttachedFiles.length === 0) {
+      toast.warning('Pilih minimal 1 berkas lampiran untuk mode baca nama file');
+      return;
+    }
+    if (bulkMode === 'text' && !bulkRawText.trim()) {
       toast.warning('Daftar judul materi belum diisi');
       return;
     }
 
     if (parsedBulkItems.length === 0) {
-      toast.warning('Tidak ada judul materi yang valid');
+      toast.warning('Tidak ada judul materi yang valid untuk disimpan');
       return;
     }
 
     setIsSavingBulk(true);
     try {
+      let payload: any = {
+        prefix: bulkPrefix,
+        defaultKategori: bulkDefaultKategori,
+        defaultSubKategori: bulkDefaultSubKategori,
+        defaultDivisi: bulkDefaultDivisi,
+        isInternal: bulkIsInternal,
+        skipDuplicates: bulkSkipDuplicates,
+        stripNumbering: bulkStripNumbering
+      };
+
+      if (bulkMode === 'files' && bulkAttachedFiles.length > 0) {
+        payload.items = bulkAttachedFiles.map(bf => {
+          let clean = cleanFilenameToTitle(bf.filename, bulkStripNumbering);
+          let finalTitle = clean;
+          if (bulkPrefix.trim()) {
+            if (!clean.toLowerCase().startsWith(bulkPrefix.trim().toLowerCase())) {
+              finalTitle = `${bulkPrefix.trim()} ${clean}`.trim();
+            }
+          }
+          return {
+            judul: finalTitle,
+            filename: bf.filename,
+            base64Data: bf.base64Data,
+            kategori: bulkDefaultKategori,
+            subKategori: bulkDefaultSubKategori,
+            divisi: bulkDefaultDivisi,
+            isInternal: bulkIsInternal
+          };
+        });
+      } else {
+        payload.rawText = bulkRawText;
+      }
+
       const res = await fetch('/api/p5m/materi/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prefix: bulkPrefix,
-          rawText: bulkRawText,
-          defaultKategori: bulkDefaultKategori,
-          defaultSubKategori: bulkDefaultSubKategori,
-          defaultDivisi: bulkDefaultDivisi,
-          isInternal: bulkIsInternal,
-          skipDuplicates: bulkSkipDuplicates,
-          stripNumbering: bulkStripNumbering
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (data.success) {
@@ -1194,6 +1337,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         setBulkModalOpen(false);
         setBulkRawText('');
         setBulkPrefix('');
+        setBulkAttachedFiles([]);
       } else {
         toast.error('Gagal menambahkan materi: ' + (data.message || 'Error'));
       }
@@ -2737,7 +2881,24 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
             <form onSubmit={handleSaveMateriModal} className="space-y-3.5 text-xs">
               <div>
-                <label className="block text-[var(--text-main)] font-semibold mb-1">Judul Materi / Topik Briefing *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[var(--text-main)] font-semibold">Judul Materi / Topik Briefing *</label>
+                  {formImageFilename && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const auto = cleanFilenameToTitle(formImageFilename, true);
+                        setFormJudul(auto);
+                        toast.success(`Judul diset dari nama file: "${auto}"`);
+                      }}
+                      className="text-[10px] text-teal-600 dark:text-teal-400 hover:text-teal-500 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Gunakan nama file lampiran sebagai judul materi"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Gunakan nama file sebagai judul</span>
+                    </button>
+                  )}
+                </div>
                 <textarea
                   required
                   rows={2}
@@ -2852,6 +3013,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                         <div className="text-xs font-bold text-[var(--text-main)] truncate">
                           {formImageFilename || (isExcelUpload ? 'Spreadsheet Excel Terlampir' : isPdfUpload ? 'Dokumen PDF Terlampir' : 'Flyer Terlampir')}
                         </div>
+                        {formImageFilename && formJudul !== cleanFilenameToTitle(formImageFilename, true) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const auto = cleanFilenameToTitle(formImageFilename, true);
+                              setFormJudul(auto);
+                              toast.success(`Judul diset dari nama file: "${auto}"`);
+                            }}
+                            className="mt-1 text-[11px] text-teal-600 dark:text-teal-400 hover:text-teal-500 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            <span>Jadikan nama file sebagai judul: "{cleanFilenameToTitle(formImageFilename, true)}"</span>
+                          </button>
+                        )}
                         <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1.5 mt-0.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                           <span>
@@ -2902,6 +3077,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                             return;
                           }
                           setFormImageFilename(file.name);
+                          const autoTitle = cleanFilenameToTitle(file.name, true);
+                          if (!formJudul.trim()) {
+                            setFormJudul(autoTitle);
+                            toast.info(`Judul materi otomatis diisi dari nama file: "${autoTitle}"`);
+                          }
                           const isImg = file.type.startsWith('image/');
                           const reader = new FileReader();
                           reader.onload = (evt) => {
@@ -3053,26 +3233,172 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </div>
               </div>
 
-              {/* Textarea Daftar Judul */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[var(--text-main)] font-bold text-xs flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Daftar Judul Materi (Satu Baris per Materi) *</span>
-                  </label>
-                  <span className="text-[11px] font-mono text-[var(--text-muted)]">
-                    {parsedBulkItems.length} materi terdeteksi
+              {/* Tab Pemilihan Mode: Lampirkan Berkas vs Tempel Teks */}
+              <div className="flex items-center gap-1.5 p-1 bg-[var(--input-bg)] rounded-xl border border-[var(--border-main)]">
+                <button
+                  type="button"
+                  onClick={() => setBulkMode('files')}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    bulkMode === 'files'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                  }`}
+                >
+                  <Paperclip className="w-3.5 h-3.5" />
+                  <span>Lampirkan Berkas ({bulkAttachedFiles.length})</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-normal ${
+                    bulkMode === 'files' ? 'bg-teal-700 text-teal-100' : 'bg-[var(--card-bg)] text-[var(--text-muted)]'
+                  }`}>
+                    Baca Nama File
                   </span>
-                </div>
-                <textarea
-                  required
-                  rows={6}
-                  value={bulkRawText}
-                  onChange={e => setBulkRawText(e.target.value)}
-                  placeholder={`Tempel daftar materi di sini (satu baris per judul). Contoh:\n1. Penggunaan Alat Pelindung Diri (APD) di Ruang Prep\n2. Prosedur Tanggap Darurat Tumpahan Bahan Kimia\n3. Ergonomi Kerja dan Manual Handling\n4. Inspeksi Kelayakan Dust Collector`}
-                  className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-3 text-xs text-[var(--text-main)] outline-none focus:border-teal-500 font-mono transition-colors resize-y leading-relaxed"
-                />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkMode('text')}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    bulkMode === 'text'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Tempel Teks ({bulkRawText.split('\n').filter(l => l.trim().length > 0).length})</span>
+                </button>
               </div>
+
+              {/* Mode 1: Lampirkan Banyak File (Otomatis Baca Nama File) */}
+              {bulkMode === 'files' && (
+                <div className="space-y-3">
+                  <label className="border-2 border-dashed border-teal-500/40 hover:border-teal-500 bg-teal-500/5 hover:bg-teal-500/10 rounded-2xl p-5 flex flex-col items-center justify-center cursor-pointer transition-all group">
+                    <div className="w-12 h-12 rounded-2xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-600 dark:text-teal-400 mb-2 group-hover:scale-105 transition-transform">
+                      {isReadingBulkFiles ? (
+                        <Loader2 className="w-6 h-6 animate-spin" />
+                      ) : (
+                        <UploadCloud className="w-6 h-6" />
+                      )}
+                    </div>
+                    <span className="text-xs font-bold text-[var(--text-main)] text-center">
+                      Klik untuk memilih banyak berkas sekaligus (atau seret berkas ke sini)
+                    </span>
+                    <p className="text-[11px] text-[var(--text-muted)] text-center mt-1 max-w-md">
+                      Sistem akan <strong>otomatis membaca nama setiap berkas</strong> menjadi judul materi P5M serta mengunggah dokumennya.
+                    </p>
+                    <span className="text-[10px] font-mono text-teal-600 dark:text-teal-400 mt-2 bg-teal-500/15 px-2.5 py-1 rounded-full border border-teal-500/30">
+                      Mendukung Gambar (PNG/JPG), Dokumen PDF, &amp; Spreadsheet Excel (.xlsx / .xls)
+                    </span>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*,.pdf,.xlsx,.xls"
+                      className="hidden"
+                      disabled={isReadingBulkFiles}
+                      onChange={handleBulkFilesSelect}
+                    />
+                  </label>
+
+                  {/* List of Attached Files */}
+                  {bulkAttachedFiles.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-[var(--text-main)] flex items-center gap-1.5">
+                          <Paperclip className="w-3.5 h-3.5 text-teal-600" />
+                          <span>Berkas Terlampir ({bulkAttachedFiles.length} file)</span>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const lines = bulkAttachedFiles.map(f => cleanFilenameToTitle(f.filename, bulkStripNumbering));
+                              setBulkRawText(lines.join('\n'));
+                              setBulkMode('text');
+                              toast.info('Judul file berhasil disalin ke mode teks');
+                            }}
+                            className="text-[11px] text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer"
+                          >
+                            Salin ke Mode Teks
+                          </button>
+                          <span className="text-[var(--text-muted)]">•</span>
+                          <button
+                            type="button"
+                            onClick={() => setBulkAttachedFiles([])}
+                            className="text-[11px] text-rose-500 hover:underline font-semibold cursor-pointer"
+                          >
+                            Hapus Semua
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="max-h-44 overflow-y-auto rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)]/80 divide-y divide-[var(--border-main)] p-1 text-xs">
+                        {bulkAttachedFiles.map((bf, idx) => {
+                          const clean = cleanFilenameToTitle(bf.filename, bulkStripNumbering);
+                          const cleanP = bulkPrefix.trim();
+                          return (
+                            <div key={idx} className="p-2 flex items-center justify-between gap-2.5 rounded-lg hover:bg-[var(--card-bg)] transition-colors">
+                              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border border-[var(--border-main)] bg-[var(--card-bg)]">
+                                {bf.isExcel ? (
+                                  <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                                ) : bf.isPdf ? (
+                                  <FileText className="w-4 h-4 text-rose-500" />
+                                ) : (
+                                  <ImageIcon className="w-4 h-4 text-sky-500" />
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-bold text-[var(--text-main)] truncate flex items-center gap-1">
+                                  {cleanP && (
+                                    <span className="text-teal-600 dark:text-teal-400 bg-teal-500/15 px-1 py-0.2 rounded text-[10px] font-mono">
+                                      {cleanP}
+                                    </span>
+                                  )}
+                                  <span>{clean}</span>
+                                </div>
+                                <div className="text-[10px] text-[var(--text-muted)] font-mono flex items-center gap-2 mt-0.5 truncate">
+                                  <span>{bf.filename}</span>
+                                  <span>•</span>
+                                  <span>{bf.sizeFormatted}</span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveBulkFile(idx)}
+                                className="p-1.5 text-[var(--text-muted)] hover:text-rose-500 rounded-lg transition-colors cursor-pointer"
+                                title="Hapus file ini"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Mode 2: Tempel Teks Judul */}
+              {bulkMode === 'text' && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[var(--text-main)] font-bold text-xs flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Daftar Judul Materi (Satu Baris per Materi) *</span>
+                    </label>
+                    <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                      {parsedBulkItems.length} materi terdeteksi
+                    </span>
+                  </div>
+                  <textarea
+                    rows={6}
+                    value={bulkRawText}
+                    onChange={e => setBulkRawText(e.target.value)}
+                    placeholder={`Tempel daftar materi di sini (satu baris per judul). Contoh:\n1. Penggunaan Alat Pelindung Diri (APD) di Ruang Prep\n2. Prosedur Tanggap Darurat Tumpahan Bahan Kimia\n3. Ergonomi Kerja dan Manual Handling\n4. Inspeksi Kelayakan Dust Collector`}
+                    className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-3 text-xs text-[var(--text-main)] outline-none focus:border-teal-500 font-mono transition-colors resize-y leading-relaxed"
+                  />
+                  <div className="mt-1 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                    <span>💡 Tips: Beralih ke tab "Lampirkan Berkas" untuk otomatis membaca nama file PDF / Excel / Flyer.</span>
+                  </div>
+                </div>
+              )}
 
               {/* Smart Options Checkboxes */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -3084,7 +3410,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-[var(--border-main)] cursor-pointer"
                   />
                   <span className="text-[var(--text-main)]">
-                    Bersihkan otomatis nomor urut (misal: <code>1. </code>, <code>2) </code>, <code>- </code>, <code>• </code>)
+                    Bersihkan otomatis nomor urut (misal: <code>01. </code>, <code>1) </code>, <code>- </code>, <code>• </code>)
                   </span>
                 </label>
 
@@ -3181,7 +3507,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     )}
                   </div>
 
-                  <div className="max-h-40 overflow-y-auto rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)]/80 divide-y divide-[var(--border-main)] p-1 text-xs">
+                  <div className="max-h-44 overflow-y-auto rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)]/80 divide-y divide-[var(--border-main)] p-1 text-xs">
                     {parsedBulkItems.map((item, idx) => (
                       <div 
                         key={idx} 
@@ -3195,6 +3521,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                           <span className="font-mono text-[10px] text-[var(--text-muted)] w-6 shrink-0">
                             #{idx + 1}
                           </span>
+                          {item.hasFile && item.fileInfo && (
+                            <span className="shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                              {item.fileInfo.isExcel ? 'Excel' : item.fileInfo.isPdf ? 'PDF' : 'Flyer'}
+                            </span>
+                          )}
                           <span className="truncate font-semibold text-[var(--text-main)]">
                             {bulkPrefix && item.title.startsWith(bulkPrefix.trim()) ? (
                               <>
@@ -3231,7 +3562,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={isSavingBulk || parsedBulkItems.length === 0}
+                  disabled={isSavingBulk || isReadingBulkFiles || parsedBulkItems.length === 0}
                   className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs h-9 px-5 rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {isSavingBulk ? (
@@ -3243,7 +3574,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     <>
                       <Check className="w-3.5 h-3.5 mr-1" />
                       <span>
-                        Simpan {parsedBulkItems.filter(i => !bulkSkipDuplicates || !i.isDuplicate).length} Materi Sekaligus
+                        Simpan {parsedBulkItems.filter(i => !bulkSkipDuplicates || !i.isDuplicate).length} Materi {bulkMode === 'files' && bulkAttachedFiles.length > 0 ? 'Beserta Berkas' : 'Sekaligus'}
                       </span>
                     </>
                   )}

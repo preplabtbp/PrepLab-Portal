@@ -4,10 +4,22 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ## [2.9.33] - 2026-09-27
 
-### 📚 Penambahan Materi P5M Secara Bulk, Awalan Judul (Bulk Prefix), Operasi Batch & Hak Akses Developer
+### 📚 Penambahan Materi P5M Secara Bulk, Pembacaan Otomatis Nama Berkas Lampiran Menjadi Judul, Awalan Judul (Bulk Prefix) & Hak Akses Developer
+
+- **Pembacaan Otomatis Nama Berkas Lampiran Menjadi Judul Materi (`src/components/p5m-screen.tsx`, `server/routes/p5m.ts`)**:
+  - **Mode Unggah Banyak Berkas Sekaligus (*Multi-File Attachment Dropzone*)**:
+    - Tab *"Lampirkan Berkas"* pada modal bulk materi memungkinkan pengguna memilih atau menyeret puluhan file sekaligus (mendukung gambar flyer PNG/JPG, dokumen PDF, dan spreadsheet Excel `.xlsx`/`.xls`).
+    - Sistem secara cerdas **membaca nama setiap file yang dilampirkan**, menghapus ekstensi file, membersihkan garis bawah (`_`) dan spasi ganda, serta mengonversinya menjadi judul materi P5M yang rapi.
+    - Dilengkapi pembersih nomor urut otomatis (*Smart Numbering Strip*) dari nama berkas (seperti `01_`, `1. `, `• `).
+    - Menerapkan **Awalan Judul (*Bulk Prefix*)** secara dinamis pada seluruh nama berkas terlampir (misal: file `01_Operasional_Jaw_Crusher.pdf` dengan prefix `P5M - ` otomatis menjadi `P5M - Operasional Jaw Crusher`).
+    - Kartu daftar berkas interaktif menampilkan ikon jenis dokumen (Flyer/PDF/Excel), pratinjau judul akhir dengan *badge* warna awalan, nama file asli, ukuran dokumen, serta tombol hapus per berkas dan tombol *"Salin ke Mode Teks"*.
+    - Saat disimpan, sistem membuat materi baru di database sekaligus mengunggah dan menautkan file lampiran ke Google Drive / penyimpanan cloud lokal.
+  - **Otomatisasi Nama Berkas pada Unggah Materi Tunggal (*Single Materi Modal*)**:
+    - Saat memilih berkas flyer, PDF, atau Excel pada modal tambah/edit materi, jika kolom judul masih kosong, sistem otomatis mengisi judul materi dari nama berkas yang dibersihkan.
+    - Disediakan tombol aksi cepat *"✨ Gunakan nama file sebagai judul"* pada label judul dan kartu berkas lampiran untuk menyinkronkan judul dengan nama berkas secara instan hanya dengan 1 klik.
 
 - **Fitur Penambahan Materi P5M Secara Bulk (`src/components/p5m-screen.tsx`, `server/routes/p5m.ts`)**:
-  - **Modal Interaktif Tambah Materi Bulk**: Tombol *"Tambah Materi Bulk"* di tab Bank Materi P5M memungkinkan pengguna menambahkan puluhan hingga ratusan judul materi sekaligus hanya dengan menyalin dan menempelkan teks daftar materi (satu baris per judul).
+  - **Modal Interaktif Tambah Materi Bulk**: Tombol *"Tambah Materi Bulk"* di tab Bank Materi P5M memungkinkan pengguna menambahkan puluhan hingga ratusan judul materi sekaligus melalui unggah berkas atau menyalin daftar teks (satu baris per judul).
   - **Dukungan Awalan Judul Seragam (*Bulk Prefix*)**:
     - Kolom input khusus untuk menambahkan awalan judul yang secara otomatis disematkan di depan setiap judul materi (misal: `P5M - `, `[P5M] `, `Safety Talk: `, `SOP - `, `IK - `, `K3: `, dsb.).
     - Dilengkapi *chip preset* sekali-klik untuk pilihan awalan umum yang sering digunakan personil K3 & Lab.
@@ -15,7 +27,7 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - **Pembersihan Otomatis Nomor Urut & Poin (*Smart Numbering Strip*)**: Opsi pembersih cerdas yang secara otomatis menghapus nomor urut atau simbol poin (seperti `1. `, `2) `, `- `, `• `) dari teks yang disalin dari WhatsApp, Excel, Word, atau catatan rapat.
   - **Pencegahan Duplikasi (*Skip Duplicates*)**: Opsi untuk otomatis memeriksa keberadaan materi di database PostgreSQL dan melewati judul yang sudah terdaftar agar bank data tetap rapi tanpa duplikat.
   - **Pengaturan Kategori & Divisi Default**: Mendukung klasifikasi otomatis (*Smart Auto-Categorization*) berbasis kata kunci teknis/non-teknis, atau penetapan manual ke sub-kategori (*General*, *Preparation*, *Laboratory*, *Maintenance*) dan target divisi.
-  - **Pratinjau Langsung (*Live Real-Time Preview*)**: Menampilkan kalkulasi jumlah materi terdeteksi dan pratinjau judul akhir dengan *highlight* warna awalan sebelum disimpan ke database.
+  - **Pratinjau Langsung (*Live Real-Time Preview*)**: Menampilkan kalkulasi jumlah materi terdeteksi dan pratinjau judul akhir dengan *highlight* warna awalan dan label tipe berkas sebelum disimpan ke database.
 
 - **Operasi Batch pada Tabel Materi P5M (`src/components/p5m-screen.tsx`, `server/routes/p5m.ts`)**:
   - **Kotak Centang Pilihan Baris (*Row Selection Checkboxes*)**: Memungkinkan pengguna memilih satu, beberapa, atau seluruh materi di tabel data.
