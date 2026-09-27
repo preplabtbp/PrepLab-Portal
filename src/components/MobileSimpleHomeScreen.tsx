@@ -5,7 +5,7 @@ import {
   FileText, MessageSquare, Trophy, Sparkles, ChevronRight, 
   CheckCircle2, Clock, AlertTriangle, ArrowRight, Settings2,
   ThermometerSun, Heart, RefreshCw, Smartphone, Eye, ShieldAlert,
-  Wrench, PlusCircle, BarChart3
+  Wrench, PlusCircle, BarChart3, BookOpen, GraduationCap, Award
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FoodReportModal } from './food-report-modal';
@@ -1157,30 +1157,35 @@ export function MobileSimpleHomeScreen({
       )}
 
       {/* ── SECTION: TUGAS TAMBAHAN & MODUL CEPAT ── */}
-      <div className="space-y-2">
+      {/* ── SECTION: TUGAS TAMBAHAN & MODUL CEPAT ── */}
+      <div className="space-y-2.5">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-xs font-black uppercase tracking-wider text-[var(--text-muted)]">
-            Modul Pendukung Lainnya
+          <h3 className="text-xs font-black uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+            <span>Modul Pendukung &amp; Edukasi</span>
           </h3>
+          <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+            Akses Cepat
+          </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           {/* Pemantauan Lab (if lab) or Inspeksi Mingguan */}
           {isLaboratory ? (
             <button
               type="button"
               onClick={() => onNav('pemantauan')}
-              className="flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer"
+              className="flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer group"
               style={{
                 backgroundColor: 'var(--card-bg, #FFFFFF)',
                 borderColor: 'var(--border-main, #E2E8F0)'
               }}
             >
-              <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center mb-1.5">
+              <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
                 <ThermometerSun className="w-4 h-4" />
               </div>
-              <span className="text-[10px] font-bold text-[var(--text-main)] leading-tight">
-                Pemantauan Lab
+              <span className="text-[9.5px] font-bold text-[var(--text-main)] leading-tight truncate w-full">
+                Pemantauan
               </span>
             </button>
           ) : (
@@ -1190,35 +1195,53 @@ export function MobileSimpleHomeScreen({
                 setInspectionDefaultTab('weekly');
                 setShowInspectionModal(true);
               }}
-              className="flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer"
+              className="flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer group"
               style={{
                 backgroundColor: 'var(--card-bg, #FFFFFF)',
                 borderColor: 'var(--border-main, #E2E8F0)'
               }}
             >
-              <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center mb-1.5">
+              <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
                 <ClipboardList className="w-4 h-4" />
               </div>
-              <span className="text-[10px] font-bold text-[var(--text-main)] leading-tight">
-                Inspeksi Mingguan
+              <span className="text-[9.5px] font-bold text-[var(--text-main)] leading-tight truncate w-full">
+                Inspeksi
               </span>
             </button>
           )}
+
+          {/* Menu Quiz Safety & SOP */}
+          <button
+            type="button"
+            onClick={() => onNav('quiz')}
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer group"
+            style={{
+              backgroundColor: 'var(--card-bg, #FFFFFF)',
+              borderColor: 'rgba(59, 130, 246, 0.4)'
+            }}
+          >
+            <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+              <BookOpen className="w-4 h-4" />
+            </div>
+            <span className="text-[9.5px] font-bold text-[var(--text-main)] leading-tight truncate w-full">
+              Quiz Safety
+            </span>
+          </button>
 
           {/* Sistem APD */}
           <button
             type="button"
             onClick={() => onNav('apd-input')}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer group"
             style={{
               backgroundColor: 'var(--card-bg, #FFFFFF)',
               borderColor: 'var(--border-main, #E2E8F0)'
             }}
           >
-            <div className="w-8 h-8 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center mb-1.5">
+            <div className="w-8 h-8 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
               <Shield className="w-4 h-4" />
             </div>
-            <span className="text-[10px] font-bold text-[var(--text-main)] leading-tight">
+            <span className="text-[9.5px] font-bold text-[var(--text-main)] leading-tight truncate w-full">
               Sistem APD
             </span>
           </button>
@@ -1227,20 +1250,56 @@ export function MobileSimpleHomeScreen({
           <button
             type="button"
             onClick={() => onNav('bulletin')}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer group"
             style={{
               backgroundColor: 'var(--card-bg, #FFFFFF)',
               borderColor: 'var(--border-main, #E2E8F0)'
             }}
           >
-            <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mb-1.5">
+            <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
               <FileText className="w-4 h-4" />
             </div>
-            <span className="text-[10px] font-bold text-[var(--text-main)] leading-tight">
+            <span className="text-[9.5px] font-bold text-[var(--text-main)] leading-tight truncate w-full">
               Buletin K3
             </span>
           </button>
         </div>
+
+        {/* Featured Quiz Banner Card for Crew */}
+        <button
+          type="button"
+          onClick={() => onNav('quiz')}
+          className="w-full p-3.5 rounded-2xl border text-left flex items-center justify-between gap-3 shadow-xs hover:shadow-md active:scale-98 transition-all cursor-pointer overflow-hidden relative group"
+          style={{
+            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(99, 102, 241, 0.05) 100%)',
+            borderColor: 'rgba(59, 130, 246, 0.35)'
+          }}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 bg-blue-500/15 text-blue-600 border-blue-500/30 group-hover:scale-105 transition-transform">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9.5px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded-md border bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/25">
+                  Quiz Safety &amp; SOP
+                </span>
+                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
+                  <Sparkles className="w-3 h-3 inline" /> +250 EXP
+                </span>
+              </div>
+              <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-blue-600 transition-colors leading-tight mt-0.5 truncate">
+                Uji Pemahaman Prosedur &amp; Keselamatan
+              </h4>
+              <p className="text-[10px] text-[var(--text-muted)] truncate">
+                Ikuti kuis mingguan untuk asah SOP &amp; tingkatkan peringkat di Leaderboard
+              </p>
+            </div>
+          </div>
+          <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0 group-hover:translate-x-0.5 transition-transform">
+            <ChevronRight className="w-4 h-4" />
+          </div>
+        </button>
       </div>
 
       {/* ── SECTION: CHAT & HALL OF FAME ROW ── */}

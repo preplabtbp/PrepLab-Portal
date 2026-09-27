@@ -4,7 +4,12 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ## [2.9.33] - 2026-09-27
 
-### 📚 Penambahan Materi P5M Secara Bulk, Pembacaan Otomatis Nama Berkas Lampiran Menjadi Judul, Awalan Judul (Bulk Prefix) & Hak Akses Developer
+### 📚 Penambahan Materi P5M Secara Bulk, Menu Quiz Mode Simple Crew, Awalan Judul (Bulk Prefix) & Hak Akses Developer
+
+- **Menu Quiz Safety & SOP pada Tampilan Mode Sederhana Crew (`src/components/MobileSimpleHomeScreen.tsx`)**:
+  - **Grid Modul Cepat 4 Kolom**: Menambahkan tombol akses langsung *"Quiz Safety"* pada deretan modul pendukung utama di halaman awal mode sederhana crew (berdampingan dengan Pemantauan/Inspeksi, Sistem APD, dan Buletin K3).
+  - **Kartu Banner Interaktif Quiz Safety & SOP**: Menghadirkan kartu visual khusus bertema biru safir dengan ikon buku/edukasi dan lencana reward *+250 EXP* yang mengajak kru menguji pemahaman SOP, keselamatan kerja, serta meningkatkan peringkat di Leaderboard secara instan.
+  - **Navigasi Cepat Terintegrasi**: Mengarahkan kru langsung ke modul ujian `/quiz` dengan transisi mulus dan penyimpanan progres otomatis.
 
 - **Pembacaan Otomatis Nama Berkas Lampiran Menjadi Judul Materi (`src/components/p5m-screen.tsx`, `server/routes/p5m.ts`)**:
   - **Mode Unggah Banyak Berkas Sekaligus (*Multi-File Attachment Dropzone*)**:
