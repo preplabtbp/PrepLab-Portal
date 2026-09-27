@@ -6,6 +6,13 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ### 📚 Penambahan Materi P5M Secara Bulk, Menu Quiz Mode Simple Crew, Awalan Judul (Bulk Prefix) & Hak Akses Developer
 
+- **Perbaikan Perhitungan Skor Kuis Saat Waktu Habis (*Quiz Auto-Submit On Timeout*) (`src/components/quiz-screen.tsx`)**:
+  - **Penghitungan Nilai dari Jawaban Riil (*Real Answer Evaluation on Expiry*)**: Mengatasi *stale closure bug* pada timer hitung mundur (`setInterval`) yang sebelumnya membaca objek jawaban awal yang kosong saat waktu pengerjaan habis sehingga nilai kru langsung menjadi 0%.
+  - **Sinkronisasi Referensi Terkini (*Latest Answer Reference Sync*)**: Mengimplementasikan `answersRef`, `questionsRef`, dan `quizVersionRef` serta *fallback* ke penyimpanan lokal (*localStorage autosave*) sehingga setiap butir soal yang sempat dijawab oleh kru tetap dihitung secara akurat sesuai persentase jawaban benar.
+  - **Notifikasi Ramah Kru**: Menampilkan pemberitahuan informatif (*toast warning*) saat waktu habis: *"Waktu kuis telah habis! Jawaban yang telah Anda isi telah dikumpulkan otomatis."*
+  - **Pencegahan Pengiriman Ganda (*Double-Submit Lock*)**: Menambahkan `isSubmittingRef` untuk mencegah balapan proses (*race condition*) antara klik tombol kumpulkan manual dan pemutusan otomatis oleh timer.
+  - **Reset Riwayat Kuis Mhd. Dahlan Ahmad**: Menghapus catatan kuis yang sebelumnya terlanjur tersimpan 0% untuk akun Mhd. Dahlan Ahmad (`M0206230531`) pada basis data PostgreSQL sehingga yang bersangkutan dapat langsung mengerjakan ulang kuis dengan perhitungan nilai yang tepat.
+
 - **Menu Quiz Safety & SOP pada Tampilan Mode Sederhana Crew (`src/components/MobileSimpleHomeScreen.tsx`)**:
   - **Grid Modul Cepat 4 Kolom**: Menambahkan tombol akses langsung *"Quiz Safety"* pada deretan modul pendukung utama di halaman awal mode sederhana crew (berdampingan dengan Pemantauan/Inspeksi, Sistem APD, dan Buletin K3).
   - **Kartu Banner Interaktif Quiz Safety & SOP**: Menghadirkan kartu visual khusus bertema biru safir dengan ikon buku/edukasi dan lencana reward *+250 EXP* yang mengajak kru menguji pemahaman SOP, keselamatan kerja, serta meningkatkan peringkat di Leaderboard secara instan.

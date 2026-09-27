@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button } from './ui';
 import { ArrowLeft, ArrowRight, CheckCircle, RefreshCcw, Activity, Timer } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,6 +22,16 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState(30 * 60);
   const [quizVersion, setQuizVersion] = useState<string>('');
+
+  const answersRef = useRef<Record<number, number>>({});
+  const quizVersionRef = useRef<string>('');
+  const questionsRef = useRef<Question[]>([]);
+  const isSubmittingRef = useRef<boolean>(false);
+  const timerRef = useRef<any>(null);
+
+  answersRef.current = answers;
+  quizVersionRef.current = quizVersion;
+  questionsRef.current = questions;
   
   useEffect(() => {
     const initQuiz = async () => {
@@ -55,6 +65,7 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
         }
         
         setQuestions(finalQuestions);
+        questionsRef.current = finalQuestions;
         let activeVersion = '';
         if (quizConfigSetting && quizConfigSetting.settingValue) {
            const parsed = JSON.parse(quizConfigSetting.settingValue);
@@ -65,15 +76,19 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
         if (savedData) {
           try {
             const parsed = JSON.parse(savedData);
-            setAnswers(parsed.answers || {});
+            const savedAnswers = parsed.answers || {};
+            answersRef.current = savedAnswers;
+            setAnswers(savedAnswers);
             setCurrentIndex(parsed.currentIndex || 0);
             setTimeLeft(parsed.timeLeft || (30 * 60));
           } catch(e) {
+            answersRef.current = {};
             setAnswers({});
             setCurrentIndex(0);
             setTimeLeft(30 * 60);
           }
         } else {
+          answersRef.current = {};
           setAnswers({});
           setCurrentIndex(0);
           setTimeLeft(30 * 60);
@@ -140,18 +155,31 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
   useEffect(() => {
     if (isFinished || loading || questions.length === 0) return;
     
-    const timer = setInterval(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          clearInterval(timer);
-          handleFinishQuiz();
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          if (!isSubmittingRef.current) {
+            isSubmittingRef.current = true;
+            handleFinishQuiz(answersRef.current, true);
+          }
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     
-    return () => clearInterval(timer);
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
   }, [isFinished, loading, questions.length]);
 
   const formatTime = (seconds: number) => {
@@ -161,10 +189,15 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
   };
 
   const handleSelectOption = (index: number) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questions[currentIndex].id]: index
-    }));
+    const qId = questions[currentIndex]?.id;
+    if (qId === undefined) return;
+    const newAnswers = {
+      ...answersRef.current,
+      ...answers,
+      [qId]: index
+    };
+    answersRef.current = newAnswers;
+    setAnswers(newAnswers);
   };
 
   const handleNext = () => {
@@ -180,20 +213,60 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
   };
 
   const handleSubmit = () => {
+    if (isSubmittingRef.current) return;
     if (window.confirm('Apakah Anda yakin ingin menyelesaikan kuis ini?')) {
-      handleFinishQuiz();
+      isSubmittingRef.current = true;
+      handleFinishQuiz(answersRef.current, false);
     }
   };
   
-  const handleFinishQuiz = async () => {
+  const handleFinishQuiz = async (overrideAnswers?: Record<number, number>, isTimeout = false) => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      // Gather answers prioritizing overrideAnswers -> answersRef.current -> answers state -> autosave storage
+      let effectiveAnswers: Record<number, number> = {
+        ...answers,
+        ...answersRef.current,
+        ...(overrideAnswers || {})
+      };
+
+      const currentVersion = quizVersionRef.current || quizVersion;
+      const currentNik = inspectorNik;
+
+      if (currentNik && currentVersion) {
+        const autosaveKey = `quiz_autosave_${currentNik}_${currentVersion}`;
+        const savedRaw = localStorage.getItem(autosaveKey);
+        if (savedRaw) {
+          try {
+            const parsed = JSON.parse(savedRaw);
+            if (parsed?.answers && typeof parsed.answers === 'object') {
+              effectiveAnswers = { ...parsed.answers, ...effectiveAnswers };
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+
+      const currentQuestions = questionsRef.current.length > 0 ? questionsRef.current : questions;
       let score = 0;
-      questions.forEach(q => {
-        if (answers[q.id] === q.correctAnswerIndex) score++;
+      currentQuestions.forEach(q => {
+        if (effectiveAnswers[q.id] === q.correctAnswerIndex) score++;
       });
-      const percentage = Math.round((score / questions.length) * 100);
+      const totalQ = currentQuestions.length > 0 ? currentQuestions.length : 1;
+      const percentage = Math.round((score / totalQ) * 100);
       setScoreData({ score, percentage });
       setIsFinished(true);
       
+      if (isTimeout) {
+        toast.warning('Waktu kuis telah habis! Jawaban yang telah Anda isi telah dikumpulkan otomatis.', {
+          duration: 6000
+        });
+      }
+
       // Submit score to backend
       try {
         const res = await fetch('/api/quiz-scores', {
@@ -204,19 +277,21 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
                 name: inspectorName,
                 department: userSection,
                 score,
-                totalQuestions: questions.length,
+                totalQuestions: currentQuestions.length,
                 percentage,
-                quizVersion
+                quizVersion: currentVersion
             })
         });
         if (!res.ok) {
            const err = await res.json();
            toast.error(err.error || 'Gagal menyimpan skor');
         } else {
-            toast.success('Kuis berhasil diselesaikan');
-            localStorage.removeItem(`quiz_autosave_${inspectorNik}_${quizVersion}`);
+            if (!isTimeout) {
+              toast.success('Kuis berhasil diselesaikan');
+            }
+            localStorage.removeItem(`quiz_autosave_${inspectorNik}_${currentVersion}`);
             if (percentage === 100) {
-              triggerExpGain(250, 'Kuis Nilai Sempurna 100%!', `Versi ${quizVersion || 'K3/SOP'}`);
+              triggerExpGain(250, 'Kuis Nilai Sempurna 100%!', `Versi ${currentVersion || 'K3/SOP'}`);
             } else if (percentage >= 70) {
               triggerExpGain(75, 'Kuis K3 Berhasil Lulus!', `Skor: ${percentage}%`);
             } else {
@@ -227,6 +302,8 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
       } catch (e) {
           console.error("Gagal menyimpan skor", e);
           toast.error("Gagal menyimpan skor kuis");
+      } finally {
+          isSubmittingRef.current = false;
       }
   };
 
