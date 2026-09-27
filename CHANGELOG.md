@@ -4,7 +4,18 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ## [2.9.33] - 2026-09-27
 
-### 📚 Penambahan Materi P5M Secara Bulk, Menu Quiz Mode Simple Crew, Awalan Judul (Bulk Prefix) & Hak Akses Developer
+### 📚 Perombakan Modul Quiz Kelas Enterprise, Penambahan Materi P5M Secara Bulk, Menu Quiz Mode Simple Crew & Hak Akses Developer
+
+- **Perombakan Total Modul Kuis Kelas Enterprise & Optimalisasi Tampilan Layar HP/Mobile (`src/components/quiz-screen.tsx`)**:
+  - **Tata Letak & Tipografi Anti-Terpotong (*Safe Responsive Typography*)**: Merombak tampilan soal dan opsi pilihan ganda dengan `break-words whitespace-normal leading-relaxed` dan kontainer fleksibel sehingga istilah teknis SOP yang panjang tidak lagi terpotong pada berbagai resolusi layar ponsel kru (320px–420px).
+  - **Pengatur Ukuran Teks Fleksibel (*Font Size Scale Controller*)**: Menyediakan tombol pengubah ukuran teks instan (`A-`, `A`, `A+`) untuk kenyamanan membaca personil lapangan.
+  - **Bilah Header Statis & Navigasi Cepat (*Sticky Assessment Header*)**: Dilengkapi info personil, lencana kategori soal, indikator simpan-otomatis (*Auto-save timestamp*), pengatur waktu dinamis dengan visual peringatan kritis saat waktu tersisa < 5 menit, dan bilah progres persentase linier.
+  - **Fitur Tandai Ragu-ragu (*Mark for Review / Flagging*)**: Mengadopsi standar ujian enterprise (CAT/Computer-Based Test) di mana kru dapat menandai soal yang masih ragu dengan lencana kuning/amber dan dapat disaring kembali sebelum pengumpulan akhir.
+  - **Peta Soal Interaktif / Laci Daftar Soal (*Slide-up Question Palette Drawer*)**: Menyediakan laci lembar nomor 1–25 dengan kode warna status (Hijau = Terjawab, Kuning = Ragu-ragu, Abu-abu = Belum Diisi) untuk melompat ke nomor mana pun dengan 1 ketukan.
+  - **Bilah Aksi Bawah Melekat (*Sticky Bottom Action Bar*)**: Memudahkan kru berpindah soal (*Sebelumnya*, *Selanjutnya*, *Tandai Ragu*, *Buka Daftar Soal*) tanpa harus menggulir layar ke bagian paling bawah setiap kali membaca opsi panjang.
+  - **Dukungan Pintasan Keyboard (*Enterprise Keyboard Navigation*)**: Kru di laptop/desktop dapat memilih jawaban langsung menggunakan tombol angka `1-4` atau huruf `A-D` serta tombol panah kiri/kanan untuk navigasi soal.
+  - **Modal Audit Pra-Pengumpulan (*Pre-Submit Audit & Confirmation Modal*)**: Sebelum skor dikunci, sistem menampilkan ringkasan kelengkapan soal terjawab, peringatan soal kosong, dan konfirmasi keamanan agar kuis tidak terkumpul secara tidak sengaja.
+  - **Halaman Hasil & Lembar Pembahasan (*Enterprise Result & Answer Review Accordion*)**: Menghadirkan ringkasan hasil dengan lencana kelulusan standar 70%, rincian statistik, perolehan Vanguard EXP, serta lembar pembahasan interaktif yang menampilkan kunci jawaban benar dan opsi yang dipilih kru.
 
 - **Perbaikan Perhitungan Skor Kuis Saat Waktu Habis (*Quiz Auto-Submit On Timeout*) (`src/components/quiz-screen.tsx`)**:
   - **Penghitungan Nilai dari Jawaban Riil (*Real Answer Evaluation on Expiry*)**: Mengatasi *stale closure bug* pada timer hitung mundur (`setInterval`) yang sebelumnya membaca objek jawaban awal yang kosong saat waktu pengerjaan habis sehingga nilai kru langsung menjadi 0%.

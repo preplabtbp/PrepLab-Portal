@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button } from './ui';
-import { ArrowLeft, ArrowRight, CheckCircle, RefreshCcw, Activity, Timer } from 'lucide-react';
+import { 
+  ArrowLeft, ArrowRight, CheckCircle, RefreshCcw, Activity, Timer, 
+  Flag, Bookmark, LayoutGrid, Check, X, AlertTriangle, AlertCircle, 
+  HelpCircle, ChevronRight, ChevronLeft, Award, Sparkles, BookOpen, 
+  Clock, ShieldCheck, Flame, ZoomIn, ZoomOut, RotateCcw, ListFilter,
+  Eye, CheckCheck
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { triggerExpGain } from '../lib/gamificationEvents';
 
@@ -12,27 +18,49 @@ interface Question {
   correctAnswerIndex: number;
 }
 
-export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }: { onBack: () => void, userSection: string, inspectorName: string, inspectorNik: string }) {
+export function QuizScreen({ 
+  onBack, 
+  userSection, 
+  inspectorName, 
+  inspectorNik 
+}: { 
+  onBack: () => void, 
+  userSection: string, 
+  inspectorName: string, 
+  inspectorNik: string 
+}) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [flagged, setFlagged] = useState<Record<number, boolean>>({});
   const [isFinished, setIsFinished] = useState(false);
   const [scoreData, setScoreData] = useState<{ score: number, percentage: number } | null>(null);
   const [isQuizLive, setIsQuizLive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState(30 * 60);
   const [quizVersion, setQuizVersion] = useState<string>('');
+  
+  // Enterprise UI Controls
+  const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg'>('base');
+  const [showQuestionPalette, setShowQuestionPalette] = useState(false);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showReviewMode, setShowReviewMode] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState<string>('Baru saja');
 
+  // Operational Refs
   const answersRef = useRef<Record<number, number>>({});
+  const flaggedRef = useRef<Record<number, boolean>>({});
   const quizVersionRef = useRef<string>('');
   const questionsRef = useRef<Question[]>([]);
   const isSubmittingRef = useRef<boolean>(false);
   const timerRef = useRef<any>(null);
 
   answersRef.current = answers;
+  flaggedRef.current = flagged;
   quizVersionRef.current = quizVersion;
   questionsRef.current = questions;
-  
+
+  // Initialize Quiz
   useEffect(() => {
     const initQuiz = async () => {
       setLoading(true);
@@ -44,7 +72,6 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
         const allQuestions: Question[] = await qRes.json();
         const settingsData = await sRes.json();
         
-        
         const liveSetting = settingsData.find((s: any) => s.settingKey === 'QUIZ_LIVE_STATUS');
         if (liveSetting && liveSetting.settingValue === 'false') {
           setIsQuizLive(false);
@@ -52,85 +79,98 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
         const quizConfigSetting = settingsData.find((s: any) => s.settingKey === 'QUIZ_CONFIG');
         
         let finalQuestions: Question[] = [];
+        let activeVersion = '';
         
         if (quizConfigSetting && quizConfigSetting.settingValue) {
           const config = JSON.parse(quizConfigSetting.settingValue);
-          if (config.version) setQuizVersion(config.version);
+          if (config.version) {
+            setQuizVersion(config.version);
+            activeVersion = config.version;
+          }
           if (config.activeQuestionIds && config.activeQuestionIds.length > 0) {
-            // Find the questions based on activeQuestionIds, preserving the order of the IDs
             finalQuestions = config.activeQuestionIds
-                .map((id: number) => allQuestions.find(q => q.id === id))
-                .filter((q: Question | undefined): q is Question => q !== undefined);
+              .map((id: number) => allQuestions.find(q => q.id === id))
+              .filter((q: Question | undefined): q is Question => q !== undefined);
           }
         }
         
         setQuestions(finalQuestions);
         questionsRef.current = finalQuestions;
-        let activeVersion = '';
-        if (quizConfigSetting && quizConfigSetting.settingValue) {
-           const parsed = JSON.parse(quizConfigSetting.settingValue);
-           activeVersion = parsed.version || '';
-        }
+
+        // Restore Autosaved State if any
         const autosaveKey = `quiz_autosave_${inspectorNik}_${activeVersion}`;
         const savedData = localStorage.getItem(autosaveKey);
         if (savedData) {
           try {
             const parsed = JSON.parse(savedData);
             const savedAnswers = parsed.answers || {};
+            const savedFlagged = parsed.flagged || {};
             answersRef.current = savedAnswers;
+            flaggedRef.current = savedFlagged;
             setAnswers(savedAnswers);
+            setFlagged(savedFlagged);
             setCurrentIndex(parsed.currentIndex || 0);
-            setTimeLeft(parsed.timeLeft || (30 * 60));
+            setTimeLeft(parsed.timeLeft !== undefined ? parsed.timeLeft : (30 * 60));
+            if (parsed.fontSize) setFontSize(parsed.fontSize);
           } catch(e) {
             answersRef.current = {};
+            flaggedRef.current = {};
             setAnswers({});
+            setFlagged({});
             setCurrentIndex(0);
             setTimeLeft(30 * 60);
           }
         } else {
           answersRef.current = {};
+          flaggedRef.current = {};
           setAnswers({});
+          setFlagged({});
           setCurrentIndex(0);
           setTimeLeft(30 * 60);
         }
 
         // Check if user already submitted for this version
         try {
-           const scoresRes = await fetch('/api/quiz-scores');
-           const allScores = await scoresRes.json();
-           const myScore = allScores.find((s: any) => s.nik === inspectorNik && s.quizVersion === activeVersion);
-           if (myScore) {
-              setScoreData({ score: myScore.score, percentage: myScore.percentage });
-              setIsFinished(true);
-           } else {
-              setIsFinished(false);
-              setScoreData(null);
-           }
+          const scoresRes = await fetch('/api/quiz-scores');
+          const allScores = await scoresRes.json();
+          const myScore = allScores.find((s: any) => s.nik === inspectorNik && s.quizVersion === activeVersion);
+          if (myScore) {
+            setScoreData({ score: myScore.score, percentage: myScore.percentage });
+            setIsFinished(true);
+          } else {
+            setIsFinished(false);
+            setScoreData(null);
+          }
         } catch(err) {
-           setIsFinished(false);
-           setScoreData(null);
+          setIsFinished(false);
+          setScoreData(null);
         }
 
       } catch (e) {
-        console.error(e);
+        console.error("Init Quiz Error:", e);
         toast.error('Gagal memuat pertanyaan kuis');
       }
       setLoading(false);
     };
     initQuiz();
-  }, []);
+  }, [inspectorNik]);
 
-
+  // Periodic Local Autosave
   useEffect(() => {
     if (loading || isFinished || !quizVersion || !inspectorNik || questions.length === 0) return;
     const autosaveKey = `quiz_autosave_${inspectorNik}_${quizVersion}`;
     localStorage.setItem(autosaveKey, JSON.stringify({
       answers,
+      flagged,
       currentIndex,
-      timeLeft
+      timeLeft,
+      fontSize
     }));
-  }, [answers, currentIndex, timeLeft, quizVersion, inspectorNik, loading, isFinished, questions.length]);
+    const now = new Date();
+    setLastSavedTime(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+  }, [answers, flagged, currentIndex, timeLeft, quizVersion, inspectorNik, loading, isFinished, questions.length, fontSize]);
 
+  // Prevent accidental back navigation
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!isFinished && questions.length > 0 && isQuizLive) {
@@ -142,16 +182,37 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isFinished, questions.length, isQuizLive]);
 
-  const handleBackClick = () => {
-    if (!isFinished && questions.length > 0 && isQuizLive) {
-      if (window.confirm('Kuis sedang berjalan. Apakah Anda yakin ingin keluar? Jawaban sementara telah disimpan otomatis.')) {
-        onBack();
-      }
-    } else {
-      onBack();
-    }
-  };
+  // Keyboard Navigation & Shortcuts (A/B/C/D & 1/2/3/4)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isFinished || loading || questions.length === 0 || showSubmitModal || showQuestionPalette) return;
+      
+      const currentQ = questions[currentIndex];
+      if (!currentQ) return;
 
+      const key = e.key.toUpperCase();
+      let selectedIdx: number | null = null;
+      if (key === '1' || key === 'A') selectedIdx = 0;
+      else if (key === '2' || key === 'B') selectedIdx = 1;
+      else if (key === '3' || key === 'C') selectedIdx = 2;
+      else if (key === '4' || key === 'D') selectedIdx = 3;
+
+      if (selectedIdx !== null && selectedIdx < currentQ.options.length) {
+        handleSelectOption(selectedIdx);
+      } else if (e.key === 'ArrowRight' && currentIndex < questions.length - 1) {
+        setCurrentIndex(prev => prev + 1);
+      } else if (e.key === 'ArrowLeft' && currentIndex > 0) {
+        setCurrentIndex(prev => prev - 1);
+      } else if (key === 'F' || key === 'R') {
+        toggleFlag(currentQ.id);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIndex, questions, isFinished, loading, showSubmitModal, showQuestionPalette]);
+
+  // Countdown Timer
   useEffect(() => {
     if (isFinished || loading || questions.length === 0) return;
     
@@ -185,7 +246,7 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   const handleSelectOption = (index: number) => {
@@ -200,6 +261,14 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
     setAnswers(newAnswers);
   };
 
+  const toggleFlag = (qId: number) => {
+    setFlagged(prev => {
+      const next = { ...prev, [qId]: !prev[qId] };
+      flaggedRef.current = next;
+      return next;
+    });
+  };
+
   const handleNext = () => {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(prev => prev + 1);
@@ -212,159 +281,151 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
     }
   };
 
-  const handleSubmit = () => {
-    if (isSubmittingRef.current) return;
-    if (window.confirm('Apakah Anda yakin ingin menyelesaikan kuis ini?')) {
-      isSubmittingRef.current = true;
-      handleFinishQuiz(answersRef.current, false);
+  const handleBackClick = () => {
+    if (!isFinished && questions.length > 0 && isQuizLive) {
+      if (window.confirm('Kuis sedang berlangsung. Draf jawaban Anda sudah tersimpan otomatis di perangkat ini. Yakin ingin keluar sementara?')) {
+        onBack();
+      }
+    } else {
+      onBack();
     }
   };
-  
+
   const handleFinishQuiz = async (overrideAnswers?: Record<number, number>, isTimeout = false) => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
 
-      // Gather answers prioritizing overrideAnswers -> answersRef.current -> answers state -> autosave storage
-      let effectiveAnswers: Record<number, number> = {
-        ...answers,
-        ...answersRef.current,
-        ...(overrideAnswers || {})
-      };
+    // Comprehensive answer consolidation
+    let effectiveAnswers: Record<number, number> = {
+      ...answers,
+      ...answersRef.current,
+      ...(overrideAnswers || {})
+    };
 
-      const currentVersion = quizVersionRef.current || quizVersion;
-      const currentNik = inspectorNik;
+    const currentVersion = quizVersionRef.current || quizVersion;
+    const currentNik = inspectorNik;
 
-      if (currentNik && currentVersion) {
-        const autosaveKey = `quiz_autosave_${currentNik}_${currentVersion}`;
-        const savedRaw = localStorage.getItem(autosaveKey);
-        if (savedRaw) {
-          try {
-            const parsed = JSON.parse(savedRaw);
-            if (parsed?.answers && typeof parsed.answers === 'object') {
-              effectiveAnswers = { ...parsed.answers, ...effectiveAnswers };
-            }
-          } catch (e) {
-            // ignore
+    if (currentNik && currentVersion) {
+      const autosaveKey = `quiz_autosave_${currentNik}_${currentVersion}`;
+      const savedRaw = localStorage.getItem(autosaveKey);
+      if (savedRaw) {
+        try {
+          const parsed = JSON.parse(savedRaw);
+          if (parsed?.answers && typeof parsed.answers === 'object') {
+            effectiveAnswers = { ...parsed.answers, ...effectiveAnswers };
           }
+        } catch (e) {
+          // ignore parsing error
         }
       }
+    }
 
-      const currentQuestions = questionsRef.current.length > 0 ? questionsRef.current : questions;
-      let score = 0;
-      currentQuestions.forEach(q => {
-        if (effectiveAnswers[q.id] === q.correctAnswerIndex) score++;
+    const currentQuestions = questionsRef.current.length > 0 ? questionsRef.current : questions;
+    let score = 0;
+    currentQuestions.forEach(q => {
+      if (effectiveAnswers[q.id] === q.correctAnswerIndex) score++;
+    });
+    const totalQ = currentQuestions.length > 0 ? currentQuestions.length : 1;
+    const percentage = Math.round((score / totalQ) * 100);
+    setScoreData({ score, percentage });
+    setIsFinished(true);
+    setShowSubmitModal(false);
+    setShowQuestionPalette(false);
+
+    if (isTimeout) {
+      toast.warning('Waktu kuis telah berakhir! Jawaban yang telah Anda isi telah dikumpulkan otomatis.', {
+        duration: 6000
       });
-      const totalQ = currentQuestions.length > 0 ? currentQuestions.length : 1;
-      const percentage = Math.round((score / totalQ) * 100);
-      setScoreData({ score, percentage });
-      setIsFinished(true);
-      
-      if (isTimeout) {
-        toast.warning('Waktu kuis telah habis! Jawaban yang telah Anda isi telah dikumpulkan otomatis.', {
-          duration: 6000
-        });
-      }
+    }
 
-      // Submit score to backend
-      try {
-        const res = await fetch('/api/quiz-scores', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                nik: inspectorNik,
-                name: inspectorName,
-                department: userSection,
-                score,
-                totalQuestions: currentQuestions.length,
-                percentage,
-                quizVersion: currentVersion
-            })
-        });
-        if (!res.ok) {
-           const err = await res.json();
-           toast.error(err.error || 'Gagal menyimpan skor');
-        } else {
-            if (!isTimeout) {
-              toast.success('Kuis berhasil diselesaikan');
-            }
-            localStorage.removeItem(`quiz_autosave_${inspectorNik}_${currentVersion}`);
-            if (percentage === 100) {
-              triggerExpGain(250, 'Kuis Nilai Sempurna 100%!', `Versi ${currentVersion || 'K3/SOP'}`);
-            } else if (percentage >= 70) {
-              triggerExpGain(75, 'Kuis K3 Berhasil Lulus!', `Skor: ${percentage}%`);
-            } else {
-              triggerExpGain(30, 'Kuis Selesai Dikerjakan', `Skor: ${percentage}%`);
-            }
-            window.dispatchEvent(new Event('gamification_updated'));
+    // Submit score to backend
+    try {
+      const res = await fetch('/api/quiz-scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nik: inspectorNik,
+          name: inspectorName,
+          department: userSection,
+          score,
+          totalQuestions: currentQuestions.length,
+          percentage,
+          quizVersion: currentVersion
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.error || 'Gagal menyimpan skor');
+      } else {
+        if (!isTimeout) {
+          toast.success('Kuis berhasil dikumpulkan!');
         }
-      } catch (e) {
-          console.error("Gagal menyimpan skor", e);
-          toast.error("Gagal menyimpan skor kuis");
-      } finally {
-          isSubmittingRef.current = false;
+        localStorage.removeItem(`quiz_autosave_${inspectorNik}_${currentVersion}`);
+        if (percentage === 100) {
+          triggerExpGain(250, 'Kuis Nilai Sempurna 100%!', `Versi ${currentVersion || 'K3/SOP'}`);
+        } else if (percentage >= 70) {
+          triggerExpGain(75, 'Kuis K3 Berhasil Lulus!', `Skor: ${percentage}%`);
+        } else {
+          triggerExpGain(30, 'Kuis Selesai Dikerjakan', `Skor: ${percentage}%`);
+        }
+        window.dispatchEvent(new Event('gamification_updated'));
       }
+    } catch (e) {
+      console.error("Gagal menyimpan skor", e);
+      toast.error("Gagal menyimpan skor kuis");
+    } finally {
+      isSubmittingRef.current = false;
+    }
   };
 
+  // State Counts
+  const answeredCount = Object.keys(answers).length;
+  const flaggedCount = Object.values(flagged).filter(Boolean).length;
+  const unansweredCount = Math.max(0, questions.length - answeredCount);
+  const progressPercent = questions.length > 0 ? Math.round((answeredCount / questions.length) * 100) : 0;
+
+  // Font size classes
+  const questionFontClass = fontSize === 'sm' ? 'text-sm sm:text-base' : fontSize === 'lg' ? 'text-lg sm:text-2xl' : 'text-base sm:text-lg';
+  const optionFontClass = fontSize === 'sm' ? 'text-xs sm:text-sm' : fontSize === 'lg' ? 'text-base sm:text-lg' : 'text-sm sm:text-base';
+
+  // 1. Loading State
   if (loading) {
     return (
-      <div className="w-full h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
-        <Activity className="w-8 h-8 text-blue-500 animate-spin" />
-        <p className="text-slate-500 font-medium">Menyiapkan pertanyaan...</p>
+      <div className="w-full min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-6 gap-5">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center animate-pulse">
+            <BookOpen className="w-8 h-8 text-blue-400" />
+          </div>
+          <Activity className="w-6 h-6 text-emerald-400 animate-spin absolute -bottom-2 -right-2" />
+        </div>
+        <div className="text-center space-y-1.5">
+          <h3 className="text-lg font-bold tracking-tight">Menyiapkan Lembar Kuis K3 & SOP</h3>
+          <p className="text-slate-400 text-xs sm:text-sm">Memuat paket pertanyaan terenkripsi dari server...</p>
+        </div>
       </div>
     );
   }
   
+  // 2. Offline State
   if (!isQuizLive) {
     return (
-      <div className="flex flex-col justify-center items-center h-64 gap-4 p-6 text-center">
-        <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mb-2">
-            <Timer className="w-8 h-8 text-slate-400" />
-        </div>
-        <h2 className="text-xl font-bold text-slate-700">Kuis Sedang Offline</h2>
-        <p className="text-slate-500 max-w-md">Kuis saat ini belum diaktifkan atau masa pengisian telah berakhir.</p>
-        <Button onClick={onBack} variant="secondary" className="mt-4">Kembali ke Beranda</Button>
-      </div>
-    );
-  }
-
-  if (questions.length === 0) {
-    return (
-      <div className="flex flex-col justify-center items-center h-64 gap-4 p-6 text-center">
-        <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mb-2">
-            <CheckCircle className="w-8 h-8 text-slate-400" />
-        </div>
-        <h2 className="text-xl font-bold text-slate-700">Belum Ada Kuis Aktif</h2>
-        <p className="text-slate-500 max-w-md">Kuis untuk bulan ini belum dikonfigurasi atau belum diaktifkan oleh Quality Assurance.</p>
-        <Button onClick={onBack} variant="secondary" className="mt-4">Kembali ke Beranda</Button>
-      </div>
-    );
-  }
-
-  if (isFinished && scoreData) {
-    return (
-      <div className="max-w-md mx-auto p-4 space-y-6 mt-12 pb-24">
-        <Card className="p-8 text-center space-y-6 shadow-xl border-slate-200">
-          <div className="w-24 h-24 mx-auto bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
-            <CheckCircle className="w-12 h-12" />
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 text-center bg-slate-900 border-slate-800 shadow-2xl rounded-3xl space-y-6">
+          <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/20 rounded-full flex items-center justify-center mx-auto text-amber-400">
+            <Timer className="w-10 h-10" />
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-slate-800">Quiz Selesai!</h2>
-            <p className="text-slate-500 mt-2">Terima kasih telah berpartisipasi, {inspectorName}.</p>
-          </div>
-          
-          <div className="bg-slate-50 rounded-xl p-6 border border-slate-100">
-            <p className="text-sm font-medium text-slate-500 mb-1">Skor Anda</p>
-            <p className={`text-5xl font-bold ${scoreData.percentage >= 70 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {scoreData.percentage}%
-            </p>
-            <p className="text-sm text-slate-500 mt-3 font-medium">
-              Benar {scoreData.score} dari {questions.length} Soal
+          <div className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
+              Periode Offline
+            </span>
+            <h2 className="text-2xl font-bold text-white tracking-tight">Kuis Sedang Dinonaktifkan</h2>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              Kuis pengujian SOP & K3 bulan ini sedang tidak dibuka atau batas waktu pengisian telah berakhir. Hubungi koordinator Quality Assurance untuk informasi jadwal aktivasi.
             </p>
           </div>
-          
-          <Button variant="secondary" onClick={onBack} className="w-full h-12">
+          <Button onClick={onBack} variant="secondary" className="w-full h-12 bg-slate-800 hover:bg-slate-700 text-white border-slate-700 rounded-xl">
             Kembali ke Beranda
           </Button>
         </Card>
@@ -372,119 +433,619 @@ export function QuizScreen({ onBack, userSection, inspectorName, inspectorNik }:
     );
   }
 
+  // 3. No Questions Configured
+  if (questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 text-center bg-slate-900 border-slate-800 shadow-2xl rounded-3xl space-y-6">
+          <div className="w-20 h-20 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center mx-auto text-blue-400">
+            <CheckCircle className="w-10 h-10" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold text-white tracking-tight">Belum Ada Kuis Aktif</h2>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              Daftar soal untuk bulan ini belum dikonfigurasi atau belum diterbitkan oleh Quality Assurance & Safety Specialist.
+            </p>
+          </div>
+          <Button onClick={onBack} variant="secondary" className="w-full h-12 bg-slate-800 hover:bg-slate-700 text-white border-slate-700 rounded-xl">
+            Kembali ke Beranda
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  // 4. Completed Result Screen (Enterprise Grade)
+  if (isFinished && scoreData) {
+    const isPassed = scoreData.percentage >= 70;
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-6 pb-24 flex flex-col items-center justify-start sm:justify-center">
+        <div className="max-w-xl w-full space-y-5 mt-4 sm:mt-0">
+          
+          {/* Main Hero Card */}
+          <Card className="p-6 sm:p-8 text-center bg-slate-900/90 backdrop-blur-xl border-slate-800 shadow-2xl rounded-3xl relative overflow-hidden">
+            {/* Top Glow Accent */}
+            <div className={`absolute top-0 left-0 right-0 h-2 ${isPassed ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500' : 'bg-gradient-to-r from-rose-500 via-amber-500 to-rose-500'}`} />
+            
+            <div className="space-y-4">
+              <div className={`w-20 h-20 sm:w-24 sm:h-24 mx-auto rounded-3xl flex items-center justify-center shadow-lg transition-transform ${
+                isPassed 
+                  ? 'bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10' 
+                  : 'bg-rose-500/10 border-2 border-rose-500/30 text-rose-400 shadow-rose-500/10'
+              }`}>
+                {isPassed ? <Award className="w-10 h-10 sm:w-12 sm:h-12" /> : <AlertCircle className="w-10 h-10 sm:w-12 sm:h-12" />}
+              </div>
+
+              <div>
+                <span className={`inline-block text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full mb-2 ${
+                  isPassed 
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                    : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                }`}>
+                  {isPassed ? 'Lulus Uji Kompetensi' : 'Belum Memenuhi Standar Minimal'}
+                </span>
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                  {isPassed ? 'Selamat, Hasil Memuaskan!' : 'Tetap Semangat & Pelajari Kembali'}
+                </h1>
+                <p className="text-slate-400 text-xs sm:text-sm mt-1">
+                  Kuis K3 & Standar Operasional Prosedur • {inspectorName} ({inspectorNik})
+                </p>
+              </div>
+
+              {/* Score Display Banner */}
+              <div className="bg-slate-950/80 rounded-2xl p-6 border border-slate-800/80 flex flex-col items-center justify-center gap-1 shadow-inner">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Skor Akhir Anda</span>
+                <div className={`text-6xl sm:text-7xl font-black tracking-tight ${isPassed ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {scoreData.percentage}<span className="text-3xl sm:text-4xl text-slate-500">%</span>
+                </div>
+                <div className="flex items-center gap-2 mt-2 text-xs sm:text-sm font-medium text-slate-300">
+                  <span className="text-emerald-400 font-bold">{scoreData.score} Benar</span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-rose-400 font-bold">{questions.length - scoreData.score} Salah/Kosong</span>
+                  <span className="text-slate-600">•</span>
+                  <span>Total {questions.length} Soal</span>
+                </div>
+              </div>
+
+              {/* Status & EXP Banner */}
+              <div className="grid grid-cols-2 gap-3 text-left">
+                <div className="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
+                  <div className="text-[11px] text-slate-400 font-medium">Standar Kelulusan</div>
+                  <div className="text-sm font-bold text-white mt-0.5">Minimal 70% (18 Soal)</div>
+                </div>
+                <div className="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
+                  <div className="text-[11px] text-slate-400 font-medium">Reward Vanguard EXP</div>
+                  <div className="text-sm font-bold text-amber-400 flex items-center gap-1 mt-0.5">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {scoreData.percentage === 100 ? '+250 EXP' : isPassed ? '+75 EXP' : '+30 EXP'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Review Accordion Toggle */}
+              <button
+                onClick={() => setShowReviewMode(!showReviewMode)}
+                className="w-full py-3 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-semibold flex items-center justify-between border border-slate-700/60 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-blue-400" />
+                  {showReviewMode ? 'Sembunyikan Lembar Pembahasan' : 'Lihat Lembar Pembahasan & Jawaban'}
+                </span>
+                <ChevronRight className={`w-4 h-4 transition-transform ${showReviewMode ? 'rotate-90' : ''}`} />
+              </button>
+
+              {/* Action Buttons */}
+              <div className="pt-2">
+                <Button 
+                  onClick={onBack} 
+                  className="w-full h-12 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-600/20"
+                >
+                  Kembali ke Beranda
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* Detailed Question Review List */}
+          {showReviewMode && (
+            <div className="space-y-3 animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="flex items-center justify-between px-2">
+                <h3 className="font-bold text-slate-200 text-sm sm:text-base flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-blue-400" />
+                  Rincian Jawaban per Soal
+                </h3>
+                <span className="text-xs text-slate-400">{questions.length} Butir Soal</span>
+              </div>
+
+              {questions.map((q, idx) => {
+                const userAns = answers[q.id];
+                const isCorrect = userAns === q.correctAnswerIndex;
+                const isUnanswered = userAns === undefined;
+
+                return (
+                  <Card key={q.id} className="p-4 sm:p-5 bg-slate-900 border-slate-800 rounded-2xl space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-7 h-7 rounded-lg bg-slate-800 text-slate-300 font-bold text-xs flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                          {q.category}
+                        </span>
+                      </div>
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 ${
+                        isCorrect 
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                          : isUnanswered
+                          ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                          : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                      }`}>
+                        {isCorrect ? <Check className="w-3.5 h-3.5" /> : isUnanswered ? <Clock className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                        {isCorrect ? 'Benar' : isUnanswered ? 'Kosong' : 'Kurang Tepat'}
+                      </span>
+                    </div>
+
+                    <p className="text-sm font-medium text-slate-200 leading-relaxed break-words">
+                      {q.text}
+                    </p>
+
+                    <div className="space-y-1.5 pt-1">
+                      {q.options.map((opt, optIdx) => {
+                        const letter = ['A', 'B', 'C', 'D'][optIdx] || optIdx + 1;
+                        const isUserChoice = userAns === optIdx;
+                        const isTheCorrectAnswer = q.correctAnswerIndex === optIdx;
+
+                        return (
+                          <div 
+                            key={optIdx}
+                            className={`p-2.5 sm:p-3 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 border transition-all ${
+                              isTheCorrectAnswer
+                                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200 font-medium'
+                                : isUserChoice
+                                ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                                : 'bg-slate-950/40 border-slate-800 text-slate-400'
+                            }`}
+                          >
+                            <span className={`w-5 h-5 rounded-md font-bold text-[11px] flex items-center justify-center shrink-0 ${
+                              isTheCorrectAnswer 
+                                ? 'bg-emerald-500 text-slate-950' 
+                                : isUserChoice 
+                                ? 'bg-rose-500 text-white' 
+                                : 'bg-slate-800 text-slate-400'
+                            }`}>
+                              {letter}
+                            </span>
+                            <span className="flex-1 break-words leading-snug">{opt}</span>
+                            {isTheCorrectAnswer && <span className="text-[10px] text-emerald-400 font-bold shrink-0">Kunci Benar</span>}
+                            {isUserChoice && !isTheCorrectAnswer && <span className="text-[10px] text-rose-400 font-bold shrink-0">Pilihan Anda</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Active Quiz View
   const currentQ = questions[currentIndex];
-  const selectedAnswer = answers[currentQ.id];
+  const selectedAnswer = answers[currentQ?.id];
+  const isCurrentFlagged = !!flagged[currentQ?.id];
+  const isTimeCritical = timeLeft < 300; // Under 5 minutes
 
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-4 mt-4 pb-24 flex flex-col">
-      {/* Header Info */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={handleBackClick} className="w-10 h-10 p-0 rounded-full shrink-0">
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h2 className="font-bold text-slate-800 hidden sm:block">Quiz {userSection && `- ${userSection}`}</h2>
-            <h2 className="font-bold text-slate-800 sm:hidden">Quiz QA</h2>
-            <span className="text-[10px] sm:text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase tracking-wider">{currentQ?.category}</span>
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-blue-500 selection:text-white pb-28">
+      
+      {/* 1. ENTERPRISE STICKY HEADER */}
+      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800/80 shadow-md">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
+          
+          {/* Left: Back & Crew Info */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              onClick={handleBackClick}
+              className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-colors shrink-0"
+              title="Kembali ke Beranda"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[140px] sm:max-w-[200px]">
+                  {inspectorName}
+                </span>
+                <span className="text-[10px] text-blue-400 font-mono bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 shrink-0">
+                  {userSection || 'Crew'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                <span className="text-emerald-400 font-medium flex items-center gap-1">
+                  <CheckCheck className="w-3 h-3 text-emerald-400 inline" />
+                  Auto-save {lastSavedTime}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Timer & Palette Launcher */}
+          <div className="flex items-center gap-2 shrink-0">
+            
+            {/* Font Size Adjuster Pill */}
+            <div className="hidden sm:flex items-center bg-slate-800/80 rounded-xl p-0.5 border border-slate-700/60">
+              <button
+                onClick={() => setFontSize(prev => prev === 'lg' ? 'base' : 'sm')}
+                className={`px-2 py-1 text-xs font-bold rounded-lg transition-colors ${fontSize === 'sm' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                title="Ukuran Teks Kecil"
+              >
+                A-
+              </button>
+              <button
+                onClick={() => setFontSize('base')}
+                className={`px-2 py-1 text-xs font-bold rounded-lg transition-colors ${fontSize === 'base' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                title="Ukuran Teks Normal"
+              >
+                A
+              </button>
+              <button
+                onClick={() => setFontSize('lg')}
+                className={`px-2 py-1 text-xs font-bold rounded-lg transition-colors ${fontSize === 'lg' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                title="Ukuran Teks Besar"
+              >
+                A+
+              </button>
+            </div>
+
+            {/* Real-time Countdown Timer */}
+            <div className={`flex items-center gap-1.5 font-mono font-bold px-3 py-1.5 rounded-xl border text-xs sm:text-sm transition-all ${
+              isTimeCritical 
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse shadow-sm shadow-rose-500/20' 
+                : 'bg-slate-800 text-blue-400 border-slate-700/60'
+            }`}>
+              <Timer className={`w-4 h-4 ${isTimeCritical ? 'text-rose-400' : 'text-blue-400'}`} />
+              <span>{formatTime(timeLeft)}</span>
+            </div>
+
+            {/* Palette Drawer Button */}
+            <button
+              onClick={() => setShowQuestionPalette(true)}
+              className="flex items-center gap-1.5 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 border border-blue-500/30 px-3 py-1.5 rounded-xl font-medium text-xs transition-colors shrink-0"
+              title="Buka Daftar Soal"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="font-mono font-bold">{answeredCount}/{questions.length}</span>
+            </button>
           </div>
         </div>
-        <div className={`flex items-center gap-2 font-mono font-bold px-3 py-1.5 rounded-lg ${timeLeft < 300 ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-700'}`}>
-          <Timer className="w-4 h-4" />
-          {formatTime(timeLeft)}
-        </div>
-      </div>
-      
-      {/* Question Navigator */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
-        <p className="text-xs font-medium text-slate-500 mb-2 px-1">Navigasi Soal</p>
-        <div className="flex overflow-x-auto gap-2 pb-2 hide-scrollbar">
-          {questions.map((q, idx) => {
-            const isAnswered = answers[q.id] !== undefined;
-            const isCurrent = currentIndex === idx;
-            return (
-              <button
-                key={q.id}
-                onClick={() => setCurrentIndex(idx)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 transition-all ${
-                  isCurrent ? 'ring-2 ring-blue-500 ring-offset-2' : ''
-                } ${
-                  isAnswered 
-                    ? 'bg-emerald-500 text-white border-transparent' 
-                    : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
-                }`}
-              >
-                {idx + 1}
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
-      <Card className="p-6 shadow-sm border-slate-200 flex flex-col">
-        <h3 className="text-lg font-semibold text-slate-800 leading-relaxed mb-6">
-          <span className="text-slate-400 mr-2">{currentIndex + 1}.</span>
-          {currentQ?.text}
-        </h3>
-        
-        <div className="space-y-3">
-          {currentQ?.options.map((opt, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleSelectOption(idx)}
-              className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-all duration-200 ${
-                selectedAnswer === idx 
-                  ? 'border-blue-500 bg-blue-50 text-blue-800 shadow-sm' 
-                  : 'border-slate-200 hover:border-blue-200 hover:bg-slate-50 text-slate-700'
-              }`}
-            >
-              <div className="flex items-start">
-                <div className={`w-6 h-6 mt-0.5 rounded-full border-2 mr-3 flex items-center justify-center flex-shrink-0 ${
-                  selectedAnswer === idx ? 'border-blue-500' : 'border-slate-300'
-                }`}>
-                  {selectedAnswer === idx && <div className="w-3 h-3 bg-blue-500 rounded-full" />}
-                </div>
-                <span className="text-[15px] leading-snug">{opt}</span>
-              </div>
-            </button>
-          ))}
+        {/* Linear Progress Bar */}
+        <div className="w-full bg-slate-800 h-1 relative overflow-hidden">
+          <div 
+            className="bg-gradient-to-r from-blue-500 to-emerald-400 h-full transition-all duration-300 ease-out"
+            style={{ width: `${progressPercent}%` }}
+          />
         </div>
-      </Card>
-      
-      <div className="flex justify-between items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <Button 
-          variant="secondary"
-          onClick={handlePrev} 
-          disabled={currentIndex === 0}
-          className="px-4"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2 hidden sm:inline" /> Sebelumnya
-        </Button>
+      </header>
+
+      {/* 2. QUESTION VIEWPORT CONTAINER */}
+      <main className="max-w-3xl w-full mx-auto px-3 sm:px-6 pt-4 sm:pt-6 space-y-4">
         
-        {currentIndex === questions.length - 1 ? (
-          <Button 
-            onClick={handleSubmit}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 font-bold"
+        {/* Question Header Card */}
+        <div className="flex items-center justify-between gap-3 bg-slate-900/60 p-3 sm:p-4 rounded-2xl border border-slate-800/80">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="bg-blue-600 text-white font-extrabold text-xs px-2.5 py-1 rounded-lg shadow-sm">
+              Soal {currentIndex + 1} / {questions.length}
+            </span>
+            <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-300 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700/60 truncate max-w-[180px] sm:max-w-xs">
+              {currentQ?.category || 'K3 & SOP'}
+            </span>
+          </div>
+
+          {/* Mark for Review (Ragu-ragu) Toggle Button */}
+          <button
+            onClick={() => toggleFlag(currentQ?.id)}
+            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
+              isCurrentFlagged 
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm shadow-amber-500/10' 
+                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+            }`}
           >
-            Selesai
-          </Button>
-        ) : (
-          <Button 
-            onClick={handleNext}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8"
+            <Flag className={`w-3.5 h-3.5 ${isCurrentFlagged ? 'fill-amber-400 text-amber-400' : ''}`} />
+            <span>{isCurrentFlagged ? 'Ragu-ragu' : 'Tandai Ragu'}</span>
+          </button>
+        </div>
+
+        {/* Question Text Box with Anti-Clipping Typography */}
+        <Card className="p-5 sm:p-7 bg-slate-900 border-slate-800 shadow-xl rounded-3xl space-y-5">
+          <h2 className={`${questionFontClass} font-semibold text-white leading-relaxed tracking-normal break-words whitespace-normal`}>
+            {currentQ?.text}
+          </h2>
+
+          {/* Options Container (Mobile-first Touch Friendly) */}
+          <div className="space-y-3 pt-2">
+            {currentQ?.options.map((optionText, optIdx) => {
+              const letter = ['A', 'B', 'C', 'D'][optIdx] || String(optIdx + 1);
+              const isSelected = selectedAnswer === optIdx;
+
+              return (
+                <button
+                  key={optIdx}
+                  onClick={() => handleSelectOption(optIdx)}
+                  className={`w-full text-left p-3.5 sm:p-4 rounded-2xl border-2 transition-all duration-200 flex items-start gap-3.5 group cursor-pointer ${
+                    isSelected 
+                      ? 'border-blue-500 bg-blue-600/15 shadow-md shadow-blue-500/10 ring-1 ring-blue-500/20' 
+                      : 'border-slate-800 hover:border-slate-700 bg-slate-950/60 hover:bg-slate-800/40 text-slate-300'
+                  }`}
+                >
+                  {/* Option Badge A/B/C/D */}
+                  <span className={`w-8 h-8 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center shrink-0 transition-transform group-active:scale-95 ${
+                    isSelected 
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' 
+                      : 'bg-slate-800 text-slate-400 group-hover:text-slate-200 border border-slate-700/60'
+                  }`}>
+                    {letter}
+                  </span>
+
+                  {/* Option Text with Safe Line-Wrap */}
+                  <span className={`flex-1 ${optionFontClass} leading-relaxed break-words whitespace-normal pt-0.5 ${
+                    isSelected ? 'text-white font-medium' : 'text-slate-300 group-hover:text-slate-100'
+                  }`}>
+                    {optionText}
+                  </span>
+
+                  {/* Checkmark Indicator */}
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 transition-colors ${
+                    isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-slate-700'
+                  }`}>
+                    {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+
+        {/* Helpful Keyboard Hint for Desktop */}
+        <div className="hidden sm:flex items-center justify-between text-xs text-slate-500 px-2">
+          <span>Tips: Anda dapat menekan tombol keyboard <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-400 font-mono">1-4</kbd> atau <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-400 font-mono">A-D</kbd> untuk memilih jawaban.</span>
+          <span><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-400 font-mono">←</kbd> <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-400 font-mono">→</kbd> Navigasi soal</span>
+        </div>
+      </main>
+
+      {/* 3. ENTERPRISE STICKY BOTTOM ACTION BAR */}
+      <footer className="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 px-3 sm:px-6 py-3">
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-2.5">
+          
+          {/* Previous Button */}
+          <button
+            onClick={handlePrev}
+            disabled={currentIndex === 0}
+            className={`h-11 sm:h-12 px-3 sm:px-5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all ${
+              currentIndex === 0 
+                ? 'opacity-30 cursor-not-allowed bg-slate-800 text-slate-500' 
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 active:scale-95'
+            }`}
           >
-            Selanjutnya <ArrowRight className="w-4 h-4 ml-2 hidden sm:inline" />
-          </Button>
-        )}
-      </div>
-      
-      {Object.keys(answers).length === questions.length && currentIndex !== questions.length - 1 && (
-        <div className="flex justify-center mt-2">
-           <Button onClick={handleSubmit} className="bg-emerald-600 hover:bg-emerald-700 text-white w-full max-w-xs shadow-lg">
-             Kumpulkan Jawaban
-           </Button>
+            <ChevronLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">Sebelumnya</span>
+          </button>
+
+          {/* Quick Ragu / Palette Toggles */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => toggleFlag(currentQ?.id)}
+              className={`h-11 sm:h-12 px-3 sm:px-4 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
+                isCurrentFlagged
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                  : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700'
+              }`}
+              title="Tandai Ragu-ragu"
+            >
+              <Flag className={`w-3.5 h-3.5 ${isCurrentFlagged ? 'fill-amber-400 text-amber-400' : ''}`} />
+              <span className="hidden xs:inline">Ragu</span>
+            </button>
+
+            <button
+              onClick={() => setShowQuestionPalette(true)}
+              className="h-11 sm:h-12 px-3 sm:px-4 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all"
+            >
+              <LayoutGrid className="w-3.5 h-3.5 text-blue-400" />
+              <span>Daftar Soal</span>
+            </button>
+          </div>
+
+          {/* Next / Finish Button */}
+          {currentIndex === questions.length - 1 ? (
+            <button
+              onClick={() => setShowSubmitModal(true)}
+              className="h-11 sm:h-12 px-4 sm:px-6 rounded-xl font-bold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+            >
+              <span>Kumpulkan</span>
+              <CheckCircle className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              onClick={handleNext}
+              className="h-11 sm:h-12 px-4 sm:px-6 rounded-xl font-bold text-xs sm:text-sm bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
+            >
+              <span className="hidden sm:inline">Selanjutnya</span>
+              <span className="sm:hidden">Lanjut</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </footer>
+
+      {/* 4. MODAL PALETTE DAFTAR SOAL (DRAWER / BOTTOM SHEET) */}
+      {showQuestionPalette && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
+            
+            {/* Drawer Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+              <div className="space-y-0.5">
+                <h3 className="font-bold text-base sm:text-lg text-white flex items-center gap-2">
+                  <LayoutGrid className="w-5 h-5 text-blue-400" />
+                  Peta Soal Kuis
+                </h3>
+                <p className="text-xs text-slate-400">Pilih nomor soal untuk langsung menuju pertanyaan</p>
+              </div>
+              <button
+                onClick={() => setShowQuestionPalette(false)}
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Legend Counters */}
+            <div className="p-3.5 bg-slate-950/80 border-b border-slate-800/80 grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="bg-emerald-950/40 border border-emerald-500/30 p-2 rounded-xl text-emerald-300">
+                <span className="font-bold text-sm block">{answeredCount}</span>
+                <span className="text-[10px] text-emerald-400">Terjawab</span>
+              </div>
+              <div className="bg-amber-950/40 border border-amber-500/30 p-2 rounded-xl text-amber-300">
+                <span className="font-bold text-sm block">{flaggedCount}</span>
+                <span className="text-[10px] text-amber-400">Ragu-ragu</span>
+              </div>
+              <div className="bg-slate-800/50 border border-slate-700/50 p-2 rounded-xl text-slate-400">
+                <span className="font-bold text-sm block">{unansweredCount}</span>
+                <span className="text-[10px]">Belum Diisi</span>
+              </div>
+            </div>
+
+            {/* Grid of Numbers */}
+            <div className="p-4 sm:p-5 overflow-y-auto max-h-[50vh] grid grid-cols-5 gap-2.5 sm:gap-3">
+              {questions.map((q, idx) => {
+                const isAns = answers[q.id] !== undefined;
+                const isFlg = !!flagged[q.id];
+                const isCurr = currentIndex === idx;
+
+                let colorStyles = 'bg-slate-800 text-slate-400 border-slate-700/70 hover:bg-slate-700';
+                if (isFlg) {
+                  colorStyles = 'bg-amber-500 text-slate-950 font-black border-amber-400 shadow-md shadow-amber-500/20';
+                } else if (isAns) {
+                  colorStyles = 'bg-emerald-600 text-white font-bold border-emerald-500 shadow-md shadow-emerald-600/20';
+                }
+
+                return (
+                  <button
+                    key={q.id}
+                    onClick={() => {
+                      setCurrentIndex(idx);
+                      setShowQuestionPalette(false);
+                    }}
+                    className={`h-11 sm:h-12 rounded-xl text-sm font-bold flex items-center justify-center relative border transition-all active:scale-95 ${colorStyles} ${
+                      isCurr ? 'ring-2 ring-blue-400 ring-offset-2 ring-offset-slate-900' : ''
+                    }`}
+                  >
+                    <span>{idx + 1}</span>
+                    {isFlg && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-300 rounded-full border border-slate-900" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-4 bg-slate-900 border-t border-slate-800 flex gap-2">
+              <button
+                onClick={() => setShowQuestionPalette(false)}
+                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm font-bold rounded-xl transition-colors"
+              >
+                Tutup Peta
+              </button>
+              <button
+                onClick={() => {
+                  setShowQuestionPalette(false);
+                  setShowSubmitModal(true);
+                }}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold rounded-xl shadow-lg shadow-emerald-600/20 transition-colors"
+              >
+                Kumpulkan Kuis ({answeredCount}/{questions.length})
+              </button>
+            </div>
+          </div>
         </div>
       )}
+
+      {/* 5. PRE-SUBMIT AUDIT & CONFIRMATION MODAL */}
+      {showSubmitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="max-w-md w-full p-6 sm:p-7 bg-slate-900 border-slate-800 shadow-2xl rounded-3xl space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto text-emerald-400">
+                <CheckCircle className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold text-white tracking-tight">Kumpulkan Jawaban Kuis?</h3>
+              <p className="text-slate-400 text-xs sm:text-sm">
+                Pastikan Anda telah memeriksa kembali seluruh jawaban sebelum melakukan penguncian skor.
+              </p>
+            </div>
+
+            {/* Audit Status Card */}
+            <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between text-xs sm:text-sm">
+                <span className="text-slate-400">Total Pertanyaan:</span>
+                <span className="font-bold text-white">{questions.length} Butir</span>
+              </div>
+              <div className="flex items-center justify-between text-xs sm:text-sm">
+                <span className="text-slate-400">Sudah Terjawab:</span>
+                <span className="font-bold text-emerald-400">{answeredCount} Soal ({progressPercent}%)</span>
+              </div>
+              {flaggedCount > 0 && (
+                <div className="flex items-center justify-between text-xs sm:text-sm">
+                  <span className="text-slate-400">Masih Ragu-ragu:</span>
+                  <span className="font-bold text-amber-400">{flaggedCount} Soal</span>
+                </div>
+              )}
+              {unansweredCount > 0 && (
+                <div className="flex items-center justify-between text-xs sm:text-sm">
+                  <span className="text-slate-400">Belum Dijawab:</span>
+                  <span className="font-bold text-rose-400">{unansweredCount} Soal</span>
+                </div>
+              )}
+            </div>
+
+            {/* Incomplete Warning Alert if unanswered exist */}
+            {unansweredCount > 0 && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                <p className="leading-snug">
+                  Masih terdapat <strong>{unansweredCount} soal</strong> yang belum terisi. Soal yang tidak terisi akan dihitung sebagai 0 poin.
+                </p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={() => {
+                  if (isSubmittingRef.current) return;
+                  isSubmittingRef.current = true;
+                  handleFinishQuiz(answersRef.current, false);
+                }}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+              >
+                Ya, Selesaikan & Kumpulkan Sekarang
+              </button>
+              
+              <button
+                onClick={() => setShowSubmitModal(false)}
+                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs sm:text-sm transition-colors"
+              >
+                Periksa Kembali Jawaban
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
+
     </div>
   );
 }
