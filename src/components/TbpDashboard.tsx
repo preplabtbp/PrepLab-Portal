@@ -173,6 +173,7 @@ export interface FocusStation {
   category: string;
   videoId: string;
   coverUrl: string;
+  audioUrl?: string;
 }
 
 export const FOCUS_STATIONS: FocusStation[] = [
@@ -182,6 +183,7 @@ export const FOCUS_STATIONS: FocusStation[] = [
     channel: 'Lofi Girl Live',
     category: 'Lofi Hip Hop',
     videoId: 'jfKfPfyJRdk',
+    audioUrl: 'https://stream.zeno.fm/f3wvbbqmdg8uv',
     coverUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=300&q=80'
   },
   {
@@ -190,6 +192,7 @@ export const FOCUS_STATIONS: FocusStation[] = [
     channel: 'Lofi Girl Synthwave',
     category: 'Synthwave',
     videoId: '4xDzrJKXOOY',
+    audioUrl: 'https://stream.nightride.fm/chill.mp3',
     coverUrl: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=300&q=80'
   },
   {
@@ -198,6 +201,7 @@ export const FOCUS_STATIONS: FocusStation[] = [
     channel: 'Lab Focus Audio',
     category: 'Binaural Focus',
     videoId: 'WPni755-Krg',
+    audioUrl: 'https://ice1.somafm.com/dronezone-128-mp3',
     coverUrl: 'https://images.unsplash.com/photo-1507668077129-56e32842fceb?auto=format&fit=crop&w=300&q=80'
   },
   {
@@ -206,6 +210,7 @@ export const FOCUS_STATIONS: FocusStation[] = [
     channel: 'Nature Atmosphere',
     category: 'Natural Sound',
     videoId: 'mPZkdNFkNps',
+    audioUrl: 'https://actions.google.com/sounds/v1/weather/rain_heavy.ogg',
     coverUrl: 'https://images.unsplash.com/photo-1534274988757-a28bf1a57c17?auto=format&fit=crop&w=300&q=80'
   },
   {
@@ -214,6 +219,7 @@ export const FOCUS_STATIONS: FocusStation[] = [
     channel: 'Acoustic Lab',
     category: 'Classical Piano',
     videoId: 'jgpJVI3tDbY',
+    audioUrl: 'https://ice2.somafm.com/thistle-128-mp3',
     coverUrl: 'https://images.unsplash.com/photo-1520523839898-5071282543e9?auto=format&fit=crop&w=300&q=80'
   }
 ];
@@ -743,7 +749,7 @@ export function TbpDashboard({
     reader.readAsDataURL(file);
   };
 
-  // Lab Focus & Ambient (YouTube Audio Stream Engine)
+  // Lab Focus & Ambient (Hybrid HTML5 Audio Stream + YouTube Engine)
   const [stationIndex, setStationIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(80);
@@ -751,9 +757,29 @@ export function TbpDashboard({
   const [showStationPicker, setShowStationPicker] = useState(false);
   const [showVideoPreview, setShowVideoPreview] = useState(false);
   const ytIframeRef = useRef<HTMLIFrameElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const currentStation = FOCUS_STATIONS[stationIndex] || FOCUS_STATIONS[0];
-  const originUrl = typeof window !== 'undefined' ? window.location.origin : '';
+
+  // Sync volume & mute to HTML5 audio element
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 0 : volume / 100;
+      audioRef.current.muted = isMuted;
+    }
+  }, [volume, isMuted]);
+
+  // Sync station change to HTML5 audio element
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.src = currentStation.audioUrl || '';
+      if (isPlaying) {
+        audioRef.current.play().catch(e => {
+          console.warn('Audio stream autoplay note:', e);
+        });
+      }
+    }
+  }, [currentStation.id]);
 
   const sendYtCommand = (func: string, args: any = '') => {
     if (ytIframeRef.current && ytIframeRef.current.contentWindow) {
@@ -771,12 +797,21 @@ export function TbpDashboard({
   const togglePlayAudio = () => {
     if (!isPlaying) {
       setIsPlaying(true);
+      if (audioRef.current && currentStation.audioUrl) {
+        audioRef.current.volume = isMuted ? 0 : volume / 100;
+        audioRef.current.play().catch(err => {
+          console.warn('HTML5 Audio play note:', err);
+        });
+      }
       sendYtCommand('playVideo');
       sendYtCommand('unMute');
       sendYtCommand('setVolume', [isMuted ? 0 : volume]);
       toast.success(`Memutar: ${currentStation.title}`, { id: 'ambient-player' });
     } else {
       setIsPlaying(false);
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
       sendYtCommand('pauseVideo');
       toast.info('Audio focus dijeda', { id: 'ambient-player' });
     }
@@ -786,13 +821,22 @@ export function TbpDashboard({
     const safeIdx = (newIdx + FOCUS_STATIONS.length) % FOCUS_STATIONS.length;
     setStationIndex(safeIdx);
     setIsPlaying(true);
+    if (audioRef.current && FOCUS_STATIONS[safeIdx].audioUrl) {
+      audioRef.current.src = FOCUS_STATIONS[safeIdx].audioUrl || '';
+      audioRef.current.volume = isMuted ? 0 : volume / 100;
+      audioRef.current.play().catch(console.warn);
+    }
     toast.success(`Beralih ke: ${FOCUS_STATIONS[safeIdx].title}`, { id: 'ambient-player' });
   };
 
   const handleVolumeChange = (newVol: number) => {
     setVolume(newVol);
+    if (audioRef.current) {
+      audioRef.current.volume = (isMuted ? 0 : newVol) / 100;
+    }
     if (isMuted && newVol > 0) {
       setIsMuted(false);
+      if (audioRef.current) audioRef.current.muted = false;
       sendYtCommand('unMute');
     }
     sendYtCommand('setVolume', [newVol]);
@@ -801,10 +845,17 @@ export function TbpDashboard({
   const toggleMute = () => {
     if (isMuted) {
       setIsMuted(false);
+      if (audioRef.current) {
+        audioRef.current.muted = false;
+        audioRef.current.volume = (volume || 80) / 100;
+      }
       sendYtCommand('unMute');
       sendYtCommand('setVolume', [volume || 80]);
     } else {
       setIsMuted(true);
+      if (audioRef.current) {
+        audioRef.current.muted = true;
+      }
       sendYtCommand('mute');
     }
   };
@@ -1837,7 +1888,15 @@ export function TbpDashboard({
                   borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
                 }}
               >
-                {/* Embedded YouTube Player with audio stream */}
+                {/* Native HTML5 Audio Stream for seamless playback & volume */}
+                <audio 
+                  ref={audioRef} 
+                  src={currentStation.audioUrl} 
+                  preload="auto" 
+                  loop 
+                />
+
+                {/* Embedded YouTube Player (No breaking origin, strict-origin referrerpolicy) */}
                 <div className={`rounded-xl overflow-hidden bg-black shadow-inner relative transition-all duration-300 ${
                   showVideoPreview ? 'aspect-video w-full mb-3' : 'h-0.5 opacity-0 overflow-hidden pointer-events-none'
                 }`}>
@@ -1846,9 +1905,10 @@ export function TbpDashboard({
                     id="ambient-yt-player"
                     width="100%"
                     height="100%"
-                    src={`https://www.youtube.com/embed/${currentStation.videoId}?enablejsapi=1&autoplay=${isPlaying ? 1 : 0}&rel=0&playsinline=1&origin=${encodeURIComponent(originUrl)}`}
+                    src={`https://www.youtube.com/embed/${currentStation.videoId}?enablejsapi=1&autoplay=${isPlaying && showVideoPreview ? 1 : 0}&rel=0&playsinline=1`}
                     title={currentStation.title}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    referrerPolicy="strict-origin-when-cross-origin"
                     className="w-full h-full border-0"
                   />
                 </div>

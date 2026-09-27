@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, X, BellRing, Wrench, ChevronRight, Megaphone, ClipboardCheck, Download } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Bell, Check, X, BellRing, Wrench, ChevronRight, Megaphone, ClipboardCheck, Download, Pin, Newspaper, BookOpen, Calendar, ChevronDown, CheckSquare, Layers } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { subscribeUserToPush } from '../push-notifications';
@@ -249,6 +249,40 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     );
   };
 
+  const isBulletinNotification = (notif: any): boolean => {
+    const link = (notif.link || '').toLowerCase();
+    const title = (notif.title || '').toLowerCase();
+    const msg = (notif.message || '').toLowerCase();
+    return (
+      link.includes('/bulletin') ||
+      title.includes('buletin') ||
+      title.includes('artikel') ||
+      title.includes('komentar') ||
+      msg.includes('buletin') ||
+      msg.includes('artikel buletin')
+    );
+  };
+
+  const isLogbookNotification = (notif: any): boolean => {
+    const link = (notif.link || '').toLowerCase();
+    const title = (notif.title || '').toLowerCase();
+    const msg = (notif.message || '').toLowerCase();
+    return (
+      link.includes('/logbook') ||
+      title.includes('log book') ||
+      title.includes('tugas') ||
+      title.includes('draft perubahan') ||
+      msg.includes('logbook') ||
+      msg.includes('penugasan')
+    );
+  };
+
+  const isAgendaNotification = (notif: any): boolean => {
+    const link = (notif.link || '').toLowerCase();
+    const title = (notif.title || '').toLowerCase();
+    return link.includes('/agenda') || title.includes('agenda');
+  };
+
   const handleNotificationClick = (notif: any) => {
     if (!notif.isRead) {
       markAsRead(notif.id);
@@ -323,6 +357,121 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     if (activeTab === 'Sistem') return !n.role || (!['Maintenance', 'Administration', 'admin', 'Laboratory', 'Preparation', 'QA', 'Inventory Control'].includes(n.role));
     return true;
   });
+
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+
+  // Group notifications into pinned category summaries with pop counters
+  const { pinnedCategories, generalNotifs } = useMemo(() => {
+    const groups: {
+      id: string;
+      title: string;
+      badgeText: string;
+      colorClass: string;
+      bgClass: string;
+      borderClass: string;
+      icon: any;
+      items: any[];
+      unreadCount: number;
+    }[] = [
+      {
+        id: 'bulletin',
+        title: 'Buletin & Forum Tim',
+        badgeText: 'Buletin',
+        colorClass: 'text-teal-600 dark:text-teal-400',
+        bgClass: 'bg-teal-500/10',
+        borderClass: 'border-teal-500/30',
+        icon: Newspaper,
+        items: [],
+        unreadCount: 0
+      },
+      {
+        id: 'wo',
+        title: 'Work Orders & Maintenance',
+        badgeText: 'WO',
+        colorClass: 'text-sky-600 dark:text-sky-400',
+        bgClass: 'bg-sky-500/10',
+        borderClass: 'border-sky-500/30',
+        icon: Wrench,
+        items: [],
+        unreadCount: 0
+      },
+      {
+        id: 'p5m',
+        title: 'P5M & Safety Briefing',
+        badgeText: 'P5M',
+        colorClass: 'text-amber-600 dark:text-amber-400',
+        bgClass: 'bg-amber-500/10',
+        borderClass: 'border-amber-500/30',
+        icon: Megaphone,
+        items: [],
+        unreadCount: 0
+      },
+      {
+        id: 'inspection',
+        title: 'P2H & Inspeksi Peralatan',
+        badgeText: 'P2H',
+        colorClass: 'text-emerald-600 dark:text-emerald-400',
+        bgClass: 'bg-emerald-500/10',
+        borderClass: 'border-emerald-500/30',
+        icon: CheckSquare,
+        items: [],
+        unreadCount: 0
+      },
+      {
+        id: 'logbook',
+        title: 'Log Book & Penugasan Harian',
+        badgeText: 'LogBook',
+        colorClass: 'text-indigo-600 dark:text-indigo-400',
+        bgClass: 'bg-indigo-500/10',
+        borderClass: 'border-indigo-500/30',
+        icon: BookOpen,
+        items: [],
+        unreadCount: 0
+      },
+      {
+        id: 'agenda',
+        title: 'Agenda & Event Site',
+        badgeText: 'Agenda',
+        colorClass: 'text-purple-600 dark:text-purple-400',
+        bgClass: 'bg-purple-500/10',
+        borderClass: 'border-purple-500/30',
+        icon: Calendar,
+        items: [],
+        unreadCount: 0
+      }
+    ];
+
+    const general: any[] = [];
+
+    filteredNotifs.forEach((n) => {
+      if (isBulletinNotification(n)) {
+        groups[0].items.push(n);
+        if (!n.isRead) groups[0].unreadCount++;
+      } else if (isWoNotification(n)) {
+        groups[1].items.push(n);
+        if (!n.isRead) groups[1].unreadCount++;
+      } else if (isP5mNotification(n)) {
+        groups[2].items.push(n);
+        if (!n.isRead) groups[2].unreadCount++;
+      } else if (isInspectionCompletedNotification(n)) {
+        groups[3].items.push(n);
+        if (!n.isRead) groups[3].unreadCount++;
+      } else if (isLogbookNotification(n)) {
+        groups[4].items.push(n);
+        if (!n.isRead) groups[4].unreadCount++;
+      } else if (isAgendaNotification(n)) {
+        groups[5].items.push(n);
+        if (!n.isRead) groups[5].unreadCount++;
+      } else {
+        general.push(n);
+      }
+    });
+
+    return {
+      pinnedCategories: groups.filter(g => g.items.length > 0),
+      generalNotifs: general
+    };
+  }, [filteredNotifs]);
 
   return (
     <>
@@ -428,29 +577,132 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
               </div>
             )}
 
-            {/* List Notifications */}
-            <div className="overflow-y-auto flex-1 p-2 space-y-1.5">
-              {filteredNotifs.length === 0 ? (
-                <div className="text-center py-8 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                  Belum ada notifikasi
+            {/* List Notifications with Pinned Categories */}
+            <div className="overflow-y-auto flex-1 p-2 space-y-2">
+              {/* PINNED CATEGORY SUMMARY CARDS (1x Card Rekap per Kategori dengan Pop Angka) */}
+              {pinnedCategories.length > 0 && (
+                <div className="space-y-1.5 pb-1">
+                  <div className="px-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                    <Pin className="w-3 h-3 text-amber-500" />
+                    <span>Rekap Notifikasi Ter-Pin</span>
+                  </div>
+
+                  {pinnedCategories.map((cat) => {
+                    const IconComponent = cat.icon;
+                    const isExpanded = expandedCategory === cat.id;
+                    const latestItem = cat.items[0];
+
+                    return (
+                      <div
+                        key={cat.id}
+                        className={`rounded-xl border transition-all ${
+                          cat.unreadCount > 0
+                            ? 'bg-gradient-to-r from-teal-500/10 via-emerald-500/5 to-transparent border-teal-500/40 shadow-xs'
+                            : 'border-slate-200 dark:border-slate-800'
+                        }`}
+                        style={{ backgroundColor: cat.unreadCount === 0 ? 'var(--card-bg)' : undefined }}
+                      >
+                        {/* Pinned Category Header Clickable */}
+                        <div
+                          onClick={() => setExpandedCategory(isExpanded ? null : cat.id)}
+                          className="p-2.5 flex items-center justify-between gap-2 cursor-pointer hover:opacity-90 select-none"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={`w-7 h-7 rounded-lg ${cat.bgClass} ${cat.colorClass} flex items-center justify-center shrink-0`}>
+                              <IconComponent className="w-3.5 h-3.5" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-xs truncate" style={{ color: 'var(--text-main)' }}>
+                                  {cat.title}
+                                </span>
+                              </div>
+                              <p className="text-[11px] truncate opacity-70" style={{ color: 'var(--text-muted)' }}>
+                                {latestItem?.title || latestItem?.message || `${cat.items.length} aktivitas terdata`}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* POP ANGKA COUNTER */}
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide shadow-xs ${
+                              cat.unreadCount > 0 
+                                ? 'bg-rose-500 text-white animate-pulse ring-2 ring-rose-300' 
+                                : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                            }`}>
+                              {cat.unreadCount > 0 ? `${cat.unreadCount} BARU` : `${cat.items.length}`}
+                            </span>
+                            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-teal-600' : ''}`} />
+                          </div>
+                        </div>
+
+                        {/* Expanded Items List inside Pinned Category */}
+                        {isExpanded && (
+                          <div className="px-2 pb-2 pt-1 border-t border-slate-200/60 dark:border-slate-700/60 space-y-1.5 animate-in fade-in duration-150">
+                            {cat.items.map((notif) => {
+                              const isWO = isWoNotification(notif);
+                              const isP5M = isP5mNotification(notif);
+                              const isInspection = isInspectionCompletedNotification(notif);
+
+                              return (
+                                <div
+                                  key={notif.id}
+                                  onClick={() => handleNotificationClick(notif)}
+                                  className={`p-2 rounded-lg text-xs cursor-pointer border transition-all hover:scale-[1.01] ${
+                                    notif.isRead ? 'opacity-70' : 'font-medium bg-white dark:bg-slate-800 shadow-2xs'
+                                  }`}
+                                  style={{
+                                    borderColor: 'var(--border-main)'
+                                  }}
+                                >
+                                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                                    <h5 className="font-bold text-xs truncate flex-1" style={{ color: 'var(--text-main)' }}>
+                                      {notif.title}
+                                    </h5>
+                                    {!notif.isRead && (
+                                      <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] leading-relaxed line-clamp-2" style={{ color: 'var(--text-muted)' }}>
+                                    {notif.message}
+                                  </p>
+                                  <div className="mt-1 flex items-center justify-between text-[9px] font-mono opacity-60" style={{ color: 'var(--text-muted)' }}>
+                                    <span>{notif.createdAt ? format(new Date(notif.createdAt), 'dd MMM HH:mm') : 'Baru saja'}</span>
+                                    <span className="text-teal-600 font-bold hover:underline">Buka rincian →</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : (
-                filteredNotifs.map((notif) => {
-                  const isWO = isWoNotification(notif);
-                  const isP5M = isP5mNotification(notif);
-                  const isInspection = isInspectionCompletedNotification(notif);
-                  return (
-                    <div 
-                      key={notif.id} 
-                      className={`p-3 rounded-xl text-xs relative cursor-pointer border transition-all hover:scale-[1.01] ${
-                        notif.isRead ? 'opacity-70' : 'shadow-xs font-medium'
-                      }`}
-                      style={{
-                        backgroundColor: notif.isRead ? 'var(--card-bg)' : 'var(--input-bg)',
-                        borderColor: isP5M && !notif.isRead ? 'rgba(245, 158, 11, 0.4)' : (isInspection && !notif.isRead ? 'rgba(16, 185, 129, 0.4)' : 'var(--border-main)')
-                      }}
-                      onClick={() => handleNotificationClick(notif)}
-                    >
+              )}
+
+              {/* UNASSIGNED / GENERAL NOTIFICATIONS (Non-kategori) */}
+              {generalNotifs.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="px-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Notifikasi Umum & Sistem
+                  </div>
+                  {generalNotifs.map((notif) => {
+                    const isWO = isWoNotification(notif);
+                    const isP5M = isP5mNotification(notif);
+                    const isInspection = isInspectionCompletedNotification(notif);
+                    return (
+                      <div 
+                        key={notif.id} 
+                        className={`p-3 rounded-xl text-xs relative cursor-pointer border transition-all hover:scale-[1.01] ${
+                          notif.isRead ? 'opacity-70' : 'shadow-xs font-medium'
+                        }`}
+                        style={{
+                          backgroundColor: notif.isRead ? 'var(--card-bg)' : 'var(--input-bg)',
+                          borderColor: 'var(--border-main)'
+                        }}
+                        onClick={() => handleNotificationClick(notif)}
+                      >
                       {!notif.isRead && (
                         <div 
                           className="absolute top-3.5 right-3 w-2 h-2 rounded-full"
@@ -543,7 +795,14 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                       </div>
                     </div>
                   );
-                })
+                })}
+              </div>
+            )}
+
+              {pinnedCategories.length === 0 && generalNotifs.length === 0 && (
+                <div className="text-center py-8 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                  Belum ada notifikasi
+                </div>
               )}
             </div>
           </div>

@@ -37,7 +37,9 @@ import {
   Maximize2,
   Minimize2,
   Monitor,
-  GripVertical
+  GripVertical,
+  Bookmark,
+  Save
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui';
@@ -76,6 +78,87 @@ interface LogbookTask {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface TaskTemplate {
+  id: string;
+  name: string;
+  section: string;
+  title: string;
+  description: string;
+  priority: string;
+  activityType: string;
+  targetTime?: string;
+  isDefault?: boolean;
+}
+
+export const DEFAULT_TASK_TEMPLATES: TaskTemplate[] = [
+  {
+    id: 'tmpl-aas-kalibrasi',
+    name: 'Kalibrasi AAS & Standar',
+    section: 'Laboratory',
+    title: 'Kalibrasi Harian Spektrofotometer AAS & Standar Reagen',
+    description: '- [ ] Pengecekan tekanan gas asetilen & nitrous oxide\n- [ ] Kalibrasi kurva standar konsentrasi Ni & Fe\n- [ ] Pengujian larutan blanko & CRM standard reference material\n- [ ] Pencatatan absorbansi & verifikasi logging instrumen',
+    priority: 'High',
+    activityType: 'Routine',
+    targetTime: '12:00',
+    isDefault: true
+  },
+  {
+    id: 'tmpl-dryer-prep',
+    name: 'Pembersihan & Flushing Dryer',
+    section: 'Preparation',
+    title: 'Pembersihan Chamber Dryer & Inspeksi Suhu Pengeringan',
+    description: '- [ ] Pengecekan burner & exhaust fan oven dryer\n- [ ] Pembersihan sisa residu sampel di nampan pengering\n- [ ] Verifikasi kalibrasi termometer oven 105°C\n- [ ] Dokumentasi log suhu harian preparasi',
+    priority: 'Normal',
+    activityType: 'Routine',
+    targetTime: '17:00',
+    isDefault: true
+  },
+  {
+    id: 'tmpl-p2h-prep',
+    name: 'P2H & Housekeeping Shift Preparasi',
+    section: 'Preparation',
+    title: 'P2H Rutin Jaw Crusher, Pulverizer, & Housekeeping Shift',
+    description: '- [ ] Pemeriksaan baut jaw crusher & rotary splitter\n- [ ] Pengecekan getaran & ring mill pulverizer\n- [ ] Pengosongan kantong dust collector\n- [ ] Pembersihan lantai kerja & pembuangan reject sampel',
+    priority: 'Normal',
+    activityType: 'Routine',
+    targetTime: '18:00',
+    isDefault: true
+  },
+  {
+    id: 'tmpl-stock-opname',
+    name: 'Stock Opname Reagen & APD Gudang',
+    section: 'Inventory Control',
+    title: 'Stock Opname Reagen Kimia, Cupel, & APD Gudang Lab',
+    description: '- [ ] Penghitungan fisik asam nitrat (HNO3) & HCl\n- [ ] Pengecekan stok cupel & crucible keramik\n- [ ] Pengecekan persediaan masker respirator & sarung tangan nitril\n- [ ] Input rekap saldo di kartu kontrol inventory',
+    priority: 'Normal',
+    activityType: 'Routine',
+    targetTime: '16:00',
+    isDefault: true
+  },
+  {
+    id: 'tmpl-qa-duplicate',
+    name: 'Analisa Duplicate Sample & QA/QC',
+    section: 'Quality Control (QA)',
+    title: 'Pengujian Duplicate Sample & Verifikasi Batas Presisi QA/QC',
+    description: '- [ ] Pengambilan 5% duplicate batch sampel harian\n- [ ] Analisa split pulverize vs split crush\n- [ ] Perhitungan RPD (Relative Percent Difference)\n- [ ] Input data control chart shewhart',
+    priority: 'High',
+    activityType: 'Routine',
+    targetTime: '15:00',
+    isDefault: true
+  },
+  {
+    id: 'tmpl-handover-shift',
+    name: 'Handover & Laporan Tutup Shift',
+    section: 'Semua Seksi',
+    title: 'Handover Antar Shift, Laporan Hasil Analisa, & Status Alat',
+    description: '- [ ] Rekap jumlah sampel terselesaikan vs pending\n- [ ] Catatan kendala alat atau downtime\n- [ ] Serah terima sampel prioritas ke pengawas shift berikutnya\n- [ ] Tandatangan berita acara serah terima shift',
+    priority: 'Urgent',
+    activityType: 'Routine',
+    targetTime: '19:00',
+    isDefault: true
+  }
+];
 
 interface LogbookScreenProps {
   inspectorNik: string;
@@ -843,6 +926,95 @@ export function LogbookScreen({
     setNewPendingPicName('');
     setNewPendingReason('');
     setShowAssignModal(true);
+  };
+
+  // Task Templates State
+  const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>(() => {
+    try {
+      const saved = localStorage.getItem('logbook_task_templates');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_TASK_TEMPLATES;
+  });
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templateFilterSection, setTemplateFilterSection] = useState('Semua Seksi');
+  const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState('');
+
+  // Handle Copy to New Task
+  const handleCopyToNewTask = (task: LogbookTask) => {
+    setNewTitle(task.title || '');
+    setNewTaskDescription(task.description || '');
+    setNewPriority(task.priority || 'Normal');
+    setNewActivityType(task.activityType || 'Routine');
+    setNewTargetDate(selectedDate || getTodayStr());
+    setNewTargetTime(task.targetTime || '23:59');
+    setSelectedBulletinPostId(task.bulletinPostId ? String(task.bulletinPostId) : '');
+    if (task.assigneeNik) {
+      const niks = task.assigneeNik.split(',').map(s => s.trim()).filter(Boolean);
+      const names = (task.assigneeName || '').split(',').map(s => s.trim()).filter(Boolean);
+      setNewAssigneeNiks(niks);
+      setNewAssigneeNames(names);
+    } else {
+      setNewAssigneeNiks([]);
+      setNewAssigneeNames([]);
+    }
+    setIsAssignPending(false);
+    setNewPendingPicNik('');
+    setNewPendingPicName('');
+    setNewPendingReason('');
+    setShowAssignModal(true);
+    toast.success('Data kegiatan berhasil disalin ke form penugasan baru', { id: 'copy-task' });
+  };
+
+  // Apply template into assign form
+  const applyTemplate = (template: TaskTemplate) => {
+    setNewTitle(template.title);
+    setNewTaskDescription(template.description);
+    setNewPriority(template.priority || 'Normal');
+    setNewActivityType(template.activityType || 'Routine');
+    if (template.targetTime) setNewTargetTime(template.targetTime);
+    toast.success(`Template "${template.name}" berhasil diterapkan`, { id: 'template-applied' });
+  };
+
+  // Save new custom template
+  const handleSaveAsTemplate = (name: string) => {
+    if (!name.trim()) {
+      toast.error('Masukkan nama template tugas');
+      return;
+    }
+    const newTmpl: TaskTemplate = {
+      id: `tmpl-custom-${Date.now()}`,
+      name: name.trim(),
+      section: selectedSection !== 'Semua Seksi' ? selectedSection : 'Semua Seksi',
+      title: newTitle.trim() || name.trim(),
+      description: newTaskDescription.trim(),
+      priority: newPriority,
+      activityType: newActivityType,
+      targetTime: newTargetTime || '23:59',
+      isDefault: false
+    };
+    const updated = [newTmpl, ...taskTemplates];
+    setTaskTemplates(updated);
+    try {
+      localStorage.setItem('logbook_task_templates', JSON.stringify(updated));
+    } catch (e) {}
+    setShowSaveTemplateDialog(false);
+    setNewTemplateName('');
+    toast.success(`Template "${newTmpl.name}" berhasil disimpan!`);
+  };
+
+  // Delete custom template
+  const handleDeleteTemplate = (templateId: string) => {
+    const updated = taskTemplates.filter(t => t.id !== templateId);
+    setTaskTemplates(updated);
+    try {
+      localStorage.setItem('logbook_task_templates', JSON.stringify(updated));
+    } catch (e) {}
+    toast.success('Template berhasil dihapus');
   };
 
   // State: Edit Task & Draft Proposal (Role-Based)
@@ -1666,18 +1838,31 @@ export function LogbookScreen({
             </div>
           </div>
 
-          {/* Right: Status Dropdown & Mini Progress Bar (di bagian bawah status) */}
+          {/* Right: Status Dropdown, Copy Button & Mini Progress Bar */}
           <div 
             onClick={(e) => e.stopPropagation()} 
             className="flex flex-col items-end gap-1 shrink-0"
           >
-            {/* Status Dropdown (Automated if subtask mode, manual if non-subtask) */}
-            <NotionDropdownCell
-              type="status"
-              value={task.status}
-              onChange={(newVal) => handleStatusChange(task.id, newVal)}
-              optionsOverride={statusOptionsOverride}
-            />
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCopyToNewTask(task);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Salin kegiatan ini ke tugas baru"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+              {/* Status Dropdown (Automated if subtask mode, manual if non-subtask) */}
+              <NotionDropdownCell
+                type="status"
+                value={task.status}
+                onChange={(newVal) => handleStatusChange(task.id, newVal)}
+                optionsOverride={statusOptionsOverride}
+              />
+            </div>
 
             {/* Progress bar kecil di ujung kanan di bagian bawah status */}
             <div className="flex items-center justify-end gap-1.5 w-24 sm:w-28 mt-0.5">
@@ -1964,6 +2149,16 @@ export function LogbookScreen({
 
                 <button
                   type="button"
+                  onClick={() => handleCopyToNewTask(task)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-all cursor-pointer shadow-xs active:scale-95"
+                  title="Salin tugas ini ke form penugasan baru"
+                >
+                  <Copy className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Salin ke Tugas Baru</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setTaskToDelete(task)}
                   title="Hapus kegiatan ini"
                   className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer border border-transparent hover:border-rose-200"
@@ -2057,6 +2252,20 @@ export function LogbookScreen({
             >
               <Copy className="w-3.5 h-3.5 text-teal-500" />
               <span className="hidden sm:inline">Salin Notulensi Seksi</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowTemplateModal(true)}
+              title="Kelola & gunakan template kegiatan"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold hover:border-teal-500 hover:text-teal-600 dark:hover:text-teal-400 transition-all cursor-pointer shadow-xs"
+              style={{
+                backgroundColor: 'var(--card-bg, #ffffff)',
+                borderColor: 'var(--border-main, #cbd5e1)'
+              }}
+            >
+              <Bookmark className="w-3.5 h-3.5 text-teal-600" />
+              <span className="hidden sm:inline">Template Tugas</span>
             </button>
 
             <button
@@ -2638,6 +2847,58 @@ export function LogbookScreen({
 
             {/* Modal Form */}
             <form onSubmit={handleAssignTaskSubmit} className="p-4 sm:p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* Quick Template Selector Bar */}
+              <div className="p-3 rounded-2xl bg-gradient-to-r from-teal-500/10 via-emerald-500/5 to-transparent border border-teal-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-teal-800 dark:text-teal-200">
+                    <Bookmark className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Template Tugas Siap Pakai:</span>
+                  </div>
+                  {newTitle.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSaveTemplateDialog(true)}
+                      className="text-[11px] font-bold text-teal-700 hover:text-teal-900 dark:text-teal-300 dark:hover:text-teal-100 hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <Save className="w-3 h-3" />
+                      <span>Simpan Isian sbg Template</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <select
+                    onChange={(e) => {
+                      const selected = taskTemplates.find(t => t.id === e.target.value);
+                      if (selected) applyTemplate(selected);
+                      e.target.value = '';
+                    }}
+                    defaultValue=""
+                    className="flex-1 px-2.5 py-1.5 rounded-xl border text-xs font-medium cursor-pointer outline-none focus:border-teal-500"
+                    style={{
+                      backgroundColor: 'var(--card-bg, #ffffff)',
+                      borderColor: 'var(--border-main, #cbd5e1)'
+                    }}
+                  >
+                    <option value="" disabled>-- Pilih Template Tugas Siap Pakai --</option>
+                    {taskTemplates.map(t => (
+                      <option key={t.id} value={t.id}>
+                        [{t.section}] {t.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplateModal(true)}
+                    className="px-2.5 py-1.5 rounded-xl border text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                    style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                  >
+                    Kelola
+                  </button>
+                </div>
+              </div>
+
               {/* Judul Kegiatan */}
               <div className="space-y-1">
                 <label className="text-xs font-bold block">Judul Kegiatan / Arahan *</label>
@@ -3408,6 +3669,207 @@ export function LogbookScreen({
           </div>
         );
       })()}
+      {/* ========================================================================= */}
+      {/* MODAL: KELOLA & PILIH TEMPLATE TUGAS LOG BOOK                            */}
+      {/* ========================================================================= */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-100 flex flex-col max-h-[85vh]"
+            style={{ 
+              backgroundColor: 'var(--card-bg, #ffffff)', 
+              borderColor: 'var(--border-main, #e2e8f0)',
+              color: 'var(--text-main, #0f172a)'
+            }}
+          >
+            {/* Modal Header */}
+            <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center">
+                  <Bookmark className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">Daftar Template Tugas Log Book</h3>
+                  <p className="text-[11px] text-slate-500">Pilih template untuk langsung mengisi arahan tugas secara instan</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTemplateModal(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Filter Section */}
+            <div className="p-3 border-b flex items-center justify-between gap-2 flex-wrap" style={{ borderColor: 'var(--border-main, #e2e8f0)', backgroundColor: 'var(--input-bg, #f8fafc)' }}>
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                {['Semua Seksi', 'Laboratory', 'Preparation', 'Inventory Control', 'Quality Control (QA)'].map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    onClick={() => setTemplateFilterSection(sec)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      templateFilterSection === sec
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'bg-white border text-slate-600 hover:bg-slate-50'
+                    }`}
+                    style={{ borderColor: templateFilterSection === sec ? undefined : 'var(--border-main, #cbd5e1)' }}
+                  >
+                    {sec}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTemplateModal(false);
+                  openAssignModal();
+                }}
+                className="text-xs font-bold text-teal-600 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Buat Template Baru</span>
+              </button>
+            </div>
+
+            {/* Template List Cards */}
+            <div className="p-4 overflow-y-auto space-y-3 flex-1">
+              {taskTemplates
+                .filter(t => templateFilterSection === 'Semua Seksi' || t.section === templateFilterSection || t.section === 'Semua Seksi')
+                .map((tmpl) => (
+                  <div
+                    key={tmpl.id}
+                    className="p-3.5 rounded-xl border hover:border-teal-500/70 transition-all space-y-2 bg-white shadow-2xs group"
+                    style={{ borderColor: 'var(--border-main, #e2e8f0)' }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                            {tmpl.section}
+                          </span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${
+                            tmpl.priority === 'High' ? 'bg-rose-50 text-rose-700' : (tmpl.priority === 'Urgent' ? 'bg-purple-50 text-purple-700' : 'bg-slate-100 text-slate-700')
+                          }`}>
+                            {tmpl.priority}
+                          </span>
+                          {tmpl.targetTime && (
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              Jam: {tmpl.targetTime}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="font-bold text-xs sm:text-sm text-slate-900 group-hover:text-teal-700 transition-colors">
+                          {tmpl.name}
+                        </h4>
+                        <p className="text-xs text-slate-600 line-clamp-1 mt-0.5 font-medium">
+                          {tmpl.title}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {!tmpl.isDefault && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTemplate(tmpl.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="Hapus template kustom ini"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            applyTemplate(tmpl);
+                            setShowTemplateModal(false);
+                            setShowAssignModal(true);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-xs transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                        >
+                          <span>Pakai Template</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {tmpl.description && (
+                      <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-600 font-mono whitespace-pre-wrap line-clamp-3">
+                        {tmpl.description}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: SIMPAN SEBAGAI TEMPLATE BARU                                       */}
+      {/* ========================================================================= */}
+      {showSaveTemplateDialog && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-100">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl border shadow-2xl p-4 space-y-3"
+            style={{ 
+              backgroundColor: 'var(--card-bg, #ffffff)', 
+              borderColor: 'var(--border-main, #e2e8f0)',
+              color: 'var(--text-main, #0f172a)'
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <Bookmark className="w-4 h-4 text-teal-600" />
+              <h4 className="font-bold text-sm">Simpan sebagai Template</h4>
+            </div>
+            <p className="text-xs text-slate-500">
+              Beri nama template untuk arahan kegiatan ini agar dapat digunakan kembali di kemudian hari.
+            </p>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold block">Nama Template *</label>
+              <input
+                type="text"
+                autoFocus
+                placeholder="Contoh: Kalibrasi Flame AAS Pagi"
+                value={newTemplateName}
+                onChange={(e) => setNewTemplateName(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border text-xs font-medium outline-none focus:border-teal-500"
+                style={{
+                  backgroundColor: 'var(--input-bg, #f8fafc)',
+                  borderColor: 'var(--border-main, #cbd5e1)'
+                }}
+              />
+            </div>
+
+            <div className="pt-2 border-t flex items-center justify-end gap-2" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSaveTemplateDialog(false);
+                  setNewTemplateName('');
+                }}
+                className="px-3 py-1.5 rounded-xl border text-xs font-semibold hover:bg-slate-100 cursor-pointer"
+                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveAsTemplate(newTemplateName)}
+                className="px-4 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-xs cursor-pointer"
+              >
+                Simpan Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -130,8 +130,9 @@ export function BulletinBoard({
   const [showAiMeetingModal, setShowAiMeetingModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
-  const [unreadNotifCount, setUnreadNotifCount] = useState(99);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [notificationsList, setNotificationsList] = useState<any[]>([]);
+  const [bulletinNotifTab, setBulletinNotifTab] = useState<'notifications' | 'changelog'>('notifications');
 
   // AI Meeting Note Form State
   const [aiMeetingTitle, setAiMeetingTitle] = useState("");
@@ -188,9 +189,24 @@ export function BulletinBoard({
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          setNotificationsList(data);
-          const unread = data.filter((n: any) => !n.isRead).length;
-          setUnreadNotifCount(unread > 0 ? unread : 99);
+          // Dedicated to Bulletin only: exclude all unrelated portal notifications (P5M, WO, dll)
+          const bulletinOnly = data.filter((n: any) => {
+            const link = (n.link || '').toLowerCase();
+            const title = (n.title || '').toLowerCase();
+            const msg = (n.message || '').toLowerCase();
+            return (
+              link.includes('/bulletin') ||
+              title.includes('buletin') ||
+              title.includes('artikel') ||
+              title.includes('komentar') ||
+              title.includes('balasan') ||
+              msg.includes('buletin') ||
+              msg.includes('artikel buletin')
+            );
+          });
+          setNotificationsList(bulletinOnly);
+          const unread = bulletinOnly.filter((n: any) => !n.isRead).length;
+          setUnreadNotifCount(unread);
         }
       }
     } catch (e) {}
@@ -2510,17 +2526,18 @@ ${aiMeetingNotes
         </div>
       )}
 
-      {/* Notifications Modal */}
+      {/* Dedicated Bulletin Notification & Changelog Modal */}
       {showNotifModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start justify-center pt-16 sm:pt-20 p-4">
           <div 
-            className="border w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            className="border w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
             style={{
               backgroundColor: 'var(--card-bg, #202020)',
               borderColor: 'var(--border-main, #334155)',
               color: 'var(--text-main, #f8fafc)'
             }}
           >
+            {/* Header */}
             <div 
               className="p-3.5 border-b flex items-center justify-between"
               style={{
@@ -2529,46 +2546,162 @@ ${aiMeetingNotes
               }}
             >
               <div className="flex items-center gap-2">
-                <Inbox className="w-4 h-4 text-teal-400" />
-                <span className="font-bold text-sm" style={{ color: 'var(--text-main, #f8fafc)' }}>
-                  Inbox & Notifikasi Tim
-                </span>
+                <div className="w-7 h-7 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center">
+                  <Inbox className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm" style={{ color: 'var(--text-main, #f8fafc)' }}>
+                      Pusat Notifikasi &amp; Changelog Buletin
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-teal-500/15 text-teal-400 border border-teal-500/30">
+                      DEDICATED BULETIN
+                    </span>
+                  </div>
+                  <p className="text-[10px] opacity-70" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                    Pemberitahuan, komentar, &amp; pembaruan artikel khusus portal Buletin
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setShowNotifModal(false)}
-                className="p-1 rounded-md opacity-70 hover:opacity-100"
+                className="p-1 rounded-md opacity-70 hover:opacity-100 cursor-pointer"
                 style={{ color: 'var(--text-muted, #94a3b8)' }}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="max-h-80 overflow-y-auto p-3 space-y-2">
-              {notificationsList.length === 0 ? (
-                <div className="py-6 text-center text-xs italic" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                  Tidak ada notifikasi baru saat ini.
-                </div>
-              ) : (
-                notificationsList.slice(0, 10).map((n) => (
-                  <div
-                    key={n.id}
-                    className="p-2.5 rounded-lg border text-xs space-y-1"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #262626)',
-                      borderColor: 'var(--border-main, #334155)'
-                    }}
-                  >
-                    <div className="font-semibold flex items-center justify-between" style={{ color: 'var(--text-main, #f8fafc)' }}>
-                      <span>{n.title || "Pemberitahuan Sistem"}</span>
-                      <span className="text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                        {n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ""}
-                      </span>
-                    </div>
-                    <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                      {n.message || n.content || "Pemberitahuan baru telah diterbitkan."}
-                    </p>
+            {/* Tab Nav */}
+            <div className="flex border-b text-xs font-semibold px-3 pt-2 gap-2" style={{ borderColor: 'var(--border-main, #334155)' }}>
+              <button
+                onClick={() => setBulletinNotifTab('notifications')}
+                className={`pb-2 px-3 flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                  bulletinNotifTab === 'notifications'
+                    ? 'border-teal-500 text-teal-400 font-bold'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Notifikasi &amp; Diskusi ({notificationsList.length})</span>
+                {unreadNotifCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white animate-pulse">
+                    {unreadNotifCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setBulletinNotifTab('changelog')}
+                className={`pb-2 px-3 flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                  bulletinNotifTab === 'changelog'
+                    ? 'border-teal-500 text-teal-400 font-bold'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Changelog Artikel ({posts.length})</span>
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="max-h-96 overflow-y-auto p-3 space-y-2">
+              {bulletinNotifTab === 'notifications' ? (
+                notificationsList.length === 0 ? (
+                  <div className="py-8 text-center text-xs space-y-1" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                    <p className="font-semibold">Belum ada notifikasi diskusi buletin</p>
+                    <p className="text-[11px] opacity-75">Komentar atau postingan yang menyebut seksi Anda akan muncul di sini.</p>
                   </div>
-                ))
+                ) : (
+                  notificationsList.map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => {
+                        if (!n.isRead) {
+                          fetch(`/api/notifications/${n.id}/read`, { method: 'PUT' }).catch(console.error);
+                          setNotificationsList(prev => prev.map(item => item.id === n.id ? { ...item, isRead: true } : item));
+                          setUnreadNotifCount(prev => Math.max(0, prev - 1));
+                        }
+                        if (n.link) {
+                          setShowNotifModal(false);
+                          // Extract post ID if link is /bulletin/PT?postId=123
+                          const match = n.link.match(/postId=(\d+)/);
+                          if (match) {
+                            const pId = parseInt(match[1], 10);
+                            const found = posts.find(p => p.id === pId);
+                            if (found) {
+                              navigateToPost(found);
+                              return;
+                            }
+                          }
+                          window.location.href = n.link;
+                        }
+                      }}
+                      className={`p-3 rounded-xl border text-xs space-y-1 cursor-pointer transition-all hover:scale-[1.01] ${
+                        n.isRead ? 'opacity-70' : 'bg-teal-500/10 border-teal-500/40 shadow-xs'
+                      }`}
+                      style={{
+                        backgroundColor: n.isRead ? 'var(--input-bg, #262626)' : undefined,
+                        borderColor: n.isRead ? 'var(--border-main, #334155)' : undefined
+                      }}
+                    >
+                      <div className="font-semibold flex items-center justify-between" style={{ color: 'var(--text-main, #f8fafc)' }}>
+                        <span className="flex items-center gap-1.5 truncate">
+                          {!n.isRead && <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />}
+                          <span className="truncate">{n.title || "Pembaruan Buletin"}</span>
+                        </span>
+                        <span className="text-[10px] font-mono shrink-0" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                          {n.createdAt ? new Date(n.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ""}
+                        </span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed line-clamp-2" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                        {n.message || n.content || "Pemberitahuan artikel/diskusi baru."}
+                      </p>
+                    </div>
+                  ))
+                )
+              ) : (
+                /* Tab Changelog Buletin */
+                <div className="space-y-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1">
+                    Artikel &amp; Topik Buletin Terbaru
+                  </div>
+                  {posts.slice(0, 15).map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => {
+                        setShowNotifModal(false);
+                        navigateToPost(p);
+                      }}
+                      className="p-3 rounded-xl border text-xs space-y-1.5 cursor-pointer transition-all hover:border-teal-500 hover:scale-[1.01]"
+                      style={{
+                        backgroundColor: 'var(--input-bg, #262626)',
+                        borderColor: 'var(--border-main, #334155)'
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-teal-500/20 text-teal-300 mr-1.5">
+                            #{p.id}
+                          </span>
+                          <span className="font-bold text-xs" style={{ color: 'var(--text-main, #f8fafc)' }}>
+                            {p.title || p.category}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-bold text-teal-400 shrink-0">
+                          Buka Topik →
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] opacity-75 flex-wrap" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                        <span>Seksi: <strong className="text-slate-200">{p.department || p.category || 'General'}</strong></span>
+                        <span>•</span>
+                        <span>Penulis: <strong className="text-slate-200">{p.authorName || 'Personil'}</strong></span>
+                        <span>•</span>
+                        <span>Universe: <strong className="text-teal-300">{p.pt || 'TBP'}</strong></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>
