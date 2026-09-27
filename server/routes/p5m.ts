@@ -693,6 +693,183 @@ p5mRouter.post("/materi", async (req, res) => {
   }
 });
 
+// Bulk Insert P5M Materi with optional bulk prefix
+p5mRouter.post("/materi/bulk", async (req, res) => {
+  try {
+    const { 
+      prefix, 
+      rawText, 
+      items, 
+      defaultKategori = 'auto', 
+      defaultSubKategori = 'General', 
+      defaultDivisi = 'All', 
+      isInternal = false,
+      skipDuplicates = true,
+      stripNumbering = true
+    } = req.body;
+
+    let titleList: string[] = [];
+
+    if (typeof rawText === 'string') {
+      titleList = rawText
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+    } else if (Array.isArray(items)) {
+      titleList = items.map(item => (typeof item === 'string' ? item : item.judul || '')).filter(t => t.trim().length > 0);
+    }
+
+    if (titleList.length === 0) {
+      return res.status(400).json({ success: false, message: "Daftar judul materi tidak boleh kosong" });
+    }
+
+    const cleanPrefix = (prefix || '').trim();
+    const existingMateri = await db.select({ judul: p5mMateri.judul }).from(p5mMateri);
+    const existingJudulSet = new Set(existingMateri.map(m => m.judul.trim().toLowerCase()));
+
+    const toInsert: Array<{
+      judul: string;
+      kategori: string;
+      subKategori: string;
+      divisi: string;
+      fileUrl: string | null;
+      isInternal: boolean;
+      lastUsed: null;
+    }> = [];
+
+    let skippedCount = 0;
+    const addedTitles = new Set<string>();
+
+    for (let rawTitle of titleList) {
+      let cleanTitle = rawTitle.trim();
+
+      // Automatically strip numbers/bullet markers (e.g. "1. ", "1) ", "- ", "• ")
+      if (stripNumbering) {
+        cleanTitle = cleanTitle.replace(/^(\d+[\.\)\-:]|\-|\*|•)\s*/, '').trim();
+      }
+
+      if (!cleanTitle) continue;
+
+      // Prepend prefix if specified
+      let finalJudul = cleanTitle;
+      if (cleanPrefix) {
+        if (!cleanTitle.toLowerCase().startsWith(cleanPrefix.toLowerCase())) {
+          finalJudul = `${cleanPrefix} ${cleanTitle}`.trim();
+        }
+      }
+
+      // Check duplicates
+      const lowerJudul = finalJudul.toLowerCase();
+      if (skipDuplicates && (existingJudulSet.has(lowerJudul) || addedTitles.has(lowerJudul))) {
+        skippedCount++;
+        continue;
+      }
+
+      addedTitles.add(lowerJudul);
+
+      // Determine category, subcategory, division
+      let kat = defaultKategori;
+      let subKat = defaultSubKategori;
+      let div = defaultDivisi;
+
+      if (!kat || kat === 'auto') {
+        const classified = classifyTopic(finalJudul);
+        kat = classified.kategori;
+        subKat = classified.subKategori;
+        div = classified.divisi;
+      }
+
+      toInsert.push({
+        judul: finalJudul,
+        kategori: kat,
+        subKategori: subKat,
+        divisi: div,
+        fileUrl: null,
+        isInternal: Boolean(isInternal),
+        lastUsed: null
+      });
+    }
+
+    if (toInsert.length === 0) {
+      return res.json({ 
+        success: true, 
+        count: 0, 
+        skipped: skippedCount, 
+        message: `Tidak ada materi baru yang ditambahkan (${skippedCount} materi dilewati karena duplikat).` 
+      });
+    }
+
+    // Insert in chunks of 50
+    const insertedAll: any[] = [];
+    for (let i = 0; i < toInsert.length; i += 50) {
+      const chunk = toInsert.slice(i, i + 50);
+      const inserted = await db.insert(p5mMateri).values(chunk).returning();
+      insertedAll.push(...inserted);
+    }
+
+    res.json({
+      success: true,
+      count: insertedAll.length,
+      skipped: skippedCount,
+      data: insertedAll,
+      message: `Berhasil menambahkan ${insertedAll.length} materi P5M secara bulk${skippedCount > 0 ? ` (${skippedCount} materi dilewati karena sudah ada)` : ''}.`
+    });
+  } catch (error: any) {
+    console.error("Error bulk creating P5M materi:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Bulk Prepend Prefix to Existing P5M Materi
+p5mRouter.post("/materi/bulk-prefix", async (req, res) => {
+  try {
+    const { ids, prefix } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: "Pilih minimal 1 materi untuk diberi awalan judul" });
+    }
+    const cleanPrefix = (prefix || '').trim();
+    if (!cleanPrefix) {
+      return res.status(400).json({ success: false, message: "Awalan judul tidak boleh kosong" });
+    }
+
+    const rows = await db.select().from(p5mMateri).where(sql`${p5mMateri.id} = ANY(${ids})`);
+    let updatedCount = 0;
+
+    for (const row of rows) {
+      let currentTitle = row.judul.trim();
+      if (!currentTitle.toLowerCase().startsWith(cleanPrefix.toLowerCase())) {
+        const newTitle = `${cleanPrefix} ${currentTitle}`.trim();
+        await db.update(p5mMateri).set({ judul: newTitle }).where(eq(p5mMateri.id, row.id));
+        updatedCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      count: updatedCount,
+      message: `Berhasil menambahkan awalan "${cleanPrefix}" pada ${updatedCount} materi.`
+    });
+  } catch (error: any) {
+    console.error("Error adding bulk prefix to P5M materi:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Bulk Delete P5M Materi
+p5mRouter.post("/materi/bulk-delete", async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: "Pilih minimal 1 materi untuk dihapus" });
+    }
+    await db.delete(p5mMateri).where(sql`${p5mMateri.id} = ANY(${ids})`);
+    res.json({ success: true, count: ids.length, message: `Berhasil menghapus ${ids.length} materi.` });
+  } catch (error: any) {
+    console.error("Error bulk deleting P5M materi:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 p5mRouter.put("/materi/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);

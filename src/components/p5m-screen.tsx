@@ -5,7 +5,7 @@ import {
   BookOpen, History, Users, Sparkles, Filter, Search, X, Layers,
   ChevronLeft, ArrowRight, ArrowLeft, Shield, ShieldAlert, Award, CheckCircle2, FileText,
   Briefcase, Loader2, Star, Eye, RefreshCw, Image as ImageIcon, ExternalLink,
-  Building2, FileSpreadsheet
+  Building2, FileSpreadsheet, Tag, CheckSquare, Square
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import * as XLSX from 'xlsx';
@@ -365,6 +365,25 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const [formImageFilename, setFormImageFilename] = useState<string>('');
   const [formImagePreview, setFormImagePreview] = useState<string | null>(null);
   const [isSavingMateri, setIsSavingMateri] = useState<boolean>(false);
+
+  // Bulk Materi States
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkPrefix, setBulkPrefix] = useState('');
+  const [bulkRawText, setBulkRawText] = useState('');
+  const [bulkDefaultKategori, setBulkDefaultKategori] = useState('auto');
+  const [bulkDefaultSubKategori, setBulkDefaultSubKategori] = useState('General');
+  const [bulkDefaultDivisi, setBulkDefaultDivisi] = useState('All');
+  const [bulkIsInternal, setBulkIsInternal] = useState(false);
+  const [bulkStripNumbering, setBulkStripNumbering] = useState(true);
+  const [bulkSkipDuplicates, setBulkSkipDuplicates] = useState(true);
+  const [isSavingBulk, setIsSavingBulk] = useState(false);
+
+  // Batch Selection States
+  const [selectedMateriIds, setSelectedMateriIds] = useState<number[]>([]);
+  const [batchPrefixModalOpen, setBatchPrefixModalOpen] = useState(false);
+  const [batchPrefixText, setBatchPrefixText] = useState('');
+  const [isApplyingBatchPrefix, setIsApplyingBatchPrefix] = useState(false);
+  const [isDeletingBatch, setIsDeletingBatch] = useState(false);
 
   // Preview Image Modal
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
@@ -1104,6 +1123,147 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       }
     } catch (err: any) {
       toast.error('Gagal menghapus materi: ' + err.message);
+    }
+  };
+
+  // Live calculation of bulk parsed items
+  const parsedBulkItems = useMemo(() => {
+    if (!bulkRawText.trim()) return [];
+    const lines = bulkRawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const cleanPrefix = bulkPrefix.trim();
+    const existingJudulSet = new Set(materiList.map(m => (m.judul || '').trim().toLowerCase()));
+    const seenInBatch = new Set<string>();
+
+    return lines.map((raw) => {
+      let clean = raw;
+      if (bulkStripNumbering) {
+        clean = clean.replace(/^(\d+[\.\)\-:]|\-|\*|•)\s*/, '').trim();
+      }
+      let finalTitle = clean;
+      if (cleanPrefix) {
+        if (!clean.toLowerCase().startsWith(cleanPrefix.toLowerCase())) {
+          finalTitle = `${cleanPrefix} ${clean}`.trim();
+        }
+      }
+      const lower = finalTitle.toLowerCase();
+      const isDuplicateInDb = existingJudulSet.has(lower);
+      const isDuplicateInBatch = seenInBatch.has(lower);
+      seenInBatch.add(lower);
+
+      return {
+        original: raw,
+        title: finalTitle,
+        isDuplicate: isDuplicateInDb || isDuplicateInBatch,
+        isExistingInDb: isDuplicateInDb
+      };
+    });
+  }, [bulkRawText, bulkPrefix, bulkStripNumbering, materiList]);
+
+  const handleSaveBulkMateri = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkRawText.trim()) {
+      toast.warning('Daftar judul materi belum diisi');
+      return;
+    }
+
+    if (parsedBulkItems.length === 0) {
+      toast.warning('Tidak ada judul materi yang valid');
+      return;
+    }
+
+    setIsSavingBulk(true);
+    try {
+      const res = await fetch('/api/p5m/materi/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prefix: bulkPrefix,
+          rawText: bulkRawText,
+          defaultKategori: bulkDefaultKategori,
+          defaultSubKategori: bulkDefaultSubKategori,
+          defaultDivisi: bulkDefaultDivisi,
+          isInternal: bulkIsInternal,
+          skipDuplicates: bulkSkipDuplicates,
+          stripNumbering: bulkStripNumbering
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || `Berhasil menambahkan ${data.count} materi P5M`);
+        fetchMateriList();
+        setBulkModalOpen(false);
+        setBulkRawText('');
+        setBulkPrefix('');
+      } else {
+        toast.error('Gagal menambahkan materi: ' + (data.message || 'Error'));
+      }
+    } catch (err: any) {
+      toast.error('Gagal memproses materi bulk: ' + err.message);
+    } finally {
+      setIsSavingBulk(false);
+    }
+  };
+
+  const handleApplyBatchPrefix = async () => {
+    if (!batchPrefixText.trim()) {
+      toast.warning('Awalan judul tidak boleh kosong');
+      return;
+    }
+    if (selectedMateriIds.length === 0) {
+      toast.warning('Pilih minimal 1 materi');
+      return;
+    }
+
+    setIsApplyingBatchPrefix(true);
+    try {
+      const res = await fetch('/api/p5m/materi/bulk-prefix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: selectedMateriIds,
+          prefix: batchPrefixText
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || `Berhasil memperbarui awalan judul materi`);
+        fetchMateriList();
+        setBatchPrefixModalOpen(false);
+        setBatchPrefixText('');
+        setSelectedMateriIds([]);
+      } else {
+        toast.error('Gagal memperbarui awalan judul: ' + (data.message || 'Error'));
+      }
+    } catch (err: any) {
+      toast.error('Gagal memproses awalan judul: ' + err.message);
+    } finally {
+      setIsApplyingBatchPrefix(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedMateriIds.length === 0) return;
+    if (!window.confirm(`Yakin ingin menghapus ${selectedMateriIds.length} materi yang dipilih dari database?`)) return;
+
+    setIsDeletingBatch(true);
+    try {
+      const res = await fetch('/api/p5m/materi/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedMateriIds })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || `Berhasil menghapus ${selectedMateriIds.length} materi`);
+        fetchMateriList();
+        setSelectedMateriIds([]);
+      } else {
+        toast.error('Gagal menghapus materi: ' + (data.message || 'Error'));
+      }
+    } catch (err: any) {
+      toast.error('Gagal menghapus materi: ' + err.message);
+    } finally {
+      setIsDeletingBatch(false);
     }
   };
 
@@ -2208,6 +2368,17 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
                   <Button
                     onClick={() => {
+                      setBulkModalOpen(true);
+                    }}
+                    className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs h-9 px-3.5 rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer"
+                    title="Tambah banyak materi P5M sekaligus dengan awalan judul seragam"
+                  >
+                    <Layers className="w-4 h-4 mr-1" />
+                    <span>Tambah Materi Bulk</span>
+                  </Button>
+
+                  <Button
+                    onClick={() => {
                       setEditingMateri(null);
                       setFormJudul('');
                       setFormKategori('Teknis');
@@ -2227,6 +2398,47 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               )}
             </div>
           </div>
+
+          {/* Batch Action Bar if items selected */}
+          {isQATeam && selectedMateriIds.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-teal-500/10 border border-teal-500/30 rounded-xl animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="flex items-center gap-2 text-xs font-semibold text-teal-700 dark:text-teal-300">
+                <CheckCircle2 className="w-4 h-4 text-teal-600" />
+                <span>{selectedMateriIds.length} materi dipilih</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setBatchPrefixText('');
+                    setBatchPrefixModalOpen(true);
+                  }}
+                  className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs h-8 px-3 rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Tag className="w-3.5 h-3.5" />
+                  <span>Tambah Awalan Judul</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={handleBatchDelete}
+                  disabled={isDeletingBatch}
+                  className="bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-500/30 font-bold text-xs h-8 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isDeletingBatch ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  <span>Hapus Terpilih</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedMateriIds([])}
+                  className="text-xs h-8 px-2 text-[var(--text-muted)] hover:text-[var(--text-main)]"
+                >
+                  Batal Pilihan
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Search & Filter Bar */}
           <div className="flex flex-wrap items-center gap-2 bg-[var(--card-bg)] border border-[var(--border-main)] p-3 rounded-xl shadow-xs">
@@ -2282,6 +2494,23 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 <table className="w-full text-left text-xs text-[var(--text-main)]">
                   <thead className="bg-[var(--input-bg)] text-[var(--text-muted)] uppercase font-mono text-[10px] border-b border-[var(--border-main)]">
                     <tr>
+                      {isQATeam && (
+                        <th className="py-3 px-3 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            checked={filteredMateri.length > 0 && selectedMateriIds.length === filteredMateri.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedMateriIds(filteredMateri.map(m => m.id));
+                              } else {
+                                setSelectedMateriIds([]);
+                              }
+                            }}
+                            className="rounded border-[var(--border-main)] text-teal-600 focus:ring-teal-500 cursor-pointer"
+                            title="Pilih Semua"
+                          />
+                        </th>
+                      )}
                       <th className="py-3 px-4 w-12 text-center">No</th>
                       <th className="py-3 px-4">Judul Materi Briefing</th>
                       <th className="py-3 px-4 w-28">Kategori</th>
@@ -2293,7 +2522,23 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]">
                     {filteredMateri.map((item, idx) => (
-                      <tr key={item.id} className="hover:bg-[var(--input-bg)] transition-colors">
+                      <tr key={item.id} className={`hover:bg-[var(--input-bg)] transition-colors ${selectedMateriIds.includes(item.id) ? 'bg-teal-500/5' : ''}`}>
+                        {isQATeam && (
+                          <td className="py-3 px-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedMateriIds.includes(item.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedMateriIds(prev => [...prev, item.id]);
+                                } else {
+                                  setSelectedMateriIds(prev => prev.filter(id => id !== item.id));
+                                }
+                              }}
+                              className="rounded border-[var(--border-main)] text-teal-600 focus:ring-teal-500 cursor-pointer"
+                            />
+                          </td>
+                        )}
                         <td className="py-3 px-4 text-center font-mono text-[var(--text-muted)]">{idx + 1}</td>
                         <td className="py-3 px-4 font-semibold text-[var(--text-main)]">
                           <div className="flex items-center gap-1.5 flex-wrap">
@@ -2702,6 +2947,390 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </Button>
               </div>
             </form>
+          </Card>
+        </div>
+      )}
+
+      {/* ── MODAL: TAMBAH MATERI P5M SECARA BULK ── */}
+      {bulkModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+          <Card className="bg-[var(--card-bg)] border border-[var(--border-main)] w-full max-w-2xl p-5 sm:p-6 rounded-2xl shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-[var(--border-main)] pb-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-600 dark:text-teal-400">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base text-[var(--text-main)]">
+                    Tambah Materi P5M Secara Bulk
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Input banyak judul materi sekaligus dan sematkan awalan judul secara seragam
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setBulkModalOpen(false)}
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--input-bg)] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBulkMateri} className="space-y-4 text-xs">
+              {/* Awalan Judul (Prefix) Input & Quick Chips */}
+              <div className="p-3.5 rounded-xl border border-teal-500/20 bg-teal-500/5 space-y-2.5">
+                <div>
+                  <label className="block text-[var(--text-main)] font-bold text-xs flex items-center gap-1.5 mb-1">
+                    <Tag className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                    <span>Awalan Judul (Bulk Prefix)</span>
+                    <span className="text-[10px] font-normal text-[var(--text-muted)]">(Opsional)</span>
+                  </label>
+                  <p className="text-[11px] text-[var(--text-muted)] mb-2">
+                    Teks ini akan otomatis disematkan di bagian depan setiap judul materi di bawah.
+                  </p>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={bulkPrefix}
+                      onChange={e => setBulkPrefix(e.target.value)}
+                      placeholder="Contoh: P5M -  atau  Safety Talk:  atau  [K3]  atau  IK-LAB-"
+                      className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl px-3 py-2 text-xs text-[var(--text-main)] outline-none focus:border-teal-500 font-mono transition-colors"
+                    />
+                    {bulkPrefix && (
+                      <button
+                        type="button"
+                        onClick={() => setBulkPrefix('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)] hover:text-rose-500"
+                        title="Hapus Awalan"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quick Preset Chips */}
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+                    Pilihan Cepat Awalan:
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'P5M - ',
+                      '[P5M] ',
+                      'Safety Talk: ',
+                      'SOP - ',
+                      'IK - ',
+                      'K3: ',
+                      '5R - ',
+                      'Kesehatan: '
+                    ].map(preset => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setBulkPrefix(preset)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-semibold transition-all cursor-pointer border ${
+                          bulkPrefix === preset 
+                            ? 'bg-teal-600 text-white border-teal-600 shadow-xs' 
+                            : 'bg-[var(--card-bg)] hover:bg-teal-500/15 text-[var(--text-main)] border-[var(--border-main)]'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                    {bulkPrefix && (
+                      <button
+                        type="button"
+                        onClick={() => setBulkPrefix('')}
+                        className="px-2 py-1 rounded-lg text-[10px] font-medium text-rose-500 hover:bg-rose-500/10 border border-rose-500/20 cursor-pointer"
+                      >
+                        Tanpa Awalan
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Textarea Daftar Judul */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[var(--text-main)] font-bold text-xs flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Daftar Judul Materi (Satu Baris per Materi) *</span>
+                  </label>
+                  <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                    {parsedBulkItems.length} materi terdeteksi
+                  </span>
+                </div>
+                <textarea
+                  required
+                  rows={6}
+                  value={bulkRawText}
+                  onChange={e => setBulkRawText(e.target.value)}
+                  placeholder={`Tempel daftar materi di sini (satu baris per judul). Contoh:\n1. Penggunaan Alat Pelindung Diri (APD) di Ruang Prep\n2. Prosedur Tanggap Darurat Tumpahan Bahan Kimia\n3. Ergonomi Kerja dan Manual Handling\n4. Inspeksi Kelayakan Dust Collector`}
+                  className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-3 text-xs text-[var(--text-main)] outline-none focus:border-teal-500 font-mono transition-colors resize-y leading-relaxed"
+                />
+              </div>
+
+              {/* Smart Options Checkboxes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <label className="flex items-center gap-2 p-2 rounded-lg bg-[var(--input-bg)] border border-[var(--border-main)] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={bulkStripNumbering}
+                    onChange={e => setBulkStripNumbering(e.target.checked)}
+                    className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-[var(--border-main)] cursor-pointer"
+                  />
+                  <span className="text-[var(--text-main)]">
+                    Bersihkan otomatis nomor urut (misal: <code>1. </code>, <code>2) </code>, <code>- </code>, <code>• </code>)
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 p-2 rounded-lg bg-[var(--input-bg)] border border-[var(--border-main)] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={bulkSkipDuplicates}
+                    onChange={e => setBulkSkipDuplicates(e.target.checked)}
+                    className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-[var(--border-main)] cursor-pointer"
+                  />
+                  <span className="text-[var(--text-main)]">
+                    Lewati jika materi sudah ada di database (Cegah Duplikat)
+                  </span>
+                </label>
+              </div>
+
+              {/* Default Categories & Divisi Setup */}
+              <div className="p-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)]/50 space-y-3">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
+                  <Filter className="w-3 h-3" />
+                  <span>Pengaturan Kategori &amp; Divisi Default</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-[var(--text-muted)] font-semibold text-[11px] mb-1">Kategori</label>
+                    <select
+                      value={bulkDefaultKategori}
+                      onChange={e => setBulkDefaultKategori(e.target.value)}
+                      className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-lg p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer"
+                    >
+                      <option value="auto">✨ Otomatis (Deteksi Kata Kunci)</option>
+                      <option value="Teknis">Teknis</option>
+                      <option value="Non-Teknis">Non-Teknis</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[var(--text-muted)] font-semibold text-[11px] mb-1">Sub-Kategori</label>
+                    <select
+                      value={bulkDefaultSubKategori}
+                      onChange={e => setBulkDefaultSubKategori(e.target.value)}
+                      disabled={bulkDefaultKategori === 'auto'}
+                      className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-lg p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer disabled:opacity-50"
+                    >
+                      <option value="General">General (Semua Section)</option>
+                      <option value="Preparation">Preparation</option>
+                      <option value="Laboratory">Laboratory &amp; QA</option>
+                      <option value="Maintenance">Maintenance</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[var(--text-muted)] font-semibold text-[11px] mb-1">Target Divisi / Section</label>
+                    <select
+                      value={bulkDefaultDivisi}
+                      onChange={e => setBulkDefaultDivisi(e.target.value)}
+                      disabled={bulkDefaultKategori === 'auto'}
+                      className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-lg p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer disabled:opacity-50"
+                    >
+                      <option value="All">Semua Section (All)</option>
+                      <option value="Preparation">Preparation</option>
+                      <option value="Laboratory">Laboratory</option>
+                      <option value="Maintenance">Maintenance</option>
+                    </select>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 pt-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={bulkIsInternal}
+                    onChange={e => setBulkIsInternal(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-[var(--border-main)] cursor-pointer"
+                  />
+                  <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                    ⭐ Tandai seluruh materi ini sebagai Materi Khusus Internal (Jadwalkan Hari Sabtu)
+                  </span>
+                </label>
+              </div>
+
+              {/* Live Preview of parsed items */}
+              {parsedBulkItems.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-[var(--text-main)] flex items-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5 text-teal-600" />
+                      <span>Pratinjau Hasil Judul ({parsedBulkItems.length})</span>
+                    </span>
+                    {bulkSkipDuplicates && parsedBulkItems.some(i => i.isDuplicate) && (
+                      <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                        ⚠️ {parsedBulkItems.filter(i => i.isDuplicate).length} duplikat akan dilewati
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="max-h-40 overflow-y-auto rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)]/80 divide-y divide-[var(--border-main)] p-1 text-xs">
+                    {parsedBulkItems.map((item, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`p-2 flex items-center justify-between gap-2 rounded-lg ${
+                          item.isDuplicate && bulkSkipDuplicates 
+                            ? 'opacity-50 bg-rose-500/5' 
+                            : 'hover:bg-[var(--card-bg)]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="font-mono text-[10px] text-[var(--text-muted)] w-6 shrink-0">
+                            #{idx + 1}
+                          </span>
+                          <span className="truncate font-semibold text-[var(--text-main)]">
+                            {bulkPrefix && item.title.startsWith(bulkPrefix.trim()) ? (
+                              <>
+                                <span className="text-teal-600 dark:text-teal-400 font-bold bg-teal-500/15 px-1 py-0.5 rounded mr-1">
+                                  {bulkPrefix.trim()}
+                                </span>
+                                <span>{item.title.substring(bulkPrefix.trim().length).trim()}</span>
+                              </>
+                            ) : (
+                              item.title
+                            )}
+                          </span>
+                        </div>
+                        {item.isDuplicate && (
+                          <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-600 border border-rose-500/30">
+                            Duplikat
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="pt-3 flex items-center justify-end gap-2 border-t border-[var(--border-main)]">
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  onClick={() => setBulkModalOpen(false)}
+                  className="text-xs h-9 px-3 text-[var(--text-muted)] hover:text-[var(--text-main)]"
+                >
+                  Batal
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={isSavingBulk || parsedBulkItems.length === 0}
+                  className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs h-9 px-5 rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingBulk ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                      <span>Menyimpan {parsedBulkItems.length} Materi...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5 mr-1" />
+                      <span>
+                        Simpan {parsedBulkItems.filter(i => !bulkSkipDuplicates || !i.isDuplicate).length} Materi Sekaligus
+                      </span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {/* ── MODAL: TAMBAH AWALAN JUDUL PADA MATERI TERPILIH (BATCH PREFIX) ── */}
+      {batchPrefixModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+          <Card className="bg-[var(--card-bg)] border border-[var(--border-main)] w-full max-w-lg p-5 rounded-2xl shadow-2xl space-y-4">
+            <div className="flex items-start justify-between border-b border-[var(--border-main)] pb-3">
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-teal-600" />
+                <h3 className="font-bold text-sm text-[var(--text-main)]">
+                  Tambah Awalan Judul ({selectedMateriIds.length} Materi Terpilih)
+                </h3>
+              </div>
+              <button 
+                onClick={() => setBatchPrefixModalOpen(false)}
+                className="text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div>
+                <label className="block text-[var(--text-main)] font-semibold mb-1">
+                  Masukkan Awalan Judul yang Ingin Ditambahkan
+                </label>
+                <input
+                  type="text"
+                  value={batchPrefixText}
+                  onChange={e => setBatchPrefixText(e.target.value)}
+                  placeholder="Contoh: P5M -  atau  SOP -  atau  [Briefing]"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl px-3 py-2 text-xs text-[var(--text-main)] outline-none focus:border-teal-500 font-mono transition-colors"
+                />
+              </div>
+
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                  Pilihan Cepat:
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {['P5M - ', '[P5M] ', 'Safety Talk: ', 'SOP - ', 'IK - ', 'K3: '].map(p => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setBatchPrefixText(p)}
+                      className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-[var(--input-bg)] border border-[var(--border-main)] hover:border-teal-500 text-[var(--text-main)] cursor-pointer"
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300">
+                Awalan di atas akan disematkan di depan judul seluruh <strong>{selectedMateriIds.length}</strong> materi yang telah Anda centang di tabel. Judul yang sudah memiliki awalan tersebut tidak akan digandakan.
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-[var(--border-main)]">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setBatchPrefixModalOpen(false)}
+                  className="text-xs h-8 text-[var(--text-muted)]"
+                >
+                  Batal
+                </Button>
+                <Button 
+                  onClick={handleApplyBatchPrefix}
+                  disabled={isApplyingBatchPrefix || !batchPrefixText.trim()}
+                  className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs h-8 px-4 rounded-xl shadow-md cursor-pointer"
+                >
+                  {isApplyingBatchPrefix ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5 mr-1" />
+                  )}
+                  <span>Terapkan Awalan Judul</span>
+                </Button>
+              </div>
+            </div>
           </Card>
         </div>
       )}

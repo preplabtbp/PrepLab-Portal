@@ -2,6 +2,32 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.33] - 2026-09-27
+
+### 📚 Penambahan Materi P5M Secara Bulk, Awalan Judul (Bulk Prefix), Operasi Batch & Hak Akses Developer
+
+- **Fitur Penambahan Materi P5M Secara Bulk (`src/components/p5m-screen.tsx`, `server/routes/p5m.ts`)**:
+  - **Modal Interaktif Tambah Materi Bulk**: Tombol *"Tambah Materi Bulk"* di tab Bank Materi P5M memungkinkan pengguna menambahkan puluhan hingga ratusan judul materi sekaligus hanya dengan menyalin dan menempelkan teks daftar materi (satu baris per judul).
+  - **Dukungan Awalan Judul Seragam (*Bulk Prefix*)**:
+    - Kolom input khusus untuk menambahkan awalan judul yang secara otomatis disematkan di depan setiap judul materi (misal: `P5M - `, `[P5M] `, `Safety Talk: `, `SOP - `, `IK - `, `K3: `, dsb.).
+    - Dilengkapi *chip preset* sekali-klik untuk pilihan awalan umum yang sering digunakan personil K3 & Lab.
+    - Menghindari duplikasi awalan jika baris judul sudah memiliki awalan yang sama.
+  - **Pembersihan Otomatis Nomor Urut & Poin (*Smart Numbering Strip*)**: Opsi pembersih cerdas yang secara otomatis menghapus nomor urut atau simbol poin (seperti `1. `, `2) `, `- `, `• `) dari teks yang disalin dari WhatsApp, Excel, Word, atau catatan rapat.
+  - **Pencegahan Duplikasi (*Skip Duplicates*)**: Opsi untuk otomatis memeriksa keberadaan materi di database PostgreSQL dan melewati judul yang sudah terdaftar agar bank data tetap rapi tanpa duplikat.
+  - **Pengaturan Kategori & Divisi Default**: Mendukung klasifikasi otomatis (*Smart Auto-Categorization*) berbasis kata kunci teknis/non-teknis, atau penetapan manual ke sub-kategori (*General*, *Preparation*, *Laboratory*, *Maintenance*) dan target divisi.
+  - **Pratinjau Langsung (*Live Real-Time Preview*)**: Menampilkan kalkulasi jumlah materi terdeteksi dan pratinjau judul akhir dengan *highlight* warna awalan sebelum disimpan ke database.
+
+- **Operasi Batch pada Tabel Materi P5M (`src/components/p5m-screen.tsx`, `server/routes/p5m.ts`)**:
+  - **Kotak Centang Pilihan Baris (*Row Selection Checkboxes*)**: Memungkinkan pengguna memilih satu, beberapa, atau seluruh materi di tabel data.
+  - **Bilah Aksi Mengambang (*Batch Action Toolbar*)**:
+    - **Tambah Awalan Judul (*Bulk Prefix Existing*)**: Menambahkan awalan seragam pada materi-materi yang telah dipilih di tabel database secara instan tanpa perlu mengedit satu per satu.
+    - **Hapus Terpilih (*Bulk Delete*)**: Menghapus beberapa materi usang sekaligus dengan konfirmasi keamanan.
+
+- **Pemberian Hak Akses Developer & Superadmin untuk Aldy Aldersun Puluh (`M0403240177`)**:
+  - **Registrasi Basis Data**: Mendaftarkan identitas Aldy ke dalam tabel database `developer_users` PostgreSQL secara permanen.
+  - **Otorisasi Backend JWT**: Menambahkan NIK `M0403240177` ke daftar inti *developer & superadmin* pada middleware otentikasi (`server/middleware/auth.ts`), endpoint developer fallback (`server/routes/misc.ts`), rute bulletin (`server/routes/bulletin.ts`), rute notifikasi broadcast (`server/routes/notifications.ts`), serta rute administrasi roster (`server/routes/roster.ts`).
+  - **Akses Penuh Frontend & UI**: Mengaktifkan hak akses Developer di seluruh portal (`src/App.tsx`, `AdminDashboard`, `Home`, `ModulesDrawer`, `LeaderboardScreen` dengan badge GM, `DevModeAccordion`, `NotificationBell`, dan `PrepLab Cloud`).
+
 ## [2.9.32] - 2026-09-26
 
 ### 🎧 Audio Ambient YouTube Lab Focus, Cuaca Real-Time Kawasi, Desain Minimalis Buletin & Optimalisasi Modul Logbook Rapat
@@ -43,11 +69,6 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - **Pembersihan Bagian Pemberi Tugas**: Mengeliminasi kolom atau label teks "Pemberi Tugas" dari kartu tampilan tugas dan modal ringkasan untuk menjaga kesederhanaan informasi.
   - **Perbaikan Hak Akses Akun Ruang Rapat (*Meeting Room*)**: Memperbaiki kendala eksepsi `isSupervisor is not defined` saat akun ruang rapat membuka tugas, serta memberikan izin setara Supervisor kepada akun ruang rapat agar dapat mengelola agenda rapat dengan leluasa.
   - **Perbaikan Galat Null-Safety Edit Modal**: Memperbaiki eksepsi `Cannot read properties of undefined (reading 'length')` pada saat membuka modal edit tugas maupun memilih PIC dengan pengamanan array yang kokoh.
-
-- **Pemberian Hak Akses Developer & Superadmin untuk Aldy Aldersun Puluh (`M0403240177`)**:
-  - **Registrasi Basis Data**: Mendaftarkan identitas Aldy ke dalam tabel database `developer_users` PostgreSQL secara permanen.
-  - **Otorisasi Backend JWT**: Menambahkan NIK `M0403240177` ke daftar inti *developer & superadmin* pada middleware otentikasi (`server/middleware/auth.ts`), endpoint developer fallback (`server/routes/misc.ts`), rute bulletin (`server/routes/bulletin.ts`), rute notifikasi broadcast (`server/routes/notifications.ts`), serta rute administrasi roster (`server/routes/roster.ts`).
-  - **Akses Penuh Frontend & UI**: Mengaktifkan hak akses Developer di seluruh portal (`src/App.tsx`, `AdminDashboard`, `Home`, `ModulesDrawer`, `LeaderboardScreen` dengan badge GM, `DevModeAccordion`, `NotificationBell`, dan `PrepLab Cloud`).
 
 ## [2.9.31] - 2026-09-25
 
