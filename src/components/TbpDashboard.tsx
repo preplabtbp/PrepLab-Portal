@@ -501,8 +501,31 @@ export function TbpDashboard({
     uvIndex: number;
     conditionText: string;
     weatherCode: number;
-    dailyForecast: Array<{ day: string; code: number; maxTemp: number; minTemp: number }>;
+    dailyForecast: Array<{ day: string; dateStr?: string; isToday?: boolean; code: number; maxTemp: number; minTemp: number }>;
   } | null>(null);
+
+  // Helper to get dynamic 7-day fallback starting from real today
+  const getDynamic7DayForecast = () => {
+    const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const result = [];
+    const now = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dateNum = String(d.getDate()).padStart(2, '0');
+      result.push({
+        day: dayNames[d.getDay()],
+        dateStr: `${y}-${m}-${dateNum}`,
+        isToday: i === 0,
+        code: i === 0 ? 1 : (i % 2 === 0 ? 2 : 1),
+        maxTemp: 30 + (i % 2),
+        minTemp: 23 + (i % 2)
+      });
+    }
+    return result;
+  };
 
   useEffect(() => {
     const fetchKawasiWeather = async () => {
@@ -531,10 +554,15 @@ export function TbpDashboard({
           };
 
           const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+          const now = new Date();
+          const todayYMD = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
           const daily = (data.daily?.time || []).slice(0, 7).map((tStr: string, idx: number) => {
-            const d = new Date(tStr);
+            const d = new Date(tStr + 'T12:00:00');
             return {
               day: dayNames[d.getDay()],
+              dateStr: tStr,
+              isToday: tStr === todayYMD || idx === 0,
               code: data.daily?.weather_code?.[idx] ?? 1,
               maxTemp: Math.round(data.daily?.temperature_2m_max?.[idx] ?? 30),
               minTemp: Math.round(data.daily?.temperature_2m_min?.[idx] ?? 23)
@@ -725,13 +753,18 @@ export function TbpDashboard({
   const ytIframeRef = useRef<HTMLIFrameElement>(null);
 
   const currentStation = FOCUS_STATIONS[stationIndex] || FOCUS_STATIONS[0];
+  const originUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
   const sendYtCommand = (func: string, args: any = '') => {
     if (ytIframeRef.current && ytIframeRef.current.contentWindow) {
-      ytIframeRef.current.contentWindow.postMessage(
-        JSON.stringify({ event: 'command', func, args }),
-        '*'
-      );
+      try {
+        ytIframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func, args }),
+          '*'
+        );
+      } catch (err) {
+        console.warn('Failed to send YT command', err);
+      }
     }
   };
 
@@ -739,6 +772,8 @@ export function TbpDashboard({
     if (!isPlaying) {
       setIsPlaying(true);
       sendYtCommand('playVideo');
+      sendYtCommand('unMute');
+      sendYtCommand('setVolume', [isMuted ? 0 : volume]);
       toast.success(`Memutar: ${currentStation.title}`, { id: 'ambient-player' });
     } else {
       setIsPlaying(false);
@@ -756,7 +791,10 @@ export function TbpDashboard({
 
   const handleVolumeChange = (newVol: number) => {
     setVolume(newVol);
-    if (isMuted && newVol > 0) setIsMuted(false);
+    if (isMuted && newVol > 0) {
+      setIsMuted(false);
+      sendYtCommand('unMute');
+    }
     sendYtCommand('setVolume', [newVol]);
   };
 
@@ -1671,29 +1709,22 @@ export function TbpDashboard({
                 <div className="grid grid-cols-7 gap-1.5">
                   {(weatherData?.dailyForecast && weatherData.dailyForecast.length > 0
                     ? weatherData.dailyForecast
-                    : [
-                        { day: 'Sab', code: 1, maxTemp: 30, minTemp: 24 },
-                        { day: 'Min', code: 2, maxTemp: 31, minTemp: 24 },
-                        { day: 'Sen', code: 61, maxTemp: 29, minTemp: 23 },
-                        { day: 'Sel', code: 1, maxTemp: 30, minTemp: 24 },
-                        { day: 'Rab', code: 2, maxTemp: 31, minTemp: 24 },
-                        { day: 'Kam', code: 3, maxTemp: 30, minTemp: 23 },
-                        { day: 'Jum', code: 61, maxTemp: 29, minTemp: 23 }
-                      ]
+                    : getDynamic7DayForecast()
                   ).map((fc, i) => {
-                    const isToday = i === 0;
+                    const isToday = fc.isToday ?? (i === 0);
                     return (
                       <div 
                         key={i} 
                         className={`flex flex-col items-center py-2 px-1 rounded-xl border transition-all duration-200 hover:scale-105 cursor-default ${
-                          isToday ? 'border-teal-500/50 bg-teal-500/10 shadow-xs' : 'border-transparent hover:border-[var(--border-main)]'
+                          isToday ? 'border-teal-500/70 bg-teal-500/15 ring-2 ring-teal-500/30 shadow-xs' : 'border-transparent hover:border-[var(--border-main)]'
                         }`}
                         style={{
                           backgroundColor: isToday ? undefined : 'var(--input-bg, rgba(0,0,0,0.02))'
                         }}
                       >
-                        <span className={`text-xs font-bold ${isToday ? 'text-teal-600 dark:text-teal-400 font-extrabold' : ''}`} style={{ color: isToday ? undefined : 'var(--text-main, #0f172a)' }}>
+                        <span className={`text-xs font-bold ${isToday ? 'text-teal-600 dark:text-teal-400 font-extrabold flex items-center gap-0.5' : ''}`} style={{ color: isToday ? undefined : 'var(--text-main, #0f172a)' }}>
                           {fc.day}
+                          {isToday && <span className="w-1 h-1 rounded-full bg-teal-500 shrink-0" />}
                         </span>
                         <WeatherIcon code={fc.code} className="w-4 h-4 my-1.5" />
                         <span className="text-xs font-bold" style={{ color: 'var(--text-main, #0f172a)' }}>{fc.maxTemp}°</span>
@@ -1806,33 +1837,21 @@ export function TbpDashboard({
                   borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
                 }}
               >
-                {/* Embedded YouTube Player (Invisible by default, visible if user expands preview) */}
-                <div className={showVideoPreview ? "mb-3 rounded-xl overflow-hidden aspect-video bg-black shadow-inner relative" : "hidden"}>
+                {/* Embedded YouTube Player with audio stream */}
+                <div className={`rounded-xl overflow-hidden bg-black shadow-inner relative transition-all duration-300 ${
+                  showVideoPreview ? 'aspect-video w-full mb-3' : 'h-0.5 opacity-0 overflow-hidden pointer-events-none'
+                }`}>
                   <iframe
                     ref={ytIframeRef}
                     id="ambient-yt-player"
                     width="100%"
                     height="100%"
-                    src={`https://www.youtube-nocookie.com/embed/${currentStation.videoId}?enablejsapi=1&autoplay=${isPlaying ? 1 : 0}&rel=0&playsinline=1`}
+                    src={`https://www.youtube.com/embed/${currentStation.videoId}?enablejsapi=1&autoplay=${isPlaying ? 1 : 0}&rel=0&playsinline=1&origin=${encodeURIComponent(originUrl)}`}
                     title={currentStation.title}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     className="w-full h-full border-0"
                   />
                 </div>
-
-                {/* If preview is hidden, keep iframe active in DOM so audio stream continues */}
-                {!showVideoPreview && (
-                  <div className="sr-only pointer-events-none" aria-hidden="true">
-                    <iframe
-                      ref={ytIframeRef}
-                      width="1"
-                      height="1"
-                      src={`https://www.youtube-nocookie.com/embed/${currentStation.videoId}?enablejsapi=1&autoplay=${isPlaying ? 1 : 0}&rel=0&playsinline=1`}
-                      title={currentStation.title}
-                      allow="autoplay; encrypted-media"
-                    />
-                  </div>
-                )}
 
                 {/* Header */}
                 <div className="flex items-center justify-between mb-3">

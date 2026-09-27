@@ -4,7 +4,8 @@ import {
   LogOut, Briefcase, MapPin, Building, Hash, CalendarIcon, 
   Users, UserCircle2, ArrowLeft, Plane, Info, X, Camera, 
   Trash2, Image as ImageIcon, Calendar, Sparkles, Check, Upload, RefreshCw,
-  Trophy, Award, Shield, ChevronRight, Zap, Star, Medal, Crown, BarChart3
+  Trophy, Award, Shield, ChevronRight, Zap, Star, Medal, Crown, BarChart3,
+  MoveVertical, Sliders
 } from 'lucide-react';
 import { getRankByXp } from '../lib/pointBlankRanks';
 import { getRosterData } from '../sheets-api';
@@ -108,6 +109,28 @@ export function ProfilePage({
     }
     return null;
   });
+
+  const [coverPosition, setCoverPosition] = useState<number>(() => {
+    if (typeof profile?.coverPosition === 'number') return profile.coverPosition;
+    if (inspectorNik) {
+      const saved = localStorage.getItem(`p2h_inspector_cover_pos_${inspectorNik}`);
+      if (saved) return parseInt(saved, 10);
+    }
+    return 50;
+  });
+  const [showPositionControl, setShowPositionControl] = useState(false);
+
+  const handleSaveCoverPosition = (newPos: number) => {
+    setCoverPosition(newPos);
+    if (inspectorNik) {
+      localStorage.setItem(`p2h_inspector_cover_pos_${inspectorNik}`, String(newPos));
+    }
+    if (profile) {
+      const updated = { ...profile, coverPosition: newPos };
+      setProfile(updated);
+      localStorage.setItem('p2h_inspector_profile', JSON.stringify(updated));
+    }
+  };
 
   const [isUploading, setIsUploading] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
@@ -828,15 +851,31 @@ export function ProfilePage({
               className="h-36 sm:h-44 md:h-52 relative overflow-hidden group/banner select-none transition-all duration-300"
               style={{
                 background: cover 
-                  ? (cover.startsWith('linear-gradient') ? cover : `url(${cover}) center / cover no-repeat`) 
+                  ? (cover.startsWith('linear-gradient') ? cover : `url(${cover}) center ${coverPosition}% / cover no-repeat`) 
                   : 'linear-gradient(to right, var(--primary, #0D9488), var(--primary-hover, #0F766E), var(--accent, #14B8A6))'
               }}
             >
               {/* Overlay Gradient for contrast */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent pointer-events-none" />
 
-              {/* Edit Background / Cover Button in Top Right */}
-              <div className="absolute top-3 right-3 z-10">
+              {/* Edit Background / Cover Button & Position Control in Top Right */}
+              <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+                {cover && !cover.startsWith('linear-gradient') && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPositionControl(!showPositionControl)}
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold backdrop-blur-md border shadow-md flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                      showPositionControl 
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
+                        : 'bg-black/40 hover:bg-black/60 text-white border-white/20'
+                    }`}
+                    title="Atur Posisi Vertikal Wallpaper"
+                  >
+                    <MoveVertical className="w-3.5 h-3.5 text-amber-300" />
+                    <span>{showPositionControl ? 'Selesai' : 'Atur Posisi'}</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setShowCoverModal(true)}
@@ -847,6 +886,48 @@ export function ProfilePage({
                   <span>Ubah Background</span>
                 </button>
               </div>
+
+              {/* Floating Position Adjuster Slider Bar */}
+              {showPositionControl && cover && !cover.startsWith('linear-gradient') && (
+                <div className="absolute bottom-3 inset-x-3 sm:inset-x-6 z-20 p-2.5 rounded-2xl bg-black/85 backdrop-blur-md border border-white/20 text-white shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MoveVertical className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span className="text-xs font-bold whitespace-nowrap">Geser Posisi:</span>
+                    <span className="text-xs font-mono text-amber-300 shrink-0">{coverPosition}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={coverPosition}
+                    onChange={(e) => handleSaveCoverPosition(parseInt(e.target.value, 10))}
+                    className="flex-1 h-1.5 rounded-lg appearance-none cursor-pointer bg-slate-700 accent-amber-400"
+                  />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleSaveCoverPosition(0)}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white/10 hover:bg-white/20 cursor-pointer"
+                    >
+                      Atas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveCoverPosition(50)}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white/10 hover:bg-white/20 cursor-pointer"
+                    >
+                      Tengah
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveCoverPosition(100)}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white/10 hover:bg-white/20 cursor-pointer"
+                    >
+                      Bawah
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="px-5 sm:px-7 pb-6 relative">
@@ -1514,7 +1595,7 @@ export function ProfilePage({
                     className="h-24 sm:h-28 relative flex items-end p-3 transition-all duration-300"
                     style={{
                       background: cover 
-                        ? (cover.startsWith('linear-gradient') ? cover : `url(${cover}) center / cover no-repeat`) 
+                        ? (cover.startsWith('linear-gradient') ? cover : `url(${cover}) center ${coverPosition}% / cover no-repeat`) 
                         : 'linear-gradient(to right, var(--primary, #0D9488), var(--primary-hover, #0F766E), var(--accent, #14B8A6))'
                     }}
                   >
@@ -1540,6 +1621,54 @@ export function ProfilePage({
                     </div>
                   </div>
                 </div>
+
+                {/* Vertical Position Control in Modal */}
+                {cover && !cover.startsWith('linear-gradient') && (
+                  <div className="mt-2.5 p-3 rounded-xl border bg-[var(--input-bg)] space-y-1.5" style={{ borderColor: 'var(--border-main)' }}>
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="flex items-center gap-1.5 text-[var(--text-main)]">
+                        <MoveVertical className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Atur Posisi Vertikal Gambar</span>
+                      </span>
+                      <span className="font-mono text-amber-600 dark:text-amber-400">{coverPosition}%</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] text-[var(--text-muted)] font-semibold">Atas</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={coverPosition}
+                        onChange={(e) => handleSaveCoverPosition(parseInt(e.target.value, 10))}
+                        className="flex-1 h-1.5 rounded-lg appearance-none cursor-pointer bg-slate-300 dark:bg-slate-700 accent-amber-500"
+                      />
+                      <span className="text-[10px] text-[var(--text-muted)] font-semibold">Bawah</span>
+                    </div>
+                    <div className="flex justify-end gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSaveCoverPosition(0)}
+                        className="px-2 py-0.5 rounded-md text-[10px] font-bold border border-[var(--border-main)] hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                      >
+                        Atas (0%)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveCoverPosition(50)}
+                        className="px-2 py-0.5 rounded-md text-[10px] font-bold border border-[var(--border-main)] hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                      >
+                        Tengah (50%)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveCoverPosition(100)}
+                        className="px-2 py-0.5 rounded-md text-[10px] font-bold border border-[var(--border-main)] hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                      >
+                        Bawah (100%)
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Action 1: Upload Custom Photo */}

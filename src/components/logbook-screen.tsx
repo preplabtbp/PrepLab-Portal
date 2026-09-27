@@ -855,6 +855,7 @@ export function LogbookScreen({
   const [editAssigneeNik, setEditAssigneeNik] = useState('');
   const [editAssigneeName, setEditAssigneeName] = useState('');
   const [editChangeReason, setEditChangeReason] = useState('');
+  const [editBulletinPostId, setEditBulletinPostId] = useState<string>('');
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
   // State: Review Draft Modal (for Task Creator)
@@ -875,6 +876,7 @@ export function LogbookScreen({
     setEditTargetTime(task.targetTime || '23:59');
     setEditAssigneeNik(task.assigneeNik || '');
     setEditAssigneeName(task.assigneeName || '');
+    setEditBulletinPostId(task.bulletinPostId ? String(task.bulletinPostId) : '');
     setEditChangeReason('');
   };
 
@@ -922,12 +924,14 @@ export function LogbookScreen({
             targetDate: editTargetDate,
             targetTime: editTargetTime || '23:59',
             assigneeNik: editAssigneeNik,
-            assigneeName: editAssigneeName
+            assigneeName: editAssigneeName,
+            bulletinPostId: editBulletinPostId ? parseInt(editBulletinPostId, 10) : null,
+            bulletinTopicTitle: editBulletinPostId ? editTitle.trim() : null
           })
         });
         const json = await res.json();
         if (json.status === 'success') {
-          toast.success('Tugas berhasil diperbarui');
+          toast.success('Tugas berhasil diperbarui dan disinkronkan ke Buletin');
           setEditingTask(null);
           fetchTasks();
         } else {
@@ -946,6 +950,8 @@ export function LogbookScreen({
           targetTime: editTargetTime || '23:59',
           assigneeNik: editAssigneeNik,
           assigneeName: editAssigneeName,
+          bulletinPostId: editBulletinPostId ? parseInt(editBulletinPostId, 10) : null,
+          bulletinTopicTitle: editBulletinPostId ? editTitle.trim() : null,
           changeReason: editChangeReason.trim()
         };
 
@@ -1734,11 +1740,24 @@ export function LogbookScreen({
                 </span>
               )}
 
-              {task.bulletinPostId && (
+              {task.bulletinPostId ? (
                 <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-teal-900 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg shadow-2xs">
                   <FileText className="w-3.5 h-3.5 text-teal-600" />
                   <span>Buletin #{task.bulletinPostId}</span>
                 </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEditModal(task);
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-300 border-dashed px-2 py-0.5 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                  title="Klik untuk menghubungkan tugas ini ke dokumen Buletin Harian"
+                >
+                  <FileText className="w-3 h-3 text-teal-600" />
+                  <span>+ Tautkan ke Buletin</span>
+                </button>
               )}
             </div>
 
@@ -3155,6 +3174,20 @@ export function LogbookScreen({
                   defaultMode={(editDescription || '').includes('- [') ? 'checklist' : 'text'}
                   rows={4}
                 />
+              </div>
+
+              {/* Hubungkan / Pindahkan Sinkronisasi ke Buletin */}
+              <div className="space-y-1">
+                <SearchableBulletinSelect
+                  selectedId={editBulletinPostId}
+                  bulletinList={bulletinList}
+                  onSelect={setEditBulletinPostId}
+                />
+                <p className="text-[10px] text-slate-500">
+                  {editingTask.bulletinPostId 
+                    ? `Saat ini terhubung ke Buletin #${editingTask.bulletinPostId}. Anda dapat memindahkan atau melepaskan tautan sinkronisasi.` 
+                    : 'Tugas ini belum terkoneksi ke Buletin. Pilih dokumen buletin jika ingin menyinkronkan tugas ini.'}
+                </p>
               </div>
 
               {/* If PIC: Required Alasan Perubahan */}

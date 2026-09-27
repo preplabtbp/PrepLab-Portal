@@ -555,8 +555,44 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
       }
     }
 
+    // Handle relocation or disconnection from previous bulletin post
+    if (currentTask.bulletinPostId && currentTask.bulletinPostId !== taskResult.bulletinPostId) {
+      try {
+        const oldPostArr = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, currentTask.bulletinPostId)).limit(1);
+        if (oldPostArr.length > 0) {
+          const oldPost = oldPostArr[0];
+          const oldParsed = parseMarkdownTableRows(oldPost.content);
+          if (oldParsed && oldParsed.headers.length > 0) {
+            const oldTargetTitle = (currentTask.bulletinTopicTitle || currentTask.title || '').toLowerCase().trim();
+            const oldIdx = oldParsed.rows.findIndex(r => {
+              const rTitle = Object.keys(r).reduce((acc, k) => {
+                const kl = k.toLowerCase().trim();
+                if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') return (r[k] || '').toLowerCase().trim();
+                return acc;
+              }, '');
+              return rTitle && (rTitle === oldTargetTitle || rTitle.startsWith(oldTargetTitle) || oldTargetTitle.startsWith(rTitle));
+            });
+            if (oldIdx !== -1) {
+              oldParsed.rows.splice(oldIdx, 1);
+              oldParsed.rows.forEach((r, idx) => {
+                Object.keys(r).forEach(k => {
+                  const kl = k.toLowerCase().trim();
+                  if (kl === 'number' || kl === 'no' || kl === '#') r[k] = String(idx + 1);
+                });
+              });
+              const oldUpdatedContent = serializeMarkdownTable(oldParsed.headers, oldParsed.rows, oldParsed.beforeText, oldParsed.afterText);
+              await db.update(bulletinPosts).set({ content: oldUpdatedContent }).where(eq(bulletinPosts.id, oldPost.id));
+              console.log(`[Logbook Sync] Removed task #${id} from previous bulletin post #${oldPost.id}`);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[Logbook Sync] Error cleaning up from old bulletin post:", err);
+      }
+    }
+
     // Auto-Sync 2-Arah ke Buletin:
-    // Update status dan keterangan di dokumen Buletin terkait
+    // Update status dan keterangan di dokumen Buletin terkait (atau buat baris baru jika baru dikoneksikan)
     if (taskResult.bulletinPostId) {
       try {
         const postArr = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, taskResult.bulletinPostId)).limit(1);
@@ -565,51 +601,91 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
           const parsed = parseMarkdownTableRows(post.content);
           if (parsed && parsed.headers.length > 0) {
             const targetTitle = (taskResult.bulletinTopicTitle || currentTask.title || '').toLowerCase().trim();
-            if (targetTitle && targetTitle.length >= 2) {
-              const targetIdx = parsed.rows.findIndex(r => {
-                const rTitle = Object.keys(r).reduce((acc, k) => {
-                  const kl = k.toLowerCase().trim();
-                  if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') {
-                    return (r[k] || '').toLowerCase().trim();
-                  }
-                  return acc;
-                }, '');
-                if (!rTitle || rTitle.length < 2) return false;
-                return rTitle === targetTitle || (rTitle.length >= 4 && targetTitle.length >= 4 && (rTitle.startsWith(targetTitle) || targetTitle.startsWith(rTitle)));
+            const targetIdx = parsed.rows.findIndex(r => {
+              const rTitle = Object.keys(r).reduce((acc, k) => {
+                const kl = k.toLowerCase().trim();
+                if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') {
+                  return (r[k] || '').toLowerCase().trim();
+                }
+                return acc;
+              }, '');
+              if (!rTitle || rTitle.length < 2) return false;
+              return rTitle === targetTitle || (rTitle.length >= 4 && targetTitle.length >= 4 && (rTitle.startsWith(targetTitle) || targetTitle.startsWith(rTitle)));
+            });
+
+            if (targetIdx !== -1) {
+              const targetRow = { ...parsed.rows[targetIdx] };
+              Object.keys(targetRow).forEach(k => {
+                const kl = k.toLowerCase().trim();
+                if (kl.includes('status')) {
+                  targetRow[k] = taskResult.status || targetRow[k];
+                }
+                if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') {
+                  if (updatePayload.title) targetRow[k] = updatePayload.title;
+                }
+                if (kl.includes('keterangan') && updatePayload.description !== undefined) {
+                  targetRow[k] = updatePayload.description;
+                }
+                if ((kl.includes('priority') || kl.includes('prioritas')) && updatePayload.priority) {
+                  targetRow[k] = updatePayload.priority;
+                }
+                if (kl.includes('pic') && updatePayload.assigneeName) {
+                  targetRow[k] = updatePayload.assigneeName;
+                }
+                if (kl.includes('target') && updatePayload.targetDate) {
+                  targetRow[k] = updatePayload.targetDate;
+                }
+                if (kl.includes('aktual') && (taskResult.status === 'Resolved' || taskResult.status === 'Done')) {
+                  targetRow[k] = formatDateStr(new Date());
+                }
+              });
+              parsed.rows[targetIdx] = targetRow;
+              const updatedContent = serializeMarkdownTable(parsed.headers, parsed.rows, parsed.beforeText, parsed.afterText);
+              await db.update(bulletinPosts).set({ content: updatedContent }).where(eq(bulletinPosts.id, post.id));
+              console.log(`[Logbook Sync] Synced update of task #${taskResult.id} to row #${targetIdx} of bulletin post #${post.id}`);
+            } else {
+              // Task baru dikoneksikan ke Buletin ini: tambahkan baris baru di tabel buletin
+              const newRow: Record<string, string> = {};
+              parsed.headers.forEach(h => {
+                const hl = h.toLowerCase().trim();
+                if (hl === 'number' || hl === 'no' || hl === '#') {
+                  newRow[h] = '1';
+                } else if (hl.includes('jenis kegiatan') || hl === 'task' || hl === 'judul') {
+                  newRow[h] = taskResult.title;
+                } else if (hl.includes('keterangan') || hl.includes('catatan') || hl.includes('deskripsi')) {
+                  newRow[h] = taskResult.description ? taskResult.description.trim() : '-';
+                } else if (hl === 'pic' || hl.includes('assignee')) {
+                  newRow[h] = taskResult.assigneeName || '-';
+                } else if (hl.includes('status')) {
+                  newRow[h] = taskResult.status || 'Open';
+                } else if (hl.includes('priority') || hl.includes('prioritas')) {
+                  newRow[h] = taskResult.priority || 'Normal';
+                } else if (hl.includes('activity') || hl.includes('aktivitas')) {
+                  newRow[h] = taskResult.activityType || 'Routine';
+                } else if (hl.includes('target') || hl.includes('deadline')) {
+                  newRow[h] = taskResult.targetDate || '-';
+                } else if (hl.includes('created')) {
+                  newRow[h] = taskResult.taskDate || formatDateStr(new Date());
+                } else if (hl.includes('group')) {
+                  newRow[h] = taskResult.section || '-';
+                } else if (hl.includes('aktual')) {
+                  newRow[h] = (taskResult.status === 'Resolved' || taskResult.status === 'Done') ? formatDateStr(new Date()) : '-';
+                } else {
+                  newRow[h] = '-';
+                }
               });
 
-              if (targetIdx !== -1) {
-                const targetRow = { ...parsed.rows[targetIdx] };
-                Object.keys(targetRow).forEach(k => {
+              parsed.rows.unshift(newRow);
+              parsed.rows.forEach((r, idx) => {
+                Object.keys(r).forEach(k => {
                   const kl = k.toLowerCase().trim();
-                  if (kl.includes('status')) {
-                    targetRow[k] = taskResult.status || targetRow[k];
-                  }
-                  if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') {
-                    if (updatePayload.title) targetRow[k] = updatePayload.title;
-                  }
-                  if (kl.includes('keterangan') && updatePayload.description !== undefined) {
-                    targetRow[k] = updatePayload.description;
-                  }
-                  if ((kl.includes('priority') || kl.includes('prioritas')) && updatePayload.priority) {
-                    targetRow[k] = updatePayload.priority;
-                  }
-                  if (kl.includes('pic') && updatePayload.assigneeName) {
-                    targetRow[k] = updatePayload.assigneeName;
-                  }
-                  if (kl.includes('target') && updatePayload.targetDate) {
-                    targetRow[k] = updatePayload.targetDate;
-                  }
-                  if (kl.includes('aktual') && (taskResult.status === 'Resolved' || taskResult.status === 'Done')) {
-                    targetRow[k] = formatDateStr(new Date());
-                  }
+                  if (kl === 'number' || kl === 'no' || kl === '#') r[k] = String(idx + 1);
                 });
-                parsed.rows[targetIdx] = targetRow;
+              });
 
-                const updatedContent = serializeMarkdownTable(parsed.headers, parsed.rows, parsed.beforeText, parsed.afterText);
-                await db.update(bulletinPosts).set({ content: updatedContent }).where(eq(bulletinPosts.id, post.id));
-                console.log(`[Logbook Sync] Synced update of task #${taskResult.id} strictly to row #${targetIdx} of bulletin post #${post.id}`);
-              }
+              const updatedContent = serializeMarkdownTable(parsed.headers, parsed.rows, parsed.beforeText, parsed.afterText);
+              await db.update(bulletinPosts).set({ content: updatedContent }).where(eq(bulletinPosts.id, post.id));
+              console.log(`[Logbook Sync] Appended newly linked task #${taskResult.id} to bulletin post #${post.id}`);
             }
           }
         }
@@ -667,6 +743,10 @@ logbookRouter.post("/api/logbook/tasks/:id/review-draft", async (req, res) => {
       if (draftObj.targetTime) applyPayload.targetTime = draftObj.targetTime;
       if (draftObj.assigneeNik) applyPayload.assigneeNik = draftObj.assigneeNik;
       if (draftObj.assigneeName) applyPayload.assigneeName = draftObj.assigneeName;
+      if (draftObj.bulletinPostId !== undefined) {
+        applyPayload.bulletinPostId = draftObj.bulletinPostId;
+        applyPayload.bulletinTopicTitle = draftObj.bulletinTopicTitle || draftObj.title || currentTask.title;
+      }
 
       const updated = await db
         .update(logbookTasks)

@@ -89,7 +89,25 @@ export const getEquipments = async (): Promise<{ category: string, tools: ToolRe
     if (!Array.isArray(data)) return [];
 
     const grouped = data.reduce((acc: any, tool: any) => {
-      const cat = tool.category || 'Asset';
+      let cat = tool.category || 'Asset';
+
+      // Separate Preparation equipments into Dry and Wet categories
+      const catLower = cat.toLowerCase();
+      if (cat === 'Asset' || catLower.includes('preparation') || catLower.includes('prep')) {
+        const loc = (tool.location || '').toLowerCase();
+        const name = (tool.itemName || '').toLowerCase();
+        const desc = (tool.itemDescription || '').toLowerCase();
+
+        const isWet = loc.includes('wet') || loc.includes('basah') || name.includes('wet') || name.includes('basah');
+        if (isWet) {
+          cat = 'Preparation (Wet / Basah)';
+        } else {
+          cat = 'Preparation (Dry / Kering)';
+        }
+      } else if (cat === 'Asset Laboratory' || catLower.includes('laboratory') || catLower.includes('lab')) {
+        cat = 'Laboratory';
+      }
+
       if (!acc[cat]) acc[cat] = [];
       acc[cat].push({
         id: tool.id.toString(),
@@ -105,7 +123,18 @@ export const getEquipments = async (): Promise<{ category: string, tools: ToolRe
       return acc;
     }, {});
     
-    return Object.keys(grouped).map(cat => ({ category: cat, tools: grouped[cat] }));
+    // Sort categories: Dry Preparation, Wet Preparation, Laboratory, then others
+    const sortOrder = ['Preparation (Dry / Kering)', 'Preparation (Wet / Basah)', 'Laboratory'];
+    const sortedKeys = Object.keys(grouped).sort((a, b) => {
+      const idxA = sortOrder.indexOf(a);
+      const idxB = sortOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+
+    return sortedKeys.map(cat => ({ category: cat, tools: grouped[cat] }));
   } catch (e) {
     console.error(e); return [];
   }

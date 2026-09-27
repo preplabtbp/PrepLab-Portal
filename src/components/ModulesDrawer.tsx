@@ -343,8 +343,7 @@ export function ModulesDrawer({
                   placeholder="Cari modul atau formulir (misal: P2H, APD, WO, Roster)..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-9.5 pr-9 py-2 rounded-xl text-xs font-semibold bg-[var(--input-bg)] border border-[var(--border-main)] text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-teal-500 transition-all shadow-2xs"
-                  autoFocus
+                  className="w-full pl-9.5 pr-9 py-2 rounded-xl text-base sm:text-xs font-semibold bg-[var(--input-bg)] border border-[var(--border-main)] text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-teal-500 transition-all shadow-2xs"
                 />
                 {searchQuery && (
                   <button
