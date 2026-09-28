@@ -532,7 +532,7 @@ router.put("/api/bulletin/:id", async (req, res) => {
 
 router.post("/api/bulletin/move-topic", async (req, res) => {
     try {
-      const { fromPostId, toPostId, topicTitle } = req.body;
+      const { fromPostId, toPostId, topicTitle, targetSubPeriod } = req.body;
       if (!fromPostId || !toPostId || !topicTitle) {
         return res.status(400).json({ status: "error", message: "Missing required fields (fromPostId, toPostId, topicTitle)" });
       }
@@ -541,17 +541,40 @@ router.post("/api/bulletin/move-topic", async (req, res) => {
       const toId = parseInt(toPostId);
       const cleanTitle = String(topicTitle).trim();
 
-      // Update all comments under this topic (and its sub-period instances) to point to the new post
+      // 1. Comments that have exact cleanTitle (no sub-period suffix yet):
+      // If targetSubPeriod is provided, update topicTitle to `${cleanTitle} - ${targetSubPeriod}`
+      if (targetSubPeriod && String(targetSubPeriod).trim()) {
+        const sub = String(targetSubPeriod).trim();
+        await db
+          .update(bulletinComments)
+          .set({ postId: toId, topicTitle: `${cleanTitle} - ${sub}` })
+          .where(
+            and(
+              eq(bulletinComments.postId, fromId),
+              eq(bulletinComments.topicTitle, cleanTitle)
+            )
+          );
+      } else {
+        await db
+          .update(bulletinComments)
+          .set({ postId: toId })
+          .where(
+            and(
+              eq(bulletinComments.postId, fromId),
+              eq(bulletinComments.topicTitle, cleanTitle)
+            )
+          );
+      }
+
+      // 2. Comments that already had a sub-period (${cleanTitle} - %):
+      // Move to toId and preserve their existing sub-period title
       await db
         .update(bulletinComments)
         .set({ postId: toId })
         .where(
           and(
             eq(bulletinComments.postId, fromId),
-            or(
-              eq(bulletinComments.topicTitle, cleanTitle),
-              like(bulletinComments.topicTitle, `${cleanTitle} - %`)
-            )
+            like(bulletinComments.topicTitle, `${cleanTitle} - %`)
           )
         );
 

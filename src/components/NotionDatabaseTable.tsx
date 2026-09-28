@@ -1001,31 +1001,57 @@ export function NotionDatabaseTable({
   }, [allPosts, section, pt, postId]);
 
   // Handler to move selected topic to a target periodical post
-  const handleMoveTopicToPost = async (targetPost: any) => {
-    if (!selectedRow || !postId || !targetPost || targetPost.id === postId) return;
-    const taskName = getRowVal(selectedRow, 'Jenis kegiatan') || 'Kegiatan';
+  const handleMoveTopicToPost = async (
+    targetPost: any, 
+    sourceRowParam?: TableRowData, 
+    forcedCadence?: string,
+    skipConfirm: boolean = false
+  ) => {
+    const rowToMove = sourceRowParam || selectedRow;
+    if (!rowToMove || !postId || !targetPost || targetPost.id === postId) return;
+    const taskName = getRowVal(rowToMove, 'Jenis kegiatan') || 'Kegiatan';
 
-    const confirmMsg = `Pindahkan topik "${taskName}" ke halaman "${targetPost.title}"?\n\nTopik dan riwayat diskusinya akan dialihkan ke halaman tersebut.`;
-    if (!window.confirm(confirmMsg)) return;
+    if (!skipConfirm) {
+      const confirmMsg = `Dengan mengubahnya ke ${forcedCadence || targetPost.title}, maka topics ini akan dipindahkan ke ${targetPost.title}.\n\nLanjutkan pemindahan?`;
+      if (!window.confirm(confirmMsg)) return;
+    }
 
     setIsMovingTopic(true);
     toast.loading(`Memindahkan topik ke ${targetPost.title}...`, { id: 'move-topic' });
 
     try {
+      const targetCadence = forcedCadence || normalizeCadence(targetPost.title);
+      const targetSubPeriod = targetCadence && isPeriodicCadence(targetCadence) 
+        ? getDefaultActiveSubPeriod(targetCadence) 
+        : '';
+
       const targetContent = targetPost.content || '';
       const parsedTarget = extractMarkdownTableFromContent(targetContent);
       const targetHeaders = parsedTarget.headers.length > 0 ? parsedTarget.headers : displayHeaders;
 
-      const rowCopy: TableRowData = { ...selectedRow };
-      rowCopy['number'] = String(parsedTarget.rows.length + 1);
+      const cleanTaskName = taskName.trim().toLowerCase();
+      const existingRowIndex = parsedTarget.rows.findIndex(r => {
+        const name = (getRowVal(r, 'Jenis kegiatan') || '').trim().toLowerCase();
+        return name === cleanTaskName;
+      });
 
-      const targetCadence = normalizeCadence(targetPost.title);
-      if (targetCadence) {
-        rowCopy['Activity (routine/non routine)'] = targetCadence;
-        rowCopy['period'] = targetCadence;
+      let updatedTargetRows: TableRowData[];
+      const isExisting = existingRowIndex !== -1;
+
+      if (isExisting) {
+        // Judul sudah ada disana! Jangan buat topics baru (duplikat), hanya gabungkan datanya
+        updatedTargetRows = parsedTarget.rows;
+      } else {
+        // Belum ada, maka judul jadi topics baru di target post
+        const rowCopy: TableRowData = { ...rowToMove };
+        rowCopy['number'] = String(parsedTarget.rows.length + 1);
+        if (targetCadence) {
+          rowCopy['Activity (routine/non routine)'] = targetCadence;
+          rowCopy['period'] = targetCadence;
+        }
+        updatedTargetRows = [...parsedTarget.rows, rowCopy];
       }
 
-      const updatedTargetRows = [...parsedTarget.rows, rowCopy];
       const newTargetMarkdown = serializeMarkdownTable(targetHeaders, updatedTargetRows, parsedTarget.beforeText, parsedTarget.afterText);
 
       const putTargetRes = await fetch(`/api/bulletin/${targetPost.id}`, {
@@ -1033,10 +1059,10 @@ export function NotionDatabaseTable({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: newTargetMarkdown })
       });
-      if (!putTargetRes.ok) throw new Error('Gagal menambahkan topik ke halaman tujuan');
+      if (!putTargetRes.ok) throw new Error('Gagal memperbarui data di halaman tujuan');
 
       // Remove row from current post
-      const updatedCurrentRows = localRows.filter(r => r !== selectedRow);
+      const updatedCurrentRows = localRows.filter(r => r !== rowToMove);
       const reindexedCurrent = updatedCurrentRows.map((r, i) => ({ ...r, number: String(i + 1) }));
       await saveTableToBackend(reindexedCurrent);
       setLocalRows(reindexedCurrent);
@@ -1044,7 +1070,7 @@ export function NotionDatabaseTable({
       setDirtyRowIndices(new Set());
       onRowsChange?.(reindexedCurrent);
 
-      // Migrate topic comments in backend
+      // Migrate topic comments in backend with targetSubPeriod (e.g. 2026)
       try {
         await fetch('/api/bulletin/move-topic', {
           method: 'POST',
@@ -1052,7 +1078,8 @@ export function NotionDatabaseTable({
           body: JSON.stringify({
             fromPostId: postId,
             toPostId: targetPost.id,
-            topicTitle: baseTopicTitle
+            topicTitle: taskName,
+            targetSubPeriod
           })
         });
       } catch (e) {
@@ -1061,15 +1088,27 @@ export function NotionDatabaseTable({
 
       targetPost.content = newTargetMarkdown;
 
-      toast.success(`Topik "${taskName}" berhasil dipindahkan ke "${targetPost.title}"!`, {
-        id: 'move-topic',
-        action: onNavigateToPost ? {
-          label: 'Buka Halaman',
-          onClick: () => onNavigateToPost(targetPost)
-        } : undefined
-      });
+      if (isExisting) {
+        toast.success(`Topik "${taskName}" sudah ada di "${targetPost.title}", data diskusi otomatis digabungkan ke sub-topik ${targetSubPeriod ? `(${targetSubPeriod})` : ''}!`, {
+          id: 'move-topic',
+          action: onNavigateToPost ? {
+            label: 'Buka Halaman',
+            onClick: () => onNavigateToPost(targetPost)
+          } : undefined
+        });
+      } else {
+        toast.success(`Topik "${taskName}" berhasil dipindahkan ke "${targetPost.title}" ${targetSubPeriod ? `(Sub-topik: ${targetSubPeriod})` : ''}!`, {
+          id: 'move-topic',
+          action: onNavigateToPost ? {
+            label: 'Buka Halaman',
+            onClick: () => onNavigateToPost(targetPost)
+          } : undefined
+        });
+      }
 
-      setSelectedRow(null);
+      if (selectedRow === rowToMove) {
+        setSelectedRow(null);
+      }
       setShowMovePopover(false);
     } catch (err: any) {
       toast.error('Gagal memindahkan topik: ' + (err.message || err), { id: 'move-topic' });
@@ -2899,7 +2938,20 @@ export function NotionDatabaseTable({
                                 type="activity"
                                 value={val}
                                 compact={fitPageMode}
-                                onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
+                                onChange={(newVal) => {
+                                  if (newVal === val) return;
+                                  const targetCad = normalizeCadence(newVal);
+                                  const matchingDest = sectionPeriodicalPages.find(p => p.cadence === newVal || (targetCad && p.cadence === targetCad));
+                                  const taskName = getRowVal(row, 'Jenis kegiatan') || 'Kegiatan';
+                                  if (matchingDest) {
+                                    const ok = window.confirm(`Dengan mengubahnya ke ${newVal}, maka topics ini akan dipindahkan ke ${matchingDest.post.title}.\n\nLanjutkan pemindahan?`);
+                                    if (ok) {
+                                      handleMoveTopicToPost(matchingDest.post, row, newVal, true);
+                                    }
+                                    return;
+                                  }
+                                  handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                }}
                               />
                             </td>
                           );
@@ -3825,17 +3877,24 @@ export function NotionDatabaseTable({
                                   type="activity"
                                   value={getRowVal(selectedRow, 'Activity (routine/non routine)')}
                                   onChange={(newVal) => {
-                                    handleUpdateCellDirect(actualIdx, 'Activity (routine/non routine)', newVal);
-                                    const matchingDest = sectionPeriodicalPages.find(p => p.cadence === newVal);
-                                    if (matchingDest && window.confirm(`Aktivitas diubah menjadi "${newVal}". Apakah Anda ingin memindahkan topik ini ke halaman "${matchingDest.post.title}"?`)) {
-                                      handleMoveTopicToPost(matchingDest.post);
-                                    } else {
-                                      const cad = normalizeCadence(newVal);
-                                      if (cad && isPeriodicCadence(cad)) {
-                                        setActiveSubPeriod(getDefaultActiveSubPeriod(cad));
-                                      } else {
-                                        setActiveSubPeriod('');
+                                    const curVal = getRowVal(selectedRow, 'Activity (routine/non routine)');
+                                    if (newVal === curVal) return;
+                                    const targetCad = normalizeCadence(newVal);
+                                    const matchingDest = sectionPeriodicalPages.find(p => p.cadence === newVal || (targetCad && p.cadence === targetCad));
+                                    const taskName = getRowVal(selectedRow, 'Jenis kegiatan') || 'Kegiatan';
+                                    if (matchingDest) {
+                                      const ok = window.confirm(`Dengan mengubahnya ke ${newVal}, maka topics ini akan dipindahkan ke ${matchingDest.post.title}.\n\nLanjutkan pemindahan?`);
+                                      if (ok) {
+                                        handleMoveTopicToPost(matchingDest.post, selectedRow, newVal, true);
                                       }
+                                      return;
+                                    }
+                                    handleUpdateCellDirect(actualIdx, 'Activity (routine/non routine)', newVal);
+                                    const cad = normalizeCadence(newVal);
+                                    if (cad && isPeriodicCadence(cad)) {
+                                      setActiveSubPeriod(getDefaultActiveSubPeriod(cad));
+                                    } else {
+                                      setActiveSubPeriod('');
                                     }
                                   }}
                                 />
