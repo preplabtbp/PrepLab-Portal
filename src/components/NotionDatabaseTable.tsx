@@ -1000,56 +1000,97 @@ export function NotionDatabaseTable({
     return results;
   }, [allPosts, section, pt, postId]);
 
-  // Handler to move selected topic to a target periodical post
-  const handleMoveTopicToPost = async (
-    targetPost: any, 
-    sourceRowParam?: TableRowData, 
-    forcedCadence?: string,
-    skipConfirm: boolean = false
-  ) => {
+  // Move Topic Modal State (allows choosing between new topic or existing topic in target page)
+  interface MoveTopicModalData {
+    sourceRow: TableRowData;
+    targetPost: any;
+    targetCadence: string;
+    targetSubPeriod: string;
+    existingTopicsInTarget: string[];
+  }
+  const [moveModalData, setMoveModalData] = useState<MoveTopicModalData | null>(null);
+  const [moveMode, setMoveMode] = useState<'new_topic' | 'existing_topic'>('new_topic');
+  const [selectedExistingTopic, setSelectedExistingTopic] = useState<string>('');
+  const [customNewTopicTitle, setCustomNewTopicTitle] = useState<string>('');
+
+  // Opens the move topic selection modal
+  const openMoveModal = (targetPost: any, sourceRowParam?: TableRowData, forcedCadence?: string) => {
     const rowToMove = sourceRowParam || selectedRow;
     if (!rowToMove || !postId || !targetPost || targetPost.id === postId) return;
-    const taskName = getRowVal(rowToMove, 'Jenis kegiatan') || 'Kegiatan';
 
-    if (!skipConfirm) {
-      const confirmMsg = `Dengan mengubahnya ke ${forcedCadence || targetPost.title}, maka topics ini akan dipindahkan ke ${targetPost.title}.\n\nLanjutkan pemindahan?`;
-      if (!window.confirm(confirmMsg)) return;
+    const targetCadence = forcedCadence || normalizeCadence(targetPost.title) || 'Routine';
+    const targetSubPeriod = targetCadence && isPeriodicCadence(targetCadence) 
+      ? getDefaultActiveSubPeriod(targetCadence) 
+      : '';
+
+    const targetContent = targetPost.content || '';
+    const parsedTarget = extractMarkdownTableFromContent(targetContent);
+    const existingTopics = Array.from(new Set(
+      parsedTarget.rows
+        .map(r => (getRowVal(r, 'Jenis kegiatan') || '').trim())
+        .filter(t => Boolean(t && t !== '-'))
+    ));
+
+    const currentTitle = (getRowVal(rowToMove, 'Jenis kegiatan') || '').trim();
+    const hasExact = existingTopics.some(t => t.toLowerCase() === currentTitle.toLowerCase());
+
+    setMoveModalData({
+      sourceRow: rowToMove,
+      targetPost,
+      targetCadence,
+      targetSubPeriod,
+      existingTopicsInTarget: existingTopics
+    });
+
+    if (hasExact) {
+      setMoveMode('existing_topic');
+      setSelectedExistingTopic(existingTopics.find(t => t.toLowerCase() === currentTitle.toLowerCase()) || existingTopics[0] || '');
+    } else {
+      setMoveMode('new_topic');
+      setSelectedExistingTopic(existingTopics[0] || '');
+    }
+    setCustomNewTopicTitle(currentTitle);
+    setShowMovePopover(false);
+  };
+
+  // Executes the topic move after user chooses new topic vs existing topic
+  const handleExecuteMoveTopic = async () => {
+    if (!moveModalData || !postId) return;
+    const { sourceRow, targetPost, targetCadence, targetSubPeriod } = moveModalData;
+
+    const originalTaskName = getRowVal(sourceRow, 'Jenis kegiatan') || 'Kegiatan';
+    const finalTopicTitle = moveMode === 'new_topic' 
+      ? (customNewTopicTitle.trim() || originalTaskName)
+      : selectedExistingTopic;
+
+    if (!finalTopicTitle) {
+      toast.error('Judul topik tujuan tidak boleh kosong');
+      return;
     }
 
     setIsMovingTopic(true);
     toast.loading(`Memindahkan topik ke ${targetPost.title}...`, { id: 'move-topic' });
 
     try {
-      const targetCadence = forcedCadence || normalizeCadence(targetPost.title);
-      const targetSubPeriod = targetCadence && isPeriodicCadence(targetCadence) 
-        ? getDefaultActiveSubPeriod(targetCadence) 
-        : '';
-
       const targetContent = targetPost.content || '';
       const parsedTarget = extractMarkdownTableFromContent(targetContent);
       const targetHeaders = parsedTarget.headers.length > 0 ? parsedTarget.headers : displayHeaders;
 
-      const cleanTaskName = taskName.trim().toLowerCase();
-      const existingRowIndex = parsedTarget.rows.findIndex(r => {
-        const name = (getRowVal(r, 'Jenis kegiatan') || '').trim().toLowerCase();
-        return name === cleanTaskName;
-      });
-
       let updatedTargetRows: TableRowData[];
-      const isExisting = existingRowIndex !== -1;
 
-      if (isExisting) {
-        // Judul sudah ada disana! Jangan buat topics baru (duplikat), hanya gabungkan datanya
-        updatedTargetRows = parsedTarget.rows;
-      } else {
-        // Belum ada, maka judul jadi topics baru di target post
-        const rowCopy: TableRowData = { ...rowToMove };
+      if (moveMode === 'new_topic') {
+        // Buat baris kegiatan baru di halaman tujuan
+        const rowCopy: TableRowData = { ...sourceRow };
         rowCopy['number'] = String(parsedTarget.rows.length + 1);
+        rowCopy['Jenis kegiatan'] = finalTopicTitle;
         if (targetCadence) {
           rowCopy['Activity (routine/non routine)'] = targetCadence;
           rowCopy['period'] = targetCadence;
         }
         updatedTargetRows = [...parsedTarget.rows, rowCopy];
+      } else {
+        // Masukkan ke topik yang sudah ada: tidak buat baris baru
+        updatedTargetRows = parsedTarget.rows;
       }
 
       const newTargetMarkdown = serializeMarkdownTable(targetHeaders, updatedTargetRows, parsedTarget.beforeText, parsedTarget.afterText);
@@ -1061,8 +1102,8 @@ export function NotionDatabaseTable({
       });
       if (!putTargetRes.ok) throw new Error('Gagal memperbarui data di halaman tujuan');
 
-      // Remove row from current post
-      const updatedCurrentRows = localRows.filter(r => r !== rowToMove);
+      // Hapus baris dari halaman asal
+      const updatedCurrentRows = localRows.filter(r => r !== sourceRow);
       const reindexedCurrent = updatedCurrentRows.map((r, i) => ({ ...r, number: String(i + 1) }));
       await saveTableToBackend(reindexedCurrent);
       setLocalRows(reindexedCurrent);
@@ -1070,7 +1111,7 @@ export function NotionDatabaseTable({
       setDirtyRowIndices(new Set());
       onRowsChange?.(reindexedCurrent);
 
-      // Migrate topic comments in backend with targetSubPeriod (e.g. 2026)
+      // Migrasi komentar & lampiran di backend
       try {
         await fetch('/api/bulletin/move-topic', {
           method: 'POST',
@@ -1078,7 +1119,8 @@ export function NotionDatabaseTable({
           body: JSON.stringify({
             fromPostId: postId,
             toPostId: targetPost.id,
-            topicTitle: taskName,
+            topicTitle: originalTaskName,
+            newTopicTitle: finalTopicTitle,
             targetSubPeriod
           })
         });
@@ -1088,8 +1130,8 @@ export function NotionDatabaseTable({
 
       targetPost.content = newTargetMarkdown;
 
-      if (isExisting) {
-        toast.success(`Topik "${taskName}" sudah ada di "${targetPost.title}", data diskusi otomatis digabungkan ke sub-topik ${targetSubPeriod ? `(${targetSubPeriod})` : ''}!`, {
+      if (moveMode === 'existing_topic') {
+        toast.success(`Data topik berhasil digabungkan ke topik "${finalTopicTitle}" di "${targetPost.title}" ${targetSubPeriod ? `(Sub-topik: ${targetSubPeriod})` : ''}!`, {
           id: 'move-topic',
           action: onNavigateToPost ? {
             label: 'Buka Halaman',
@@ -1097,7 +1139,7 @@ export function NotionDatabaseTable({
           } : undefined
         });
       } else {
-        toast.success(`Topik "${taskName}" berhasil dipindahkan ke "${targetPost.title}" ${targetSubPeriod ? `(Sub-topik: ${targetSubPeriod})` : ''}!`, {
+        toast.success(`Topik "${finalTopicTitle}" berhasil dibuat di "${targetPost.title}" ${targetSubPeriod ? `(Sub-topik: ${targetSubPeriod})` : ''}!`, {
           id: 'move-topic',
           action: onNavigateToPost ? {
             label: 'Buka Halaman',
@@ -1106,9 +1148,10 @@ export function NotionDatabaseTable({
         });
       }
 
-      if (selectedRow === rowToMove) {
+      if (selectedRow === sourceRow) {
         setSelectedRow(null);
       }
+      setMoveModalData(null);
       setShowMovePopover(false);
     } catch (err: any) {
       toast.error('Gagal memindahkan topik: ' + (err.message || err), { id: 'move-topic' });
@@ -2942,12 +2985,8 @@ export function NotionDatabaseTable({
                                   if (newVal === val) return;
                                   const targetCad = normalizeCadence(newVal);
                                   const matchingDest = sectionPeriodicalPages.find(p => p.cadence === newVal || (targetCad && p.cadence === targetCad));
-                                  const taskName = getRowVal(row, 'Jenis kegiatan') || 'Kegiatan';
                                   if (matchingDest) {
-                                    const ok = window.confirm(`Dengan mengubahnya ke ${newVal}, maka topics ini akan dipindahkan ke ${matchingDest.post.title}.\n\nLanjutkan pemindahan?`);
-                                    if (ok) {
-                                      handleMoveTopicToPost(matchingDest.post, row, newVal, true);
-                                    }
+                                    openMoveModal(matchingDest.post, row, newVal);
                                     return;
                                   }
                                   handleUpdateCellDirect(actualRowIndex, colName, newVal);
@@ -3237,6 +3276,221 @@ export function NotionDatabaseTable({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: PILIH TUJUAN PEMINDAHAN TOPIK (NEW TOPIC vs EXISTING TOPIC)        */}
+      {/* ========================================================================= */}
+      {moveModalData && (
+        <div 
+          className="fixed inset-0 z-[160] bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150"
+          onClick={() => !isMovingTopic && setMoveModalData(null)}
+        >
+          <div 
+            className="w-full max-w-lg border rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+            style={{
+              backgroundColor: 'var(--card-bg, #1e1e1e)',
+              borderColor: 'var(--border-main, #334155)',
+              color: 'var(--text-main, #cbd5e1)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div 
+              className="p-4 border-b flex items-center justify-between shrink-0"
+              style={{
+                backgroundColor: 'var(--input-bg, #252525)',
+                borderColor: 'var(--border-main, #334155)'
+              }}
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-teal-600/30 border border-teal-500/50 text-teal-300 flex items-center justify-center font-bold">
+                  <ExternalLink className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base" style={{ color: 'var(--text-main, #f1f5f9)' }}>
+                    Pindahkan ke {moveModalData.targetPost.title}
+                  </h3>
+                  <p className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                    Pilih apakah ingin membuat topik baru atau memasukkan ke topik yang sudah ada
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setMoveModalData(null)}
+                disabled={isMovingTopic}
+                className="p-1.5 rounded-full hover:opacity-80 transition-opacity cursor-pointer disabled:opacity-50"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-5 space-y-4 overflow-y-auto max-h-[75vh]">
+              {/* Info Topik Asal */}
+              <div 
+                className="p-3 rounded-2xl border text-xs space-y-1"
+                style={{
+                  backgroundColor: 'var(--input-bg, #161616)',
+                  borderColor: 'var(--border-main, #2d3748)'
+                }}
+              >
+                <div className="text-[10px] font-bold uppercase tracking-wider text-teal-400">Topik Yang Dipindahkan:</div>
+                <div className="font-bold text-sm" style={{ color: 'var(--text-main, #f8fafc)' }}>
+                  {getRowVal(moveModalData.sourceRow, 'Jenis kegiatan') || 'Kegiatan'}
+                </div>
+                {moveModalData.targetSubPeriod && (
+                  <div className="text-[11px] flex items-center gap-1.5 pt-1 text-amber-300">
+                    <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Data & komentar otomatis menjadi sub-topik: <strong>{moveModalData.targetSubPeriod}</strong></span>
+                  </div>
+                )}
+              </div>
+
+              {/* Pilihan 1: Masukkan ke Topik yang Sudah Ada (Existing Topic) */}
+              <div 
+                onClick={() => {
+                  if (moveModalData.existingTopicsInTarget.length > 0) {
+                    setMoveMode('existing_topic');
+                  }
+                }}
+                className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer ${
+                  moveMode === 'existing_topic'
+                    ? 'border-teal-500 bg-teal-500/10 shadow-md'
+                    : 'border-slate-700 hover:border-slate-600 bg-transparent opacity-80 hover:opacity-100'
+                } ${moveModalData.existingTopicsInTarget.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="moveMode"
+                    value="existing_topic"
+                    checked={moveMode === 'existing_topic'}
+                    disabled={moveModalData.existingTopicsInTarget.length === 0}
+                    onChange={() => setMoveMode('existing_topic')}
+                    className="mt-1 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                  />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div>
+                      <div className="text-xs font-black text-white flex items-center gap-1.5">
+                        <span>🔗 Masukkan ke Topik yang Sudah Ada</span>
+                        <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                          {moveModalData.existingTopicsInTarget.length} Topik Tersedia
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Topik ini tidak akan membuat baris baru. Data dan diskusinya akan digabungkan ke bawah topik yang dipilih di halaman tujuan {moveModalData.targetSubPeriod ? `(Sub-topik: ${moveModalData.targetSubPeriod})` : ''}.
+                      </p>
+                    </div>
+
+                    {moveMode === 'existing_topic' && (
+                      <div className="pt-1">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                          Pilih Topik Tujuan di {moveModalData.targetPost.title}:
+                        </label>
+                        <select
+                          value={selectedExistingTopic}
+                          onChange={(e) => setSelectedExistingTopic(e.target.value)}
+                          className="w-full p-2.5 rounded-xl border border-slate-700 bg-slate-900 text-white text-xs font-semibold focus:border-teal-500 outline-none"
+                        >
+                          {moveModalData.existingTopicsInTarget.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Pilihan 2: Buat Topik Baru (New Topic) */}
+              <div 
+                onClick={() => setMoveMode('new_topic')}
+                className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer ${
+                  moveMode === 'new_topic'
+                    ? 'border-teal-500 bg-teal-500/10 shadow-md'
+                    : 'border-slate-700 hover:border-slate-600 bg-transparent opacity-80 hover:opacity-100'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="moveMode"
+                    value="new_topic"
+                    checked={moveMode === 'new_topic'}
+                    onChange={() => setMoveMode('new_topic')}
+                    className="mt-1 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                  />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div>
+                      <div className="text-xs font-black text-white flex items-center gap-1.5">
+                        <span>➕ Buat Topik Baru di Halaman Tujuan</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Membuat baris kegiatan baru tersendiri di tabel {moveModalData.targetPost.title}.
+                      </p>
+                    </div>
+
+                    {moveMode === 'new_topic' && (
+                      <div className="pt-1">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                          Nama Judul Kegiatan di Halaman Tujuan:
+                        </label>
+                        <input
+                          type="text"
+                          value={customNewTopicTitle}
+                          onChange={(e) => setCustomNewTopicTitle(e.target.value)}
+                          placeholder="Masukkan judul kegiatan..."
+                          className="w-full p-2.5 rounded-xl border border-slate-700 bg-slate-900 text-white text-xs font-semibold focus:border-teal-500 outline-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div 
+              className="p-4 border-t flex items-center justify-end gap-2.5 shrink-0"
+              style={{
+                backgroundColor: 'var(--input-bg, #252525)',
+                borderColor: 'var(--border-main, #334155)'
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setMoveModalData(null)}
+                disabled={isMovingTopic}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteMoveTopic}
+                disabled={isMovingTopic || (moveMode === 'existing_topic' && !selectedExistingTopic)}
+                className="px-5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-md transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
+              >
+                {isMovingTopic ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Memindahkan...</span>
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Pindahkan Topik</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -3773,7 +4027,7 @@ export function NotionDatabaseTable({
                                   <button
                                     key={dest.post.id}
                                     type="button"
-                                    onClick={() => handleMoveTopicToPost(dest.post)}
+                                    onClick={() => openMoveModal(dest.post, selectedRow)}
                                     className="w-full px-2.5 py-2 rounded-xl text-left text-xs font-medium hover:bg-teal-500/15 hover:text-teal-300 transition-colors flex items-center justify-between group cursor-pointer"
                                     style={{ color: 'var(--text-main, #cbd5e1)' }}
                                   >
@@ -3881,12 +4135,8 @@ export function NotionDatabaseTable({
                                     if (newVal === curVal) return;
                                     const targetCad = normalizeCadence(newVal);
                                     const matchingDest = sectionPeriodicalPages.find(p => p.cadence === newVal || (targetCad && p.cadence === targetCad));
-                                    const taskName = getRowVal(selectedRow, 'Jenis kegiatan') || 'Kegiatan';
                                     if (matchingDest) {
-                                      const ok = window.confirm(`Dengan mengubahnya ke ${newVal}, maka topics ini akan dipindahkan ke ${matchingDest.post.title}.\n\nLanjutkan pemindahan?`);
-                                      if (ok) {
-                                        handleMoveTopicToPost(matchingDest.post, selectedRow, newVal, true);
-                                      }
+                                      openMoveModal(matchingDest.post, selectedRow, newVal);
                                       return;
                                     }
                                     handleUpdateCellDirect(actualIdx, 'Activity (routine/non routine)', newVal);

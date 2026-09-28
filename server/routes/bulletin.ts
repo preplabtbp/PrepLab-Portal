@@ -532,7 +532,7 @@ router.put("/api/bulletin/:id", async (req, res) => {
 
 router.post("/api/bulletin/move-topic", async (req, res) => {
     try {
-      const { fromPostId, toPostId, topicTitle, targetSubPeriod } = req.body;
+      const { fromPostId, toPostId, topicTitle, newTopicTitle, targetSubPeriod } = req.body;
       if (!fromPostId || !toPostId || !topicTitle) {
         return res.status(400).json({ status: "error", message: "Missing required fields (fromPostId, toPostId, topicTitle)" });
       }
@@ -540,43 +540,41 @@ router.post("/api/bulletin/move-topic", async (req, res) => {
       const fromId = parseInt(fromPostId);
       const toId = parseInt(toPostId);
       const cleanTitle = String(topicTitle).trim();
+      const targetTitle = String(newTopicTitle || topicTitle).trim();
 
-      // 1. Comments that have exact cleanTitle (no sub-period suffix yet):
-      // If targetSubPeriod is provided, update topicTitle to `${cleanTitle} - ${targetSubPeriod}`
-      if (targetSubPeriod && String(targetSubPeriod).trim()) {
-        const sub = String(targetSubPeriod).trim();
-        await db
-          .update(bulletinComments)
-          .set({ postId: toId, topicTitle: `${cleanTitle} - ${sub}` })
-          .where(
-            and(
-              eq(bulletinComments.postId, fromId),
-              eq(bulletinComments.topicTitle, cleanTitle)
-            )
-          );
-      } else {
-        await db
-          .update(bulletinComments)
-          .set({ postId: toId })
-          .where(
-            and(
-              eq(bulletinComments.postId, fromId),
-              eq(bulletinComments.topicTitle, cleanTitle)
-            )
-          );
-      }
-
-      // 2. Comments that already had a sub-period (${cleanTitle} - %):
-      // Move to toId and preserve their existing sub-period title
-      await db
-        .update(bulletinComments)
-        .set({ postId: toId })
+      // Fetch all comments from this topic to update accurately
+      const commentsToMove = await db
+        .select()
+        .from(bulletinComments)
         .where(
           and(
             eq(bulletinComments.postId, fromId),
-            like(bulletinComments.topicTitle, `${cleanTitle} - %`)
+            or(
+              eq(bulletinComments.topicTitle, cleanTitle),
+              like(bulletinComments.topicTitle, `${cleanTitle} - %`)
+            )
           )
         );
+
+      for (const c of commentsToMove) {
+        let updatedTitle = c.topicTitle;
+        if (c.topicTitle === cleanTitle) {
+          // No subperiod suffix yet
+          if (targetSubPeriod && String(targetSubPeriod).trim()) {
+            updatedTitle = `${targetTitle} - ${String(targetSubPeriod).trim()}`;
+          } else {
+            updatedTitle = targetTitle;
+          }
+        } else if (c.topicTitle.startsWith(`${cleanTitle} - `)) {
+          // Already has a subperiod suffix: replace cleanTitle prefix with targetTitle
+          const suffix = c.topicTitle.slice(`${cleanTitle} - `.length);
+          updatedTitle = `${targetTitle} - ${suffix}`;
+        }
+        await db
+          .update(bulletinComments)
+          .set({ postId: toId, topicTitle: updatedTitle })
+          .where(eq(bulletinComments.id, c.id));
+      }
 
       res.json({ status: "success", message: "Topic comments successfully moved" });
     } catch (err: any) {
