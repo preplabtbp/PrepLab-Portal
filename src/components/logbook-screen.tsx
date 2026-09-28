@@ -39,11 +39,12 @@ import {
   Monitor,
   GripVertical,
   Bookmark,
-  Save
+  Save,
+  Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui';
-import { parseTasklist, toggleTasklistItem, markdownToVisualHtml, reorderTasklistItems } from './notion/tasklist-utils';
+import { parseTasklist, toggleTasklistItem, markdownToVisualHtml, reorderTasklistItems, updateTasklistItemNote } from './notion/tasklist-utils';
 import { NotionDropdownCell, DropdownOption } from './notion/NotionDropdownCell';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 
@@ -1058,6 +1059,52 @@ export function LogbookScreen({
     setEditChangeReason('');
   };
 
+  // State: Subtask Note Modal (Icon !)
+  const [subtaskNoteModal, setSubtaskNoteModal] = useState<{
+    task: LogbookTask;
+    itemIndex: number;
+    itemText: string;
+    note: string;
+    isReadOnly: boolean;
+  } | null>(null);
+  const [subtaskNoteInput, setSubtaskNoteInput] = useState('');
+  const [isSavingSubtaskNote, setIsSavingSubtaskNote] = useState(false);
+
+  const openSubtaskNoteModal = (task: LogbookTask, itemIndex: number, itemText: string, note: string, isReadOnly: boolean) => {
+    setSubtaskNoteModal({ task, itemIndex, itemText, note, isReadOnly });
+    setSubtaskNoteInput(note || '');
+  };
+
+  const handleSaveSubtaskNote = async () => {
+    if (!subtaskNoteModal) return;
+    const { task, itemIndex } = subtaskNoteModal;
+    const updatedDesc = updateTasklistItemNote(task.description || '', itemIndex, subtaskNoteInput.trim());
+
+    // Optimistic update
+    setTodayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc } : t));
+    setYesterdayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc } : t));
+    setCarryOverTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc } : t));
+
+    try {
+      setIsSavingSubtaskNote(true);
+      await fetch(`/api/logbook/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: updatedDesc,
+          updaterNik: inspectorNik
+        })
+      });
+      toast.success('Keterangan subtask berhasil disimpan');
+      setSubtaskNoteModal(null);
+    } catch (e) {
+      console.error('Failed to save subtask note:', e);
+      toast.error('Gagal menyimpan keterangan subtask');
+    } finally {
+      setIsSavingSubtaskNote(false);
+    }
+  };
+
   const openReviewModal = (task: LogbookTask) => {
     setReviewingTask(task);
     setRejectReason('');
@@ -1351,7 +1398,7 @@ export function LogbookScreen({
 
   // Toggle Subtask Checklist in Description
   const handleToggleSubtask = async (task: LogbookTask, itemIndex: number) => {
-    const updatedDesc = toggleTasklistItem(task.description || '', itemIndex);
+    const updatedDesc = toggleTasklistItem(task.description || '', itemIndex, selectedDate);
     const progress = parseTasklist(updatedDesc);
 
     // Automation: if task has subtasks, auto update status:
@@ -1784,7 +1831,7 @@ export function LogbookScreen({
   };
 
   // Enterprise Minimalist Task Row Renderer with Click-to-Expand Details
-  const renderTaskCard = (task: LogbookTask, isCarryOver: boolean) => {
+  const renderTaskCard = (task: LogbookTask, isCarryOver: boolean, isReadOnly: boolean = false) => {
     const parsed = parseTasklist(task.description || '');
     const hasSubtasks = parsed.hasTasklist && parsed.total > 0;
     const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
@@ -1923,13 +1970,26 @@ export function LogbookScreen({
               >
                 <Copy className="w-3.5 h-3.5" />
               </button>
-              {/* Status Dropdown (Automated if subtask mode, manual if non-subtask) */}
-              <NotionDropdownCell
-                type="status"
-                value={task.status}
-                onChange={(newVal) => handleStatusChange(task.id, newVal)}
-                optionsOverride={statusOptionsOverride}
-              />
+              {/* Status Dropdown: Static Badge if isReadOnly, Interactive Dropdown if active */}
+              {isReadOnly ? (
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black border ${
+                  isDone 
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                    : isInProgress 
+                    ? 'bg-amber-100 text-amber-900 border-amber-300' 
+                    : 'bg-slate-100 text-slate-700 border-slate-300'
+                }`}>
+                  {isDone ? <CheckCircle2 className="w-3 h-3 text-emerald-600" /> : <Clock className="w-3 h-3 text-amber-600" />}
+                  <span>{task.status}</span>
+                </span>
+              ) : (
+                <NotionDropdownCell
+                  type="status"
+                  value={task.status}
+                  onChange={(newVal) => handleStatusChange(task.id, newVal)}
+                  optionsOverride={statusOptionsOverride}
+                />
+              )}
             </div>
 
             {/* Progress bar kecil di ujung kanan di bagian bawah status */}
@@ -2147,25 +2207,74 @@ export function LogbookScreen({
                           : ''
                       }`}
                     >
-                      <div 
-                        className="cursor-grab active:cursor-grabbing p-0.5 text-slate-400 hover:text-teal-600 transition-colors shrink-0 mt-0.5"
-                        title="Geser untuk mengatur urutan subtask (Drag & Drop)"
-                      >
-                        <GripVertical className="w-4 h-4" />
-                      </div>
+                      {!isReadOnly && (
+                        <div 
+                          className="cursor-grab active:cursor-grabbing p-0.5 text-slate-400 hover:text-teal-600 transition-colors shrink-0 mt-0.5"
+                          title="Geser untuk mengatur urutan subtask (Drag & Drop)"
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </div>
+                      )}
                       <input
                         type="checkbox"
                         checked={item.checked}
-                        onChange={() => handleToggleSubtask(task, item.index)}
-                        className="mt-0.5 w-4 h-4 rounded border-2 border-slate-400 text-teal-600 focus:ring-teal-500 cursor-pointer shrink-0"
+                        disabled={isReadOnly}
+                        onChange={() => {
+                          if (isReadOnly) {
+                            toast.warning('🔒 Laporan Kemarin bersifat Read-Only. Untuk menceklis tugas yang terlewat, silakan geser tanggal log book ke kemarin.');
+                            return;
+                          }
+                          handleToggleSubtask(task, item.index);
+                        }}
+                        className={`mt-0.5 w-4 h-4 rounded border-2 border-slate-400 text-teal-600 focus:ring-teal-500 shrink-0 ${
+                          isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                        }`}
                       />
-                      <span className={`flex-1 text-xs sm:text-sm leading-snug ${
-                        item.checked 
-                          ? 'line-through text-slate-400 font-normal' 
-                          : 'font-bold text-slate-900'
-                      }`}>
-                        {item.text}
-                      </span>
+                      <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-1">
+                        <span className={`text-xs sm:text-sm leading-snug break-words ${
+                          item.checked 
+                            ? 'line-through text-slate-400 font-normal' 
+                            : 'font-bold text-slate-900'
+                        }`}>
+                          {item.text}
+                        </span>
+                        {item.checkedDate && (
+                          <span 
+                            className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold border inline-flex items-center gap-0.5 w-fit ${
+                              item.checkedDate === summaryData?.yesterdayDate
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                : 'bg-slate-100 text-slate-500 border-slate-200'
+                            }`}
+                            title={`Diceklis pada: ${item.checkedDate}`}
+                          >
+                            {item.checkedDate === summaryData?.yesterdayDate ? '✅ Diceklis Kemarin' : `Diceklis: ${item.checkedDate}`}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Icon (!) Keterangan Subtask di Ujung Kanan */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openSubtaskNoteModal(task, item.index, item.text, item.note || '', isReadOnly);
+                        }}
+                        title={item.note ? `Keterangan: ${item.note}` : isReadOnly ? 'Tidak ada keterangan' : 'Tambah keterangan subtask (Icon !)'}
+                        className={`p-1.5 rounded-lg transition-all shrink-0 flex items-center gap-1 cursor-pointer ${
+                          item.note
+                            ? 'text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 shadow-2xs'
+                            : isReadOnly
+                            ? 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'
+                            : 'text-slate-400 hover:text-teal-700 hover:bg-teal-50 hover:border hover:border-teal-200'
+                        }`}
+                      >
+                        <AlertCircle className={`w-3.5 h-3.5 ${item.note ? 'text-amber-600' : ''}`} />
+                        {item.note && (
+                          <span className="max-w-[130px] truncate text-[10px] font-bold hidden sm:inline text-amber-900">
+                            {item.note}
+                          </span>
+                        )}
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -2194,48 +2303,66 @@ export function LogbookScreen({
 
             {/* Action Buttons Toolbar in Expanded View */}
             <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-2.5 border-slate-200">
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => openJobPendingModal(task)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 transition-all cursor-pointer shadow-xs"
-                >
-                  <Clock className="w-3.5 h-3.5 text-amber-600" />
-                  <span>{task.isPending ? 'Ubah PIC Pending' : 'Set Job Pending'}</span>
-                </button>
-
-                {(task.assignedByNik === inspectorNik || isSupervisor || String(task.assigneeNik || '').split(',').map(s => s.trim()).includes(inspectorNik) || task.pendingPicNik === inspectorNik) && (
+              {isReadOnly ? (
+                <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200">
+                  <span className="flex items-center gap-1.5 text-slate-600">
+                    <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    <span>Laporan Progres Kemarin (Read-Only). Geser tanggal log book ke kemarin jika perlu pembaruan data.</span>
+                  </span>
                   <button
                     type="button"
-                    onClick={() => openEditModal(task)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-all cursor-pointer shadow-xs"
+                    onClick={() => handleCopyToNewTask(task)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-slate-200 text-indigo-700 border border-slate-300 transition-all cursor-pointer shadow-2xs self-start sm:self-auto shrink-0"
+                    title="Salin tugas ini ke form penugasan baru"
                   >
-                    <Edit3 className="w-3.5 h-3.5 text-teal-600" />
-                    <span>{(task.assignedByNik === inspectorNik || isSupervisor) ? 'Edit Tugas' : 'Ajukan Perubahan'}</span>
+                    <Copy className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Salin ke Tugas Baru</span>
                   </button>
-                )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => openJobPendingModal(task)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 transition-all cursor-pointer shadow-xs"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                    <span>{task.isPending ? 'Ubah PIC Pending' : 'Set Job Pending'}</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleCopyToNewTask(task)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-all cursor-pointer shadow-xs active:scale-95"
-                  title="Salin tugas ini ke form penugasan baru"
-                >
-                  <Copy className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Salin ke Tugas Baru</span>
-                </button>
+                  {(task.assignedByNik === inspectorNik || isSupervisor || String(task.assigneeNik || '').split(',').map(s => s.trim()).includes(inspectorNik) || task.pendingPicNik === inspectorNik) && (
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(task)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-all cursor-pointer shadow-xs"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-teal-600" />
+                      <span>{(task.assignedByNik === inspectorNik || isSupervisor) ? 'Edit Tugas' : 'Ajukan Perubahan'}</span>
+                    </button>
+                  )}
 
-                <button
-                  type="button"
-                  onClick={() => setTaskToDelete(task)}
-                  title="Hapus kegiatan ini"
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer border border-transparent hover:border-rose-200"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyToNewTask(task)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-all cursor-pointer shadow-xs active:scale-95"
+                    title="Salin tugas ini ke form penugasan baru"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Salin ke Tugas Baru</span>
+                  </button>
 
-              {isCarryOver && !isDone && (
+                  <button
+                    type="button"
+                    onClick={() => setTaskToDelete(task)}
+                    title="Hapus kegiatan ini"
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer border border-transparent hover:border-rose-200"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {!isReadOnly && isCarryOver && !isDone && (
                 <button
                   type="button"
                   onClick={() => handleCarryOverTask(task)}
@@ -2881,7 +3008,7 @@ export function LogbookScreen({
               </div>
             ) : (
               <div className="space-y-2.5">
-                {displayedYesterdayTasks.map((task) => renderTaskCard(task, true))}
+                {displayedYesterdayTasks.map((task) => renderTaskCard(task, true, true))}
               </div>
             )}
           </div>
@@ -2971,7 +3098,7 @@ export function LogbookScreen({
               </div>
             ) : (
               <div className="space-y-2.5">
-                {filteredToday.map((task) => renderTaskCard(task, false))}
+                {filteredToday.map((task) => renderTaskCard(task, false, false))}
               </div>
             )}
           </div>
@@ -4077,6 +4204,129 @@ export function LogbookScreen({
               >
                 Simpan Template
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: KETERANGAN TAMBAHAN SUBTASK (ICON !)                              */}
+      {/* ========================================================================= */}
+      {subtaskNoteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-150"
+            style={{ 
+              backgroundColor: 'var(--card-bg, #ffffff)', 
+              borderColor: 'var(--border-main, #e2e8f0)',
+              color: 'var(--text-main, #0f172a)'
+            }}
+          >
+            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <AlertCircle className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">Keterangan Subtask</h4>
+                  <p className="text-[11px] text-slate-500">
+                    {subtaskNoteModal.isReadOnly ? 'Mode Baca Saja (Laporan Kemarin)' : 'Catatan hasil, kendala, atau rincian item'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSubtaskNoteModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Subtask Context */}
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-0.5">Item Subtask:</span>
+              <p className="text-xs font-semibold text-slate-800 line-clamp-3">
+                {subtaskNoteModal.itemText}
+              </p>
+            </div>
+
+            {/* Content Field: Read-Only or Editable */}
+            {subtaskNoteModal.isReadOnly ? (
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold block text-slate-700">Catatan / Keterangan Tambahan:</label>
+                <div 
+                  className="w-full p-3 rounded-xl border text-xs font-medium min-h-[90px] whitespace-pre-wrap leading-relaxed"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #f8fafc)',
+                    borderColor: 'var(--border-main, #cbd5e1)',
+                    color: subtaskNoteModal.note ? 'var(--text-main, #0f172a)' : '#94a3b8'
+                  }}
+                >
+                  {subtaskNoteModal.note || 'Tidak ada catatan tambahan untuk subtask ini.'}
+                </div>
+                <p className="text-[10px] text-slate-400 italic">
+                  💡 Untuk mengedit catatan subtask kemarin, geser tanggal log book ke kemarin terlebih dahulu.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold block text-slate-700">Catatan / Keterangan Subtask:</label>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {subtaskNoteInput.length}/300
+                  </span>
+                </div>
+                <textarea
+                  autoFocus
+                  rows={3}
+                  maxLength={300}
+                  placeholder="Contoh: Sampel A sudah diencerkan 10x, butuh reagen tambahan untuk batch berikutnya..."
+                  value={subtaskNoteInput}
+                  onChange={(e) => setSubtaskNoteInput(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border text-xs font-medium outline-none focus:border-teal-500 transition-colors resize-none leading-relaxed"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #f8fafc)',
+                    borderColor: 'var(--border-main, #cbd5e1)'
+                  }}
+                />
+                <p className="text-[10px] text-slate-400">
+                  Keterangan ini tersimpan khusus pada subtask ini dan dapat dilihat dengan mengklik icon (!).
+                </p>
+              </div>
+            )}
+
+            {/* Modal Footer */}
+            <div className="pt-2 border-t flex items-center justify-end gap-2" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+              <button
+                type="button"
+                onClick={() => setSubtaskNoteModal(null)}
+                className="px-3.5 py-1.5 rounded-xl border text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
+                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+              >
+                {subtaskNoteModal.isReadOnly ? 'Tutup' : 'Batal'}
+              </button>
+              {!subtaskNoteModal.isReadOnly && (
+                <button
+                  type="button"
+                  disabled={isSavingSubtaskNote}
+                  onClick={handleSaveSubtaskNote}
+                  className="px-4 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {isSavingSubtaskNote ? (
+                    <>
+                      <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Simpan Keterangan</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

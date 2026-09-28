@@ -5,6 +5,8 @@ export interface TaskItem {
   checked: boolean;
   text: string;
   rawLine: string;
+  note?: string;
+  checkedDate?: string; // 'YYYY-MM-DD'
 }
 
 export interface TasklistProgress {
@@ -21,7 +23,7 @@ export interface TasklistProgress {
 const TASK_REGEX = /(?:^|\n|•|\-)\s*\[([ xX])\]\s*([^\n•\r]+)/g;
 
 /**
- * Parses markdown text to detect and extract interactive task list items
+ * Parses markdown text to detect and extract interactive task list items with notes and dates
  */
 export function parseTasklist(text?: string | null): TasklistProgress {
   if (!text || typeof text !== 'string') {
@@ -40,12 +42,31 @@ export function parseTasklist(text?: string | null): TasklistProgress {
     const match = trimmed.match(/^[-*]?\s*\[([ xX])\]\s*(.+)$/);
     if (match) {
       const isChecked = match[1].toLowerCase() === 'x';
-      const itemText = match[2].trim();
+      let rawContent = match[2].trim();
+
+      // Extract note if present: <!--note: ...--> or {note: ...}
+      let note = '';
+      const noteMatch = rawContent.match(/<!--\s*note:\s*([\s\S]*?)\s*-->/i) || rawContent.match(/\{note:\s*([^\}]+)\}/i);
+      if (noteMatch) {
+        note = noteMatch[1].trim();
+        rawContent = rawContent.replace(noteMatch[0], '').trim();
+      }
+
+      // Extract checkedDate if present: <!--checkedDate: YYYY-MM-DD--> or {date: YYYY-MM-DD}
+      let checkedDate = '';
+      const dateMatch = rawContent.match(/<!--\s*checkedDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/i) || rawContent.match(/\{date:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\}/i);
+      if (dateMatch) {
+        checkedDate = dateMatch[1].trim();
+        rawContent = rawContent.replace(dateMatch[0], '').trim();
+      }
+
       items.push({
         index: itemIndex++,
         checked: isChecked,
-        text: itemText,
-        rawLine: trimmed
+        text: rawContent,
+        rawLine: trimmed,
+        note: note || undefined,
+        checkedDate: checkedDate || undefined
       });
     } else if (trimmed) {
       nonTaskLines.push(trimmed);
@@ -68,9 +89,54 @@ export function parseTasklist(text?: string | null): TasklistProgress {
 }
 
 /**
- * Toggles a specific task checklist item in the text by index
+ * Toggles a specific task checklist item in the text by index and stamps actionDate
  */
-export function toggleTasklistItem(text: string, targetIndex: number): string {
+export function toggleTasklistItem(text: string, targetIndex: number, actionDate?: string): string {
+  if (!text) return text;
+
+  const hasBr = /<br\s*\/?>/i.test(text);
+  const delimiter = hasBr ? '<br/>' : '\n';
+  const normalized = text.replace(/<br\s*\/?>/gi, '\n');
+
+  const todayStr = actionDate || new Date().toISOString().split('T')[0];
+
+  let currentIndex = 0;
+  const lines = normalized.split('\n');
+  const updatedLines = lines.map(line => {
+    // Check if line contains a task item
+    const match = line.match(/^(\s*[-*•]?\s*\[)([ xX])(\]\s*)(.+)$/);
+    if (match) {
+      if (currentIndex === targetIndex) {
+        const prefix = match[1];
+        const currentChecked = match[2].toLowerCase() === 'x';
+        const newCheck = currentChecked ? ' ' : 'x';
+        const spaceAfterBracket = match[3];
+        let content = match[4].trim();
+
+        if (newCheck === 'x') {
+          // Turning to checked: add or update checkedDate
+          content = content.replace(/<!--\s*checkedDate:\s*[0-9]{4}-[0-9]{2}-[0-9]{2}\s*-->/gi, '').trim();
+          content = `${content} <!--checkedDate:${todayStr}-->`;
+        } else {
+          // Turning to unchecked: remove checkedDate
+          content = content.replace(/<!--\s*checkedDate:\s*[0-9]{4}-[0-9]{2}-[0-9]{2}\s*-->/gi, '').trim();
+        }
+
+        currentIndex++;
+        return `${prefix}${newCheck}${spaceAfterBracket}${content}`;
+      }
+      currentIndex++;
+    }
+    return line;
+  });
+
+  return updatedLines.join(delimiter);
+}
+
+/**
+ * Updates or sets note on a specific task checklist item in the text by index
+ */
+export function updateTasklistItemNote(text: string, targetIndex: number, newNote: string): string {
   if (!text) return text;
 
   const hasBr = /<br\s*\/?>/i.test(text);
@@ -80,39 +146,28 @@ export function toggleTasklistItem(text: string, targetIndex: number): string {
   let currentIndex = 0;
   const lines = normalized.split('\n');
   const updatedLines = lines.map(line => {
-    // Check if line contains a task item
-    const match = line.match(/^(\s*[-*•]?\s*\[)([ xX])(\]\s*.+)$/);
+    const match = line.match(/^(\s*[-*•]?\s*\[)([ xX])(\]\s*)(.+)$/);
     if (match) {
       if (currentIndex === targetIndex) {
-        const currentChecked = match[2].toLowerCase() === 'x';
-        const newCheck = currentChecked ? ' ' : 'x';
+        const prefix = match[1];
+        const check = match[2];
+        const spaceAfterBracket = match[3];
+        let content = match[4].trim();
+
+        // Remove existing note comment
+        content = content.replace(/<!--\s*note:\s*[\s\S]*?\s*-->/gi, '').trim();
+
+        if (newNote && newNote.trim()) {
+          content = `${content} <!--note:${newNote.trim()}-->`;
+        }
+
         currentIndex++;
-        return `${match[1]}${newCheck}${match[3]}`;
+        return `${prefix}${check}${spaceAfterBracket}${content}`;
       }
       currentIndex++;
     }
     return line;
   });
-
-  // If text had bullet-separated format (e.g. "• [ ] task1 • [x] task2")
-  if (currentIndex <= targetIndex && normalized.includes('•')) {
-    let bulletIdx = 0;
-    const bulletParts = normalized.split('•');
-    const updatedParts = bulletParts.map(part => {
-      const match = part.match(/^(\s*\[)([ xX])(\]\s*.+)$/);
-      if (match) {
-        if (bulletIdx === targetIndex) {
-          const currentChecked = match[2].toLowerCase() === 'x';
-          const newCheck = currentChecked ? ' ' : 'x';
-          bulletIdx++;
-          return `${match[1]}${newCheck}${match[3]}`;
-        }
-        bulletIdx++;
-      }
-      return part;
-    });
-    return updatedParts.join('•');
-  }
 
   return updatedLines.join(delimiter);
 }
@@ -136,7 +191,12 @@ export function appendTasklistItem(text: string, taskTitle: string): string {
 export function reorderTasklistItems(originalText: string, newItems: TaskItem[]): string {
   if (!originalText) return '';
   const parsed = parseTasklist(originalText);
-  const checklistLines = newItems.map(item => `- [${item.checked ? 'x' : ' '}] ${item.text}`);
+  const checklistLines = newItems.map(item => {
+    let line = `- [${item.checked ? 'x' : ' '}] ${item.text}`;
+    if (item.checkedDate) line += ` <!--checkedDate:${item.checkedDate}-->`;
+    if (item.note) line += ` <!--note:${item.note}-->`;
+    return line;
+  });
   const delimiter = /<br\s*\/?>/i.test(originalText) ? '<br/>' : '\n';
 
   if (!parsed.cleanText || !parsed.cleanText.trim()) {

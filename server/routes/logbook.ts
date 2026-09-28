@@ -144,15 +144,39 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
     // 1. Today tasks: ONLY tasks for targetDateStr
     const todayTasks = allMatching.filter(t => t.taskDate === targetDateStr);
 
-    // 2. Strict Yesterday tasks (H-1): Tasks scheduled for yesterday OR completed on yesterday
+    // 2. Strict Yesterday tasks (H-1): ONLY tasks that had active progress or were completed ON yesterdayDateStr
+    // (Tasks checked 2+ days ago or tasks with 0% progress are excluded from yesterday's accomplishments)
     const yesterdayTasks = allMatching.filter(t => {
-      if (t.taskDate === yesterdayDateStr) return true;
+      // If completed before yesterday (2+ days ago), strictly exclude
       if (t.actualCompletedDate) {
         try {
           const compStr = formatDateStr(new Date(t.actualCompletedDate));
+          if (compStr < yesterdayDateStr) return false;
           if (compStr === yesterdayDateStr) return true;
         } catch (e) {}
       }
+
+      // Check subtasks inside description for checkedDate stamps
+      const desc = t.description || '';
+      if (desc.includes('[-') || desc.includes('[x]') || desc.includes('[X]') || desc.includes('[ ]')) {
+        const checkedDatesMatches = Array.from(desc.matchAll(/<!--\s*checkedDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/gi));
+        if (checkedDatesMatches.length > 0) {
+          const hasYesterdayCheck = checkedDatesMatches.some(m => m[1] === yesterdayDateStr);
+          if (hasYesterdayCheck) return true;
+          const allOlder = checkedDatesMatches.every(m => m[1] < yesterdayDateStr);
+          if (allOlder && (t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed' || (t.progressPercent && t.progressPercent >= 100))) {
+            return false;
+          }
+        }
+      }
+
+      // If scheduled for yesterday: must have active progress or completion on yesterday
+      if (t.taskDate === yesterdayDateStr) {
+        const isDone = t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed';
+        const hasProgress = (t.progressPercent !== null && t.progressPercent > 0) || t.status === 'In Progress' || t.status === 'On Progress';
+        return isDone || hasProgress;
+      }
+
       return false;
     });
 
