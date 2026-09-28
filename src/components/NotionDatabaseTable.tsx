@@ -1085,12 +1085,44 @@ export function NotionDatabaseTable({
         rowCopy['Jenis kegiatan'] = finalTopicTitle;
         if (targetCadence) {
           rowCopy['Activity (routine/non routine)'] = targetCadence;
+          rowCopy['Activity'] = targetCadence;
+          rowCopy['Aktivitas'] = targetCadence;
           rowCopy['period'] = targetCadence;
+          rowCopy['Periode'] = targetCadence;
+
+          targetHeaders.forEach(h => {
+            const hLower = h.toLowerCase();
+            if (hLower.includes('activ') || hLower.includes('aktiv') || hLower.includes('period')) {
+              rowCopy[h] = targetCadence;
+            }
+          });
+
+          Object.keys(rowCopy).forEach(k => {
+            const kLower = k.toLowerCase();
+            if (kLower.includes('activ') || kLower.includes('aktiv') || kLower.includes('period')) {
+              rowCopy[k] = targetCadence;
+            }
+          });
         }
         updatedTargetRows = [...parsedTarget.rows, rowCopy];
       } else {
-        // Masukkan ke topik yang sudah ada: tidak buat baris baru
-        updatedTargetRows = parsedTarget.rows;
+        // Masukkan ke topik yang sudah ada: update kolom aktivitas topik tersebut
+        updatedTargetRows = parsedTarget.rows.map(r => {
+          const name = (getRowVal(r, 'Jenis kegiatan') || '').trim().toLowerCase();
+          if (name === finalTopicTitle.toLowerCase()) {
+            const updated = { ...r };
+            if (targetCadence) {
+              targetHeaders.forEach(h => {
+                const hLower = h.toLowerCase();
+                if (hLower.includes('activ') || hLower.includes('aktiv') || hLower.includes('period')) {
+                  updated[h] = targetCadence;
+                }
+              });
+            }
+            return updated;
+          }
+          return r;
+        });
       }
 
       const newTargetMarkdown = serializeMarkdownTable(targetHeaders, updatedTargetRows, parsedTarget.beforeText, parsedTarget.afterText);
@@ -1111,7 +1143,7 @@ export function NotionDatabaseTable({
       setDirtyRowIndices(new Set());
       onRowsChange?.(reindexedCurrent);
 
-      // Migrasi komentar & lampiran di backend
+      // Migrasi komentar, lampiran & link logbook di backend
       try {
         await fetch('/api/bulletin/move-topic', {
           method: 'POST',
@@ -1121,11 +1153,12 @@ export function NotionDatabaseTable({
             toPostId: targetPost.id,
             topicTitle: originalTaskName,
             newTopicTitle: finalTopicTitle,
+            targetCadence,
             targetSubPeriod
           })
         });
       } catch (e) {
-        console.warn('Comments migration non-fatal warning:', e);
+        console.warn('Comments/logbook migration non-fatal warning:', e);
       }
 
       targetPost.content = newTargetMarkdown;

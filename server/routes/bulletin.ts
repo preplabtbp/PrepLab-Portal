@@ -6,7 +6,8 @@ import {
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
   pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, 
   notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, 
-  mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi
+  mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi,
+  logbookTasks
 } from "../../src/db/schema.js";
 import { generatePdfFromTemplate, drive } from '../../google-services.js';
 import { 
@@ -532,7 +533,7 @@ router.put("/api/bulletin/:id", async (req, res) => {
 
 router.post("/api/bulletin/move-topic", async (req, res) => {
     try {
-      const { fromPostId, toPostId, topicTitle, newTopicTitle, targetSubPeriod } = req.body;
+      const { fromPostId, toPostId, topicTitle, newTopicTitle, targetCadence, targetSubPeriod } = req.body;
       if (!fromPostId || !toPostId || !topicTitle) {
         return res.status(400).json({ status: "error", message: "Missing required fields (fromPostId, toPostId, topicTitle)" });
       }
@@ -576,7 +577,33 @@ router.post("/api/bulletin/move-topic", async (req, res) => {
           .where(eq(bulletinComments.id, c.id));
       }
 
-      res.json({ status: "success", message: "Topic comments successfully moved" });
+      // Repoint connected Logbook tasks so that their bulletin connection follows to the new post
+      try {
+        const updateTaskPayload: any = {
+          bulletinPostId: toId,
+          bulletinTopicTitle: targetTitle
+        };
+        if (targetCadence) {
+          updateTaskPayload.activityType = targetCadence;
+        }
+
+        await db
+          .update(logbookTasks)
+          .set(updateTaskPayload)
+          .where(
+            and(
+              eq(logbookTasks.bulletinPostId, fromId),
+              or(
+                eq(logbookTasks.bulletinTopicTitle, cleanTitle),
+                eq(logbookTasks.title, cleanTitle)
+              )
+            )
+          );
+      } catch (logbookErr) {
+        console.warn("[MoveTopic] Error updating linked logbook tasks:", logbookErr);
+      }
+
+      res.json({ status: "success", message: "Topic comments and linked logbook tasks successfully moved" });
     } catch (err: any) {
       console.error("[MoveTopic] Error migrating comments:", err);
       res.status(500).json({ status: "error", message: err.message || "Failed to move topic comments" });
