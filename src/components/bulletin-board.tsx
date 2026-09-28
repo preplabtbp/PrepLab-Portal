@@ -1813,6 +1813,8 @@ ${aiMeetingNotes
                 beforeText={parsedTableData.beforeText}
                 afterText={parsedTableData.afterText}
                 initialTopicTitle={deepLinkTopic}
+                allPosts={posts}
+                onNavigateToPost={(p: any) => navigateToPost(p)}
                 onPostContentUpdate={(newContent: string) => {
                   setSelectedPost((prev: any) => (prev ? { ...prev, content: newContent } : null));
                   setPosts((prev) =>

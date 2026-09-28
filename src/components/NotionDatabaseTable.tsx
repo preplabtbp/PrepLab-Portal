@@ -474,6 +474,60 @@ export function serializeMarkdownTable(
   return parts.join('\n\n');
 }
 
+// Helper untuk mengekstrak tabel markdown dari string konten
+export function extractMarkdownTableFromContent(content: string): {
+  headers: string[];
+  rows: TableRowData[];
+  beforeText: string;
+  afterText: string;
+} {
+  if (!content || !content.includes('|')) {
+    return { headers: [], rows: [], beforeText: content || '', afterText: '' };
+  }
+  const lines = content.split('\n');
+  let startIdx = -1;
+  let endIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.startsWith('|') && line.endsWith('|')) {
+      if (startIdx === -1) startIdx = i;
+      endIdx = i;
+    } else if (startIdx !== -1) {
+      break;
+    }
+  }
+  if (startIdx !== -1 && endIdx - startIdx >= 2) {
+    const headerLine = lines[startIdx];
+    const headers = headerLine
+      .split('|')
+      .map((h) => h.trim())
+      .filter((h, idx, arr) => idx > 0 && idx < arr.length - 1);
+
+    const rows: TableRowData[] = [];
+    for (let i = startIdx + 2; i <= endIdx; i++) {
+      const rowLine = lines[i].trim();
+      if (!rowLine.startsWith('|')) continue;
+      const cells = rowLine
+        .split('|')
+        .map((c) => c.trim())
+        .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+
+      if (cells.length > 0) {
+        const rowObj: TableRowData = {};
+        headers.forEach((h, idx) => {
+          rowObj[h] = cells[idx] || '';
+        });
+        rows.push(rowObj);
+      }
+    }
+
+    const beforeText = lines.slice(0, startIdx).join('\n');
+    const afterText = lines.slice(endIdx + 1).join('\n');
+    return { headers, rows, beforeText, afterText };
+  }
+  return { headers: [], rows: [], beforeText: content || '', afterText: '' };
+}
+
 interface NotionDatabaseTableProps {
   postId?: number;
   headers: string[];
@@ -488,6 +542,8 @@ interface NotionDatabaseTableProps {
   onPostContentUpdate?: (newContent: string) => void;
   onRowsChange?: (newRows: TableRowData[]) => void;
   initialTopicTitle?: string;
+  allPosts?: any[];
+  onNavigateToPost?: (post: any) => void;
 }
 
 export function NotionDatabaseTable({
@@ -503,7 +559,9 @@ export function NotionDatabaseTable({
   afterText = '',
   onPostContentUpdate,
   onRowsChange,
-  initialTopicTitle
+  initialTopicTitle,
+  allPosts,
+  onNavigateToPost
 }: NotionDatabaseTableProps) {
   // Local table rows for responsive instant CRUD
   const [localRows, setLocalRows] = useState<TableRowData[]>(() => rows || []);
@@ -526,10 +584,11 @@ export function NotionDatabaseTable({
     }
   }, [rows]);
 
-  // Routine & Cadence States
-  const [cadenceFilter, setCadenceFilter] = useState<string>('ALL');
+  // Routine & Cadence States (Sub-Period Navigator)
   const [activeSubPeriod, setActiveSubPeriod] = useState<string>('');
   const [customPeriodsMap, setCustomPeriodsMap] = useState<Record<string, string[]>>({});
+  const [isMovingTopic, setIsMovingTopic] = useState(false);
+  const [showMovePopover, setShowMovePopover] = useState(false);
 
   // Auto open topic drawer if initialTopicTitle is provided (e.g. from notification deep link)
   useEffect(() => {
@@ -876,12 +935,15 @@ export function NotionDatabaseTable({
     return (getRowVal(selectedRow, 'Jenis kegiatan') || '').trim();
   }, [selectedRow, getRowVal]);
 
-  // Current normalized cadence
+  // Current normalized cadence (prioritize page title itself, e.g. "Weekly Manajemen Mutu" -> Weekly)
   const currentCadence = useMemo(() => {
+    const pageCadence = normalizeCadence(title);
+    if (pageCadence) return pageCadence;
+
     if (!selectedRow) return null;
     const actVal = getRowVal(selectedRow, 'Activity (routine/non routine)') || getRowVal(selectedRow, 'period') || '';
     return normalizeCadence(actVal);
-  }, [selectedRow, getRowVal]);
+  }, [title, selectedRow, getRowVal]);
 
   // Is periodic cadence (Weekly, Monthly, Quarterly, Biannual, Yearly, Daily)
   const isPeriodic = useMemo(() => {
@@ -895,6 +957,126 @@ export function NotionDatabaseTable({
     const customList = customPeriodsMap[baseT] || [];
     return generateSubPeriods(currentCadence, new Date().getFullYear(), customList);
   }, [selectedRow, currentCadence, isPeriodic, customPeriodsMap, getRowVal]);
+
+  // Available periodical pages within this section to move topics into
+  const sectionPeriodicalPages = useMemo(() => {
+    if (!allPosts || allPosts.length === 0) return [];
+    const sec = (section || '').trim();
+    const currentUniverse = pt === 'GTS' ? 'GTS' : 'TBP';
+    const eligible = allPosts.filter(p => (p.pt === 'GTS' ? 'GTS' : 'TBP') === currentUniverse);
+
+    const cadences: { cadence: RoutineCadence; label: string; icon: string }[] = [
+      { cadence: 'Daily', label: 'Daily', icon: '📐' },
+      { cadence: 'Weekly', label: 'Weekly', icon: '📅' },
+      { cadence: 'Monthly', label: 'Monthly', icon: '🗓️' },
+      { cadence: 'Quarterly', label: 'Quarterly', icon: '📊' },
+      { cadence: 'Biannual', label: 'Biannual', icon: '🌓' },
+      { cadence: 'Yearly', label: 'Yearly', icon: '📆' },
+      { cadence: 'Non-Routine', label: 'Non Routine', icon: '📑' },
+    ];
+
+    const results: { cadence: RoutineCadence; label: string; icon: string; post: any }[] = [];
+
+    cadences.forEach(c => {
+      const found = eligible.find(p => {
+        const pTitle = (p.title || '').toLowerCase();
+        const pCat = (p.category || p.department || '').toLowerCase();
+        const cStr = c.cadence.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const secStr = sec.toLowerCase().replace(/prep\s*(&|dan)\s*lab/gi, '').trim();
+
+        const titleMatches = pTitle.includes(c.cadence.toLowerCase()) || (cStr === 'nonroutine' && pTitle.includes('non'));
+        const secMatches = secStr ? (pTitle.includes(secStr) || pCat.includes(secStr)) : true;
+        return titleMatches && secMatches;
+      }) || eligible.find(p => {
+        const pTitle = (p.title || '').toLowerCase().trim();
+        return pTitle === c.cadence.toLowerCase() || (c.cadence === 'Non-Routine' && pTitle === 'non routine');
+      });
+
+      if (found && found.id !== postId) {
+        results.push({ ...c, post: found });
+      }
+    });
+
+    return results;
+  }, [allPosts, section, pt, postId]);
+
+  // Handler to move selected topic to a target periodical post
+  const handleMoveTopicToPost = async (targetPost: any) => {
+    if (!selectedRow || !postId || !targetPost || targetPost.id === postId) return;
+    const taskName = getRowVal(selectedRow, 'Jenis kegiatan') || 'Kegiatan';
+
+    const confirmMsg = `Pindahkan topik "${taskName}" ke halaman "${targetPost.title}"?\n\nTopik dan riwayat diskusinya akan dialihkan ke halaman tersebut.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsMovingTopic(true);
+    toast.loading(`Memindahkan topik ke ${targetPost.title}...`, { id: 'move-topic' });
+
+    try {
+      const targetContent = targetPost.content || '';
+      const parsedTarget = extractMarkdownTableFromContent(targetContent);
+      const targetHeaders = parsedTarget.headers.length > 0 ? parsedTarget.headers : displayHeaders;
+
+      const rowCopy: TableRowData = { ...selectedRow };
+      rowCopy['number'] = String(parsedTarget.rows.length + 1);
+
+      const targetCadence = normalizeCadence(targetPost.title);
+      if (targetCadence) {
+        rowCopy['Activity (routine/non routine)'] = targetCadence;
+        rowCopy['period'] = targetCadence;
+      }
+
+      const updatedTargetRows = [...parsedTarget.rows, rowCopy];
+      const newTargetMarkdown = serializeMarkdownTable(targetHeaders, updatedTargetRows, parsedTarget.beforeText, parsedTarget.afterText);
+
+      const putTargetRes = await fetch(`/api/bulletin/${targetPost.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newTargetMarkdown })
+      });
+      if (!putTargetRes.ok) throw new Error('Gagal menambahkan topik ke halaman tujuan');
+
+      // Remove row from current post
+      const updatedCurrentRows = localRows.filter(r => r !== selectedRow);
+      const reindexedCurrent = updatedCurrentRows.map((r, i) => ({ ...r, number: String(i + 1) }));
+      await saveTableToBackend(reindexedCurrent);
+      setLocalRows(reindexedCurrent);
+      setOriginalRowsBackup(JSON.parse(JSON.stringify(reindexedCurrent)));
+      setDirtyRowIndices(new Set());
+      onRowsChange?.(reindexedCurrent);
+
+      // Migrate topic comments in backend
+      try {
+        await fetch('/api/bulletin/move-topic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fromPostId: postId,
+            toPostId: targetPost.id,
+            topicTitle: baseTopicTitle
+          })
+        });
+      } catch (e) {
+        console.warn('Comments migration non-fatal warning:', e);
+      }
+
+      targetPost.content = newTargetMarkdown;
+
+      toast.success(`Topik "${taskName}" berhasil dipindahkan ke "${targetPost.title}"!`, {
+        id: 'move-topic',
+        action: onNavigateToPost ? {
+          label: 'Buka Halaman',
+          onClick: () => onNavigateToPost(targetPost)
+        } : undefined
+      });
+
+      setSelectedRow(null);
+      setShowMovePopover(false);
+    } catch (err: any) {
+      toast.error('Gagal memindahkan topik: ' + (err.message || err), { id: 'move-topic' });
+    } finally {
+      setIsMovingTopic(false);
+    }
+  };
 
   // Active topic title for comments modal (incorporates sub-period if active for isolated threads)
   const selectedTopicTitle = useMemo(() => {
@@ -1252,37 +1434,7 @@ export function NotionDatabaseTable({
       });
     }
 
-    // 3. Cadence Filter (Routinity)
-    if (cadenceFilter !== 'ALL') {
-      result = result.filter((row) => {
-        const actVal = getRowVal(row, 'Activity (routine/non routine)') || getRowVal(row, 'period') || '';
-        const cad = normalizeCadence(actVal);
-        if (cadenceFilter === 'Non-Routine') {
-          return cad === 'Non-Routine' || actVal.toLowerCase().includes('non');
-        }
-        if (cadenceFilter === 'Daily') {
-          return cad === 'Daily';
-        }
-        if (cadenceFilter === 'Weekly') {
-          return cad === 'Weekly';
-        }
-        if (cadenceFilter === 'Monthly') {
-          return cad === 'Monthly';
-        }
-        if (cadenceFilter === 'Quarterly') {
-          return cad === 'Quarterly';
-        }
-        if (cadenceFilter === 'Biannual') {
-          return cad === 'Biannual';
-        }
-        if (cadenceFilter === 'Yearly') {
-          return cad === 'Yearly';
-        }
-        return true;
-      });
-    }
-
-    // 4. Priority Filter
+    // 3. Priority Filter
     if (priorityFilter !== 'ALL') {
       result = result.filter((row) => {
         const val = (getRowVal(row, 'Priority') || '').toUpperCase().trim();
@@ -1290,7 +1442,7 @@ export function NotionDatabaseTable({
       });
     }
 
-    // 5. Sort
+    // 4. Sort
     if (sortColumn) {
       result.sort((a, b) => {
         const rawA = (getRowVal(a, sortColumn) || '').trim();
@@ -1319,7 +1471,7 @@ export function NotionDatabaseTable({
     }
 
     return result;
-  }, [localRows, searchQuery, statusFilter, cadenceFilter, priorityFilter, sortColumn, sortDirection, getRowVal]);
+  }, [localRows, searchQuery, statusFilter, priorityFilter, sortColumn, sortDirection, getRowVal]);
 
   // Statistics calculation
   const stats = useMemo(() => {
@@ -2181,47 +2333,6 @@ export function NotionDatabaseTable({
             <span>Rapikan Kolom</span>
           </button>
         </div>
-      </div>
-
-      {/* Cadence / Routinity Filter Bar */}
-      <div 
-        className="px-3 py-2 border-b flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs"
-        style={{
-          backgroundColor: 'var(--card-bg, #1a1a1a)',
-          borderColor: 'var(--border-main, #2d2d2d)'
-        }}
-      >
-        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 shrink-0">
-          <Activity className="w-3 h-3 text-teal-400" />
-          <span>Aktivitas:</span>
-        </div>
-        {[
-          { key: 'ALL', label: 'Semua Cadence' },
-          { key: 'Daily', label: '⭐ Daily' },
-          { key: 'Weekly', label: '📅 Weekly' },
-          { key: 'Monthly', label: '🗓️ Monthly' },
-          { key: 'Quarterly', label: '📊 Quarterly' },
-          { key: 'Biannual', label: '🌓 Biannual' },
-          { key: 'Yearly', label: '📆 Yearly' },
-          { key: 'Non-Routine', label: '⚡ Non-Routine' },
-        ].map((cad) => {
-          const isSelected = cadenceFilter === cad.key;
-          return (
-            <button
-              key={cad.key}
-              type="button"
-              onClick={() => setCadenceFilter(cad.key)}
-              className="px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-all flex-shrink-0 flex items-center gap-1 border cursor-pointer"
-              style={{
-                backgroundColor: isSelected ? 'rgba(42, 157, 143, 0.25)' : 'var(--card-bg, #222222)',
-                borderColor: isSelected ? 'var(--primary, #2A9D8F)' : 'var(--border-main, #334155)',
-                color: isSelected ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)'
-              }}
-            >
-              <span>{cad.label}</span>
-            </button>
-          );
-        })}
       </div>
 
       {/* ========================================================================= */}
@@ -3569,6 +3680,65 @@ export function NotionDatabaseTable({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
+                    {/* Move Topic to Section Periodical Page Button */}
+                    {sectionPeriodicalPages.length > 0 && (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setShowMovePopover(!showMovePopover)}
+                          disabled={isMovingTopic}
+                          className="p-2 px-3 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm disabled:opacity-50"
+                          title="Pindahkan kegiatan ini ke halaman periodik seksi lain (Weekly, Daily, Monthly, dll)"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Pindah Halaman</span>
+                          <ChevronDown className="w-3 h-3 opacity-70" />
+                        </button>
+
+                        {showMovePopover && (
+                          <>
+                            <div 
+                              className="fixed inset-0 z-30" 
+                              onClick={() => setShowMovePopover(false)} 
+                            />
+                            <div 
+                              className="absolute right-0 top-full mt-1.5 z-40 w-64 border rounded-2xl shadow-2xl overflow-hidden p-1.5 animate-in fade-in zoom-in-95 duration-100"
+                              style={{
+                                backgroundColor: 'var(--card-bg, #202020)',
+                                borderColor: 'var(--border-main, #334155)'
+                              }}
+                            >
+                              <div className="px-2.5 py-1.5 border-b mb-1" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-400 block">
+                                  Pindah ke Halaman Periodik:
+                                </span>
+                                <span className="text-[11px] text-slate-400 block truncate">
+                                  {section || 'Seksi Ini'}
+                                </span>
+                              </div>
+                              <div className="space-y-0.5 max-h-56 overflow-y-auto">
+                                {sectionPeriodicalPages.map((dest) => (
+                                  <button
+                                    key={dest.post.id}
+                                    type="button"
+                                    onClick={() => handleMoveTopicToPost(dest.post)}
+                                    className="w-full px-2.5 py-2 rounded-xl text-left text-xs font-medium hover:bg-teal-500/15 hover:text-teal-300 transition-colors flex items-center justify-between group cursor-pointer"
+                                    style={{ color: 'var(--text-main, #cbd5e1)' }}
+                                  >
+                                    <div className="flex items-center gap-2 truncate">
+                                      <span className="text-sm shrink-0">{dest.icon}</span>
+                                      <span className="truncate">{dest.post.title}</span>
+                                    </div>
+                                    <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-teal-300 shrink-0" />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
                     <button
                       onClick={() => handleOpenEditModal(selectedRow, localRows.indexOf(selectedRow))}
                       className="p-2 px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
@@ -3656,11 +3826,16 @@ export function NotionDatabaseTable({
                                   value={getRowVal(selectedRow, 'Activity (routine/non routine)')}
                                   onChange={(newVal) => {
                                     handleUpdateCellDirect(actualIdx, 'Activity (routine/non routine)', newVal);
-                                    const cad = normalizeCadence(newVal);
-                                    if (cad && isPeriodicCadence(cad)) {
-                                      setActiveSubPeriod(getDefaultActiveSubPeriod(cad));
+                                    const matchingDest = sectionPeriodicalPages.find(p => p.cadence === newVal);
+                                    if (matchingDest && window.confirm(`Aktivitas diubah menjadi "${newVal}". Apakah Anda ingin memindahkan topik ini ke halaman "${matchingDest.post.title}"?`)) {
+                                      handleMoveTopicToPost(matchingDest.post);
                                     } else {
-                                      setActiveSubPeriod('');
+                                      const cad = normalizeCadence(newVal);
+                                      if (cad && isPeriodicCadence(cad)) {
+                                        setActiveSubPeriod(getDefaultActiveSubPeriod(cad));
+                                      } else {
+                                        setActiveSubPeriod('');
+                                      }
                                     }
                                   }}
                                 />

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../../src/db/index.js";
-import { eq, desc, or, inArray, isNull, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, or, inArray, isNull, and, gte, lte, sql, like } from "drizzle-orm";
 import { 
   chatMessages, employees, equipments, workOrders, users, tickets, downtime, 
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
@@ -527,6 +527,38 @@ router.put("/api/bulletin/:id", async (req, res) => {
       res.json({ status: "success", data: post });
     } catch (error) {
       res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
+router.post("/api/bulletin/move-topic", async (req, res) => {
+    try {
+      const { fromPostId, toPostId, topicTitle } = req.body;
+      if (!fromPostId || !toPostId || !topicTitle) {
+        return res.status(400).json({ status: "error", message: "Missing required fields (fromPostId, toPostId, topicTitle)" });
+      }
+
+      const fromId = parseInt(fromPostId);
+      const toId = parseInt(toPostId);
+      const cleanTitle = String(topicTitle).trim();
+
+      // Update all comments under this topic (and its sub-period instances) to point to the new post
+      await db
+        .update(bulletinComments)
+        .set({ postId: toId })
+        .where(
+          and(
+            eq(bulletinComments.postId, fromId),
+            or(
+              eq(bulletinComments.topicTitle, cleanTitle),
+              like(bulletinComments.topicTitle, `${cleanTitle} - %`)
+            )
+          )
+        );
+
+      res.json({ status: "success", message: "Topic comments successfully moved" });
+    } catch (err: any) {
+      console.error("[MoveTopic] Error migrating comments:", err);
+      res.status(500).json({ status: "error", message: err.message || "Failed to move topic comments" });
     }
   });
 
