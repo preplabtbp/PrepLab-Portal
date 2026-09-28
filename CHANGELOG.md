@@ -2,6 +2,34 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.34] - 2026-09-28
+
+### 🚀 Rollover Otomatis Task Routine, Integrasi Sub-Periode Buletin, Pilihan Topik Cerdas & Indikator Catatan Subtask Interaktif
+
+- **Visual Catatan Subtask Minimalis & Bubble Chat Interaktif ke Kanan (`src/components/logbook-screen.tsx`, `src/components/notion/tasklist-utils.ts`)**:
+  - **Tampilan Default Minimalis dengan Indikator Dot Merah**: Menghilangkan tampilan teks catatan yang sebelumnya memanjang di samping checklist subtask. Sebagai gantinya, ikon tanda seru (`AlertCircle`) kini hanya menampilkan **dot merah berkedip** (*pulsing red dot badge*) di pojok kanan atas sebagai tanda visual yang bersih bahwa subtask memiliki catatan tambahan.
+  - **Bubble Chat Popover ke Arah Kanan pada Modul Kemarin (`isReadOnly`)**: Pada mode evaluasi kemarin, mengklik ikon tanda seru yang ber-dot merah akan memunculkan popover obrolan (*speech bubble*) yang melayang ke arah kanan lengkap dengan ekor bubble ke arah ikon, menampilkan referensi subtask, tanggal pencatatan (`📅 YYYY-MM-DD`), dan isi catatan lengkap dengan tombol tutup (`X`).
+  - **Pengakuan Otomatis Progres Subtask ke Progres Kemarin (`server/routes/logbook.ts`)**: Menambahkan stempel tanggal pencatatan catatan (`<!--noteDate:YYYY-MM-DD-->`). Jika kegiatan berstatus `Open`, penambahan catatan subtask otomatis menaikkan status menjadi `On Progress`. Backend server memvalidasi `hasYesterdayNote` sehingga kegiatan yang diberi catatan hari ini otomatis diakui memiliki progres aktif dan langsung masuk ke daftar **Progres Kemarin (H-1)** pada tanggal keesokan harinya.
+
+- **Otomatisasi Rollover Periode Baru pada Routine Task Saat 100% Selesai (`src/components/logbook-screen.tsx`, `src/components/notion/period-utils.ts`)**:
+  - **Pendeteksian Selesai Checklist Otomatis**: Ketika subtask terakhir dari sebuah tugas bertipe Routine (Daily, Weekly, Monthly, Yearly) dicentang (selesai 100%), sistem secara proaktif memunculkan dialog konfirmasi: *"Routine Task Selesai! 🎉 Apakah Anda ingin membuat kembali task routine ini untuk periode selanjutnya?"*.
+  - **Duplikasi & Pembaruan Periode Cerdas**: Jika disetujui, sistem otomatis menduplikasi daftar subtask dalam keadaan bersih belum dicentang (0%), menyetel status awal ke `Open`, dan memajukan tanggal target penyelesaian default serta sub-periode buletin (misal: dari `2026` ke `2027`, atau dari `Maret 2026` ke `April 2026`) secara otomatis.
+
+- **Penyelarasan Sub-Periode Dinamis & Preservasi Cadence Topik Buletin (`src/components/NotionDatabaseTable.tsx`)**:
+  - **Pembersihan Sub-Topik Liar**: Menghapus pembuatan sub-topik tahunan otomatis tanpa persetujuan pengguna (seperti `2021-2025`) pada halaman Yearly, menjaga database tetap bersih dan hanya menampilkan sub-topik yang benar-benar ditambahkan oleh pengguna.
+  - **Pembacaan Sub-Periode Terkait Saja**: Kolom topik dan diskusi kini membaca secara dinamis tahun/periode yang ditambahkan dan membatasi tampilan hanya pada sub-periode yang relevan.
+  - **Preservasi Cadence Halaman Tujuan**: Memastikan topik yang dipindahkan ke halaman Yearly atau berkala lainnya tetap mempertahankan jenis berkala target (misal: tetap berjenis `Yearly` dan tidak kembali menjadi `Routine Umum`).
+
+- **Modal Pilihan Pengguna Saat Memindahkan Topik Aktivitas (`src/components/NotionDatabaseTable.tsx`)**:
+  - **Dialog Konfirmasi Perubahan Aktivitas**: Ketika pengguna mengubah kolom Activity dari routine umum ke berkala (seperti Yearly), sistem menampilkan dialog konfirmasi informasi pemindahan.
+  - **Pilihan Fleksibel (Topik Baru vs Gabung Topik Yang Ada)**: Pengguna diberikan pilihan langsung:
+    1. **Buat Topik Baru**: Membuat topik baru di halaman tujuan dengan nama topik saat ini.
+    2. **Gabung ke Topik Yang Sudah Ada**: Memilih dari daftar topik yang telah ada di halaman tujuan untuk digabungkan sebagai sub-topik.
+  - **Sinkronisasi Otomatis Tautan Task Logbook**: Ketika topik buletin dipindahkan, seluruh kegiatan logbook yang sebelumnya terhubung ke postingan asal secara otomatis diperbarui relasinya (`bulletinPostId` dan `bulletinTopicTitle`) ke postingan tujuan agar sinkronisasi data tetap utuh.
+
+- **Perbaikan Fleksibilitas Interaksi pada Modul Log Book (`src/components/logbook-screen.tsx`)**:
+  - Memisahkan status *read-only* dengan tegas: hanya tab **Evaluasi Kemarin** (`yesterday`) yang dikunci sebagai laporan historis shift H-1, sedangkan tab **Semua Backlog** (`all_carryover`) tetap mempertahankan fungsionalitas interaktif penuh (seperti salin ke tugas baru dan pemantauan status).
+
 ## [2.9.33] - 2026-09-27
 
 ### 📚 Perombakan Modul Quiz Kelas Enterprise, Penambahan Materi P5M Secara Bulk, Menu Quiz Mode Simple Crew & Hak Akses Developer
