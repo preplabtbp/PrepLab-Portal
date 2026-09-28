@@ -412,6 +412,70 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
     }
   });
 
+router.delete("/api/bulletin/comments/:commentId/attachment", async (req, res) => {
+    try {
+      const commentId = parseInt(req.params.commentId);
+      const attachmentUrl = (req.query.attachmentUrl as string) || (req.body?.attachmentUrl as string);
+      
+      const commentArray = await db.select().from(bulletinComments).where(eq(bulletinComments.id, commentId)).limit(1);
+      if (commentArray.length === 0) {
+        return res.status(404).json({ status: "error", message: "Comment not found" });
+      }
+      const comment = commentArray[0];
+
+      // If comment.fileUrl is a JSON array with multiple attachments
+      if (comment.fileUrl) {
+        try {
+          const parsed = JSON.parse(comment.fileUrl);
+          if (Array.isArray(parsed) && parsed.length > 1) {
+            const filtered = parsed.filter((item: any) => {
+              const u = item.directUrl || item.url || item.fileUrl;
+              return u !== attachmentUrl && item.name !== attachmentUrl;
+            });
+
+            if (filtered.length > 0) {
+              await db.update(bulletinComments).set({
+                fileUrl: JSON.stringify(filtered),
+                fileName: filtered[0]?.name || comment.fileName
+              }).where(eq(bulletinComments.id, commentId));
+
+              return res.json({ status: "success", action: "attachment_removed", remaining: filtered.length });
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Check if comment has meaningful user text or is just auto-generated attachment link
+      const content = (comment.content || '').trim();
+      const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
+      const isPureAttachment = 
+        lines.length === 0 ||
+        (lines.length === 1 && lines[0].startsWith('📎')) ||
+        (lines.length <= 2 && lines.every(l => l.startsWith('📎') || l.toLowerCase().startsWith('caption:')));
+
+      if (isPureAttachment) {
+        // Pure attachment comment: delete the comment record
+        await db.delete(bulletinComments).where(eq(bulletinComments.id, commentId));
+        return res.json({ status: "success", action: "comment_deleted" });
+      } else {
+        // Has discussion text: keep comment text intact, remove attachment links
+        const cleanedLines = lines.filter(l => !l.startsWith('📎'));
+        const newContent = cleanedLines.join('\n').trim() || content;
+
+        await db.update(bulletinComments).set({
+          fileUrl: null,
+          fileName: null,
+          content: newContent
+        }).where(eq(bulletinComments.id, commentId));
+
+        return res.json({ status: "success", action: "attachment_detached_text_kept" });
+      }
+    } catch (error: any) {
+      console.error('[Delete Attachment Error]', error);
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
 router.delete("/api/bulletin/comments/:commentId", async (req, res) => {
     try {
       const { deleterNik, deleterName } = req.query;

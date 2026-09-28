@@ -208,6 +208,29 @@ export function BulletinTopicDetail({
     return list;
   }, [comments]);
 
+  const handleDeleteAttachment = async (commentId: number, attachmentUrl: string, attachmentName: string) => {
+    if (!confirm(`Hapus lampiran "${attachmentName}" dari topik ini?\n\nCatatan: Teks komentar Anda (jika ada) akan tetap tersimpan.`)) return;
+
+    try {
+      const res = await fetch(`/api/bulletin/comments/${commentId}/attachment?attachmentUrl=${encodeURIComponent(attachmentUrl)}&deleterNik=${encodeURIComponent(inspectorNik || '')}&deleterName=${encodeURIComponent(inspectorName || '')}`, {
+        method: 'DELETE'
+      });
+      const json = await res.json();
+      if (json.status === 'success') {
+        toast.success(
+          json.action === 'attachment_detached_text_kept'
+            ? 'Lampiran berhasil dihapus. Teks komentar tetap disimpan.'
+            : 'Lampiran berhasil dihapus dari galeri.'
+        );
+        fetchComments();
+      } else {
+        toast.error('Gagal menghapus lampiran: ' + (json.message || 'Error'));
+      }
+    } catch (e) {
+      toast.error('Gagal menghapus lampiran');
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3, ease: "easeOut" }} className="flex flex-col h-full pb-36 w-full w-full max-w-full px-4 md:px-8 md:px-0">
       
@@ -402,12 +425,21 @@ export function BulletinTopicDetail({
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-medium">{att.authorName || '-'}</td>
                           <td className="px-3 py-2 text-center whitespace-nowrap">
-                            <button
-                              onClick={() => att.isImage ? setPreviewImage(att.directUrl || att.url) : window.open(att.driveViewUrl || att.url, '_blank', 'noopener,noreferrer')}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-blue-600 hover:text-white border border-slate-200 hover:border-blue-600 rounded-lg text-[11px] font-semibold text-slate-700 transition-all shadow-2xs"
-                            >
-                              <ExternalLink className="w-3 h-3" /> Buka
-                            </button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => att.isImage ? setPreviewImage(att.directUrl || att.url) : window.open(att.driveViewUrl || att.url, '_blank', 'noopener,noreferrer')}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-blue-600 hover:text-white border border-slate-200 hover:border-blue-600 rounded-lg text-[11px] font-semibold text-slate-700 transition-all shadow-2xs"
+                              >
+                                <ExternalLink className="w-3 h-3" /> Buka
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAttachment(att.commentId, att.directUrl || att.url, att.name)}
+                                className="p-1 rounded-lg border border-slate-200 hover:border-rose-300 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shadow-2xs cursor-pointer"
+                                title="Hapus lampiran ini (teks komentar tetap tersimpan)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}

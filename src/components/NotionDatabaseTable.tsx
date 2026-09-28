@@ -573,6 +573,8 @@ export function NotionDatabaseTable({
   const [commentText, setCommentText] = useState('');
   const [statusUpdateChoice, setStatusUpdateChoice] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const isSubmittingCommentRef = useRef(false);
+  const isUploadingGalleryRef = useRef(false);
   const [selectedFile, setSelectedFile] = useState<{ name: string; url: string; previewUrl?: string; isImage?: boolean } | null>(null);
   const [commentFileCaption, setCommentFileCaption] = useState('');
   const [isUploadingCommentFile, setIsUploadingCommentFile] = useState(false);
@@ -1276,6 +1278,7 @@ export function NotionDatabaseTable({
   // Submit comment / progress update
   const handlePostComment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingComment || isSubmittingCommentRef.current) return;
     const finalContent = commentText.trim() || (commentFileCaption.trim() ? `📎 ${selectedFile?.name}\n\n${commentFileCaption.trim()}` : (selectedFile ? `📎 Lampiran: ${selectedFile.name}` : ''));
     if (!finalContent && !selectedFile) return;
     if (!postId || !selectedRow) return;
@@ -1285,6 +1288,7 @@ export function NotionDatabaseTable({
     const activeSection = section || getRowVal(selectedRow, 'Kategori') || 'Prep & Lab';
 
     try {
+      isSubmittingCommentRef.current = true;
       setSubmittingComment(true);
       const fileUrlPayload = selectedFile ? JSON.stringify([{
         url: selectedFile.url,
@@ -1349,6 +1353,7 @@ export function NotionDatabaseTable({
     } catch (err) {
       toast.error('Gagal menghubungi server untuk mengirim update.');
     } finally {
+      isSubmittingCommentRef.current = false;
       setSubmittingComment(false);
     }
   };
@@ -1478,117 +1483,148 @@ export function NotionDatabaseTable({
 
   // Execute upload after user enters caption in Gallery modal
   const handleExecuteGalleryUpload = async () => {
+    if (isUploadingGallery || isUploadingGalleryRef.current) return;
     if (!pendingUploadFile || !postId || !selectedRow) return;
 
-    const { file, caption, isImage: isImg, previewUrl } = pendingUploadFile;
+    isUploadingGalleryRef.current = true;
     setIsUploadingGallery(true);
     toast.loading('Mengompres dan mengunggah lampiran foto...', { id: 'upload-gallery' });
 
     try {
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const base64Raw = ev.target?.result as string;
-        let finalBase64 = base64Raw;
+      const { file, caption, isImage: isImg, previewUrl } = pendingUploadFile;
 
-        // If image, compress with canvas
-        if (isImg) {
-          const img = new Image();
-          await new Promise((resolve) => {
-            img.onload = resolve;
-            img.src = base64Raw;
-          });
+      const base64Raw = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target?.result as string);
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(file);
+      });
 
-          const canvas = document.createElement('canvas');
-          const maxW = 1600;
-          const maxH = 1200;
-          let w = img.width;
-          let h = img.height;
+      let finalBase64 = base64Raw;
 
-          if (w > maxW || h > maxH) {
-            if (w > h) {
-              h = Math.round((h * maxW) / w);
-              w = maxW;
-            } else {
-              w = Math.round((w * maxH) / h);
-              h = maxH;
-            }
-          }
+      // If image, compress with canvas
+      if (isImg) {
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = base64Raw;
+        });
 
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, w, h);
-            finalBase64 = canvas.toDataURL('image/jpeg', 0.85);
+        const canvas = document.createElement('canvas');
+        const maxW = 1600;
+        const maxH = 1200;
+        let w = img.width;
+        let h = img.height;
+
+        if (w > maxW || h > maxH) {
+          if (w > h) {
+            h = Math.round((h * maxW) / w);
+            w = maxW;
+          } else {
+            w = Math.round((w * maxH) / h);
+            h = maxH;
           }
         }
 
-        // Upload to /api/upload or Google Drive
-        let uploadedUrl = finalBase64;
-        try {
-          const upRes = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              base64Data: finalBase64,
-              mimeType: file.type || 'image/jpeg',
-              filename: file.name,
-              folderName: 'Bulletin Attachments'
-            })
-          });
-          const upJson = await upRes.json();
-          if (upJson.url) {
-            uploadedUrl = upJson.url;
-          }
-        } catch (uErr) {
-          // Fallback to compressed base64
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          finalBase64 = canvas.toDataURL('image/jpeg', 0.85);
         }
+      }
 
-        // Post as an attachment comment with caption for this topic
-        const topicTitleVal = selectedTopicTitle || 'Topik';
-        const activeSection = section || getRowVal(selectedRow, 'Kategori') || 'Prep & Lab';
-
-        const cRes = await fetch(`/api/bulletin/${postId}/comments`, {
+      // Upload to /api/upload or Google Drive
+      let uploadedUrl = finalBase64;
+      try {
+        const upRes = await fetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            postId,
-            content: caption.trim() ? `📎 ${file.name}\n\n${caption.trim()}` : `📎 Lampiran Foto / Dokumen: ${file.name}`,
-            fileUrl: JSON.stringify([{
-              url: uploadedUrl,
-              name: file.name,
-              caption: caption.trim(),
-              directUrl: uploadedUrl,
-              isImage: isImg
-            }]),
-            fileName: file.name,
-            topicTitle: topicTitleVal,
-            topicId: topicTitleVal.toLowerCase().replace(/\s+/g, '-'),
-            section: activeSection,
-            category: getRowVal(selectedRow, 'Kategori') || 'Laboratorium',
-            authorName: currentAuthorName || 'Personil',
-            authorNik: currentAuthorNik || 'NOT_SET'
+            base64Data: finalBase64,
+            mimeType: file.type || 'image/jpeg',
+            filename: file.name,
+            folderName: 'Bulletin Attachments'
           })
         });
-
-        toast.dismiss('upload-gallery');
-        if (cRes.ok) {
-          toast.success('Foto dengan caption berhasil ditambahkan ke galeri!');
-          if (previewUrl && previewUrl.startsWith('blob:')) {
-            URL.revokeObjectURL(previewUrl);
-          }
-          setPendingUploadFile(null);
-          await fetchComments();
-        } else {
-          toast.error('Gagal menambahkan lampiran ke topik.');
+        const upJson = await upRes.json();
+        if (upJson.url) {
+          uploadedUrl = upJson.url;
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (uErr) {
+        // Fallback to compressed base64
+      }
+
+      // Post as an attachment comment with caption for this topic
+      const topicTitleVal = selectedTopicTitle || 'Topik';
+      const activeSection = section || getRowVal(selectedRow, 'Kategori') || 'Prep & Lab';
+
+      const cRes = await fetch(`/api/bulletin/${postId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId,
+          content: caption.trim() ? `📎 ${file.name}\n\n${caption.trim()}` : `📎 Lampiran Foto / Dokumen: ${file.name}`,
+          fileUrl: JSON.stringify([{
+            url: uploadedUrl,
+            name: file.name,
+            caption: caption.trim(),
+            directUrl: uploadedUrl,
+            isImage: isImg
+          }]),
+          fileName: file.name,
+          topicTitle: topicTitleVal,
+          topicId: topicTitleVal.toLowerCase().replace(/\s+/g, '-'),
+          section: activeSection,
+          category: getRowVal(selectedRow, 'Kategori') || 'Laboratorium',
+          authorName: currentAuthorName || 'Personil',
+          authorNik: currentAuthorNik || 'NOT_SET'
+        })
+      });
+
+      toast.dismiss('upload-gallery');
+      if (cRes.ok) {
+        toast.success('Foto dengan caption berhasil ditambahkan ke galeri!');
+        if (previewUrl && previewUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(previewUrl);
+        }
+        setPendingUploadFile(null);
+        await fetchComments();
+      } else {
+        toast.error('Gagal menambahkan lampiran ke topik.');
+      }
     } catch (err) {
       toast.dismiss('upload-gallery');
       toast.error('Gagal mengunggah foto / file');
     } finally {
+      isUploadingGalleryRef.current = false;
       setIsUploadingGallery(false);
+    }
+  };
+
+  // Handler untuk menghapus lampiran dari topik (menjaga teks komentar jika ada)
+  const handleDeleteAttachment = async (commentId: number, attachmentUrl: string, attachmentName: string) => {
+    if (!confirm(`Hapus lampiran "${attachmentName}" dari topik ini?\n\nCatatan: Teks komentar Anda (jika ada) akan tetap tersimpan.`)) return;
+
+    try {
+      const res = await fetch(`/api/bulletin/comments/${commentId}/attachment?attachmentUrl=${encodeURIComponent(attachmentUrl)}&deleterNik=${encodeURIComponent(currentAuthorNik || '')}&deleterName=${encodeURIComponent(currentAuthorName || '')}`, {
+        method: 'DELETE'
+      });
+      const json = await res.json();
+      if (json.status === 'success') {
+        toast.success(
+          json.action === 'attachment_detached_text_kept'
+            ? 'Lampiran berhasil dihapus. Teks komentar Anda tetap disimpan.'
+            : 'Lampiran berhasil dihapus dari galeri.'
+        );
+        await fetchComments();
+      } else {
+        toast.error('Gagal menghapus lampiran: ' + (json.message || 'Error'));
+      }
+    } catch (e) {
+      toast.error('Gagal menghapus lampiran');
     }
   };
 
@@ -3632,9 +3668,15 @@ export function NotionDatabaseTable({
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
                             {galleryItems.map((item, idx) => {
                               const driveId = item.attachment.id || extractDriveId(item.attachment.directUrl || item.attachment.url);
+                              const targetUrl = item.attachment.directUrl || item.attachment.url || item.attachment.name;
+                              const canDelete = 
+                                !item.comment.authorNik || 
+                                item.comment.authorNik === currentAuthorNik || 
+                                item.comment.authorName === currentAuthorName;
+
                               return (
                                 <div 
-                                  key={item.comment.id || idx}
+                                  key={item.comment.id ? `gal-${item.comment.id}-${idx}` : idx}
                                   onClick={() => handlePreviewAttachment(item.attachment)}
                                   className="group relative rounded-xl overflow-hidden aspect-video border hover:border-teal-500/60 cursor-pointer shadow-sm transition-all hover:scale-[1.02]"
                                   style={{
@@ -3667,12 +3709,30 @@ export function NotionDatabaseTable({
                                       <span className="text-[10px] text-teal-300 font-semibold truncate w-full px-1">{item.attachment.name}</span>
                                     </div>
                                   )}
+
+                                  {/* Caption Badge */}
                                   {item.attachment.caption && (
-                                    <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[9px] text-teal-300 font-medium z-10">
+                                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[9px] text-teal-300 font-medium z-10 shadow-xs border border-teal-500/30">
                                       💬 Caption
                                     </div>
                                   )}
-                                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2.5">
+
+                                  {/* Delete Attachment Button on Thumbnail */}
+                                  {canDelete && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteAttachment(item.comment.id, targetUrl, item.attachment.name);
+                                      }}
+                                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-lg bg-black/75 hover:bg-rose-600 text-slate-300 hover:text-white flex items-center justify-center transition-all opacity-80 group-hover:opacity-100 z-20 cursor-pointer shadow-md border border-white/20 hover:border-rose-400 active:scale-90"
+                                      title="Hapus lampiran ini dari galeri (teks komentar tetap tersimpan)"
+                                    >
+                                      <Trash2 className="w-3 h-3 stroke-[2.5]" />
+                                    </button>
+                                  )}
+
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2.5 pointer-events-none">
                                     {item.attachment.caption ? (
                                       <>
                                         <span className="text-[11px] font-bold text-white line-clamp-2 leading-tight">
