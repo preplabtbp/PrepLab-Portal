@@ -176,3 +176,273 @@ export function getDefaultActiveSubPeriod(
       return '';
   }
 }
+
+/**
+ * Calculates the subsequent/next sub-period based on current period and cadence
+ * e.g., '2026' -> '2027' (Yearly)
+ * 'Sep 2026' -> 'Okt 2026' (Monthly)
+ * 'Des 2026' -> 'Jan 2027' (Monthly)
+ * 'W39 2026' -> 'W40 2026' (Weekly)
+ * 'W52 2026' -> 'W1 2027' (Weekly)
+ * 'Q3 2026' -> 'Q4 2026' (Quarterly)
+ * 'B1 2026' -> 'B2 2026' (Biannual)
+ */
+export function getNextSubPeriod(
+  currentPeriod: string,
+  cadence: RoutineCadence | string | null | undefined
+): string {
+  const norm = normalizeCadence(cadence);
+  const cur = (currentPeriod || '').trim();
+
+  if (norm === 'Yearly') {
+    const match = cur.match(/\b(20\d\d)\b/);
+    const yr = match ? parseInt(match[1], 10) : new Date().getFullYear();
+    return `${yr + 1}`;
+  }
+
+  if (norm === 'Monthly') {
+    const monthMatch = cur.match(/([a-zA-Z]{3,4})\s*(20\d\d)/i);
+    if (monthMatch) {
+      const mName = monthMatch[1].toLowerCase();
+      let yr = parseInt(monthMatch[2], 10);
+      let idx = MONTH_NAMES.findIndex(m => m.toLowerCase().startsWith(mName.substring(0, 3)));
+      if (idx === -1) idx = new Date().getMonth();
+      if (idx === 11) {
+        idx = 0;
+        yr += 1;
+      } else {
+        idx += 1;
+      }
+      return `${MONTH_NAMES[idx]} ${yr}`;
+    }
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return getDefaultActiveSubPeriod('Monthly', nextMonth);
+  }
+
+  if (norm === 'Weekly') {
+    const weekMatch = cur.match(/W(\d+)\s*(20\d\d)/i);
+    if (weekMatch) {
+      let wNum = parseInt(weekMatch[1], 10);
+      let yr = parseInt(weekMatch[2], 10);
+      if (wNum >= 52) {
+        wNum = 1;
+        yr += 1;
+      } else {
+        wNum += 1;
+      }
+      return `W${wNum} ${yr}`;
+    }
+    const now = new Date();
+    now.setDate(now.getDate() + 7);
+    return getDefaultActiveSubPeriod('Weekly', now);
+  }
+
+  if (norm === 'Quarterly') {
+    const qMatch = cur.match(/Q(\d)\s*(20\d\d)/i);
+    if (qMatch) {
+      let qNum = parseInt(qMatch[1], 10);
+      let yr = parseInt(qMatch[2], 10);
+      if (qNum >= 4) {
+        qNum = 1;
+        yr += 1;
+      } else {
+        qNum += 1;
+      }
+      return `Q${qNum} ${yr}`;
+    }
+    const now = new Date();
+    now.setMonth(now.getMonth() + 3);
+    return getDefaultActiveSubPeriod('Quarterly', now);
+  }
+
+  if (norm === 'Biannual') {
+    const bMatch = cur.match(/B(\d)\s*(20\d\d)/i);
+    if (bMatch) {
+      let bNum = parseInt(bMatch[1], 10);
+      let yr = parseInt(bMatch[2], 10);
+      if (bNum >= 2) {
+        bNum = 1;
+        yr += 1;
+      } else {
+        bNum += 1;
+      }
+      return `B${bNum} ${yr}`;
+    }
+    const now = new Date();
+    now.setMonth(now.getMonth() + 6);
+    return getDefaultActiveSubPeriod('Biannual', now);
+  }
+
+  if (norm === 'Daily') {
+    const now = new Date();
+    now.setDate(now.getDate() + 1);
+    return now.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  return getDefaultActiveSubPeriod(norm);
+}
+
+/**
+ * Calculates the next default target date (ISO format 'YYYY-MM-DD')
+ * from an optional existing date string or current date
+ */
+export function getNextDefaultTargetDate(
+  cadence: RoutineCadence | string | null | undefined,
+  baseDateStr?: string | null
+): string {
+  const norm = normalizeCadence(cadence);
+  let base = new Date();
+  if (baseDateStr) {
+    const parsed = new Date(baseDateStr);
+    if (!isNaN(parsed.getTime())) {
+      base = parsed;
+    }
+  }
+
+  const next = new Date(base);
+  switch (norm) {
+    case 'Yearly':
+      next.setFullYear(next.getFullYear() + 1);
+      break;
+    case 'Monthly':
+      next.setMonth(next.getMonth() + 1);
+      break;
+    case 'Weekly':
+      next.setDate(next.getDate() + 7);
+      break;
+    case 'Quarterly':
+      next.setMonth(next.getMonth() + 3);
+      break;
+    case 'Biannual':
+      next.setMonth(next.getMonth() + 6);
+      break;
+    case 'Daily':
+    default:
+      next.setDate(next.getDate() + 1);
+      break;
+  }
+
+  return next.toISOString().split('T')[0];
+}
+
+/**
+ * Resets all checklist items in a markdown text to unchecked (- [ ])
+ * and strips any checked date annotations
+ */
+export function resetAllTasklistItems(text?: string | null): string {
+  if (!text) return '';
+  return text
+    // Replace [x] or [X] with [ ]
+    .replace(/^(\s*[-*•]?\s*\[)[xX](\]\s*)/gm, '$1 $2')
+    // Remove checkedDate comments: <!--checkedDate:YYYY-MM-DD-->
+    .replace(/<!--\s*checkedDate:\s*[0-9]{4}-[0-9]{2}-[0-9]{2}\s*-->/gi, '')
+    // Remove {date:YYYY-MM-DD} or {checked:YYYY-MM-DD} tags
+    .replace(/\{(?:checked|date):\s*[0-9]{4}-[0-9]{2}-[0-9]{2}\}/gi, '')
+    .trim();
+}
+
+/**
+ * Detects the sub-period of a row from its date fields or title
+ */
+export function detectRowSubPeriod(
+  row: Record<string, any>,
+  cadence: RoutineCadence | string | null | undefined
+): string | null {
+  if (!row || !cadence) return null;
+  const norm = normalizeCadence(cadence);
+  if (!norm) return null;
+
+  // Search through row fields for date-like or year-like values
+  const dateCandidateKeys = [
+    'target selesai', 'target date', 'target', 'deadline', 
+    'tanggal selesai', 'tanggal', 'created time', 'tanggal dibuat', 
+    'waktu', 'period', 'periode'
+  ];
+
+  for (const [key, val] of Object.entries(row)) {
+    if (!val || typeof val !== 'string') continue;
+    const kLower = key.toLowerCase().trim();
+    if (dateCandidateKeys.some(cand => kLower.includes(cand))) {
+      // Check 4-digit year directly
+      const yrMatch = val.match(/\b(20\d\d)\b/);
+      if (yrMatch) {
+        if (norm === 'Yearly') {
+          return yrMatch[1];
+        }
+      }
+
+      // Check standard date
+      const d = new Date(val);
+      if (!isNaN(d.getTime()) && d.getFullYear() >= 2020) {
+        return getDefaultActiveSubPeriod(norm, d);
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Dynamically discovers only the sub-periods that are assigned, discussed,
+ * or explicitly created for this specific topic (NO hardcoded multi-year ranges).
+ */
+export function getTopicSubPeriods(
+  baseTopicTitle: string,
+  row: Record<string, any> | null | undefined,
+  cadence: RoutineCadence | string | null | undefined,
+  allComments: Array<{ topicTitle?: string }> = [],
+  customList: string[] = []
+): string[] {
+  const norm = normalizeCadence(cadence);
+  if (!norm) return [];
+
+  const foundPeriods = new Set<string>();
+
+  // 1. From the row itself (its target/created date)
+  if (row) {
+    const rowPeriod = detectRowSubPeriod(row, norm);
+    if (rowPeriod) {
+      foundPeriods.add(rowPeriod);
+    }
+  }
+
+  // 2. From existing comments in the discussion drawer
+  if (baseTopicTitle && allComments && allComments.length > 0) {
+    const baseClean = baseTopicTitle.toLowerCase().trim();
+    const prefix = `${baseClean} - `;
+    allComments.forEach(c => {
+      const t = (c.topicTitle || '').trim();
+      const tLower = t.toLowerCase();
+      if (tLower.startsWith(prefix)) {
+        const sub = t.substring(prefix.length).trim();
+        if (sub) {
+          foundPeriods.add(sub);
+        }
+      }
+    });
+  }
+
+  // 3. From custom/rollover periods for this topic
+  if (customList && customList.length > 0) {
+    customList.forEach(cp => {
+      if (cp && cp.trim()) {
+        foundPeriods.add(cp.trim());
+      }
+    });
+  }
+
+  // 4. If none found, fallback to current active period for today
+  if (foundPeriods.size === 0) {
+    const defaultCur = getDefaultActiveSubPeriod(norm, new Date());
+    if (defaultCur) {
+      foundPeriods.add(defaultCur);
+    }
+  }
+
+  // Sort logically (e.g. 2026, 2027 or W1, W2)
+  const result = Array.from(foundPeriods);
+  result.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  return result;
+}

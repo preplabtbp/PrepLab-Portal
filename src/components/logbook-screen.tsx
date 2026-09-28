@@ -47,6 +47,12 @@ import { Button } from './ui';
 import { parseTasklist, toggleTasklistItem, markdownToVisualHtml, reorderTasklistItems, updateTasklistItemNote } from './notion/tasklist-utils';
 import { NotionDropdownCell, DropdownOption } from './notion/NotionDropdownCell';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
+import {
+  getNextSubPeriod,
+  getNextDefaultTargetDate,
+  resetAllTasklistItems,
+  normalizeCadence
+} from './notion/period-utils';
 
 interface LogbookTask {
   id: number;
@@ -1070,6 +1076,66 @@ export function LogbookScreen({
   const [subtaskNoteInput, setSubtaskNoteInput] = useState('');
   const [isSavingSubtaskNote, setIsSavingSubtaskNote] = useState(false);
 
+  // Routine Task Completion & Next Period Rollover Modal State
+  const [routineCompletionModal, setRoutineCompletionModal] = useState<{
+    task: LogbookTask;
+    currentPeriod: string;
+    nextPeriod: string;
+    nextTargetDate: string;
+    resetDescription: string;
+  } | null>(null);
+
+  const handleConfirmLogbookNextPeriod = async () => {
+    if (!routineCompletionModal) return;
+    const { task, nextPeriod, nextTargetDate, resetDescription } = routineCompletionModal;
+    
+    try {
+      let newBulletinTopicTitle = task.bulletinTopicTitle;
+      if (task.bulletinTopicTitle) {
+        const base = task.bulletinTopicTitle.includes(' - ') 
+          ? task.bulletinTopicTitle.split(' - ')[0].trim() 
+          : task.bulletinTopicTitle.trim();
+        newBulletinTopicTitle = `${base} - ${nextPeriod}`;
+      }
+
+      const res = await fetch('/api/logbook/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: task.title,
+          description: resetDescription,
+          section: task.section,
+          assigneeNik: task.assigneeNik,
+          assigneeName: task.assigneeName,
+          assignedByNik: task.assignedByNik || inspectorNik || 'SUPERVISOR',
+          assignedByName: task.assignedByName || inspectorName || 'Atasan / Manajemen',
+          priority: task.priority || 'Normal',
+          activityType: task.activityType || 'Daily',
+          taskDate: selectedDate || getTodayStr(),
+          targetDate: nextTargetDate,
+          targetTime: task.targetTime || '23:59',
+          status: 'Open',
+          progressPercent: 0,
+          pt: task.pt || selectedPt,
+          bulletinPostId: task.bulletinPostId,
+          bulletinTopicTitle: newBulletinTopicTitle
+        })
+      });
+
+      const json = await res.json();
+      if (json.status === 'success') {
+        toast.success(`🎉 Task routine untuk periode selanjutnya (${nextPeriod}) berhasil dibuat! Target selesai: ${nextTargetDate}`);
+        fetchTasks();
+      } else {
+        toast.error(json.message || 'Gagal membuat task periode selanjutnya');
+      }
+    } catch (err: any) {
+      toast.error('Gagal membuat task periode selanjutnya: ' + (err.message || err));
+    } finally {
+      setRoutineCompletionModal(null);
+    }
+  };
+
   const openSubtaskNoteModal = (task: LogbookTask, itemIndex: number, itemText: string, note: string, isReadOnly: boolean) => {
     setSubtaskNoteModal({ task, itemIndex, itemText, note, isReadOnly });
     setSubtaskNoteInput(note || '');
@@ -1399,6 +1465,7 @@ export function LogbookScreen({
 
   // Toggle Subtask Checklist in Description
   const handleToggleSubtask = async (task: LogbookTask, itemIndex: number) => {
+    const prevProg = parseTasklist(task.description || '');
     const updatedDesc = toggleTasklistItem(task.description || '', itemIndex, selectedDate);
     const progress = parseTasklist(updatedDesc);
 
@@ -1412,6 +1479,27 @@ export function LogbookScreen({
         autoStatus = 'Closed';
       } else {
         autoStatus = 'On Progress';
+      }
+    }
+
+    // Auto-prompt routine task completion & create next period
+    if (progress.hasTasklist && progress.total > 0 && progress.completed === progress.total && prevProg.completed < prevProg.total) {
+      const actType = task.activityType || 'Routine';
+      const isRoutine = !actType.toLowerCase().includes('non');
+      if (isRoutine) {
+        const normCad = normalizeCadence(actType) || 'Daily';
+        const curPeriod = task.bulletinTopicTitle?.split(' - ')[1] || (normCad === 'Yearly' ? String(new Date().getFullYear()) : task.targetDate || selectedDate);
+        const nextPeriod = getNextSubPeriod(curPeriod, normCad);
+        const nextTargetDate = getNextDefaultTargetDate(normCad, task.targetDate || selectedDate);
+        const resetDesc = resetAllTasklistItems(updatedDesc);
+
+        setRoutineCompletionModal({
+          task,
+          currentPeriod: curPeriod,
+          nextPeriod,
+          nextTargetDate,
+          resetDescription: resetDesc
+        });
       }
     }
 
@@ -4336,6 +4424,110 @@ export function LogbookScreen({
                   )}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Routine Task Completed -> Rollover Confirmation */}
+      {routineCompletionModal && (
+        <div 
+          className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
+          onClick={() => setRoutineCompletionModal(null)}
+        >
+          <div 
+            className="w-full max-w-lg bg-white dark:bg-slate-900 border rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
+            style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b flex items-center justify-between bg-teal-50 dark:bg-teal-950/40" style={{ borderColor: 'var(--border-main, #cbd5e1)' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-500/20 border border-teal-500/40 text-teal-600 dark:text-teal-400 flex items-center justify-center shadow-inner">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base sm:text-lg flex items-center gap-2 text-slate-900 dark:text-white">
+                    <span>Routine Task Selesai!</span>
+                    <span className="text-sm">🎉</span>
+                  </h3>
+                  <p className="text-xs text-teal-600 dark:text-teal-400 font-medium">
+                    Semua subtask telah 100% selesai dikerjakan
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setRoutineCompletionModal(null)}
+                className="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 text-xs">
+              <div className="p-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/30 space-y-1.5">
+                <span className="text-[10px] uppercase font-bold text-teal-600 dark:text-teal-400 tracking-wider block">
+                  Tugas Rutin Selesai
+                </span>
+                <h4 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+                  {routineCompletionModal.task.title}
+                </h4>
+                <div className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-teal-200">
+                  <span>Klasifikasi: <strong>{routineCompletionModal.task.activityType || 'Routine'}</strong></span>
+                  <span>•</span>
+                  <span>Target Selesai: <strong>{routineCompletionModal.task.targetDate || selectedDate}</strong></span>
+                </div>
+              </div>
+
+              <div className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                Apakah Anda ingin membuat kembali task routine ini untuk periode selanjutnya?
+              </div>
+
+              {/* Next Period Preview Card */}
+              <div className="p-3.5 rounded-2xl border bg-slate-50 dark:bg-slate-800/60 space-y-2" style={{ borderColor: 'var(--border-main, #cbd5e1)' }}>
+                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
+                  Rencana Periode Baru
+                </span>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">Periode / Sub-Topik:</span>
+                    <span className="font-mono font-bold text-teal-600 dark:text-teal-400 text-sm">
+                      {routineCompletionModal.nextPeriod}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">Target Selesai Default:</span>
+                    <span className="font-mono font-bold text-teal-600 dark:text-teal-300 text-sm">
+                      {routineCompletionModal.nextTargetDate}
+                    </span>
+                  </div>
+                </div>
+                <div className="pt-2 border-t text-[11px] text-slate-500 space-y-1" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+                  <div>✓ Daftar subtask akan diduplikasi dengan status belum dicentang (0%)</div>
+                  <div>✓ Target selesai disesuaikan otomatis untuk periode berikutnya</div>
+                  <div>✓ Status awal otomatis menjadi [Open]</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-4 border-t flex items-center justify-end gap-2.5 bg-slate-50 dark:bg-slate-900/60" style={{ borderColor: 'var(--border-main, #cbd5e1)' }}>
+              <button
+                type="button"
+                onClick={() => setRoutineCompletionModal(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all cursor-pointer"
+              >
+                Tidak, Selesai
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmLogbookNextPeriod}
+                className="px-5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-lg shadow-teal-900/30 transition-all cursor-pointer flex items-center gap-2 active:scale-95"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Ya, Buka Periode {routineCompletionModal.nextPeriod}</span>
+              </button>
             </div>
           </div>
         </div>

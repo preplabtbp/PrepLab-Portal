@@ -69,6 +69,11 @@ import {
   isPeriodicCadence,
   generateSubPeriods,
   getDefaultActiveSubPeriod,
+  getNextSubPeriod,
+  getNextDefaultTargetDate,
+  resetAllTasklistItems,
+  detectRowSubPeriod,
+  getTopicSubPeriods,
   RoutineCadence
 } from './notion/period-utils';
 
@@ -590,6 +595,18 @@ export function NotionDatabaseTable({
   const [isMovingTopic, setIsMovingTopic] = useState(false);
   const [showMovePopover, setShowMovePopover] = useState(false);
 
+  // Routine Completion & Next Period Confirmation Modal State
+  interface RoutineCompletionModalData {
+    row: TableRowData;
+    rowIndex: number;
+    colName: string;
+    currentPeriod: string;
+    nextPeriod: string;
+    nextTargetDate: string;
+    resetKeterangan: string;
+  }
+  const [routineCompletionModal, setRoutineCompletionModal] = useState<RoutineCompletionModalData | null>(null);
+
   // Auto open topic drawer if initialTopicTitle is provided (e.g. from notification deep link)
   useEffect(() => {
     if (initialTopicTitle && localRows.length > 0) {
@@ -950,13 +967,33 @@ export function NotionDatabaseTable({
     return isPeriodicCadence(currentCadence);
   }, [currentCadence]);
 
-  // Available sub-periods for active row
+  // Available sub-periods for active row (only shows periods assigned, discussed, or rolled over for this topic)
   const availableSubPeriods = useMemo(() => {
     if (!selectedRow || !currentCadence || !isPeriodic) return [];
     const baseT = (getRowVal(selectedRow, 'Jenis kegiatan') || '').trim();
     const customList = customPeriodsMap[baseT] || [];
-    return generateSubPeriods(currentCadence, new Date().getFullYear(), customList);
-  }, [selectedRow, currentCadence, isPeriodic, customPeriodsMap, getRowVal]);
+    return getTopicSubPeriods(baseT, selectedRow, currentCadence, allComments, customList);
+  }, [selectedRow, currentCadence, isPeriodic, customPeriodsMap, allComments, getRowVal]);
+
+  // Keep activeSubPeriod pointing to the topic's detected period when opening a row
+  const prevSelectedRowRef = useRef<TableRowData | null>(null);
+  useEffect(() => {
+    if (selectedRow && isPeriodic && currentCadence) {
+      if (prevSelectedRowRef.current !== selectedRow) {
+        prevSelectedRowRef.current = selectedRow;
+        const baseT = (getRowVal(selectedRow, 'Jenis kegiatan') || '').trim();
+        const customList = customPeriodsMap[baseT] || [];
+        const detected = getTopicSubPeriods(baseT, selectedRow, currentCadence, allComments, customList);
+        if (detected.length > 0) {
+          if (!activeSubPeriod || !detected.includes(activeSubPeriod)) {
+            setActiveSubPeriod(detected[detected.length - 1]);
+          }
+        }
+      }
+    } else if (!selectedRow) {
+      prevSelectedRowRef.current = null;
+    }
+  }, [selectedRow, isPeriodic, currentCadence, allComments, customPeriodsMap, getRowVal, activeSubPeriod]);
 
   // Available periodical pages within this section to move topics into
   const sectionPeriodicalPages = useMemo(() => {
@@ -1373,6 +1410,164 @@ export function NotionDatabaseTable({
     const currentVal = getRowVal(row, colName);
     const updatedVal = toggleTasklistItem(currentVal, taskIndex);
     handleUpdateCellDirect(targetRowIndex, colName, updatedVal);
+
+    // Auto-check if this toggle completed the routine task (last subtask checked -> 100%)
+    const prevProg = parseTasklist(currentVal);
+    const newProg = parseTasklist(updatedVal);
+
+    if (newProg.hasTasklist && newProg.total > 0 && newProg.completed === newProg.total && prevProg.completed < prevProg.total) {
+      const rowAct = getRowVal(row, 'Activity (routine/non routine)') || getRowVal(row, 'period') || '';
+      const rowCad = normalizeCadence(rowAct) || currentCadence;
+      if (rowCad && rowCad !== 'Non-Routine') {
+        const curPeriod = activeSubPeriod || detectRowSubPeriod(row, rowCad) || getDefaultActiveSubPeriod(rowCad);
+        const nextPeriod = getNextSubPeriod(curPeriod, rowCad);
+        const targetVal = getRowVal(row, 'Target Selesai') || getRowVal(row, 'Deadline') || getRowVal(row, 'Created Time');
+        const nextTarget = getNextDefaultTargetDate(rowCad, targetVal);
+        const resetDesc = resetAllTasklistItems(updatedVal);
+
+        setRoutineCompletionModal({
+          row,
+          rowIndex: targetRowIndex,
+          colName,
+          currentPeriod: curPeriod,
+          nextPeriod,
+          nextTargetDate: nextTarget,
+          resetKeterangan: resetDesc
+        });
+      }
+    }
+  };
+
+  // Handler saat user konfirmasi untuk membuat kembali task routine untuk periode selanjutnya
+  const handleConfirmNextPeriod = async () => {
+    if (!routineCompletionModal) return;
+    const { row, rowIndex, colName, nextPeriod, nextTargetDate, resetKeterangan } = routineCompletionModal;
+    const baseTopic = (getRowVal(row, 'Jenis kegiatan') || '').trim();
+
+    // 1. Tambah periode selanjutnya ke customPeriodsMap
+    setCustomPeriodsMap(prev => ({
+      ...prev,
+      [baseTopic]: [...(prev[baseTopic] || []).filter(p => p !== nextPeriod), nextPeriod]
+    }));
+
+    // 2. Alihkan sub-period aktif ke periode baru tersebut
+    setActiveSubPeriod(nextPeriod);
+
+    // 3. Update baris tabel: reset checklist subtask, reset status ke Open, update target selesai
+    const updatedRows = [...localRows];
+    if (updatedRows[rowIndex]) {
+      const targetRow = { ...updatedRows[rowIndex] };
+
+      // Update Keterangan
+      let keyToSet = colName;
+      const colLower = colName.toLowerCase().trim();
+      for (const k of Object.keys(targetRow)) {
+        if (k.toLowerCase().trim() === colLower) {
+          keyToSet = k;
+          break;
+        }
+      }
+      targetRow[keyToSet] = resetKeterangan;
+
+      // Update Status ke Open
+      for (const k of Object.keys(targetRow)) {
+        if (k.toLowerCase().trim() === 'status') {
+          targetRow[k] = 'Open';
+          break;
+        }
+      }
+
+      // Update Target Selesai
+      let targetFound = false;
+      for (const k of Object.keys(targetRow)) {
+        const kl = k.toLowerCase().trim();
+        if (kl.includes('target') || kl.includes('deadline')) {
+          targetRow[k] = nextTargetDate;
+          targetFound = true;
+          break;
+        }
+      }
+      if (!targetFound) {
+        targetRow['Target Selesai'] = nextTargetDate;
+      }
+
+      updatedRows[rowIndex] = targetRow;
+      setLocalRows(updatedRows);
+      if (selectedRow) {
+        setSelectedRow(targetRow);
+      }
+      setDirtyRowIndices(prev => {
+        const next = new Set(prev);
+        next.add(rowIndex);
+        return next;
+      });
+
+      // Simpan perubahan tabel ke backend
+      await saveTableToBackend(updatedRows);
+      onRowsChange?.(updatedRows);
+    }
+
+    // 4. Buat room diskusi awal untuk periode baru agar traceability mandiri tercatat
+    if (postId && baseTopic) {
+      try {
+        await fetch(`/api/bulletin/${postId}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            topicTitle: `${baseTopic} - ${nextPeriod}`,
+            content: `🎯 Periode baru **${nextPeriod}** telah dibuka dengan target penyelesaian ${nextTargetDate}. Seluruh checklist subtask telah siap kembali.`,
+            authorNik: currentAuthorNik || 'SYSTEM',
+            authorName: currentAuthorName || 'Sistem Routine',
+            statusUpdate: 'Open'
+          })
+        });
+        fetchComments();
+      } catch (e) {
+        console.warn('Initial period comment creation warning:', e);
+      }
+    }
+
+    // 5. Cek apakah ada task logbook terhubung dan sinkronkan rollover ke logbook
+    try {
+      const res = await fetch(`/api/logbook/tasks?bulletinPostId=${postId}`);
+      const json = await res.json();
+      if (json.status === 'success' && Array.isArray(json.data?.todayTasks)) {
+        const matched = json.data.todayTasks.find((t: any) => 
+          (t.title && t.title.toLowerCase().trim() === baseTopic.toLowerCase().trim()) ||
+          (t.bulletinTopicTitle && t.bulletinTopicTitle.toLowerCase().trim().startsWith(baseTopic.toLowerCase().trim()))
+        );
+        if (matched) {
+          await fetch('/api/logbook/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: matched.title,
+              description: resetKeterangan,
+              section: matched.section,
+              assigneeNik: matched.assigneeNik,
+              assigneeName: matched.assigneeName,
+              assignedByNik: matched.assignedByNik || currentAuthorNik,
+              assignedByName: matched.assignedByName || currentAuthorName,
+              priority: matched.priority || 'Normal',
+              activityType: matched.activityType || currentCadence || 'Yearly',
+              taskDate: new Date().toISOString().split('T')[0],
+              targetDate: nextTargetDate,
+              targetTime: matched.targetTime || '23:59',
+              status: 'Open',
+              progressPercent: 0,
+              pt: matched.pt,
+              bulletinPostId: postId,
+              bulletinTopicTitle: `${baseTopic} - ${nextPeriod}`
+            })
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Connected logbook rollover non-fatal warning:', e);
+    }
+
+    toast.success(`🎉 Periode baru "${nextPeriod}" berhasil dibuka dengan subtask yang telah direset!`);
+    setRoutineCompletionModal(null);
   };
 
   // Batalkan semua perubahan langsung
@@ -3521,6 +3716,137 @@ export function NotionDatabaseTable({
                     <span>Pindahkan Topik</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: ROUTINE TASK COMPLETED -> CREATE NEXT PERIOD CONFIRMATION         */}
+      {/* ========================================================================= */}
+      {routineCompletionModal && (
+        <div 
+          className="fixed inset-0 z-[200] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150"
+          onClick={() => setRoutineCompletionModal(null)}
+        >
+          <div 
+            className="w-full max-w-lg border rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
+            style={{
+              backgroundColor: 'var(--card-bg, #1a1a1a)',
+              borderColor: 'var(--border-main, #334155)',
+              color: 'var(--text-main, #cbd5e1)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div 
+              className="p-5 border-b flex items-center justify-between"
+              style={{
+                backgroundColor: 'var(--input-bg, #222222)',
+                borderColor: 'var(--border-main, #334155)'
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-500/20 border border-teal-500/40 text-teal-400 flex items-center justify-center shadow-inner">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base sm:text-lg flex items-center gap-2" style={{ color: 'var(--text-main, #f1f5f9)' }}>
+                    <span>Routine Task Selesai!</span>
+                    <span className="text-sm">🎉</span>
+                  </h3>
+                  <p className="text-xs text-teal-400 font-medium">
+                    Semua checklist subtask telah 100% selesai
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setRoutineCompletionModal(null)}
+                className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 text-xs">
+              <div className="p-3.5 rounded-2xl bg-teal-950/30 border border-teal-500/30 space-y-2">
+                <span className="text-[10px] uppercase font-bold text-teal-400 tracking-wider block">
+                  Topik Kegiatan
+                </span>
+                <h4 className="font-bold text-sm sm:text-base text-white">
+                  {getRowVal(routineCompletionModal.row, 'Jenis kegiatan') || 'Kegiatan Rutin'}
+                </h4>
+                <div className="flex items-center gap-2 text-[11px] text-teal-200">
+                  <span>Periode saat ini:</span>
+                  <span className="px-2 py-0.5 rounded-full bg-teal-500/20 border border-teal-500/40 font-mono font-bold">
+                    {routineCompletionModal.currentPeriod}
+                  </span>
+                  <span className="text-slate-500">•</span>
+                  <span className="text-emerald-400 font-semibold">100% Selesai [Closed]</span>
+                </div>
+              </div>
+
+              <div className="text-xs sm:text-sm leading-relaxed" style={{ color: 'var(--text-main, #e2e8f0)' }}>
+                Apakah Anda ingin membuat kembali task routine ini untuk periode selanjutnya?
+              </div>
+
+              {/* Next Period Preview Card */}
+              <div 
+                className="p-3.5 rounded-2xl border space-y-2"
+                style={{
+                  backgroundColor: 'var(--input-bg, #141414)',
+                  borderColor: 'var(--border-main, #334155)'
+                }}
+              >
+                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
+                  Rencana Periode Baru
+                </span>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Sub-Judul Periode Baru:</span>
+                    <span className="font-mono font-bold text-teal-400 text-sm">
+                      {routineCompletionModal.nextPeriod}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Target Selesai Default:</span>
+                    <span className="font-mono font-bold text-teal-300 text-sm">
+                      {routineCompletionModal.nextTargetDate}
+                    </span>
+                  </div>
+                </div>
+                <div className="pt-2 border-t text-[11px] text-slate-400 space-y-1" style={{ borderColor: 'var(--border-main, #262626)' }}>
+                  <div>✓ Daftar subtask sama, semua checklist direset belum dicentang (0%)</div>
+                  <div>✓ Target selesai default disesuaikan untuk periode selanjutnya</div>
+                  <div>✓ Ruang diskusi & dokumentasi terpisah untuk periode {routineCompletionModal.nextPeriod}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div 
+              className="p-4 border-t flex items-center justify-end gap-2.5"
+              style={{
+                backgroundColor: 'var(--input-bg, #222222)',
+                borderColor: 'var(--border-main, #334155)'
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setRoutineCompletionModal(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all cursor-pointer"
+              >
+                Tidak, Selesai
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmNextPeriod}
+                className="px-5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-lg shadow-teal-950/50 transition-all cursor-pointer flex items-center gap-2 active:scale-95"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Ya, Buka Periode {routineCompletionModal.nextPeriod}</span>
               </button>
             </div>
           </div>
