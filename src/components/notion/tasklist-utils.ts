@@ -6,6 +6,7 @@ export interface TaskItem {
   text: string;
   rawLine: string;
   note?: string;
+  noteDate?: string; // 'YYYY-MM-DD'
   checkedDate?: string; // 'YYYY-MM-DD'
 }
 
@@ -60,12 +61,21 @@ export function parseTasklist(text?: string | null): TasklistProgress {
         rawContent = rawContent.replace(dateMatch[0], '').trim();
       }
 
+      // Extract noteDate if present: <!--noteDate: YYYY-MM-DD--> or {noteDate: YYYY-MM-DD}
+      let noteDate = '';
+      const noteDateMatch = rawContent.match(/<!--\s*noteDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/i) || rawContent.match(/\{noteDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\}/i);
+      if (noteDateMatch) {
+        noteDate = noteDateMatch[1].trim();
+        rawContent = rawContent.replace(noteDateMatch[0], '').trim();
+      }
+
       items.push({
         index: itemIndex++,
         checked: isChecked,
         text: rawContent,
         rawLine: trimmed,
         note: note || undefined,
+        noteDate: noteDate || undefined,
         checkedDate: checkedDate || undefined
       });
     } else if (trimmed) {
@@ -134,14 +144,15 @@ export function toggleTasklistItem(text: string, targetIndex: number, actionDate
 }
 
 /**
- * Updates or sets note on a specific task checklist item in the text by index
+ * Updates or sets note on a specific task checklist item in the text by index and records noteDate
  */
-export function updateTasklistItemNote(text: string, targetIndex: number, newNote: string): string {
+export function updateTasklistItemNote(text: string, targetIndex: number, newNote: string, actionDate?: string): string {
   if (!text) return text;
 
   const hasBr = /<br\s*\/?>/i.test(text);
   const delimiter = hasBr ? '<br/>' : '\n';
   const normalized = text.replace(/<br\s*\/?>/gi, '\n');
+  const todayStr = actionDate || new Date().toISOString().split('T')[0];
 
   let currentIndex = 0;
   const lines = normalized.split('\n');
@@ -154,11 +165,12 @@ export function updateTasklistItemNote(text: string, targetIndex: number, newNot
         const spaceAfterBracket = match[3];
         let content = match[4].trim();
 
-        // Remove existing note comment
+        // Remove existing note and noteDate comments
         content = content.replace(/<!--\s*note:\s*[\s\S]*?\s*-->/gi, '').trim();
+        content = content.replace(/<!--\s*noteDate:\s*[0-9]{4}-[0-9]{2}-[0-9]{2}\s*-->/gi, '').trim();
 
         if (newNote && newNote.trim()) {
-          content = `${content} <!--note:${newNote.trim()}-->`;
+          content = `${content} <!--note:${newNote.trim()}--> <!--noteDate:${todayStr}-->`;
         }
 
         currentIndex++;
@@ -195,6 +207,7 @@ export function reorderTasklistItems(originalText: string, newItems: TaskItem[])
     let line = `- [${item.checked ? 'x' : ' '}] ${item.text}`;
     if (item.checkedDate) line += ` <!--checkedDate:${item.checkedDate}-->`;
     if (item.note) line += ` <!--note:${item.note}-->`;
+    if (item.noteDate) line += ` <!--noteDate:${item.noteDate}-->`;
     return line;
   });
   const delimiter = /<br\s*\/?>/i.test(originalText) ? '<br/>' : '\n';

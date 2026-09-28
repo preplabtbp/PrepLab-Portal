@@ -156,13 +156,19 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
         } catch (e) {}
       }
 
-      // Check subtasks inside description for checkedDate stamps
+      // Check subtasks inside description for checkedDate stamps or noteDate stamps
       const desc = t.description || '';
       if (desc.includes('[-') || desc.includes('[x]') || desc.includes('[X]') || desc.includes('[ ]')) {
         const checkedDatesMatches = Array.from(desc.matchAll(/<!--\s*checkedDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/gi));
-        if (checkedDatesMatches.length > 0) {
-          const hasYesterdayCheck = checkedDatesMatches.some(m => m[1] === yesterdayDateStr);
-          if (hasYesterdayCheck) return true;
+        const noteDatesMatches = Array.from(desc.matchAll(/<!--\s*noteDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/gi));
+
+        const hasYesterdayCheck = checkedDatesMatches.some(m => m[1] === yesterdayDateStr);
+        const hasYesterdayNote = noteDatesMatches.some(m => m[1] === yesterdayDateStr);
+
+        // If a subtask was checked OR had a note added on yesterday: active progress confirmed
+        if (hasYesterdayCheck || hasYesterdayNote) return true;
+
+        if (checkedDatesMatches.length > 0 && !hasYesterdayNote) {
           const allOlder = checkedDatesMatches.every(m => m[1] < yesterdayDateStr);
           if (allOlder && (t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed' || (t.progressPercent && t.progressPercent >= 100))) {
             return false;

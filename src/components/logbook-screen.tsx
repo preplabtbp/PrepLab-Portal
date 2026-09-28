@@ -40,7 +40,8 @@ import {
   GripVertical,
   Bookmark,
   Save,
-  Lock
+  Lock,
+  MessageSquare
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui';
@@ -1076,6 +1077,18 @@ export function LogbookScreen({
   const [subtaskNoteInput, setSubtaskNoteInput] = useState('');
   const [isSavingSubtaskNote, setIsSavingSubtaskNote] = useState(false);
 
+  // Subtask Note Bubble Chat State (for popover to the right in yesterday / read-only module)
+  const [activeNoteBubbleKey, setActiveNoteBubbleKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeNoteBubbleKey) return;
+    const handleOutsideClick = () => {
+      setActiveNoteBubbleKey(null);
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [activeNoteBubbleKey]);
+
   // Routine Task Completion & Next Period Rollover Modal State
   const [routineCompletionModal, setRoutineCompletionModal] = useState<{
     task: LogbookTask;
@@ -1144,12 +1157,20 @@ export function LogbookScreen({
   const handleSaveSubtaskNote = async () => {
     if (!subtaskNoteModal) return;
     const { task, itemIndex } = subtaskNoteModal;
-    const updatedDesc = updateTasklistItemNote(task.description || '', itemIndex, subtaskNoteInput.trim());
+    const noteText = subtaskNoteInput.trim();
+    const actionDate = selectedDate || getTodayStr();
+    const updatedDesc = updateTasklistItemNote(task.description || '', itemIndex, noteText, actionDate);
+
+    // If task was 'Open' and a note is added, it represents active work / progress on that subtask ('On Progress')
+    let updatedStatus = task.status;
+    if (noteText && task.status === 'Open') {
+      updatedStatus = 'On Progress';
+    }
 
     // Optimistic update
-    setTodayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc } : t));
-    setYesterdayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc } : t));
-    setCarryOverTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc } : t));
+    setTodayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, status: updatedStatus } : t));
+    setYesterdayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, status: updatedStatus } : t));
+    setCarryOverTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, status: updatedStatus } : t));
 
     try {
       setIsSavingSubtaskNote(true);
@@ -1158,10 +1179,11 @@ export function LogbookScreen({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           description: updatedDesc,
+          status: updatedStatus,
           updaterNik: inspectorNik
         })
       });
-      toast.success('Keterangan subtask berhasil disimpan');
+      toast.success(noteText ? 'Catatan subtask berhasil disimpan (Tercatat sebagai progres kegiatan)!' : 'Catatan subtask berhasil dihapus');
       setSubtaskNoteModal(null);
     } catch (e) {
       console.error('Failed to save subtask note:', e);
@@ -1988,7 +2010,7 @@ export function LogbookScreen({
     return (
       <div 
         key={task.id}
-        className={`rounded-xl border transition-all duration-200 overflow-hidden ${
+        className={`rounded-xl border transition-all duration-200 ${isExpanded ? 'overflow-visible' : 'overflow-hidden'} ${
           isExpanded 
             ? 'border-teal-400 bg-white shadow-md ring-2 ring-teal-500/10' 
             : isDone 
@@ -2349,29 +2371,92 @@ export function LogbookScreen({
                         )}
                       </div>
 
-                      {/* Icon (!) Keterangan Subtask di Ujung Kanan */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openSubtaskNoteModal(task, item.index, item.text, item.note || '', isReadOnly);
-                        }}
-                        title={item.note ? `Keterangan: ${item.note}` : isReadOnly ? 'Tidak ada keterangan' : 'Tambah keterangan subtask (Icon !)'}
-                        className={`p-1.5 rounded-lg transition-all shrink-0 flex items-center gap-1 cursor-pointer ${
-                          item.note
-                            ? 'text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 shadow-2xs'
-                            : isReadOnly
-                            ? 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'
-                            : 'text-slate-400 hover:text-teal-700 hover:bg-teal-50 hover:border hover:border-teal-200'
-                        }`}
-                      >
-                        <AlertCircle className={`w-3.5 h-3.5 ${item.note ? 'text-amber-600' : ''}`} />
-                        {item.note && (
-                          <span className="max-w-[130px] truncate text-[10px] font-bold hidden sm:inline text-amber-900">
-                            {item.note}
-                          </span>
-                        )}
-                      </button>
+                      {/* Icon (!) Catatan Subtask & Bubble Chat ke Kanan */}
+                      {(() => {
+                        const bubbleKey = `${task.id}-${item.index}`;
+                        const isBubbleOpen = activeNoteBubbleKey === bubbleKey;
+                        const hasNote = Boolean(item.note && item.note.trim());
+
+                        return (
+                          <div className="relative inline-flex items-center shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isReadOnly) {
+                                  if (hasNote) {
+                                    setActiveNoteBubbleKey(prev => prev === bubbleKey ? null : bubbleKey);
+                                  } else {
+                                    toast.info('Tidak ada catatan pada subtask ini.');
+                                  }
+                                } else {
+                                  openSubtaskNoteModal(task, item.index, item.text, item.note || '', isReadOnly);
+                                }
+                              }}
+                              title={hasNote ? `Catatan: ${item.note}` : isReadOnly ? 'Tidak ada catatan' : 'Tambah catatan subtask (Icon !)'}
+                              className={`relative p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                                hasNote
+                                  ? 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 shadow-2xs'
+                                  : isReadOnly
+                                  ? 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'
+                                  : 'text-slate-400 hover:text-teal-700 hover:bg-teal-50 hover:border hover:border-teal-200'
+                              }`}
+                            >
+                              <AlertCircle className={`w-3.5 h-3.5 ${hasNote ? 'text-amber-600' : ''}`} />
+
+                              {/* Dot Merah: Tanda bahwa ada catatan pada subtask */}
+                              {hasNote && (
+                                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600 border-2 border-white dark:border-slate-800"></span>
+                                </span>
+                              )}
+                            </button>
+
+                            {/* Bubble Chat ke Kanan untuk Modul Kemarin (isReadOnly) */}
+                            {isReadOnly && isBubbleOpen && hasNote && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="absolute right-0 sm:right-auto sm:left-full sm:ml-3 top-full sm:top-1/2 mt-2 sm:mt-0 sm:-translate-y-1/2 z-[100] w-72 sm:w-80 max-w-[85vw] bg-slate-900 text-slate-100 rounded-2xl p-3.5 shadow-2xl border border-slate-700 animate-in fade-in zoom-in-95 duration-150"
+                              >
+                                {/* Speech Bubble Tail pointing left on desktop, up on mobile */}
+                                <div className="hidden sm:block absolute -left-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-slate-900 border-l border-b border-slate-700 rotate-45 pointer-events-none" />
+                                <div className="sm:hidden absolute -top-1.5 right-3 w-3 h-3 bg-slate-900 border-t border-l border-slate-700 rotate-45 pointer-events-none" />
+
+                                <div className="relative flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+                                  <div className="flex items-center gap-1.5">
+                                    <MessageSquare className="w-3.5 h-3.5 text-teal-400" />
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-teal-400">Catatan Subtask</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    {item.noteDate && (
+                                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                        📅 {item.noteDate}
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveNoteBubbleKey(null)}
+                                      className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                                      title="Tutup"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="relative mb-2 px-2.5 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-[11px] text-slate-300 font-medium line-clamp-2">
+                                  <span className="text-slate-400 font-normal">Subtask: </span>{item.text}
+                                </div>
+
+                                <div className="relative text-xs text-slate-100 font-medium leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto pr-1">
+                                  {item.note}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -4388,8 +4473,8 @@ export function LogbookScreen({
                     borderColor: 'var(--border-main, #cbd5e1)'
                   }}
                 />
-                <p className="text-[10px] text-slate-400">
-                  Keterangan ini tersimpan khusus pada subtask ini dan dapat dilihat dengan mengklik icon (!).
+                <p className="text-[10px] text-teal-700 dark:text-teal-400 font-medium bg-teal-50 dark:bg-teal-950/40 p-2 rounded-lg border border-teal-200 dark:border-teal-800">
+                  ✨ Catatan ini tercatat sebagai progres kegiatan hari ini dan otomatis akan masuk ke dalam <strong>Progres Kemarin</strong> pada tanggal keesokannya.
                 </p>
               </div>
             )}
