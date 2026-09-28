@@ -50,7 +50,8 @@ import {
   ChevronUp,
   ChevronLeft,
   CheckSquare,
-  Square
+  Square,
+  CalendarDays
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -63,6 +64,13 @@ import { NotionDropdownCell } from './notion/NotionDropdownCell';
 import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
+import {
+  normalizeCadence,
+  isPeriodicCadence,
+  generateSubPeriods,
+  getDefaultActiveSubPeriod,
+  RoutineCadence
+} from './notion/period-utils';
 
 export interface CommentAttachmentItem {
   id?: string;
@@ -518,17 +526,32 @@ export function NotionDatabaseTable({
     }
   }, [rows]);
 
+  // Routine & Cadence States
+  const [cadenceFilter, setCadenceFilter] = useState<string>('ALL');
+  const [activeSubPeriod, setActiveSubPeriod] = useState<string>('');
+  const [customPeriodsMap, setCustomPeriodsMap] = useState<Record<string, string[]>>({});
+
   // Auto open topic drawer if initialTopicTitle is provided (e.g. from notification deep link)
   useEffect(() => {
     if (initialTopicTitle && localRows.length > 0) {
+      let cleanTitle = initialTopicTitle.trim();
+      let detectedSubPeriod = '';
+      if (cleanTitle.includes(' - ')) {
+        const parts = cleanTitle.split(' - ');
+        cleanTitle = parts[0].trim();
+        detectedSubPeriod = parts.slice(1).join(' - ').trim();
+      }
       const match = localRows.find(r => {
         const tVal = getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'keterangan') || '';
-        return tVal.toLowerCase().trim() === initialTopicTitle.toLowerCase().trim() ||
-               tVal.toLowerCase().includes(initialTopicTitle.toLowerCase().trim()) ||
-               initialTopicTitle.toLowerCase().includes(tVal.toLowerCase().trim());
+        return tVal.toLowerCase().trim() === cleanTitle.toLowerCase().trim() ||
+               tVal.toLowerCase().includes(cleanTitle.toLowerCase().trim()) ||
+               cleanTitle.toLowerCase().includes(tVal.toLowerCase().trim());
       });
       if (match) {
         setSelectedRow(match);
+        if (detectedSubPeriod) {
+          setActiveSubPeriod(detectedSubPeriod);
+        }
       }
     }
   }, [initialTopicTitle, localRows]);
@@ -831,23 +854,56 @@ export function NotionDatabaseTable({
     fetchComments();
   }, [fetchComments]);
 
-  // Comment counts per topic title
+  // Comment counts per topic title (aggregates sub-periods to base topic as well)
   const topicCommentCounts = useMemo(() => {
     const map: Record<string, number> = {};
     allComments.forEach((c) => {
       if (c.topicTitle) {
-        const key = c.topicTitle.toLowerCase().trim();
-        map[key] = (map[key] || 0) + 1;
+        const fullKey = c.topicTitle.toLowerCase().trim();
+        map[fullKey] = (map[fullKey] || 0) + 1;
+        if (fullKey.includes(' - ')) {
+          const baseKey = fullKey.split(' - ')[0].trim();
+          map[baseKey] = (map[baseKey] || 0) + 1;
+        }
       }
     });
     return map;
   }, [allComments]);
 
-  // Active topic title for comments modal
-  const selectedTopicTitle = useMemo(() => {
+  // Base topic title from row
+  const baseTopicTitle = useMemo(() => {
     if (!selectedRow) return '';
     return (getRowVal(selectedRow, 'Jenis kegiatan') || '').trim();
   }, [selectedRow, getRowVal]);
+
+  // Current normalized cadence
+  const currentCadence = useMemo(() => {
+    if (!selectedRow) return null;
+    const actVal = getRowVal(selectedRow, 'Activity (routine/non routine)') || getRowVal(selectedRow, 'period') || '';
+    return normalizeCadence(actVal);
+  }, [selectedRow, getRowVal]);
+
+  // Is periodic cadence (Weekly, Monthly, Quarterly, Biannual, Yearly, Daily)
+  const isPeriodic = useMemo(() => {
+    return isPeriodicCadence(currentCadence);
+  }, [currentCadence]);
+
+  // Available sub-periods for active row
+  const availableSubPeriods = useMemo(() => {
+    if (!selectedRow || !currentCadence || !isPeriodic) return [];
+    const baseT = (getRowVal(selectedRow, 'Jenis kegiatan') || '').trim();
+    const customList = customPeriodsMap[baseT] || [];
+    return generateSubPeriods(currentCadence, new Date().getFullYear(), customList);
+  }, [selectedRow, currentCadence, isPeriodic, customPeriodsMap, getRowVal]);
+
+  // Active topic title for comments modal (incorporates sub-period if active for isolated threads)
+  const selectedTopicTitle = useMemo(() => {
+    if (!baseTopicTitle) return '';
+    if (activeSubPeriod && activeSubPeriod.trim()) {
+      return `${baseTopicTitle} - ${activeSubPeriod.trim()}`;
+    }
+    return baseTopicTitle;
+  }, [baseTopicTitle, activeSubPeriod]);
 
   const activeTopicComments = useMemo(() => {
     if (!selectedTopicTitle) return [];
@@ -1196,7 +1252,37 @@ export function NotionDatabaseTable({
       });
     }
 
-    // 3. Priority Filter
+    // 3. Cadence Filter (Routinity)
+    if (cadenceFilter !== 'ALL') {
+      result = result.filter((row) => {
+        const actVal = getRowVal(row, 'Activity (routine/non routine)') || getRowVal(row, 'period') || '';
+        const cad = normalizeCadence(actVal);
+        if (cadenceFilter === 'Non-Routine') {
+          return cad === 'Non-Routine' || actVal.toLowerCase().includes('non');
+        }
+        if (cadenceFilter === 'Daily') {
+          return cad === 'Daily';
+        }
+        if (cadenceFilter === 'Weekly') {
+          return cad === 'Weekly';
+        }
+        if (cadenceFilter === 'Monthly') {
+          return cad === 'Monthly';
+        }
+        if (cadenceFilter === 'Quarterly') {
+          return cad === 'Quarterly';
+        }
+        if (cadenceFilter === 'Biannual') {
+          return cad === 'Biannual';
+        }
+        if (cadenceFilter === 'Yearly') {
+          return cad === 'Yearly';
+        }
+        return true;
+      });
+    }
+
+    // 4. Priority Filter
     if (priorityFilter !== 'ALL') {
       result = result.filter((row) => {
         const val = (getRowVal(row, 'Priority') || '').toUpperCase().trim();
@@ -1204,7 +1290,7 @@ export function NotionDatabaseTable({
       });
     }
 
-    // 4. Sort
+    // 5. Sort
     if (sortColumn) {
       result.sort((a, b) => {
         const rawA = (getRowVal(a, sortColumn) || '').trim();
@@ -1233,7 +1319,7 @@ export function NotionDatabaseTable({
     }
 
     return result;
-  }, [localRows, searchQuery, statusFilter, priorityFilter, sortColumn, sortDirection, getRowVal]);
+  }, [localRows, searchQuery, statusFilter, cadenceFilter, priorityFilter, sortColumn, sortDirection, getRowVal]);
 
   // Statistics calculation
   const stats = useMemo(() => {
@@ -2095,6 +2181,47 @@ export function NotionDatabaseTable({
             <span>Rapikan Kolom</span>
           </button>
         </div>
+      </div>
+
+      {/* Cadence / Routinity Filter Bar */}
+      <div 
+        className="px-3 py-2 border-b flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs"
+        style={{
+          backgroundColor: 'var(--card-bg, #1a1a1a)',
+          borderColor: 'var(--border-main, #2d2d2d)'
+        }}
+      >
+        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 shrink-0">
+          <Activity className="w-3 h-3 text-teal-400" />
+          <span>Aktivitas:</span>
+        </div>
+        {[
+          { key: 'ALL', label: 'Semua Cadence' },
+          { key: 'Daily', label: '⭐ Daily' },
+          { key: 'Weekly', label: '📅 Weekly' },
+          { key: 'Monthly', label: '🗓️ Monthly' },
+          { key: 'Quarterly', label: '📊 Quarterly' },
+          { key: 'Biannual', label: '🌓 Biannual' },
+          { key: 'Yearly', label: '📆 Yearly' },
+          { key: 'Non-Routine', label: '⚡ Non-Routine' },
+        ].map((cad) => {
+          const isSelected = cadenceFilter === cad.key;
+          return (
+            <button
+              key={cad.key}
+              type="button"
+              onClick={() => setCadenceFilter(cad.key)}
+              className="px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-all flex-shrink-0 flex items-center gap-1 border cursor-pointer"
+              style={{
+                backgroundColor: isSelected ? 'rgba(42, 157, 143, 0.25)' : 'var(--card-bg, #222222)',
+                borderColor: isSelected ? 'var(--primary, #2A9D8F)' : 'var(--border-main, #334155)',
+                color: isSelected ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)'
+              }}
+            >
+              <span>{cad.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ========================================================================= */}
@@ -3270,8 +3397,20 @@ export function NotionDatabaseTable({
                     Activity
                   </label>
                   <select
-                    value={rowFormData['Activity (routine/non routine)'] || 'Routine'}
-                    onChange={(e) => setRowFormData({ ...rowFormData, 'Activity (routine/non routine)': e.target.value })}
+                    value={rowFormData['Activity (routine/non routine)'] || 'Daily'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const updated: any = { ...rowFormData, 'Activity (routine/non routine)': val };
+                      if (!rowFormData['period'] || rowFormData['period'] === 'Weekly') {
+                        if (val === 'Daily') updated.period = 'Daily';
+                        else if (val === 'Weekly') updated.period = 'Weekly';
+                        else if (val === 'Monthly') updated.period = 'Monthly';
+                        else if (val === 'Quarterly') updated.period = 'Quarterly';
+                        else if (val === 'Biannual') updated.period = 'Biannual';
+                        else if (val === 'Yearly') updated.period = 'Yearly';
+                      }
+                      setRowFormData(updated);
+                    }}
                     className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs"
                     style={{
                       backgroundColor: 'var(--input-bg, #141414)',
@@ -3279,8 +3418,14 @@ export function NotionDatabaseTable({
                       color: 'var(--text-main, #f1f5f9)'
                     }}
                   >
-                    <option value="Routine">Routine</option>
-                    <option value="Non-routine">Non-routine</option>
+                    <option value="Daily">Daily</option>
+                    <option value="Weekly">Weekly</option>
+                    <option value="Monthly">Monthly</option>
+                    <option value="Quarterly">Quarterly</option>
+                    <option value="Biannual">Biannual</option>
+                    <option value="Yearly">Yearly</option>
+                    <option value="Non-Routine">Non-Routine</option>
+                    <option value="Routine">Routine (Legacy)</option>
                   </select>
                 </div>
               </div>
@@ -3397,12 +3542,23 @@ export function NotionDatabaseTable({
                       #{getRowVal(selectedRow, 'number') || '1'}
                     </span>
                     <div className="truncate">
-                      <h3 className="font-black text-base sm:text-xl truncate" style={{ color: 'var(--text-main, #f1f5f9)' }}>
-                        {selectedTopicTitle || 'Detail Kegiatan'}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-black text-base sm:text-xl truncate" style={{ color: 'var(--text-main, #f1f5f9)' }}>
+                          {baseTopicTitle || 'Detail Kegiatan'}
+                        </h3>
+                        {activeSubPeriod && (
+                          <span className="text-xs px-2.5 py-0.5 rounded-full font-mono bg-teal-500/20 text-teal-300 border border-teal-500/50 font-bold shrink-0">
+                            {activeSubPeriod}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[11px] text-teal-400 font-mono font-semibold">
                           {getRowVal(selectedRow, 'Kategori') || 'Laboratorium'}
+                        </span>
+                        <span style={{ color: 'var(--text-muted, #64748b)' }}>•</span>
+                        <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                          Aktivitas: {getRowVal(selectedRow, 'Activity (routine/non routine)') || 'Routine'}
                         </span>
                         <span style={{ color: 'var(--text-muted, #64748b)' }}>•</span>
                         <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #94a3b8)' }}>
@@ -3488,18 +3644,187 @@ export function NotionDatabaseTable({
                         </div>
                         <div>
                           <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Activity Type</span>
-                          <span 
-                            className="font-mono font-semibold px-2 py-0.5 rounded border inline-block truncate max-w-full text-[11px]"
-                            style={{
-                              backgroundColor: 'var(--card-bg, #1e1e1e)',
-                              borderColor: 'var(--border-main, #334155)',
-                              color: 'var(--text-main, #cbd5e1)'
-                            }}
-                          >
-                            {getRowVal(selectedRow, 'Activity (routine/non routine)') || 'Routine'}
-                          </span>
+                          {(() => {
+                            const actualIdx = localRows.indexOf(selectedRow) !== -1 
+                              ? localRows.indexOf(selectedRow)
+                              : localRows.findIndex(r => getRowVal(r, 'Jenis kegiatan') === getRowVal(selectedRow, 'Jenis kegiatan'));
+                            
+                            if (actualIdx !== -1) {
+                              return (
+                                <NotionDropdownCell
+                                  type="activity"
+                                  value={getRowVal(selectedRow, 'Activity (routine/non routine)')}
+                                  onChange={(newVal) => {
+                                    handleUpdateCellDirect(actualIdx, 'Activity (routine/non routine)', newVal);
+                                    const cad = normalizeCadence(newVal);
+                                    if (cad && isPeriodicCadence(cad)) {
+                                      setActiveSubPeriod(getDefaultActiveSubPeriod(cad));
+                                    } else {
+                                      setActiveSubPeriod('');
+                                    }
+                                  }}
+                                />
+                              );
+                            }
+                            return (
+                              <span 
+                                className="font-mono font-semibold px-2 py-0.5 rounded border inline-block truncate max-w-full text-[11px]"
+                                style={{
+                                  backgroundColor: 'var(--card-bg, #1e1e1e)',
+                                  borderColor: 'var(--border-main, #334155)',
+                                  color: 'var(--text-main, #cbd5e1)'
+                                }}
+                              >
+                                {getRowVal(selectedRow, 'Activity (routine/non routine)') || 'Routine'}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
+
+                      {/* Sub-Period Navigator Card (when cadence is periodic) */}
+                      {isPeriodic && (
+                        <div 
+                          className="p-4 rounded-2xl border shadow-sm space-y-3"
+                          style={{
+                            backgroundColor: 'var(--card-bg, #181818)',
+                            borderColor: 'var(--border-main, #334155)'
+                          }}
+                        >
+                          <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-main, #2d2d2d)' }}>
+                            <div className="flex items-center gap-2">
+                              <CalendarDays className="w-4 h-4 text-teal-400" />
+                              <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider">
+                                Sub-Judul Periode ({currentCadence})
+                              </h4>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-950/80 text-teal-300 border border-teal-700/50">
+                              Traceability Mandiri
+                            </span>
+                          </div>
+
+                          <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                            Setiap sub-judul memiliki ruang diskusi, PIC, dan galeri media tersendiri:
+                          </p>
+
+                          {/* Sub-period pills */}
+                          <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
+                            <button
+                              type="button"
+                              onClick={() => setActiveSubPeriod('')}
+                              className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                activeSubPeriod === ''
+                                  ? 'bg-teal-500 text-slate-950 border-teal-400 shadow-md shadow-teal-950/50'
+                                  : 'bg-slate-900/80 text-slate-300 border-slate-700 hover:border-teal-500/60'
+                              }`}
+                            >
+                              <span>📋 Topik Umum</span>
+                              {(() => {
+                                const count = topicCommentCounts[baseTopicTitle.toLowerCase().trim()] || 0;
+                                return count > 0 ? (
+                                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                                    activeSubPeriod === '' ? 'bg-slate-950 text-teal-300' : 'bg-slate-800 text-slate-400'
+                                  }`}>
+                                    {count}
+                                  </span>
+                                ) : null;
+                              })()}
+                            </button>
+
+                            {availableSubPeriods.map((subP) => {
+                              const isSelected = activeSubPeriod === subP;
+                              const subKey = `${baseTopicTitle} - ${subP}`.toLowerCase().trim();
+                              const subCount = topicCommentCounts[subKey] || 0;
+
+                              return (
+                                <button
+                                  key={subP}
+                                  type="button"
+                                  onClick={() => setActiveSubPeriod(subP)}
+                                  className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                    isSelected
+                                      ? 'bg-teal-500 text-slate-950 border-teal-400 shadow-md shadow-teal-950/50 scale-[1.03]'
+                                      : 'bg-slate-900/80 text-slate-300 border-slate-700 hover:border-teal-500/60'
+                                  }`}
+                                >
+                                  <span>{subP}</span>
+                                  {subCount > 0 && (
+                                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                                      isSelected ? 'bg-slate-950 text-teal-300' : 'bg-teal-950 text-teal-400 border border-teal-700/60'
+                                    }`}>
+                                      {subCount}
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Active Sub-Period PIC Banner */}
+                          {activeSubPeriod && (
+                            <div className="p-2.5 rounded-xl border bg-teal-950/20 border-teal-500/30 flex items-center justify-between text-xs mt-2">
+                              <div className="flex items-center gap-2">
+                                <User className="w-3.5 h-3.5 text-teal-400" />
+                                <span className="text-[11px] text-teal-200">
+                                  PIC Sub-Judul ({activeSubPeriod}): <strong>{getRowVal(selectedRow, 'PIC') || 'Belum Ditentukan'}</strong>
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-teal-400/80 font-mono">
+                                {activeTopicComments.length} update
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Custom sub-period quick adder */}
+                          <div className="pt-1 flex items-center gap-2">
+                            <input
+                              type="text"
+                              id="custom-subperiod-input"
+                              placeholder={`Tambah sub-judul kustom (cth: ${currentCadence === 'Weekly' ? 'W53 2026' : currentCadence === 'Quarterly' ? 'Q1 Revisi' : 'Kustom'})...`}
+                              className="flex-1 px-2.5 py-1.5 rounded-xl border text-[11px] outline-none focus:border-teal-500"
+                              style={{
+                                backgroundColor: 'var(--input-bg, #141414)',
+                                borderColor: 'var(--border-main, #334155)',
+                                color: 'var(--text-main, #f1f5f9)'
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const val = (e.currentTarget.value || '').trim();
+                                  if (val) {
+                                    setCustomPeriodsMap(prev => ({
+                                      ...prev,
+                                      [baseTopicTitle]: [...(prev[baseTopicTitle] || []), val]
+                                    }));
+                                    setActiveSubPeriod(val);
+                                    e.currentTarget.value = '';
+                                    toast.success(`Sub-judul "${val}" berhasil ditambahkan!`);
+                                  }
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const inputEl = document.getElementById('custom-subperiod-input') as HTMLInputElement;
+                                if (inputEl && inputEl.value.trim()) {
+                                  const val = inputEl.value.trim();
+                                  setCustomPeriodsMap(prev => ({
+                                    ...prev,
+                                    [baseTopicTitle]: [...(prev[baseTopicTitle] || []), val]
+                                  }));
+                                  setActiveSubPeriod(val);
+                                  inputEl.value = '';
+                                  toast.success(`Sub-judul "${val}" berhasil ditambahkan!`);
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-bold cursor-pointer shrink-0"
+                            >
+                              + Tambah
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Rincian & Keterangan Card */}
                       {(() => {
