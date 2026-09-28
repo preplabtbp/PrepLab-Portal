@@ -1253,6 +1253,7 @@ export function LogbookScreen({
     // Optimistic update
     setTodayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: newDesc } : t));
     setYesterdayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: newDesc } : t));
+    setCarryOverTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: newDesc } : t));
 
     // Send update to server
     fetch(`/api/logbook/tasks/${task.id}`, {
@@ -1427,6 +1428,12 @@ export function LogbookScreen({
       progressPercent: progress.percentage,
       status: autoStatus 
     } : t));
+    setCarryOverTasks(prev => prev.map(t => t.id === task.id ? { 
+      ...t, 
+      description: updatedDesc, 
+      progressPercent: progress.percentage,
+      status: autoStatus 
+    } : t));
 
     try {
       await fetch(`/api/logbook/tasks/${task.id}`, {
@@ -1459,6 +1466,7 @@ export function LogbookScreen({
     // Optimistic Update
     setTodayTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
     setYesterdayTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+    setCarryOverTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
 
     try {
       const res = await fetch(`/api/logbook/tasks/${taskId}`, {
@@ -1532,6 +1540,7 @@ export function LogbookScreen({
       if (json.status === 'success') {
         setTodayTasks(prev => prev.filter(t => t.id !== task.id));
         setYesterdayTasks(prev => prev.filter(t => t.id !== task.id));
+        setCarryOverTasks(prev => prev.filter(t => t.id !== task.id));
         setTaskToDelete(null);
         toast.success(task.bulletinPostId ? 'Kegiatan berhasil dihapus dan baris buletin tersinkronkan!' : 'Kegiatan berhasil dihapus!', { id: 'delete-task' });
       } else {
@@ -3008,7 +3017,7 @@ export function LogbookScreen({
               </div>
             ) : (
               <div className="space-y-2.5">
-                {displayedYesterdayTasks.map((task) => renderTaskCard(task, true, true))}
+                {displayedYesterdayTasks.map((task) => renderTaskCard(task, true, evalScope === 'yesterday'))}
               </div>
             )}
           </div>
