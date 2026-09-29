@@ -2,6 +2,22 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.37] - 2026-09-30
+
+### 🎯 Fitur Drag & Drop Penjadwalan Tugas Log Book & Fokus Khusus Task Hari Ini (Planning & Arahan)
+
+- **Fokus Ketat Kolom 2 "Planning & Arahan Hari Ini" (`server/routes/logbook.ts`, `src/components/logbook-screen.tsx`)**:
+  - **Penyaringan Presisi Hanya Task Hari Ini**: Kolom *"2. Planning & Arahan Hari Ini"* kini secara ketat hanya memuat tugas-tugas yang memang direncanakan dan ditargetkan untuk diprogress pada hari yang dipilih (`taskDate === selectedDate`). Rutinitas atau kegiatan yang belum dijadwalkan tidak lagi otomatis membanjiri planning hari ini.
+  - **Dukungan Drag and Drop Antar Kolom (*Interactive HTML5 Drag & Drop*)**:
+    - **Menambahkan Task ke Planning Hari Ini**: Pengguna dapat langsung men-drag (menyeret) kartu tugas dari kolom kiri (*1. Progres & Evaluasi*) ke kolom kanan (*2. Planning & Arahan Hari Ini*). Kartu akan berpindah tanggal ke hari ini secara mulus (*optimistic update* seketika + sinkronisasi API).
+    - **Membatalkan / Mengembalikan Task ke Backlog**: Sebaliknya, jika suatu tugas tidak jadi dikerjakan atau diprogress hari ini, pengguna cukup men-drag kartu tugas tersebut dari kolom Planning kembali ke kolom Progres & Evaluasi di sebelah kiri.
+  - **Indikator Visual & Zona Lepas (*Drop Zone Effects*)**:
+    - Kartu tugas dilengkapi pegangan seret (*drag grip handle*) dengan kursor `grab`/`grabbing`.
+    - Ketika kartu sedang ditarik di atas kolom tujuan, area kolom menampilkan bingkai putus-putus (*dashed border*), bayangan menyala, dan spanduk petunjuk animasi (*drop indicator banner*).
+  - **Tombol Pintas Fallback (*One-Click Action Button*)**:
+    - Tersedia tombol cepat **"Progress Hari Ini"** pada kartu tugas backlog/carry-over di kolom kiri.
+    - Tersedia tombol cepat **"Batal Hari Ini"** pada kartu tugas di kolom kanan, memudahkan operasional pada perangkat layar sentuh (*mobile/tablet*) tanpa harus melakukan drag & drop manual.
+
 ## [2.9.36] - 2026-09-30
 
 ### 🏥 Modul Baru Pelaporan & Rekap Kunjungan Klinik (Enterprise Healthcare Portal)

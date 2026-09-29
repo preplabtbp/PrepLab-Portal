@@ -222,22 +222,16 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
 
     // STRICT SEPARATION & METRICS:
     // 1. Today tasks:
-    //    - Non-Routine: ONLY tasks added/planned for targetDateStr
-    //    - Routine: Tasks eligible on targetDateStr based on cadence appearance window
+    //    - STRICTLY tasks planned/scheduled to be progressed on targetDateStr (today)
     const todayTasks = allMatching.filter(t => {
-      const isRoutine = isRoutineTask(t);
-      if (!isRoutine) {
-        // Non-routine: ONLY task added/planned for targetDateStr
-        return t.taskDate === targetDateStr;
-      }
-
-      // Routine: check cadence appearance window
-      return isRoutineEligibleForDate(t, targetDateStr);
+      return t.taskDate === targetDateStr;
     });
 
     // 2. Strict Yesterday tasks (H-1): ONLY tasks that had active progress or were completed ON yesterdayDateStr
     // (Tasks checked 2+ days ago or notes added 2+ days ago are strictly excluded from yesterday's accomplishments)
     const yesterdayTasks = allMatching.filter(t => {
+      // Exclude if already in today's planning
+      if (t.taskDate === targetDateStr) return false;
       // If completed before yesterday (2+ days ago), strictly exclude
       if (t.actualCompletedDate) {
         try {

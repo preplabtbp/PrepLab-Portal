@@ -998,6 +998,19 @@ export function LogbookScreen({
   const [carryOverTasks, setCarryOverTasks] = useState<LogbookTask[]>([]);
   const [summaryData, setSummaryData] = useState<any>(null);
 
+  // Drag & Drop State for moving tasks between Progress & Planning
+  const [draggedLogbookTaskId, setDraggedLogbookTaskId] = useState<number | null>(null);
+  const [dragSourceColumn, setDragSourceColumn] = useState<'progress' | 'planning' | null>(null);
+  const [isDragOverToday, setIsDragOverToday] = useState(false);
+  const [isDragOverYesterday, setIsDragOverYesterday] = useState(false);
+
+  const yesterdayDateStr = useMemo(() => {
+    if (summaryData?.yesterdayDate) return summaryData.yesterdayDate;
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  }, [summaryData?.yesterdayDate, selectedDate]);
+
   // Expanded card state (accordion per-task in Carry Over & Today)
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<number>>(new Set());
 
@@ -1887,6 +1900,77 @@ export function LogbookScreen({
     }
   };
 
+  // Drag & Drop Moving Tasks Between Progres & Evaluasi <--> Planning & Arahan Hari Ini
+  const handleMoveTaskToToday = async (taskId: number) => {
+    const taskToMove = carryOverTasks.find(t => t.id === taskId) || yesterdayTasks.find(t => t.id === taskId);
+    if (!taskToMove) return;
+
+    // Optimistic UI update
+    const updatedTask = { ...taskToMove, taskDate: selectedDate };
+    setTodayTasks(prev => [updatedTask, ...prev.filter(t => t.id !== taskId)]);
+    setCarryOverTasks(prev => prev.filter(t => t.id !== taskId));
+    setYesterdayTasks(prev => prev.filter(t => t.id !== taskId));
+
+    toast.success(`"${taskToMove.title}" dijadwalkan untuk diprogress Hari Ini!`, {
+      icon: '📋'
+    });
+
+    try {
+      const res = await fetch(`/api/logbook/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskDate: selectedDate,
+          updaterNik: inspectorNik || 'system'
+        })
+      });
+      const json = await res.json();
+      if (json.status !== 'success') {
+        toast.error(json.message || 'Gagal memindahkan tugas');
+        fetchTasks();
+      }
+    } catch (err) {
+      toast.error('Gagal terhubung ke server');
+      fetchTasks();
+    }
+  };
+
+  const handleMoveTaskToBacklog = async (taskId: number) => {
+    const taskToMove = todayTasks.find(t => t.id === taskId);
+    if (!taskToMove) return;
+
+    const yDate = yesterdayDateStr;
+
+    // Optimistic UI update
+    const updatedTask = { ...taskToMove, taskDate: yDate };
+    setTodayTasks(prev => prev.filter(t => t.id !== taskId));
+    setCarryOverTasks(prev => [updatedTask, ...prev.filter(t => t.id !== taskId)]);
+    setYesterdayTasks(prev => [updatedTask, ...prev.filter(t => t.id !== taskId)]);
+
+    toast.info(`"${taskToMove.title}" batal diprogress hari ini (kembali ke Progres & Evaluasi / Backlog)`, {
+      icon: '⏳'
+    });
+
+    try {
+      const res = await fetch(`/api/logbook/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskDate: yDate,
+          updaterNik: inspectorNik || 'system'
+        })
+      });
+      const json = await res.json();
+      if (json.status !== 'success') {
+        toast.error(json.message || 'Gagal mengembalikan tugas');
+        fetchTasks();
+      }
+    } catch (err) {
+      toast.error('Gagal terhubung ke server');
+      fetchTasks();
+    }
+  };
+
   // Copy Meeting & Operational Summary to WhatsApp / Clipboard (Section Centric)
   const handleCopyMeetingSummary = () => {
     const formattedDate = new Date(selectedDate).toLocaleDateString('id-ID', {
@@ -2011,9 +2095,8 @@ export function LogbookScreen({
   const filteredToday = useMemo(() => {
     return todayTasks
       .filter(t => {
-        // Enforce: Non-routine tasks in today's column must strictly be for selectedDate
-        const isRoutine = isTaskRoutine(t);
-        if (!isRoutine && t.taskDate !== selectedDate) {
+        // Enforce: tasks in today's column must strictly be planned for selectedDate
+        if (t.taskDate !== selectedDate) {
           return false;
         }
 
@@ -2209,7 +2292,21 @@ export function LogbookScreen({
     return (
       <div 
         key={task.id}
-        className={`rounded-xl border transition-all duration-200 ${isExpanded ? 'overflow-visible' : 'overflow-hidden'} ${
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: task.id, fromColumn: isCarryOver ? 'progress' : 'planning' }));
+          setDraggedLogbookTaskId(task.id);
+          setDragSourceColumn(isCarryOver ? 'progress' : 'planning');
+        }}
+        onDragEnd={() => {
+          setDraggedLogbookTaskId(null);
+          setDragSourceColumn(null);
+          setIsDragOverToday(false);
+          setIsDragOverYesterday(false);
+        }}
+        className={`rounded-xl border transition-all duration-200 cursor-grab active:cursor-grabbing ${
+          draggedLogbookTaskId === task.id ? 'opacity-40 scale-[0.98] border-2 border-dashed border-teal-500 bg-teal-50/50 shadow-inner' : ''
+        } ${isExpanded ? 'overflow-visible' : 'overflow-hidden'} ${
           isExpanded 
             ? 'border-teal-400 bg-white shadow-md ring-2 ring-teal-500/10' 
             : isDone 
@@ -2226,8 +2323,16 @@ export function LogbookScreen({
           onClick={() => toggleExpand(task.id)}
           className="p-3 sm:px-4 sm:py-2.5 flex items-center justify-between gap-3 cursor-pointer select-none transition-colors group"
         >
-          {/* Left: Chevron + Priority Badge + Judul Utama Task */}
+          {/* Left: Drag Grip + Chevron + Priority Badge + Judul Utama Task */}
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            {/* Drag Handle */}
+            <div 
+              className="p-1 text-slate-300 group-hover:text-teal-600 transition-colors shrink-0"
+              title={isCarryOver ? "Tarik (Drag) ke Planning & Arahan untuk diprogress hari ini" : "Tarik (Drag) kembali ke Progres & Evaluasi jika tidak jadi diprogress"}
+            >
+              <GripVertical className="w-3.5 h-3.5" />
+            </div>
+
             {/* Expand indicator icon */}
             <div className={`p-1 rounded-md text-slate-400 group-hover:text-teal-700 transition-transform duration-200 shrink-0 ${
               isExpanded ? 'rotate-90 text-teal-700 bg-teal-50' : 'hover:bg-slate-100'
@@ -2287,6 +2392,35 @@ export function LogbookScreen({
             className="flex flex-col items-end gap-1 shrink-0"
           >
             <div className="flex items-center gap-1.5">
+              {/* Quick Move / Drag Alternative Button */}
+              {isCarryOver ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleMoveTaskToToday(task.id);
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all cursor-pointer active:scale-95 shrink-0"
+                  title="Tarik (drag) atau klik untuk jadwalkan diprogress Hari Ini"
+                >
+                  <ArrowRight className="w-3 h-3 stroke-[3]" />
+                  <span className="hidden sm:inline">Progress Hari Ini</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleMoveTaskToBacklog(task.id);
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-amber-100 text-slate-600 hover:text-amber-900 border border-slate-200 hover:border-amber-300 transition-all cursor-pointer shrink-0"
+                  title="Tarik (drag) atau klik jika tidak jadi diprogress hari ini (kembalikan ke Progres & Evaluasi / Backlog)"
+                >
+                  <ArrowLeft className="w-3 h-3 text-amber-600" />
+                  <span className="hidden sm:inline">Batal Hari Ini</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={(e) => {
@@ -3260,12 +3394,49 @@ export function LogbookScreen({
           {/* 1. COLUMN KIRI: PROGRES & EVALUASI */}
           <div 
             onClick={() => setActiveSection('yesterday')}
-            className={`rounded-3xl p-5 space-y-4 transition-all duration-300 cursor-pointer ${
-              activeSection === 'yesterday'
+            onDragOver={(e) => {
+              if (dragSourceColumn === 'planning') {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (!isDragOverYesterday) setIsDragOverYesterday(true);
+              }
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setIsDragOverYesterday(false);
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOverYesterday(false);
+              const data = e.dataTransfer.getData('text/plain');
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.taskId && parsed.fromColumn === 'planning') {
+                  handleMoveTaskToBacklog(parsed.taskId);
+                }
+              } catch (err) {
+                if (draggedLogbookTaskId && dragSourceColumn === 'planning') {
+                  handleMoveTaskToBacklog(draggedLogbookTaskId);
+                }
+              }
+            }}
+            className={`rounded-3xl p-5 space-y-4 transition-all duration-300 cursor-pointer relative ${
+              isDragOverYesterday
+                ? 'border-2 border-dashed border-amber-500 bg-amber-50/70 shadow-2xl ring-4 ring-amber-400/40'
+                : activeSection === 'yesterday'
                 ? 'border-2 border-amber-500 bg-gradient-to-b from-amber-50/30 via-white to-white shadow-xl ring-4 ring-amber-400/25'
                 : 'border-2 border-slate-200 bg-white shadow-xs opacity-70 hover:opacity-100 hover:border-amber-300'
             }`}
           >
+            {/* Drop Indicator Banner */}
+            {isDragOverYesterday && (
+              <div className="p-3.5 rounded-2xl bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 border-2 border-dashed border-slate-950 shadow-lg animate-pulse">
+                <ArrowLeft className="w-4 h-4 stroke-[3]" />
+                <span>Lepaskan di sini untuk membatalkan progress hari ini & mengembalikan ke Progres & Evaluasi / Backlog</span>
+              </div>
+            )}
+
             {/* Header Kolom 1 */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-slate-100 pb-4 gap-3">
               <div>
@@ -3411,12 +3582,49 @@ export function LogbookScreen({
           {/* 2. COLUMN KANAN: PLANNING & ARAHAN HARI INI */}
           <div 
             onClick={() => setActiveSection('today')}
-            className={`rounded-3xl p-5 space-y-4 transition-all duration-300 cursor-pointer ${
-              activeSection === 'today'
+            onDragOver={(e) => {
+              if (dragSourceColumn === 'progress') {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (!isDragOverToday) setIsDragOverToday(true);
+              }
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setIsDragOverToday(false);
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOverToday(false);
+              const data = e.dataTransfer.getData('text/plain');
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.taskId && parsed.fromColumn === 'progress') {
+                  handleMoveTaskToToday(parsed.taskId);
+                }
+              } catch (err) {
+                if (draggedLogbookTaskId && dragSourceColumn === 'progress') {
+                  handleMoveTaskToToday(draggedLogbookTaskId);
+                }
+              }
+            }}
+            className={`rounded-3xl p-5 space-y-4 transition-all duration-300 cursor-pointer relative ${
+              isDragOverToday
+                ? 'border-2 border-dashed border-teal-500 bg-teal-50/70 shadow-2xl ring-4 ring-teal-400/40'
+                : activeSection === 'today'
                 ? 'border-2 border-teal-500 bg-gradient-to-b from-teal-50/30 via-white to-white shadow-xl ring-4 ring-teal-400/25'
                 : 'border-2 border-slate-200 bg-white shadow-xs opacity-70 hover:opacity-100 hover:border-teal-300'
             }`}
           >
+            {/* Drop Indicator Banner */}
+            {isDragOverToday && (
+              <div className="p-3.5 rounded-2xl bg-teal-600 text-white font-black text-xs flex items-center justify-center gap-2 border-2 border-dashed border-teal-200 shadow-lg animate-pulse">
+                <ArrowRight className="w-4 h-4 stroke-[3]" />
+                <span>Lepaskan di sini untuk menambahkan task ini ke Planning & Arahan Hari Ini</span>
+              </div>
+            )}
+
             {/* Header Kolom 2 */}
             <div className="flex items-center justify-between border-b-2 border-slate-100 pb-4">
               <div>
@@ -3443,7 +3651,7 @@ export function LogbookScreen({
                   )}
                 </div>
                 <p className="text-xs font-semibold text-slate-500 mt-1">
-                  Penjabaran arahan kerja shift hari ini, penugasan Multi-PIC, target deadline, & checklist eksekusi
+                  Khusus task yang akan diprogress hari ini &middot; Drag dari kolom kiri atau klik + Tambah
                 </p>
               </div>
 
@@ -3477,10 +3685,10 @@ export function LogbookScreen({
               <div className="py-14 text-center border-2 border-dashed border-teal-200 rounded-2xl bg-teal-50/40 space-y-3">
                 <Briefcase className="w-8 h-8 text-teal-600 mx-auto" />
                 <p className="text-sm font-bold text-slate-900">
-                  Belum ada tugas khusus untuk hari ini
+                  Belum ada task yang diprogress hari ini
                 </p>
                 <p className="text-xs text-slate-600 max-w-sm mx-auto">
-                  Tambahkan penugasan dan arahan kegiatan shift hari ini agar PIC dapat segera memulai eksekusi.
+                  Drag tugas dari kolom <span className="font-bold text-amber-700">1. Progres & Evaluasi</span> di sebelah kiri ke sini untuk diprogress hari ini, atau buat tugas baru.
                 </p>
                 <button
                   type="button"
