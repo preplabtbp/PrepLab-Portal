@@ -1285,7 +1285,7 @@ export function LogbookScreen({
   const handleAddSubtaskNote = async () => {
     if (!subtaskNoteModal) return;
     const { task, itemIndex } = subtaskNoteModal;
-    const noteText = newSubtaskNoteInput.trim();
+    const noteText = newSubtaskNoteInput.replace(/[\r\n]+/g, ' ').trim();
     if (!noteText) {
       toast.error('Catatan tidak boleh kosong');
       return;
@@ -1982,8 +1982,30 @@ export function LogbookScreen({
   };
 
   // Task classification counters for Header Module Switcher
-  const routineCountToday = useMemo(() => todayTasks.filter(t => isTaskRoutine(t)).length, [todayTasks]);
-  const nonRoutineCountToday = useMemo(() => todayTasks.filter(t => !isTaskRoutine(t)).length, [todayTasks]);
+  // Count across today + active pending/carry-over tasks in the log book
+  const routineCount = useMemo(() => {
+    const taskMap = new Map<number, LogbookTask>();
+    todayTasks.filter(t => isTaskRoutine(t)).forEach(t => taskMap.set(t.id, t));
+    carryOverTasks.filter(t => isTaskRoutine(t) && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').forEach(t => taskMap.set(t.id, t));
+    yesterdayTasks.filter(t => isTaskRoutine(t) && (t.isPending || t.status === 'Pending' || (t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed'))).forEach(t => taskMap.set(t.id, t));
+    return taskMap.size;
+  }, [todayTasks, carryOverTasks, yesterdayTasks]);
+
+  const nonRoutineCount = useMemo(() => {
+    const taskMap = new Map<number, LogbookTask>();
+    todayTasks.filter(t => !isTaskRoutine(t)).forEach(t => taskMap.set(t.id, t));
+    carryOverTasks.filter(t => !isTaskRoutine(t) && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').forEach(t => taskMap.set(t.id, t));
+    yesterdayTasks.filter(t => !isTaskRoutine(t) && (t.isPending || t.status === 'Pending' || (t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed'))).forEach(t => taskMap.set(t.id, t));
+    return taskMap.size;
+  }, [todayTasks, carryOverTasks, yesterdayTasks]);
+
+  const allTasksCount = useMemo(() => {
+    const taskMap = new Map<number, LogbookTask>();
+    todayTasks.forEach(t => taskMap.set(t.id, t));
+    carryOverTasks.filter(t => t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').forEach(t => taskMap.set(t.id, t));
+    yesterdayTasks.filter(t => t.isPending || t.status === 'Pending' || (t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed')).forEach(t => taskMap.set(t.id, t));
+    return taskMap.size;
+  }, [todayTasks, carryOverTasks, yesterdayTasks]);
 
   // Filtered Today & Yesterday Lists (Sorted by Urgency then FIFO)
   const filteredToday = useMemo(() => {
@@ -2905,7 +2927,7 @@ export function LogbookScreen({
               )}
             </div>
 
-            {/* Header Module Mode Switcher: Semua Modul | Modul Routine | Modul Non Routine */}
+            {/* Header Module Mode Switcher: Log Book All Task | Log Book Routine | Log Book Non Routine */}
             <div className="flex items-center p-1 rounded-2xl border bg-slate-100/90 dark:bg-slate-800/80 shadow-2xs gap-1">
               <button
                 type="button"
@@ -2918,7 +2940,12 @@ export function LogbookScreen({
                 title="Tampilkan seluruh modul kegiatan (Routine & Non Routine)"
               >
                 <ClipboardCheck className="w-3.5 h-3.5" />
-                <span>Semua Modul</span>
+                <span>Log Book All Task</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
+                  moduleMode === 'ALL' ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
+                }`}>
+                  {allTasksCount}
+                </span>
               </button>
 
               <button
@@ -2932,11 +2959,11 @@ export function LogbookScreen({
                 title="Khusus memantau tugas Routine: Daily, Weekly (D-3), Monthly (D-7), Quarterly (M-1), Biannual (M-2), Yearly (M-3)"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Modul Routine</span>
+                <span>Log Book Routine</span>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
                   moduleMode === 'ROUTINE' ? 'bg-teal-900/60 text-teal-100' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                 }`}>
-                  {routineCountToday}
+                  {routineCount}
                 </span>
               </button>
 
@@ -2951,11 +2978,11 @@ export function LogbookScreen({
                 title="Khusus memantau instruksi operasional non rutin / penugasan harian"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Modul Non Routine</span>
+                <span>Log Book Non Routine</span>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
                   moduleMode === 'NON_ROUTINE' ? 'bg-amber-800/60 text-amber-100' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                 }`}>
-                  {nonRoutineCountToday}
+                  {nonRoutineCount}
                 </span>
               </button>
             </div>
@@ -4719,9 +4746,17 @@ export function LogbookScreen({
                 <textarea
                   rows={2}
                   maxLength={300}
-                  placeholder="Ketik catatan progres atau kendala baru..."
+                  placeholder="Ketik catatan progres atau kendala baru (tekan Enter untuk simpan)..."
                   value={newSubtaskNoteInput}
                   onChange={(e) => setNewSubtaskNoteInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (!isSavingSubtaskNote && newSubtaskNoteInput.trim()) {
+                        handleAddSubtaskNote();
+                      }
+                    }
+                  }}
                   className="w-full px-3 py-2 rounded-xl border text-xs font-medium outline-none focus:border-teal-500 transition-colors resize-none leading-relaxed"
                   style={{
                     backgroundColor: 'var(--input-bg, #f8fafc)',

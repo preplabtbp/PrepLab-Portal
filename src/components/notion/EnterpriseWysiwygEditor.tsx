@@ -23,7 +23,7 @@ import {
   Info,
   GripVertical
 } from 'lucide-react';
-import { parseTasklist, toggleTasklistItem, markdownToVisualHtml, visualHtmlToMarkdown } from './tasklist-utils';
+import { parseTasklist, toggleTasklistItem, markdownToVisualHtml, visualHtmlToMarkdown, SubtaskNote } from './tasklist-utils';
 
 export interface EnterpriseWysiwygEditorProps {
   value: string;
@@ -42,7 +42,32 @@ interface SubtaskItem {
   id: string;
   text: string;
   checked: boolean;
+  notes?: SubtaskNote[];
+  checkedDate?: string;
+  noteDate?: string;
 }
+
+const parseValueToSubtasks = (val?: string): SubtaskItem[] => {
+  if (!val) return [{ id: '1', text: '', checked: false }];
+  const parsed = parseTasklist(val);
+  if (parsed.items.length > 0) {
+    return parsed.items.map((it, idx) => ({
+      id: `item-${idx}-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      checked: it.checked,
+      text: (it.text || '').replace(/<!--[\s\S]*?-->/gi, '').replace(/<!--.*$/gi, '').trim(),
+      notes: it.notes,
+      checkedDate: it.checkedDate,
+      noteDate: it.noteDate
+    }));
+  }
+  return [{ id: '1', text: '', checked: false }];
+};
+
+const parseValueToNotes = (val?: string): string => {
+  if (!val) return '';
+  const parsed = parseTasklist(val);
+  return parsed.cleanText || '';
+};
 
 export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = ({
   value,
@@ -68,36 +93,11 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // Subtask drafts for checklist mode
-  const [subtasks, setSubtasks] = useState<SubtaskItem[]>(() => {
-    if (!value) return [{ id: '1', text: '', checked: false }];
-    const normalized = value.replace(/<br\s*\/?>/gi, '\n');
-    const lines = normalized.split('\n');
-    const items: SubtaskItem[] = [];
-    lines.forEach((line, idx) => {
-      const match = line.match(/^[\s\t]*- \[([ xX])\]\s*(.*)$/);
-      if (match) {
-        items.push({
-          id: `item-${idx}-${Date.now()}`,
-          checked: match[1].toLowerCase() === 'x',
-          text: match[2].trim()
-        });
-      }
-    });
-    return items.length > 0 ? items : [{ id: '1', text: '', checked: false }];
-  });
+  // Subtask drafts for checklist mode (Clean of HTML comments)
+  const [subtasks, setSubtasks] = useState<SubtaskItem[]>(() => parseValueToSubtasks(value));
 
   // Notes draft (non-checklist part)
-  const [notes, setNotes] = useState<string>(() => {
-    if (!value) return '';
-    const normalized = value.replace(/<br\s*\/?>/gi, '\n');
-    const nonChecklistLines = normalized
-      .split('\n')
-      .filter(l => !/^[\s\t]*- \[([ xX])\]/.test(l))
-      .join('\n')
-      .trim();
-    return nonChecklistLines;
-  });
+  const [notes, setNotes] = useState<string>(() => parseValueToNotes(value));
 
   // Keep internal text state in sync
   const [textContent, setTextContent] = useState<string>(() => (value || '').replace(/<br\s*\/?>/gi, '\n'));
@@ -121,22 +121,50 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
         editorRef.current.innerHTML = markdownToVisualHtml(norm);
       }
     }
+    // Synchronize subtasks & notes if external value changes
+    const parsed = parseTasklist(norm);
+    if (parsed.hasTasklist) {
+      setSubtasks(parsed.items.map((it, idx) => ({
+        id: `item-${idx}-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+        checked: it.checked,
+        text: (it.text || '').replace(/<!--[\s\S]*?-->/gi, '').replace(/<!--.*$/gi, '').trim(),
+        notes: it.notes,
+        checkedDate: it.checkedDate,
+        noteDate: it.noteDate
+      })));
+      setNotes(parsed.cleanText || '');
+    }
   }, [value, mode]);
 
-  // Sync checklist state changes back to parent
+  // Sync checklist state changes back to parent, preserving subtask notes and stamps
   const emitChecklistChange = (newItems: SubtaskItem[], newNotesText: string) => {
-    const validItems = newItems.filter(i => i.text.trim());
+    const validItems = newItems.filter(i => (i.text || '').trim());
     const checklistMd = validItems
-      .map(i => `- [${i.checked ? 'x' : ' '}] ${i.text.trim()}`)
+      .map(i => {
+        const cleanTitle = (i.text || '')
+          .replace(/[\r\n]+/g, ' ')
+          .replace(/<!--[\s\S]*?-->/gi, '')
+          .replace(/<!--.*$/gi, '')
+          .trim();
+        let commentSuffix = '';
+        if (i.checkedDate) {
+          commentSuffix += ` <!--checkedDate:${i.checkedDate}-->`;
+        }
+        if (i.notes && i.notes.length > 0) {
+          commentSuffix += ` <!--notes:${JSON.stringify(i.notes)}-->`;
+        }
+        return `- [${i.checked ? 'x' : ' '}] ${cleanTitle}${commentSuffix}`;
+      })
       .join('\n');
 
     let combined = '';
-    if (newNotesText.trim() && checklistMd) {
-      combined = `${newNotesText.trim()}\n\n${checklistMd}`;
+    const cleanNotes = (newNotesText || '').trim();
+    if (cleanNotes && checklistMd) {
+      combined = `${cleanNotes}\n\n${checklistMd}`;
     } else if (checklistMd) {
       combined = checklistMd;
     } else {
-      combined = newNotesText.trim();
+      combined = cleanNotes;
     }
 
     setTextContent(combined);
@@ -250,16 +278,27 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
 
   // Subtask Checklist interactions
   const handleToggleSubtask = (index: number) => {
-    const updated = subtasks.map((item, i) => 
-      i === index ? { ...item, checked: !item.checked } : item
-    );
+    const todayStr = new Date().toISOString().split('T')[0];
+    const updated = subtasks.map((item, i) => {
+      if (i === index) {
+        const nextChecked = !item.checked;
+        return {
+          ...item,
+          checked: nextChecked,
+          checkedDate: nextChecked ? (item.checkedDate || todayStr) : undefined
+        };
+      }
+      return item;
+    });
     setSubtasks(updated);
     emitChecklistChange(updated, notes);
   };
 
   const handleSubtaskTextChange = (index: number, newText: string) => {
+    // Sanitize any accidentally pasted HTML comments or raw newlines
+    const sanitized = newText.replace(/[\r\n]+/g, ' ').replace(/<!--[\s\S]*?-->/gi, '').replace(/<!--.*$/gi, '');
     const updated = subtasks.map((item, i) => 
-      i === index ? { ...item, text: newText } : item
+      i === index ? { ...item, text: sanitized } : item
     );
     setSubtasks(updated);
     emitChecklistChange(updated, notes);

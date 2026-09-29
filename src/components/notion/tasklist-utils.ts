@@ -88,6 +88,9 @@ export function parseTasklist(text?: string | null): TasklistProgress {
         rawContent = rawContent.replace(noteDateMatch[0], '').trim();
       }
 
+      // Strip any other HTML comments or dangling comment brackets from title
+      rawContent = rawContent.replace(/<!--[\s\S]*?-->/gi, '').replace(/<!--.*$/gi, '').trim();
+
       // If we have legacy note and notes is empty, synthesize into notes array
       if (note && notes.length === 0) {
         notes.push({
@@ -164,6 +167,14 @@ export function toggleTasklistItem(text: string, targetIndex: number, actionDate
         const spaceAfterBracket = match[3];
         let content = match[4].trim();
 
+        // Extract notes if present
+        let existingNotesStr = '';
+        const notesMatch = content.match(/<!--\s*notes:\s*\[[\s\S]*?\]\s*-->/i);
+        if (notesMatch) {
+          existingNotesStr = notesMatch[0];
+          content = content.replace(notesMatch[0], '').trim();
+        }
+
         if (newCheck === 'x') {
           // Turning to checked: add or update checkedDate
           content = content.replace(/<!--\s*checkedDate:\s*[0-9]{4}-[0-9]{2}-[0-9]{2}\s*-->/gi, '').trim();
@@ -171,6 +182,10 @@ export function toggleTasklistItem(text: string, targetIndex: number, actionDate
         } else {
           // Turning to unchecked: remove checkedDate
           content = content.replace(/<!--\s*checkedDate:\s*[0-9]{4}-[0-9]{2}-[0-9]{2}\s*-->/gi, '').trim();
+        }
+
+        if (existingNotesStr) {
+          content = `${content} ${existingNotesStr}`;
         }
 
         currentIndex++;
@@ -196,8 +211,10 @@ export function addSubtaskNote(
   author?: string
 ): string {
   if (!text) return text;
-  const trimmedNote = newNoteText.trim();
-  if (!trimmedNote) return text;
+  // CRITICAL: Subtask notes must NOT contain newlines (\r or \n) because each subtask in markdown is a single line (- [ ] ...)
+  // Any raw newline breaks the checklist line and spills into general task notes (nonTaskLines / cleanText)!
+  const sanitizedNote = newNoteText.replace(/[\r\n]+/g, ' ').trim();
+  if (!sanitizedNote) return text;
 
   const hasBr = /<br\s*\/?>/i.test(text);
   const delimiter = hasBr ? '<br/>' : '\n';
@@ -238,14 +255,19 @@ export function addSubtaskNote(
           });
         }
 
-        // Clean out old comments
-        content = content.replace(/<!--\s*notes:\s*\[[\s\S]*?\]\s*-->/gi, '').trim();
-        content = content.replace(/<!--\s*note:\s*[\s\S]*?\s*-->/gi, '').trim();
-        content = content.replace(/<!--\s*noteDate:\s*[0-9]{4}-[0-9]{2}-[0-9]{2}\s*-->/gi, '').trim();
+        // Preserve checkedDate if present
+        let checkedDate = '';
+        const dateMatch = content.match(/<!--\s*checkedDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/i);
+        if (dateMatch) {
+          checkedDate = dateMatch[1];
+        }
+
+        // Clean out all comments from content so subtask title is pristine
+        content = content.replace(/<!--[\s\S]*?-->/gi, '').replace(/<!--.*$/gi, '').trim();
 
         const newNoteObj: SubtaskNote = {
           id: `note-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          text: trimmedNote,
+          text: sanitizedNote,
           date: todayStr,
           time: timeStr,
           author: author || undefined
@@ -256,7 +278,13 @@ export function addSubtaskNote(
           const dtB = `${b.date || ''} ${b.time || ''}`;
           return dtB.localeCompare(dtA);
         });
-        content = `${content} <!--notes:${JSON.stringify(updatedNotes)}-->`;
+
+        let commentSuffix = '';
+        if (checkedDate) {
+          commentSuffix += ` <!--checkedDate:${checkedDate}-->`;
+        }
+        commentSuffix += ` <!--notes:${JSON.stringify(updatedNotes)}-->`;
+        content = `${content}${commentSuffix}`;
 
         currentIndex++;
         return `${prefix}${check}${spaceAfterBracket}${content}`;
@@ -308,14 +336,24 @@ export function removeSubtaskNote(text: string, targetIndex: number, noteId: str
           }
         }
 
-        content = content.replace(/<!--\s*notes:\s*\[[\s\S]*?\]\s*-->/gi, '').trim();
-        content = content.replace(/<!--\s*note:\s*[\s\S]*?\s*-->/gi, '').trim();
-        content = content.replace(/<!--\s*noteDate:\s*[0-9]{4}-[0-9]{2}-[0-9]{2}\s*-->/gi, '').trim();
+        // Preserve checkedDate if present
+        let checkedDate = '';
+        const dateMatch = content.match(/<!--\s*checkedDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/i);
+        if (dateMatch) {
+          checkedDate = dateMatch[1];
+        }
+
+        content = content.replace(/<!--[\s\S]*?-->/gi, '').replace(/<!--.*$/gi, '').trim();
 
         const updatedNotes = existingNotes.filter(n => n.id !== noteId);
-        if (updatedNotes.length > 0) {
-          content = `${content} <!--notes:${JSON.stringify(updatedNotes)}-->`;
+        let commentSuffix = '';
+        if (checkedDate) {
+          commentSuffix += ` <!--checkedDate:${checkedDate}-->`;
         }
+        if (updatedNotes.length > 0) {
+          commentSuffix += ` <!--notes:${JSON.stringify(updatedNotes)}-->`;
+        }
+        content = `${content}${commentSuffix}`;
 
         currentIndex++;
         return `${prefix}${check}${spaceAfterBracket}${content}`;

@@ -2,6 +2,27 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.35] - 2026-09-29
+
+### 🛠️ Perbaikan Tampilan Kode Catatan Subtask, Sanitasi Tombol Enter/Shift+Enter, Indikator Tugas Non Routine & Penamaan Bilah Modul Log Book
+
+- **Pembersihan Bocoran Kode HTML Comment Catatan Subtask (`src/components/notion/EnterpriseWysiwygEditor.tsx`, `src/components/notion/tasklist-utils.ts`)**:
+  - **Sanitasi Judul Subtask dari Metadata**: Mengganti pemisahan baris manual pada input subtask dengan `parseTasklist` yang secara otomatis membersihkan tag `<!--notes:[...]-->`, `<!--checkedDate:...-->`, maupun komentar HTML lainnya. Kotak input subtask kini selalu menampilkan teks judul subtask yang bersih tanpa tampilan kode mentah.
+  - **Preservasi Metadata Catatan & Tanggal Ceklis**: Pada saat menyimpan atau mengubah baris subtask di editor, metadata riwayat catatan (`notes`) dan tanggal centang (`checkedDate`) tetap dipertahankan dan di-serialize rapi di ujung baris checklist markdown.
+
+- **Penyempurnaan Penambahan Catatan Subtask & Sanitasi Tombol Enter (`src/components/logbook-screen.tsx`, `src/components/notion/tasklist-utils.ts`)**:
+  - **Pencegahan Line Break yang Memecah Format Subtask**: Menambahkan sanitasi string catatan subtask dengan mengubah karakter baris baru (`\r`, `\n`) menjadi spasi tunggal. Ini mencegah baris checklist markdown (`- [ ]`) terpecah dua yang sebelumnya menyebabkan potongan catatan masuk ke dalam catatan umum tugas dan merusak judul subtask.
+  - **Dukungan Tombol Enter pada Modal Catatan Subtask**: Menambahkan event listener `onKeyDown` pada textarea modal catatan subtask sehingga menekan tombol **Enter** langsung memicu penyimpanan catatan secara instan tanpa menambah enter/baris baru liar.
+
+- **Perbaikan Indikator Jumlah Tugas Non Routine pada Header Switcher (`src/components/logbook-screen.tsx`)**:
+  - **Perhitungan Menyeluruh Seluruh Tugas Aktif**: Memperbaiki rumus kalkulasi `nonRoutineCount`, `routineCount`, dan `allTasksCount`. Kini lencana angka tidak lagi hanya menghitung penugasan hari ini (`todayTasks`), melainkan mencakup seluruh tugas non-routine aktif dan pending yang ada di log book (termasuk tugas *carry-over* dan *job pending* kemarin yang masih berjalan). Indikator tidak lagi bernilai `0` saat ada tugas non-routine yang pending.
+
+- **Penamaan Ulang Modul Log Book pada Bilah Header (`src/components/logbook-screen.tsx`)**:
+  - Mengubah tombol sakelar filter modul pada header secara konsisten:
+    - `Semua Modul` ➔ **`Log Book All Task`** (disertai lencana total seluruh tugas aktif).
+    - `Modul Routine` ➔ **`Log Book Routine`** (disertai lencana tugas rutin).
+    - `Modul Non Routine` ➔ **`Log Book Non Routine`** (disertai lencana tugas non rutin/harian).
+
 ## [2.9.34] - 2026-09-28
 
 ### 🚀 Sistem Routine & Non-Routine Log Book, Pengalih Modul Header, Aturan Window Kemunculan, Urutan Catatan Teratas & Pembersihan Antarmuka
