@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../../src/db/index.js";
-import { eq, desc, and, or, inArray, gte, lte, sql, isNull } from "drizzle-orm";
+import { eq, desc, and, or, inArray, gte, lte, sql, isNull, ilike } from "drizzle-orm";
 import { 
   logbookTasks, employees, bulletinPosts, notifications 
 } from "../../src/db/schema.js";
@@ -123,8 +123,15 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
         ));
       }
     }
-    if (section && section !== 'ALL' && section !== 'Semua') {
-      conditions.push(eq(logbookTasks.section, section));
+    if (section && section !== 'ALL' && section !== 'Semua' && section !== 'Semua Seksi') {
+      if (section.toLowerCase().includes('quality') || section.toLowerCase().includes('qa')) {
+        conditions.push(or(
+          ilike(logbookTasks.section, '%quality%'),
+          ilike(logbookTasks.section, '%qa%')
+        ));
+      } else {
+        conditions.push(eq(logbookTasks.section, section));
+      }
     }
     if (assigneeNik) {
       conditions.push(eq(logbookTasks.assigneeNik, assigneeNik));
@@ -140,12 +147,35 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
       .where(conditions.length > 0 ? and(...conditions) : sql`1=1`)
       .orderBy(desc(logbookTasks.createdAt));
 
+    // Helper: Identify Daily Routine Tasks
+    const isDailyRoutine = (t: any) => {
+      const act = (t.activityType || '').toLowerCase();
+      return act.includes('daily') || (act === 'routine' && !act.includes('non') && (!t.bulletinTopicTitle || t.bulletinTopicTitle.toLowerCase().includes('daily')));
+    };
+
     // STRICT SEPARATION & METRICS:
-    // 1. Today tasks: ONLY tasks for targetDateStr
-    const todayTasks = allMatching.filter(t => t.taskDate === targetDateStr);
+    // 1. Today tasks: ONLY tasks for targetDateStr + Daily Routine tasks that are active
+    const todayTasks = allMatching.filter(t => {
+      if (t.taskDate === targetDateStr) return true;
+
+      // Daily Routine: Always appears in Today Tasks every day until completed/canceled
+      if (isDailyRoutine(t)) {
+        const isCanceled = (t.status || '').toLowerCase() === 'canceled';
+        if (!isCanceled) {
+          if (t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed') {
+            return true;
+          }
+          if (t.actualCompletedDate && formatDateStr(new Date(t.actualCompletedDate)) === targetDateStr) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    });
 
     // 2. Strict Yesterday tasks (H-1): ONLY tasks that had active progress or were completed ON yesterdayDateStr
-    // (Tasks checked 2+ days ago or tasks with 0% progress are excluded from yesterday's accomplishments)
+    // (Tasks checked 2+ days ago or notes added 2+ days ago are strictly excluded from yesterday's accomplishments)
     const yesterdayTasks = allMatching.filter(t => {
       // If completed before yesterday (2+ days ago), strictly exclude
       if (t.actualCompletedDate) {
@@ -156,20 +186,23 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
         } catch (e) {}
       }
 
-      // Check subtasks inside description for checkedDate stamps or noteDate stamps
+      // Check subtasks inside description for checkedDate stamps or note dates
       const desc = t.description || '';
       if (desc.includes('[-') || desc.includes('[x]') || desc.includes('[X]') || desc.includes('[ ]')) {
-        const checkedDatesMatches = Array.from(desc.matchAll(/<!--\s*checkedDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/gi));
-        const noteDatesMatches = Array.from(desc.matchAll(/<!--\s*noteDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/gi));
+        const checkedDatesMatches = Array.from(desc.matchAll(/<!--\s*checkedDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/gi)).map(m => m[1]);
 
-        const hasYesterdayCheck = checkedDatesMatches.some(m => m[1] === yesterdayDateStr);
-        const hasYesterdayNote = noteDatesMatches.some(m => m[1] === yesterdayDateStr);
+        // Extract all note dates from <!--notes:[{"date":"YYYY-MM-DD",...}]--> and legacy <!--noteDate:YYYY-MM-DD-->
+        const noteDatesMatches = Array.from(desc.matchAll(/"date"\s*:\s*"([0-9]{4}-[0-9]{2}-[0-9]{2})"/gi)).map(m => m[1])
+          .concat(Array.from(desc.matchAll(/<!--\s*noteDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/gi)).map(m => m[1]));
+
+        const hasYesterdayCheck = checkedDatesMatches.some(d => d === yesterdayDateStr);
+        const hasYesterdayNote = noteDatesMatches.some(d => d === yesterdayDateStr);
 
         // If a subtask was checked OR had a note added on yesterday: active progress confirmed
         if (hasYesterdayCheck || hasYesterdayNote) return true;
 
         if (checkedDatesMatches.length > 0 && !hasYesterdayNote) {
-          const allOlder = checkedDatesMatches.every(m => m[1] < yesterdayDateStr);
+          const allOlder = checkedDatesMatches.every(d => d < yesterdayDateStr);
           if (allOlder && (t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed' || (t.progressPercent && t.progressPercent >= 100))) {
             return false;
           }

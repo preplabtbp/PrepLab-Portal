@@ -45,7 +45,16 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui';
-import { parseTasklist, toggleTasklistItem, markdownToVisualHtml, reorderTasklistItems, updateTasklistItemNote } from './notion/tasklist-utils';
+import { 
+  parseTasklist, 
+  toggleTasklistItem, 
+  markdownToVisualHtml, 
+  reorderTasklistItems, 
+  updateTasklistItemNote,
+  addSubtaskNote,
+  removeSubtaskNote,
+  SubtaskNote
+} from './notion/tasklist-utils';
 import { NotionDropdownCell, DropdownOption } from './notion/NotionDropdownCell';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import {
@@ -147,11 +156,11 @@ export const DEFAULT_TASK_TEMPLATES: TaskTemplate[] = [
   {
     id: 'tmpl-qa-duplicate',
     name: 'Analisa Duplicate Sample & QA/QC',
-    section: 'Quality Control (QA)',
+    section: 'Quality Assurance',
     title: 'Pengujian Duplicate Sample & Verifikasi Batas Presisi QA/QC',
     description: '- [ ] Pengambilan 5% duplicate batch sampel harian\n- [ ] Analisa split pulverize vs split crush\n- [ ] Perhitungan RPD (Relative Percent Difference)\n- [ ] Input data control chart shewhart',
     priority: 'High',
-    activityType: 'Routine',
+    activityType: 'Daily',
     targetTime: '15:00',
     isDefault: true
   },
@@ -162,7 +171,7 @@ export const DEFAULT_TASK_TEMPLATES: TaskTemplate[] = [
     title: 'Handover Antar Shift, Laporan Hasil Analisa, & Status Alat',
     description: '- [ ] Rekap jumlah sampel terselesaikan vs pending\n- [ ] Catatan kendala alat atau downtime\n- [ ] Serah terima sampel prioritas ke pengawas shift berikutnya\n- [ ] Tandatangan berita acara serah terima shift',
     priority: 'Urgent',
-    activityType: 'Routine',
+    activityType: 'Daily',
     targetTime: '19:00',
     isDefault: true
   }
@@ -181,7 +190,7 @@ const SECTION_OPTIONS = [
   'Preparation',
   'Laboratory',
   'Maintenance',
-  'Quality Control (QA)',
+  'Quality Assurance',
   'Sampling',
   'General'
 ];
@@ -859,6 +868,17 @@ export function LogbookScreen({
   const [selectedPt, setSelectedPt] = useState<string>(userPt === 'GTS' ? 'GTS' : 'TBP');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [picFilter, setPicFilter] = useState<string>('ALL');
+  const [activityFilter, setActivityFilter] = useState<'ALL' | 'Routine' | 'Daily' | 'Non Routine'>('ALL');
+
+  const matchesActivityFilter = (task: LogbookTask, filter: string) => {
+    if (filter === 'ALL') return true;
+    const act = (task.activityType || 'Routine').toLowerCase();
+    const isNonRoutine = act.includes('non');
+    if (filter === 'Non Routine') return isNonRoutine;
+    if (filter === 'Daily') return !isNonRoutine && (act.includes('daily') || act === 'routine');
+    if (filter === 'Routine') return !isNonRoutine;
+    return true;
+  };
 
   // Keep selectedSection in sync if userSection resolves after boot
   useEffect(() => {
@@ -1034,6 +1054,7 @@ export function LogbookScreen({
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editPriority, setEditPriority] = useState('Normal');
+  const [editActivityType, setEditActivityType] = useState('Daily');
   const [editTaskDate, setEditTaskDate] = useState('');
   const [editTargetDate, setEditTargetDate] = useState('');
   const [editTargetTime, setEditTargetTime] = useState('');
@@ -1057,6 +1078,7 @@ export function LogbookScreen({
     setEditTitle(task.title || '');
     setEditDescription(task.description || '');
     setEditPriority(task.priority || 'Normal');
+    setEditActivityType(task.activityType || 'Daily');
     setEditTaskDate(task.taskDate || selectedDate || getTodayStr());
     setEditTargetDate(task.targetDate || selectedDate || getTodayStr());
     setEditTargetTime(task.targetTime || '23:59');
@@ -1071,10 +1093,10 @@ export function LogbookScreen({
     task: LogbookTask;
     itemIndex: number;
     itemText: string;
-    note: string;
+    notes: SubtaskNote[];
     isReadOnly: boolean;
   } | null>(null);
-  const [subtaskNoteInput, setSubtaskNoteInput] = useState('');
+  const [newSubtaskNoteInput, setNewSubtaskNoteInput] = useState('');
   const [isSavingSubtaskNote, setIsSavingSubtaskNote] = useState(false);
 
   // Subtask Note Bubble Chat State (for popover to the right in yesterday / read-only module)
@@ -1149,21 +1171,27 @@ export function LogbookScreen({
     }
   };
 
-  const openSubtaskNoteModal = (task: LogbookTask, itemIndex: number, itemText: string, note: string, isReadOnly: boolean) => {
-    setSubtaskNoteModal({ task, itemIndex, itemText, note, isReadOnly });
-    setSubtaskNoteInput(note || '');
+  const openSubtaskNoteModal = (task: LogbookTask, itemIndex: number, itemText: string, notes: SubtaskNote[], isReadOnly: boolean) => {
+    setSubtaskNoteModal({ task, itemIndex, itemText, notes, isReadOnly });
+    setNewSubtaskNoteInput('');
   };
 
-  const handleSaveSubtaskNote = async () => {
+  const handleAddSubtaskNote = async () => {
     if (!subtaskNoteModal) return;
     const { task, itemIndex } = subtaskNoteModal;
-    const noteText = subtaskNoteInput.trim();
+    const noteText = newSubtaskNoteInput.trim();
+    if (!noteText) {
+      toast.error('Catatan tidak boleh kosong');
+      return;
+    }
+    const now = new Date();
     const actionDate = selectedDate || getTodayStr();
-    const updatedDesc = updateTasklistItemNote(task.description || '', itemIndex, noteText, actionDate);
+    const actionTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    
+    const updatedDesc = addSubtaskNote(task.description || '', itemIndex, noteText, actionDate, actionTime, inspectorName);
 
-    // If task was 'Open' and a note is added, it represents active work / progress on that subtask ('On Progress')
     let updatedStatus = task.status;
-    if (noteText && task.status === 'Open') {
+    if (task.status === 'Open') {
       updatedStatus = 'On Progress';
     }
 
@@ -1171,6 +1199,11 @@ export function LogbookScreen({
     setTodayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, status: updatedStatus } : t));
     setYesterdayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, status: updatedStatus } : t));
     setCarryOverTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, status: updatedStatus } : t));
+
+    const parsed = parseTasklist(updatedDesc);
+    const updatedItem = parsed.items.find(it => it.index === itemIndex);
+    setSubtaskNoteModal(prev => prev ? { ...prev, notes: updatedItem?.notes || [] } : null);
+    setNewSubtaskNoteInput('');
 
     try {
       setIsSavingSubtaskNote(true);
@@ -1183,15 +1216,49 @@ export function LogbookScreen({
           updaterNik: inspectorNik
         })
       });
-      toast.success(noteText ? 'Catatan subtask berhasil disimpan (Tercatat sebagai progres kegiatan)!' : 'Catatan subtask berhasil dihapus');
-      setSubtaskNoteModal(null);
+      toast.success('Catatan berhasil ditambahkan!');
     } catch (e) {
-      console.error('Failed to save subtask note:', e);
-      toast.error('Gagal menyimpan keterangan subtask');
+      console.error('Failed to add note:', e);
+      toast.error('Gagal menambahkan catatan');
     } finally {
       setIsSavingSubtaskNote(false);
     }
   };
+
+  const handleDeleteSubtaskNote = async (noteId: string) => {
+    if (!subtaskNoteModal) return;
+    const { task, itemIndex } = subtaskNoteModal;
+    
+    const updatedDesc = removeSubtaskNote(task.description || '', itemIndex, noteId);
+
+    // Optimistic update
+    setTodayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, status: updatedStatusOrDefault(t.status) } : t));
+    setYesterdayTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, status: updatedStatusOrDefault(t.status) } : t));
+    setCarryOverTasks(prev => prev.map(t => t.id === task.id ? { ...t, description: updatedDesc, status: updatedStatusOrDefault(t.status) } : t));
+
+    const parsed = parseTasklist(updatedDesc);
+    const updatedItem = parsed.items.find(it => it.index === itemIndex);
+    setSubtaskNoteModal(prev => prev ? { ...prev, notes: updatedItem?.notes || [] } : null);
+
+    try {
+      await fetch(`/api/logbook/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: updatedDesc,
+          updaterNik: inspectorNik
+        })
+      });
+      toast.success('Catatan berhasil dihapus');
+    } catch (e) {
+      console.error('Failed to delete note:', e);
+      toast.error('Gagal menghapus catatan');
+    }
+  };
+
+  function updatedStatusOrDefault(s: string) {
+    return s;
+  }
 
   const openReviewModal = (task: LogbookTask) => {
     setReviewingTask(task);
@@ -1234,6 +1301,7 @@ export function LogbookScreen({
             title: editTitle.trim(),
             description: editDescription.trim(),
             priority: editPriority,
+            activityType: editActivityType,
             taskDate: editTaskDate || editingTask.taskDate,
             targetDate: editTargetDate,
             targetTime: editTargetTime || '23:59',
@@ -1260,6 +1328,7 @@ export function LogbookScreen({
           title: editTitle.trim(),
           description: editDescription.trim(),
           priority: editPriority,
+          activityType: editActivityType,
           taskDate: editTaskDate || editingTask.taskDate,
           targetDate: editTargetDate,
           targetTime: editTargetTime || '23:59',
@@ -1816,10 +1885,11 @@ export function LogbookScreen({
           (t.pendingPicName && t.pendingPicName.toLowerCase().includes(searchQuery.toLowerCase())) ||
           (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
         const matchPic = picFilter === 'ALL' || t.assigneeNik.includes(picFilter) || t.assigneeName.includes(picFilter) || (t.pendingPicNik && t.pendingPicNik.includes(picFilter));
-        return matchSearch && matchPic;
+        const matchActivity = matchesActivityFilter(t, activityFilter);
+        return matchSearch && matchPic && matchActivity;
       })
       .sort(sortTasksByUrgencyAndFifo);
-  }, [todayTasks, searchQuery, picFilter]);
+  }, [todayTasks, searchQuery, picFilter, activityFilter]);
 
   // Scope selector for Evaluation Column: 'yesterday' (strict H-1) vs 'all_carryover' (all historical carry overs)
   const [evalScope, setEvalScope] = useState<'yesterday' | 'all_carryover'>('yesterday');
@@ -1837,23 +1907,18 @@ export function LogbookScreen({
           (t.pendingPicName && t.pendingPicName.toLowerCase().includes(searchQuery.toLowerCase())) ||
           (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
         const matchPic = picFilter === 'ALL' || t.assigneeNik.includes(picFilter) || t.assigneeName.includes(picFilter) || (t.pendingPicNik && t.pendingPicNik.includes(picFilter));
-        return matchSearch && matchPic;
+        const matchActivity = matchesActivityFilter(t, activityFilter);
+        return matchSearch && matchPic && matchActivity;
       })
       .sort(sortTasksByUrgencyAndFifo);
-  }, [evalSourceTasks, searchQuery, picFilter]);
+  }, [evalSourceTasks, searchQuery, picFilter, activityFilter]);
 
   // Active Section for Presentation Focus Highlight ('yesterday' | 'today')
   const [activeSection, setActiveSection] = useState<'yesterday' | 'today'>('yesterday');
-  const [yesterdaySubFilter, setYesterdaySubFilter] = useState<'all' | 'pending' | 'completed'>('all');
 
   const displayedYesterdayTasks = useMemo(() => {
-    return filteredYesterday.filter(t => {
-      const isDone = t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed';
-      if (yesterdaySubFilter === 'pending') return !isDone;
-      if (yesterdaySubFilter === 'completed') return isDone;
-      return true;
-    });
-  }, [filteredYesterday, yesterdaySubFilter]);
+    return filteredYesterday;
+  }, [filteredYesterday]);
 
   const yesterdayCompletedCount = useMemo(() => {
     return filteredYesterday.filter(t => t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed').length;
@@ -1930,9 +1995,6 @@ export function LogbookScreen({
     return Array.from(map.entries()).map(([nik, name]) => ({ nik, name }));
   }, [todayTasks, yesterdayTasks, carryOverTasks]);
 
-  // Enterprise Morning Briefing & Projector Presentation Mode (Default ON as requested)
-  const [isProjectorMode, setIsProjectorMode] = useState<boolean>(true);
-
   const expandAllTasks = () => {
     const allIds = new Set<number>([
       ...filteredYesterday.map(t => t.id),
@@ -1943,10 +2005,6 @@ export function LogbookScreen({
 
   const collapseAllTasks = () => {
     setExpandedTaskIds(new Set());
-  };
-
-  const toggleProjectorMode = () => {
-    setIsProjectorMode(prev => !prev);
   };
 
   // Enterprise Minimalist Task Row Renderer with Click-to-Expand Details
@@ -2375,7 +2433,10 @@ export function LogbookScreen({
                       {(() => {
                         const bubbleKey = `${task.id}-${item.index}`;
                         const isBubbleOpen = activeNoteBubbleKey === bubbleKey;
-                        const hasNote = Boolean(item.note && item.note.trim());
+                        const notesList: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                          ? item.notes
+                          : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+                        const noteCount = notesList.length;
 
                         return (
                           <div className="relative inline-flex items-center shrink-0">
@@ -2384,37 +2445,36 @@ export function LogbookScreen({
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (isReadOnly) {
-                                  if (hasNote) {
+                                  if (noteCount > 0) {
                                     setActiveNoteBubbleKey(prev => prev === bubbleKey ? null : bubbleKey);
                                   } else {
                                     toast.info('Tidak ada catatan pada subtask ini.');
                                   }
                                 } else {
-                                  openSubtaskNoteModal(task, item.index, item.text, item.note || '', isReadOnly);
+                                  openSubtaskNoteModal(task, item.index, item.text, notesList, isReadOnly);
                                 }
                               }}
-                              title={hasNote ? `Catatan: ${item.note}` : isReadOnly ? 'Tidak ada catatan' : 'Tambah catatan subtask (Icon !)'}
+                              title={noteCount > 0 ? `${noteCount} Catatan Subtask (Klik untuk lihat)` : isReadOnly ? 'Tidak ada catatan' : 'Tambah catatan subtask (Icon !)'}
                               className={`relative p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
-                                hasNote
+                                noteCount > 0
                                   ? 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 shadow-2xs'
                                   : isReadOnly
                                   ? 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'
                                   : 'text-slate-400 hover:text-teal-700 hover:bg-teal-50 hover:border hover:border-teal-200'
                               }`}
                             >
-                              <AlertCircle className={`w-3.5 h-3.5 ${hasNote ? 'text-amber-600' : ''}`} />
+                              <AlertCircle className={`w-3.5 h-3.5 ${noteCount > 0 ? 'text-amber-600' : ''}`} />
 
-                              {/* Dot Merah: Tanda bahwa ada catatan pada subtask */}
-                              {hasNote && (
-                                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600 border-2 border-white dark:border-slate-800"></span>
+                              {/* Angka Badge Menggantikan Dot Merah */}
+                              {noteCount > 0 && (
+                                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-600 text-white font-mono text-[9px] font-black flex items-center justify-center border-2 border-white shadow-xs">
+                                  {noteCount}
                                 </span>
                               )}
                             </button>
 
                             {/* Bubble Chat ke Kanan untuk Modul Kemarin (isReadOnly) */}
-                            {isReadOnly && isBubbleOpen && hasNote && (
+                            {isReadOnly && isBubbleOpen && noteCount > 0 && (
                               <div
                                 onClick={(e) => e.stopPropagation()}
                                 className="absolute right-0 sm:right-auto sm:left-full sm:ml-3 top-full sm:top-1/2 mt-2 sm:mt-0 sm:-translate-y-1/2 z-[100] w-72 sm:w-80 max-w-[85vw] bg-slate-900 text-slate-100 rounded-2xl p-3.5 shadow-2xl border border-slate-700 animate-in fade-in zoom-in-95 duration-150"
@@ -2426,31 +2486,36 @@ export function LogbookScreen({
                                 <div className="relative flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
                                   <div className="flex items-center gap-1.5">
                                     <MessageSquare className="w-3.5 h-3.5 text-teal-400" />
-                                    <span className="text-[11px] font-black uppercase tracking-wider text-teal-400">Catatan Subtask</span>
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-teal-400">
+                                      Catatan Subtask ({noteCount})
+                                    </span>
                                   </div>
-                                  <div className="flex items-center gap-1.5">
-                                    {item.noteDate && (
-                                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                                        📅 {item.noteDate}
-                                      </span>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={() => setActiveNoteBubbleKey(null)}
-                                      className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                                      title="Tutup"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveNoteBubbleKey(null)}
+                                    className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                                    title="Tutup"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
 
-                                <div className="relative mb-2 px-2.5 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-[11px] text-slate-300 font-medium line-clamp-2">
+                                <div className="relative mb-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-[11px] text-slate-300 font-medium line-clamp-2">
                                   <span className="text-slate-400 font-normal">Subtask: </span>{item.text}
                                 </div>
 
-                                <div className="relative text-xs text-slate-100 font-medium leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto pr-1">
-                                  {item.note}
+                                <div className="relative space-y-2 max-h-56 overflow-y-auto pr-1">
+                                  {notesList.map((nt, nIdx) => (
+                                    <div key={nt.id || nIdx} className="p-2.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs text-slate-100 space-y-1">
+                                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                                        <span className="text-teal-300 font-bold">{nt.author || 'PIC'}</span>
+                                        <span>📅 {nt.date}{nt.time ? ` ⏰ ${nt.time}` : ''}</span>
+                                      </div>
+                                      <div className="whitespace-pre-wrap leading-relaxed font-medium text-slate-200">
+                                        {nt.text}
+                                      </div>
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
                             )}
@@ -2605,20 +2670,6 @@ export function LogbookScreen({
           {/* Action Toolbar */}
           <div className="flex items-center gap-2">
             <button
-              type="button"
-              onClick={toggleProjectorMode}
-              title="Aktifkan Mode Proyektor Rapat (Tampilan kontras tinggi & font diperbesar untuk presentasi)"
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs ${
-                isProjectorMode
-                  ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white border-indigo-700 ring-2 ring-indigo-400 shadow-md'
-                  : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-indigo-500 hover:text-indigo-600'
-              }`}
-            >
-              <span className="text-sm">📽️</span>
-              <span>{isProjectorMode ? 'Mode Proyektor: ON' : 'Mode Proyektor'}</span>
-            </button>
-
-            <button
               onClick={handleCopyMeetingSummary}
               title="Salin notulensi log book dan briefing ke WhatsApp"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold hover:border-teal-500 hover:text-teal-600 dark:hover:text-teal-400 transition-all cursor-pointer shadow-xs"
@@ -2757,6 +2808,23 @@ export function LogbookScreen({
                 <option value="ALL">Semua Universe</option>
               </select>
 
+              {/* Activity / Routine Filter */}
+              <select
+                value={activityFilter}
+                onChange={(e) => setActivityFilter(e.target.value as any)}
+                className="px-2.5 py-1 rounded-xl border text-xs font-semibold outline-none cursor-pointer"
+                style={{
+                  backgroundColor: 'var(--card-bg, #ffffff)',
+                  borderColor: 'var(--border-main, #cbd5e1)',
+                  color: 'var(--text-main, #0f172a)'
+                }}
+              >
+                <option value="ALL">Semua Kegiatan</option>
+                <option value="Routine">🔁 Routine</option>
+                <option value="Daily">📅 Daily Routine</option>
+                <option value="Non Routine">⚡ Non Routine</option>
+              </select>
+
               {/* PIC Filter (if tasks available) */}
               {uniquePics.length > 0 && (
                 <select
@@ -2832,56 +2900,11 @@ export function LogbookScreen({
         </div>
       </div>
 
-      {/* Main Content Body - Full Screen Projector Optimized (No cramped centering) */}
+      {/* Main Content Body */}
       <div className="w-full px-4 sm:px-8 lg:px-10 py-5 sm:py-6 space-y-6 transition-all duration-300">
-        {/* Projector Mode Live Meeting Room Banner */}
-        {isProjectorMode && (
-          <div className="bg-gradient-to-r from-slate-100 via-sky-50 to-slate-100 border-2 border-slate-300 rounded-3xl p-4 sm:p-5 shadow-xs text-slate-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-rose-100 text-rose-800 border border-rose-300 shadow-xs">
-                  <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />
-                  Live Meeting Projector Mode
-                </span>
-                <span className="text-xs px-2.5 py-0.5 rounded-lg bg-sky-100 border border-sky-300 font-mono font-bold text-sky-900">
-                  {selectedSection}
-                </span>
-                <span className="text-xs font-mono font-bold text-slate-700">
-                  📅 {formatDateDisplay(selectedDate)}
-                </span>
-              </div>
-              <h2 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 flex items-center gap-2">
-                <span>Morning Briefing & Operational Handover</span>
-              </h2>
-              <p className="text-xs text-slate-600 font-semibold">
-                Mode layar lebar dengan kontras tinggi dioptimalkan untuk proyektor meeting room, evaluasi carry-over, serta checklist progres harian.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 self-end md:self-auto">
-              <button
-                type="button"
-                onClick={expandAllTasks}
-                className="px-3.5 py-2 rounded-xl text-xs font-black bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-300 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <ChevronDown className="w-4 h-4 text-teal-700 stroke-[3]" />
-                <span>Buka Semua Checklist</span>
-              </button>
-              <button
-                type="button"
-                onClick={toggleProjectorMode}
-                className="px-3.5 py-2 rounded-xl text-xs font-black bg-slate-800 hover:bg-slate-900 text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Minimize2 className="w-4 h-4" />
-                <span>Keluar Mode Layar</span>
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Enterprise KPI Summary Cards */}
         {summaryData && (
-          <div className={`grid grid-cols-2 md:grid-cols-4 ${isProjectorMode ? 'gap-5' : 'gap-3.5'}`}>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 sm:gap-4">
             {/* Card 1: Fokus Hari Ini */}
             <div 
               onClick={() => setActiveSection('today')}
@@ -3001,8 +3024,8 @@ export function LogbookScreen({
         {/* ========================================================================= */}
         {/* TWO-COLUMN DUAL VIEW WITH ENTERPRISE INTERACTIVE SECTION HIGHLIGHT        */}
         {/* ========================================================================= */}
-        <div className={`grid grid-cols-1 lg:grid-cols-2 ${isProjectorMode ? 'gap-8' : 'gap-6'} items-start`}>
-          {/* 1. COLUMN KIRI: EVALUASI & PROGRES KEMARIN */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          {/* 1. COLUMN KIRI: PROGRES & EVALUASI */}
           <div 
             onClick={() => setActiveSection('yesterday')}
             className={`rounded-3xl p-5 space-y-4 transition-all duration-300 cursor-pointer ${
@@ -3021,7 +3044,7 @@ export function LogbookScreen({
                         ? 'bg-amber-500 animate-pulse ring-4 ring-amber-500/30'
                         : 'bg-slate-400'
                     }`} />
-                    <span>1. Evaluasi & Progres Kemarin</span>
+                    <span>1. Progres & Evaluasi</span>
                   </h2>
 
                   {/* Enterprise Active Badge or Focus Indicator */}
@@ -3135,46 +3158,6 @@ export function LogbookScreen({
               </div>
             </div>
 
-            {/* Sub-Filters for Step 1 */}
-            <div 
-              onClick={(e) => e.stopPropagation()} 
-              className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
-            >
-              <button
-                type="button"
-                onClick={() => setYesterdaySubFilter('all')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  yesterdaySubFilter === 'all'
-                    ? 'bg-slate-800 text-white font-black'
-                    : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
-                }`}
-              >
-                Semua ({filteredYesterday.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setYesterdaySubFilter('pending')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  yesterdaySubFilter === 'pending'
-                    ? 'bg-amber-500 text-white font-black shadow-xs'
-                    : 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
-                }`}
-              >
-                ⏳ Carry-Over ({yesterdayPendingCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setYesterdaySubFilter('completed')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  yesterdaySubFilter === 'completed'
-                    ? 'bg-teal-700 text-white font-black shadow-xs'
-                    : 'bg-teal-50 text-teal-900 border border-teal-300 hover:bg-teal-100'
-                }`}
-              >
-                ✅ Selesai ({yesterdayCompletedCount})
-              </button>
-            </div>
-
             {/* Task List (Evaluasi & Progres Kemarin) */}
             {displayedYesterdayTasks.length === 0 ? (
               <div className="py-14 text-center border-2 border-dashed border-amber-200 rounded-2xl bg-amber-50/40 space-y-2">
@@ -3183,9 +3166,7 @@ export function LogbookScreen({
                   Tidak ada tugas dalam kategori ini
                 </p>
                 <p className="text-xs text-slate-600 max-w-sm mx-auto">
-                  {yesterdaySubFilter === 'pending'
-                    ? 'Semua kegiatan dari shift kemarin telah terselesaikan dengan baik (tuntas 100%).'
-                    : 'Belum ada data tugas untuk filter yang dipilih.'}
+                  Belum ada data kegiatan atau progres tugas yang tercatat untuk periode kemarin yang dipilih.
                 </p>
               </div>
             ) : (
@@ -3470,8 +3451,27 @@ export function LogbookScreen({
                 )}
               </div>
 
-              {/* Prioritas, Target Tanggal, & Target Jam Selesai */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+              {/* Klasifikasi Kegiatan, Prioritas, Target Tanggal, & Target Jam Selesai */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold block">Klasifikasi</label>
+                  <select
+                    value={newActivityType}
+                    onChange={(e) => setNewActivityType(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-semibold cursor-pointer"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #f8fafc)',
+                      borderColor: 'var(--border-main, #cbd5e1)'
+                    }}
+                  >
+                    <option value="Daily">🔁 Daily (Tiap Hari)</option>
+                    <option value="Weekly">🔁 Weekly</option>
+                    <option value="Monthly">🔁 Monthly</option>
+                    <option value="Yearly">🔁 Yearly</option>
+                    <option value="Non Routine">⚡ Non Routine</option>
+                  </select>
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-xs font-bold block">Prioritas</label>
                   <select
@@ -3867,8 +3867,28 @@ export function LogbookScreen({
                 </div>
               )}
 
-              {/* Prioritas & Target Selesai */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+              {/* Klasifikasi, Prioritas & Target Selesai */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold block">Klasifikasi</label>
+                  <select
+                    value={editActivityType}
+                    onChange={(e) => setEditActivityType(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #f8fafc)',
+                      borderColor: 'var(--border-main, #cbd5e1)',
+                      color: 'var(--text-main, #0f172a)'
+                    }}
+                  >
+                    <option value="Daily">🔁 Daily (Tiap Hari)</option>
+                    <option value="Weekly">🔁 Weekly</option>
+                    <option value="Monthly">🔁 Monthly</option>
+                    <option value="Yearly">🔁 Yearly</option>
+                    <option value="Non Routine">⚡ Non Routine</option>
+                  </select>
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-xs font-bold block">Prioritas</label>
                   <select
@@ -4411,9 +4431,9 @@ export function LogbookScreen({
                   <AlertCircle className="w-4 h-4 stroke-[2.5]" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-slate-900">Keterangan Subtask</h4>
+                  <h4 className="font-bold text-sm text-slate-900">Catatan Subtask ({subtaskNoteModal.notes.length})</h4>
                   <p className="text-[11px] text-slate-500">
-                    {subtaskNoteModal.isReadOnly ? 'Mode Baca Saja (Laporan Kemarin)' : 'Catatan hasil, kendala, atau rincian item'}
+                    {subtaskNoteModal.isReadOnly ? 'Mode Baca Saja (Laporan Kemarin)' : 'Riwayat catatan & penambahan progres'}
                   </p>
                 </div>
               </div>
@@ -4434,81 +4454,93 @@ export function LogbookScreen({
               </p>
             </div>
 
-            {/* Content Field: Read-Only or Editable */}
-            {subtaskNoteModal.isReadOnly ? (
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold block text-slate-700">Catatan / Keterangan Tambahan:</label>
-                <div 
-                  className="w-full p-3 rounded-xl border text-xs font-medium min-h-[90px] whitespace-pre-wrap leading-relaxed"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #f8fafc)',
-                    borderColor: 'var(--border-main, #cbd5e1)',
-                    color: subtaskNoteModal.note ? 'var(--text-main, #0f172a)' : '#94a3b8'
-                  }}
-                >
-                  {subtaskNoteModal.note || 'Tidak ada catatan tambahan untuk subtask ini.'}
+            {/* Existing Notes List */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold block text-slate-700">Daftar Catatan Tersimpan:</label>
+              {subtaskNoteModal.notes.length === 0 ? (
+                <div className="p-3 text-center text-xs text-slate-400 border border-dashed rounded-xl bg-slate-50">
+                  Belum ada catatan untuk subtask ini.
                 </div>
-                <p className="text-[10px] text-slate-400 italic">
-                  💡 Untuk mengedit catatan subtask kemarin, geser tanggal log book ke kemarin terlebih dahulu.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-1.5">
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {subtaskNoteModal.notes.map((note) => (
+                    <div 
+                      key={note.id} 
+                      className="p-2.5 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-1 flex items-start justify-between gap-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono font-bold">
+                          {note.author && <span className="text-teal-700">{note.author}</span>}
+                          <span>📅 {note.date}{note.time ? ` ⏰ ${note.time}` : ''}</span>
+                        </div>
+                        <p className="text-xs text-slate-800 font-medium whitespace-pre-wrap leading-relaxed mt-0.5">
+                          {note.text}
+                        </p>
+                      </div>
+                      {!subtaskNoteModal.isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSubtaskNote(note.id)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
+                          title="Hapus catatan ini"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Add New Note Section (If not read-only) */}
+            {!subtaskNoteModal.isReadOnly && (
+              <div className="space-y-2 pt-2 border-t" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold block text-slate-700">Catatan / Keterangan Subtask:</label>
+                  <label className="text-xs font-bold block text-slate-700">Tambah Catatan Baru:</label>
                   <span className="text-[10px] text-slate-400 font-mono">
-                    {subtaskNoteInput.length}/300
+                    {newSubtaskNoteInput.length}/300
                   </span>
                 </div>
                 <textarea
-                  autoFocus
-                  rows={3}
+                  rows={2}
                   maxLength={300}
-                  placeholder="Contoh: Sampel A sudah diencerkan 10x, butuh reagen tambahan untuk batch berikutnya..."
-                  value={subtaskNoteInput}
-                  onChange={(e) => setSubtaskNoteInput(e.target.value)}
+                  placeholder="Ketik catatan progres atau kendala baru..."
+                  value={newSubtaskNoteInput}
+                  onChange={(e) => setNewSubtaskNoteInput(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border text-xs font-medium outline-none focus:border-teal-500 transition-colors resize-none leading-relaxed"
                   style={{
                     backgroundColor: 'var(--input-bg, #f8fafc)',
                     borderColor: 'var(--border-main, #cbd5e1)'
                   }}
                 />
-                <p className="text-[10px] text-teal-700 dark:text-teal-400 font-medium bg-teal-50 dark:bg-teal-950/40 p-2 rounded-lg border border-teal-200 dark:border-teal-800">
-                  ✨ Catatan ini tercatat sebagai progres kegiatan hari ini dan otomatis akan masuk ke dalam <strong>Progres Kemarin</strong> pada tanggal keesokannya.
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] text-teal-700 font-medium">
+                    ✨ Tiap catatan memiliki time tag dan tercatat sebagai progres kegiatan.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={isSavingSubtaskNote || !newSubtaskNoteInput.trim()}
+                    onClick={handleAddSubtaskNote}
+                    className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5 shrink-0"
+                  >
+                    {isSavingSubtaskNote ? <RotateCcw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    <span>Tambah Catatan</span>
+                  </button>
+                </div>
               </div>
             )}
 
             {/* Modal Footer */}
-            <div className="pt-2 border-t flex items-center justify-end gap-2" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+            <div className="pt-2 border-t flex items-center justify-end" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
               <button
                 type="button"
                 onClick={() => setSubtaskNoteModal(null)}
-                className="px-3.5 py-1.5 rounded-xl border text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
+                className="px-4 py-1.5 rounded-xl border text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
                 style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
               >
-                {subtaskNoteModal.isReadOnly ? 'Tutup' : 'Batal'}
+                Tutup
               </button>
-              {!subtaskNoteModal.isReadOnly && (
-                <button
-                  type="button"
-                  disabled={isSavingSubtaskNote}
-                  onClick={handleSaveSubtaskNote}
-                  className="px-4 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5"
-                >
-                  {isSavingSubtaskNote ? (
-                    <>
-                      <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Menyimpan...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Simpan Keterangan</span>
-                    </>
-                  )}
-                </button>
-              )}
             </div>
           </div>
         </div>

@@ -4,16 +4,33 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ## [2.9.34] - 2026-09-28
 
-### 🚀 Rollover Otomatis Task Routine, Integrasi Sub-Periode Buletin, Pilihan Topik Cerdas & Indikator Catatan Subtask Interaktif
+### 🚀 Sistem Routine & Non-Routine Log Book, Multi-Catatan Subtask dengan Lencana Angka, Penyelarasan QA & Pembersihan Antarmuka
 
-- **Visual Catatan Subtask Minimalis & Bubble Chat Interaktif ke Kanan (`src/components/logbook-screen.tsx`, `src/components/notion/tasklist-utils.ts`)**:
-  - **Tampilan Default Minimalis dengan Indikator Dot Merah**: Menghilangkan tampilan teks catatan yang sebelumnya memanjang di samping checklist subtask. Sebagai gantinya, ikon tanda seru (`AlertCircle`) kini hanya menampilkan **dot merah berkedip** (*pulsing red dot badge*) di pojok kanan atas sebagai tanda visual yang bersih bahwa subtask memiliki catatan tambahan.
-  - **Bubble Chat Popover ke Arah Kanan pada Modul Kemarin (`isReadOnly`)**: Pada mode evaluasi kemarin, mengklik ikon tanda seru yang ber-dot merah akan memunculkan popover obrolan (*speech bubble*) yang melayang ke arah kanan lengkap dengan ekor bubble ke arah ikon, menampilkan referensi subtask, tanggal pencatatan (`📅 YYYY-MM-DD`), dan isi catatan lengkap dengan tombol tutup (`X`).
-  - **Pengakuan Otomatis Progres Subtask ke Progres Kemarin (`server/routes/logbook.ts`)**: Menambahkan stempel tanggal pencatatan catatan (`<!--noteDate:YYYY-MM-DD-->`). Jika kegiatan berstatus `Open`, penambahan catatan subtask otomatis menaikkan status menjadi `On Progress`. Backend server memvalidasi `hasYesterdayNote` sehingga kegiatan yang diberi catatan hari ini otomatis diakui memiliki progres aktif dan langsung masuk ke daftar **Progres Kemarin (H-1)** pada tanggal keesokan harinya.
+- **Penyelarasan Seksi Quality Assurance (QA) (`src/components/logbook-screen.tsx`, `server/routes/logbook.ts`)**:
+  - **Penyatuan Opsi Dropdown & Database**: Mengubah opsi `'Quality Control (QA)'` menjadi `'Quality Assurance'` pada `SECTION_OPTIONS` dan template penugasan agar sepenuhnya sinkron dengan normalisasi profil pengguna (`userSection`) dan rekaman database PostgreSQL.
+  - **Pencarian Seksi Cerdas di Server**: Mengimplementasikan pencarian fleksibel *case-insensitive* (`ilike '%quality%' OR ilike '%qa%'`) pada endpoint rute logbook sehingga personil Quality Assurance dapat memfilter dan melihat seluruh penugasan seksinya tanpa hambatan.
+
+- **Sistem Klasifikasi Kegiatan Routine (Daily) & Non-Routine (`src/components/logbook-screen.tsx`, `server/routes/logbook.ts`)**:
+  - **Otomatisasi Task Daily Routine**: Tugas berklasifikasi `Daily` secara otomatis muncul setiap hari di kolom **Fokus Hari Ini** (*Today Tasks*) hingga tugas tersebut tuntas diselesaikan.
+  - **Pengaturan Klasifikasi Fleksibel**: Menyediakan opsi klasifikasi kegiatan (*Daily*, *Weekly*, *Monthly*, *Yearly*, dan *Non Routine*) pada modal penugasan baru (*Create Task*), modal penyesuaian (*Edit Task*), serta template penugasan.
+  - **Filter Jenis Kegiatan pada Toolbar**: Menambahkan dropdown filter (*Semua Kegiatan*, *Routine*, *Daily Routine*, *Non Routine*) di bilah alat utama untuk mempermudah pemilahan fokus kerja.
+  - **Lencana Klasifikasi Visual**: Menampilkan indikator pill `🔁 Daily`, `🔁 Routine`, atau `⚡ Non Routine` pada baris ringkasan kartu maupun bilah lencana rincian tugas.
+
+- **Catatan Subtask Multi-Entry dengan Lencana Angka & Time Tag Presisi (`src/components/logbook-screen.tsx`, `src/components/notion/tasklist-utils.ts`, `server/routes/logbook.ts`)**:
+  - **Dukungan Catatan Lebih Dari Satu Per Subtask**: Subtask kini dapat menyimpan riwayat banyak catatan secara beruntun dalam format terstruktur `<!--notes:[...]-->` tanpa batasan satu catatan saja.
+  - **Lencana Angka (*Numeric Badge*) Menggantikan Dot Merah**: Mengganti dot merah pada ikon tanda seru (`AlertCircle`) dengan lencana angka merah yang informatif (misal: `1`, `2`, `3`) yang menunjukkan jumlah catatan tersimpan secara riil.
+  - **Stempel Waktu (*Time Tag*) & Penulis Masing-Masing**: Setiap catatan merekam tanggal dan jam aksi tersendiri (`📅 YYYY-MM-DD ⏰ HH:mm`) serta nama penulis/PIC pelaksana.
+  - **Penyaringan Evaluasi Progres Kemarin yang Ketat**: Catatan lama yang ditambahkan 2 hari lalu atau lebih tidak akan menyebabkan subtask/tugas muncul di evaluasi kemarin hari ini, kecuali pada hari kemarin terdapat penambahan catatan baru atau ceklis subtask baru.
+  - **Modal Catatan Interaktif & Bubble Popover**: Modal catatan menyediakan daftar riwayat catatan dengan tombol hapus per butir dan form penambahan catatan baru. Pada modul kemarin (`isReadOnly`), bubble chat melayang ke kanan menampilkan seluruh riwayat catatan dengan time tag lengkap.
+
+- **Penyederhanaan Tampilan & Pembersihan Antarmuka Log Book (`src/components/logbook-screen.tsx`)**:
+  - **Penghapusan Mode Proyektor**: Menghilangkan tombol *Mode Proyektor* pada toolbar navigasi atas serta spanduk *Live Meeting Projector Mode* pada badan halaman untuk menghasilkan tampilan yang jauh lebih bersih, ringkas, dan fokus.
+  - **Pembaruan Judul Kolom Evaluasi**: Mengubah judul kolom pertama dari `1. Evaluasi & Progres Kemarin` menjadi `1. Progres & Evaluasi`.
+  - **Pembersihan Sub-Filter Kartu Kemarin**: Menghapus bilah filter sub-kategori (*Semua*, *Carry-Over*, *Selesai*) pada kartu kemarin agar langsung menyajikan progres pekerjaan kemarin secara transparan dan lugas.
 
 - **Otomatisasi Rollover Periode Baru pada Routine Task Saat 100% Selesai (`src/components/logbook-screen.tsx`, `src/components/notion/period-utils.ts`)**:
-  - **Pendeteksian Selesai Checklist Otomatis**: Ketika subtask terakhir dari sebuah tugas bertipe Routine (Daily, Weekly, Monthly, Yearly) dicentang (selesai 100%), sistem secara proaktif memunculkan dialog konfirmasi: *"Routine Task Selesai! 🎉 Apakah Anda ingin membuat kembali task routine ini untuk periode selanjutnya?"*.
-  - **Duplikasi & Pembaruan Periode Cerdas**: Jika disetujui, sistem otomatis menduplikasi daftar subtask dalam keadaan bersih belum dicentang (0%), menyetel status awal ke `Open`, dan memajukan tanggal target penyelesaian default serta sub-periode buletin (misal: dari `2026` ke `2027`, atau dari `Maret 2026` ke `April 2026`) secara otomatis.
+  - **Pendeteksian Selesai Checklist Otomatis**: Ketika subtask terakhir dari sebuah tugas bertipe Routine dicentang (selesai 100%), sistem secara proaktif memunculkan dialog konfirmasi untuk membuat kembali task routine untuk periode selanjutnya.
+  - **Duplikasi & Pembaruan Periode Cerdas**: Jika disetujui, sistem otomatis menduplikasi daftar subtask dalam keadaan bersih belum dicentang (0%), menyetel status awal ke `Open`, dan memajukan tanggal target penyelesaian default serta sub-periode buletin secara otomatis.
 
 - **Penyelarasan Sub-Periode Dinamis & Preservasi Cadence Topik Buletin (`src/components/NotionDatabaseTable.tsx`)**:
   - **Pembersihan Sub-Topik Liar**: Menghapus pembuatan sub-topik tahunan otomatis tanpa persetujuan pengguna (seperti `2021-2025`) pada halaman Yearly, menjaga database tetap bersih dan hanya menampilkan sub-topik yang benar-benar ditambahkan oleh pengguna.
