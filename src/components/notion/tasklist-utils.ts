@@ -98,7 +98,16 @@ export function parseTasklist(text?: string | null): TasklistProgress {
         });
       }
 
-      const latestNote = notes.length > 0 ? notes[notes.length - 1] : null;
+      // Sort notes descending: newest notes always at the top
+      if (notes.length > 0) {
+        notes.sort((a, b) => {
+          const dtA = `${a.date || ''} ${a.time || ''}`;
+          const dtB = `${b.date || ''} ${b.time || ''}`;
+          return dtB.localeCompare(dtA);
+        });
+      }
+
+      const latestNote = notes.length > 0 ? notes[0] : null;
 
       items.push({
         index: itemIndex++,
@@ -242,7 +251,11 @@ export function addSubtaskNote(
           author: author || undefined
         };
 
-        const updatedNotes = [...existingNotes, newNoteObj];
+        const updatedNotes = [newNoteObj, ...existingNotes].sort((a, b) => {
+          const dtA = `${a.date || ''} ${a.time || ''}`;
+          const dtB = `${b.date || ''} ${b.time || ''}`;
+          return dtB.localeCompare(dtA);
+        });
         content = `${content} <!--notes:${JSON.stringify(updatedNotes)}-->`;
 
         currentIndex++;

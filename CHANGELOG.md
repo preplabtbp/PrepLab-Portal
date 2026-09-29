@@ -4,17 +4,36 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ## [2.9.34] - 2026-09-28
 
-### 🚀 Sistem Routine & Non-Routine Log Book, Multi-Catatan Subtask dengan Lencana Angka, Penyelarasan QA & Pembersihan Antarmuka
+### 🚀 Sistem Routine & Non-Routine Log Book, Pengalih Modul Header, Aturan Window Kemunculan, Urutan Catatan Teratas & Pembersihan Antarmuka
+
+- **Urutan Catatan Subtask Terbaru Selalu di Atas (`src/components/notion/tasklist-utils.ts`, `src/components/logbook-screen.tsx`)**:
+  - **Pengurutan Kronologis Terbalik (*Newest on Top*)**: Seluruh catatan subtask pada modal catatan maupun popover obrolan (*bubble chat*) kini secara otomatis diurutkan menurun (*descending*) berdasarkan stempel tanggal dan jam (`date` + `time`). Catatan yang baru saja ditambahkan seketika tampil di urutan paling atas.
+  - **Pembaruan Pembacaan Catatan Terakhir**: Fungsi utilitas tasklist secara konsisten mengambil catatan paling baru dari indeks teratas (`notes[0]`) untuk tinjauan cepat pada baris subtask.
+
+- **Penyempurnaan Ruang Lingkup Kolom Planning & Arahan Hari Ini (`server/routes/logbook.ts`, `src/components/logbook-screen.tsx`)**:
+  - **Eksklusivitas Tugas Hari Ini**: Kolom 2 (*Planning & Arahan Hari Ini*) kini secara ketat dan eksklusif hanya memuat tugas non-routine yang dijadwalkan/dibuat untuk hari ini saja (`taskDate === selectedDate`).
+  - **Pemisahan dari Backlog Lampau**: Tugas-tugas masa lalu yang belum terselesaikan tidak lagi bercampur di kolom rencana hari ini, melainkan tersaring rapi di kolom *Progres & Evaluasi* serta tab *Semua Backlog Carry-Over*, menjaga fokus rencana kerja shift hari ini tetap bersih dan transparan.
+
+- **Sistem Klasifikasi Routine vs Non Routine & Pengalih Modul Header (`src/components/logbook-screen.tsx`, `server/routes/logbook.ts`)**:
+  - **Pengalih Modul Header (*Segmented Module Switcher*)**: Menambahkan kontrol bilah sakelar yang menonjol dan responsif di bagian atas bilah alat:
+    - `📋 Semua Modul`: Menyajikan gabungan seluruh kegiatan operasional seksi.
+    - `🔁 Modul Routine`: Khusus memfokuskan pemantauan pada kegiatan-kegiatan rutin berulang beserta lencana frekuensi dan perhitungan sisa hari.
+    - `⚡ Modul Non Routine`: Khusus memfokuskan pengawasan pada instruksi kerja non-rutin, pekerjaan tak terduga, dan penugasan harian ad-hoc.
+  - **Penghitung Realtime pada Tab**: Dilengkapi lencana angka penghitung riil (*badge counter*) untuk jumlah kegiatan Routine dan Non Routine yang aktif hari ini.
+
+- **Logika Jendela Kemunculan Otomatis (*Appearance Window Rules*) Task Routine (`server/routes/logbook.ts`, `src/components/logbook-screen.tsx`)**:
+  - **Aturan Batas Waktu Tampil Berdasarkan Frekuensi / Cadence**:
+    - **Daily**: Muncul terus-menerus setiap hari di tugas hari ini hingga tuntas diselesaikan.
+    - **Weekly**: Mulai muncul di daftar tugas/planning sejak **D-3** (3 hari sebelum batas tanggal target).
+    - **Monthly**: Mulai muncul di tugas/planning sejak **D-7** (7 hari sebelum batas tanggal target).
+    - **Quarterly**: Mulai muncul di tugas/planning sejak **M-1** (1 bulan / 30 hari sebelum batas tanggal target).
+    - **Biannual (Semesteran)**: Mulai muncul di tugas/planning sejak **M-2** (2 bulan / 60 hari sebelum batas tanggal target).
+    - **Yearly (Tahunan)**: Mulai muncul di tugas/planning sejak **M-3** (3 bulan / 90 hari sebelum batas tanggal target).
+  - **Lencana Cadence & Indikator Countdown D-Day**: Setiap kartu tugas Routine menampilkan lencana frekuensi (`🔁 Daily`, `📅 Weekly (D-3)`, `🗓️ Monthly (D-7)`, `📊 Quarterly (M-1)`, `⏳ Biannual (M-2)`, `🎯 Yearly (M-3)`) lengkap dengan info hitungan sisa hari menuju deadline (misal: `H-3`, `H-1`, `Target: Hari Ini!`, atau `Lewat X hr`).
 
 - **Penyelarasan Seksi Quality Assurance (QA) (`src/components/logbook-screen.tsx`, `server/routes/logbook.ts`)**:
   - **Penyatuan Opsi Dropdown & Database**: Mengubah opsi `'Quality Control (QA)'` menjadi `'Quality Assurance'` pada `SECTION_OPTIONS` dan template penugasan agar sepenuhnya sinkron dengan normalisasi profil pengguna (`userSection`) dan rekaman database PostgreSQL.
   - **Pencarian Seksi Cerdas di Server**: Mengimplementasikan pencarian fleksibel *case-insensitive* (`ilike '%quality%' OR ilike '%qa%'`) pada endpoint rute logbook sehingga personil Quality Assurance dapat memfilter dan melihat seluruh penugasan seksinya tanpa hambatan.
-
-- **Sistem Klasifikasi Kegiatan Routine (Daily) & Non-Routine (`src/components/logbook-screen.tsx`, `server/routes/logbook.ts`)**:
-  - **Otomatisasi Task Daily Routine**: Tugas berklasifikasi `Daily` secara otomatis muncul setiap hari di kolom **Fokus Hari Ini** (*Today Tasks*) hingga tugas tersebut tuntas diselesaikan.
-  - **Pengaturan Klasifikasi Fleksibel**: Menyediakan opsi klasifikasi kegiatan (*Daily*, *Weekly*, *Monthly*, *Yearly*, dan *Non Routine*) pada modal penugasan baru (*Create Task*), modal penyesuaian (*Edit Task*), serta template penugasan.
-  - **Filter Jenis Kegiatan pada Toolbar**: Menambahkan dropdown filter (*Semua Kegiatan*, *Routine*, *Daily Routine*, *Non Routine*) di bilah alat utama untuk mempermudah pemilahan fokus kerja.
-  - **Lencana Klasifikasi Visual**: Menampilkan indikator pill `🔁 Daily`, `🔁 Routine`, atau `⚡ Non Routine` pada baris ringkasan kartu maupun bilah lencana rincian tugas.
 
 - **Catatan Subtask Multi-Entry dengan Lencana Angka & Time Tag Presisi (`src/components/logbook-screen.tsx`, `src/components/notion/tasklist-utils.ts`, `server/routes/logbook.ts`)**:
   - **Dukungan Catatan Lebih Dari Satu Per Subtask**: Subtask kini dapat menyimpan riwayat banyak catatan secara beruntun dalam format terstruktur `<!--notes:[...]-->` tanpa batasan satu catatan saja.

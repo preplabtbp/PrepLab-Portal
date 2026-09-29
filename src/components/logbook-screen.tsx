@@ -868,15 +868,121 @@ export function LogbookScreen({
   const [selectedPt, setSelectedPt] = useState<string>(userPt === 'GTS' ? 'GTS' : 'TBP');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [picFilter, setPicFilter] = useState<string>('ALL');
-  const [activityFilter, setActivityFilter] = useState<'ALL' | 'Routine' | 'Daily' | 'Non Routine'>('ALL');
+  // Header Module Mode Switcher: 'ALL' | 'ROUTINE' | 'NON_ROUTINE'
+  const [moduleMode, setModuleMode] = useState<'ALL' | 'ROUTINE' | 'NON_ROUTINE'>('ALL');
+  const [activityFilter, setActivityFilter] = useState<string>('ALL');
+
+  // Helper to determine if a task is routine
+  const isTaskRoutine = (task: LogbookTask) => {
+    const act = (task.activityType || 'Routine').toLowerCase().trim();
+    return !act.includes('non');
+  };
+
+  // Helper to resolve cadence info & D-day appearance for a task
+  const getTaskRoutineInfo = (task: LogbookTask, referenceDateStr?: string) => {
+    const act = (task.activityType || '').toLowerCase().trim();
+    const isNon = act.includes('non');
+    if (isNon) {
+      return {
+        isRoutine: false,
+        cadence: 'Non Routine',
+        label: '⚡ Non Routine',
+        color: 'bg-slate-100 text-slate-700 border-slate-300',
+        windowDesc: 'Harian (Ad-hoc)',
+        dDayText: null
+      };
+    }
+
+    let cadence = task.activityType || 'Daily';
+    if (cadence.toLowerCase() === 'routine' || !cadence) {
+      const bTitle = (task.bulletinTopicTitle || '').toLowerCase();
+      const tTitle = (task.title || '').toLowerCase();
+      const combined = `${bTitle} ${tTitle}`;
+      if (combined.includes('weekly') || combined.includes('mingguan')) cadence = 'Weekly';
+      else if (combined.includes('quarterly') || combined.includes('triwulan')) cadence = 'Quarterly';
+      else if (combined.includes('biannual') || combined.includes('semester')) cadence = 'Biannual';
+      else if (combined.includes('yearly') || combined.includes('annual') || combined.includes('tahunan')) cadence = 'Yearly';
+      else if (combined.includes('monthly') || combined.includes('bulanan')) cadence = 'Monthly';
+      else cadence = 'Daily';
+    }
+
+    const cLower = cadence.toLowerCase();
+    let label = '🔁 Routine';
+    let color = 'bg-teal-50 text-teal-800 border-teal-300';
+    let windowDesc = 'Harian';
+
+    if (cLower.includes('daily')) {
+      label = '🔁 Daily';
+      color = 'bg-teal-50 text-teal-800 border-teal-300';
+      windowDesc = 'Muncul Tiap Hari';
+    } else if (cLower.includes('weekly')) {
+      label = '📅 Weekly';
+      color = 'bg-blue-50 text-blue-800 border-blue-300';
+      windowDesc = 'Muncul Mulai D-3';
+    } else if (cLower.includes('monthly')) {
+      label = '🗓️ Monthly';
+      color = 'bg-indigo-50 text-indigo-800 border-indigo-300';
+      windowDesc = 'Muncul Mulai D-7';
+    } else if (cLower.includes('quarterly')) {
+      label = '📊 Quarterly';
+      color = 'bg-purple-50 text-purple-800 border-purple-300';
+      windowDesc = 'Muncul Mulai M-1';
+    } else if (cLower.includes('biannual')) {
+      label = '⏳ Biannual';
+      color = 'bg-amber-50 text-amber-900 border-amber-300';
+      windowDesc = 'Muncul Mulai M-2';
+    } else if (cLower.includes('yearly')) {
+      label = '🎯 Yearly';
+      color = 'bg-rose-50 text-rose-800 border-rose-300';
+      windowDesc = 'Muncul Mulai M-3';
+    }
+
+    // Calculate D-Day if targetDate exists
+    let dDayText: string | null = null;
+    const deadlineStr = task.targetDate || task.taskDate;
+    if (deadlineStr && referenceDateStr) {
+      const diff = Math.ceil((new Date(deadlineStr).getTime() - new Date(referenceDateStr).getTime()) / (1000 * 60 * 60 * 24));
+      if (diff === 0) dDayText = 'Target: Hari Ini!';
+      else if (diff > 0) dDayText = `H-${diff}`;
+      else dDayText = `Lewat ${Math.abs(diff)} hr`;
+    }
+
+    return {
+      isRoutine: true,
+      cadence,
+      label,
+      color,
+      windowDesc,
+      dDayText
+    };
+  };
+
+  const matchesModuleMode = (task: LogbookTask, mode: 'ALL' | 'ROUTINE' | 'NON_ROUTINE') => {
+    if (mode === 'ALL') return true;
+    const isRoutine = isTaskRoutine(task);
+    if (mode === 'ROUTINE') return isRoutine;
+    if (mode === 'NON_ROUTINE') return !isRoutine;
+    return true;
+  };
 
   const matchesActivityFilter = (task: LogbookTask, filter: string) => {
     if (filter === 'ALL') return true;
-    const act = (task.activityType || 'Routine').toLowerCase();
+    const act = (task.activityType || 'Routine').toLowerCase().trim();
     const isNonRoutine = act.includes('non');
     if (filter === 'Non Routine') return isNonRoutine;
-    if (filter === 'Daily') return !isNonRoutine && (act.includes('daily') || act === 'routine');
-    if (filter === 'Routine') return !isNonRoutine;
+    if (isNonRoutine) return false;
+
+    const info = getTaskRoutineInfo(task);
+    const c = info.cadence.toLowerCase();
+    const f = filter.toLowerCase();
+
+    if (f === 'routine') return true;
+    if (f === 'daily') return c.includes('daily');
+    if (f === 'weekly') return c.includes('week');
+    if (f === 'monthly') return c.includes('month') && !c.includes('biannual');
+    if (f === 'quarterly') return c.includes('quarter') || c.includes('triwulan');
+    if (f === 'biannual') return c.includes('biannual') || c.includes('semester');
+    if (f === 'yearly') return c.includes('year') || c.includes('annual');
     return true;
   };
 
@@ -1875,21 +1981,32 @@ export function LogbookScreen({
     return task.progressPercent || 0;
   };
 
+  // Task classification counters for Header Module Switcher
+  const routineCountToday = useMemo(() => todayTasks.filter(t => isTaskRoutine(t)).length, [todayTasks]);
+  const nonRoutineCountToday = useMemo(() => todayTasks.filter(t => !isTaskRoutine(t)).length, [todayTasks]);
+
   // Filtered Today & Yesterday Lists (Sorted by Urgency then FIFO)
   const filteredToday = useMemo(() => {
     return todayTasks
       .filter(t => {
+        // Enforce: Non-routine tasks in today's column must strictly be for selectedDate
+        const isRoutine = isTaskRoutine(t);
+        if (!isRoutine && t.taskDate !== selectedDate) {
+          return false;
+        }
+
         const matchSearch = !searchQuery || 
           t.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
           t.assigneeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (t.pendingPicName && t.pendingPicName.toLowerCase().includes(searchQuery.toLowerCase())) ||
           (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
         const matchPic = picFilter === 'ALL' || t.assigneeNik.includes(picFilter) || t.assigneeName.includes(picFilter) || (t.pendingPicNik && t.pendingPicNik.includes(picFilter));
+        const matchModule = matchesModuleMode(t, moduleMode);
         const matchActivity = matchesActivityFilter(t, activityFilter);
-        return matchSearch && matchPic && matchActivity;
+        return matchSearch && matchPic && matchModule && matchActivity;
       })
       .sort(sortTasksByUrgencyAndFifo);
-  }, [todayTasks, searchQuery, picFilter, activityFilter]);
+  }, [todayTasks, searchQuery, picFilter, moduleMode, activityFilter, selectedDate]);
 
   // Scope selector for Evaluation Column: 'yesterday' (strict H-1) vs 'all_carryover' (all historical carry overs)
   const [evalScope, setEvalScope] = useState<'yesterday' | 'all_carryover'>('yesterday');
@@ -1907,11 +2024,12 @@ export function LogbookScreen({
           (t.pendingPicName && t.pendingPicName.toLowerCase().includes(searchQuery.toLowerCase())) ||
           (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
         const matchPic = picFilter === 'ALL' || t.assigneeNik.includes(picFilter) || t.assigneeName.includes(picFilter) || (t.pendingPicNik && t.pendingPicNik.includes(picFilter));
+        const matchModule = matchesModuleMode(t, moduleMode);
         const matchActivity = matchesActivityFilter(t, activityFilter);
-        return matchSearch && matchPic && matchActivity;
+        return matchSearch && matchPic && matchModule && matchActivity;
       })
       .sort(sortTasksByUrgencyAndFifo);
-  }, [evalSourceTasks, searchQuery, picFilter, activityFilter]);
+  }, [evalSourceTasks, searchQuery, picFilter, moduleMode, activityFilter]);
 
   // Active Section for Presentation Focus Highlight ('yesterday' | 'today')
   const [activeSection, setActiveSection] = useState<'yesterday' | 'today'>('yesterday');
@@ -2018,6 +2136,7 @@ export function LogbookScreen({
     const picList = parsePicList(task.assigneeNik, task.assigneeName);
     const isOverdue = isTaskOverdue(task.targetDate, task.targetTime, task.status);
     const progressPercent = calculateTaskProgress(task);
+    const routineInfo = getTaskRoutineInfo(task, selectedDate);
 
     // Mode Subtask Status Automation:
     // Jika ada subtask: otomatis Open (0 ceklis), On Progress (1..N-1 ceklis), Closed (full ceklis), dengan pilihan khusus Canceled.
@@ -2074,9 +2193,9 @@ export function LogbookScreen({
             : isDone 
             ? 'border-emerald-200 bg-emerald-50/20 hover:border-emerald-300 hover:bg-emerald-50/40' 
             : isPending
-            ? 'border-amber-200 bg-amber-50/20 hover:border-amber-300 hover:bg-amber-50/40'
+            ? 'border-amber-200 bg-amber-50/20 hover:border-amber-300 hover:bg-amber-50/40' 
             : isInProgress
-            ? 'border-sky-200 bg-sky-50/20 hover:border-sky-300 hover:bg-sky-50/40'
+            ? 'border-sky-200 bg-sky-50/20 hover:border-sky-300 hover:bg-sky-50/40' 
             : 'border-slate-200 bg-white hover:border-teal-300 hover:bg-slate-50/50 shadow-2xs'
         }`}
       >
@@ -2106,6 +2225,16 @@ export function LogbookScreen({
             }`}>
               {task.priority}
             </span>
+
+            {/* Routine Cadence Badge */}
+            <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md border shrink-0 shadow-2xs ${routineInfo.color}`}>
+              {routineInfo.label}
+            </span>
+            {routineInfo.dDayText && !isDone && (
+              <span className="hidden sm:inline-block text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-300 shrink-0">
+                {routineInfo.dDayText}
+              </span>
+            )}
 
             {/* Judul Utama Task */}
             <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -2199,6 +2328,18 @@ export function LogbookScreen({
             <div className="flex flex-wrap items-center gap-2">
               <span className={`text-xs px-2.5 py-1 rounded-lg font-mono font-bold shadow-2xs tracking-wide ${sectionBadgeClass}`}>
                 {task.section}
+              </span>
+
+              {/* Routine Cadence Detail Badge */}
+              <span className={`text-xs px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 shadow-2xs ${routineInfo.color}`}>
+                <span>{routineInfo.label}</span>
+                <span className="opacity-50">•</span>
+                <span>{routineInfo.windowDesc}</span>
+                {routineInfo.dDayText && (
+                  <span className="font-mono font-black text-[11px] bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 rounded shadow-2xs border border-current">
+                    {routineInfo.dDayText}
+                  </span>
+                )}
               </span>
 
               {/* Tanggal Dimulai (Start Date) Badge */}
@@ -2433,9 +2574,14 @@ export function LogbookScreen({
                       {(() => {
                         const bubbleKey = `${task.id}-${item.index}`;
                         const isBubbleOpen = activeNoteBubbleKey === bubbleKey;
-                        const notesList: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                        const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
                           ? item.notes
                           : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+                        const notesList: SubtaskNote[] = [...rawNotes].sort((a, b) => {
+                          const dtA = `${a.date || ''} ${a.time || ''}`;
+                          const dtB = `${b.date || ''} ${b.time || ''}`;
+                          return dtB.localeCompare(dtA);
+                        });
                         const noteCount = notesList.length;
 
                         return (
@@ -2759,6 +2905,61 @@ export function LogbookScreen({
               )}
             </div>
 
+            {/* Header Module Mode Switcher: Semua Modul | Modul Routine | Modul Non Routine */}
+            <div className="flex items-center p-1 rounded-2xl border bg-slate-100/90 dark:bg-slate-800/80 shadow-2xs gap-1">
+              <button
+                type="button"
+                onClick={() => setModuleMode('ALL')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  moduleMode === 'ALL'
+                    ? 'bg-white dark:bg-slate-900 text-teal-800 dark:text-teal-300 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+                title="Tampilkan seluruh modul kegiatan (Routine & Non Routine)"
+              >
+                <ClipboardCheck className="w-3.5 h-3.5" />
+                <span>Semua Modul</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModuleMode('ROUTINE')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  moduleMode === 'ROUTINE'
+                    ? 'bg-teal-700 text-white shadow-xs ring-2 ring-teal-400/40'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-teal-700 dark:hover:text-teal-300'
+                }`}
+                title="Khusus memantau tugas Routine: Daily, Weekly (D-3), Monthly (D-7), Quarterly (M-1), Biannual (M-2), Yearly (M-3)"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Modul Routine</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
+                  moduleMode === 'ROUTINE' ? 'bg-teal-900/60 text-teal-100' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                }`}>
+                  {routineCountToday}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModuleMode('NON_ROUTINE')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  moduleMode === 'NON_ROUTINE'
+                    ? 'bg-amber-600 text-white shadow-xs ring-2 ring-amber-400/40'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-amber-700 dark:hover:text-amber-300'
+                }`}
+                title="Khusus memantau instruksi operasional non rutin / penugasan harian"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Modul Non Routine</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
+                  moduleMode === 'NON_ROUTINE' ? 'bg-amber-800/60 text-amber-100' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                }`}>
+                  {nonRoutineCountToday}
+                </span>
+              </button>
+            </div>
+
             {/* Section & Universe Filters */}
             <div className="flex flex-wrap items-center gap-2">
               {/* Section Filter / Display */}
@@ -2808,10 +3009,10 @@ export function LogbookScreen({
                 <option value="ALL">Semua Universe</option>
               </select>
 
-              {/* Activity / Routine Filter */}
+              {/* Activity / Routine Cadence Filter */}
               <select
                 value={activityFilter}
-                onChange={(e) => setActivityFilter(e.target.value as any)}
+                onChange={(e) => setActivityFilter(e.target.value)}
                 className="px-2.5 py-1 rounded-xl border text-xs font-semibold outline-none cursor-pointer"
                 style={{
                   backgroundColor: 'var(--card-bg, #ffffff)',
@@ -2819,9 +3020,13 @@ export function LogbookScreen({
                   color: 'var(--text-main, #0f172a)'
                 }}
               >
-                <option value="ALL">Semua Kegiatan</option>
-                <option value="Routine">🔁 Routine</option>
-                <option value="Daily">📅 Daily Routine</option>
+                <option value="ALL">Semua Frekuensi</option>
+                <option value="Daily">🔁 Daily (Tiap Hari)</option>
+                <option value="Weekly">📅 Weekly (D-3)</option>
+                <option value="Monthly">🗓️ Monthly (D-7)</option>
+                <option value="Quarterly">📊 Quarterly (M-1)</option>
+                <option value="Biannual">⏳ Biannual (M-2)</option>
+                <option value="Yearly">🎯 Yearly (M-3)</option>
                 <option value="Non Routine">⚡ Non Routine</option>
               </select>
 
@@ -3464,11 +3669,13 @@ export function LogbookScreen({
                       borderColor: 'var(--border-main, #cbd5e1)'
                     }}
                   >
-                    <option value="Daily">🔁 Daily (Tiap Hari)</option>
-                    <option value="Weekly">🔁 Weekly</option>
-                    <option value="Monthly">🔁 Monthly</option>
-                    <option value="Yearly">🔁 Yearly</option>
-                    <option value="Non Routine">⚡ Non Routine</option>
+                    <option value="Daily">🔁 Daily (Muncul Setiap Hari)</option>
+                    <option value="Weekly">📅 Weekly (Muncul Mulai D-3)</option>
+                    <option value="Monthly">🗓️ Monthly (Muncul Mulai D-7)</option>
+                    <option value="Quarterly">📊 Quarterly (Muncul Mulai M-1)</option>
+                    <option value="Biannual">⏳ Biannual (Muncul Mulai M-2)</option>
+                    <option value="Yearly">🎯 Yearly (Muncul Mulai M-3)</option>
+                    <option value="Non Routine">⚡ Non Routine (Penugasan Harian)</option>
                   </select>
                 </div>
 
@@ -3881,11 +4088,13 @@ export function LogbookScreen({
                       color: 'var(--text-main, #0f172a)'
                     }}
                   >
-                    <option value="Daily">🔁 Daily (Tiap Hari)</option>
-                    <option value="Weekly">🔁 Weekly</option>
-                    <option value="Monthly">🔁 Monthly</option>
-                    <option value="Yearly">🔁 Yearly</option>
-                    <option value="Non Routine">⚡ Non Routine</option>
+                    <option value="Daily">🔁 Daily (Muncul Setiap Hari)</option>
+                    <option value="Weekly">📅 Weekly (Muncul Mulai D-3)</option>
+                    <option value="Monthly">🗓️ Monthly (Muncul Mulai D-7)</option>
+                    <option value="Quarterly">📊 Quarterly (Muncul Mulai M-1)</option>
+                    <option value="Biannual">⏳ Biannual (Muncul Mulai M-2)</option>
+                    <option value="Yearly">🎯 Yearly (Muncul Mulai M-3)</option>
+                    <option value="Non Routine">⚡ Non Routine (Penugasan Harian)</option>
                   </select>
                 </div>
 
@@ -4432,8 +4641,8 @@ export function LogbookScreen({
                 </div>
                 <div>
                   <h4 className="font-bold text-sm text-slate-900">Catatan Subtask ({subtaskNoteModal.notes.length})</h4>
-                  <p className="text-[11px] text-slate-500">
-                    {subtaskNoteModal.isReadOnly ? 'Mode Baca Saja (Laporan Kemarin)' : 'Riwayat catatan & penambahan progres'}
+                  <p className="text-[11px] text-teal-700 font-bold">
+                    {subtaskNoteModal.isReadOnly ? 'Mode Baca Saja (Laporan Kemarin)' : '✨ Urutan catatan terbaru tampil di paling atas'}
                   </p>
                 </div>
               </div>
@@ -4456,14 +4665,19 @@ export function LogbookScreen({
 
             {/* Existing Notes List */}
             <div className="space-y-2">
-              <label className="text-xs font-bold block text-slate-700">Daftar Catatan Tersimpan:</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold block text-slate-700">Daftar Catatan Tersimpan:</label>
+                <span className="text-[10px] text-slate-400 font-medium italic">Terbaru di atas</span>
+              </div>
               {subtaskNoteModal.notes.length === 0 ? (
                 <div className="p-3 text-center text-xs text-slate-400 border border-dashed rounded-xl bg-slate-50">
                   Belum ada catatan untuk subtask ini.
                 </div>
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {subtaskNoteModal.notes.map((note) => (
+                  {[...subtaskNoteModal.notes]
+                    .sort((a, b) => (`${b.date || ''} ${b.time || ''}`).localeCompare(`${a.date || ''} ${a.time || ''}`))
+                    .map((note) => (
                     <div 
                       key={note.id} 
                       className="p-2.5 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-1 flex items-start justify-between gap-2"

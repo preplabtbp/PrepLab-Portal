@@ -147,31 +147,92 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
       .where(conditions.length > 0 ? and(...conditions) : sql`1=1`)
       .orderBy(desc(logbookTasks.createdAt));
 
-    // Helper: Identify Daily Routine Tasks
-    const isDailyRoutine = (t: any) => {
-      const act = (t.activityType || '').toLowerCase();
-      return act.includes('daily') || (act === 'routine' && !act.includes('non') && (!t.bulletinTopicTitle || t.bulletinTopicTitle.toLowerCase().includes('daily')));
+    // Helper: Determine appearance threshold window in days before targetDate
+    const getRoutineWindowDays = (cadence: string): number => {
+      const c = (cadence || '').toLowerCase().trim();
+      if (c.includes('daily') || c === 'routine') return 999999; // Continuous every day
+      if (c.includes('weekly') || c.includes('week') || c.includes('mingguan')) return 3; // D-3
+      if ((c.includes('monthly') || c.includes('month') || c.includes('bulanan')) && !c.includes('biannual')) return 7; // D-7
+      if (c.includes('quarterly') || c.includes('quarter') || c.includes('triwulan') || c.includes('3 month')) return 30; // M-1 (~30 days)
+      if (c.includes('biannual') || c.includes('semester') || c.includes('6 month')) return 60; // M-2 (~60 days)
+      if (c.includes('yearly') || c.includes('annual') || c.includes('tahunan') || c.includes('year')) return 90; // M-3 (~90 days)
+      return 999999;
+    };
+
+    // Helper: Determine if task is classified as Routine vs Non Routine
+    const isRoutineTask = (t: any): boolean => {
+      const act = (t.activityType || '').toLowerCase().trim();
+      if (act.includes('non')) return false;
+      return true; // Routine by default if not Non Routine
+    };
+
+    // Helper: Resolve effective cadence for routine tasks
+    const resolveRoutineCadence = (t: any): string => {
+      let act = (t.activityType || 'Daily').trim();
+      if (act.toLowerCase() === 'routine' || !act) {
+        const bTitle = (t.bulletinTopicTitle || '').toLowerCase();
+        const tTitle = (t.title || '').toLowerCase();
+        const combined = `${bTitle} ${tTitle}`;
+        if (combined.includes('weekly') || combined.includes('mingguan')) return 'Weekly';
+        if (combined.includes('quarterly') || combined.includes('triwulan')) return 'Quarterly';
+        if (combined.includes('biannual') || combined.includes('semester')) return 'Biannual';
+        if (combined.includes('yearly') || combined.includes('annual') || combined.includes('tahunan')) return 'Yearly';
+        if (combined.includes('monthly') || combined.includes('bulanan')) return 'Monthly';
+        return 'Daily';
+      }
+      return act;
+    };
+
+    // Helper: Check if a Routine task should appear on targetDateStr based on cadence window
+    const isRoutineEligibleForDate = (t: any, targetDate: string): boolean => {
+      if (!isRoutineTask(t)) return false;
+
+      const isCanceled = (t.status || '').toLowerCase() === 'canceled' || (t.status || '').toLowerCase() === 'cancelled';
+      if (isCanceled) return false;
+
+      const isDone = t.status === 'Resolved' || t.status === 'Done' || t.status === 'Closed';
+      if (isDone) {
+        // If completed, only visible on the exact day it was completed
+        if (t.actualCompletedDate) {
+          try {
+            const compStr = formatDateStr(new Date(t.actualCompletedDate));
+            return compStr === targetDate;
+          } catch (e) {}
+        }
+        return false;
+      }
+
+      const cadence = resolveRoutineCadence(t);
+      const windowDays = getRoutineWindowDays(cadence);
+
+      // Daily Routine appears continuous every day
+      if (windowDays >= 99999) return true;
+
+      // For Weekly (D-3), Monthly (D-7), Quarterly (M-1 / 30d), Biannual (M-2 / 60d), Yearly (M-3 / 90d):
+      const deadlineStr = t.targetDate || t.taskDate;
+      if (!deadlineStr) return true;
+
+      const deadlineTime = new Date(deadlineStr).getTime();
+      const targetTime = new Date(targetDate).getTime();
+      const diffDays = Math.ceil((deadlineTime - targetTime) / (1000 * 60 * 60 * 24));
+
+      // Eligible when within threshold window or overdue before completion
+      return diffDays <= windowDays;
     };
 
     // STRICT SEPARATION & METRICS:
-    // 1. Today tasks: ONLY tasks for targetDateStr + Daily Routine tasks that are active
+    // 1. Today tasks:
+    //    - Non-Routine: ONLY tasks added/planned for targetDateStr
+    //    - Routine: Tasks eligible on targetDateStr based on cadence appearance window
     const todayTasks = allMatching.filter(t => {
-      if (t.taskDate === targetDateStr) return true;
-
-      // Daily Routine: Always appears in Today Tasks every day until completed/canceled
-      if (isDailyRoutine(t)) {
-        const isCanceled = (t.status || '').toLowerCase() === 'canceled';
-        if (!isCanceled) {
-          if (t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed') {
-            return true;
-          }
-          if (t.actualCompletedDate && formatDateStr(new Date(t.actualCompletedDate)) === targetDateStr) {
-            return true;
-          }
-        }
+      const isRoutine = isRoutineTask(t);
+      if (!isRoutine) {
+        // Non-routine: ONLY task added/planned for targetDateStr
+        return t.taskDate === targetDateStr;
       }
 
-      return false;
+      // Routine: check cadence appearance window
+      return isRoutineEligibleForDate(t, targetDateStr);
     });
 
     // 2. Strict Yesterday tasks (H-1): ONLY tasks that had active progress or were completed ON yesterdayDateStr
