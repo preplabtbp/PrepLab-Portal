@@ -66,6 +66,7 @@ import { labbotRouter } from "./server/routes/labbot.js";
 import { kbbiRouter } from "./server/routes/kbbi.js";
 import { gamificationRouter } from "./server/routes/gamification.js";
 import { logbookRouter } from "./server/routes/logbook.js";
+import { clinicRouter } from "./server/routes/clinic.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
 
 async function initDbSchema() {
@@ -228,6 +229,33 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE logbook_tasks ADD COLUMN IF NOT EXISTS pending_pic_name TEXT;`);
     await db.execute(sql`ALTER TABLE logbook_tasks ADD COLUMN IF NOT EXISTS pending_reason TEXT;`);
     await db.execute(sql`ALTER TABLE logbook_tasks ADD COLUMN IF NOT EXISTS draft_change TEXT;`);
+
+    // Clinic Visits Table (Pelaporan Kunjungan Klinik)
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS clinic_visits (
+      id SERIAL PRIMARY KEY,
+      nik TEXT NOT NULL,
+      name TEXT NOT NULL,
+      section TEXT,
+      department TEXT,
+      jabatan TEXT,
+      pt TEXT DEFAULT 'TBP',
+      visit_date TEXT NOT NULL,
+      visit_time TEXT NOT NULL,
+      category TEXT DEFAULT 'Keluhan Sakit',
+      reason TEXT NOT NULL,
+      diagnosis TEXT,
+      action_taken TEXT,
+      recommendation TEXT DEFAULT 'Fit to Work',
+      doctor_or_medic_name TEXT,
+      reporter_nik TEXT,
+      reporter_name TEXT,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_clinic_visits_date ON clinic_visits(visit_date);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_clinic_visits_nik ON clinic_visits(nik);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_clinic_visits_section ON clinic_visits(section);`);
 
     // Auto seed questions if table is empty
     const qCount = await db.select().from(questions).limit(1);
@@ -755,7 +783,8 @@ const app = express();
       url.startsWith('/api/bulletin') ||
       url.startsWith('/api/agenda') ||
       url.startsWith('/api/apd') ||
-      url.startsWith('/api/logbook')
+      url.startsWith('/api/logbook') ||
+      url.startsWith('/api/clinic')
     )) {
       return next();
     }
@@ -790,6 +819,7 @@ const app = express();
   app.use(changelogRouter);
   app.use("/api/gamification", gamificationRouter);
   app.use(logbookRouter);
+  app.use(clinicRouter);
 
   // --- PRESENCE ROUTES ---
   app.get('/api/presence/online', (req, res) => {

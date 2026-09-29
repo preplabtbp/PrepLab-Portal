@@ -692,3 +692,32 @@ export const logbookTasks = pgTable('logbook_tasks', {
   index('idx_logbook_tasks_bulletin').on(t.bulletinPostId),
 ]);
 
+// Define 'clinic_visits' table (Pelaporan & Rekap Kunjungan Klinik Karyawan)
+export const clinicVisits = pgTable('clinic_visits', {
+  id: serial('id').primaryKey(),
+  nik: text('nik').notNull(),
+  name: text('name').notNull(),
+  section: text('section'), // 'Preparation', 'Laboratory', 'Maintenance', 'Quality Assurance', dll.
+  department: text('department'),
+  jabatan: text('jabatan'),
+  pt: text('pt').default('TBP'), // 'TBP', 'GPS', 'GTS'
+  visitDate: text('visit_date').notNull(), // 'YYYY-MM-DD'
+  visitTime: text('visit_time').notNull(), // 'HH:mm'
+  category: text('category').default('Keluhan Sakit'), // 'Keluhan Sakit', 'Pemeriksaan Rutin / Tensi', 'Rawat Luka / P3K', 'Konsultasi Dokter', 'Pengambilan Obat', 'Surat Sakit / Izin', 'Darurat / Fatigue'
+  reason: text('reason').notNull(), // Alasan berkunjung / keluhan detail
+  diagnosis: text('diagnosis'), // Diagnosa sementara / hasil pemeriksaan
+  actionTaken: text('action_taken'), // Tindakan medis / obat yang diberikan
+  recommendation: text('recommendation').default('Fit to Work'), // 'Fit to Work', 'Istirahat di Mess (1 Hari)', 'Istirahat di Mess (2-3 Hari)', 'Rujuk ke RS Luar', 'Bekerja dengan Batasan', 'Observasi di Klinik'
+  doctorOrMedicName: text('doctor_or_medic_name'), // Tenaga medis / paramedik yang melayani
+  reporterNik: text('reporter_nik'), // NIK pengguna yang menginput
+  reporterName: text('reporter_name'), // Nama pengguna yang menginput
+  notes: text('notes'), // Catatan tambahan / instruksi tindak lanjut
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  index('idx_clinic_visits_date').on(t.visitDate),
+  index('idx_clinic_visits_nik').on(t.nik),
+  index('idx_clinic_visits_section').on(t.section),
+  index('idx_clinic_visits_category').on(t.category),
+]);
+

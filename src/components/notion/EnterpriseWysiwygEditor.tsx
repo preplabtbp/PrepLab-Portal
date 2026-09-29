@@ -48,11 +48,11 @@ interface SubtaskItem {
 }
 
 const parseValueToSubtasks = (val?: string): SubtaskItem[] => {
-  if (!val) return [{ id: '1', text: '', checked: false }];
+  if (!val) return [{ id: 'subtask-initial-1', text: '', checked: false }];
   const parsed = parseTasklist(val);
   if (parsed.items.length > 0) {
     return parsed.items.map((it, idx) => ({
-      id: `item-${idx}-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      id: `subtask-${idx}-${it.text.slice(0, 15).replace(/\W/g, '') || idx}`,
       checked: it.checked,
       text: (it.text || '').replace(/<!--[\s\S]*?-->/gi, '').replace(/<!--.*$/gi, '').trim(),
       notes: it.notes,
@@ -60,7 +60,7 @@ const parseValueToSubtasks = (val?: string): SubtaskItem[] => {
       noteDate: it.noteDate
     }));
   }
-  return [{ id: '1', text: '', checked: false }];
+  return [{ id: 'subtask-initial-1', text: '', checked: false }];
 };
 
 const parseValueToNotes = (val?: string): string => {
@@ -92,6 +92,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
 
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
   const editorRef = useRef<HTMLDivElement>(null);
+  const lastEmittedValueRef = useRef<string | null>(null);
+  const subtaskInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Subtask drafts for checklist mode (Clean of HTML comments)
   const [subtasks, setSubtasks] = useState<SubtaskItem[]>(() => parseValueToSubtasks(value));
@@ -107,6 +109,7 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
     if (!editorRef.current) return;
     const html = editorRef.current.innerHTML;
     const md = visualHtmlToMarkdown(html);
+    lastEmittedValueRef.current = md;
     setTextContent(md);
     onChange(md);
   };
@@ -114,6 +117,13 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
   // Synchronize when value changes externally or mode switch
   useEffect(() => {
     const norm = (value || '').replace(/<br\s*\/?>/gi, '\n');
+
+    // Skip if value update was triggered internally from our own onChange
+    if (norm === lastEmittedValueRef.current) {
+      return;
+    }
+    lastEmittedValueRef.current = norm;
+
     setTextContent(norm);
     if (editorRef.current && mode === 'text') {
       const currentMd = visualHtmlToMarkdown(editorRef.current.innerHTML);
@@ -125,7 +135,7 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
     const parsed = parseTasklist(norm);
     if (parsed.hasTasklist) {
       setSubtasks(parsed.items.map((it, idx) => ({
-        id: `item-${idx}-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+        id: `subtask-${idx}-${it.text.slice(0, 15).replace(/\W/g, '') || idx}`,
         checked: it.checked,
         text: (it.text || '').replace(/<!--[\s\S]*?-->/gi, '').replace(/<!--.*$/gi, '').trim(),
         notes: it.notes,
@@ -133,6 +143,9 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
         noteDate: it.noteDate
       })));
       setNotes(parsed.cleanText || '');
+    } else if (!norm.trim()) {
+      setSubtasks([{ id: 'subtask-initial-1', text: '', checked: false }]);
+      setNotes('');
     }
   }, [value, mode]);
 
@@ -167,6 +180,7 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
       combined = cleanNotes;
     }
 
+    lastEmittedValueRef.current = combined;
     setTextContent(combined);
     onChange(combined);
   };
@@ -305,7 +319,8 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
   };
 
   const handleAddSubtask = (afterIndex?: number) => {
-    const newItem: SubtaskItem = { id: `item-${Date.now()}`, text: '', checked: false };
+    const newItemId = `subtask-add-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newItem: SubtaskItem = { id: newItemId, text: '', checked: false };
     let updated: SubtaskItem[] = [];
     if (afterIndex !== undefined) {
       updated = [
@@ -318,11 +333,16 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
     }
     setSubtasks(updated);
     emitChecklistChange(updated, notes);
+
+    // Auto-focus the newly added subtask input
+    setTimeout(() => {
+      subtaskInputRefs.current[newItemId]?.focus();
+    }, 50);
   };
 
   const handleDeleteSubtask = (index: number) => {
     if (subtasks.length <= 1) {
-      const reset = [{ id: '1', text: '', checked: false }];
+      const reset = [{ id: 'subtask-initial-1', text: '', checked: false }];
       setSubtasks(reset);
       emitChecklistChange(reset, notes);
       return;
@@ -804,6 +824,7 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
                   </button>
 
                   <input
+                    ref={(el) => { subtaskInputRefs.current[item.id] = el; }}
                     type="text"
                     value={item.text}
                     onChange={(e) => handleSubtaskTextChange(index, e.target.value)}

@@ -5,7 +5,7 @@ import {
   CheckSquare, Eye, AlertTriangle, ClipboardCheck, Package, Box, FileText, 
   Settings, BookOpen, Info, Briefcase, Users, Calendar, Clock, Utensils, 
   Receipt, LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink, Sparkles,
-  ClipboardList
+  ClipboardList, BriefcaseMedical
 } from 'lucide-react';
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
@@ -83,6 +83,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
       bgIcon: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20',
       items: [
         { id: 'weekly-inspection', title: "Inspeksi Mingguan", desc: "Area & kelengkapan", icon: <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('weekly-inspection') },
+        { id: 'clinic', title: "Kunjungan Klinik", desc: "Pelaporan & Rekap Kunjungan Klinik", icon: <BriefcaseMedical className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('clinic') },
         { id: 'ticket', title: "Rekapan Temuan Inspeksi", desc: "Laporan temuan unsafe", icon: <Eye className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('ticket') },
         { id: 'kta', title: "KTA / TTA", desc: "Laporan Observasi KTA & TTA", icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => setShowKtaConfirmation(true) },
         { id: 'general-inspection', title: "Submit General Inspection", desc: "Form inspeksi tim safety", icon: <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => window.open('https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform', '_blank', 'noopener,noreferrer') },

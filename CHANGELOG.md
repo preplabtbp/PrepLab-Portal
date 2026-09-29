@@ -2,6 +2,34 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.36] - 2026-09-30
+
+### 🏥 Modul Baru Pelaporan & Rekap Kunjungan Klinik (Enterprise Healthcare Portal)
+
+- **Formulir Pendaftaran & Autofill Otomatis Karyawan (`src/components/clinic-screen.tsx`, `server/routes/clinic.ts`)**:
+  - **Pencarian Cerdas NIK / Nama**: Dilengkapi fitur modal pencarian karyawan secara instan. Ketika pengguna memilih karyawan atau memasukkan NIK/Nama, sistem secara otomatis melakukan *autofill* pada data Nama, NIK, Seksi, Departemen, Jabatan, dan Perusahaan (PT).
+  - **Pemilih Waktu Kunjungan Presisi**: Kalender interaktif untuk pemilihan tanggal kunjungan serta *time picker* untuk pencatatan jam kunjungan (lengkap dengan tombol preset cepat *"Sekarang"*).
+  - **Pencatatan Alasan & Kategori Kunjungan**: Mendukung input komprehensif alasan berkunjung / keluhan, kategori kondisi (*Sakit Ringan, Sakit Sedang, Kecelakaan Kerja, Kontrol Rutin, Surat Dokter, dll.*), diagnosis awal, tindakan penanganan, dan nama dokter / paramedis yang bertugas.
+  - **Status Rekomendasi Medis**: Klasifikasi penanganan karyawan (*Fit to Work*, *Istirahat di Mess / Bed Rest*, *Rujuk ke RS Eksternal*, atau *Kontrol Ulang*).
+
+- **Sajian Rekap & Analitik Kelas Enterprise (`src/components/clinic-screen.tsx`, `server/routes/clinic.ts`)**:
+  - **Kartu Metrik Eksekutif (KPI Cards)**: Menampilkan ringkasan eksekutif secara *real-time*: Kunjungan Hari Ini, Kunjungan Bulan Ini, Jumlah Karyawan Istirahat Mess (Bed Rest), Karyawan Fit to Work, dan Seksi dengan Kunjungan Terbanyak.
+  - **Bilah Filter Multi-Dimensi**: Penyaringan data berdasarkan rentang waktu (*Hari Ini, 7 Hari Terakhir, Bulan Ini, Custom Date Range*), Seksi kerja, Kategori keluhan, Rekomendasi medis, serta kotak pencarian teks *realtime* (Nama, NIK, Keluhan, atau Paramedis).
+  - **Tabel Data Enterprise Responsif**: Tampilan data tabular modern dengan lencana status berwarna, visualisasi data lengkap, serta modal tinjauan detail rekam kunjungan perorangan.
+  - **Fitur Ekspor & Integrasi Manajemen**:
+    - **Ekspor CSV**: Mengunduh seluruh rekap data kunjungan terfilter ke dalam format spreadsheet Excel/CSV.
+    - **Salin Laporan WhatsApp Manajemen**: Pembuat ringkasan laporan otomatis berformat resmi WhatsApp untuk diteruskan langsung ke grup koordinasi pimpinan / HSE.
+    - **Cetak Laporan**: Dukungan tata letak ramah cetak (*print-friendly view*).
+
+- **Integrasi Database, Pengecualian Injeksi Filter PT & Rute Navigasi (`src/db/schema.ts`, `server.ts`, `server/routes/clinic.ts`, `src/main.tsx`, `src/App.tsx`, `src/components/ModulesDrawer.tsx`, `src/components/modules-screen.tsx`)**:
+  - **Tabel Database PostgreSQL `clinic_visits`**: Skema tabel terstruktur lengkap dengan indeks performa pada kolom tanggal, NIK, seksi, dan kategori.
+  - **Perbaikan Rekap Data Kunjungan Karyawan Lintas PT**: Menangani bug di mana data kunjungan yang diinput (misalnya personil dengan entitas PT GPS/TBP) tidak muncul di rekapan akibat injeksi otomatis parameter PT oleh interceptor fetch global. Kini rute `/api/clinic` dikecualikan dari pemaksaan filter PT default, query server menyatukan entitas operasional TBP & GPS, serta ditambahkan kontrol dropdown filter PT (*Semua PT*, *TBP / GPS*, *GTS*) di bilah filter.
+  - **Registrasi Rute & Modul Drawer**: Rute `/clinic` dan `/kunjungan-klinik` dapat diakses langsung melalui laci navigasi modul (*Modules Drawer*) maupun halaman katalog modul (*Modules Screen*) di bawah kelompok Observasi & Pelaporan.
+
+- **Perbaikan Input Subtask & Stabilitas Kursor pada Editor Log Book (`src/components/notion/EnterpriseWysiwygEditor.tsx`)**:
+  - **Eliminasi Re-mount DOM & Lonjakan Fokus (*Focus Jump Bug*)**: Memperbaiki bug di mana setiap pengetikan 1 karakter pada baris subtask baru menyebabkan kursor/seleksi seketika terlempar ke tombol *"Tambah Baris Tugas (Enter)"*. Masalah ini disebabkan oleh pembaharuan state internal yang memicu re-parse dan men-generate ID acak baru pada tiap ketukan tombol sehingga React me-unmount elemen input.
+  - **Tracking Nilai Emisi & ID Subtask Stabil**: Menambahkan referensi pelacak `lastEmittedValueRef` agar pembaharuan nilai markdown internal tidak memicu siklus re-parse ulang yang destruktif, menggunakan ID subtask yang stabil, dan menambahkan *auto-focus* otomatis langsung ke input subtask baru ketika tombol tambah baris ditekan.
+
 ## [2.9.35] - 2026-09-29
 
 ### 🛠️ Perbaikan Tampilan Kode Catatan Subtask, Sanitasi Tombol Enter/Shift+Enter, Indikator Tugas Non Routine & Penamaan Bilah Modul Log Book
