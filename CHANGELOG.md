@@ -4,19 +4,18 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
 
 ## [2.9.37] - 2026-09-30
 
-### 🎯 Fitur Drag & Drop Penjadwalan Tugas Log Book & Fokus Khusus Task Hari Ini (Planning & Arahan)
+### 🎯 Fitur Drag & Drop Penjadwalan Tugas Log Book & Preservasi Riwayat Tab Kiri (Planning & Arahan)
 
-- **Fokus Ketat Kolom 2 "Planning & Arahan Hari Ini" (`server/routes/logbook.ts`, `src/components/logbook-screen.tsx`)**:
-  - **Penyaringan Presisi Hanya Task Hari Ini**: Kolom *"2. Planning & Arahan Hari Ini"* kini secara ketat hanya memuat tugas-tugas yang memang direncanakan dan ditargetkan untuk diprogress pada hari yang dipilih (`taskDate === selectedDate`). Rutinitas atau kegiatan yang belum dijadwalkan tidak lagi otomatis membanjiri planning hari ini.
-  - **Dukungan Drag and Drop Antar Kolom (*Interactive HTML5 Drag & Drop*)**:
-    - **Menambahkan Task ke Planning Hari Ini**: Pengguna dapat langsung men-drag (menyeret) kartu tugas dari kolom kiri (*1. Progres & Evaluasi*) ke kolom kanan (*2. Planning & Arahan Hari Ini*). Kartu akan berpindah tanggal ke hari ini secara mulus (*optimistic update* seketika + sinkronisasi API).
-    - **Membatalkan / Mengembalikan Task ke Backlog**: Sebaliknya, jika suatu tugas tidak jadi dikerjakan atau diprogress hari ini, pengguna cukup men-drag kartu tugas tersebut dari kolom Planning kembali ke kolom Progres & Evaluasi di sebelah kiri.
-  - **Indikator Visual & Zona Lepas (*Drop Zone Effects*)**:
+- **Preservasi Riwayat Tab Kiri & Multi-View Scheduling (`src/db/schema.ts`, `server/routes/logbook.ts`, `src/components/logbook-screen.tsx`)**:
+  - **Tugas Tetap Berada di Tab Kiri**: Tugas yang di-drag atau dijadwalkan dari tab kiri (*1. Progres & Evaluasi* — baik dari sub-tab *Report Kemarin* maupun *Backlog/Carry-Over*) **tetap dipertahankan di tab asalnya** sebagai data historis dan evaluasi kerja, namun kini **juga muncul di kolom kanan** (*2. Planning & Arahan Hari Ini*) sebagai target progres hari ini.
+  - **Skema `planned_date` Database**: Menambahkan kolom `planned_date` pada tabel `logbook_tasks`. Tugas yang dijadwalkan tidak mengubah `taskDate` (tanggal asal/pembuatan tugas), melainkan merekam `plannedDate` untuk hari yang dipilih, sehingga rekapan pencapaian kemarin dan backlog tidak hilang atau terhapus.
+  - **Indikator Visual Tugas Terjadwal di Kolom Kiri**: Kartu tugas di kolom kiri yang telah dijadwalkan ke hari ini menampilkan lencana status hijau **"✅ Di Planning Hari Ini"** serta tombol cepat **"Batal"** untuk menghapus dari planning hari ini tanpa menghapus tugas dari riwayat kemarin.
+  - **Dukungan Drag and Drop Dua Arah (*Interactive HTML5 Drag & Drop*)**:
+    - **Menambahkan Task ke Planning Hari Ini**: Pengguna dapat langsung men-drag (menyeret) kartu tugas dari kolom kiri (*1. Progres & Evaluasi*) ke kolom kanan (*2. Planning & Arahan Hari Ini*). Tugas seketika muncul di planning hari ini (*optimistic update* + sinkronisasi API).
+    - **Membatalkan / Menghapus dari Planning Hari Ini**: Sebaliknya, jika suatu tugas batal dikerjakan hari ini, pengguna dapat men-drag kartu tugas tersebut dari kolom Planning kembali ke kolom kiri, atau menekan tombol **"Batal Hari Ini"** / **"Batal"**. Kartu tugas di kolom kanan hilang, sementara kartu di kolom kiri tetap ada seperti semula.
+  - **Indikator Zona Lepas (*Drop Zone Effects*)**:
     - Kartu tugas dilengkapi pegangan seret (*drag grip handle*) dengan kursor `grab`/`grabbing`.
-    - Ketika kartu sedang ditarik di atas kolom tujuan, area kolom menampilkan bingkai putus-putus (*dashed border*), bayangan menyala, dan spanduk petunjuk animasi (*drop indicator banner*).
-  - **Tombol Pintas Fallback (*One-Click Action Button*)**:
-    - Tersedia tombol cepat **"Progress Hari Ini"** pada kartu tugas backlog/carry-over di kolom kiri.
-    - Tersedia tombol cepat **"Batal Hari Ini"** pada kartu tugas di kolom kanan, memudahkan operasional pada perangkat layar sentuh (*mobile/tablet*) tanpa harus melakukan drag & drop manual.
+    - Kolom tujuan menampilkan bingkai putus-putus (*dashed border*), efek pencahayaan, dan spanduk petunjuk animasi (*drop indicator banner*).
 
 ## [2.9.36] - 2026-09-30
 

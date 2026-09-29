@@ -673,6 +673,7 @@ export const logbookTasks = pgTable('logbook_tasks', {
   activityType: text('activity_type').default('Routine'), // 'Routine', 'Non Routine', 'Periodic', 'Special Task'
   progressPercent: integer('progress_percent').default(0),
   taskDate: text('task_date').notNull(), // 'YYYY-MM-DD'
+  plannedDate: text('planned_date'), // Tanggal pelaksanaan/planning yang dijadwalkan ('YYYY-MM-DD' atau comma-separated)
   targetDate: text('target_date'), // Deadline / tanggal target
   targetTime: text('target_time').default('23:59'), // Batas jam penyelesaian (HH:mm), default '23:59' (jam 12 malam)
   actualCompletedDate: timestamp('actual_completed_date'),

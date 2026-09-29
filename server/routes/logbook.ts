@@ -220,18 +220,33 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
       return diffDays <= windowDays;
     };
 
+    // Helper to check if task is planned/scheduled for targetDateStr
+    const isTaskPlannedForDate = (t: any, targetDate: string): boolean => {
+      if (t.taskDate === targetDate) return true;
+      if (!t.plannedDate) return false;
+      const dates = String(t.plannedDate).split(',').map((d: string) => d.trim());
+      return dates.includes(targetDate);
+    };
+
     // STRICT SEPARATION & METRICS:
     // 1. Today tasks:
     //    - STRICTLY tasks planned/scheduled to be progressed on targetDateStr (today)
+    //    - Either originally created for targetDateStr, OR explicitly scheduled/planned for targetDateStr (plannedDate)
     const todayTasks = allMatching.filter(t => {
-      return t.taskDate === targetDateStr;
+      return isTaskPlannedForDate(t, targetDateStr);
     });
 
     // 2. Strict Yesterday tasks (H-1): ONLY tasks that had active progress or were completed ON yesterdayDateStr
-    // (Tasks checked 2+ days ago or notes added 2+ days ago are strictly excluded from yesterday's accomplishments)
+    // NOTE: Tasks that are also scheduled in today's planning REMAIN visible in yesterday's accomplishments/evaluations!
     const yesterdayTasks = allMatching.filter(t => {
-      // Exclude if already in today's planning
-      if (t.taskDate === targetDateStr) return false;
+      // Exclude tasks originally created today (unless they had actual accomplishments yesterday)
+      if (t.taskDate === targetDateStr && !t.actualCompletedDate) {
+        const desc = t.description || '';
+        const hasYesterdayCheck = desc.includes(`checkedDate: ${yesterdayDateStr}`) || desc.includes(`checkedDate:${yesterdayDateStr}`);
+        const hasYesterdayNote = desc.includes(`"date":"${yesterdayDateStr}"`) || desc.includes(`noteDate:${yesterdayDateStr}`);
+        if (!hasYesterdayCheck && !hasYesterdayNote) return false;
+      }
+
       // If completed before yesterday (2+ days ago), strictly exclude
       if (t.actualCompletedDate) {
         try {
@@ -275,8 +290,8 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
     });
 
     // 3. Carry Over tasks: All past unfinished tasks (Open, In Progress, Pending) before targetDateStr
+    // NOTE: Tasks scheduled in today's planning REMAIN visible in carry-over/backlog as their origin record!
     const carryOverTasks = allMatching.filter(t => {
-      if (t.taskDate === targetDateStr) return false;
       if (t.taskDate < targetDateStr && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed') return true;
       return false;
     });

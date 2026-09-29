@@ -82,6 +82,7 @@ interface LogbookTask {
   activityType: string;
   progressPercent: number;
   taskDate: string;
+  plannedDate?: string | null;
   targetDate: string;
   targetTime?: string | null;
   actualCompletedDate: string | null;
@@ -1902,16 +1903,35 @@ export function LogbookScreen({
 
   // Drag & Drop Moving Tasks Between Progres & Evaluasi <--> Planning & Arahan Hari Ini
   const handleMoveTaskToToday = async (taskId: number) => {
-    const taskToMove = carryOverTasks.find(t => t.id === taskId) || yesterdayTasks.find(t => t.id === taskId);
-    if (!taskToMove) return;
+    const taskToSchedule = carryOverTasks.find(t => t.id === taskId) || yesterdayTasks.find(t => t.id === taskId) || todayTasks.find(t => t.id === taskId);
+    if (!taskToSchedule) return;
 
-    // Optimistic UI update
-    const updatedTask = { ...taskToMove, taskDate: selectedDate };
-    setTodayTasks(prev => [updatedTask, ...prev.filter(t => t.id !== taskId)]);
-    setCarryOverTasks(prev => prev.filter(t => t.id !== taskId));
-    setYesterdayTasks(prev => prev.filter(t => t.id !== taskId));
+    // Check if already in today's planning
+    const existingDates = (taskToSchedule.plannedDate || '').split(',').map(d => d.trim()).filter(Boolean);
+    const isAlreadyPlanned = taskToSchedule.taskDate === selectedDate || existingDates.includes(selectedDate);
+    if (isAlreadyPlanned && todayTasks.some(t => t.id === taskId)) {
+      toast.info(`"${taskToSchedule.title}" sudah ada di Planning Hari Ini`, { icon: 'ℹ️' });
+      return;
+    }
 
-    toast.success(`"${taskToMove.title}" dijadwalkan untuk diprogress Hari Ini!`, {
+    const updatedDates = Array.from(new Set([...existingDates, selectedDate])).join(',');
+    const updatedTask: LogbookTask = { ...taskToSchedule, plannedDate: updatedDates };
+
+    // Optimistic UI update:
+    // 1. Add to todayTasks (Planning & Arahan Hari Ini)
+    setTodayTasks(prev => {
+      const exists = prev.some(t => t.id === taskId);
+      if (exists) {
+        return prev.map(t => t.id === taskId ? updatedTask : t);
+      }
+      return [updatedTask, ...prev];
+    });
+
+    // 2. KEEP in carryOverTasks and yesterdayTasks, but update plannedDate on them
+    setCarryOverTasks(prev => prev.map(t => t.id === taskId ? { ...t, plannedDate: updatedDates } : t));
+    setYesterdayTasks(prev => prev.map(t => t.id === taskId ? { ...t, plannedDate: updatedDates } : t));
+
+    toast.success(`"${taskToSchedule.title}" dijadwalkan ke Planning Hari Ini!`, {
       icon: '📋'
     });
 
@@ -1920,13 +1940,13 @@ export function LogbookScreen({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          taskDate: selectedDate,
+          plannedDate: updatedDates,
           updaterNik: inspectorNik || 'system'
         })
       });
       const json = await res.json();
       if (json.status !== 'success') {
-        toast.error(json.message || 'Gagal memindahkan tugas');
+        toast.error(json.message || 'Gagal menjadwalkan tugas');
         fetchTasks();
       }
     } catch (err) {
@@ -1936,18 +1956,55 @@ export function LogbookScreen({
   };
 
   const handleMoveTaskToBacklog = async (taskId: number) => {
-    const taskToMove = todayTasks.find(t => t.id === taskId);
-    if (!taskToMove) return;
+    const taskToRemove = todayTasks.find(t => t.id === taskId) || carryOverTasks.find(t => t.id === taskId) || yesterdayTasks.find(t => t.id === taskId);
+    if (!taskToRemove) return;
 
-    const yDate = yesterdayDateStr;
+    // If task was originally created today (taskDate === selectedDate):
+    // Move its taskDate to yesterdayDateStr so it becomes a backlog item
+    if (taskToRemove.taskDate === selectedDate) {
+      const yDate = yesterdayDateStr;
+      const updatedTask: LogbookTask = { ...taskToRemove, taskDate: yDate, plannedDate: null };
 
-    // Optimistic UI update
-    const updatedTask = { ...taskToMove, taskDate: yDate };
+      setTodayTasks(prev => prev.filter(t => t.id !== taskId));
+      setCarryOverTasks(prev => [updatedTask, ...prev.filter(t => t.id !== taskId)]);
+      setYesterdayTasks(prev => [updatedTask, ...prev.filter(t => t.id !== taskId)]);
+
+      toast.info(`"${taskToRemove.title}" batal diprogress hari ini (dipindahkan ke Backlog)`, {
+        icon: '⏳'
+      });
+
+      try {
+        const res = await fetch(`/api/logbook/tasks/${taskId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            taskDate: yDate,
+            plannedDate: null,
+            updaterNik: inspectorNik || 'system'
+          })
+        });
+        const json = await res.json();
+        if (json.status !== 'success') {
+          toast.error(json.message || 'Gagal membatalkan tugas');
+          fetchTasks();
+        }
+      } catch (err) {
+        toast.error('Gagal terhubung ke server');
+        fetchTasks();
+      }
+      return;
+    }
+
+    // If task was from yesterday/backlog (taskDate !== selectedDate):
+    // Simply remove selectedDate from plannedDate! Task stays in yesterday / backlog untouched!
+    const existingDates = (taskToRemove.plannedDate || '').split(',').map(d => d.trim()).filter(Boolean);
+    const remainingDates = existingDates.filter(d => d !== selectedDate).join(',') || null;
+
     setTodayTasks(prev => prev.filter(t => t.id !== taskId));
-    setCarryOverTasks(prev => [updatedTask, ...prev.filter(t => t.id !== taskId)]);
-    setYesterdayTasks(prev => [updatedTask, ...prev.filter(t => t.id !== taskId)]);
+    setCarryOverTasks(prev => prev.map(t => t.id === taskId ? { ...t, plannedDate: remainingDates } : t));
+    setYesterdayTasks(prev => prev.map(t => t.id === taskId ? { ...t, plannedDate: remainingDates } : t));
 
-    toast.info(`"${taskToMove.title}" batal diprogress hari ini (kembali ke Progres & Evaluasi / Backlog)`, {
+    toast.info(`"${taskToRemove.title}" batal diprogress hari ini (tetap ada di Progres & Evaluasi)`, {
       icon: '⏳'
     });
 
@@ -1956,13 +2013,13 @@ export function LogbookScreen({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          taskDate: yDate,
+          plannedDate: remainingDates,
           updaterNik: inspectorNik || 'system'
         })
       });
       const json = await res.json();
       if (json.status !== 'success') {
-        toast.error(json.message || 'Gagal mengembalikan tugas');
+        toast.error(json.message || 'Gagal membatalkan tugas dari planning');
         fetchTasks();
       }
     } catch (err) {
@@ -2096,7 +2153,8 @@ export function LogbookScreen({
     return todayTasks
       .filter(t => {
         // Enforce: tasks in today's column must strictly be planned for selectedDate
-        if (t.taskDate !== selectedDate) {
+        const isPlanned = t.taskDate === selectedDate || Boolean(t.plannedDate && t.plannedDate.split(',').map((d: string) => d.trim()).includes(selectedDate));
+        if (!isPlanned) {
           return false;
         }
 
@@ -2231,7 +2289,7 @@ export function LogbookScreen({
   };
 
   // Enterprise Minimalist Task Row Renderer with Click-to-Expand Details
-  const renderTaskCard = (task: LogbookTask, isCarryOver: boolean, isReadOnly: boolean = false) => {
+  const renderTaskCard = (task: LogbookTask, isYesterday: boolean, isReadOnly: boolean = false) => {
     const parsed = parseTasklist(task.description || '');
     const hasSubtasks = parsed.hasTasklist && parsed.total > 0;
     const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
@@ -2294,9 +2352,10 @@ export function LogbookScreen({
         key={task.id}
         draggable={true}
         onDragStart={(e) => {
-          e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: task.id, fromColumn: isCarryOver ? 'progress' : 'planning' }));
+          const fromCol = isYesterday ? 'progress' : 'planning';
+          e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: task.id, fromColumn: fromCol }));
           setDraggedLogbookTaskId(task.id);
-          setDragSourceColumn(isCarryOver ? 'progress' : 'planning');
+          setDragSourceColumn(fromCol);
         }}
         onDragEnd={() => {
           setDraggedLogbookTaskId(null);
@@ -2328,7 +2387,7 @@ export function LogbookScreen({
             {/* Drag Handle */}
             <div 
               className="p-1 text-slate-300 group-hover:text-teal-600 transition-colors shrink-0"
-              title={isCarryOver ? "Tarik (Drag) ke Planning & Arahan untuk diprogress hari ini" : "Tarik (Drag) kembali ke Progres & Evaluasi jika tidak jadi diprogress"}
+              title={isYesterday ? "Tarik (Drag) ke Planning & Arahan untuk diprogress hari ini" : "Tarik (Drag) kembali ke Progres & Evaluasi jika tidak jadi diprogress"}
             >
               <GripVertical className="w-3.5 h-3.5" />
             </div>
@@ -2393,19 +2452,40 @@ export function LogbookScreen({
           >
             <div className="flex items-center gap-1.5">
               {/* Quick Move / Drag Alternative Button */}
-              {isCarryOver ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleMoveTaskToToday(task.id);
-                  }}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all cursor-pointer active:scale-95 shrink-0"
-                  title="Tarik (drag) atau klik untuk jadwalkan diprogress Hari Ini"
-                >
-                  <ArrowRight className="w-3 h-3 stroke-[3]" />
-                  <span className="hidden sm:inline">Progress Hari Ini</span>
-                </button>
+              {isYesterday ? (
+                Boolean(todayTasks.some(t => t.id === task.id) || (task.plannedDate && task.plannedDate.split(',').map(d => d.trim()).includes(selectedDate))) ? (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-teal-100 text-teal-800 border border-teal-300">
+                      <Check className="w-3 h-3 text-teal-600 stroke-[3]" />
+                      <span>Di Planning Hari Ini</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveTaskToBacklog(task.id);
+                      }}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-700 border border-slate-200 hover:border-rose-300 transition-all cursor-pointer shrink-0"
+                      title="Batalkan dari Planning Hari Ini"
+                    >
+                      <X className="w-3 h-3 text-rose-500" />
+                      <span className="hidden sm:inline">Batal</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMoveTaskToToday(task.id);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all cursor-pointer active:scale-95 shrink-0"
+                    title="Tarik (drag) atau klik untuk jadwalkan diprogress Hari Ini"
+                  >
+                    <ArrowRight className="w-3 h-3 stroke-[3]" />
+                    <span className="hidden sm:inline">Progress Hari Ini</span>
+                  </button>
+                )
               ) : (
                 <button
                   type="button"
@@ -2414,7 +2494,7 @@ export function LogbookScreen({
                     handleMoveTaskToBacklog(task.id);
                   }}
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-amber-100 text-slate-600 hover:text-amber-900 border border-slate-200 hover:border-amber-300 transition-all cursor-pointer shrink-0"
-                  title="Tarik (drag) atau klik jika tidak jadi diprogress hari ini (kembalikan ke Progres & Evaluasi / Backlog)"
+                  title="Tarik (drag) atau klik jika tidak jadi diprogress hari ini"
                 >
                   <ArrowLeft className="w-3 h-3 text-amber-600" />
                   <span className="hidden sm:inline">Batal Hari Ini</span>
@@ -2911,15 +2991,26 @@ export function LogbookScreen({
                 </div>
               )}
 
-              {!isReadOnly && isCarryOver && !isDone && (
-                <button
-                  type="button"
-                  onClick={() => handleCarryOverTask(task)}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white transition-all cursor-pointer shadow-xs active:scale-95"
-                >
-                  <ArrowRight className="w-4 h-4" />
-                  <span>Lanjutkan ke Fokus Hari Ini</span>
-                </button>
+              {!isReadOnly && isYesterday && !isDone && (
+                Boolean(todayTasks.some(t => t.id === task.id) || (task.plannedDate && task.plannedDate.split(',').map(d => d.trim()).includes(selectedDate))) ? (
+                  <button
+                    type="button"
+                    onClick={() => handleMoveTaskToBacklog(task.id)}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 border border-slate-300 hover:border-rose-300 transition-all cursor-pointer shadow-xs active:scale-95"
+                  >
+                    <X className="w-4 h-4 text-rose-500" />
+                    <span>Batalkan dari Planning Hari Ini</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleMoveTaskToToday(task.id)}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white transition-all cursor-pointer shadow-xs active:scale-95"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                    <span>Lanjutkan ke Planning Hari Ini</span>
+                  </button>
+                )
               )}
             </div>
           </div>
