@@ -107,6 +107,13 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
   // Synchronize visual HTML to markdown
   const syncEditorContent = () => {
     if (!editorRef.current) return;
+    const bqs = editorRef.current.querySelectorAll('blockquote');
+    bqs.forEach(b => {
+      const text = b.textContent?.trim().toLowerCase() || '';
+      if (!text || text.includes('menu info')) {
+        b.remove();
+      }
+    });
     const html = editorRef.current.innerHTML;
     const md = visualHtmlToMarkdown(html);
     lastEmittedValueRef.current = md;
@@ -242,6 +249,17 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
 
   const handleFormatQuote = (e: React.MouseEvent) => {
     e.preventDefault();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const node = sel.anchorNode;
+    const bq = node instanceof HTMLElement ? node.closest('blockquote') : node?.parentElement?.closest('blockquote');
+    if (bq) {
+      const div = document.createElement('div');
+      div.innerHTML = bq.innerHTML;
+      bq.parentNode?.replaceChild(div, bq);
+      syncEditorContent();
+      return;
+    }
     document.execCommand('formatBlock', false, 'blockquote');
     syncEditorContent();
   };
@@ -687,6 +705,28 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
                 } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                   e.preventDefault();
                   onSave?.(textContent);
+                } else if (e.key === 'Backspace' || e.key === 'Delete') {
+                  const sel = window.getSelection();
+                  if (sel && sel.rangeCount > 0) {
+                    const node = sel.anchorNode;
+                    const bq = node instanceof HTMLElement ? node.closest('blockquote') : node?.parentElement?.closest('blockquote');
+                    if (bq) {
+                      const text = bq.textContent?.trim();
+                      const selText = sel.toString().trim();
+                      if (!text || text === '\n' || text.toLowerCase().includes('menu info') || (selText && selText === text)) {
+                        e.preventDefault();
+                        const div = document.createElement('div');
+                        div.innerHTML = '<br>';
+                        bq.parentNode?.replaceChild(div, bq);
+                        const newRange = document.createRange();
+                        newRange.setStart(div, 0);
+                        newRange.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(newRange);
+                        syncEditorContent();
+                      }
+                    }
+                  }
                 }
               }}
               data-placeholder={placeholder}

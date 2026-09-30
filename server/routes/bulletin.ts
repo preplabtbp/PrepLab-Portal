@@ -518,12 +518,83 @@ router.delete("/api/bulletin/comments/:commentId", async (req, res) => {
     }
   });
 
+async function syncBulletinToLogbook(post: any) {
+  try {
+    if (!post || !post.id || !post.content || typeof post.content !== 'string') return;
+    const { parseMarkdownTableRows } = await import("./logbook.js");
+    const parsed = parseMarkdownTableRows(post.content);
+    if (!parsed || !parsed.rows || parsed.rows.length === 0) return;
+
+    // Find all logbook tasks connected to this bulletin post
+    const linkedTasks = await db
+      .select()
+      .from(logbookTasks)
+      .where(eq(logbookTasks.bulletinPostId, post.id));
+
+    if (linkedTasks.length === 0) return;
+
+    for (const task of linkedTasks) {
+      const taskTopic = (task.bulletinTopicTitle || task.title || '').toLowerCase().trim();
+      const matchingRow = parsed.rows.find(r => {
+        const rTitle = Object.keys(r).reduce((acc, k) => {
+          const kl = k.toLowerCase().trim();
+          if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') {
+            return (r[k] || '').toLowerCase().trim();
+          }
+          return acc;
+        }, '');
+        if (!rTitle) return false;
+        return rTitle === taskTopic || (rTitle.length >= 4 && taskTopic.length >= 4 && (rTitle.startsWith(taskTopic) || taskTopic.startsWith(rTitle)));
+      });
+
+      if (matchingRow) {
+        let rowDesc = '';
+        let rowStatus = '';
+        let rowPriority = '';
+
+        Object.keys(matchingRow).forEach(k => {
+          const kl = k.toLowerCase().trim();
+          if (kl.includes('keterangan') || kl.includes('catatan') || kl.includes('deskripsi')) {
+            rowDesc = matchingRow[k];
+          } else if (kl.includes('status')) {
+            rowStatus = matchingRow[k];
+          } else if (kl.includes('priority') || kl.includes('prioritas')) {
+            rowPriority = matchingRow[k];
+          }
+        });
+
+        const updatePayload: any = {};
+        if (rowDesc && rowDesc !== '-' && rowDesc !== task.description) {
+          updatePayload.description = rowDesc;
+        }
+        if (rowStatus && rowStatus !== task.status) {
+          updatePayload.status = rowStatus;
+        }
+        if (rowPriority && rowPriority !== task.priority) {
+          updatePayload.priority = rowPriority;
+        }
+
+        if (Object.keys(updatePayload).length > 0) {
+          await db
+            .update(logbookTasks)
+            .set(updatePayload)
+            .where(eq(logbookTasks.id, task.id));
+          console.log(`[Sync Buletin -> Logbook] Updated task #${task.id} (${task.title}) from bulletin #${post.id}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[Sync Buletin -> Logbook] Failed to sync:", err);
+  }
+}
+
 router.put("/api/bulletin/:id", async (req, res) => {
     try {
       const result = await db.update(bulletinPosts).set(req.body).where(eq(bulletinPosts.id, parseInt(req.params.id))).returning();
       const post = result[0];
       if (post) {
         await syncBulletinToAgenda(post);
+        await syncBulletinToLogbook(post);
       }
       res.json({ status: "success", data: post });
     } catch (error) {

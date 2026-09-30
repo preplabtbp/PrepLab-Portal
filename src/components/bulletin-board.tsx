@@ -58,6 +58,28 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { AgendaDashboard } from "./agenda-dashboard";
 
+export const extractTextFromReactNode = (node: any): string => {
+  if (!node) return "";
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractTextFromReactNode).join(" ");
+  if (node.props && node.props.children) {
+    return extractTextFromReactNode(node.props.children);
+  }
+  return "";
+};
+
+export const cleanLegacyMenuInfo = (text?: string | null): string => {
+  if (!text) return "";
+  return text
+    .replace(/<details[\s\S]*?<summary>[\s\S]*?Menu Info[\s\S]*?<\/summary>[\s\S]*?<\/details>/gi, "")
+    .replace(/<summary>[\s\S]*?Menu Info[\s\S]*?<\/summary>/gi, "")
+    .replace(/(?:^|\n)\s*>\s*[*_"\s]*Menu Info[^\n]*[*_"\s]*(?=\n|$)/gi, "")
+    .replace(/(?:^|\n)\s*[*_"\s]*Menu Info[^\n]*[*_"\s]*(?=\n|$)/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+};
+
 export function BulletinBoard({
   inspectorName,
   inspectorNik,
@@ -163,6 +185,11 @@ export function BulletinBoard({
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editCategory, setEditCategory] = useState<string>("");
+  const [editBeforeTable, setEditBeforeTable] = useState("");
+  const [editAfterTable, setEditAfterTable] = useState("");
+  const [editTableRaw, setEditTableRaw] = useState<string | null>(null);
+  const [editTableHeaders, setEditTableHeaders] = useState<string[]>([]);
+  const [editTableRowCount, setEditTableRowCount] = useState<number>(0);
 
   useEffect(() => {
     fetchPosts();
@@ -501,6 +528,12 @@ export function BulletinBoard({
     setEditTitle("Untitled Document");
     setEditContent("");
     setEditCategory("PAGE");
+    setEditBeforeTable("");
+    setEditAfterTable("");
+    setEditTableRaw(null);
+    setEditTableHeaders([]);
+    setEditTableRowCount(0);
+    setEditorMode('wysiwyg');
     setIsEditing(true);
   };
 
@@ -511,6 +544,15 @@ export function BulletinBoard({
     }
     toast.loading("Menyimpan dokumen...", { id: "save-post" });
 
+    let finalContent = editContent;
+    if (editorMode === 'wysiwyg' && editTableRaw !== null) {
+      const cleanBefore = cleanLegacyMenuInfo(editBeforeTable).trim();
+      const cleanAfter = cleanLegacyMenuInfo(editAfterTable).trim();
+      finalContent = [cleanBefore, editTableRaw, cleanAfter].filter(Boolean).join('\n\n');
+    } else {
+      finalContent = cleanLegacyMenuInfo(editContent).trim();
+    }
+
     try {
       if (selectedPost) {
         // Update
@@ -519,10 +561,11 @@ export function BulletinBoard({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             title: editTitle,
-            content: editContent,
+            content: finalContent,
             category: editCategory,
           }),
         });
+        setSelectedPost((prev: any) => prev ? { ...prev, title: editTitle, content: finalContent, category: editCategory } : null);
       } else {
         // Create
         await fetch("/api/bulletin", {
@@ -532,7 +575,7 @@ export function BulletinBoard({
             department: "Prep & Lab",
             category: editCategory,
             title: editTitle,
-            content: editContent,
+            content: finalContent,
             pt: pt || "TBP",
             authorNik: inspectorNik,
             authorName: inspectorName,
@@ -648,51 +691,112 @@ export function BulletinBoard({
     rows: TableRowData[];
     beforeText: string;
     afterText: string;
+    rawTable: string;
   } | null => {
     if (!content || !content.includes("|")) return null;
     const lines = content.split("\n");
-    let startIdx = -1;
-    let endIdx = -1;
+    let headerIdx = -1;
+    let separatorIdx = -1;
+
+    // 1. Locate header line and separator line
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (line.startsWith("|") && line.endsWith("|")) {
-        if (startIdx === -1) startIdx = i;
-        endIdx = i;
-      } else if (startIdx !== -1) {
-        break;
-      }
-    }
-    if (startIdx !== -1 && endIdx - startIdx >= 1) {
-      const headerLine = lines[startIdx];
-      const headers = headerLine
-        .split("|")
-        .map((h) => h.trim())
-        .filter((h, idx, arr) => idx > 0 && idx < arr.length - 1);
-
-      const rows: TableRowData[] = [];
-      for (let i = startIdx + 2; i <= endIdx; i++) {
-        const rowLine = lines[i].trim();
-        if (!rowLine.startsWith("|")) continue;
-        const cells = rowLine
-          .split("|")
-          .map((c) => c.trim())
-          .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
-
-        if (cells.length > 0) {
-          const rowObj: TableRowData = {};
-          headers.forEach((h, idx) => {
-            rowObj[h] = cells[idx] || "";
-          });
-          rows.push(rowObj);
+        if (headerIdx === -1) {
+          headerIdx = i;
+        } else if (separatorIdx === -1 && line.includes("---")) {
+          separatorIdx = i;
+          break;
         }
       }
-
-      const beforeText = lines.slice(0, startIdx).join("\n");
-      const afterText = lines.slice(endIdx + 1).join("\n");
-
-      return { headers, rows, beforeText, afterText };
     }
-    return null;
+
+    if (headerIdx === -1 || separatorIdx === -1) return null;
+
+    const headerLine = lines[headerIdx];
+    const headers = headerLine
+      .split("|")
+      .map((h) => h.trim())
+      .filter((h, idx, arr) => idx > 0 && idx < arr.length - 1);
+
+    if (headers.length === 0) return null;
+
+    // 2. Parse table rows (handling multiline cell continuations and empty lines)
+    const rawRowLines: string[] = [];
+    let currentRow = "";
+    let lastTableLineIdx = separatorIdx;
+
+    for (let i = separatorIdx + 1; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // If empty line
+      if (!trimmed) {
+        if (currentRow && currentRow.trim().endsWith("|")) {
+          rawRowLines.push(currentRow.trim());
+          currentRow = "";
+        }
+        continue;
+      }
+
+      // Check if table has terminated by hitting another markdown section (heading or blockquote)
+      if (
+        !trimmed.startsWith("|") &&
+        (trimmed.startsWith("#") || trimmed.startsWith("> ") || trimmed.startsWith("```"))
+      ) {
+        if (currentRow) {
+          rawRowLines.push(currentRow.trim());
+          currentRow = "";
+        }
+        break;
+      }
+
+      if (trimmed.startsWith("|")) {
+        if (currentRow) {
+          rawRowLines.push(currentRow.trim());
+        }
+        currentRow = trimmed;
+        lastTableLineIdx = i;
+      } else {
+        // Line continuation of multiline cell (e.g. subtask checklist or bullet point)
+        if (currentRow) {
+          currentRow += "<br/>" + trimmed;
+          lastTableLineIdx = i;
+        }
+      }
+    }
+
+    if (currentRow) {
+      rawRowLines.push(currentRow.trim());
+    }
+
+    // Convert raw row strings to TableRowData objects
+    const rows: TableRowData[] = [];
+    for (const rowLine of rawRowLines) {
+      if (!rowLine.startsWith("|")) continue;
+      const cells = rowLine
+        .split("|")
+        .map((c) => c.trim())
+        .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+
+      if (cells.length > 0) {
+        const rowObj: TableRowData = {};
+        headers.forEach((h, idx) => {
+          rowObj[h] = cells[idx] || "";
+        });
+        rows.push(rowObj);
+      }
+    }
+
+    const beforeText = lines.slice(0, headerIdx).join("\n");
+    const afterText = lines.slice(lastTableLineIdx + 1).join("\n");
+    const rawTable = [
+      headerLine,
+      lines[separatorIdx],
+      ...rawRowLines
+    ].join("\n");
+
+    return { headers, rows, beforeText, afterText, rawTable };
   }, []);
 
   const parsedTableData = useMemo(() => {
@@ -1403,9 +1507,26 @@ ${aiMeetingNotes
               <>
                 <button
                   onClick={() => {
+                    const rawContent = cleanLegacyMenuInfo(getRenderableContent(selectedPost));
                     setEditTitle(selectedPost.title || "");
-                    setEditContent(getRenderableContent(selectedPost));
                     setEditCategory(selectedPost.category || "");
+                    setEditContent(rawContent);
+
+                    const tbl = extractMarkdownTable(rawContent);
+                    if (tbl) {
+                      setEditBeforeTable(cleanLegacyMenuInfo(tbl.beforeText).trim());
+                      setEditAfterTable(cleanLegacyMenuInfo(tbl.afterText).trim());
+                      setEditTableRaw(tbl.rawTable);
+                      setEditTableHeaders(tbl.headers);
+                      setEditTableRowCount(tbl.rows.length);
+                    } else {
+                      setEditBeforeTable(cleanLegacyMenuInfo(rawContent).trim());
+                      setEditAfterTable("");
+                      setEditTableRaw(null);
+                      setEditTableHeaders([]);
+                      setEditTableRowCount(0);
+                    }
+                    setEditorMode('wysiwyg');
                     setIsEditing(true);
                   }}
                   className="p-1.5 text-slate-400 hover:text-blue-400 rounded-md hover:bg-slate-800 transition-colors"
@@ -1504,7 +1625,25 @@ ${aiMeetingNotes
                 >
                   <button
                     type="button"
-                    onClick={() => setEditorMode('wysiwyg')}
+                    onClick={() => {
+                      if (editorMode !== 'wysiwyg') {
+                        const tbl = extractMarkdownTable(editContent);
+                        if (tbl) {
+                          setEditBeforeTable(cleanLegacyMenuInfo(tbl.beforeText).trim());
+                          setEditAfterTable(cleanLegacyMenuInfo(tbl.afterText).trim());
+                          setEditTableRaw(tbl.rawTable);
+                          setEditTableHeaders(tbl.headers);
+                          setEditTableRowCount(tbl.rows.length);
+                        } else {
+                          setEditBeforeTable(cleanLegacyMenuInfo(editContent).trim());
+                          setEditAfterTable("");
+                          setEditTableRaw(null);
+                          setEditTableHeaders([]);
+                          setEditTableRowCount(0);
+                        }
+                        setEditorMode('wysiwyg');
+                      }
+                    }}
                     className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                       editorMode === 'wysiwyg'
                         ? 'bg-teal-600 text-white shadow-xs'
@@ -1515,7 +1654,17 @@ ${aiMeetingNotes
                   </button>
                   <button
                     type="button"
-                    onClick={() => setEditorMode('raw')}
+                    onClick={() => {
+                      if (editorMode !== 'raw') {
+                        if (editTableRaw !== null) {
+                          const cleanBefore = cleanLegacyMenuInfo(editBeforeTable).trim();
+                          const cleanAfter = cleanLegacyMenuInfo(editAfterTable).trim();
+                          const full = [cleanBefore, editTableRaw, cleanAfter].filter(Boolean).join('\n\n');
+                          setEditContent(full);
+                        }
+                        setEditorMode('raw');
+                      }
+                    }}
                     className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                       editorMode === 'raw'
                         ? 'bg-teal-600 text-white shadow-xs'
@@ -1528,22 +1677,132 @@ ${aiMeetingNotes
               </div>
 
               {editorMode === 'wysiwyg' ? (
-                <div 
-                  className="rounded-2xl border p-4 shadow-sm"
-                  style={{
-                    backgroundColor: 'var(--card-bg, #1e1e1e)',
-                    borderColor: 'var(--border-main, #334155)'
-                  }}
-                >
-                  <EnterpriseWysiwygEditor
-                    value={editContent}
-                    onChange={setEditContent}
-                    placeholder="Tulis dokumen dalam format visual (teks, heading, checklist subtask, dll)..."
-                    allowModeSwitch={true}
-                    defaultMode="text"
-                    rows={20}
-                  />
-                </div>
+                editTableRaw !== null ? (
+                  /* Specialized Visual View for Pages with Connected Database Table */
+                  <div className="space-y-6">
+                    {/* Intro Text Editor */}
+                    <div 
+                      className="rounded-2xl border p-4 shadow-sm"
+                      style={{
+                        backgroundColor: 'var(--card-bg, #1e1e1e)',
+                        borderColor: 'var(--border-main, #334155)'
+                      }}
+                    >
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                        <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--text-main, #f8fafc)' }}>
+                          <FileText className="w-4 h-4 text-teal-400" />
+                          <span>Keterangan & Pengantar Halaman (Sebelum Tabel)</span>
+                        </span>
+                        <span className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                          Visual WYSIWYG
+                        </span>
+                      </div>
+                      <EnterpriseWysiwygEditor
+                        value={editBeforeTable}
+                        onChange={setEditBeforeTable}
+                        placeholder="Tuliskan catatan, petunjuk, atau pengantar sebelum tabel topik..."
+                        allowModeSwitch={true}
+                        defaultMode="text"
+                        rows={6}
+                      />
+                    </div>
+
+                    {/* Connected Database Table Card (No messy raw pipes!) */}
+                    <div 
+                      className="rounded-2xl border p-5 shadow-md relative overflow-hidden transition-all"
+                      style={{
+                        backgroundColor: 'var(--card-bg, #1e293b)',
+                        borderColor: 'var(--primary, #0d9488)'
+                      }}
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-700/60">
+                        <div className="flex items-center gap-3">
+                          <div className="p-3 rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-400">
+                            <Table className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-extrabold text-base" style={{ color: 'var(--text-main, #f8fafc)' }}>
+                                Tabel Database Topik Terhubung
+                              </h3>
+                              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/40">
+                                {editTableRowCount} Baris Kegiatan
+                              </span>
+                            </div>
+                            <p className="text-xs mt-1 text-slate-400">
+                              Kolom: {editTableHeaders.join(' • ')}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleSavePost}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-500 transition-all shadow-md cursor-pointer self-start md:self-auto shrink-0"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>Simpan & Buka Tabel Interaktif</span>
+                        </button>
+                      </div>
+
+                      <div className="pt-4 flex items-start gap-3 text-xs text-slate-300 bg-slate-900/50 p-3.5 rounded-xl border border-slate-800/80 mt-2">
+                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="leading-relaxed">
+                          <p className="font-semibold text-slate-200">
+                            Format tabel sudah otomatis terintegrasi dan aman!
+                          </p>
+                          <p className="text-slate-400 mt-0.5">
+                            Semua baris kegiatan, PIC, status, target tanggal, dan checklist subtask dikelola langsung secara interaktif melalui tabel utama di halaman (lengkap dengan fitur tambah baris, sorting, pencarian, dan subtask manager). Anda tidak perlu lagi mengedit atau melihat ribuan baris kode pipa (<code className="px-1 py-0.5 bg-slate-800 rounded text-teal-300 font-mono">|</code>) yang membingungkan.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Optional Outro Notes Editor */}
+                    {(editAfterTable.trim() || false) && (
+                      <div 
+                        className="rounded-2xl border p-4 shadow-sm"
+                        style={{
+                          backgroundColor: 'var(--card-bg, #1e1e1e)',
+                          borderColor: 'var(--border-main, #334155)'
+                        }}
+                      >
+                        <div className="flex items-center justify-between pb-2 mb-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                          <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--text-main, #f8fafc)' }}>
+                            <FileText className="w-4 h-4 text-teal-400" />
+                            <span>Catatan Penutup (Setelah Tabel)</span>
+                          </span>
+                        </div>
+                        <EnterpriseWysiwygEditor
+                          value={editAfterTable}
+                          onChange={setEditAfterTable}
+                          placeholder="Tuliskan catatan tambahan setelah tabel (opsional)..."
+                          allowModeSwitch={true}
+                          defaultMode="text"
+                          rows={4}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Standard WYSIWYG for Normal Non-Table Pages */
+                  <div 
+                    className="rounded-2xl border p-4 shadow-sm"
+                    style={{
+                      backgroundColor: 'var(--card-bg, #1e1e1e)',
+                      borderColor: 'var(--border-main, #334155)'
+                    }}
+                  >
+                    <EnterpriseWysiwygEditor
+                      value={editContent}
+                      onChange={setEditContent}
+                      placeholder="Tulis dokumen dalam format visual (teks, heading, checklist subtask, dll)..."
+                      allowModeSwitch={true}
+                      defaultMode="text"
+                      rows={20}
+                    />
+                  </div>
+                )
               ) : (
                 <textarea
                   value={editContent}
@@ -1678,7 +1937,7 @@ ${aiMeetingNotes
                   <ReactMarkdown 
                     components={{
                       h1: ({ node, children }: any) => {
-                        const text = String(children).trim();
+                        const text = extractTextFromReactNode(children).trim();
                         const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
                         const targetPost = posts.find(
                           (p) =>
@@ -1689,7 +1948,7 @@ ${aiMeetingNotes
                                 (p.title.toLowerCase().includes(clean) ||
                                   clean.includes(p.title.toLowerCase().trim()))))
                         );
-                        if (targetPost && text.length > 3) {
+                        if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
                           return (
                             <div
                               onClick={() => navigateToPost(targetPost)}
@@ -1720,7 +1979,7 @@ ${aiMeetingNotes
                         return <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>;
                       },
                       h2: ({ node, children }: any) => {
-                        const text = String(children).trim();
+                        const text = extractTextFromReactNode(children).trim();
                         const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
                         const targetPost = posts.find(
                           (p) =>
@@ -1731,7 +1990,7 @@ ${aiMeetingNotes
                                 (p.title.toLowerCase().includes(clean) ||
                                   clean.includes(p.title.toLowerCase().trim()))))
                         );
-                        if (targetPost && text.length > 3) {
+                        if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
                           return (
                             <div
                               onClick={() => navigateToPost(targetPost)}
@@ -1762,7 +2021,7 @@ ${aiMeetingNotes
                         return <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>;
                       },
                       h3: ({ node, children }: any) => {
-                        const text = String(children).trim();
+                        const text = extractTextFromReactNode(children).trim();
                         const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
                         const targetPost = posts.find(
                           (p) =>
@@ -1773,7 +2032,7 @@ ${aiMeetingNotes
                                 (p.title.toLowerCase().includes(clean) ||
                                   clean.includes(p.title.toLowerCase().trim()))))
                         );
-                        if (targetPost && text.length > 3) {
+                        if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
                           return (
                             <div
                               onClick={() => navigateToPost(targetPost)}
@@ -1799,11 +2058,11 @@ ${aiMeetingNotes
                         return <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>;
                       },
                       blockquote: ({ node, children }: any) => {
-                        const text = String(children)
-                          .replace(/\"/g, "")
+                        const text = extractTextFromReactNode(children)
+                          .replace(/["*_]/g, "")
                           .trim()
                           .toLowerCase();
-                        if (text.includes("menu info")) return null;
+                        if (text.includes("menu info") || !text) return null;
                         return (
                           <blockquote 
                             className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
@@ -1818,12 +2077,11 @@ ${aiMeetingNotes
                         );
                       },
                       p: ({ node, children }: any) => {
-                        if (
-                          typeof children === "string" &&
-                          children.replace(/\"/g, "").trim().toLowerCase() ===
-                            "menu info laboratorium"
-                        )
-                          return null;
+                        const text = extractTextFromReactNode(children)
+                          .replace(/["*_]/g, "")
+                          .trim()
+                          .toLowerCase();
+                        if (text.includes("menu info")) return null;
                         return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
                       },
                       a: ({ href, children }: any) => {
@@ -1919,19 +2177,33 @@ ${aiMeetingNotes
                       h1: ({ node, children }: any) => <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>,
                       h2: ({ node, children }: any) => <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>,
                       h3: ({ node, children }: any) => <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>,
-                      blockquote: ({ node, children }: any) => (
-                        <blockquote 
-                          className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
-                          style={{
-                            backgroundColor: 'var(--input-bg, #222)',
-                            color: 'var(--text-main, #cbd5e1)',
-                            borderColor: 'var(--primary, #2A9D8F)'
-                          }}
-                        >
-                          {children}
-                        </blockquote>
-                      ),
-                      p: ({ node, children }: any) => <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>,
+                      blockquote: ({ node, children }: any) => {
+                        const text = extractTextFromReactNode(children)
+                          .replace(/["*_]/g, "")
+                          .trim()
+                          .toLowerCase();
+                        if (text.includes("menu info") || !text) return null;
+                        return (
+                          <blockquote 
+                            className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
+                            style={{
+                              backgroundColor: 'var(--input-bg, #222)',
+                              color: 'var(--text-main, #cbd5e1)',
+                              borderColor: 'var(--primary, #2A9D8F)'
+                            }}
+                          >
+                            {children}
+                          </blockquote>
+                        );
+                      },
+                      p: ({ node, children }: any) => {
+                        const text = extractTextFromReactNode(children)
+                          .replace(/["*_]/g, "")
+                          .trim()
+                          .toLowerCase();
+                        if (text.includes("menu info")) return null;
+                        return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
+                      },
                       a: ({ href, children }: any) => (
                         <a
                           href={href}
@@ -2041,7 +2313,7 @@ ${aiMeetingNotes
                 <ReactMarkdown
                   components={{
                     h1: ({ node, children }) => {
-                      const text = String(children).trim();
+                      const text = extractTextFromReactNode(children).trim();
                       const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
                       const targetPost = posts.find(
                         (p) =>
@@ -2052,7 +2324,7 @@ ${aiMeetingNotes
                               (p.title.toLowerCase().includes(clean) ||
                                 clean.includes(p.title.toLowerCase().trim()))))
                       );
-                      if (targetPost && text.length > 3) {
+                      if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
                         return (
                           <div
                             onClick={() => navigateToPost(targetPost)}
@@ -2083,7 +2355,7 @@ ${aiMeetingNotes
                       return <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>;
                     },
                     h2: ({ node, children }) => {
-                      const text = String(children).trim();
+                      const text = extractTextFromReactNode(children).trim();
                       const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
                       const targetPost = posts.find(
                         (p) =>
@@ -2094,7 +2366,7 @@ ${aiMeetingNotes
                               (p.title.toLowerCase().includes(clean) ||
                                 clean.includes(p.title.toLowerCase().trim()))))
                       );
-                      if (targetPost && text.length > 3) {
+                      if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
                         return (
                           <div
                             onClick={() => navigateToPost(targetPost)}
@@ -2125,7 +2397,7 @@ ${aiMeetingNotes
                       return <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>;
                     },
                     h3: ({ node, children }) => {
-                      const text = String(children).trim();
+                      const text = extractTextFromReactNode(children).trim();
                       const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
                       const targetPost = posts.find(
                         (p) =>
@@ -2136,7 +2408,7 @@ ${aiMeetingNotes
                               (p.title.toLowerCase().includes(clean) ||
                                 clean.includes(p.title.toLowerCase().trim()))))
                       );
-                      if (targetPost && text.length > 3) {
+                      if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
                         return (
                           <div
                             onClick={() => navigateToPost(targetPost)}
@@ -2162,11 +2434,11 @@ ${aiMeetingNotes
                       return <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>;
                     },
                     blockquote: ({ node, children }) => {
-                      const text = String(children)
-                        .replace(/\"/g, "")
+                      const text = extractTextFromReactNode(children)
+                        .replace(/["*_]/g, "")
                         .trim()
                         .toLowerCase();
-                        if (text.includes("menu info")) return null;
+                      if (text.includes("menu info") || !text) return null;
                       return (
                         <blockquote 
                           className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
@@ -2181,12 +2453,11 @@ ${aiMeetingNotes
                       );
                     },
                     p: ({ node, children }) => {
-                      if (
-                        typeof children === "string" &&
-                        children.replace(/\"/g, "").trim().toLowerCase() ===
-                          "menu info laboratorium"
-                      )
-                        return null;
+                      const text = extractTextFromReactNode(children)
+                        .replace(/["*_]/g, "")
+                        .trim()
+                        .toLowerCase();
+                      if (text.includes("menu info")) return null;
                       return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
                     },
                     a: ({ href, children }) => {

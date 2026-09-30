@@ -1674,9 +1674,10 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
       db.select().from(inspectionProofs).where(eq(inspectionProofs.week, currentWeekTag))
     ]);
 
-    // Filter inspections belonging to current ISO week
+    // Filter inspections belonging to current ISO week, strictly excluding daily P2H ('Harian')
     const currentWeekInspections = recentInspections.filter(insp => {
       if (!insp.date) return false;
+      if (insp.type === 'Harian') return false; // P2H daily equipment checklist is separate from weekly inspection
       return getISOWeekTagForSchedule(new Date(insp.date)) === currentWeekTag;
     });
 
@@ -1726,9 +1727,9 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
 
       const personNames = [s.name, ...(s.partners || []).map((p: any) => p.name)].filter(Boolean).map((n: string) => n.trim().toLowerCase());
       const personNiks = personNames.map(pName => empNameToNik.get(pName)).filter(Boolean) as string[];
-      const sInspeksi = (s.inspeksi || '').toLowerCase();
-      const sSubArea = (s.formInfo?.subArea || '').toLowerCase();
-      const sFormTitle = (s.formInfo?.formTitle || '').toLowerCase();
+      const sInspeksi = (s.inspeksi || '').toLowerCase().trim();
+      const sSubArea = (s.formInfo?.subArea || '').toLowerCase().trim();
+      const sFormTitle = (s.formInfo?.formTitle || '').toLowerCase().trim();
 
       let matchedStrict: any = null;
       let matchedAny: any = null;
@@ -1744,11 +1745,10 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
         const insp1 = (dataFObj.insp1 || insp.inspectorName || '').toLowerCase().trim();
         const insp2 = (dataFObj.insp2 || '').toLowerCase().trim();
         const insp3 = (dataFObj.insp3 || '').toLowerCase().trim();
-        const rawDataF = typeof insp.dataF === 'string' ? insp.dataF.toLowerCase() : '';
-        const location = (insp.location || dataFObj.lokasiUmum || '').toLowerCase();
-        const judulForm = (insp.type || dataFObj.judulForm || '').toLowerCase();
+        const location = (insp.location || dataFObj.lokasiUmum || '').toLowerCase().trim();
+        const judulForm = (insp.type || dataFObj.judulForm || '').toLowerCase().trim();
 
-        // 1. Check person match (by name or NIK)
+        // 1. Check person match (by name or NIK against actual inspectors)
         const isPersonMatch = personNames.some(pName => {
           if (!pName || pName.length < 3) return false;
           const checkMatch = (target: string) => {
@@ -1763,14 +1763,15 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
           return false;
         }) || personNiks.some(nik => {
           if (!nik || nik.length < 4) return false;
-          return (insp1 && insp1.includes(nik)) || (insp2 && insp2.includes(nik)) || (insp3 && insp3.includes(nik)) || rawDataF.includes(nik);
+          return (insp1 && insp1.includes(nik)) || (insp2 && insp2.includes(nik)) || (insp3 && insp3.includes(nik));
         });
 
-        // 2. Check area / form match
-        const isAreaMatch =
-          (sSubArea && (location.includes(sSubArea) || sSubArea.includes(location))) ||
-          (sInspeksi && (location.includes(sInspeksi) || sInspeksi.includes(location))) ||
-          (judulForm && sFormTitle && (judulForm.includes(sFormTitle) || sFormTitle.includes(judulForm)));
+        // 2. Check area / form match (guarding against empty string false positives)
+        const isAreaMatch = Boolean(
+          (sSubArea && sSubArea.length >= 3 && location && location.length >= 3 && (location.includes(sSubArea) || sSubArea.includes(location))) ||
+          (sInspeksi && sInspeksi.length >= 3 && location && location.length >= 3 && (location.includes(sInspeksi) || sInspeksi.includes(location))) ||
+          (judulForm && judulForm.length >= 3 && sFormTitle && sFormTitle.length >= 3 && (judulForm.includes(sFormTitle) || sFormTitle.includes(judulForm)))
+        );
 
         if (isPersonMatch) {
           if (!matchedAny) {

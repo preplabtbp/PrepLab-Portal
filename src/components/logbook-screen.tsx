@@ -57,6 +57,7 @@ import {
 } from './notion/tasklist-utils';
 import { NotionDropdownCell, DropdownOption } from './notion/NotionDropdownCell';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
+import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
 import {
   getNextSubPeriod,
   getNextDefaultTargetDate,
@@ -4014,16 +4015,17 @@ export function LogbookScreen({
                 </div>
               </div>
 
-              {/* Enterprise WYSIWYG Editor */}
+              {/* Shared Subtask Manager (Sinergi Log Book & Buletin) */}
               <div>
-                <EnterpriseWysiwygEditor
+                <SharedSubtaskManager
                   value={newTaskDescription}
                   onChange={setNewTaskDescription}
-                  label="Rincian Tugas & Subtask"
-                  placeholder="Tulis arahan kegiatan... (Beralih ke 'Checklist Subtask' jika ingin membuat poin-poin ceklis)"
+                  label="Rincian Tugas & Checklist Subtask"
+                  placeholder="Ketik butir subtask baru lalu tekan Enter..."
                   allowModeSwitch={true}
-                  defaultMode="text"
-                  rows={4}
+                  defaultMode="checklist"
+                  currentUser={{ nik: inspectorNik, name: inspectorName }}
+                  selectedDate={newTaskDate || selectedDate}
                 />
               </div>
 
@@ -4433,16 +4435,17 @@ export function LogbookScreen({
                 </div>
               </div>
 
-              {/* Enterprise WYSIWYG Editor with Drag & Drop Checklist */}
+              {/* Shared Subtask Manager (Sinergi Log Book & Buletin) */}
               <div>
-                <EnterpriseWysiwygEditor
+                <SharedSubtaskManager
                   value={editDescription}
                   onChange={setEditDescription}
-                  label="Rincian Tugas & Checklist Subtask (Drag & drop untuk urutan)"
+                  label="Rincian Tugas & Checklist Subtask"
                   placeholder="Sesuaikan petunjuk kerja atau urutan checklist..."
                   allowModeSwitch={true}
-                  defaultMode={(editDescription || '').includes('- [') ? 'checklist' : 'text'}
-                  rows={4}
+                  defaultMode={(editDescription || '').includes('- [') ? 'checklist' : 'checklist'}
+                  currentUser={{ nik: inspectorNik, name: inspectorName }}
+                  selectedDate={editTaskDate || editingTask.taskDate}
                 />
               </div>
 

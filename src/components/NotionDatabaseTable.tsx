@@ -64,6 +64,7 @@ import { NotionDropdownCell } from './notion/NotionDropdownCell';
 import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
+import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
 import {
   normalizeCadence,
   isPeriodicCadence,
@@ -4361,15 +4362,17 @@ export function NotionDatabaseTable({
                 />
               </div>
 
-              {/* Keterangan & Rincian (Enterprise WYSIWYG Editor) */}
+              {/* Keterangan & Rincian (Shared Subtask Manager - Sinergi Log Book & Buletin) */}
               <div>
-                <EnterpriseWysiwygEditor
+                <SharedSubtaskManager
                   value={rowFormData['Keterangan'] || ''}
                   onChange={(val) => setRowFormData({ ...rowFormData, Keterangan: val })}
-                  label="Keterangan & Rincian Kegiatan"
+                  label="Keterangan & Checklist Subtask"
                   allowModeSwitch={true}
-                  placeholder="Deskripsi langkah, catatan temuan, atau checklist subtask..."
-                  rows={3}
+                  defaultMode="checklist"
+                  currentUser={{ nik: currentAuthorNik || '', name: currentAuthorName || rowFormData['PIC'] || 'PIC' }}
+                  selectedDate={new Date().toISOString().split('T')[0]}
+                  placeholder="Ketik butir subtask baru lalu tekan Enter..."
                 />
               </div>
 
@@ -5065,115 +5068,29 @@ export function NotionDatabaseTable({
                         </div>
                       )}
 
-                      {/* Rincian & Keterangan Card */}
+                      {/* Rincian & Keterangan Subtask Manager (Sinergi Penuh dengan Log Book) */}
                       {(() => {
                         const selKetVal = getRowVal(selectedRow, 'Keterangan');
-                        const selTaskProg = parseTasklist(selKetVal);
                         const actualIdx = localRows.indexOf(selectedRow) !== -1 
                           ? localRows.indexOf(selectedRow)
                           : localRows.findIndex(r => getRowVal(r, 'Jenis kegiatan') === getRowVal(selectedRow, 'Jenis kegiatan'));
 
                         return (
-                          <div 
-                            className="p-4 sm:p-5 rounded-2xl border shadow-sm space-y-3"
-                            style={{
-                              backgroundColor: 'var(--card-bg, #171717)',
-                              borderColor: 'var(--border-main, #334155)'
+                          <SharedSubtaskManager
+                            value={selKetVal}
+                            onChange={(newVal) => {
+                              if (actualIdx !== -1) {
+                                handleUpdateCellDirect(actualIdx, 'Keterangan', newVal);
+                              }
                             }}
-                          >
-                            <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
-                              <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
-                                <FileText className="w-4 h-4" />
-                                <span>Rincian & Keterangan Kegiatan</span>
-                              </h4>
-                              {selTaskProg.hasTasklist && (
-                                <span className={`text-[11px] font-mono px-2 py-0.5 rounded-full font-semibold border ${
-                                  selTaskProg.isAllCompleted
-                                    ? 'border-emerald-500/40 text-emerald-400 bg-emerald-950/40'
-                                    : selTaskProg.percentage > 0
-                                    ? 'border-amber-500/40 text-amber-400 bg-amber-950/40'
-                                    : 'border-blue-500/40 text-blue-400 bg-blue-950/40'
-                                }`}>
-                                  {selTaskProg.completed}/{selTaskProg.total} ({selTaskProg.percentage}%)
-                                </span>
-                              )}
-                            </div>
-
-                            {selTaskProg.hasTasklist ? (
-                              <div className="space-y-3 pt-1">
-                                {/* Subtask Progress Bar */}
-                                <div className="space-y-1">
-                                  <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-                                    <span>Progres Subtask</span>
-                                    <span className={`font-bold ${
-                                      selTaskProg.isAllCompleted
-                                        ? 'text-emerald-400'
-                                        : selTaskProg.percentage > 0
-                                        ? 'text-amber-400'
-                                        : 'text-blue-400'
-                                    }`}>
-                                      {selTaskProg.isAllCompleted
-                                        ? '100% Selesai (Closed)'
-                                        : selTaskProg.percentage > 0
-                                        ? `${selTaskProg.percentage}% (On Progress)`
-                                        : '0% (Open)'}
-                                    </span>
-                                  </div>
-                                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60">
-                                    <div
-                                      className={`h-full transition-all duration-300 ${
-                                        selTaskProg.isAllCompleted
-                                          ? 'bg-emerald-500'
-                                          : selTaskProg.percentage < 35
-                                          ? 'bg-amber-500'
-                                          : 'bg-teal-500'
-                                      }`}
-                                      style={{ width: `${selTaskProg.percentage}%` }}
-                                    />
-                                  </div>
-                                </div>
-
-                                {/* Task Checklist Items */}
-                                <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                                  {selTaskProg.items.map((item) => (
-                                    <div
-                                      key={item.index}
-                                      onClick={() => {
-                                        if (actualIdx !== -1) {
-                                          handleToggleTasklistDirect(actualIdx, 'Keterangan', item.index);
-                                        }
-                                      }}
-                                      className="flex items-start gap-2.5 text-xs sm:text-sm select-none p-2 rounded-xl hover:bg-slate-800/60 cursor-pointer transition-colors border border-transparent hover:border-slate-700/50"
-                                    >
-                                      <button
-                                        type="button"
-                                        className="mt-0.5 shrink-0 focus:outline-none cursor-pointer"
-                                      >
-                                        {item.checked ? (
-                                          <CheckSquare className="w-4 h-4 text-teal-400" />
-                                        ) : (
-                                          <Square className="w-4 h-4 text-slate-400" />
-                                        )}
-                                      </button>
-                                      <span
-                                        className={`leading-relaxed flex-1 break-words ${
-                                          item.checked
-                                            ? 'line-through text-slate-500 font-normal'
-                                            : 'text-slate-200 font-medium'
-                                        }`}
-                                      >
-                                        {item.text}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="leading-relaxed text-xs sm:text-sm font-sans pt-1" style={{ color: 'var(--text-main, #e2e8f0)' }}>
-                                {renderFormattedNotes(selKetVal)}
-                              </div>
-                            )}
-                          </div>
+                            label="Rincian & Checklist Subtask Kegiatan"
+                            currentUser={{ nik: currentAuthorNik || '', name: currentAuthorName || getRowVal(selectedRow, 'PIC') || 'PIC' }}
+                            selectedDate={new Date().toISOString().split('T')[0]}
+                            allowModeSwitch={true}
+                            defaultMode="checklist"
+                            showProgressBar={true}
+                            placeholder="Tambah butir subtask langsung di sini lalu tekan Enter..."
+                          />
                         );
                       })()}
 

@@ -421,6 +421,71 @@ export function appendTasklistItem(text: string, taskTitle: string): string {
 }
 
 /**
+ * Removes a specific task checklist item from the text by its index
+ */
+export function removeTasklistItem(text: string, targetIndex: number): string {
+  if (!text) return '';
+  const hasBr = /<br\s*\/?>/i.test(text);
+  const delimiter = hasBr ? '<br/>' : '\n';
+  const normalized = text.replace(/<br\s*\/?>/gi, '\n');
+
+  let currentIndex = 0;
+  const lines = normalized.split('\n');
+  const updatedLines = lines.filter(line => {
+    const match = line.match(/^(\s*[-*•]?\s*\[)([ xX])(\]\s*)(.+)$/);
+    if (match) {
+      if (currentIndex === targetIndex) {
+        currentIndex++;
+        return false;
+      }
+      currentIndex++;
+    }
+    return true;
+  });
+
+  return updatedLines.join(delimiter);
+}
+
+/**
+ * Updates the title of a specific task checklist item in the text by index, preserving existing notes and dates
+ */
+export function updateTasklistItemTitle(text: string, targetIndex: number, newTitle: string): string {
+  if (!text) return '';
+  const sanitized = newTitle.replace(/[\r\n]+/g, ' ').replace(/<!--[\s\S]*?-->/gi, '').trim();
+  if (!sanitized) return text;
+  const hasBr = /<br\s*\/?>/i.test(text);
+  const delimiter = hasBr ? '<br/>' : '\n';
+  const normalized = text.replace(/<br\s*\/?>/gi, '\n');
+
+  let currentIndex = 0;
+  const lines = normalized.split('\n');
+  const updatedLines = lines.map(line => {
+    const match = line.match(/^(\s*[-*•]?\s*\[)([ xX])(\]\s*)(.+)$/);
+    if (match) {
+      if (currentIndex === targetIndex) {
+        const prefix = match[1];
+        const check = match[2];
+        const spaceAfterBracket = match[3];
+        const oldContent = match[4].trim();
+
+        // preserve all comments (checkedDate, notes, etc.)
+        let comments = '';
+        const commentsMatch = oldContent.match(/<!--[\s\S]*?-->/g);
+        if (commentsMatch) {
+          comments = ' ' + commentsMatch.join(' ');
+        }
+        currentIndex++;
+        return `${prefix}${check}${spaceAfterBracket}${sanitized}${comments}`;
+      }
+      currentIndex++;
+    }
+    return line;
+  });
+
+  return updatedLines.join(delimiter);
+}
+
+/**
  * Reorders tasklist items in text given a new array of TaskItems
  */
 export function reorderTasklistItems(originalText: string, newItems: TaskItem[]): string {
@@ -501,8 +566,12 @@ export function markdownToVisualHtml(text?: string | null): string {
       if (inUl) { processedLines.push('</ul>'); inUl = false; }
       if (inOl) { processedLines.push('</ol>'); inOl = false; }
 
-      if (trimmed.startsWith('> ')) {
-        processedLines.push(`<blockquote class="border-l-4 border-teal-500 pl-3 italic text-slate-600 my-1">${trimmed.substring(2)}</blockquote>`);
+      if (trimmed.startsWith('> ') || trimmed === '>') {
+        const bqContent = trimmed.substring(1).replace(/^[>\s]+/, '').trim();
+        if (!bqContent || bqContent.toLowerCase().includes('menu info')) {
+          continue;
+        }
+        processedLines.push(`<blockquote class="border-l-4 border-teal-500 pl-3 italic text-slate-600 my-1">${bqContent}</blockquote>`);
       } else if (trimmed) {
         processedLines.push(`<div>${trimmed}</div>`);
       } else {
@@ -581,8 +650,13 @@ export function visualHtmlToMarkdown(html?: string | null): string {
         return inner.trim() ? `~~${inner.trim()}~~` : '';
       case 'code':
         return inner.trim() ? `\`${inner.trim()}\`` : '';
-      case 'blockquote':
-        return inner.trim() ? `> ${inner.trim()}\n` : '';
+      case 'blockquote': {
+        const cleanInner = inner.trim();
+        if (!cleanInner || cleanInner.toLowerCase().includes('menu info')) {
+          return '';
+        }
+        return `> ${cleanInner}\n`;
+      }
       case 'li':
         return `• ${inner.trim()}\n`;
       case 'ul':

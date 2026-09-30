@@ -18,7 +18,7 @@ const formatDateStr = (date: Date): string => {
 };
 
 // Helper to parse markdown table from bulletin content
-function parseMarkdownTableRows(content: string) {
+export function parseMarkdownTableRows(content: string) {
   if (!content || !content.includes("|")) return null;
   const lines = content.split("\n");
   let startIdx = -1;
