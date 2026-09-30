@@ -2054,9 +2054,26 @@ export function LogbookScreen({
         text += `${i + 1}. ${statusBadge} ${t.title} - PIC: ${t.assigneeName}${pendingInfo}\n`;
         const parsed = parseTasklist(t.description || '');
         if (parsed.hasTasklist) {
-          parsed.items.forEach(item => {
-            text += `   ${item.checked ? '✅' : '◻️'} ${item.text}\n`;
+          const targetYDate = summaryData?.yesterdayDate || yesterdayDateStr;
+          const yesterdayItems = parsed.items.filter(item => {
+            const isCheckedYesterday = item.checked && (item.checkedDate === targetYDate);
+            const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+              ? item.notes
+              : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+            const hasNoteYesterday = rawNotes.some(n => n.date === targetYDate);
+            return isCheckedYesterday || hasNoteYesterday;
           });
+
+          if (yesterdayItems.length > 0) {
+            yesterdayItems.forEach(item => {
+              const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                ? item.notes
+                : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+              const yesterdayNotes = rawNotes.filter(n => n.date === targetYDate);
+              const noteText = yesterdayNotes.length > 0 ? ` (Catatan: ${yesterdayNotes.map(n => n.text).join('; ')})` : '';
+              text += `   ${item.checked ? '✅' : '◻️'} ${item.text}${noteText}\n`;
+            });
+          }
         }
       });
     }
@@ -2290,7 +2307,7 @@ export function LogbookScreen({
   };
 
   // Enterprise Minimalist Task Row Renderer with Click-to-Expand Details
-  const renderTaskCard = (task: LogbookTask, isYesterday: boolean, isReadOnly: boolean = false) => {
+  const renderTaskCard = (task: LogbookTask, isYesterday: boolean, isReadOnly: boolean = false, currentEvalScope?: 'yesterday' | 'all_carryover') => {
     const parsed = parseTasklist(task.description || '');
     const hasSubtasks = parsed.hasTasklist && parsed.total > 0;
     const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
@@ -2301,6 +2318,30 @@ export function LogbookScreen({
     const isOverdue = isTaskOverdue(task.targetDate, task.targetTime, task.status);
     const progressPercent = calculateTaskProgress(task);
     const routineInfo = getTaskRoutineInfo(task, selectedDate);
+
+    // Deteksi mode evaluasi:
+    // isYesterdayMode = true jika di bagian "Kemarin" (evalScope === 'yesterday').
+    // isYesterdayMode = false jika di bagian "Semua Backlog" (evalScope === 'all_carryover') atau "Planning Hari Ini".
+    const isYesterdayMode = isYesterday && (currentEvalScope ? currentEvalScope === 'yesterday' : isReadOnly);
+    const targetYDate = summaryData?.yesterdayDate || yesterdayDateStr;
+
+    // Filter Subtask:
+    // - Bagian Kemarin: HANYA subtask yang mengalami perubahan kemarin (baik diceklis kemarin, ATAU memiliki catatan baru kemarin).
+    // - Bagian Semua Backlog: Tampilkan SEMUA subtask (baik yang sudah diceklis maupun yang belum diceklis).
+    const displayedItems = (() => {
+      if (!parsed.hasTasklist || !parsed.items) return [];
+      if (!isYesterdayMode) {
+        return parsed.items;
+      }
+      return parsed.items.filter(item => {
+        const isCheckedYesterday = item.checked && (item.checkedDate === targetYDate);
+        const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+          ? item.notes
+          : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+        const hasNoteYesterday = rawNotes.some(n => n.date === targetYDate);
+        return isCheckedYesterday || hasNoteYesterday;
+      });
+    })();
 
     // Mode Subtask Status Automation:
     // Jika ada subtask: otomatis Open (0 ceklis), On Progress (1..N-1 ceklis), Closed (full ceklis), dengan pilihan khusus Canceled.
@@ -2673,197 +2714,234 @@ export function LogbookScreen({
                 <div className="flex items-center justify-between text-xs sm:text-sm font-black text-slate-900 pb-1 border-b border-slate-100">
                   <span className="flex items-center gap-1.5">
                     <CheckSquare className="w-4 h-4 text-teal-600" />
-                    <span>Checklist Subtask ({parsed.completed}/{parsed.total})</span>
+                    <span>
+                      {isYesterdayMode 
+                        ? `Subtask Diperbarui Kemarin (${displayedItems.length})` 
+                        : `Checklist Subtask (${parsed.completed}/${parsed.total})`}
+                    </span>
                   </span>
-                  <span className="text-[11px] font-normal text-slate-500">Geser ikon titik untuk atur posisi</span>
+                  <span className="text-[11px] font-normal text-slate-500">
+                    {isYesterdayMode 
+                      ? 'Hanya subtask & catatan yang diupdate kemarin' 
+                      : !isReadOnly 
+                      ? 'Geser ikon titik untuk atur posisi' 
+                      : 'Menampilkan semua subtask & seluruh riwayat catatan'}
+                  </span>
                 </div>
-                <div className="space-y-1.5 pt-1">
-                  {parsed.items.map((item, idx) => (
-                    <div
-                      key={item.index}
-                      draggable={true}
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('text/plain', String(idx));
-                        setCardDragIdx({ taskId: task.id, itemIdx: idx });
-                      }}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'move';
-                        if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx !== idx) {
-                          setCardDragOverIdx({ taskId: task.id, itemIdx: idx });
-                        }
-                      }}
-                      onDragLeave={() => {
-                        if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === idx) {
-                          setCardDragOverIdx(null);
-                        }
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        handleDropCardSubtask(task, idx);
-                      }}
-                      onDragEnd={() => {
-                        setCardDragIdx(null);
-                        setCardDragOverIdx(null);
-                      }}
-                      className={`flex items-start gap-2 p-2 rounded-xl border transition-all select-none ${
-                        cardDragIdx?.taskId === task.id && cardDragIdx?.itemIdx === idx
-                          ? 'opacity-40 border-2 border-dashed border-teal-500 bg-teal-50/50'
-                          : item.checked
-                          ? 'bg-slate-50 border-slate-200'
-                          : 'bg-white border-slate-300 hover:border-teal-500 hover:shadow-xs'
-                      } ${
-                        cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === idx && cardDragIdx?.itemIdx !== idx
-                          ? 'border-t-2 border-teal-600 bg-teal-50/40'
-                          : ''
-                      }`}
-                    >
-                      {!isReadOnly && (
-                        <div 
-                          className="cursor-grab active:cursor-grabbing p-0.5 text-slate-400 hover:text-teal-600 transition-colors shrink-0 mt-0.5"
-                          title="Geser untuk mengatur urutan subtask (Drag & Drop)"
+
+                {isYesterdayMode && displayedItems.length === 0 ? (
+                  <div className="py-2.5 px-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Nihil perubahan subtask pada hari kemarin ({formatDisplayTargetDate(targetYDate)}).</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Tidak ada subtask yang diceklis atau mendapat catatan baru pada tanggal kemarin. Seluruh {parsed.total} subtask & riwayat lengkap dapat dilihat di tab <strong>Semua Backlog</strong>.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 pt-1">
+                    {displayedItems.map((item, idx) => {
+                      // Subtask note handling
+                      const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                        ? item.notes
+                        : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+
+                      // Filter jika isYesterdayMode: HANYA catatan yang ditulis kemarin yang ditampilkan!
+                      const displayedNotes: SubtaskNote[] = isYesterdayMode
+                        ? rawNotes.filter(n => n.date === targetYDate)
+                        : rawNotes;
+
+                      const notesList: SubtaskNote[] = [...displayedNotes].sort((a, b) => {
+                        const dtA = `${a.date || ''} ${a.time || ''}`;
+                        const dtB = `${b.date || ''} ${b.time || ''}`;
+                        return dtB.localeCompare(dtA);
+                      });
+                      const noteCount = notesList.length;
+
+                      return (
+                        <div
+                          key={item.index}
+                          draggable={!isReadOnly}
+                          onDragStart={(e) => {
+                            if (isReadOnly) return;
+                            e.dataTransfer.setData('text/plain', String(idx));
+                            setCardDragIdx({ taskId: task.id, itemIdx: idx });
+                          }}
+                          onDragOver={(e) => {
+                            if (isReadOnly) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                            if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx !== idx) {
+                              setCardDragOverIdx({ taskId: task.id, itemIdx: idx });
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (isReadOnly) return;
+                            if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === idx) {
+                              setCardDragOverIdx(null);
+                            }
+                          }}
+                          onDrop={(e) => {
+                            if (isReadOnly) return;
+                            e.preventDefault();
+                            handleDropCardSubtask(task, idx);
+                          }}
+                          onDragEnd={() => {
+                            setCardDragIdx(null);
+                            setCardDragOverIdx(null);
+                          }}
+                          className={`flex items-start gap-2 p-2 rounded-xl border transition-all select-none ${
+                            cardDragIdx?.taskId === task.id && cardDragIdx?.itemIdx === idx
+                              ? 'opacity-40 border-2 border-dashed border-teal-500 bg-teal-50/50'
+                              : item.checked
+                              ? 'bg-slate-50 border-slate-200'
+                              : 'bg-white border-slate-300 hover:border-teal-500 hover:shadow-xs'
+                          } ${
+                            cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === idx && cardDragIdx?.itemIdx !== idx
+                              ? 'border-t-2 border-teal-600 bg-teal-50/40'
+                              : ''
+                          }`}
                         >
-                          <GripVertical className="w-4 h-4" />
-                        </div>
-                      )}
-                      <input
-                        type="checkbox"
-                        checked={item.checked}
-                        disabled={isReadOnly}
-                        onChange={() => {
-                          if (isReadOnly) {
-                            toast.warning('🔒 Laporan Kemarin bersifat Read-Only. Untuk menceklis tugas yang terlewat, silakan geser tanggal log book ke kemarin.');
-                            return;
-                          }
-                          handleToggleSubtask(task, item.index);
-                        }}
-                        className={`mt-0.5 w-4 h-4 rounded border-2 border-slate-400 text-teal-600 focus:ring-teal-500 shrink-0 ${
-                          isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-                        }`}
-                      />
-                      <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-1">
-                        <span className={`text-xs sm:text-sm leading-snug break-words ${
-                          item.checked 
-                            ? 'line-through text-slate-400 font-normal' 
-                            : 'font-bold text-slate-900'
-                        }`}>
-                          {item.text}
-                        </span>
-                        {item.checkedDate && (
-                          <span 
-                            className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold border inline-flex items-center gap-0.5 w-fit ${
-                              item.checkedDate === summaryData?.yesterdayDate
-                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                : 'bg-slate-100 text-slate-500 border-slate-200'
-                            }`}
-                            title={`Diceklis pada: ${item.checkedDate}`}
-                          >
-                            {item.checkedDate === summaryData?.yesterdayDate ? '✅ Diceklis Kemarin' : `Diceklis: ${item.checkedDate}`}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Icon (!) Catatan Subtask & Bubble Chat ke Kanan */}
-                      {(() => {
-                        const bubbleKey = `${task.id}-${item.index}`;
-                        const isBubbleOpen = activeNoteBubbleKey === bubbleKey;
-                        const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
-                          ? item.notes
-                          : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
-                        const notesList: SubtaskNote[] = [...rawNotes].sort((a, b) => {
-                          const dtA = `${a.date || ''} ${a.time || ''}`;
-                          const dtB = `${b.date || ''} ${b.time || ''}`;
-                          return dtB.localeCompare(dtA);
-                        });
-                        const noteCount = notesList.length;
-
-                        return (
-                          <div className="relative inline-flex items-center shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isReadOnly) {
-                                  if (noteCount > 0) {
-                                    setActiveNoteBubbleKey(prev => prev === bubbleKey ? null : bubbleKey);
-                                  } else {
-                                    toast.info('Tidak ada catatan pada subtask ini.');
-                                  }
-                                } else {
-                                  openSubtaskNoteModal(task, item.index, item.text, notesList, isReadOnly);
-                                }
-                              }}
-                              title={noteCount > 0 ? `${noteCount} Catatan Subtask (Klik untuk lihat)` : isReadOnly ? 'Tidak ada catatan' : 'Tambah catatan subtask (Icon !)'}
-                              className={`relative p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
-                                noteCount > 0
-                                  ? 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 shadow-2xs'
-                                  : isReadOnly
-                                  ? 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'
-                                  : 'text-slate-400 hover:text-teal-700 hover:bg-teal-50 hover:border hover:border-teal-200'
-                              }`}
+                          {!isReadOnly && (
+                            <div 
+                              className="cursor-grab active:cursor-grabbing p-0.5 text-slate-400 hover:text-teal-600 transition-colors shrink-0 mt-0.5"
+                              title="Geser untuk mengatur urutan subtask (Drag & Drop)"
                             >
-                              <AlertCircle className={`w-3.5 h-3.5 ${noteCount > 0 ? 'text-amber-600' : ''}`} />
-
-                              {/* Angka Badge Menggantikan Dot Merah */}
-                              {noteCount > 0 && (
-                                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-600 text-white font-mono text-[9px] font-black flex items-center justify-center border-2 border-white shadow-xs">
-                                  {noteCount}
-                                </span>
-                              )}
-                            </button>
-
-                            {/* Bubble Chat ke Kanan untuk Modul Kemarin (isReadOnly) */}
-                            {isReadOnly && isBubbleOpen && noteCount > 0 && (
-                              <div
-                                onClick={(e) => e.stopPropagation()}
-                                className="absolute right-0 sm:right-auto sm:left-full sm:ml-3 top-full sm:top-1/2 mt-2 sm:mt-0 sm:-translate-y-1/2 z-[100] w-72 sm:w-80 max-w-[85vw] bg-slate-900 text-slate-100 rounded-2xl p-3.5 shadow-2xl border border-slate-700 animate-in fade-in zoom-in-95 duration-150"
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                          )}
+                          <input
+                            type="checkbox"
+                            checked={item.checked}
+                            disabled={isReadOnly}
+                            onChange={() => {
+                              if (isReadOnly) {
+                                toast.warning('🔒 Laporan Kemarin bersifat Read-Only. Untuk menceklis tugas yang terlewat, silakan geser tanggal log book ke kemarin.');
+                                return;
+                              }
+                              handleToggleSubtask(task, item.index);
+                            }}
+                            className={`mt-0.5 w-4 h-4 rounded border-2 border-slate-400 text-teal-600 focus:ring-teal-500 shrink-0 ${
+                              isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                            }`}
+                          />
+                          <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-1">
+                            <span className={`text-xs sm:text-sm leading-snug break-words ${
+                              item.checked 
+                                ? 'line-through text-slate-400 font-normal' 
+                                : 'font-bold text-slate-900'
+                            }`}>
+                              {item.text}
+                            </span>
+                            {item.checkedDate && (
+                              <span 
+                                className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold border inline-flex items-center gap-0.5 w-fit ${
+                                  item.checkedDate === summaryData?.yesterdayDate
+                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                    : 'bg-slate-100 text-slate-500 border-slate-200'
+                                }`}
+                                title={`Diceklis pada: ${item.checkedDate}`}
                               >
-                                {/* Speech Bubble Tail pointing left on desktop, up on mobile */}
-                                <div className="hidden sm:block absolute -left-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-slate-900 border-l border-b border-slate-700 rotate-45 pointer-events-none" />
-                                <div className="sm:hidden absolute -top-1.5 right-3 w-3 h-3 bg-slate-900 border-t border-l border-slate-700 rotate-45 pointer-events-none" />
-
-                                <div className="relative flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
-                                  <div className="flex items-center gap-1.5">
-                                    <MessageSquare className="w-3.5 h-3.5 text-teal-400" />
-                                    <span className="text-[11px] font-black uppercase tracking-wider text-teal-400">
-                                      Catatan Subtask ({noteCount})
-                                    </span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setActiveNoteBubbleKey(null)}
-                                    className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                                    title="Tutup"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-
-                                <div className="relative mb-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-[11px] text-slate-300 font-medium line-clamp-2">
-                                  <span className="text-slate-400 font-normal">Subtask: </span>{item.text}
-                                </div>
-
-                                <div className="relative space-y-2 max-h-56 overflow-y-auto pr-1">
-                                  {notesList.map((nt, nIdx) => (
-                                    <div key={nt.id || nIdx} className="p-2.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs text-slate-100 space-y-1">
-                                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                                        <span className="text-teal-300 font-bold">{nt.author || 'PIC'}</span>
-                                        <span>📅 {nt.date}{nt.time ? ` ⏰ ${nt.time}` : ''}</span>
-                                      </div>
-                                      <div className="whitespace-pre-wrap leading-relaxed font-medium text-slate-200">
-                                        {nt.text}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
+                                {item.checkedDate === summaryData?.yesterdayDate ? '✅ Diceklis Kemarin' : `Diceklis: ${item.checkedDate}`}
+                              </span>
                             )}
                           </div>
-                        );
-                      })()}
-                    </div>
-                  ))}
-                </div>
+
+                          {/* Icon (!) Catatan Subtask & Bubble Chat ke Kanan */}
+                          {(() => {
+                            const bubbleKey = `${task.id}-${item.index}`;
+                            const isBubbleOpen = activeNoteBubbleKey === bubbleKey;
+
+                            return (
+                              <div className="relative inline-flex items-center shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isReadOnly) {
+                                      if (noteCount > 0) {
+                                        setActiveNoteBubbleKey(prev => prev === bubbleKey ? null : bubbleKey);
+                                      } else {
+                                        toast.info(isYesterdayMode ? 'Tidak ada catatan baru yang dibuat kemarin pada subtask ini.' : 'Tidak ada catatan pada subtask ini.');
+                                      }
+                                    } else {
+                                      openSubtaskNoteModal(task, item.index, item.text, displayedNotes, isReadOnly);
+                                    }
+                                  }}
+                                  title={noteCount > 0 ? `${noteCount} Catatan ${isYesterdayMode ? 'Kemarin' : 'Subtask'} (Klik untuk lihat)` : isReadOnly ? 'Tidak ada catatan' : 'Tambah catatan subtask (Icon !)'}
+                                  className={`relative p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                                    noteCount > 0
+                                      ? 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 shadow-2xs'
+                                      : isReadOnly
+                                      ? 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'
+                                      : 'text-slate-400 hover:text-teal-700 hover:bg-teal-50 hover:border hover:border-teal-200'
+                                  }`}
+                                >
+                                  <AlertCircle className={`w-3.5 h-3.5 ${noteCount > 0 ? 'text-amber-600' : ''}`} />
+
+                                  {/* Angka Badge Menggantikan Dot Merah */}
+                                  {noteCount > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-600 text-white font-mono text-[9px] font-black flex items-center justify-center border-2 border-white shadow-xs">
+                                      {noteCount}
+                                    </span>
+                                  )}
+                                </button>
+
+                                {/* Bubble Chat ke Kanan untuk Modul Kemarin (isReadOnly) */}
+                                {isReadOnly && isBubbleOpen && noteCount > 0 && (
+                                  <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="absolute right-0 sm:right-auto sm:left-full sm:ml-3 top-full sm:top-1/2 mt-2 sm:mt-0 sm:-translate-y-1/2 z-[100] w-72 sm:w-80 max-w-[85vw] bg-slate-900 text-slate-100 rounded-2xl p-3.5 shadow-2xl border border-slate-700 animate-in fade-in zoom-in-95 duration-150"
+                                  >
+                                    {/* Speech Bubble Tail pointing left on desktop, up on mobile */}
+                                    <div className="hidden sm:block absolute -left-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-slate-900 border-l border-b border-slate-700 rotate-45 pointer-events-none" />
+                                    <div className="sm:hidden absolute -top-1.5 right-3 w-3 h-3 bg-slate-900 border-t border-l border-slate-700 rotate-45 pointer-events-none" />
+
+                                    <div className="relative flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+                                      <div className="flex items-center gap-1.5">
+                                        <MessageSquare className="w-3.5 h-3.5 text-teal-400" />
+                                        <span className="text-[11px] font-black uppercase tracking-wider text-teal-400">
+                                          {isYesterdayMode ? `Catatan Kemarin (${noteCount})` : `Catatan Subtask (${noteCount})`}
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveNoteBubbleKey(null)}
+                                        className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                                        title="Tutup"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+
+                                    <div className="relative mb-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-[11px] text-slate-300 font-medium line-clamp-2">
+                                      <span className="text-slate-400 font-normal">Subtask: </span>{item.text}
+                                    </div>
+
+                                    <div className="relative space-y-2 max-h-56 overflow-y-auto pr-1">
+                                      {notesList.map((nt, nIdx) => (
+                                        <div key={nt.id || nIdx} className="p-2.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs text-slate-100 space-y-1">
+                                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                                            <span className="text-teal-300 font-bold">{nt.author || 'PIC'}</span>
+                                            <span>📅 {nt.date}{nt.time ? ` ⏰ ${nt.time}` : ''}</span>
+                                          </div>
+                                          <div className="whitespace-pre-wrap leading-relaxed font-medium text-slate-200">
+                                            {nt.text}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -3489,7 +3567,9 @@ export function LogbookScreen({
                   )}
                 </div>
                 <p className="text-xs font-semibold text-slate-500 mt-1">
-                  Review pencapaian tugas kemarin, progres checklist subtask, kendala, & status carry-over
+                  {evalScope === 'yesterday'
+                    ? 'Evaluasi H-1: Khusus subtask yang diceklis kemarin atau catatan yang ditulis kemarin.'
+                    : 'Semua Backlog: Menampilkan seluruh subtask (selesai & belum) dan semua riwayat catatan.'}
                 </p>
               </div>
 
@@ -3600,7 +3680,7 @@ export function LogbookScreen({
               </div>
             ) : (
               <div className="space-y-2.5">
-                {displayedYesterdayTasks.map((task) => renderTaskCard(task, true, evalScope === 'yesterday'))}
+                {displayedYesterdayTasks.map((task) => renderTaskCard(task, true, evalScope === 'yesterday', evalScope))}
               </div>
             )}
           </div>
