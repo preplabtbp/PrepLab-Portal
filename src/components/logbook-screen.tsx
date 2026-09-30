@@ -2431,6 +2431,12 @@ export function LogbookScreen({
               </h3>
 
               {/* Notice indicators on collapsed row */}
+              {isYesterday && Boolean(todayTasks.some(t => t.id === task.id) || (task.plannedDate && task.plannedDate.split(',').map(d => d.trim()).includes(selectedDate))) && (
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200 shrink-0" title="Tugas ini telah dijadwalkan ke Planning Hari Ini">
+                  <Bookmark className="w-2.5 h-2.5 fill-teal-600 text-teal-600" />
+                  <span>Di Planning</span>
+                </span>
+              )}
               {task.draftChange && (
                 <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 shrink-0">
                   Draft Usulan
@@ -2451,56 +2457,6 @@ export function LogbookScreen({
             className="flex flex-col items-end gap-1 shrink-0"
           >
             <div className="flex items-center gap-1.5">
-              {/* Quick Move / Drag Alternative Button */}
-              {isYesterday ? (
-                Boolean(todayTasks.some(t => t.id === task.id) || (task.plannedDate && task.plannedDate.split(',').map(d => d.trim()).includes(selectedDate))) ? (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-teal-100 text-teal-800 border border-teal-300">
-                      <Check className="w-3 h-3 text-teal-600 stroke-[3]" />
-                      <span>Di Planning Hari Ini</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMoveTaskToBacklog(task.id);
-                      }}
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-700 border border-slate-200 hover:border-rose-300 transition-all cursor-pointer shrink-0"
-                      title="Batalkan dari Planning Hari Ini"
-                    >
-                      <X className="w-3 h-3 text-rose-500" />
-                      <span className="hidden sm:inline">Batal</span>
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleMoveTaskToToday(task.id);
-                    }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all cursor-pointer active:scale-95 shrink-0"
-                    title="Tarik (drag) atau klik untuk jadwalkan diprogress Hari Ini"
-                  >
-                    <ArrowRight className="w-3 h-3 stroke-[3]" />
-                    <span className="hidden sm:inline">Progress Hari Ini</span>
-                  </button>
-                )
-              ) : (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleMoveTaskToBacklog(task.id);
-                  }}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-amber-100 text-slate-600 hover:text-amber-900 border border-slate-200 hover:border-amber-300 transition-all cursor-pointer shrink-0"
-                  title="Tarik (drag) atau klik jika tidak jadi diprogress hari ini"
-                >
-                  <ArrowLeft className="w-3 h-3 text-amber-600" />
-                  <span className="hidden sm:inline">Batal Hari Ini</span>
-                </button>
-              )}
-
               <button
                 type="button"
                 onClick={(e) => {
@@ -2989,28 +2945,6 @@ export function LogbookScreen({
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-              )}
-
-              {!isReadOnly && isYesterday && !isDone && (
-                Boolean(todayTasks.some(t => t.id === task.id) || (task.plannedDate && task.plannedDate.split(',').map(d => d.trim()).includes(selectedDate))) ? (
-                  <button
-                    type="button"
-                    onClick={() => handleMoveTaskToBacklog(task.id)}
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 border border-slate-300 hover:border-rose-300 transition-all cursor-pointer shadow-xs active:scale-95"
-                  >
-                    <X className="w-4 h-4 text-rose-500" />
-                    <span>Batalkan dari Planning Hari Ini</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleMoveTaskToToday(task.id)}
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white transition-all cursor-pointer shadow-xs active:scale-95"
-                  >
-                    <ArrowRight className="w-4 h-4" />
-                    <span>Lanjutkan ke Planning Hari Ini</span>
-                  </button>
-                )
               )}
             </div>
           </div>
