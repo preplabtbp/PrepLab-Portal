@@ -639,7 +639,20 @@ export function NotionDatabaseTable({
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedRow, setSelectedRow] = useState<TableRowData | null>(null);
+  const [selectedRowIndices, setSelectedRowIndices] = useState<Set<number>>(new Set());
   const [modalTab, setModalTab] = useState<'details' | 'comments'>('details');
+
+  // Clear or prune selection if rows change
+  useEffect(() => {
+    setSelectedRowIndices((prev) => {
+      if (prev.size === 0) return prev;
+      const validIndices = new Set<number>();
+      prev.forEach((idx) => {
+        if (idx < localRows.length) validIndices.add(idx);
+      });
+      return validIndices.size !== prev.size ? validIndices : prev;
+    });
+  }, [localRows.length]);
 
   // Fit to screen / Zoom Mode State
   const [fitPageMode, setFitPageMode] = useState<boolean>(false);
@@ -1810,6 +1823,101 @@ export function NotionDatabaseTable({
     return { total, onProgress, closed, open, canceled, highPriority };
   }, [localRows, getRowVal]);
 
+  // Multiple Row Selection Helpers for Bulk Actions
+  const isAllSelected = useMemo(() => {
+    if (filteredRows.length === 0) return false;
+    return filteredRows.every((row) => {
+      const idx = localRows.indexOf(row);
+      return idx !== -1 && selectedRowIndices.has(idx);
+    });
+  }, [filteredRows, localRows, selectedRowIndices]);
+
+  const isSomeSelected = useMemo(() => {
+    if (filteredRows.length === 0) return false;
+    return filteredRows.some((row) => {
+      const idx = localRows.indexOf(row);
+      return idx !== -1 && selectedRowIndices.has(idx);
+    }) && !isAllSelected;
+  }, [filteredRows, localRows, selectedRowIndices, isAllSelected]);
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedRowIndices((prev) => {
+        const next = new Set(prev);
+        filteredRows.forEach((row) => {
+          const idx = localRows.indexOf(row);
+          if (idx !== -1) next.delete(idx);
+        });
+        return next;
+      });
+    } else {
+      setSelectedRowIndices((prev) => {
+        const next = new Set(prev);
+        filteredRows.forEach((row) => {
+          const idx = localRows.indexOf(row);
+          if (idx !== -1) next.add(idx);
+        });
+        return next;
+      });
+    }
+  };
+
+  const handleToggleSelectRow = (actualRowIndex: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedRowIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(actualRowIndex)) {
+        next.delete(actualRowIndex);
+      } else {
+        next.add(actualRowIndex);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllInPage = () => {
+    const next = new Set<number>();
+    localRows.forEach((_, i) => next.add(i));
+    setSelectedRowIndices(next);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedRowIndices(new Set());
+  };
+
+  const handleDeleteSelectedRows = async () => {
+    if (selectedRowIndices.size === 0) return;
+    const count = selectedRowIndices.size;
+    const isDeletingAll = count === localRows.length;
+    const confirmMessage = isDeletingAll
+      ? `Apakah Anda yakin ingin MENGHAPUS SEMUA (${count}) topik/kegiatan di halaman ini? Tabel akan dikosongkan.`
+      : `Apakah Anda yakin ingin menghapus ${count} topik/kegiatan yang dipilih?`;
+
+    if (!window.confirm(confirmMessage)) return;
+
+    try {
+      const updatedRows = localRows.filter((_, idx) => !selectedRowIndices.has(idx));
+      // Re-index number column
+      const reindexed = updatedRows.map((r, i) => ({
+        ...r,
+        number: String(i + 1)
+      }));
+
+      setLocalRows(reindexed);
+      onRowsChange?.(reindexed);
+      if (selectedRow && selectedRowIndices.has(localRows.indexOf(selectedRow))) {
+        setSelectedRow(null);
+      }
+      setSelectedRowIndices(new Set());
+
+      await saveTableToBackend(reindexed);
+      toast.success(isDeletingAll ? 'Semua topik berhasil dibersihkan!' : `${count} topik berhasil dihapus!`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal menghapus topik terpilih');
+    }
+  };
+
   const handleSort = (col: string) => {
     if (sortColumn === col) {
       if (sortDirection === 'asc') setSortDirection('desc');
@@ -2576,8 +2684,41 @@ export function NotionDatabaseTable({
           )}
         </div>
 
-        {/* Quick Filter Pills */}
+        {/* Quick Filter Pills & Bulk Selection Actions */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          {localRows.length > 0 && (
+            <button
+              type="button"
+              onClick={handleToggleSelectAll}
+              className={`px-3 py-1 rounded-lg font-semibold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 border cursor-pointer ${
+                isAllSelected
+                  ? 'bg-teal-600/20 text-teal-400 border-teal-500/40 shadow-xs'
+                  : 'hover:bg-slate-800 text-slate-300 border-slate-700'
+              }`}
+              title={isAllSelected ? "Batalkan pilihan semua topik" : "Pilih semua topik di tabel ini"}
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              <span>{isAllSelected ? 'Batal Pilih Semua' : 'Pilih Semua'}</span>
+              {selectedRowIndices.size > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono bg-teal-500/30 text-teal-300">
+                  {selectedRowIndices.size}
+                </span>
+              )}
+            </button>
+          )}
+
+          {selectedRowIndices.size > 0 && (
+            <button
+              type="button"
+              onClick={handleDeleteSelectedRows}
+              className="px-3 py-1 rounded-lg font-bold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 border border-red-500/40 bg-red-600/20 hover:bg-red-600/30 text-red-300 cursor-pointer shadow-xs active:scale-95"
+              title="Hapus semua topik yang dipilih"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              <span>Hapus Terpilih ({selectedRowIndices.size})</span>
+            </button>
+          )}
+
           {[
             { key: 'ALL', label: 'Semua Status', count: stats.total },
             { key: 'ACTIVE', label: 'Sedang Aktif', count: stats.total - stats.closed - stats.canceled },
@@ -2666,6 +2807,21 @@ export function NotionDatabaseTable({
                   color: 'var(--text-muted, #94a3b8)'
                 }}
               >
+                {/* Select All Checkbox Column */}
+                <th className={`text-center ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}>
+                  <div className="flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isSomeSelected;
+                      }}
+                      onChange={handleToggleSelectAll}
+                      className="w-3.5 h-3.5 rounded text-teal-600 bg-slate-800 border-slate-600 focus:ring-teal-500 focus:ring-1 cursor-pointer accent-teal-600"
+                      title={isAllSelected ? "Batalkan pilihan semua" : "Pilih semua topik"}
+                    />
+                  </div>
+                </th>
                 {displayHeaders.map((colHeader) => {
                   const isSorted = sortColumn === colHeader;
                   const isNum = colHeader.toLowerCase() === 'number' || colHeader.toLowerCase() === 'no';
@@ -2903,7 +3059,7 @@ export function NotionDatabaseTable({
             >
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={displayHeaders.length + 2} className="py-12 text-center text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>
+                  <td colSpan={displayHeaders.length + 3} className="py-12 text-center text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>
                     {localRows.length === 0 ? (
                       <div className="flex flex-col items-center justify-center gap-3 py-6">
                         <div className="w-12 h-12 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-400">
@@ -2931,6 +3087,7 @@ export function NotionDatabaseTable({
                 filteredRows.map((row, idx) => {
                   const actualRowIndex = localRows.indexOf(row) !== -1 ? localRows.indexOf(row) : idx;
                   const isDirty = dirtyRowIndices.has(actualRowIndex);
+                  const isSelected = selectedRowIndices.has(actualRowIndex);
                   const topicTitle = getRowVal(row, 'Jenis kegiatan') || `Baris ${idx + 1}`;
                   const topicKey = topicTitle.toLowerCase().trim();
                   const cCount = topicCommentCounts[topicKey] || 0;
@@ -2939,10 +3096,31 @@ export function NotionDatabaseTable({
                     <tr
                       key={idx}
                       className={`hover:opacity-95 transition-all group ${
-                        isDirty ? 'bg-amber-500/5 hover:bg-amber-500/10' : ''
+                        isSelected 
+                          ? 'bg-teal-500/10 hover:bg-teal-500/15' 
+                          : isDirty 
+                            ? 'bg-amber-500/5 hover:bg-amber-500/10' 
+                            : ''
                       }`}
-                      style={{ borderBottomColor: isDirty ? 'rgba(245, 158, 11, 0.4)' : 'var(--border-main, #334155)' }}
+                      style={{ 
+                        borderBottomColor: isSelected 
+                          ? 'rgba(20, 184, 166, 0.4)' 
+                          : isDirty 
+                            ? 'rgba(245, 158, 11, 0.4)' 
+                            : 'var(--border-main, #334155)' 
+                      }}
                     >
+                      {/* Checkbox Column */}
+                      <td className={`text-center ${fitPageMode ? 'px-1 py-2' : 'px-2 py-3'}`} onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
+                            className="w-3.5 h-3.5 rounded text-teal-600 bg-slate-800 border-slate-600 focus:ring-teal-500 focus:ring-1 cursor-pointer accent-teal-600"
+                          />
+                        </div>
+                      </td>
                       {displayHeaders.map((colName) => {
                         const val = getRowVal(row, colName);
                         const colLower = colName.toLowerCase();
@@ -3268,6 +3446,9 @@ export function NotionDatabaseTable({
                         );
                       })}
 
+                      {/* Spacer cell for Add Column (+) header */}
+                      <td className="w-10 px-1 py-2 text-center" />
+
                       {/* Row Action Buttons */}
                       <td className={`text-center whitespace-nowrap ${fitPageMode ? 'px-1 py-2' : 'px-3 py-3'}`}>
                         <div className="flex items-center justify-center gap-1">
@@ -3296,7 +3477,7 @@ export function NotionDatabaseTable({
             </tbody>
           </table>
 
-          {/* Bottom Table Add Row Shortcut */}
+          {/* Bottom Table Add Row Shortcut & Select All */}
           <div 
             className="p-3 border-t flex items-center justify-between"
             style={{
@@ -3304,18 +3485,109 @@ export function NotionDatabaseTable({
               borderColor: 'var(--border-main, #2d2d2d)'
             }}
           >
-            <button
-              onClick={handleOpenAddModal}
-              className="text-xs font-semibold hover:text-teal-400 flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all cursor-pointer"
-              style={{ color: 'var(--text-muted, #94a3b8)' }}
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ Tambah Baris Kegiatan Baru</span>
-            </button>
-            <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>
-              Total {localRows.length} baris tercatat
-            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleOpenAddModal}
+                className="text-xs font-semibold hover:text-teal-400 flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all cursor-pointer"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Tambah Baris Kegiatan Baru</span>
+              </button>
+              {localRows.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleToggleSelectAll}
+                  className="text-xs font-medium hover:text-teal-400 flex items-center gap-1 py-1 px-2 rounded-lg transition-all cursor-pointer"
+                  style={{ color: 'var(--text-muted, #94a3b8)' }}
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  <span>{isAllSelected ? 'Batal Pilih Semua' : 'Pilih Semua'}</span>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedRowIndices.size > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDeleteSelectedRows}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 text-white flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Hapus Terpilih ({selectedRowIndices.size})</span>
+                </button>
+              )}
+              <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>
+                Total {localRows.length} baris tercatat {selectedRowIndices.size > 0 && `(${selectedRowIndices.size} dipilih)`}
+              </span>
+            </div>
           </div>
+
+          {/* Floating Bulk Selection Action Bar */}
+          {selectedRowIndices.size > 0 && (
+            <div 
+              className="sticky bottom-3 z-40 mx-4 my-2 p-3 px-4 rounded-2xl border shadow-2xl backdrop-blur-md flex items-center justify-between gap-4 animate-in slide-in-from-bottom-2 duration-200"
+              style={{
+                backgroundColor: 'rgba(24, 24, 27, 0.96)',
+                borderColor: 'rgba(239, 68, 68, 0.6)',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.5)'
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
+                  <CheckSquare className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-100 flex items-center gap-2">
+                    <span>
+                      {selectedRowIndices.size === localRows.length
+                        ? `Semua ${localRows.length} topik dipilih`
+                        : `${selectedRowIndices.size} dari ${localRows.length} topik dipilih`}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-red-500/20 text-red-300 font-mono">
+                      Pilihan Aktif
+                    </span>
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    {selectedRowIndices.size === localRows.length
+                      ? 'Klik Hapus untuk membersihkan semua topik di tabel ini sekaligus.'
+                      : 'Hapus topik yang dipilih atau pilih semua topik untuk membersihkan tabel.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  className="px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                {selectedRowIndices.size < localRows.length && (
+                  <button
+                    type="button"
+                    onClick={handleSelectAllInPage}
+                    className="px-3 py-1.5 rounded-xl border text-xs font-medium hover:bg-slate-800 transition-colors cursor-pointer text-teal-400 border-teal-500/30"
+                  >
+                    Pilih Semua ({localRows.length})
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDeleteSelectedRows}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-950/50 active:scale-95 transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>
+                    {selectedRowIndices.size === localRows.length
+                      ? `Hapus Semua (${selectedRowIndices.size})`
+                      : `Hapus Terpilih (${selectedRowIndices.size})`}
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Floating Save Action Bar when there are direct unsaved edits */}
           {dirtyRowIndices.size > 0 && (
