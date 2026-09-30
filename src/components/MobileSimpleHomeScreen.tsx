@@ -510,7 +510,7 @@ export function MobileSimpleHomeScreen({
                     Inspeksi, KTA &amp; TTA
                   </h4>
                   <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {weeklyInspectionDone ? '✓ Lihat Bukti Screenshot' : 'Inspeksi rutin & lapor K3L'}
+                    {weeklyInspectionDone ? '✓ PDF Laporan & General Submit' : 'Inspeksi rutin & lapor K3L'}
                   </p>
                 </div>
               </button>
@@ -638,7 +638,7 @@ export function MobileSimpleHomeScreen({
                     Inspeksi, KTA &amp; TTA
                   </h4>
                   <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {weeklyInspectionDone ? '✓ Lihat Bukti Screenshot' : 'Inspeksi rutin & lapor K3L'}
+                    {weeklyInspectionDone ? '✓ PDF Laporan & General Submit' : 'Inspeksi rutin & lapor K3L'}
                   </p>
                 </div>
               </button>
@@ -806,7 +806,7 @@ export function MobileSimpleHomeScreen({
                     Inspeksi, KTA &amp; TTA
                   </h4>
                   <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {weeklyInspectionDone ? '✓ Lihat Bukti Screenshot' : 'Inspeksi rutin & lapor K3L'}
+                    {weeklyInspectionDone ? '✓ PDF Laporan & General Submit' : 'Inspeksi rutin & lapor K3L'}
                   </p>
                 </div>
               </button>
@@ -934,7 +934,7 @@ export function MobileSimpleHomeScreen({
                     Inspeksi, KTA &amp; TTA
                   </h4>
                   <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {weeklyInspectionDone ? '✓ Lihat Bukti Screenshot' : 'Inspeksi rutin & lapor K3L'}
+                    {weeklyInspectionDone ? '✓ PDF Laporan & General Submit' : 'Inspeksi rutin & lapor K3L'}
                   </p>
                 </div>
               </button>
@@ -1042,7 +1042,7 @@ export function MobileSimpleHomeScreen({
                     Inspeksi, KTA &amp; TTA
                   </h4>
                   <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {weeklyInspectionDone ? '✓ Lihat Bukti Screenshot' : 'Inspeksi rutin & lapor K3L'}
+                    {weeklyInspectionDone ? '✓ PDF Laporan & General Submit' : 'Inspeksi rutin & lapor K3L'}
                   </p>
                 </div>
               </button>

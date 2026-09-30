@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  ClipboardCheck, ClipboardList, Camera, X, Check, 
+  ClipboardCheck, ClipboardList, Camera, X, Check, Copy,
   Upload, ArrowRight, Loader2, Trash2, Calendar,
   ShieldAlert, CheckCircle2, AlertTriangle, ChevronLeft, ExternalLink, MapPin,
   Sparkles, FileText, Clock, AlertCircle, Eye, Download, ZoomIn, Image as ImageIcon,
@@ -12,8 +12,38 @@ import { compressImage } from '../features/inspections/hooks/useInspection';
 import { triggerExpGain } from '../lib/gamificationEvents';
 import { isPicTemuanRole, getOpenFindingsForSupervisor } from '../utils/inspection-pic-matcher';
 import { getISOWeekKey } from '../utils/iso-week';
+import { GENERAL_INSPECTION_FORM_URL } from './InspectionCompletionModal';
 
 const SAFETY_KTA_FORM_URL = 'https://docs.google.com/forms/d/1YMympG3aA-8l978aAlRJFSoi-SVQAKiS7KmJjNRfuBI/viewform?edit_requested=true';
+
+// Helper to extract fileId from Google Drive link if available
+export const extractDriveFileId = (rawUrl?: string | null) => {
+  if (!rawUrl) return null;
+  const match = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+};
+
+// Return a mobile-friendly view URL that avoids Google Drive virus scan block / login loops on smartphones
+export const getMobileDriveViewUrl = (rawUrl?: string | null) => {
+  if (!rawUrl || rawUrl === '#' || rawUrl === '-') return null;
+  const fileId = extractDriveFileId(rawUrl);
+  if (fileId) {
+    return `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk`;
+  }
+  return rawUrl;
+};
+
+export const getDrivePreviewUrl = (rawUrl?: string | null) => {
+  if (!rawUrl || rawUrl === '#' || rawUrl === '-') return null;
+  const fileId = extractDriveFileId(rawUrl);
+  if (fileId) {
+    return `https://drive.google.com/file/d/${fileId}/preview`;
+  }
+  if (rawUrl.startsWith('http')) {
+    return `https://docs.google.com/viewer?url=${encodeURIComponent(rawUrl)}&embedded=true`;
+  }
+  return rawUrl;
+};
 
 export function formatProofImageUrl(url?: string | null): string {
   if (!url || url === '-' || url === '#' || url === 'null') return '';
@@ -95,7 +125,27 @@ export function SimplifiedInspectionModal({
   const [submittingClose, setSubmittingClose] = useState(false);
   const closingFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch submitted proofs for this user
+  // Latest inspection data (for downloading PDF report)
+  const [latestInspection, setLatestInspection] = useState<any | null>(null);
+  const [copiedPdf, setCopiedPdf] = useState(false);
+  const [copiedGeneralUrl, setCopiedGeneralUrl] = useState(false);
+
+  const handleCopyPdf = (url: string) => {
+    if (!url) return;
+    navigator.clipboard.writeText(url);
+    setCopiedPdf(true);
+    toast.success('Link PDF laporan berhasil disalin! Siap ditempel di formulir Safety.');
+    setTimeout(() => setCopiedPdf(false), 2500);
+  };
+
+  const handleCopyGeneralSubmitUrl = () => {
+    navigator.clipboard.writeText(GENERAL_INSPECTION_FORM_URL);
+    setCopiedGeneralUrl(true);
+    toast.success('Tautan Form General Submit disalin!');
+    setTimeout(() => setCopiedGeneralUrl(false), 2500);
+  };
+
+  // Fetch submitted proofs and latest inspection for this user
   const fetchUserProofs = async () => {
     if (!inspectorNik && !inspectorName) return;
     setLoadingProofs(true);
@@ -116,9 +166,10 @@ export function SimplifiedInspectionModal({
         return false;
       };
 
-      const [wRes, kRes] = await Promise.allSettled([
+      const [wRes, kRes, inspRes] = await Promise.allSettled([
         fetch('/api/inspection-proofs?week=ALL'),
-        fetch('/api/kta-reports?week=ALL')
+        fetch('/api/kta-reports?week=ALL'),
+        fetch(`/api/inspections/latest-by-user?nik=${encodeURIComponent(cleanNik)}&name=${encodeURIComponent(cleanName)}`)
       ]);
 
       if (wRes.status === 'fulfilled' && wRes.value.ok) {
@@ -140,6 +191,13 @@ export function SimplifiedInspectionModal({
         const allK: any[] = await kRes.value.json();
         const myK = Array.isArray(allK) ? allK.filter(isMatch) : [];
         setKtaProofs(myK);
+      }
+
+      if (inspRes.status === 'fulfilled' && inspRes.value.ok) {
+        const inspJson = await inspRes.value.json();
+        if (inspJson && inspJson.found && inspJson.inspection) {
+          setLatestInspection(inspJson.inspection);
+        }
       }
     } catch (e) {
       console.warn('Gagal memuat bukti screenshot:', e);
@@ -464,6 +522,10 @@ export function SimplifiedInspectionModal({
 
   const isAnySubmitting = submittingWeekly || submittingKta || submittingClose;
   const latestWeeklyProof = weeklyProofs[0] || null;
+  const effectivePdfUrl = 
+    (schedule?.completedPdfUrl && schedule.completedPdfUrl !== '#' && schedule.completedPdfUrl !== '-') 
+      ? schedule.completedPdfUrl 
+      : (latestInspection?.pdfUrl || schedule?.pdfUrl || null);
 
   return (
     <AnimatePresence>
@@ -675,6 +737,137 @@ export function SimplifiedInspectionModal({
                   </div>
                 </div>
 
+                {/* ── DOKUMEN PDF LAPORAN INSPEKSI (MOBILE-FRIENDLY DOWNLOAD & PREVIEW) ── */}
+                {(effectivePdfUrl || schedule?.isCompleted || latestInspection) && (
+                  <div className="p-3.5 rounded-2xl bg-teal-500/10 border-2 border-teal-500/30 space-y-2.5 shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                          <FileText className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-xs text-[var(--text-main)] block">
+                            Dokumen Laporan PDF Resmi
+                          </span>
+                          <span className="text-[10px] text-[var(--text-muted)]">
+                            {latestInspection?.type || schedule?.formInfo?.formTitle || schedule?.formName || 'Laporan Hasil Inspeksi'}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-full bg-teal-600 text-white shadow-2xs">
+                        PDF Siap
+                      </span>
+                    </div>
+
+                    {effectivePdfUrl && effectivePdfUrl !== '#' && effectivePdfUrl !== '-' ? (
+                      <div className="space-y-2 pt-1">
+                        <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                          Dokumen PDF resmi hasil inspeksi siap diunduh ke HP Anda untuk dilampirkan ke formulir General Submit Safety K3.
+                        </p>
+                        
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <a
+                            href={getMobileDriveViewUrl(effectivePdfUrl) || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 min-w-[130px] py-2.5 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer text-center"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Buka / Unduh PDF</span>
+                          </a>
+
+                          <a
+                            href={getDrivePreviewUrl(effectivePdfUrl) || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="py-2.5 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--card-bg)] text-[var(--text-main)] hover:bg-black/5 font-semibold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                            title="Buka Pratinjau PDF"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-teal-600" />
+                            <span>Preview</span>
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPdf(getMobileDriveViewUrl(effectivePdfUrl) || effectivePdfUrl)}
+                            className="py-2.5 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--card-bg)] text-[var(--text-main)] hover:bg-black/5 font-semibold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                            title="Salin Link Google Drive PDF"
+                          >
+                            {copiedPdf ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedPdf ? 'Tersalin' : 'Salin Link'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                        <Clock className="w-4 h-4 shrink-0 animate-pulse text-amber-600" />
+                        <span>PDF sedang dalam proses pembuatan oleh server. Ketuk tombol Segarkan di pojok kanan atas setelah beberapa saat.</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── KARTU PANDUAN & AKSES GENERAL SUBMIT SAFETY (WAJIB K3) ── */}
+                <div className="p-3.5 rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/15 via-amber-500/5 to-orange-500/15 space-y-2.5 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <ShieldAlert className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="font-bold text-xs text-[var(--text-main)] block">
+                          Formulir General Submit Safety
+                        </span>
+                        <span className="text-[10px] text-[var(--text-muted)]">
+                          Google Form Resmi Departemen K3 Harita
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500 text-white shadow-2xs">
+                      Wajib K3
+                    </span>
+                  </div>
+
+                  {/* Panduan 3 Langkah untuk Mobile User */}
+                  <div className="p-2.5 rounded-xl bg-[var(--card-bg)]/80 border border-amber-500/20 space-y-1.5 text-[11px] text-[var(--text-main)]">
+                    <div className="flex items-start gap-1.5">
+                      <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                      <span><strong>Unduh / Salin Dokumen PDF</strong> laporan inspeksi di atas ke HP Anda.</span>
+                    </div>
+                    <div className="flex items-start gap-1.5">
+                      <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                      <span>Buka <strong>Form General Submit Safety</strong> di bawah, isi data inspeksi & lampirkan file/link PDF.</span>
+                    </div>
+                    <div className="flex items-start gap-1.5">
+                      <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                      <span>Ambil screenshot konfirmasi kirim ("Tanggapan telah direkam"), lalu <strong>unggah buktinya di bawah</strong> (+50 EXP).</span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons for General Submit */}
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <a
+                      href={GENERAL_INSPECTION_FORM_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer text-center"
+                    >
+                      <span>Buka Form General Submit K3</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyGeneralSubmitUrl}
+                      className="py-2.5 px-3 rounded-xl border border-amber-500/30 bg-[var(--card-bg)] text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 font-semibold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      title="Salin tautan formulir Google Forms Safety"
+                    >
+                      {copiedGeneralUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedGeneralUrl ? 'Tersalin' : 'Salin Link'}</span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* ── JIKA SUDAH ADA BUKTI SCREENSHOT INSPEKSI: TAMPILKAN THUMBNAIL & TOMBOL LIHAT BUKTI ── */}
                 {latestWeeklyProof && (
                   <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
@@ -778,8 +971,23 @@ export function SimplifiedInspectionModal({
                       </span>
                     </div>
                     <p className="text-[10.5px] text-[var(--text-muted)] leading-relaxed">
-                      Jika Anda mengisi form inspeksi via tautan terpisah / lembar tanggapan, unggah tangkapan layar bukti kirim di bawah ini:
+                      Unggah tangkapan layar (screenshot) bukti konfirmasi formulir Safety (&quot;Tanggapan telah direkam&quot;) di bawah ini untuk verifikasi &amp; klaim status <strong>SUDAH</strong>:
                     </p>
+
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[10.5px]">
+                      <span className="text-amber-800 dark:text-amber-200 font-medium">
+                        Belum mengisi formulir Safety?
+                      </span>
+                      <a
+                        href={GENERAL_INSPECTION_FORM_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 shrink-0"
+                      >
+                        <span>Buka General Submit</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
 
                     <form onSubmit={handleSubmitWeeklySs} className="space-y-3">
                       {weeklyImagePreview ? (

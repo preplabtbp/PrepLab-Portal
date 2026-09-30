@@ -1065,6 +1065,70 @@ router.get("/api/inspections/:id/pdf", async (req, res) => {
   }
 });
 
+router.get("/api/inspections/latest-by-user", async (req, res) => {
+  try {
+    const nik = typeof req.query.nik === 'string' ? req.query.nik.trim().toLowerCase() : '';
+    const name = typeof req.query.name === 'string' ? req.query.name.trim().toLowerCase() : '';
+    if (!nik && !name) {
+      return res.status(400).json({ error: "Parameter nik atau name wajib disertakan" });
+    }
+
+    const recentList = await db.select().from(inspections).orderBy(desc(inspections.date)).limit(100);
+    const matched = recentList.find(insp => {
+      const dataF = (insp.dataF && typeof insp.dataF === 'object') ? (insp.dataF as any) : {};
+      const insp1 = (dataF.insp1 || '').toLowerCase();
+      const insp2 = (dataF.insp2 || '').toLowerCase();
+      const insp3 = (dataF.insp3 || '').toLowerCase();
+      const mainInspector = (insp.inspectorName || '').toLowerCase();
+
+      if (nik && (insp1.includes(nik) || insp2.includes(nik) || insp3.includes(nik) || mainInspector.includes(nik))) {
+        return true;
+      }
+      if (name) {
+        if (mainInspector.includes(name) || name.includes(mainInspector)) return true;
+        if (insp1.includes(name) || insp2.includes(name) || insp3.includes(name)) return true;
+        const nameParts = name.split(/\s+/).filter(Boolean);
+        if (nameParts.length >= 2 && nameParts.every(p => mainInspector.includes(p) || insp1.includes(p))) return true;
+      }
+      return false;
+    });
+
+    if (!matched) {
+      return res.json({ found: false, inspection: null });
+    }
+
+    let displayPdf = matched.pdfUrl;
+    let gpsPdf = null;
+    if (displayPdf && typeof displayPdf === 'string' && displayPdf.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(displayPdf);
+        displayPdf = parsed.tbp || parsed.pdfUrl || (Object.values(parsed)[0] as string) || null;
+        gpsPdf = parsed.gps || null;
+      } catch (e) {}
+    }
+
+    if (!displayPdf || displayPdf === '#' || displayPdf === '-') {
+      displayPdf = `/api/inspections/${matched.id}/pdf`;
+    }
+
+    return res.json({
+      found: true,
+      inspection: {
+        id: matched.id,
+        date: matched.date,
+        type: matched.type,
+        location: matched.location,
+        inspectorName: matched.inspectorName,
+        pdfUrl: displayPdf,
+        linkPdf2: gpsPdf
+      }
+    });
+  } catch (err: any) {
+    console.error("Error fetching latest inspection by user:", err);
+    return res.status(500).json({ error: err.message || "Gagal memuat inspeksi terbaru" });
+  }
+});
+
 router.post("/api/admin/inspections/:id/regenerate-pdf", async (req, res) => {
     try {
         const id = parseInt(req.params.id);
@@ -1796,9 +1860,16 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
           } catch (e) {}
         }
 
+        if (!displayPdf || displayPdf === '#' || displayPdf === '-') {
+          if (insp.id) {
+            displayPdf = `/api/inspections/${insp.id}/pdf`;
+          }
+        }
+
         s.isCompleted = true;
         s.completedAt = insp.date ? new Date(insp.date).toISOString() : new Date().toISOString();
         s.completedPdfUrl = displayPdf || '#';
+        s.completedInspectionId = insp.id;
         s.completedInspector = insp.inspectorName || dataFObj.insp1 || s.name;
         s.completedFormTitle = insp.type || dataFObj.judulForm;
         s.completedLocation = insp.location || dataFObj.lokasiUmum;
