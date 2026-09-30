@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { TbpDashboard } from "./TbpDashboard";
 import { SectionHubDashboard } from "./SectionHubDashboard";
 import { NotionDatabaseTable, TableRowData } from "./NotionDatabaseTable";
+import { EnterpriseWysiwygEditor } from "./notion/EnterpriseWysiwygEditor";
 import { Card, Button, Input } from "./ui";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -158,6 +159,7 @@ export function BulletinBoard({
 
   // New Post State
   const [isEditing, setIsEditing] = useState(false);
+  const [editorMode, setEditorMode] = useState<'wysiwyg' | 'raw'>('wysiwyg');
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editCategory, setEditCategory] = useState<string>("");
@@ -1472,36 +1474,89 @@ ${aiMeetingNotes
                 }}
               />
 
-              <div className="flex items-center gap-2 mb-6">
-                <span className="text-xs font-semibold" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                  Kategori:
-                </span>
-                <select
-                  value={editCategory}
-                  onChange={(e) => setEditCategory(e.target.value)}
-                  className="text-xs rounded-lg px-2.5 py-1.5 outline-none border focus:border-teal-500 transition-colors"
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                    Kategori:
+                  </span>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="text-xs rounded-lg px-2.5 py-1.5 outline-none border focus:border-teal-500 transition-colors"
+                    style={{
+                      backgroundColor: 'var(--card-bg, #2a2a2a)',
+                      color: 'var(--text-main, #cbd5e1)',
+                      borderColor: 'var(--border-main, #334155)'
+                    }}
+                  >
+                    <option value="PAGE">Page</option>
+                    <option value="INFO::1">Info</option>
+                  </select>
+                </div>
+
+                {/* Editor Mode Switcher (WYSIWYG vs Raw Markdown Code) */}
+                <div 
+                  className="flex items-center p-0.5 rounded-lg border text-xs"
                   style={{
-                    backgroundColor: 'var(--card-bg, #2a2a2a)',
-                    color: 'var(--text-main, #cbd5e1)',
+                    backgroundColor: 'var(--input-bg, #1a1a1a)',
                     borderColor: 'var(--border-main, #334155)'
                   }}
                 >
-                  <option value="PAGE">Page</option>
-                  <option value="INFO::1">Info</option>
-                </select>
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('wysiwyg')}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                      editorMode === 'wysiwyg'
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Visual (WYSIWYG)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('raw')}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                      editorMode === 'raw'
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Kode Markdown
+                  </button>
+                </div>
               </div>
 
-              <textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                placeholder="Tulis dokumen dalam format Markdown (Gunakan ## untuk membuat link sub-menu)..."
-                className="w-full min-h-[500px] text-base outline-none resize-y p-4 rounded-xl border leading-relaxed font-mono transition-colors"
-                style={{
-                  backgroundColor: 'var(--input-bg, #222)',
-                  color: 'var(--text-main, #cbd5e1)',
-                  borderColor: 'var(--border-main, #334155)'
-                }}
-              />
+              {editorMode === 'wysiwyg' ? (
+                <div 
+                  className="rounded-2xl border p-4 shadow-sm"
+                  style={{
+                    backgroundColor: 'var(--card-bg, #1e1e1e)',
+                    borderColor: 'var(--border-main, #334155)'
+                  }}
+                >
+                  <EnterpriseWysiwygEditor
+                    value={editContent}
+                    onChange={setEditContent}
+                    placeholder="Tulis dokumen dalam format visual (teks, heading, checklist subtask, dll)..."
+                    allowModeSwitch={true}
+                    defaultMode="text"
+                    rows={20}
+                  />
+                </div>
+              ) : (
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  placeholder="Tulis dokumen dalam format Markdown (Gunakan ## untuk membuat link sub-menu)..."
+                  className="w-full min-h-[500px] text-base outline-none resize-y p-4 rounded-xl border leading-relaxed font-mono transition-colors"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #222)',
+                    color: 'var(--text-main, #cbd5e1)',
+                    borderColor: 'var(--border-main, #334155)'
+                  }}
+                />
+              )}
             </div>
           ) : isSectionHubPost(selectedPost) ? (
             <div className="space-y-6 w-full max-w-none animate-in fade-in duration-200">

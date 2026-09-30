@@ -412,47 +412,74 @@ export const CANONICAL_NOTION_COLUMNS = [
   'period'
 ] as const;
 
+export const getPriorityWeight = (priority: string): number => {
+  const p = (priority || '').toLowerCase().trim();
+  if (p.includes('urgent') || p.includes('kritis') || p.includes('critical')) return 1;
+  if (p.includes('high') || p.includes('tinggi')) return 2;
+  if (p.includes('medium') || p.includes('sedang')) return 3;
+  if (p.includes('normal') || p.includes('biasa')) return 4;
+  if (p.includes('low') || p.includes('rendah')) return 5;
+  return 6;
+};
+
 export const getCellValue = (row: TableRowData, colName: string): string => {
   if (!row) return '';
   if (row[colName] !== undefined && row[colName] !== '') return row[colName];
 
   const targetLower = colName.toLowerCase().trim();
+  let fallbackVal: string | undefined = undefined;
+
   for (const key of Object.keys(row)) {
+    const val = row[key];
     const keyLower = key.toLowerCase().trim();
-    if (keyLower === targetLower) return row[key];
+
+    if (keyLower === targetLower) {
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
+    }
 
     if (targetLower === 'number' && (keyLower === 'no' || keyLower === 'no.' || keyLower === '#' || keyLower === 'index')) {
-      return row[key];
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
     }
-    if (targetLower === 'jenis kegiatan' && (keyLower.includes('jenis kegiatan') || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
-      return row[key];
+    if ((targetLower === 'jenis kegiatan' || targetLower === 'judul') && (keyLower.includes('jenis kegiatan') || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
     }
     if (targetLower === 'keterangan' && (keyLower.includes('keterangan') || keyLower.includes('catatan') || keyLower.includes('deskripsi') || keyLower.includes('content') || keyLower.includes('rincian'))) {
-      return row[key];
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
     }
     if (targetLower === 'pic' && (keyLower === 'pic' || keyLower.includes('assignee') || keyLower.includes('pj') || keyLower === 'personil')) {
-      return row[key];
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
     }
     if (targetLower === 'priority' && (keyLower.includes('prioritas') || keyLower.includes('priority'))) {
-      return row[key];
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
     }
     if (targetLower === 'status' && keyLower.includes('status')) {
-      return row[key];
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
     }
     if (targetLower === 'created time' && (keyLower.includes('created') || keyLower.includes('tanggal dibuat') || keyLower.includes('waktu dibuat') || keyLower === 'dibuat')) {
-      return row[key];
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
     }
     if (targetLower === 'kategori' && (keyLower.includes('kategori') || keyLower.includes('category') || keyLower === 'dept')) {
-      return row[key];
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
     }
     if (targetLower === 'activity (routine/non routine)' && (keyLower.includes('activity') || keyLower.includes('aktivitas'))) {
-      return row[key];
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
     }
     if (targetLower === 'period' && (keyLower === 'period' || keyLower === 'periode')) {
-      return row[key];
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
     }
   }
-  return row[colName] || '';
+  return fallbackVal ?? row[colName] ?? '';
 };
 
 export function serializeMarkdownTable(
@@ -479,6 +506,13 @@ export function serializeMarkdownTable(
   return parts.join('\n\n');
 }
 
+export function splitMarkdownRow(line: string): string[] {
+  const trimmed = line.trim();
+  const inner = trimmed.replace(/^\|/, '').replace(/\|$/, '');
+  const rawCells = inner.split(/(?<!\\)\|/);
+  return rawCells.map(c => c.trim().replace(/\\\|/g, '|'));
+}
+
 // Helper untuk mengekstrak tabel markdown dari string konten
 export function extractMarkdownTableFromContent(content: string): {
   headers: string[];
@@ -503,19 +537,13 @@ export function extractMarkdownTableFromContent(content: string): {
   }
   if (startIdx !== -1 && endIdx - startIdx >= 1) {
     const headerLine = lines[startIdx];
-    const headers = headerLine
-      .split('|')
-      .map((h) => h.trim())
-      .filter((h, idx, arr) => idx > 0 && idx < arr.length - 1);
+    const headers = splitMarkdownRow(headerLine);
 
     const rows: TableRowData[] = [];
     for (let i = startIdx + 2; i <= endIdx; i++) {
       const rowLine = lines[i].trim();
       if (!rowLine.startsWith('|')) continue;
-      const cells = rowLine
-        .split('|')
-        .map((c) => c.trim())
-        .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+      const cells = splitMarkdownRow(rowLine);
 
       if (cells.length > 0) {
         const rowObj: TableRowData = {};
@@ -881,45 +909,62 @@ export function NotionDatabaseTable({
   // Helper to read row property with fuzzy matching across header aliases
   const getRowVal = useCallback((row: TableRowData, colName: string): string => {
     if (!row) return '';
-    if (row[colName] !== undefined) return row[colName];
+    if (row[colName] !== undefined && row[colName] !== '') return row[colName];
 
     const targetLower = colName.toLowerCase().trim();
-    for (const key of Object.keys(row)) {
-      const keyLower = key.toLowerCase().trim();
-      if (keyLower === targetLower) return row[key];
+    let fallbackVal: string | undefined = undefined;
 
-      if (targetLower === 'number' && (keyLower === 'no' || keyLower === 'no.' || keyLower === '#')) {
-        return row[key];
+    for (const key of Object.keys(row)) {
+      const val = row[key];
+      const keyLower = key.toLowerCase().trim();
+
+      if (keyLower === targetLower) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'jenis kegiatan' && (keyLower.includes('jenis kegiatan') || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama')) {
-        return row[key];
+
+      if (targetLower === 'number' && (keyLower === 'no' || keyLower === 'no.' || keyLower === '#' || keyLower === 'index')) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if ((targetLower === 'jenis kegiatan' || targetLower === 'judul') && (keyLower.includes('jenis kegiatan') || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
       }
       if (targetLower === 'keterangan' && (keyLower.includes('keterangan') || keyLower.includes('catatan') || keyLower.includes('deskripsi') || keyLower.includes('content') || keyLower.includes('rincian'))) {
-        return row[key];
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
       }
       if (targetLower === 'pic' && (keyLower === 'pic' || keyLower.includes('assignee') || keyLower.includes('pj') || keyLower === 'personil')) {
-        return row[key];
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
       }
       if (targetLower === 'priority' && (keyLower.includes('prioritas') || keyLower.includes('priority'))) {
-        return row[key];
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
       }
       if (targetLower === 'status' && keyLower.includes('status')) {
-        return row[key];
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
       }
       if (targetLower === 'created time' && (keyLower.includes('created') || keyLower.includes('tanggal dibuat') || keyLower.includes('waktu dibuat') || keyLower === 'dibuat')) {
-        return row[key];
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
       }
       if (targetLower === 'kategori' && (keyLower.includes('kategori') || keyLower.includes('category') || keyLower === 'dept')) {
-        return row[key];
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
       }
       if (targetLower === 'activity (routine/non routine)' && (keyLower.includes('activity') || keyLower.includes('aktivitas'))) {
-        return row[key];
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
       }
       if (targetLower === 'period' && (keyLower === 'period' || keyLower === 'periode')) {
-        return row[key];
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
       }
     }
-    return '';
+    return fallbackVal ?? row[colName] ?? '';
   }, []);
 
   // Fetch comments from backend
@@ -1377,6 +1422,10 @@ export function NotionDatabaseTable({
         }
       }
       targetRow[keyToSet] = newValue;
+      if (colLower === 'jenis kegiatan' || colLower === 'judul' || colLower === 'task' || colLower === 'nama kegiatan') {
+        targetRow['Jenis kegiatan'] = newValue;
+        targetRow['Jenis Kegiatan'] = newValue;
+      }
 
       // Smart Tasklist Auto-progress:
       // Otomatis open jika 0%, on progress jika progress berjalan (>0% & <100%), closed ketika 100%
@@ -1622,6 +1671,7 @@ export function NotionDatabaseTable({
     setRowFormData({
       number: nextNum,
       'Jenis kegiatan': '',
+      'Jenis Kegiatan': '',
       Keterangan: '',
       PIC: currentAuthorName || '',
       Priority: 'Normal',
@@ -1642,6 +1692,10 @@ export function NotionDatabaseTable({
     displayHeaders.forEach(h => {
       data[h] = getRowVal(row, h);
     });
+    // Ensure both casing variants of title are explicitly populated
+    const titleVal = getRowVal(row, 'Jenis Kegiatan') || getRowVal(row, 'Jenis kegiatan') || '';
+    data['Jenis Kegiatan'] = titleVal;
+    data['Jenis kegiatan'] = titleVal;
     setRowFormData(data);
     setEditingRowIndex(index);
     setShowRowModal(true);
@@ -1650,17 +1704,29 @@ export function NotionDatabaseTable({
   // Save Row (Create / Edit)
   const handleSaveRow = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!rowFormData['Jenis kegiatan']?.trim()) {
+    const title = (rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || '').trim();
+    if (!title) {
       toast.error('Wajib mengisi "Jenis kegiatan"');
       return;
     }
 
+    const cleanedRow = { ...rowFormData };
+    // Synchronize title across both casing keys and any matching header
+    cleanedRow['Jenis kegiatan'] = title;
+    cleanedRow['Jenis Kegiatan'] = title;
+    displayHeaders.forEach(h => {
+      const hLower = h.toLowerCase().trim();
+      if (hLower === 'jenis kegiatan' || hLower === 'judul' || hLower === 'task' || hLower === 'nama kegiatan') {
+        cleanedRow[h] = title;
+      }
+    });
+
     // Auto-progress status jika berisi tasklist (kecuali jika user memilih Canceled)
-    const taskProg = parseTasklist(rowFormData['Keterangan']);
+    const taskProg = parseTasklist(cleanedRow['Keterangan']);
     if (taskProg.hasTasklist) {
-      const curSt = (rowFormData['Status'] || '').toLowerCase();
+      const curSt = (cleanedRow['Status'] || '').toLowerCase();
       if (!curSt.includes('cancel')) {
-        rowFormData['Status'] = taskProg.percentage === 0 ? 'Open' : taskProg.percentage === 100 ? 'Closed' : 'On Progress';
+        cleanedRow['Status'] = taskProg.percentage === 0 ? 'Open' : taskProg.percentage === 100 ? 'Closed' : 'On Progress';
       }
     }
 
@@ -1669,11 +1735,11 @@ export function NotionDatabaseTable({
       let updatedRows: TableRowData[];
       if (editingRowIndex === null) {
         // Adding new row
-        updatedRows = [...localRows, rowFormData];
+        updatedRows = [...localRows, cleanedRow];
         toast.success('Data kegiatan baru berhasil ditambahkan!');
       } else {
         // Editing existing row
-        updatedRows = localRows.map((r, i) => i === editingRowIndex ? { ...r, ...rowFormData } : r);
+        updatedRows = localRows.map((r, i) => i === editingRowIndex ? { ...r, ...cleanedRow } : r);
         toast.success('Perubahan data kegiatan berhasil disimpan!');
       }
 
@@ -1683,7 +1749,7 @@ export function NotionDatabaseTable({
       setShowRowModal(false);
 
       if (selectedRow && editingRowIndex !== null) {
-        setSelectedRow(rowFormData);
+        setSelectedRow(cleanedRow);
       }
     } catch (err: any) {
       toast.error('Gagal menyimpan baris data: ' + err.message);
@@ -1761,6 +1827,11 @@ export function NotionDatabaseTable({
     if (priorityFilter !== 'ALL') {
       result = result.filter((row) => {
         const val = (getRowVal(row, 'Priority') || '').toUpperCase().trim();
+        if (priorityFilter === 'URGENT') return val.includes('URGENT') || val.includes('KRITIS') || val.includes('CRITICAL');
+        if (priorityFilter === 'HIGH') return (val.includes('HIGH') || val.includes('TINGGI')) && !val.includes('URGENT');
+        if (priorityFilter === 'MEDIUM') return val.includes('MEDIUM') || val.includes('SEDANG');
+        if (priorityFilter === 'NORMAL') return (val.includes('NORMAL') || val.includes('BIASA')) && !val.includes('MEDIUM');
+        if (priorityFilter === 'LOW') return val.includes('LOW') || val.includes('RENDAH');
         return val.includes(priorityFilter);
       });
     }
@@ -1776,6 +1847,13 @@ export function NotionDatabaseTable({
           const numA = parseFloat(rawA) || 0;
           const numB = parseFloat(rawB) || 0;
           return sortDirection === 'asc' ? numA - numB : numB - numA;
+        }
+
+        // If priority column (weighted: Urgent > High > Medium > Normal > Low)
+        if (sortColumn.toLowerCase().includes('priorit') || sortColumn.toLowerCase() === 'priority') {
+          const wA = getPriorityWeight(rawA);
+          const wB = getPriorityWeight(rawB);
+          return sortDirection === 'asc' ? wA - wB : wB - wA;
         }
 
         // If date/time column
@@ -2348,18 +2426,34 @@ export function NotionDatabaseTable({
     const p = (pStr || '').toUpperCase().trim();
     if (!p || p === '-') return <span className="font-mono text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>;
 
-    if (p.includes('HIGH') || p.includes('TINGGI') || p.includes('URGENT')) {
+    if (p.includes('URGENT') || p.includes('KRITIS') || p.includes('CRITICAL')) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-950/80 text-red-300 border border-red-700/60">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950/80 text-rose-300 border border-rose-600/70 shadow-xs animate-pulse">
+          <AlertCircle className="w-2.5 h-2.5 text-rose-400" />
+          URGENT
+        </span>
+      );
+    }
+    if (p.includes('HIGH') || p.includes('TINGGI')) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-950/80 text-red-300 border border-red-700/60 shadow-xs">
           <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
           HIGH
         </span>
       );
     }
-    if (p.includes('NORMAL') || p.includes('MEDIUM') || p.includes('SEDANG')) {
+    if (p.includes('MEDIUM') || p.includes('SEDANG')) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-950/60 text-amber-300 border border-amber-700/50">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-950/70 text-blue-300 border border-blue-600/50 shadow-xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+          MEDIUM
+        </span>
+      );
+    }
+    if (p.includes('NORMAL') || p.includes('BIASA')) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-teal-950/60 text-teal-300 border border-teal-700/50 shadow-xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
           NORMAL
         </span>
       );
@@ -2763,9 +2857,11 @@ export function NotionDatabaseTable({
             }}
           >
             <option value="ALL">Semua Prioritas</option>
+            <option value="URGENT">🚨 Urgent / Critical</option>
             <option value="HIGH">🔴 High Priority</option>
-            <option value="NORMAL">🟡 Normal Priority</option>
-            <option value="LOW">🔵 Low Priority</option>
+            <option value="MEDIUM">🔵 Medium Priority</option>
+            <option value="NORMAL">🟢 Normal Priority</option>
+            <option value="LOW">⚪ Low Priority</option>
           </select>
 
           {/* Quick Action: Reset & Organize Column Order to Notion Canonical */}
@@ -4229,10 +4325,11 @@ export function NotionDatabaseTable({
                       color: 'var(--text-main, #f1f5f9)'
                     }}
                   >
-                    <option value="Low">Low</option>
-                    <option value="Normal">Normal</option>
-                    <option value="High">High</option>
-                    <option value="Urgent">Urgent</option>
+                    <option value="Urgent">🚨 Urgent</option>
+                    <option value="High">🔴 High</option>
+                    <option value="Medium">🔵 Medium</option>
+                    <option value="Normal">🟢 Normal</option>
+                    <option value="Low">⚪ Low</option>
                   </select>
                 </div>
               </div>
@@ -4245,8 +4342,15 @@ export function NotionDatabaseTable({
                 <input
                   type="text"
                   required
-                  value={rowFormData['Jenis kegiatan'] || ''}
-                  onChange={(e) => setRowFormData({ ...rowFormData, 'Jenis kegiatan': e.target.value })}
+                  value={rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setRowFormData({ 
+                      ...rowFormData, 
+                      'Jenis kegiatan': val,
+                      'Jenis Kegiatan': val 
+                    });
+                  }}
                   className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-medium"
                   style={{
                     backgroundColor: 'var(--input-bg, #141414)',
