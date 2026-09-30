@@ -501,7 +501,7 @@ export function extractMarkdownTableFromContent(content: string): {
       break;
     }
   }
-  if (startIdx !== -1 && endIdx - startIdx >= 2) {
+  if (startIdx !== -1 && endIdx - startIdx >= 1) {
     const headerLine = lines[startIdx];
     const headers = headerLine
       .split('|')
@@ -2903,8 +2903,28 @@ export function NotionDatabaseTable({
             >
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={displayHeaders.length + 2} className="py-12 text-center italic text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>
-                    Tidak ada data yang sesuai dengan pencarian atau filter.
+                  <td colSpan={displayHeaders.length + 2} className="py-12 text-center text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>
+                    {localRows.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center gap-3 py-6">
+                        <div className="w-12 h-12 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-400">
+                          <Plus className="w-6 h-6" />
+                        </div>
+                        <div className="text-center">
+                          <p className="font-semibold text-sm" style={{ color: 'var(--text-main, #f8fafc)' }}>Belum Ada Topik / Baris Kegiatan</p>
+                          <p className="text-xs mt-1 max-w-sm mx-auto" style={{ color: 'var(--text-muted, #94a3b8)' }}>Semua topik dalam tabel ini kosong. Klik tombol di bawah untuk menambahkan topik baru ke tabel ini.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleOpenAddModal}
+                          className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs shadow-md transition-all cursor-pointer active:scale-95"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>+ Tambah Baris Kegiatan Baru</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="italic">Tidak ada data yang sesuai dengan pencarian atau filter.</span>
+                    )}
                   </td>
                 </tr>
               ) : (

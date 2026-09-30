@@ -560,6 +560,34 @@ export function BulletinBoard({
     }
   };
 
+  const handleInitializeTableForPost = async () => {
+    if (!selectedPost) return;
+    toast.loading("Membuat tabel topik...", { id: "init-table" });
+    const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Target Selesai', 'Aktual selesai', 'Group', 'Created Time'];
+    const headerLine = `| ${defaultHeaders.join(' | ')} |`;
+    const separatorLine = `| ${defaultHeaders.map(() => '---').join(' | ')} |`;
+    const tableMd = `${headerLine}\n${separatorLine}`;
+    const newContent = selectedPost.content?.trim() 
+      ? `${selectedPost.content.trim()}\n\n${tableMd}` 
+      : `### 📊 ${getPostTitle(selectedPost)}\n\n${tableMd}`;
+    try {
+      await fetch(`/api/bulletin/${selectedPost.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: selectedPost.title,
+          content: newContent,
+          category: selectedPost.category,
+        }),
+      });
+      setSelectedPost((prev: any) => prev ? { ...prev, content: newContent } : null);
+      setPosts((prev) => prev.map((p) => p.id === selectedPost.id ? { ...p, content: newContent } : p));
+      toast.success("Tabel topik berhasil dibuat!", { id: "init-table" });
+    } catch (e) {
+      toast.error("Gagal membuat tabel", { id: "init-table" });
+    }
+  };
+
   // Convert legacy table JSON to markdown for rendering
   const getRenderableContent = (post: any) => {
     if (!post.content) return "";
@@ -632,7 +660,7 @@ export function BulletinBoard({
         break;
       }
     }
-    if (startIdx !== -1 && endIdx - startIdx >= 2) {
+    if (startIdx !== -1 && endIdx - startIdx >= 1) {
       const headerLine = lines[startIdx];
       const headers = headerLine
         .split("|")
@@ -1885,6 +1913,14 @@ ${aiMeetingNotes
                 </button>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleInitializeTableForPost}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white shadow-xs transition-all cursor-pointer"
+                    title="Buat tabel database topik/kegiatan di halaman ini"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Buat Tabel Topik</span>
+                  </button>
                   <span 
                     className="text-[11px] px-2.5 py-1 rounded-full font-mono border"
                     style={{

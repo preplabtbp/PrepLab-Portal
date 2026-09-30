@@ -32,7 +32,7 @@ function parseMarkdownTableRows(content: string) {
       break;
     }
   }
-  if (startIdx === -1 || endIdx - startIdx < 2) return null;
+  if (startIdx === -1 || endIdx - startIdx < 1) return null;
 
   const headerLine = lines[startIdx];
   const headers = headerLine
@@ -479,7 +479,16 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
         const postArr = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, parseInt(String(bulletinPostId)))).limit(1);
         if (postArr.length > 0) {
           const post = postArr[0];
-          const parsed = parseMarkdownTableRows(post.content);
+          let parsed = parseMarkdownTableRows(post.content);
+          if (!parsed || parsed.headers.length === 0) {
+            const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Target Selesai', 'Aktual selesai', 'Group', 'Created Time'];
+            parsed = {
+              headers: defaultHeaders,
+              rows: [],
+              beforeText: post.content ? post.content.trim() : `### 📊 ${post.title || 'Kegiatan'}`,
+              afterText: ''
+            };
+          }
           if (parsed && parsed.headers.length > 0) {
             // Check if row already exists
             const existingRowIdx = parsed.rows.findIndex(r => {
@@ -759,7 +768,16 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
         const postArr = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, taskResult.bulletinPostId)).limit(1);
         if (postArr.length > 0) {
           const post = postArr[0];
-          const parsed = parseMarkdownTableRows(post.content);
+          let parsed = parseMarkdownTableRows(post.content);
+          if (!parsed || parsed.headers.length === 0) {
+            const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Target Selesai', 'Aktual selesai', 'Group', 'Created Time'];
+            parsed = {
+              headers: defaultHeaders,
+              rows: [],
+              beforeText: post.content ? post.content.trim() : `### 📊 ${post.title || 'Kegiatan'}`,
+              afterText: ''
+            };
+          }
           if (parsed && parsed.headers.length > 0) {
             const targetTitle = (taskResult.bulletinTopicTitle || currentTask.title || '').toLowerCase().trim();
             const targetIdx = parsed.rows.findIndex(r => {
