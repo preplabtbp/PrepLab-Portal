@@ -952,23 +952,71 @@ export function LogbookScreen({
       windowDesc = 'Muncul Mulai M-3';
     }
 
-    // Calculate D-Day if targetDate exists
-    let dDayText: string | null = null;
-    const deadlineStr = task.targetDate || task.taskDate;
-    if (deadlineStr && referenceDateStr) {
-      const diff = Math.ceil((new Date(deadlineStr).getTime() - new Date(referenceDateStr).getTime()) / (1000 * 60 * 60 * 24));
-      if (diff === 0) dDayText = 'Target: Hari Ini!';
-      else if (diff > 0) dDayText = `H-${diff}`;
-      else dDayText = `Lewat ${Math.abs(diff)} hr`;
-    }
-
     return {
       isRoutine: true,
       cadence,
       label,
       color,
-      windowDesc,
-      dDayText
+      windowDesc
+    };
+  };
+
+  // Helper to calculate start date and elapsed duration of a project/task for management
+  const getTaskDurationInfo = (task: LogbookTask, referenceDateStr?: string) => {
+    const startStr = task.taskDate || (task.createdAt ? task.createdAt.split('T')[0] : getTodayStr());
+    const refStr = referenceDateStr || selectedDate || getTodayStr();
+
+    const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
+    let endStr = refStr;
+    if (isDone && task.actualCompletedDate) {
+      try {
+        endStr = new Date(task.actualCompletedDate).toISOString().split('T')[0];
+      } catch (e) {
+        endStr = refStr;
+      }
+    }
+
+    const startDate = new Date(startStr);
+    const endDate = new Date(endStr);
+    const diffTime = endDate.getTime() - startDate.getTime();
+    const rawDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const dayCount = Math.max(1, rawDays + 1);
+
+    let durationLabel = '';
+    let durationShort = '';
+    let badgeClass = 'bg-teal-50 text-teal-800 border-teal-200';
+
+    if (isDone) {
+      if (rawDays <= 0) {
+        durationLabel = 'Selesai di Hari yang Sama';
+        durationShort = '1 Hari';
+      } else {
+        durationLabel = `Tuntas dalam ${dayCount} Hari`;
+        durationShort = `${dayCount} Hari`;
+      }
+      badgeClass = 'bg-emerald-50 text-emerald-800 border-emerald-300';
+    } else {
+      if (rawDays <= 0) {
+        durationLabel = 'Hari ke-1 (Mulai Hari Ini)';
+        durationShort = 'Hari ke-1';
+        badgeClass = 'bg-sky-50 text-sky-800 border-sky-300';
+      } else {
+        durationLabel = `Berjalan ${dayCount} Hari`;
+        durationShort = `Hari ke-${dayCount}`;
+        badgeClass = dayCount > 14 
+          ? 'bg-amber-50 text-amber-900 border-amber-300' 
+          : 'bg-teal-50 text-teal-800 border-teal-200';
+      }
+    }
+
+    return {
+      startDateStr: startStr,
+      displayStartDate: formatDisplayTargetDate(startStr),
+      dayCount,
+      durationLabel,
+      durationShort,
+      badgeClass,
+      isDone
     };
   };
 
@@ -2096,8 +2144,9 @@ export function LogbookScreen({
       text += `- Belum ada tugas/planning yang ditugaskan untuk hari ini.\n`;
     } else {
       todayTasks.forEach((t, i) => {
+        const dur = getTaskDurationInfo(t, selectedDate);
         const pendingInfo = t.isPending ? ` [Job Pending: ${t.pendingPicName || ''}]` : '';
-        text += `${i + 1}. [${t.priority}] ${t.title} (PIC: ${t.assigneeName}${pendingInfo}) - Target: ${t.targetDate || 'Hari ini'} [${t.status}]\n`;
+        text += `${i + 1}. [${t.priority}] ${t.title} (PIC: ${t.assigneeName}${pendingInfo}) [Mulai: ${dur.displayStartDate} • ${dur.durationLabel}] [${t.status}]\n`;
         const parsed = parseTasklist(t.description || '');
         if (parsed.hasTasklist) {
           parsed.items.forEach(item => {
@@ -2266,7 +2315,8 @@ export function LogbookScreen({
       report += `- Tidak ada tugas yang diselesaikan kemarin.\n`;
     } else {
       completed.forEach((t, i) => {
-        report += `${i + 1}. [${t.priority}] ${t.title} [100%]\n   - PIC: ${t.assigneeName}\n`;
+        const dur = getTaskDurationInfo(t, summaryData?.yesterdayDate || yesterdayDateStr);
+        report += `${i + 1}. [${t.priority}] ${t.title} [100%]\n   - PIC: ${t.assigneeName}\n   - Waktu Pengerjaan: Mulai ${dur.displayStartDate} • ${dur.durationLabel}\n`;
       });
     }
 
@@ -2275,9 +2325,10 @@ export function LogbookScreen({
       report += `- Nihil (Semua tugas kemarin telah tuntas 100%).\n`;
     } else {
       unfinished.forEach((t, i) => {
+        const dur = getTaskDurationInfo(t, summaryData?.yesterdayDate || yesterdayDateStr);
         const prog = calculateTaskProgress(t);
         const pendingNote = t.isPending ? ` [Job Pending: ${t.pendingPicName || ''} - ${t.pendingReason || ''}]` : '';
-        report += `${i + 1}. [${t.priority}] ${t.title} [Progres: ${prog}% - Status: ${t.status}]${pendingNote}\n   - PIC: ${t.assigneeName}\n   - Target: ${formatDisplayTargetDate(t.targetDate)} (${t.targetTime || '23:59'})\n`;
+        report += `${i + 1}. [${t.priority}] ${t.title} [Progres: ${prog}% - Status: ${t.status}]${pendingNote}\n   - PIC: ${t.assigneeName}\n   - Durasi: Mulai ${dur.displayStartDate} • ${dur.durationLabel}\n`;
       });
     }
 
@@ -2328,7 +2379,7 @@ export function LogbookScreen({
     const isInProgress = task.status === 'In Progress' || task.status === 'On Progress';
     const isExpanded = expandedTaskIds.has(task.id);
     const picList = parsePicList(task.assigneeNik, task.assigneeName);
-    const isOverdue = isTaskOverdue(task.targetDate, task.targetTime, task.status);
+    const durationInfo = getTaskDurationInfo(task, selectedDate);
     const progressPercent = calculateTaskProgress(task);
     const routineInfo = getTaskRoutineInfo(task, selectedDate);
 
@@ -2435,81 +2486,86 @@ export function LogbookScreen({
         {/* Minimalist Baris Header (Clickable anywhere to expand/collapse) */}
         <div 
           onClick={() => toggleExpand(task.id)}
-          className="p-3 sm:px-4 sm:py-2.5 flex items-center justify-between gap-3 cursor-pointer select-none transition-colors group"
+          className="p-3 sm:px-4 sm:py-2.5 flex items-start sm:items-center justify-between gap-3 cursor-pointer select-none transition-colors group"
         >
-          {/* Left: Drag Grip + Chevron + Priority Badge + Judul Utama Task */}
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            {/* Drag Handle */}
-            <div 
-              className="p-1 text-slate-300 group-hover:text-teal-600 transition-colors shrink-0"
-              title={isYesterday ? "Tarik (Drag) ke Planning & Arahan untuk diprogress hari ini" : "Tarik (Drag) kembali ke Progres & Evaluasi jika tidak jadi diprogress"}
-            >
-              <GripVertical className="w-3.5 h-3.5" />
+          {/* Left: Drag Grip + Chevron + Content (Metadata Badges & Judul Utama) */}
+          <div className="flex items-start gap-2 sm:gap-2.5 min-w-0 flex-1">
+            {/* Drag Handle & Chevron */}
+            <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
+              <div 
+                className="p-1 text-slate-300 group-hover:text-teal-600 transition-colors"
+                title={isYesterday ? "Tarik (Drag) ke Planning & Arahan untuk diprogress hari ini" : "Tarik (Drag) kembali ke Progres & Evaluasi jika tidak jadi diprogress"}
+              >
+                <GripVertical className="w-3.5 h-3.5" />
+              </div>
+
+              {/* Expand indicator icon */}
+              <div className={`p-1 rounded-md text-slate-400 group-hover:text-teal-700 transition-transform duration-200 ${
+                isExpanded ? 'rotate-90 text-teal-700 bg-teal-50' : 'hover:bg-slate-100'
+              }`}>
+                <ChevronRight className="w-4 h-4" />
+              </div>
             </div>
 
-            {/* Expand indicator icon */}
-            <div className={`p-1 rounded-md text-slate-400 group-hover:text-teal-700 transition-transform duration-200 shrink-0 ${
-              isExpanded ? 'rotate-90 text-teal-700 bg-teal-50' : 'hover:bg-slate-100'
-            }`}>
-              <ChevronRight className="w-4 h-4" />
-            </div>
+            {/* Content Container: Baris 1 Badges Metadata + Baris 2 Judul Utama Full Width */}
+            <div className="flex flex-col gap-1 min-w-0 flex-1">
+              {/* Baris 1: Badges Metadata (Priority, Routine, Waktu Mulai & Durasi Pengerjaan, Notices) */}
+              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                {/* Urgency Badge */}
+                <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0 shadow-2xs ${
+                  task.priority === 'Urgent' 
+                    ? 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse' :
+                  task.priority === 'High' 
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                  task.priority === 'Low'
+                    ? 'bg-slate-100 text-slate-500 border border-slate-200' :
+                    'bg-slate-100 text-slate-700 border border-slate-300 font-bold'
+                }`}>
+                  {task.priority}
+                </span>
 
-            {/* Urgency Badge */}
-            <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0 shadow-2xs ${
-              task.priority === 'Urgent' 
-                ? 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse' :
-              task.priority === 'High' 
-                ? 'bg-amber-100 text-amber-900 border border-amber-300' :
-              task.priority === 'Low'
-                ? 'bg-slate-100 text-slate-500 border border-slate-200' :
-                'bg-slate-100 text-slate-700 border border-slate-300 font-bold'
-            }`}>
-              {task.priority}
-            </span>
+                {/* Routine Cadence Badge */}
+                <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md border shrink-0 shadow-2xs ${routineInfo.color}`}>
+                  {routineInfo.label}
+                </span>
 
-            {/* Routine Cadence Badge */}
-            <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md border shrink-0 shadow-2xs ${routineInfo.color}`}>
-              {routineInfo.label}
-            </span>
-            {routineInfo.dDayText && !isDone && (
-              <span className="hidden sm:inline-block text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-300 shrink-0">
-                {routineInfo.dDayText}
-              </span>
-            )}
+                {/* Waktu Mulai & Lama Pengerjaan Badge (Pengganti Deadline) */}
+                <span 
+                  className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md border shrink-0 shadow-2xs ${durationInfo.badgeClass}`}
+                  title={`Waktu Mulai: ${durationInfo.displayStartDate} • Lama Pengerjaan: ${durationInfo.durationLabel}`}
+                >
+                  <Clock className="w-3 h-3 opacity-70" />
+                  <span>{durationInfo.durationLabel}</span>
+                  <span className="opacity-60 hidden md:inline">• Mulai {durationInfo.displayStartDate}</span>
+                </span>
 
-            {/* Judul Utama Task */}
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <h3 className={`font-bold leading-snug text-slate-900 tracking-tight text-sm sm:text-base truncate ${
+                {/* Notice indicators on collapsed row */}
+                {isYesterday && Boolean(todayTasks.some(t => t.id === task.id) || (task.plannedDate && task.plannedDate.split(',').map(d => d.trim()).includes(selectedDate))) && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200 shrink-0" title="Tugas ini telah dijadwalkan ke Planning Hari Ini">
+                    <Bookmark className="w-2.5 h-2.5 fill-teal-600 text-teal-600" />
+                    <span>Di Planning</span>
+                  </span>
+                )}
+                {task.draftChange && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 shrink-0">
+                    Draft Usulan
+                  </span>
+                )}
+              </div>
+
+              {/* Baris 2: Judul Utama Task (Tidak terpotong, full width, word-break natural) */}
+              <h3 className={`font-bold leading-snug text-slate-900 dark:text-slate-100 tracking-tight text-sm sm:text-base break-words ${
                 isDone ? 'line-through text-slate-400 font-normal' : ''
               }`}>
                 {task.title}
               </h3>
-
-              {/* Notice indicators on collapsed row */}
-              {isYesterday && Boolean(todayTasks.some(t => t.id === task.id) || (task.plannedDate && task.plannedDate.split(',').map(d => d.trim()).includes(selectedDate))) && (
-                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200 shrink-0" title="Tugas ini telah dijadwalkan ke Planning Hari Ini">
-                  <Bookmark className="w-2.5 h-2.5 fill-teal-600 text-teal-600" />
-                  <span>Di Planning</span>
-                </span>
-              )}
-              {task.draftChange && (
-                <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 shrink-0">
-                  Draft Usulan
-                </span>
-              )}
-              {isOverdue && !isDone && (
-                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300 shrink-0">
-                  <AlertTriangle className="w-3 h-3 text-rose-600" />
-                  Lewat Batas
-                </span>
-              )}
             </div>
           </div>
 
           {/* Right: Status Dropdown, Copy Button & Mini Progress Bar */}
           <div 
             onClick={(e) => e.stopPropagation()} 
-            className="flex flex-col items-end gap-1 shrink-0"
+            className="flex flex-col items-end gap-1 shrink-0 self-start sm:self-center"
           >
             <div className="flex items-center gap-1.5">
               <button
@@ -2571,7 +2627,7 @@ export function LogbookScreen({
         {/* Expandable Details (Hanya muncul saat task diklik) */}
         {isExpanded && (
           <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50/50 space-y-4 animate-in fade-in duration-150">
-            {/* Badges Bar (Seksi, Tanggal Target / Asal, Overdue, Buletin) */}
+            {/* Badges Bar (Seksi, Routine Info, Waktu Mulai, Lama Pengerjaan, Buletin) */}
             <div className="flex flex-wrap items-center gap-2">
               <span className={`text-xs px-2.5 py-1 rounded-lg font-mono font-bold shadow-2xs tracking-wide ${sectionBadgeClass}`}>
                 {task.section}
@@ -2582,41 +2638,19 @@ export function LogbookScreen({
                 <span>{routineInfo.label}</span>
                 <span className="opacity-50">•</span>
                 <span>{routineInfo.windowDesc}</span>
-                {routineInfo.dDayText && (
-                  <span className="font-mono font-black text-[11px] bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 rounded shadow-2xs border border-current">
-                    {routineInfo.dDayText}
-                  </span>
-                )}
               </span>
 
               {/* Tanggal Dimulai (Start Date) Badge */}
-              <span className="text-xs px-2.5 py-1 rounded-lg font-bold bg-slate-100 text-slate-800 border border-slate-300 flex items-center gap-1 shadow-2xs" title="Tanggal Dimulai (Start Date)">
+              <span className="text-xs px-2.5 py-1 rounded-lg font-bold bg-slate-100 text-slate-800 border border-slate-300 flex items-center gap-1.5 shadow-2xs" title="Tanggal Dimulai (Start Date)">
                 <Calendar className="w-3.5 h-3.5 text-slate-600" />
-                <span>Mulai: {formatDisplayTargetDate(task.taskDate)}</span>
+                <span>Mulai: {durationInfo.displayStartDate}</span>
               </span>
 
-              {/* Target Selesai (Deadline) Badge */}
-              <span className={`text-xs px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 shadow-2xs ${
-                isOverdue 
-                  ? 'bg-rose-50 text-rose-900 border-rose-300' 
-                  : 'bg-sky-50 text-sky-900 border-sky-200'
-              }`}>
-                <Calendar className={`w-3.5 h-3.5 ${isOverdue ? 'text-rose-600' : 'text-sky-600'}`} />
-                <span>Target: {formatDisplayTargetDate(task.targetDate)}</span>
-                <span className={`font-mono text-[11px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                  isOverdue ? 'bg-rose-200/80 text-rose-950' : 'bg-sky-200/70 text-sky-950'
-                }`}>
-                  <Clock className="w-3 h-3 text-slate-700" />
-                  {task.targetTime && task.targetTime !== '23:59' ? `${task.targetTime} WIB` : '12 Malam (23:59)'}
-                </span>
+              {/* Lama Pengerjaan (Duration) Badge */}
+              <span className={`text-xs px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 shadow-2xs ${durationInfo.badgeClass}`} title="Lama Pengerjaan Task">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Lama Pengerjaan: {durationInfo.durationLabel}</span>
               </span>
-
-              {isOverdue && !isDone && (
-                <span className="text-[10px] sm:text-xs px-2.5 py-1 rounded-lg font-black bg-rose-600 text-white shadow-2xs animate-pulse flex items-center gap-1 uppercase tracking-wider">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Lewat Batas Jam</span>
-                </span>
-              )}
 
               {task.bulletinPostId ? (
                 <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-teal-900 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg shadow-2xs">
