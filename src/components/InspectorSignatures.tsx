@@ -62,9 +62,32 @@ export function InspectorSignatures({ inspectorName, inspectorNik, onChange }: I
   const handleClear2 = () => { sigPad2.current?.clear(); setTtd2(''); triggerChange({ ttd2: '' }); };
   const handleClear3 = () => { sigPad3.current?.clear(); setTtd3(''); triggerChange({ ttd3: '' }); };
 
-  const handleEnd1 = () => { const val = sigPad1.current?.getCanvas().toDataURL() || ''; setTtd1(val); triggerChange({ ttd1: val }); };
-  const handleEnd2 = () => { const val = sigPad2.current?.getCanvas().toDataURL() || ''; setTtd2(val); triggerChange({ ttd2: val }); };
-  const handleEnd3 = () => { const val = sigPad3.current?.getCanvas().toDataURL() || ''; setTtd3(val); triggerChange({ ttd3: val }); };
+  const getCompressedDataUrl = (sigPad: any): string => {
+    if (!sigPad.current || sigPad.current.isEmpty()) return '';
+    const rawCanvas = sigPad.current.getCanvas();
+    if (!rawCanvas) return '';
+
+    const maxW = 360;
+    const maxH = 180;
+    let { width, height } = rawCanvas;
+    if (width > maxW || height > maxH) {
+      const ratio = Math.min(maxW / width, maxH / height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+    }
+
+    const offscreen = document.createElement('canvas');
+    offscreen.width = width;
+    offscreen.height = height;
+    const ctx = offscreen.getContext('2d');
+    if (!ctx) return rawCanvas.toDataURL('image/png');
+    ctx.drawImage(rawCanvas, 0, 0, width, height);
+    return offscreen.toDataURL('image/png');
+  };
+
+  const handleEnd1 = () => { const val = getCompressedDataUrl(sigPad1); setTtd1(val); triggerChange({ ttd1: val }); };
+  const handleEnd2 = () => { const val = getCompressedDataUrl(sigPad2); setTtd2(val); triggerChange({ ttd2: val }); };
+  const handleEnd3 = () => { const val = getCompressedDataUrl(sigPad3); setTtd3(val); triggerChange({ ttd3: val }); };
 
   return (
     <div className="space-y-4">

@@ -997,12 +997,15 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
             });
           }
 
-          allEmployees.forEach(e => {
-            if (e.name && (msg.senderName?.toLowerCase().includes(e.name.toLowerCase().trim()) || msg.text?.toLowerCase().includes(e.name.toLowerCase().trim()))) {
-              registerCompletedUser(e.nik, info);
-              registerCompletedUser(e.name, info);
+          // Strict match senderName against allEmployees (full name exact match)
+          if (msg.senderName) {
+            const senderClean = msg.senderName.trim().toLowerCase();
+            const matchedEmp = allEmployees.find(e => e.name && e.name.trim().toLowerCase() === senderClean);
+            if (matchedEmp) {
+              registerCompletedUser(matchedEmp.nik, info);
+              registerCompletedUser(matchedEmp.name, info);
             }
-          });
+          }
         }
       });
     } catch (e) {
@@ -1081,11 +1084,22 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
                 const cleanName = part.split('|')[0].trim();
                 if (cleanName) registerCompletedUser(cleanName, info);
 
-                const nikMatches = part.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
+                const nikMatches: string[] = part.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
                 nikMatches.forEach((nik: string) => registerCompletedUser(nik, info));
 
                 allEmployees.forEach(e => {
-                  if (e.name && (part.toLowerCase().includes(e.name.toLowerCase().trim()) || e.name.toLowerCase().trim().includes(part.toLowerCase()))) {
+                  const empName = (e.name || '').trim().toLowerCase();
+                  const empNik = (e.nik || '').trim().toLowerCase();
+                  const partClean = part.toLowerCase().trim();
+                  const cleanNameLower = cleanName.toLowerCase().trim();
+
+                  if (empNik && (partClean === empNik || nikMatches.some(n => n.toLowerCase() === empNik))) {
+                    registerCompletedUser(e.nik, info);
+                    registerCompletedUser(e.name, info);
+                  } else if (empName && (cleanNameLower === empName || partClean === empName)) {
+                    registerCompletedUser(e.nik, info);
+                    registerCompletedUser(e.name, info);
+                  } else if (empName && empName.length >= 4 && partClean.includes(empName)) {
                     registerCompletedUser(e.nik, info);
                     registerCompletedUser(e.name, info);
                   }
@@ -1295,7 +1309,7 @@ router.post('/api/kta-reports', async (req, res) => {
 
     const duplicate = existingReports.find(r => 
       (cleanDesc && r.description && r.description.trim().toLowerCase() === cleanDesc.toLowerCase()) ||
-      (r.imageUrl && r.imageUrl.trim() === cleanImg)
+      (!cleanDesc && r.imageUrl && r.imageUrl.trim() === cleanImg)
     );
 
     if (duplicate) {
@@ -1406,8 +1420,8 @@ router.post('/api/inspection-proofs', async (req, res) => {
     );
 
     const duplicateProof = existingProofs.find(p => 
-      (p.imageUrl && p.imageUrl.trim() === cleanImg) ||
-      (cleanDesc && p.description && p.description.trim().toLowerCase() === cleanDesc.toLowerCase())
+      (cleanDesc && p.description && p.description.trim().toLowerCase() === cleanDesc.toLowerCase()) ||
+      (!cleanDesc && p.imageUrl && p.imageUrl.trim() === cleanImg)
     );
 
     if (duplicateProof) {

@@ -16,6 +16,29 @@ import {
 } from "../utils.js";
 import webpush from 'web-push';
 import path from "path";
+import sharp from 'sharp';
+
+export async function compressSignatureBase64(dataUri?: string | null, maxDimension = 360, maxBytes = 35000): Promise<string> {
+  if (!dataUri || typeof dataUri !== 'string') return '';
+  if (!dataUri.startsWith('data:image')) return dataUri;
+
+  const parts = dataUri.split(',');
+  if (parts.length < 2) return dataUri;
+  if (dataUri.length <= maxBytes) return dataUri;
+
+  try {
+    const buffer = Buffer.from(parts[1], 'base64');
+    const resizedBuffer = await sharp(buffer)
+      .resize({ width: maxDimension, height: Math.round(maxDimension / 2), fit: 'inside' })
+      .png({ quality: 80, compressionLevel: 9 })
+      .toBuffer();
+    
+    return `data:image/png;base64,${resizedBuffer.toString('base64')}`;
+  } catch (err: any) {
+    console.warn('[compressSignatureBase64] Compression failed, returning original:', err?.message);
+    return dataUri;
+  }
+}
 
 export const router = Router();
 
@@ -60,9 +83,9 @@ router.post("/api/inspections/universal", async (req, res) => {
       
       const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
       
-      let finalTtd1 = ttd1;
-      let finalTtd2 = ttd2;
-      let finalTtd3 = ttd3;
+      let finalTtd1 = await compressSignatureBase64(ttd1);
+      let finalTtd2 = await compressSignatureBase64(ttd2);
+      let finalTtd3 = await compressSignatureBase64(ttd3);
       let finalFotoProses = fotoProses;
       let finalFotoTemuanArray = fotoTemuanArray;
 
@@ -76,7 +99,7 @@ router.post("/api/inspections/universal", async (req, res) => {
                       ...finalData,
                       devOptions: { isDev: true, db: true, pdf: true, verboseLog: true }
                   },
-                  ttd1, ttd2, ttd3, fotoTemuanArray, fotoProses
+                  ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3, fotoTemuanArray, fotoProses
               };
 
               const gasRes = await fetch(gasUrl, {
@@ -530,6 +553,10 @@ export async function generateGasPdfForInspection(inspRecord: any) {
     } catch(e) {}
   }
 
+  ttd1 = await compressSignatureBase64(ttd1);
+  ttd2 = await compressSignatureBase64(ttd2);
+  ttd3 = await compressSignatureBase64(ttd3);
+
   let fotoProses = '', fotoTemuanArray: any[] = [];
   if (inspRecord.photoUrl) {
     try {
@@ -541,11 +568,15 @@ export async function generateGasPdfForInspection(inspRecord: any) {
 
   const isApd = Array.isArray(parsedDataF) || (inspRecord.type && inspRecord.type.includes('APD'));
 
+  const cleanDataF = Array.isArray(parsedDataF) ? parsedDataF.map((row: any[]) => {
+    return Array.isArray(row) ? row.map((cell: any) => (typeof cell === 'string' && cell.length > 30000 ? '-' : cell)) : row;
+  }) : parsedDataF;
+
   let payloadToGas: any = {};
   if (isApd) {
     payloadToGas = {
       action: "submitInspeksi",
-      dataF: parsedDataF,
+      dataF: cleanDataF,
       devOptions: { isDev: true, db: true, pdf: true, verboseLog: true },
       ttd1, ttd2, ttd3, fotoProses
     };
@@ -640,9 +671,9 @@ router.post("/api/inspections", async (req, res) => {
       
       const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
       
-      let finalTtd1 = ttd1;
-      let finalTtd2 = ttd2;
-      let finalTtd3 = ttd3;
+      let finalTtd1 = await compressSignatureBase64(ttd1);
+      let finalTtd2 = await compressSignatureBase64(ttd2);
+      let finalTtd3 = await compressSignatureBase64(ttd3);
       let finalFotoProses = fotoProses;
       let finalFotoTemuanArray = req.body.fotoTemuanArray;
 
@@ -658,7 +689,7 @@ router.post("/api/inspections", async (req, res) => {
                   action: "submitInspeksi",
                   dataF: cleanDataF,
                   devOptions: { isDev: true, db: true, pdf: true, verboseLog: true },
-                  ttd1, ttd2, ttd3, fotoProses
+                  ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3, fotoProses
               };
               
               const gasRes = await fetch(gasUrl, {
