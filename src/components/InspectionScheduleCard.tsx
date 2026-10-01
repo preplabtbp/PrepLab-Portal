@@ -996,8 +996,8 @@ export function InspectionScheduleCard({
       item.jabatan.toLowerCase().includes(searchQuery.toLowerCase());
     const matchShift = 
       filterShift === 'all' || 
-      (filterShift === 'siang' && item.shift.toLowerCase().includes('siang')) ||
-      (filterShift === 'malam' && item.shift.toLowerCase().includes('malam')) ||
+      (filterShift === 'siang' && (item.shift.toLowerCase().includes('siang') || item.shift.toLowerCase().includes('pagi') || item.shift.toLowerCase().includes('day'))) ||
+      (filterShift === 'malam' && (item.shift.toLowerCase().includes('malam') || item.shift.toLowerCase().includes('night'))) ||
       (filterShift === 'nonshift' && item.shift.toLowerCase().includes('nonshift')) ||
       (filterShift === 'cuti' && item.isCuti);
     return matchSearch && matchShift;
@@ -2903,9 +2903,9 @@ export function InspectionScheduleCard({
                     let shiftBadgeClass = 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
                     if (item.isCuti) {
                       shiftBadgeClass = 'bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800';
-                    } else if (shiftLower.includes('malam') || shiftLower.includes('shift a') || shiftLower.includes('shift b')) {
+                    } else if (shiftLower.includes('malam') || shiftLower.includes('night')) {
                       shiftBadgeClass = 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800';
-                    } else if (shiftLower.includes('siang') || shiftLower.includes('shift r')) {
+                    } else if (shiftLower.includes('siang') || shiftLower.includes('pagi') || shiftLower.includes('day')) {
                       shiftBadgeClass = 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800';
                     }
 

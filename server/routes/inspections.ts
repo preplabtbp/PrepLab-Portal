@@ -1653,12 +1653,18 @@ export async function fetchInspectionScheduleFromSheet(forceRefresh = false, she
     const col5 = (r[5] || '').trim();
 
     // Check for section markers
-    if (col1.toLowerCase() === 'malam' || col0.toLowerCase().includes('shift a')) {
-      currentShiftGroup = 'Shift A (Malam)';
+    const col1Lower = col1.toLowerCase();
+    const col0Lower = col0.toLowerCase();
+    if (col1Lower === 'malam' || col0Lower === 'malam') {
+      currentShiftGroup = 'Malam';
       continue;
     }
-    if (col1.toLowerCase() === 'siang' || col0.toLowerCase().includes('shift b')) {
-      currentShiftGroup = 'Shift B (Siang)';
+    if (col1Lower === 'siang' || col0Lower === 'siang') {
+      currentShiftGroup = 'Siang';
+      continue;
+    }
+    if (col1Lower === 'nonshift' || col0Lower === 'nonshift') {
+      currentShiftGroup = 'Nonshift';
       continue;
     }
 
@@ -1676,9 +1682,9 @@ export async function fetchInspectionScheduleFromSheet(forceRefresh = false, she
       } else if (!cleanShift) {
         cleanShift = currentShiftGroup;
       } else if (cleanShift === 'A') {
-        cleanShift = 'Shift A (Malam)';
+        cleanShift = currentShiftGroup === 'Malam' ? 'Shift A (Malam)' : (currentShiftGroup === 'Siang' ? 'Shift A (Siang)' : 'Shift A');
       } else if (cleanShift === 'B') {
-        cleanShift = 'Shift B (Siang)';
+        cleanShift = currentShiftGroup === 'Malam' ? 'Shift B (Malam)' : (currentShiftGroup === 'Siang' ? 'Shift B (Siang)' : 'Shift B');
       }
 
       const formInfo = isCuti ? null : mapInspectionToFormInfo(col5);
@@ -1765,11 +1771,26 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
     const currentWeekTag = targetWeekTag || getISOWeekTagForSchedule(new Date(), true);
 
     // Execute queries in parallel for high performance over remote SQL
-    const [recentInspections, allEmps, allProofs] = await Promise.all([
+    const nowUtc = new Date();
+    const witDate = new Date(nowUtc.getTime() + (9 * 60 * 60 * 1000));
+    const parts = witDate.toDateString().split(' ');
+    const dayNum = parseInt(parts[2], 10);
+    const todayRosterDate = `${dayNum} ${parts[1]} ${parts[3].substring(2)}`; // e.g. "1 Oct 26"
+
+    const [recentInspections, allEmps, allProofs, todayRosterRows] = await Promise.all([
       db.select().from(inspections).orderBy(desc(inspections.date)).limit(150),
       getAllEmployeesCached(),
-      db.select().from(inspectionProofs).where(eq(inspectionProofs.week, currentWeekTag))
+      db.select().from(inspectionProofs).where(eq(inspectionProofs.week, currentWeekTag)),
+      db.select().from(roster).where(eq(roster.date, todayRosterDate))
     ]);
+
+    // Build roster lookup by NIK for today to accurately identify Day/Night shift
+    const rosterStatusByNik = new Map<string, string>();
+    todayRosterRows.forEach(r => {
+      if (r.nik && r.status) {
+        rosterStatusByNik.set(r.nik.trim().toUpperCase(), r.status.trim().toUpperCase());
+      }
+    });
 
     // Filter inspections belonging to current ISO week, strictly excluding daily P2H ('Harian')
     const currentWeekInspections = recentInspections.filter(insp => {
@@ -1786,14 +1807,7 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
     });
 
     for (const s of schedules) {
-      if (!s || s.isCuti) {
-        s.isCompleted = false;
-        s.hasSsProof = false;
-        s.ssProofUrl = null;
-        continue;
-      }
-
-      // Attach SS proof info ONLY for this specific individual inspector (each partner must upload their own SS!)
+      // 1. Resolve individual inspector NIK
       const selfName = (s.name || '').trim().toLowerCase();
       let selfNik = (empNameToNik.get(selfName) || '').trim().toLowerCase();
       if (!selfNik) {
@@ -1803,6 +1817,63 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
             break;
           }
         }
+      }
+
+      // 2. Cross-reference ROSTER to determine real Shift Siang / Shift Malam (D=Siang, N=Malam)
+      const rosterCode = selfNik ? rosterStatusByNik.get(selfNik.toUpperCase()) : null;
+      if (rosterCode) {
+        s.rosterStatus = rosterCode;
+        const grp = s.shift?.includes('A') ? 'Shift A' : (s.shift?.includes('B') ? 'Shift B' : '');
+        if (rosterCode === 'D' || rosterCode === 'DS') {
+          s.shift = grp ? `${grp} (Siang)` : 'Shift Siang';
+          s.shiftType = 'siang';
+        } else if (rosterCode === 'N' || rosterCode === 'NS') {
+          s.shift = grp ? `${grp} (Malam)` : 'Shift Malam';
+          s.shiftType = 'malam';
+        } else if (rosterCode === 'OFF') {
+          s.shift = grp ? `${grp} (Off)` : 'Off Shift';
+          s.shiftType = 'off';
+        } else if (rosterCode === 'LS') {
+          s.shift = grp ? `${grp} (Long Shift)` : 'Long Shift';
+          s.shiftType = 'longshift';
+        } else if (rosterCode === 'C' || rosterCode.startsWith('CT') || rosterCode.startsWith('CR') || rosterCode === 'TRV') {
+          s.isCuti = true;
+          s.shift = 'Cuti';
+          s.shiftType = 'cuti';
+        }
+      }
+
+      // Sync partners with their respective roster status as well
+      if (Array.isArray(s.partners)) {
+        s.partners.forEach((p: any) => {
+          const pName = (p.name || '').trim().toLowerCase();
+          let pNik = (empNameToNik.get(pName) || '').trim().toUpperCase();
+          if (!pNik) {
+            for (const [eName, eNik] of empNameToNik.entries()) {
+              if (eName === pName || eName.includes(pName) || pName.includes(eName)) {
+                pNik = eNik.toUpperCase();
+                break;
+              }
+            }
+          }
+          const pRosterCode = pNik ? rosterStatusByNik.get(pNik) : null;
+          if (pRosterCode) {
+            p.rosterStatus = pRosterCode;
+            const pGrp = p.shift?.includes('A') ? 'Shift A' : (p.shift?.includes('B') ? 'Shift B' : '');
+            if (pRosterCode === 'D' || pRosterCode === 'DS') {
+              p.shift = pGrp ? `${pGrp} (Siang)` : 'Shift Siang';
+            } else if (pRosterCode === 'N' || pRosterCode === 'NS') {
+              p.shift = pGrp ? `${pGrp} (Malam)` : 'Shift Malam';
+            }
+          }
+        });
+      }
+
+      if (!s || s.isCuti) {
+        s.isCompleted = false;
+        s.hasSsProof = false;
+        s.ssProofUrl = null;
+        continue;
       }
 
       const pMatch = allProofs.find(p => {
