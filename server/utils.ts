@@ -20,7 +20,10 @@ export function getIoInstance() {
   return _io;
 }
 
-export async function sendWebPush(notifs: any | any[]) {
+export async function sendWebPush(
+  notifs: any | any[],
+  options?: { targetNiks?: string[]; skipWebPush?: boolean }
+) {
   try {
     if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {
       try {
@@ -45,9 +48,17 @@ export async function sendWebPush(notifs: any | any[]) {
         }
       }
 
+      // If WebPush is explicitly skipped (e.g. KTA, TTA, Inspeksi - tetap di list, tidak push ke all)
+      if (options?.skipWebPush) {
+        continue;
+      }
+
       let subs: any[] = [];
 
-      if (notif.userId) {
+      // Targeted NIKs (e.g. WO yang hanya push ke Maintenance + Pengawas & Atasan Section Pelapor)
+      if (options?.targetNiks && options.targetNiks.length > 0) {
+        subs = await db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.nik, options.targetNiks));
+      } else if (notif.userId) {
         subs = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.nik, notif.userId));
       } else if (notif.role && notif.role !== 'ALL' && notif.role !== 'all' && notif.role !== 'Semua') {
         const roleLower = String(notif.role).toLowerCase().trim();

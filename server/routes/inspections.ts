@@ -407,15 +407,16 @@ router.post("/api/inspections/universal", async (req, res) => {
                       const notifMsg = `${inspectorNameClean} mencatat ${ticketValues.length} temuan di ${finalData.lokasiUmum || 'Area Kerja'}`;
                       const _n = await db.insert(notifications).values({
                           userId: null,
-                          role: 'Safety',
+                          role: null,
                           title: notifTitle,
                           message: notifMsg,
                           type: 'warning',
                           link: '/ticket'
                       }).returning();
-                      sendWebPush(_n);
-                  } catch (pushErr) {
-                      console.error("Gagal mengirim push notifikasi temuan inspeksi universal:", pushErr);
+                      // Tetap masuk di list notifikasi, tapi tidak di-push ke all (skipWebPush: true)
+                      sendWebPush(_n, { skipWebPush: true });
+                  } catch (notifErr) {
+                      console.error("Gagal menyimpan notifikasi temuan inspeksi universal:", notifErr);
                   }
               }
           } catch(e) {
@@ -877,22 +878,23 @@ router.post("/api/inspections", async (req, res) => {
                       await db.insert(tickets).values([singleTicket]);
                       console.log(`Inserted 1 consolidated APD temuan ticket (${singleTicket.ticketId}) into tickets table.`);
 
-                      // Kirim Push Notification & In-App Notification untuk Temuan APD Baru
+                      // Masukkan ke List Notifikasi untuk Temuan APD Baru (tidak di-push ke all)
                       try {
                           const inspectorNameClean = (insp || 'Inspektor').split('-')[0].split('(')[0].trim();
                           const notifTitle = 'Temuan Kepatuhan APD Baru';
                           const notifMsg = `${inspectorNameClean} mencatat ketidakpatuhan APD di area ${area || 'Area Kerja'}`;
                           const _n = await db.insert(notifications).values({
                               userId: null,
-                              role: 'Safety',
+                              role: null,
                               title: notifTitle,
                               message: notifMsg,
                               type: 'warning',
                               link: '/ticket'
                           }).returning();
-                          sendWebPush(_n);
-                      } catch (pushErr) {
-                          console.error("Gagal mengirim push notifikasi temuan APD:", pushErr);
+                          // Tetap masuk di list notifikasi, tapi tidak di-push ke all (skipWebPush: true)
+                          sendWebPush(_n, { skipWebPush: true });
+                      } catch (notifErr) {
+                          console.error("Gagal menyimpan notifikasi temuan APD:", notifErr);
                       }
                   }
               } catch(e) {

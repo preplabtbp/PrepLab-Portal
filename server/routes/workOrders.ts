@@ -433,8 +433,66 @@ router.post("/api/work-orders", async (req, res) => {
         console.error(`Gagal generate PDF WO for ${createdWO.woId}:`, pdfErr.message);
         waMessageText += `\n\n*Dokumen Kerusakan*:\n(Sedang offline / Kredensial tidak valid)`;
       }
-      // Push Notification to Maintenance and Requestor Section (SPV Up)
+      // Push Notification HANYA ke Tim Maintenance serta Pengawas & Atasan di Section yang Melapor
       try {
+        const allEmps = await db.select().from(employees);
+
+        // 1. Dapatkan section pelapor
+        let requestorSection: string = (createdWO as any).section || '';
+        if (!requestorSection && createdWO.requestorNik) {
+          const empRes = allEmps.find((e: any) => e.nik === createdWO.requestorNik);
+          if (empRes) {
+            requestorSection = empRes.section || empRes.department || '';
+          }
+        }
+        const reqSectClean = requestorSection.trim();
+        const reqSectLower = reqSectClean.toLowerCase();
+
+        // 2. NIK Tim Maintenance
+        const maintNiks = allEmps.filter((e: any) => {
+          const d = (e.department || '').toLowerCase();
+          const s = (e.section || '').toLowerCase();
+          const j = (e.jabatan || '').toLowerCase();
+          return d.includes('maint') || s.includes('maint') || j.includes('maint');
+        }).map((e: any) => e.nik);
+
+        // 3. NIK Pengawas dan Atasan di section yang melapor
+        const isPengawasOrAtasan = (e: any) => {
+          const j = (e.jabatan || '').toLowerCase();
+          const r = (e.role || '').toLowerCase();
+          const p = (e.position || '').toLowerCase();
+          return (
+            j.includes('supervisor') || j.includes('spv') || 
+            j.includes('superintendent') || j.includes('manager') || 
+            j.includes('lead') || j.includes('foreman') || 
+            j.includes('pengawas') || j.includes('kepala') || 
+            j.includes('koordinator') || j.includes('admin') ||
+            r.includes('supervisor') || r.includes('admin') ||
+            p.includes('supervisor') || p.includes('spv') || p.includes('lead') || p.includes('foreman')
+          );
+        };
+
+        const SUPERADMIN_NIKS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'preplabadmin'];
+
+        const reportingSectionSupervisorsNiks = allEmps.filter((e: any) => {
+          const d = (e.department || '').toLowerCase();
+          const s = (e.section || '').toLowerCase();
+          const j = (e.jabatan || '').toLowerCase();
+
+          // Superintendent & Manager & Admin mengawasi seluruh operasional
+          if (j.includes('manager') || j.includes('superintendent') || SUPERADMIN_NIKS.includes(e.nik)) {
+            return true;
+          }
+
+          // Wajib berada di seksi yang melapor DAN berstatus pengawas/atasan
+          const inSection = reqSectLower && (s.includes(reqSectLower) || d.includes(reqSectLower) || reqSectLower.includes(s));
+          return inSection && isPengawasOrAtasan(e);
+        }).map((e: any) => e.nik);
+
+        // Gabungkan penerima push: Tim Maintenance + Pengawas/Atasan Seksi Pelapor (tanpa staf biasa dan tanpa seksi lain)
+        const targetPushNiks = Array.from(new Set([...maintNiks, ...reportingSectionSupervisorsNiks])).filter(Boolean);
+
+        // Masukkan ke list notifikasi Maintenance
         const _n = await db.insert(notifications).values({
           userId: null,
           role: 'Maintenance',
@@ -443,26 +501,22 @@ router.post("/api/work-orders", async (req, res) => {
           type: 'info',
           link: `/wo-detail/${createdWO.woId}`
         }).returning();
-        sendWebPush(_n);
 
-        // Notify requestor's section so SPV Up and section members are aware
-        let requestorSection: string | null = (createdWO as any).section || null;
-        if (!requestorSection && createdWO.requestorNik) {
-          const empRes = await db.select().from(employees).where(eq(employees.nik, createdWO.requestorNik)).limit(1);
-          if (empRes.length > 0) {
-            requestorSection = empRes[0].section || empRes[0].department || null;
-          }
-        }
-        if (requestorSection && requestorSection.toLowerCase() !== 'maintenance') {
-          const _nSec = await db.insert(notifications).values({
+        // Masukkan ke list notifikasi Pengawas/Atasan Seksi Pelapor
+        if (reqSectClean && reqSectClean.toLowerCase() !== 'maintenance') {
+          await db.insert(notifications).values({
             userId: null,
-            role: requestorSection,
-            title: `Work Order Baru (${requestorSection})`,
+            role: 'SPV',
+            title: `Work Order Baru (${reqSectClean})`,
             message: `${createdWO.requestorName} membuat WO ${createdWO.woId}: ${createdWO.equipmentName || ''}`,
             type: 'info',
             link: `/wo-detail/${createdWO.woId}`
-          }).returning();
-          sendWebPush(_nSec);
+          });
+        }
+
+        // Push WebPush HANYA ke tim maintenance serta pengawas dan atasan section pelapor
+        if (targetPushNiks.length > 0) {
+          await sendWebPush(_n[0], { targetNiks: targetPushNiks });
         }
       } catch(e) { console.error('WO push error:', e); }
       res.status(201).json({ ...createdWO, pdfUrl, waMessageText });
