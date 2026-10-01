@@ -254,20 +254,20 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
 
   return (
     <div 
-      className="space-y-3 p-3.5 sm:p-4 rounded-2xl border transition-all"
+      className="space-y-3 p-3.5 sm:p-4 rounded-2xl border transition-all shadow-xs"
       style={{
-        backgroundColor: 'var(--card-bg, #ffffff)',
-        borderColor: 'var(--border-main, #cbd5e1)',
-        color: 'var(--text-main, #0f172a)'
+        backgroundColor: '#ffffff',
+        borderColor: '#cbd5e1',
+        color: '#000000'
       }}
     >
       {/* Header & Mode Switcher */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
         <div className="flex items-center gap-2">
           <ListTodo className="w-4 h-4 text-teal-600 shrink-0" />
-          <span className="font-extrabold text-xs sm:text-sm tracking-tight">{label}</span>
+          <span className="font-black text-xs sm:text-sm tracking-tight text-black">{label}</span>
           {progress.hasTasklist && (
-            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border ${progressBadgeClass}`}>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-black border ${progressBadgeClass}`}>
               {progress.completed}/{progress.total} Selesai ({progress.percentage}%)
             </span>
           )}
@@ -275,17 +275,17 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
 
         {/* Mode Switch Toggle (Checklist vs Freeform Text) */}
         {allowModeSwitch && (
-          <div className="flex items-center gap-1 p-0.5 rounded-xl border bg-slate-100 dark:bg-slate-800 text-[11px] font-bold">
+          <div className="flex items-center gap-1 p-0.5 rounded-xl border border-slate-300 bg-slate-100 text-[11px] font-black">
             <button
               type="button"
               onClick={() => setMode('checklist')}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
                 mode === 'checklist'
-                  ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs font-extrabold'
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'bg-white text-black shadow-xs font-black border border-slate-300'
+                  : 'text-slate-700 hover:text-black'
               }`}
             >
-              <CheckSquare className="w-3 h-3" />
+              <CheckSquare className="w-3 h-3 text-teal-600" />
               <span>Checklist</span>
             </button>
             <button
@@ -296,11 +296,11 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
               }}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
                 mode === 'text'
-                  ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs font-extrabold'
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'bg-white text-black shadow-xs font-black border border-slate-300'
+                  : 'text-slate-700 hover:text-black'
               }`}
             >
-              <FileText className="w-3 h-3" />
+              <FileText className="w-3 h-3 text-teal-600" />
               <span>Teks Bebas</span>
             </button>
           </div>
@@ -310,11 +310,11 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
       {/* Progress Bar (If in checklist mode) */}
       {showProgressBar && mode === 'checklist' && progress.hasTasklist && (
         <div className="space-y-1">
-          <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-500">
+          <div className="flex items-center justify-between text-[11px] font-mono font-black text-black">
             <span>Otomatisasi Status: {isDone ? 'Closed (100%)' : isInProgress ? 'On Progress' : 'Open (0%)'}</span>
             <span>{progress.percentage}%</span>
           </div>
-          <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-300 dark:border-slate-700">
+          <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden border border-slate-300">
             <div 
               className={`h-full rounded-full transition-all duration-300 ${progressBgClass}`}
               style={{ width: `${progress.percentage}%` }}
@@ -329,7 +329,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
           {/* List of Subtasks */}
           <div className={`space-y-1.5 ${compact ? 'max-h-48' : 'max-h-80'} overflow-y-auto pr-1`}>
             {progress.items.length === 0 ? (
-              <div className="p-4 rounded-xl border border-dashed text-center text-xs text-slate-400">
+              <div className="p-4 rounded-xl border border-dashed border-slate-300 text-center text-xs font-bold text-slate-600">
                 Belum ada butir checklist subtask. Silakan tambahkan butir di bawah.
               </div>
             ) : (
@@ -363,18 +363,18 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                       setDraggedIdx(null);
                       setDragOverIdx(null);
                     }}
-                    className={`flex items-start gap-2 p-2 rounded-xl border transition-all select-none ${
+                    className={`flex items-start gap-2 p-2.5 rounded-xl border transition-all select-none ${
                       isDragging
-                        ? 'opacity-40 border-2 border-dashed border-teal-500 bg-teal-50/50'
+                        ? 'opacity-40 border-2 border-dashed border-teal-500 bg-teal-50'
                         : item.checked
-                        ? 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-teal-500 hover:shadow-2xs'
-                    } ${isDragOver ? 'border-t-2 border-teal-600 bg-teal-50/40' : ''}`}
+                        ? 'bg-slate-50 border-slate-300 shadow-2xs'
+                        : 'bg-white border-slate-300 hover:border-teal-500 hover:shadow-xs'
+                    } ${isDragOver ? 'border-t-2 border-teal-600 bg-teal-50' : ''}`}
                   >
                     {/* Drag Handle */}
                     {!isReadOnly && (
                       <div 
-                        className="cursor-grab active:cursor-grabbing p-0.5 text-slate-400 hover:text-teal-600 transition-colors shrink-0 mt-0.5"
+                        className="cursor-grab active:cursor-grabbing p-0.5 text-slate-500 hover:text-teal-600 transition-colors shrink-0 mt-0.5"
                         title="Geser untuk mengatur urutan (Drag & Drop)"
                       >
                         <GripVertical className="w-3.5 h-3.5" />
@@ -390,9 +390,9 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                       title={item.checked ? 'Tandai belum selesai' : 'Tandai selesai'}
                     >
                       {item.checked ? (
-                        <CheckSquare className="w-4 h-4 text-teal-600 fill-teal-50 dark:fill-teal-950" />
+                        <CheckSquare className="w-4 h-4 text-teal-600 fill-teal-100" />
                       ) : (
-                        <Square className="w-4 h-4 text-slate-400 hover:text-teal-600" />
+                        <Square className="w-4 h-4 text-slate-500 hover:text-teal-600" />
                       )}
                     </button>
 
@@ -410,7 +410,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                               if (e.key === 'Escape') setEditingTitleIdx(null);
                             }}
                             onBlur={() => handleCommitTitle(item.index)}
-                            className="w-full text-xs font-bold px-2 py-1 rounded-lg border border-teal-500 outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                            className="w-full text-xs font-black px-2 py-1 rounded-lg border-2 border-teal-500 outline-none bg-white text-black"
                           />
                         </div>
                       ) : (
@@ -424,8 +424,8 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                             }}
                             className={`text-xs sm:text-sm leading-snug break-words ${
                               item.checked 
-                                ? 'line-through text-slate-400 font-normal' 
-                                : 'font-bold text-slate-800 dark:text-slate-200'
+                                ? 'line-through text-slate-800 font-bold opacity-80' 
+                                : 'font-black text-black'
                             }`}
                           >
                             {item.text}
@@ -433,7 +433,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
 
                           {/* Checked Date Badge */}
                           {item.checkedDate && (
-                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded font-bold border bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 inline-flex items-center gap-0.5 w-fit">
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded font-black border bg-slate-200 text-slate-900 border-slate-300 inline-flex items-center gap-0.5 w-fit">
                               Diceklis: {item.checkedDate}
                             </span>
                           )}
@@ -512,22 +512,22 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                   }
                 }}
                 placeholder={placeholder}
-                className="flex-1 px-3 py-2 text-xs rounded-xl border outline-none font-medium focus:border-teal-500 transition-all bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                className="flex-1 px-3 py-2 text-xs rounded-xl border-2 outline-none font-bold focus:border-teal-500 transition-all bg-white text-black border-slate-400 placeholder:text-slate-500 shadow-2xs"
               />
               <button
                 type="button"
                 onClick={handleAddSubtask}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 active:scale-95 transition-all shadow-xs cursor-pointer shrink-0"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black text-white bg-teal-600 hover:bg-teal-700 active:scale-95 transition-all shadow-xs cursor-pointer shrink-0"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-3.5 h-3.5 stroke-[3]" />
                 <span>Tambah</span>
               </button>
             </div>
           )}
 
           {/* Extra Notes (Non-Checklist Part) */}
-          <div className="pt-2 border-t space-y-1" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
-            <label className="text-[10px] font-bold uppercase tracking-wider block text-slate-500">
+          <div className="pt-2 border-t space-y-1" style={{ borderColor: '#cbd5e1' }}>
+            <label className="text-[10px] font-black uppercase tracking-wider block text-black">
               Catatan Umum / Instruksi Khusus (Opsional)
             </label>
             <textarea
@@ -536,7 +536,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
               value={extraNotes}
               onChange={(e) => handleExtraNotesChange(e.target.value)}
               placeholder="Instruksi tambahan, parameter khusus, atau keterangan ringkas..."
-              className="w-full text-xs font-sans p-2 rounded-xl border outline-none resize-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+              className="w-full text-xs font-sans font-bold p-2.5 rounded-xl border-2 outline-none resize-none focus:border-teal-500 bg-white text-black border-slate-400 placeholder:text-slate-500 shadow-2xs"
             />
           </div>
         </div>
@@ -552,9 +552,9 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
               onChange(e.target.value);
             }}
             placeholder="Tuliskan keterangan naratif atau laporan detail..."
-            className="w-full text-xs font-sans p-3 rounded-xl border outline-none resize-y focus:border-teal-500 leading-relaxed bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+            className="w-full text-xs font-sans font-bold p-3 rounded-xl border-2 outline-none resize-y focus:border-teal-500 leading-relaxed bg-white text-black border-slate-400 placeholder:text-slate-500 shadow-2xs"
           />
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] font-bold text-slate-700">
             Tip: Anda dapat beralih ke Mode Checklist kapan saja untuk memformat rincian tugas menjadi to-do checklist terstruktur.
           </p>
         </div>
@@ -567,24 +567,24 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
           onClick={() => setActiveNoteModal(null)}
         >
           <div 
-            className="w-full max-w-lg rounded-2xl border shadow-2xl p-5 space-y-4 max-h-[90vh] flex flex-col bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+            className="w-full max-w-lg rounded-2xl border shadow-2xl p-5 space-y-4 max-h-[90vh] flex flex-col bg-white border-slate-300 text-black"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200">
               <div className="space-y-0.5">
-                <div className="flex items-center gap-1.5 text-xs font-black text-amber-700 dark:text-amber-400">
-                  <AlertCircle className="w-4 h-4" />
+                <div className="flex items-center gap-1.5 text-xs font-black text-amber-800">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
                   <span>Catatan Khusus Subtask</span>
                 </div>
-                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-2">
+                <h4 className="text-sm font-black text-black line-clamp-2">
                   {activeNoteModal.itemText}
                 </h4>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveNoteModal(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                className="p-1 rounded-lg text-slate-500 hover:text-black hover:bg-slate-100 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -593,29 +593,29 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
             {/* Notes History List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[140px] max-h-[300px]">
               {activeNoteModal.notes.length === 0 ? (
-                <div className="p-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center text-xs text-slate-400">
+                <div className="p-4 rounded-xl border border-dashed border-slate-300 text-center text-xs font-bold text-slate-500">
                   Belum ada catatan temuan/kendala untuk subtask ini.
                 </div>
               ) : (
                 activeNoteModal.notes.map((note) => (
                   <div 
                     key={note.id}
-                    className="p-3 rounded-xl border bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 space-y-1.5"
+                    className="p-3 rounded-xl border bg-slate-50 border-slate-300 space-y-1.5"
                   >
-                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-500">
+                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-600">
                       <div className="flex items-center gap-2">
                         {note.author && (
-                          <span className="font-bold text-teal-700 dark:text-teal-400 flex items-center gap-1">
+                          <span className="font-black text-teal-800 flex items-center gap-1">
                             <User className="w-3 h-3" />
                             {note.author}
                           </span>
                         )}
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1 font-bold">
                           <Calendar className="w-3 h-3" />
                           {note.date}
                         </span>
                         {note.time && (
-                          <span className="flex items-center gap-1">
+                          <span className="flex items-center gap-1 font-bold">
                             <Clock className="w-3 h-3" />
                             {note.time}
                           </span>
@@ -632,7 +632,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                         </button>
                       )}
                     </div>
-                    <p className="text-xs font-medium text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+                    <p className="text-xs font-bold text-black leading-relaxed whitespace-pre-wrap">
                       {note.text}
                     </p>
                   </div>
@@ -642,7 +642,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
 
             {/* Add Note Input */}
             {!isReadOnly && (
-              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="pt-2 border-t border-slate-200 space-y-2">
                 <textarea
                   rows={2}
                   value={newNoteInput}
@@ -654,10 +654,10 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                     }
                   }}
                   placeholder="Ketik catatan kendala, temuan, atau perkembangan subtask..."
-                  className="w-full text-xs font-sans p-2.5 rounded-xl border outline-none resize-none focus:border-teal-500 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700"
+                  className="w-full text-xs font-sans font-bold p-2.5 rounded-xl border-2 outline-none resize-none focus:border-teal-500 bg-white text-black border-slate-400 placeholder:text-slate-500"
                 />
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400">Tekan Enter untuk menyimpan catatan</span>
+                  <span className="text-[10px] font-semibold text-slate-600">Tekan Enter untuk menyimpan catatan</span>
                   <button
                     type="button"
                     onClick={handleAddNote}
