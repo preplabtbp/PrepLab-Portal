@@ -896,15 +896,28 @@ export function LogbookScreen({
     }
 
     let cadence = task.activityType || 'Daily';
-    if (cadence.toLowerCase() === 'routine' || !cadence) {
+    const cActLower = (task.activityType || '').toLowerCase().trim();
+    if (cActLower.includes('monthly') || cActLower.includes('bulanan')) {
+      cadence = 'Monthly';
+    } else if (cActLower.includes('weekly') || cActLower.includes('mingguan')) {
+      cadence = 'Weekly';
+    } else if (cActLower.includes('daily') || cActLower.includes('harian')) {
+      cadence = 'Daily';
+    } else if (cActLower.includes('quarterly') || cActLower.includes('triwulan')) {
+      cadence = 'Quarterly';
+    } else if (cActLower.includes('biannual') || cActLower.includes('semester')) {
+      cadence = 'Biannual';
+    } else if (cActLower.includes('yearly') || cActLower.includes('annual') || cActLower.includes('tahunan')) {
+      cadence = 'Yearly';
+    } else if (cadence.toLowerCase() === 'routine' || !cadence) {
       const bTitle = (task.bulletinTopicTitle || '').toLowerCase();
       const tTitle = (task.title || '').toLowerCase();
       const combined = `${bTitle} ${tTitle}`;
-      if (combined.includes('weekly') || combined.includes('mingguan')) cadence = 'Weekly';
+      if (combined.includes('monthly') || combined.includes('bulanan')) cadence = 'Monthly';
+      else if (combined.includes('weekly') || combined.includes('mingguan')) cadence = 'Weekly';
       else if (combined.includes('quarterly') || combined.includes('triwulan')) cadence = 'Quarterly';
       else if (combined.includes('biannual') || combined.includes('semester')) cadence = 'Biannual';
       else if (combined.includes('yearly') || combined.includes('annual') || combined.includes('tahunan')) cadence = 'Yearly';
-      else if (combined.includes('monthly') || combined.includes('bulanan')) cadence = 'Monthly';
       else cadence = 'Daily';
     }
 

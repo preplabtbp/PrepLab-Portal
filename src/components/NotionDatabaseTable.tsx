@@ -1669,6 +1669,11 @@ export function NotionDatabaseTable({
     const now = new Date();
     const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
+    const inheritedCadence = currentCadence || normalizeCadence(title) || 'Monthly';
+    const inheritedPeriod = (inheritedCadence && inheritedCadence !== 'Non-Routine')
+      ? inheritedCadence
+      : 'Monthly';
+
     setRowFormData({
       number: nextNum,
       'Jenis kegiatan': '',
@@ -1679,8 +1684,8 @@ export function NotionDatabaseTable({
       Status: 'Open',
       'Created Time': createdStr,
       Kategori: section || 'Laboratorium',
-      'Activity (routine/non routine)': 'Routine',
-      period: 'Weekly'
+      'Activity (routine/non routine)': inheritedCadence,
+      period: inheritedPeriod
     });
     setEditingRowIndex(null);
     setShowRowModal(true);
@@ -3506,12 +3511,6 @@ export function NotionDatabaseTable({
                                 compact={fitPageMode}
                                 onChange={(newVal) => {
                                   if (newVal === val) return;
-                                  const targetCad = normalizeCadence(newVal);
-                                  const matchingDest = sectionPeriodicalPages.find(p => p.cadence === newVal || (targetCad && p.cadence === targetCad));
-                                  if (matchingDest) {
-                                    openMoveModal(matchingDest.post, row, newVal);
-                                    return;
-                                  }
                                   handleUpdateCellDirect(actualRowIndex, colName, newVal);
                                 }}
                               />

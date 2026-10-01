@@ -168,16 +168,25 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
 
     // Helper: Resolve effective cadence for routine tasks
     const resolveRoutineCadence = (t: any): string => {
-      let act = (t.activityType || 'Daily').trim();
-      if (act.toLowerCase() === 'routine' || !act) {
+      let act = (t.activityType || '').trim();
+      const actLower = act.toLowerCase();
+      if (actLower.includes('monthly') || actLower.includes('bulanan')) return 'Monthly';
+      if (actLower.includes('weekly') || actLower.includes('mingguan')) return 'Weekly';
+      if (actLower.includes('daily') || actLower.includes('harian')) return 'Daily';
+      if (actLower.includes('quarterly') || actLower.includes('triwulan')) return 'Quarterly';
+      if (actLower.includes('biannual') || actLower.includes('semester')) return 'Biannual';
+      if (actLower.includes('yearly') || actLower.includes('annual') || actLower.includes('tahunan')) return 'Yearly';
+      if (actLower.includes('non')) return 'Non Routine';
+
+      if (actLower === 'routine' || !act) {
         const bTitle = (t.bulletinTopicTitle || '').toLowerCase();
         const tTitle = (t.title || '').toLowerCase();
         const combined = `${bTitle} ${tTitle}`;
+        if (combined.includes('monthly') || combined.includes('bulanan')) return 'Monthly';
         if (combined.includes('weekly') || combined.includes('mingguan')) return 'Weekly';
         if (combined.includes('quarterly') || combined.includes('triwulan')) return 'Quarterly';
         if (combined.includes('biannual') || combined.includes('semester')) return 'Biannual';
         if (combined.includes('yearly') || combined.includes('annual') || combined.includes('tahunan')) return 'Yearly';
-        if (combined.includes('monthly') || combined.includes('bulanan')) return 'Monthly';
         return 'Daily';
       }
       return act;
@@ -232,8 +241,11 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
     // 1. Today tasks:
     //    - STRICTLY tasks planned/scheduled to be progressed on targetDateStr (today)
     //    - Either originally created for targetDateStr, OR explicitly scheduled/planned for targetDateStr (plannedDate)
+    //    - OR active Routine tasks eligible for targetDateStr (Daily continuous, Weekly within D-3, Monthly within D-7)
     const todayTasks = allMatching.filter(t => {
-      return isTaskPlannedForDate(t, targetDateStr);
+      if (isTaskPlannedForDate(t, targetDateStr)) return true;
+      if (isRoutineEligibleForDate(t, targetDateStr) && t.taskDate <= targetDateStr) return true;
+      return false;
     });
 
     // 2. Strict Yesterday tasks (H-1): ONLY tasks that had active progress or were completed ON yesterdayDateStr
@@ -289,10 +301,14 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
       return false;
     });
 
-    // 3. Carry Over tasks: All past unfinished tasks (Open, In Progress, Pending) before targetDateStr
-    // NOTE: Tasks scheduled in today's planning REMAIN visible in carry-over/backlog as their origin record!
+    // 3. Carry Over / Backlog tasks: All active unfinished tasks before targetDateStr, PLUS all active routine backlogs (Monthly, Weekly, etc)
     const carryOverTasks = allMatching.filter(t => {
-      if (t.taskDate < targetDateStr && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed') return true;
+      const isUnfinished = t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed' && t.status !== 'Canceled' && t.status !== 'Cancelled';
+      if (!isUnfinished) return false;
+      // All past unfinished tasks
+      if (t.taskDate < targetDateStr) return true;
+      // Active routine backlogs that belong to current backlog
+      if (isRoutineTask(t)) return true;
       return false;
     });
 
