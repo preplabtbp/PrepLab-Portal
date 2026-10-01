@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Bell, Check, X, BellRing, Wrench, ChevronRight, Megaphone, ClipboardCheck, Download, Pin, Newspaper, BookOpen, Calendar, ChevronDown, CheckSquare, Layers } from 'lucide-react';
+import { Bell, Check, X, BellRing, Wrench, ChevronRight, Megaphone, ClipboardCheck, Download, Pin, Newspaper, BookOpen, Calendar, ChevronDown, CheckSquare, Layers, Trophy, MessageSquare, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { subscribeUserToPush } from '../push-notifications';
@@ -283,6 +283,74 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     return link.includes('/agenda') || title.includes('agenda');
   };
 
+  const isSafetyK3Notification = (notif: any): boolean => {
+    const type = (notif.type || '').toUpperCase();
+    const title = (notif.title || '').toLowerCase();
+    const msg = (notif.message || '').toLowerCase();
+    const link = (notif.link || '').toLowerCase();
+    return (
+      type === 'INSPECTION_COMPLETED' ||
+      type === 'REMINDER_INSPECTION' ||
+      type === 'REMINDER_KTA' ||
+      isP5mNotification(notif) ||
+      isInspectionCompletedNotification(notif) ||
+      title.includes('inspeksi') ||
+      title.includes('p2h') ||
+      title.includes('temuan') ||
+      title.includes('apd') ||
+      title.includes('kta') ||
+      title.includes('tta') ||
+      title.includes('pengingat') ||
+      link.includes('/ticket') ||
+      link.includes('/inspections') ||
+      msg.includes('inspeksi') ||
+      msg.includes('kta') ||
+      msg.includes('tta')
+    );
+  };
+
+  const isLogbookOpsNotification = (notif: any): boolean => {
+    return isLogbookNotification(notif) || isBulletinNotification(notif) || isAgendaNotification(notif);
+  };
+
+  const isGamificationNotification = (notif: any): boolean => {
+    const link = (notif.link || '').toLowerCase();
+    const title = (notif.title || '').toLowerCase();
+    const msg = (notif.message || '').toLowerCase();
+    const type = (notif.type || '').toUpperCase();
+    return (
+      link.includes('/leaderboard') ||
+      link.includes('gamification') ||
+      type === 'RANK_PROMOTION' ||
+      type === 'ACHIEVEMENT_UNLOCKED' ||
+      title.includes('exp') ||
+      title.includes('pangkat') ||
+      title.includes('leaderboard') ||
+      title.includes('achievement') ||
+      title.includes('gelar') ||
+      title.includes('penghormatan tertinggi') ||
+      msg.includes('exp') ||
+      msg.includes('pangkat') ||
+      msg.includes('leaderboard')
+    );
+  };
+
+  const isChatNotification = (notif: any): boolean => {
+    const link = (notif.link || '').toLowerCase();
+    const title = (notif.title || '').toLowerCase();
+    const msg = (notif.message || '').toLowerCase();
+    return (
+      link.includes('/chat') ||
+      title.includes('chat') ||
+      title.includes('pesan baru') ||
+      title.includes('obrolan') ||
+      title.includes('menyebut anda') ||
+      msg.includes('obrolan') ||
+      msg.includes('mengirim pesan') ||
+      title.includes('hq vanguard command')
+    );
+  };
+
   const handleNotificationClick = (notif: any) => {
     if (!notif.isRead) {
       markAsRead(notif.id);
@@ -329,7 +397,10 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
       } catch (err) {
         console.error('Failed to parse inspection completion notif:', err);
       }
-    } else if (notif.link === '/chat' || notif.title?.includes('Chat') || notif.title?.includes('menyebut Anda')) {
+    } else if (isGamificationNotification(notif)) {
+      setIsOpen(false);
+      window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'leaderboard' } }));
+    } else if (isChatNotification(notif)) {
       setIsOpen(false);
       window.dispatchEvent(new CustomEvent('open-chat-drawer'));
     } else if (notif.link?.startsWith('/bulletin')) {
@@ -360,7 +431,7 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
 
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
-  // Group notifications into pinned category summaries with pop counters
+  // Group notifications into 5 pinned category summaries with pop counters
   const { pinnedCategories, generalNotifs } = useMemo(() => {
     const groups: {
       id: string;
@@ -374,19 +445,8 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
       unreadCount: number;
     }[] = [
       {
-        id: 'bulletin',
-        title: 'Buletin & Forum Tim',
-        badgeText: 'Buletin',
-        colorClass: 'text-teal-600 dark:text-teal-400',
-        bgClass: 'bg-teal-500/10',
-        borderClass: 'border-teal-500/30',
-        icon: Newspaper,
-        items: [],
-        unreadCount: 0
-      },
-      {
         id: 'wo',
-        title: 'Work Orders & Maintenance',
+        title: 'Work Orders & Pemeliharaan',
         badgeText: 'WO',
         colorClass: 'text-sky-600 dark:text-sky-400',
         bgClass: 'bg-sky-500/10',
@@ -396,31 +456,20 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
         unreadCount: 0
       },
       {
-        id: 'p5m',
-        title: 'P5M & Safety Briefing',
-        badgeText: 'P5M',
-        colorClass: 'text-amber-600 dark:text-amber-400',
-        bgClass: 'bg-amber-500/10',
-        borderClass: 'border-amber-500/30',
-        icon: Megaphone,
-        items: [],
-        unreadCount: 0
-      },
-      {
-        id: 'inspection',
-        title: 'P2H & Inspeksi Peralatan',
-        badgeText: 'P2H',
+        id: 'safety_k3',
+        title: 'Keselamatan Kerja (K3) & Inspeksi',
+        badgeText: 'K3 & Safety',
         colorClass: 'text-emerald-600 dark:text-emerald-400',
         bgClass: 'bg-emerald-500/10',
         borderClass: 'border-emerald-500/30',
-        icon: CheckSquare,
+        icon: ShieldAlert,
         items: [],
         unreadCount: 0
       },
       {
-        id: 'logbook',
-        title: 'Log Book & Penugasan Harian',
-        badgeText: 'LogBook',
+        id: 'logbook_ops',
+        title: 'Logbook, Buletin & Agenda',
+        badgeText: 'Operasional',
         colorClass: 'text-indigo-600 dark:text-indigo-400',
         bgClass: 'bg-indigo-500/10',
         borderClass: 'border-indigo-500/30',
@@ -429,13 +478,24 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
         unreadCount: 0
       },
       {
-        id: 'agenda',
-        title: 'Agenda & Event Site',
-        badgeText: 'Agenda',
-        colorClass: 'text-purple-600 dark:text-purple-400',
-        bgClass: 'bg-purple-500/10',
-        borderClass: 'border-purple-500/30',
-        icon: Calendar,
+        id: 'gamification',
+        title: 'Leaderboard, EXP & Pangkat',
+        badgeText: 'Rank & EXP',
+        colorClass: 'text-amber-600 dark:text-amber-400',
+        bgClass: 'bg-amber-500/10',
+        borderClass: 'border-amber-500/30',
+        icon: Trophy,
+        items: [],
+        unreadCount: 0
+      },
+      {
+        id: 'chat',
+        title: 'Chat & Pesan Komunikasi',
+        badgeText: 'Chat',
+        colorClass: 'text-rose-600 dark:text-rose-400',
+        bgClass: 'bg-rose-500/10',
+        borderClass: 'border-rose-500/30',
+        icon: MessageSquare,
         items: [],
         unreadCount: 0
       }
@@ -444,24 +504,21 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     const general: any[] = [];
 
     filteredNotifs.forEach((n) => {
-      if (isBulletinNotification(n)) {
-        groups[0].items.push(n);
-        if (!n.isRead) groups[0].unreadCount++;
-      } else if (isWoNotification(n)) {
-        groups[1].items.push(n);
-        if (!n.isRead) groups[1].unreadCount++;
-      } else if (isP5mNotification(n)) {
-        groups[2].items.push(n);
-        if (!n.isRead) groups[2].unreadCount++;
-      } else if (isInspectionCompletedNotification(n)) {
-        groups[3].items.push(n);
-        if (!n.isRead) groups[3].unreadCount++;
-      } else if (isLogbookNotification(n)) {
+      if (isChatNotification(n)) {
         groups[4].items.push(n);
         if (!n.isRead) groups[4].unreadCount++;
-      } else if (isAgendaNotification(n)) {
-        groups[5].items.push(n);
-        if (!n.isRead) groups[5].unreadCount++;
+      } else if (isGamificationNotification(n)) {
+        groups[3].items.push(n);
+        if (!n.isRead) groups[3].unreadCount++;
+      } else if (isWoNotification(n)) {
+        groups[0].items.push(n);
+        if (!n.isRead) groups[0].unreadCount++;
+      } else if (isSafetyK3Notification(n)) {
+        groups[1].items.push(n);
+        if (!n.isRead) groups[1].unreadCount++;
+      } else if (isLogbookOpsNotification(n)) {
+        groups[2].items.push(n);
+        if (!n.isRead) groups[2].unreadCount++;
       } else {
         general.push(n);
       }
@@ -691,6 +748,8 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                     const isWO = isWoNotification(notif);
                     const isP5M = isP5mNotification(notif);
                     const isInspection = isInspectionCompletedNotification(notif);
+                    const isGame = isGamificationNotification(notif);
+                    const isChat = isChatNotification(notif);
                     return (
                       <div 
                         key={notif.id} 
@@ -706,7 +765,9 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                       {!notif.isRead && (
                         <div 
                           className="absolute top-3.5 right-3 w-2 h-2 rounded-full"
-                          style={{ backgroundColor: isP5M ? '#F59E0B' : (isInspection ? '#10B981' : 'var(--primary, #2A9D8F)') }}
+                          style={{ 
+                            backgroundColor: isP5M ? '#F59E0B' : (isInspection ? '#10B981' : (isGame ? '#D97706' : (isChat ? '#E11D48' : 'var(--primary, #2A9D8F)'))) 
+                          }}
                         />
                       )}
                       
@@ -734,6 +795,20 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                             className="p-1 rounded-md text-[10px] font-bold inline-flex items-center gap-1 shadow-2xs bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
                           >
                             <ClipboardCheck className="w-3 h-3" /> Selesai
+                          </span>
+                        )}
+                        {isGame && (
+                          <span 
+                            className="p-1 rounded-md text-[10px] font-bold inline-flex items-center gap-1 shadow-2xs bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                          >
+                            <Trophy className="w-3 h-3" /> Rank & EXP
+                          </span>
+                        )}
+                        {isChat && (
+                          <span 
+                            className="p-1 rounded-md text-[10px] font-bold inline-flex items-center gap-1 shadow-2xs bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                          >
+                            <MessageSquare className="w-3 h-3" /> Chat
                           </span>
                         )}
                         <h4 className="font-bold text-xs truncate pr-3" style={{ color: 'var(--text-main)' }}>
@@ -776,6 +851,28 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                             <Download className="w-3 h-3" /> Unduh PDF &amp; General Submit Safety
                           </span>
                           <ChevronRight className="w-3.5 h-3.5 text-emerald-500" />
+                        </div>
+                      )}
+
+                      {isGame && (
+                        <div 
+                          className="mt-2 pt-1.5 border-t flex items-center justify-between text-[11px] font-bold border-amber-500/20 text-amber-600 dark:text-amber-400"
+                        >
+                          <span className="flex items-center gap-1">
+                            <Trophy className="w-3 h-3" /> Buka Hall of Fame &amp; Peringkat
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5 text-amber-500" />
+                        </div>
+                      )}
+
+                      {isChat && (
+                        <div 
+                          className="mt-2 pt-1.5 border-t flex items-center justify-between text-[11px] font-bold border-rose-500/20 text-rose-600 dark:text-rose-400"
+                        >
+                          <span className="flex items-center gap-1">
+                            <MessageSquare className="w-3 h-3" /> Buka Ruang Obrolan
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5 text-rose-500" />
                         </div>
                       )}
 
