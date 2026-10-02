@@ -740,17 +740,36 @@ export function visualHtmlToMarkdown(html?: string | null): string {
         return inner.trim() ? `\`${inner.trim()}\`` : '';
       case 'span':
       case 'font': {
+        const dataColor = el.getAttribute('data-color');
+        if (dataColor && NOTION_COLORS[dataColor] && dataColor !== 'default') {
+          return `[${dataColor}]${inner}[/${dataColor}]`;
+        }
+
         const style = el.getAttribute('style') || '';
         const colorAttr = el.getAttribute('color') || '';
-        const colorMatch = style.match(/color:\s*([#a-zA-Z0-9]+)/i);
+        const colorMatch = style.match(/color:\s*([^;]+)/i);
         const colorVal = colorMatch ? colorMatch[1].trim() : (colorAttr ? colorAttr.trim() : '');
         if (colorVal) {
-          const foundKey = Object.keys(NOTION_COLORS).find(k => 
-            NOTION_COLORS[k].hex.toLowerCase() === colorVal.toLowerCase() || 
-            k.toLowerCase() === colorVal.toLowerCase()
+          const c = colorVal.toLowerCase();
+          let foundKey = Object.keys(NOTION_COLORS).find(k => 
+            NOTION_COLORS[k].hex.toLowerCase() === c || 
+            k.toLowerCase() === c
           );
-          const colorTag = foundKey && foundKey !== 'default' ? foundKey : colorVal;
-          return `[${colorTag}]${inner}[/${colorTag}]`;
+          if (!foundKey && c.startsWith('rgb')) {
+            const rgbMatch = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (rgbMatch) {
+              const r = parseInt(rgbMatch[1], 10);
+              const g = parseInt(rgbMatch[2], 10);
+              const b = parseInt(rgbMatch[3], 10);
+              const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`.toLowerCase();
+              foundKey = Object.keys(NOTION_COLORS).find(k => 
+                NOTION_COLORS[k].hex.toLowerCase() === hex
+              );
+            }
+          }
+          if (foundKey && foundKey !== 'default') {
+            return `[${foundKey}]${inner}[/${foundKey}]`;
+          }
         }
         return inner;
       }

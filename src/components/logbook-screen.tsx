@@ -3963,8 +3963,8 @@ export function LogbookScreen({
                 {isAssignPending && (
                   <div className="space-y-3 pt-1 border-t border-amber-300">
                     <SearchableSinglePicSelect
-                      valueNik={newPendingPicPicNik}
-                      valueName={newPendingPicPicName}
+                      valueNik={newPendingPicNik}
+                      valueName={newPendingPicName}
                       onChange={(nik, name) => {
                         setNewPendingPicNik(nik);
                         setNewPendingPicName(name);

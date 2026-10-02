@@ -2577,19 +2577,20 @@ export function NotionDatabaseTable({
   };
 
   // Helper for PIC Avatar Badge
+  // Helper for PIC Avatar Badge
   const renderPicBadge = (picStr: string) => {
     if (!picStr || picStr === '-') return <span className="font-mono text-xs text-slate-400">-</span>;
     const initial = picStr.charAt(0).toUpperCase();
     return (
       <div 
-        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs font-medium ${
+        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs ${
           isNotionLight
-            ? 'bg-slate-50 border-slate-200 text-slate-700'
-            : 'bg-[#1e293b] border-slate-700 text-slate-300'
+            ? 'bg-slate-50 border-slate-300 text-slate-950 font-bold shadow-2xs'
+            : 'bg-[#1e293b] border-slate-700 text-slate-200 font-semibold'
         }`}
       >
-        <span className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
-          isNotionLight ? 'bg-slate-200 text-slate-700' : 'bg-teal-800 text-teal-200'
+        <span className={`w-4 h-4 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 ${
+          isNotionLight ? 'bg-slate-200 text-slate-900' : 'bg-teal-800 text-teal-200'
         }`}>
           {initial}
         </span>
@@ -2615,9 +2616,9 @@ export function NotionDatabaseTable({
         <ul className="space-y-1 my-0.5">
           {items.map((item, idx) => (
             <li key={idx} className="flex items-start gap-1.5 text-xs sm:text-[13px] leading-relaxed">
-              <span className="text-slate-400 font-bold leading-none mt-1 shrink-0">•</span>
+              <span className={`font-bold leading-none mt-1 shrink-0 ${isNotionLight ? 'text-slate-800' : 'text-slate-400'}`}>•</span>
               <span 
-                className="flex-1 whitespace-pre-wrap font-medium" 
+                className={`flex-1 whitespace-pre-wrap font-medium ${isNotionLight ? 'text-slate-950' : 'text-slate-100'}`} 
                 dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(item) }}
               />
             </li>
@@ -2636,9 +2637,9 @@ export function NotionDatabaseTable({
             const content = isBullet ? line.substring(2) : line;
             return (
               <div key={idx} className="flex items-start gap-1.5 text-xs sm:text-[13px] leading-relaxed">
-                {isBullet && <span className="text-slate-400 font-bold leading-none mt-1 shrink-0">•</span>}
+                {isBullet && <span className={`font-bold leading-none mt-1 shrink-0 ${isNotionLight ? 'text-slate-800' : 'text-slate-400'}`}>•</span>}
                 <span 
-                  className="flex-1 whitespace-pre-wrap font-medium" 
+                  className={`flex-1 whitespace-pre-wrap font-medium ${isNotionLight ? 'text-slate-950' : 'text-slate-100'}`} 
                   dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(content) }}
                 />
               </div>
@@ -2650,7 +2651,7 @@ export function NotionDatabaseTable({
 
     return (
       <p 
-        className="text-xs sm:text-[13px] leading-relaxed whitespace-pre-line font-medium" 
+        className={`text-xs sm:text-[13px] leading-relaxed whitespace-pre-line font-medium ${isNotionLight ? 'text-slate-950' : 'text-slate-100'}`} 
         dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(cleanText) }}
       />
     );
