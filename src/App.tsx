@@ -3,7 +3,7 @@ import React, { useState, useEffect, Suspense, lazy, useRef, useMemo, useCallbac
 import { AnimatePresence, motion } from 'motion/react';
 import { registerPresence, pingPresence, unregisterPresence } from './lib/socketClient';
 
-import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare, Trophy, Maximize2, Minimize2 } from 'lucide-react';
+import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, EyeOff, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare, Trophy, Maximize2, Minimize2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { appendRowsToSheet, getDowntimeRecords,updateDowntimeRepair, getEmployees, loginEmployee, getEquipments, ToolRecord, updateToolPhotoUrl, uploadPhotoToDrive } from './sheets-api';
@@ -400,6 +400,17 @@ export default function App() {
     );
   }, [isDeveloper, userProfile, isMeetingRoom]);
 
+  // SPT (Superintendent) & Manager Homepage Routing
+  const isSptOrManager = React.useMemo(() => {
+    if (isMeetingRoom) return false;
+    const jab = (userProfile?.jabatan || '').toLowerCase();
+    return (
+      jab.includes('superintendent') ||
+      jab.includes('spt') ||
+      jab.includes('manager')
+    );
+  }, [userProfile, isMeetingRoom]);
+
   const [showProfileScreen, setShowProfileScreen] = useState(false);
   const [showModulesDrawer, setShowModulesDrawer] = useState(false);
   const [showBulletinMenu, setShowBulletinMenu] = useState(false);
@@ -644,7 +655,14 @@ export default function App() {
       setShowMeetingRoomDevModal(true);
       return;
     }
-    if (tab === 'home' || tab === '' || tab === '/') navigate('/');
+    if (tab === 'home' || tab === '' || tab === '/') {
+      if (isSptOrManager) {
+        const universe = userProfile?.pt === 'GTS' ? 'GTS' : 'TBP';
+        navigate(`/bulletin/${universe}`);
+      } else {
+        navigate('/');
+      }
+    }
     else navigate('/' + cleanTab);
   };
 
@@ -726,9 +744,12 @@ export default function App() {
   
   const [loginStep, setLoginStep] = useState<'nik' | 'password' | 'setup' | 'forgot'>('nik');
   const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [requireSetup, setRequireSetup] = useState(false);
   const [setupPassword1, setSetupPassword1] = useState('');
+  const [showSetupPassword1, setShowSetupPassword1] = useState(false);
   const [setupPassword2, setSetupPassword2] = useState('');
+  const [showSetupPassword2, setShowSetupPassword2] = useState(false);
   const [setupTanggalLahir, setSetupTanggalLahir] = useState('');
   const [setupEmail, setSetupEmail] = useState('');
   
@@ -856,6 +877,14 @@ export default function App() {
                   toast.success("Login berhasil");
                   setLoginStep('nik');
                   setPasswordInput('');
+                  setShowPassword(false);
+
+                  const jab = (data.employee?.jabatan || '').toLowerCase();
+                  const isSuperOrMgr = jab.includes('superintendent') || jab.includes('spt') || jab.includes('manager');
+                  if (isSuperOrMgr) {
+                      const targetUniverse = data.employee?.pt === 'GTS' ? 'GTS' : 'TBP';
+                      navigate(`/bulletin/${targetUniverse}`);
+                  }
               }
           } else {
              const errMsg = data.message || 'Error login';
@@ -1040,19 +1069,48 @@ export default function App() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-teal-400" />
-                    <span>Password Akun</span>
-                  </label>
-                  <input 
-                    type="password"
-                    placeholder="••••••••"
-                    value={passwordInput}
-                    onChange={e => setPasswordInput(e.target.value)}
-                    required
-                    autoFocus
-                    className="w-full px-4 py-3 bg-slate-950/70 border border-slate-700/80 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all shadow-inner font-sans"
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Password Akun</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-[11px] text-slate-400 hover:text-teal-400 flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      {showPassword ? (
+                        <>
+                          <EyeOff className="w-3 h-3 text-teal-400" />
+                          <span className="text-teal-400 font-medium">Sembunyikan</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-3 h-3" />
+                          <span>Lihat Password</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input 
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={passwordInput}
+                      onChange={e => setPasswordInput(e.target.value)}
+                      required
+                      autoFocus
+                      className="w-full px-4 py-3 pr-11 bg-slate-950/70 border border-slate-700/80 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all shadow-inner font-sans"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-400 p-1 cursor-pointer transition-colors"
+                      title={showPassword ? "Sembunyikan password" : "Lihat password"}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4 text-teal-400" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <button 
@@ -1108,27 +1166,63 @@ export default function App() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-300">Password Baru</label>
-                  <input 
-                    type="password"
-                    placeholder="Minimal 6 karakter"
-                    value={setupPassword1}
-                    onChange={e => setSetupPassword1(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-300">Password Baru</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowSetupPassword1(!showSetupPassword1)}
+                      className="text-[10px] text-slate-400 hover:text-teal-400 flex items-center gap-1 cursor-pointer"
+                    >
+                      {showSetupPassword1 ? <EyeOff className="w-3 h-3 text-teal-400" /> : <Eye className="w-3 h-3" />}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input 
+                      type={showSetupPassword1 ? "text" : "password"}
+                      placeholder="Minimal 6 karakter"
+                      value={setupPassword1}
+                      onChange={e => setSetupPassword1(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 pr-9 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSetupPassword1(!showSetupPassword1)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-400 p-0.5 cursor-pointer"
+                    >
+                      {showSetupPassword1 ? <EyeOff className="w-3.5 h-3.5 text-teal-400" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-300">Konfirmasi Password Baru</label>
-                  <input 
-                    type="password"
-                    placeholder="Ulangi password baru"
-                    value={setupPassword2}
-                    onChange={e => setSetupPassword2(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-300">Konfirmasi Password Baru</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowSetupPassword2(!showSetupPassword2)}
+                      className="text-[10px] text-slate-400 hover:text-teal-400 flex items-center gap-1 cursor-pointer"
+                    >
+                      {showSetupPassword2 ? <EyeOff className="w-3 h-3 text-teal-400" /> : <Eye className="w-3 h-3" />}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input 
+                      type={showSetupPassword2 ? "text" : "password"}
+                      placeholder="Ulangi password baru"
+                      value={setupPassword2}
+                      onChange={e => setSetupPassword2(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 pr-9 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSetupPassword2(!showSetupPassword2)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-400 p-0.5 cursor-pointer"
+                    >
+                      {showSetupPassword2 ? <EyeOff className="w-3.5 h-3.5 text-teal-400" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
 
                 <button 
@@ -1499,7 +1593,16 @@ export default function App() {
       <Suspense fallback={<div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
               <AnimatePresence mode="wait">
 <Routes location={location} key={location.pathname}>
-  <Route path="/" element={<HomeScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} userPt={userProfile?.pt} />} />
+  <Route 
+    path="/" 
+    element={
+      isSptOrManager ? (
+        <Navigate to={`/bulletin/${userProfile?.pt === 'GTS' ? 'GTS' : 'TBP'}`} replace />
+      ) : (
+        <HomeScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} userPt={userProfile?.pt} />
+      )
+    } 
+  />
   <Route path="/modules" element={<ModulesScreen onNav={handleNav} inspectorNik={inspectorNik!} inspectorName={inspectorName!} userPt={userProfile?.pt} />} />
   <Route path="/chat" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
   <Route path="/group-reports" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />

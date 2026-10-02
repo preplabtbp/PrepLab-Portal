@@ -367,6 +367,40 @@ export function SectionHubDashboard({
       };
     }
 
+    if (sectionTitle === 'INFORMATION' || sectionTitle.includes('INFORMASI')) {
+      return {
+        icon: '📘',
+        bannerUrl: 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=1200&q=80',
+        infoTitle: 'DOKUMEN & PANDUAN UTAMA',
+        infoItems: [
+          { title: 'Golden Rules', icon: '⭐', searchKeywords: ['Golden Rules', '1. Golden Rules'] },
+          { title: 'SPDK dan Aturan Perusahaan', icon: '📝', searchKeywords: ['SPDK', 'SPDK dan Aturan Perusahaan'] },
+          { title: 'Kebijakan Perusahaan', icon: '🏛️', searchKeywords: ['Kebijakan Perusahaan'] },
+          { title: 'Induksi Internal', icon: '🎓', searchKeywords: ['Induksi Internal'] },
+          { title: 'Training Need Analysis (TNA)', icon: '📊', searchKeywords: ['TNA', 'Training Need Analysis'] },
+          { title: 'Identifikasi Bahaya & Resiko (IBPR)', icon: '📋', searchKeywords: ['IBPR', 'Identifikasi Bahaya'] },
+          { title: 'Identifikasi Aspek Lingkungan (IADL)', icon: '🌿', searchKeywords: ['IADL', 'Aspek dan Dampak Lingkungan'] },
+          { title: 'Security Risk Assesment (SRA)', icon: '🔒', searchKeywords: ['SRA', 'Security Risk Assesment'] },
+          { title: 'Hasil Meeting Internal Prep & Lab', icon: '🤝', searchKeywords: ['Hasil Meeting Internal', 'Meeting'] },
+        ],
+        rulesTitle: 'MEMO, STANDAR & SISTEM',
+        rulesItems: [
+          { title: 'IM HR', icon: '👥', searchKeywords: ['IM HR', 'Internal Memo HR'] },
+          { title: 'IM IT', icon: '💻', searchKeywords: ['IM IT', 'Internal Memo IT'] },
+          { title: 'IM Safety', icon: '⚠️', searchKeywords: ['IM Safety', 'Internal Memo Safety'] },
+          { title: 'EM QC', icon: '🧪', searchKeywords: ['EM QC', 'Edaran Mutu'] },
+          { title: 'Standard Methods', icon: '📘', searchKeywords: ['Standard Methods', 'SNI'] },
+          { title: 'Manual Book Instrument dan Alat', icon: '⚙️', searchKeywords: ['Manual Book', 'Manual'] },
+          { title: 'CRM', icon: '🧪', searchKeywords: ['CRM'] },
+          { title: 'Inhouse', icon: '🧪', searchKeywords: ['Inhouse'] },
+          { title: 'Informasi IT', icon: '🖥️', searchKeywords: ['Informasi IT'] },
+          { title: 'QR Code', icon: '📱', searchKeywords: ['QR Code'] },
+          { title: 'Harita Core', icon: '💎', searchKeywords: ['Harita Core'] },
+        ],
+        extraLinks: []
+      };
+    }
+
     // Default configuration for general section hubs
     return {
       icon: '📂',

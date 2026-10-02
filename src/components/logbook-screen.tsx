@@ -936,18 +936,43 @@ export function LogbookScreen({
 
     const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
     let endStr = refStr;
-    if (isDone && task.actualCompletedDate) {
-      try {
-        endStr = new Date(task.actualCompletedDate).toISOString().split('T')[0];
-      } catch (e) {
-        endStr = refStr;
+    if (isDone) {
+      if (task.actualCompletedDate) {
+        try {
+          const d = new Date(task.actualCompletedDate);
+          if (!isNaN(d.getTime())) {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            endStr = `${year}-${month}-${day}`;
+          }
+        } catch (e) {
+          endStr = refStr;
+        }
+      } else {
+        // Fallback: check subtask checkedDate
+        const parsed = parseTasklist(task.description || '');
+        if (parsed.items.length > 0) {
+          const dates = parsed.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
+          if (dates.length > 0) {
+            endStr = dates[dates.length - 1];
+          }
+        }
       }
     }
 
-    const startDate = new Date(startStr);
-    const endDate = new Date(endStr);
+    const parseCalendarDate = (str: string) => {
+      const parts = str.split('T')[0].split('-');
+      if (parts.length === 3) {
+        return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      }
+      return new Date(str);
+    };
+
+    const startDate = parseCalendarDate(startStr);
+    const endDate = parseCalendarDate(endStr);
     const diffTime = endDate.getTime() - startDate.getTime();
-    const rawDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const rawDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     const dayCount = Math.max(1, rawDays + 1);
 
     let durationLabel = '';
@@ -1744,24 +1769,29 @@ export function LogbookScreen({
       }
     }
 
+    const compDateVal = autoStatus === 'Closed' ? selectedDate : (autoStatus === 'Open' || autoStatus === 'On Progress' ? null : task.actualCompletedDate);
+
     // Optimistic UI Update
     setTodayTasks(prev => prev.map(t => t.id === task.id ? { 
       ...t, 
       description: updatedDesc, 
       progressPercent: progress.percentage,
-      status: autoStatus 
+      status: autoStatus,
+      actualCompletedDate: compDateVal
     } : t));
     setYesterdayTasks(prev => prev.map(t => t.id === task.id ? { 
       ...t, 
       description: updatedDesc, 
       progressPercent: progress.percentage,
-      status: autoStatus 
+      status: autoStatus,
+      actualCompletedDate: compDateVal
     } : t));
     setCarryOverTasks(prev => prev.map(t => t.id === task.id ? { 
       ...t, 
       description: updatedDesc, 
       progressPercent: progress.percentage,
-      status: autoStatus 
+      status: autoStatus,
+      actualCompletedDate: compDateVal
     } : t));
 
     try {
@@ -1772,6 +1802,8 @@ export function LogbookScreen({
           description: updatedDesc,
           progressPercent: progress.percentage,
           status: autoStatus,
+          selectedDate: selectedDate,
+          actualCompletedDate: autoStatus === 'Closed' ? selectedDate : (autoStatus === 'Open' || autoStatus === 'On Progress' ? null : undefined),
           updaterNik: inspectorNik
         })
       });
@@ -1792,10 +1824,14 @@ export function LogbookScreen({
 
   // Update Status Directly
   const handleStatusChange = async (taskId: number, newStatus: string) => {
+    const isClosing = newStatus === 'Closed' || newStatus === 'Done' || newStatus === 'Resolved';
+    const isReopening = newStatus === 'Open' || newStatus === 'On Progress' || newStatus === 'In Progress';
+    const compDateVal = isClosing ? selectedDate : (isReopening ? null : undefined);
+
     // Optimistic Update
-    setTodayTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-    setYesterdayTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-    setCarryOverTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+    setTodayTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
+    setYesterdayTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
+    setCarryOverTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
 
     try {
       const res = await fetch(`/api/logbook/tasks/${taskId}`, {
@@ -1803,6 +1839,8 @@ export function LogbookScreen({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: newStatus,
+          selectedDate: selectedDate,
+          actualCompletedDate: isClosing ? selectedDate : (isReopening ? null : undefined),
           updaterNik: inspectorNik
         })
       });

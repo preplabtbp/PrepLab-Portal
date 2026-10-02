@@ -497,7 +497,7 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
           const post = postArr[0];
           let parsed = parseMarkdownTableRows(post.content);
           if (!parsed || parsed.headers.length === 0) {
-            const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Target Selesai', 'Aktual selesai', 'Group', 'Created Time'];
+            const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Tanggal Selesai', 'Group', 'Created Time'];
             parsed = {
               headers: defaultHeaders,
               rows: [],
@@ -541,7 +541,7 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
                   newRow[h] = assignedDate;
                 } else if (hl.includes('group')) {
                   newRow[h] = section || '-';
-                } else if (hl.includes('aktual')) {
+                } else if (hl.includes('tanggal selesai') || hl.includes('completed') || hl.includes('aktual') || hl.includes('waktu selesai') || hl === 'selesai') {
                   newRow[h] = '-';
                 } else {
                   newRow[h] = '-';
@@ -676,7 +676,39 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
       updatePayload.status && 
       (updatePayload.status === 'Resolved' || updatePayload.status === 'Done' || updatePayload.status === 'Closed')
     ) {
-      if (!currentTask.actualCompletedDate) updatePayload.actualCompletedDate = new Date();
+      // Determine completion date accurately:
+      let resolvedDate: Date | null = null;
+      if (req.body.actualCompletedDate) {
+        const dStr = String(req.body.actualCompletedDate);
+        resolvedDate = new Date(dStr.includes('T') ? dStr : `${dStr}T12:00:00`);
+      } else if (subtaskTotal > 0 && subtaskCompleted === subtaskTotal) {
+        // Find latest checkedDate from subtasks
+        const dateMatches = (targetDesc || '').match(/<!--\s*checkedDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/gi);
+        if (dateMatches && dateMatches.length > 0) {
+          const rawDates = dateMatches.map((m: string) => {
+            const inner = m.match(/[0-9]{4}-[0-9]{2}-[0-9]{2}/);
+            return inner ? inner[0] : '';
+          }).filter(Boolean).sort();
+          if (rawDates.length > 0) {
+            resolvedDate = new Date(`${rawDates[rawDates.length - 1]}T12:00:00`);
+          }
+        }
+      }
+
+      if (!resolvedDate && (req.body.selectedDate || req.body.actionDate)) {
+        const dStr = String(req.body.selectedDate || req.body.actionDate);
+        resolvedDate = new Date(dStr.includes('T') ? dStr : `${dStr}T12:00:00`);
+      }
+
+      if (!resolvedDate && currentTask.actualCompletedDate) {
+        resolvedDate = new Date(currentTask.actualCompletedDate);
+      }
+
+      if (!resolvedDate || isNaN(resolvedDate.getTime())) {
+        resolvedDate = new Date();
+      }
+
+      updatePayload.actualCompletedDate = resolvedDate;
       updatePayload.isPending = false;
     } else if (updatePayload.status && (updatePayload.status === 'Open' || updatePayload.status === 'In Progress' || updatePayload.status === 'On Progress')) {
       updatePayload.actualCompletedDate = null;
@@ -786,7 +818,7 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
           const post = postArr[0];
           let parsed = parseMarkdownTableRows(post.content);
           if (!parsed || parsed.headers.length === 0) {
-            const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Target Selesai', 'Aktual selesai', 'Group', 'Created Time'];
+            const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Tanggal Selesai', 'Group', 'Created Time'];
             parsed = {
               headers: defaultHeaders,
               rows: [],
@@ -830,8 +862,15 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
                 if (kl.includes('target') && updatePayload.targetDate) {
                   targetRow[k] = updatePayload.targetDate;
                 }
-                if (kl.includes('aktual') && (taskResult.status === 'Resolved' || taskResult.status === 'Done')) {
-                  targetRow[k] = formatDateStr(new Date());
+                if (
+                  (kl.includes('tanggal selesai') || kl.includes('completed') || kl.includes('aktual') || kl.includes('waktu selesai') || kl === 'selesai')
+                ) {
+                  if (taskResult.status === 'Resolved' || taskResult.status === 'Done' || taskResult.status === 'Closed') {
+                    const compDate = taskResult.actualCompletedDate ? new Date(taskResult.actualCompletedDate) : new Date();
+                    targetRow[k] = formatDateStr(compDate);
+                  } else if (taskResult.status === 'Open' || taskResult.status === 'On Progress' || taskResult.status === 'In Progress') {
+                    targetRow[k] = '-';
+                  }
                 }
               });
               parsed.rows[targetIdx] = targetRow;
@@ -863,8 +902,10 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
                   newRow[h] = taskResult.taskDate || formatDateStr(new Date());
                 } else if (hl.includes('group')) {
                   newRow[h] = taskResult.section || '-';
-                } else if (hl.includes('aktual')) {
-                  newRow[h] = (taskResult.status === 'Resolved' || taskResult.status === 'Done') ? formatDateStr(new Date()) : '-';
+                } else if (hl.includes('tanggal selesai') || hl.includes('completed') || hl.includes('aktual') || hl.includes('waktu selesai') || hl === 'selesai') {
+                  const isDone = taskResult.status === 'Resolved' || taskResult.status === 'Done' || taskResult.status === 'Closed';
+                  const compDate = taskResult.actualCompletedDate ? new Date(taskResult.actualCompletedDate) : new Date();
+                  newRow[h] = isDone ? formatDateStr(compDate) : '-';
                 } else {
                   newRow[h] = '-';
                 }

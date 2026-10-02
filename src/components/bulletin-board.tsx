@@ -368,6 +368,7 @@ export function BulletinBoard({
       "INVENTORY",
       "GENERAL ISSUE",
       "MANAJEMEN MUTU",
+      "INFORMATION",
     ];
     if (sectionHubTitles.some((t) => titleUpper === t || titleUpper.replace(/^[#\s\-*]+/, "") === t)) {
       return true;
@@ -612,7 +613,7 @@ export function BulletinBoard({
   const handleInitializeTableForPost = async () => {
     if (!selectedPost) return;
     toast.loading("Membuat tabel topik...", { id: "init-table" });
-    const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Target Selesai', 'Aktual selesai', 'Group', 'Created Time'];
+    const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Tanggal Selesai', 'Group', 'Created Time'];
     const headerLine = `| ${defaultHeaders.join(' | ')} |`;
     const separatorLine = `| ${defaultHeaders.map(() => '---').join(' | ')} |`;
     const tableMd = `${headerLine}\n${separatorLine}`;

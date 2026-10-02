@@ -813,10 +813,18 @@ export function NotionDatabaseTable({
   // Helper to establish logical Notion canonical order for database columns:
   // number -> jenis kegiatan -> keterangan -> Created Time -> Completed Time -> Status -> PIC -> Priority -> Aktivitas
   const normalizeAndOrderHeaders = useCallback((inputHeaders: string[]): string[] => {
-    // 1. Remove redundant 'Progress' / 'progres' column
+    // 1. Remove redundant 'Progress' / 'progres' and 'Target Selesai' / 'target' column
     const filtered = (inputHeaders || []).filter(h => {
       const l = h.toLowerCase().trim();
-      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian');
+      if (l.includes('progress') || l.includes('progres') || l.includes('capaian')) return false;
+      if (l.includes('target') || l.includes('deadline') || l.includes('jatuh tempo')) return false;
+      return true;
+    }).map(h => {
+      const l = h.toLowerCase().trim();
+      if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai')) {
+        return 'Tanggal Selesai';
+      }
+      return h;
     });
 
     if (filtered.length === 0) {
@@ -825,7 +833,7 @@ export function NotionDatabaseTable({
         'Jenis kegiatan',
         'Keterangan',
         'Created Time',
-        'Completed Time',
+        'Tanggal Selesai',
         'Status',
         'PIC',
         'Priority',
@@ -841,20 +849,20 @@ export function NotionDatabaseTable({
 
     const headersWithNumber = hasNumber ? filtered : ['Number', ...filtered];
 
-    // Ensure 'Completed Time' exists
+    // Ensure 'Tanggal Selesai' exists
     const hasCompleted = headersWithNumber.some(h => {
       const l = h.toLowerCase().trim();
-      return l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai');
+      return l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai');
     });
 
-    const headersWithMeta = hasCompleted ? headersWithNumber : [...headersWithNumber, 'Completed Time'];
+    const headersWithMeta = hasCompleted ? headersWithNumber : [...headersWithNumber, 'Tanggal Selesai'];
 
-    // Priority ordering weight strictly requested by user:
+    // Priority ordering weight:
     // 0: Number
     // 1: Jenis Kegiatan
     // 2: Keterangan
     // 3: Created Time
-    // 4: Completed Time
+    // 4: Tanggal Selesai
     // 5: Status
     // 6: PIC
     // 7: Priority
@@ -870,9 +878,8 @@ export function NotionDatabaseTable({
       if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 6;
       if (l.includes('priority') || l.includes('prioritas')) return 7;
       if (l.includes('activity') || l.includes('aktivitas')) return 8;
-      if (l.includes('target') || l.includes('deadline') || l.includes('jatuh tempo')) return 9;
-      if (l.includes('period') || l.includes('periode')) return 10;
-      if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 11;
+      if (l.includes('period') || l.includes('periode')) return 9;
+      if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 10;
       return 20; // other custom columns
     };
 
@@ -890,11 +897,12 @@ export function NotionDatabaseTable({
     }
   }, [headers, normalizeAndOrderHeaders]);
 
-  // Ensure Progress column is never rendered in displayHeaders
+  // Ensure Progress and Target Selesai columns are never rendered in displayHeaders
   const displayHeaders = useMemo(() => {
     return tableHeaders.filter(h => {
       const l = h.toLowerCase().trim();
-      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian');
+      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
+             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo');
     });
   }, [tableHeaders]);
 
@@ -1507,6 +1515,45 @@ export function NotionDatabaseTable({
             }
           }
           targetRow[statusKey] = autoStatus;
+
+          // Auto-sync Tanggal Selesai column
+          let compKey = 'Tanggal Selesai';
+          for (const k of Object.keys(targetRow)) {
+            const kl = k.toLowerCase().trim();
+            if (kl.includes('tanggal selesai') || kl.includes('completed') || kl.includes('aktual selesai') || kl === 'selesai' || kl.includes('waktu selesai')) {
+              compKey = k;
+              break;
+            }
+          }
+
+          if (autoStatus === 'Closed') {
+            const dates = taskProg.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
+            targetRow[compKey] = dates.length > 0 ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10);
+          } else if (autoStatus === 'Open' || autoStatus === 'On Progress') {
+            targetRow[compKey] = '-';
+          }
+        }
+      }
+
+      // Auto-sync Tanggal Selesai when Status column is updated directly
+      if (colLower.includes('status')) {
+        const stUpper = (newValue || '').toUpperCase();
+        let compKey = 'Tanggal Selesai';
+        for (const k of Object.keys(targetRow)) {
+          const kl = k.toLowerCase().trim();
+          if (kl.includes('tanggal selesai') || kl.includes('completed') || kl.includes('aktual selesai') || kl === 'selesai' || kl.includes('waktu selesai')) {
+            compKey = k;
+            break;
+          }
+        }
+
+        if (stUpper.includes('CLOSE') || stUpper.includes('SELESAI') || stUpper.includes('DONE')) {
+          const curVal = targetRow[compKey];
+          if (!curVal || curVal === '-') {
+            targetRow[compKey] = new Date().toISOString().slice(0, 10);
+          }
+        } else if (stUpper.includes('OPEN') || stUpper.includes('PROGRESS')) {
+          targetRow[compKey] = '-';
         }
       }
 
@@ -2509,10 +2556,10 @@ export function NotionDatabaseTable({
   // Helper to calculate duration for closed/completed tasks in Notion Table
   const getRowDurationInfo = (row: TableRowData, taskProgress?: TasklistProgress) => {
     const createdStr = getRowVal(row, 'Created Time') || getRowVal(row, 'Tanggal Dibuat') || getRowVal(row, 'Waktu Dibuat') || getRowVal(row, 'Created') || getRowVal(row, 'Tanggal') || '';
-    let completedStr = getRowVal(row, 'Completed Time') || getRowVal(row, 'Aktual Selesai') || getRowVal(row, 'Waktu Selesai') || getRowVal(row, 'Selesai') || getRowVal(row, 'Completed') || '';
+    let completedStr = getRowVal(row, 'Tanggal Selesai') || getRowVal(row, 'Completed Time') || getRowVal(row, 'Aktual Selesai') || getRowVal(row, 'Waktu Selesai') || getRowVal(row, 'Selesai') || getRowVal(row, 'Completed') || '';
 
     // If completedStr not in column, check if tasklist items have checkedDate
-    if (!completedStr && taskProgress?.items && taskProgress.items.length > 0) {
+    if ((!completedStr || completedStr === '-') && taskProgress?.items && taskProgress.items.length > 0) {
       const dates = taskProgress.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
       if (dates.length > 0) {
         completedStr = dates[dates.length - 1];
@@ -3201,7 +3248,11 @@ export function NotionDatabaseTable({
                           title="Klik untuk mengurutkan kolom"
                         >
                           {getNotionColumnIcon(colHeader)}
-                          <span className={`truncate font-semibold ${isNotionLight ? 'text-slate-700' : 'text-slate-300'}`}>{colHeader}</span>
+                          <span className={`truncate font-semibold ${isNotionLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                            {colLower.includes('tanggal selesai') || colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai')
+                              ? 'Tanggal Selesai'
+                              : colHeader}
+                          </span>
                           {isSorted && (
                             sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" />
                           )}
@@ -3697,9 +3748,25 @@ export function NotionDatabaseTable({
                                 );
                               }
 
-                              // 4. Completed Time Column
+                              // 4. Tanggal Selesai Column
                               if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai') || colLower.includes('tanggal selesai')) {
                                 const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
+
+                                // Auto resolve display date if val is empty or '-' but task is closed
+                                let displayDate = val && val !== '-' ? val : '';
+                                if (!displayDate) {
+                                  const statusStr = (getRowVal(row, 'Status') || '').toUpperCase();
+                                  if (statusStr.includes('CLOSE') || statusStr.includes('SELESAI') || statusStr.includes('DONE')) {
+                                    const ketVal = getRowVal(row, 'Keterangan');
+                                    const taskProg = parseTasklist(ketVal);
+                                    if (taskProg.items.length > 0) {
+                                      const dates = taskProg.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
+                                      if (dates.length > 0) {
+                                        displayDate = dates[dates.length - 1];
+                                      }
+                                    }
+                                  }
+                                }
 
                                 return (
                                   <td key={colName} className={`font-sans ${
@@ -3708,7 +3775,7 @@ export function NotionDatabaseTable({
                                     {isEditingThis ? (
                                       <NotionInlineEditor
                                         initialValue={val}
-                                        fieldLabel="Completed Time"
+                                        fieldLabel="Tanggal Selesai"
                                         multiline={false}
                                         isNotionLight={isNotionLight}
                                         onSave={(newVal) => {
@@ -3717,14 +3784,14 @@ export function NotionDatabaseTable({
                                         }}
                                         onCancel={() => setActiveInlineEditor(null)}
                                       />
-                                    ) : val && val !== '-' ? (
+                                    ) : displayDate ? (
                                       <span 
-                                        onClick={() => setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: false })}
-                                        className="inline-flex items-center gap-1 cursor-pointer hover:underline"
-                                        title="Klik untuk mengubah Completed Time"
+                                        onClick={() => setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: displayDate, multiline: false })}
+                                        className="inline-flex items-center gap-1 cursor-pointer hover:underline font-mono"
+                                        title="Klik untuk mengubah Tanggal Selesai"
                                       >
                                         <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                                        <span>{val}</span>
+                                        <span>{displayDate}</span>
                                       </span>
                                     ) : (
                                       <span 

@@ -2,6 +2,95 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.38] - 2026-10-02
+
+### 📝 Pengalaman Editor Tabel Buletin Inline Gaya Notion, Sanitasi Tag WYSIWYG & Indikator Durasi Tugas Tuntas
+
+- **Fitur Toggle Lihat Password (Icon Mata) pada Halaman Login / Loading Page (`src/App.tsx`)**:
+  - Menambahkan tombol interaktif icon mata (`Eye` & `EyeOff`) pada kolom input password saat proses login maupun setup password awal akun karyawan.
+  - Memungkinkan pengguna memeriksa karakter password yang sedang diketik secara instan tanpa khawatir salah input, dengan tombol toggle inline di dalam input dan label helper.
+
+- **Pengalihan Otomatis Homepage Khusus Superintendent (SPT) & Manager ke Buletin (`src/App.tsx`)**:
+  - Menyesuaikan alur navigasi homepage `/` dan fungsi navigasi `handleNav('home')` agar pengguna dengan jabatan Superintendent (`spt` / `superintendent`) dan Manager langsung diarahkan (*auto-redirect*) masuk ke Buletin Board (`/bulletin/TBP` atau `/bulletin/GTS`).
+  - Menjadikan Buletin Board sebagai beranda kerja (*workspace landing page*) utama pimpinan departemen untuk memantau arahan, topik proyek, dan perkembangan seksi secara langsung.
+
+- **Integrasi Menu Modul Accordion Terpadu di Dashboard Buletin (`src/components/BulletinModulesAccordion.tsx`, `src/components/TbpDashboard.tsx`)**:
+  - Menghadirkan menu accordion 6 kelompok modul terintegrasi tepat di bawah kartu *Workstation Sections* pada dashboard Buletin Board:
+    1. 🩺 **Operasional & Maintenance (6 Modul)**: Inspeksi Harian, Log Book Section, Pantau Parameter, Daftar Work Order, Buat Work Order, Dashboard Maintenance.
+    2. 🛡️ **Observasi & Pelaporan (5 Modul)**: Inspeksi Mingguan, Kunjungan Klinik, Rekapan Temuan Inspeksi, KTA / TTA, Submit General Inspection.
+    3. 📦 **Inventory Control APD (3 Modul)**: Distribusi APD, Monitoring Dokumen, Pengaturan APD.
+    4. 📚 **Pelatihan & Edukasi (3 Modul)**: Quiz Safety & SOP, Buku Panduan, Manajemen Quiz.
+    5. 💼 **Administrasi & HR (5 Modul)**: Induksi Internal, Database Karyawan, P5M Schedule, Agenda Personal, Roster & Cuti.
+    6. 📊 **Dashboards (7 Modul)**: Hall of Fame & Rank, WO Maintenance, Administrasi, Pelanggaran, SAP Dashboard, Pemantauan, Developer.
+  - Dilengkapi animasi buka-tutup yang mulus, lencana jumlah modul berkode warna pastel, serta tautan navigasi langsung ke seluruh modul portal.
+
+- **Perhitungan Akurat Durasi Penyelesaian Tugas Log Book pada Hari Lampau (`server/routes/logbook.ts`, `src/components/logbook-screen.tsx`)**:
+  - **Perekaman Tanggal Selesai Riil (`actualCompletedDate`)**: Memperbaiki bug di mana penyelesaian tugas pada tanggal lampau (misal pengguna lupa menceklis lalu menggeser kalender ke hari sebelumnya) tetap menghitung durasi berdasarkan tanggal hari ini (`new Date()`). Server dan client kini memprioritaskan tanggal kalender terpilih (`selectedDate` / subtask `checkedDate`) sebagai tanggal tuntas tugas.
+  - **Kalkulasi Hari Kalender Murni**: Menggunakan selisih hari kalender (`parseCalendarDate`) dari tanggal awal tugas hingga tanggal riil selesai, menjamin akurasi angka hari tuntas tanpa terdistorsi waktu saat ini maupun pergeseran zona waktu UTC/lokal.
+
+- **Standardisasi Kolom "Tanggal Selesai" & Penghapusan Kolom "Target Selesai" di Buletin (`src/components/bulletin-board.tsx`, `src/components/NotionDatabaseTable.tsx`, `server/routes/logbook.ts`)**:
+  - **Pergantian Nama Kolom "Aktual Selesai" -> "Tanggal Selesai"**: Mengubah nama kolom menjadi **"Tanggal Selesai"** yang secara otomatis mencatat dan menampilkan tanggal tuntas tugas saat status berubah menjadi `Closed`/`Done` atau checklist mencapai 100%.
+  - **Penghapusan Kolom "Target Selesai"**: Menghapus kolom Target Selesai dari header default dan tampilan tabel database Buletin Board agar antarmuka lebih ringkas dan fokus pada riwayat realisasi.
+
+- **Floating Bubble Toolbar Pengeditan Teks pada Mode Ceklis (`src/components/notion/NotionInlineEditor.tsx`)**:
+  - **Tersedia di Mode Ceklis**: Memperbaiki keterbatasan di mana floating formatting toolbar (`A v | B | I | U | S | Tx | link | </>`) sebelumnya hanya muncul pada Mode Teks. Kini menyeleksi karakter di dalam subtask checklist pada **Mode Ceklis** secara otomatis memunculkan bubble toolbar tepat di bawah teks yang diseleksi.
+  - **Format Visual WYSIWYG**: Menggunakan elemen `contentEditable` pada item checklist sehingga pemformatan huruf tebal, miring, coret, garis bawah, tautan, kode, dan palet warna teks Notion langsung terlihat seketika saat diedit dan diserialisasikan ke format Markdown saat disimpan.
+
+- **Pengeditan Langsung di Dalam Sel Tabel Tanpa Modal Mencolok (`src/components/bulletin-board.tsx`, `src/components/NotionDatabaseTable.tsx`)**:
+  - **Eliminasi Modal Pop-up Berlebihan**: Menghilangkan modal editor pop-up yang mencolok saat mengubah teks keterangan baris topik di Buletin Board. Seluruh pengeditan kini dilakukan secara murni *inline* di dalam sel tabel (*true in-place table cell editing*) sebagaimana pengalaman interaksi spreadsheet modern dan Notion.
+  - **Penyelarasan Tema & Estetika Visual Notion**: Mengeliminasi latar belakang hitam pekat dan garis tepi (outline) hijau kontras tinggi yang mengganggu. Tampilan sel yang sedang diedit kini berlatar putih bersih (*clean slate/white*), teks Slate-900 kontras tinggi, serta bayangan lembut (*subtle focus ring*) yang menyatu serasi dengan tabel.
+  - **Pencegahan Kebocoran Kode Format Warna (*Clean WYSIWYG Formatting*)**: Memperbaiki bug di mana tag warna teks (seperti `[red]`, `[green]`, `[blue]`) bocor menjadi teks kode mentah saat mode edit dibuka. Sistem kini secara cerdas men-sanitasi dan mem-parse tag warna secara otomatis sehingga pengguna hanya berinteraksi dengan teks bersih tanpa kode markup yang membingungkan.
+  - **Penangkapan Tombol Escape (<kbd>Esc</kbd>) yang Aman**: Mengimplementasikan event listener `keydown` pada fase *window capture phase* dengan `e.stopPropagation()` dan `e.preventDefault()`. Menekan tombol Escape ketika sedang mengetik di dalam sel kini hanya membatalkan/keluar dari mode edit sel tanpa memicu *browser history back*, navigasi mundur, atau keluar dari halaman buletin.
+
+- **Indikator Durasi Penyelesaian Tugas Tuntas (*Completed Task Duration Display*) (`src/components/bulletin-board.tsx`, `src/components/logbook-screen.tsx`)**:
+  - **Penggantian Progress Bar Saat Tugas Selesai**: Ketika sebuah tugas atau topik buletin diubah statusnya menjadi `Closed`, `Selesai`, atau `Done`, bilah progres (progress bar) yang sudah penuh secara otomatis digantikan dengan lencana durasi kerja: `⏱️ Tuntas dlm X hari` (atau `⏱️ Tuntas hari ini` / `⏱️ Tuntas dlm X jam`).
+  - **Penyelarasan Konsisten Lintas Modul**: Perilaku tampilan durasi tuntas ini disinkronkan secara konsisten baik pada tabel Buletin Board maupun pada kartu tugas dan daftar evaluasi modul Log Book.
+
+### 📘 Sinkronisasi Menyeluruh Modul INFORMATION Notion, Integrasi Dashboard Hub & Preservasi Lampiran Permanen
+
+- **Sinkronisasi Modul INFORMATION & 30 Sub-Halaman Dokumen (`scripts/sync-information-full.ts`, `src/components/SectionHubDashboard.tsx`, `src/components/bulletin-board.tsx`)**:
+  - **Integrasi Penuh Struktur Notion `INFORMATION` (`12bd00c5c8098006a5a8fb55eb68f5d8`)**: Mengimpor modul pusat informasi perusahaan ke dalam database PostgreSQL `bulletin_posts` (`category = 'INFO::1'`, ID 479) yang mencakup 30 sub-halaman dokumen resmi dan 21 database terstruktur.
+  - **Pustaka Dokumen & Standar Lengkap**: Mencakup dokumen vital operasional, antara lain:
+    - *Aturan & Kebijakan*: Golden Rules K3, SPDK dan Aturan Perusahaan, Kebijakan Perusahaan, dan Induksi Internal Karyawan Baru & Balik Cuti.
+    - *K3, Lingkungan & Resiko*: Identifikasi Bahaya & Resiko (IBPR), Identifikasi Aspek & Dampak Lingkungan (IADL), dan Security Risk Assessment (SRA).
+    - *Pelatihan & Risalah*: Training Need Analysis (TNA) serta Notulen Hasil Meeting Internal Prep & Lab.
+    - *SOP, Standar & Metode Uji*: Edaran Mutu (EM QC), Standard Methods (SNI & ASTM), Manual Book Instrumen & Alat Laboratorium, CRM (Certified Reference Material), Inhouse Standards, dan Pedoman Harita Core.
+    - *Sistem & Memo Operasional*: Internal Memo HR, Internal Memo IT, Internal Memo Safety, Portal Informasi IT, dan Bank QR Code Akses Cepat.
+  - **Preservasi 65+ File Lampiran Permanen ke Google Drive & Cache Lokal**:
+    - Mengunduh seluruh dokumen lampiran (PDF, DOCX, XLSX, PPTX, dan gambar) yang semula tersimpan di Amazon S3 Notion ke server lokal `public/uploads/notion/`.
+    - Mengunggah seluruh aset lampiran ke Google Drive dengan hak akses publik (*read-only*), menjamin tautan unduh/buka dokumen tidak akan pernah kedaluwarsa (*expired link issue*) sebagaimana batasan tautan temporal AWS Notion.
+    - Mendukung dokumen berukuran besar seperti presentasi induksi internal hingga ratusan megabyte secara mulus.
+  - **Dasbor Pusat Navigasi Section Hub INFORMATION (`src/components/SectionHubDashboard.tsx`)**:
+    - Menghadirkan visual hub interaktif khusus modul INFORMATION dengan banner bertema korporat modern.
+    - Pengelompokan kartu navigasi cepat ke dalam 2 kelompok utama: **DOKUMEN & PANDUAN UTAMA** (Golden Rules, Kebijakan, Induksi, IBPR, TNA) dan **MEMO, STANDAR & SISTEM** (Internal Memo HR/IT/Safety, EM QC, SNI Methods, Manual Book, Harita Core).
+    - Setiap kartu dilengkapi kata kunci pencarian otomatis (*instant filter*) yang langsung membuka dan menyaring topik dokumen terkait di tabel buletin.
+
+### 🔔 Rekategorisasi Sistem Notifikasi 5 Grup Terpadu & Penyelarasan Roster Shift Inspeksi
+
+- **Penyatuan & Rekategorisasi 5 Saluran Notifikasi Terpadu (`server/routes/notifications.ts`, `src/components/NotificationsDropdown.tsx`)**:
+  - Mengelompokkan seluruh riwayat dan rekap notifikasi portal ke dalam 5 kanal fungsional yang terorganisir:
+    1. 🛠️ **Work Order (WO)**: Notifikasi perintah kerja pemeliharaan, perbaikan alat, dan pembaruan status mekanikal/elektrikal.
+    2. 🦺 **K3 & Inspeksi**: Rekap laporan keselamatan KTA, TTA, checklist P2H, dan audit K3 berkala.
+    3. 📋 **Logbook & Agenda**: Pengingat penugasan harian, evaluasi shift, dan carry-over backlog seksi.
+    4. 🏆 **Leaderboard EXP & Pangkat**: Notifikasi perolehan Vanguard EXP, kenaikan rank, dan penghargaan pencapaian kuis mingguan.
+    5. 💬 **Chat & Diskusi**: Pembaruan pesan obrolan, diskusi topik buletin, dan koordinasi shift.
+  - **Pencegahan Spam & Penargetan Presisi Push WO**: Push notification perintah kerja (WO) kini hanya ditargetkan secara ketat kepada personil tim Maintenance serta pengawas/atasan seksi yang bersangkutan, tidak lagi membanjiri pengguna di luar wewenang.
+  - **Manajemen Notifikasi Temuan K3**: Notifikasi KTA, TTA, dan inspeksi kini disimpan rapi dalam daftar riwayat tanpa memicu push massal yang mengganggu fokus kerja kru.
+
+- **Sinkronisasi Dinamis Shift Inspeksi K3 dengan Roster Aktual (`server/routes/safety.ts`, `server/routes/inspections.ts`)**:
+  - Menggantikan penetapan shift statis (A/B) dengan pembacaan jadwal dinamis dari master roster kerja riil per tanggal (D = Siang / Day, N = Malam / Night).
+  - Eliminasi bug rekapan status inspeksi tuntas palsu (*false positive completion*) yang sebelumnya terpicu oleh entri P2H.
+  - Mengatasi kendala batas kuota 50.000 sel Google Apps Script (GAS) melalui kompresi cerdas data tanda tangan digital pelapor.
+
+### 🛠️ Perbaikan Autofill Seksi Karyawan, Deduplikasi Data KTA & Stabilitas Unduhan Mobile
+
+- **Perbaikan Autofill Seksi & Sinkronisasi Data Pelapor (`src/components/logbook-screen.tsx`, `src/components/clinic-screen.tsx`, `src/components/bulletin-board.tsx`)**:
+  - Memperbaiki ketidaksinkronan di mana pemilihan nama personil pada modal pencarian karyawan tidak otomatis memperbarui kolom Seksi/Section mengikuti data master karyawan.
+  - Memastikan pencatatan identitas pelapor, NIK, dan penanggung jawab (PIC) selalu konsisten dan akurat di seluruh formulir operasional.
+- **Deduplikasi Multi-Upload Laporan K3 & Optimalisasi PDF Mobile (`src/components/safety-inspection-screen.tsx`, `server/routes/safety.ts`)**:
+  - Mencegah duplikasi data ketika personil melakukan multi-upload dokumentasi temuan KTA/TTA secara bersamaan.
+  - Memperbaiki kegagalan pengunduhan dokumen berformat PDF pada browser seluler dan menyederhanakan alur kirim (*Safety General Submit*) pada tampilan minimalis kru lapangan.
+
 ## [2.9.37] - 2026-09-30
 
 ### 🎯 Fitur Drag & Drop Penjadwalan Tugas Log Book & Preservasi Riwayat Tab Kiri (Planning & Arahan)

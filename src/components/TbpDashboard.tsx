@@ -57,6 +57,7 @@ import {
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { ImageModal } from './image-modal';
+import { BulletinModulesAccordion } from './BulletinModulesAccordion';
 
 const WeatherIcon = ({ code, className }: { code: number, className?: string }) => {
   if (code < 3) return <Sun className={`text-amber-400 ${className}`} />;
@@ -1295,6 +1296,11 @@ export function TbpDashboard({
                   );
                 })}
               </div>
+            </div>
+
+            {/* INTEGRATED MODULES ACCORDION */}
+            <div className="pt-1">
+              <BulletinModulesAccordion />
             </div>
           </div>
 
