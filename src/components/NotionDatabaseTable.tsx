@@ -798,6 +798,7 @@ export function NotionDatabaseTable({
   // Column templates definition
   const POPULAR_COLUMN_TEMPLATES = [
     { name: 'Status', icon: '🏷️', defaultValue: 'Open', desc: 'Dropdown status progress tugas' },
+    { name: 'Completed Time', icon: '✓', defaultValue: '-', desc: 'Tanggal atau waktu penyelesaian tugas' },
     { name: 'Priority', icon: '⚡', defaultValue: 'Normal', desc: 'Tingkat urgensi kegiatan' },
     { name: 'PIC', icon: '👤', defaultValue: '', desc: 'Personil penanggung jawab' },
     { name: 'Activity (routine/non routine)', icon: '🔄', defaultValue: 'Routine', desc: 'Klasifikasi aktivitas rutin/non-rutin' },
@@ -809,55 +810,70 @@ export function NotionDatabaseTable({
     { name: 'Estimasi Biaya', icon: '💰', defaultValue: '-', desc: 'Anggaran atau estimasi biaya (opsional)' },
   ];
 
-  // Helper to establish logical Notion canonical order for database columns
+  // Helper to establish logical Notion canonical order for database columns:
+  // number -> jenis kegiatan -> keterangan -> Created Time -> Completed Time -> Status -> PIC -> Priority -> Aktivitas
   const normalizeAndOrderHeaders = useCallback((inputHeaders: string[]): string[] => {
-    if (!inputHeaders || inputHeaders.length === 0) {
+    // 1. Remove redundant 'Progress' / 'progres' column
+    const filtered = (inputHeaders || []).filter(h => {
+      const l = h.toLowerCase().trim();
+      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian');
+    });
+
+    if (filtered.length === 0) {
       return [
-        'number',
+        'Number',
         'Jenis kegiatan',
         'Keterangan',
-        'PIC',
+        'Created Time',
+        'Completed Time',
         'Status',
+        'PIC',
         'Priority',
-        'Activity (routine/non routine)',
-        'period',
-        'Created Time'
+        'Aktivitas'
       ];
     }
 
     // Ensure 'number' exists
-    const hasNumber = inputHeaders.some(h => {
+    const hasNumber = filtered.some(h => {
       const l = h.toLowerCase().trim();
       return l === 'number' || l === 'no' || l === 'no.' || l === '#';
     });
 
-    const headersWithNumber = hasNumber ? inputHeaders : ['Number', ...inputHeaders];
+    const headersWithNumber = hasNumber ? filtered : ['Number', ...filtered];
 
-    const hasProgress = headersWithNumber.some(h => {
+    // Ensure 'Completed Time' exists
+    const hasCompleted = headersWithNumber.some(h => {
       const l = h.toLowerCase().trim();
-      return l.includes('progress') || l.includes('progres') || l.includes('capaian');
+      return l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai');
     });
 
-    const headersWithMeta = hasProgress ? headersWithNumber : [...headersWithNumber, 'Progress'];
+    const headersWithMeta = hasCompleted ? headersWithNumber : [...headersWithNumber, 'Completed Time'];
 
-    // Priority ordering weight matching Notion database screenshot:
-    // 0: Number, 1: Jenis Kegiatan, 2: Keterangan, 3: Progress, 4: Status, 5: Created time, 6: PIC, 7: Priority
+    // Priority ordering weight strictly requested by user:
+    // 0: Number
+    // 1: Jenis Kegiatan
+    // 2: Keterangan
+    // 3: Created Time
+    // 4: Completed Time
+    // 5: Status
+    // 6: PIC
+    // 7: Priority
+    // 8: Aktivitas
     const getColOrder = (colName: string): number => {
       const l = colName.toLowerCase().trim();
       if (l === 'number' || l === 'no' || l === 'no.' || l === '#') return 0;
       if (l.includes('jenis kegiatan') || l === 'task' || l === 'judul' || l === 'name' || l === 'nama') return 1;
-      if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('rincian')) return 2;
-      if (l.includes('progress') || l.includes('progres') || l.includes('capaian')) return 3;
-      if (l.includes('status')) return 4;
-      if (l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat')) return 5;
+      if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('rincian') || l.includes('notes')) return 2;
+      if (l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat')) return 3;
+      if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) return 4;
+      if (l.includes('status')) return 5;
       if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 6;
       if (l.includes('priority') || l.includes('prioritas')) return 7;
       if (l.includes('activity') || l.includes('aktivitas')) return 8;
       if (l.includes('target') || l.includes('deadline') || l.includes('jatuh tempo')) return 9;
-      if (l.includes('aktual') || l.includes('selesai') || l.includes('actual')) return 10;
-      if (l.includes('period') || l.includes('periode')) return 11;
-      if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 12;
-      return 20; // other custom columns placed between standard meta and timestamp
+      if (l.includes('period') || l.includes('periode')) return 10;
+      if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 11;
+      return 20; // other custom columns
     };
 
     return [...headersWithMeta].sort((a, b) => getColOrder(a) - getColOrder(b));
@@ -874,7 +890,13 @@ export function NotionDatabaseTable({
     }
   }, [headers, normalizeAndOrderHeaders]);
 
-  const displayHeaders = tableHeaders;
+  // Ensure Progress column is never rendered in displayHeaders
+  const displayHeaders = useMemo(() => {
+    return tableHeaders.filter(h => {
+      const l = h.toLowerCase().trim();
+      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian');
+    });
+  }, [tableHeaders]);
 
   const [showAddColumnPopover, setShowAddColumnPopover] = useState(false);
   const [customColumnName, setCustomColumnName] = useState('');
@@ -2542,14 +2564,15 @@ export function NotionDatabaseTable({
   // Helper for Notion Canonical Column Icons
   const getNotionColumnIcon = (colHeader: string) => {
     const colLower = colHeader.toLowerCase();
-    if (colLower === 'number' || colLower === 'no') return <span className="font-mono text-slate-400 font-bold mr-1">#</span>;
+    if (colLower === 'number' || colLower === 'no' || colLower === '#') return <span className="font-mono text-slate-400 font-bold mr-1">#</span>;
     if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') return <span className="text-slate-400 mr-1 text-xs">≡</span>;
     if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
-    if (colLower.includes('progress')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
+    if (colLower.includes('created') || colLower.includes('tanggal dibuat') || colLower.includes('waktu dibuat')) return <span className="text-slate-400 mr-1 text-xs">📅</span>;
+    if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai')) return <span className="text-emerald-500 mr-1 text-xs">✓</span>;
     if (colLower.includes('status')) return <span className="text-slate-400 mr-1 text-xs">⭕</span>;
-    if (colLower.includes('created') || colLower.includes('time') || colLower.includes('tanggal')) return <span className="text-slate-400 mr-1 text-xs">📅</span>;
     if (colLower.includes('pic') || colLower.includes('assignee')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
     if (colLower.includes('priority') || colLower.includes('prioritas')) return <span className="text-slate-400 mr-1 text-xs">↓</span>;
+    if (colLower.includes('activity') || colLower.includes('aktivitas')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
     return <span className="text-slate-400 mr-1 text-xs">≡</span>;
   };
 
@@ -3075,14 +3098,15 @@ export function NotionDatabaseTable({
                   let widthClass = 'whitespace-nowrap px-3 py-2.5';
                   if (fitPageMode) {
                     if (isNum) widthClass = 'w-[4%] text-center px-1 py-2';
-                    else if (isJudul) widthClass = 'w-[18%] px-2.5 py-2';
+                    else if (isJudul) widthClass = 'w-[19%] px-2.5 py-2';
                     else if (colLower.includes('keterangan') || colLower.includes('catatan')) widthClass = 'w-[23%] px-2.5 py-2';
-                    else if (colLower === 'pic' || colLower.includes('assignee')) widthClass = 'w-[11%] px-2 py-2';
-                    else if (colLower.includes('priority')) widthClass = 'w-[7%] px-1.5 py-2';
-                    else if (colLower.includes('status')) widthClass = 'w-[9%] px-1.5 py-2';
                     else if (colLower.includes('created')) widthClass = 'w-[9%] px-1.5 py-2';
+                    else if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai') widthClass = 'w-[9%] px-1.5 py-2';
+                    else if (colLower.includes('status')) widthClass = 'w-[9%] px-1.5 py-2';
+                    else if (colLower === 'pic' || colLower.includes('assignee')) widthClass = 'w-[10%] px-2 py-2';
+                    else if (colLower.includes('priority') || colLower.includes('prioritas')) widthClass = 'w-[7%] px-1.5 py-2';
+                    else if (colLower.includes('activity') || colLower.includes('aktivitas')) widthClass = 'w-[8%] px-1.5 py-2';
                     else if (colLower.includes('kategori')) widthClass = 'w-[6%] px-1.5 py-2';
-                    else if (colLower.includes('activity')) widthClass = 'w-[7%] px-1.5 py-2';
                     else if (colLower.includes('period')) widthClass = 'w-[5%] px-1.5 py-2';
                     else widthClass = 'w-[6%] px-1.5 py-2';
                   } else {
@@ -3598,26 +3622,44 @@ export function NotionDatabaseTable({
                                 );
                               }
 
-                              // 4. Progress Column (Notion Pill 'Done' / 'In progress')
-                              if (colLower.includes('progress')) {
-                                const statusVal = (getRowVal(row, 'Status') || '').toUpperCase();
-                                const ketVal = getRowVal(row, 'Keterangan');
-                                const taskProgress = parseTasklist(ketVal);
-                                const isDone = (val && (val.toLowerCase().includes('done') || val.toLowerCase().includes('selesai') || val.includes('100%'))) ||
-                                               statusVal.includes('CLOSE') || 
-                                               statusVal.includes('DONE') || 
-                                               statusVal.includes('SELESAI') || 
-                                               (taskProgress.hasTasklist && taskProgress.isAllCompleted);
+                              // 4. Completed Time Column
+                              if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai') || colLower.includes('tanggal selesai')) {
+                                const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
 
                                 return (
-                                  <td key={colName} className={`${fitPageMode ? 'px-1.5 py-2 overflow-hidden' : 'px-3.5 py-3 whitespace-nowrap'}`}>
-                                    {isDone ? (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#edf8f1] dark:bg-emerald-950/60 text-[#227242] dark:text-emerald-300 border border-[#bfe7cc] dark:border-emerald-800 shadow-2xs">
-                                        Done
+                                  <td key={colName} className={`font-sans ${
+                                    fitPageMode ? 'px-1 py-2 text-[10px] truncate' : 'px-3.5 py-3 whitespace-nowrap text-[11px]'
+                                  }`} style={{ color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }}>
+                                    {isEditingThis ? (
+                                      <NotionInlineEditor
+                                        initialValue={val}
+                                        fieldLabel="Completed Time"
+                                        multiline={false}
+                                        onSave={(newVal) => {
+                                          handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                          setActiveInlineEditor(null);
+                                        }}
+                                        onCancel={() => setActiveInlineEditor(null)}
+                                      />
+                                    ) : val && val !== '-' ? (
+                                      <span 
+                                        onClick={() => setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: false })}
+                                        className="inline-flex items-center gap-1 cursor-pointer hover:underline"
+                                        title="Klik untuk mengubah Completed Time"
+                                      >
+                                        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                                        <span>{val}</span>
                                       </span>
                                     ) : (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#eef4fc] dark:bg-blue-950/60 text-[#2563eb] dark:text-blue-300 border border-[#c7dcf9] dark:border-blue-800 shadow-2xs">
-                                        In progress
+                                      <span 
+                                        onClick={() => {
+                                          const todayStr = new Date().toISOString().slice(0, 10);
+                                          handleUpdateCellDirect(actualRowIndex, colName, todayStr);
+                                        }}
+                                        className="font-mono text-slate-400 hover:text-emerald-500 cursor-pointer text-xs transition-colors"
+                                        title="Klik untuk isi tanggal selesai hari ini"
+                                      >
+                                        -
                                       </span>
                                     )}
                                   </td>

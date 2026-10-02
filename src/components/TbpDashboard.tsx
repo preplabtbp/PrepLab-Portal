@@ -618,7 +618,13 @@ export function TbpDashboard({
       if (searchStr === 'inventory' || searchStr === 'warehouse') {
         post = posts.find(p => {
           const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
-          return clean === 'warehouse' || clean === 'information warehouse' || clean === 'warehouse / inventory control' || clean.includes('warehouse') || clean.includes('inventory');
+          return clean === 'inventory' || clean === 'warehouse / inventory control' || clean === 'warehouse';
+        }) || posts.find(p => {
+          const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+          return clean.includes('inventory') && !clean.includes('daily') && !clean.includes('weekly') && !clean.includes('monthly') && !clean.includes('non routine');
+        }) || posts.find(p => {
+          const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+          return clean.includes('warehouse') || clean.includes('inventory');
         });
       } else if (searchStr === 'general issue' || searchStr === 'general issues') {
         post = posts.find(p => {

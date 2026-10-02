@@ -46,8 +46,21 @@ export function SectionHubDashboard({
 
   // Helper to find target post from database by keywords or title
   const findPost = (keywords: string[] | string): any => {
-    const list = Array.isArray(keywords) ? keywords : [keywords];
-    for (const kw of list) {
+    const rawList = Array.isArray(keywords) ? keywords : [keywords];
+    const expandedList: string[] = [];
+    
+    rawList.forEach(k => {
+      expandedList.push(k);
+      const kLower = k.toLowerCase();
+      if (kLower.includes('warehouse')) {
+        expandedList.push(k.replace(/warehouse/gi, 'Inventory'));
+      }
+      if (kLower.includes('inventory')) {
+        expandedList.push(k.replace(/inventory/gi, 'Warehouse'));
+      }
+    });
+
+    for (const kw of expandedList) {
       const q = kw.toLowerCase().trim();
       
       // Look for candidates that match by numeric ID strictly in the same PT universe
@@ -56,9 +69,9 @@ export function SectionHubDashboard({
         if (idMatch) return idMatch;
       }
 
-      // 1. Exact matches (prioritize table posts)
+      // 1. Exact matches (cleaned title)
       const exactMatches = eligiblePosts.filter(
-        (p) => (p.title || '').toLowerCase().trim() === q
+        (p) => (p.title || '').replace(/^[#\s\-*]+/, '').toLowerCase().trim() === q
       );
       if (exactMatches.length > 0) {
         const tableMatch = exactMatches.find((p) => p.content && p.content.includes('|'));
@@ -67,7 +80,7 @@ export function SectionHubDashboard({
 
       // 2. Exact match with section prefix or suffix (e.g. "Daily Laboratorium" or "Daily")
       const sectionMatches = eligiblePosts.filter((p) => {
-        const t = (p.title || '').toLowerCase();
+        const t = (p.title || '').replace(/^[#\s\-*]+/, '').toLowerCase().trim();
         return t === `${q} ${sectionTitle.toLowerCase()}` || t === `${sectionTitle.toLowerCase()} ${q}`;
       });
       if (sectionMatches.length > 0) {
@@ -77,7 +90,7 @@ export function SectionHubDashboard({
 
       // 3. Match containing both keyword and section
       const bothMatches = eligiblePosts.filter((p) => {
-        const t = (p.title || '').toLowerCase();
+        const t = (p.title || '').replace(/^[#\s\-*]+/, '').toLowerCase().trim();
         return t.includes(q) && (t.includes(sectionTitle.toLowerCase()) || sectionTitle.toLowerCase().includes(t));
       });
       if (bothMatches.length > 0) {
@@ -86,7 +99,7 @@ export function SectionHubDashboard({
       }
 
       // 4. General match within same PT
-      const generalMatches = eligiblePosts.filter((p) => (p.title || '').toLowerCase().includes(q));
+      const generalMatches = eligiblePosts.filter((p) => (p.title || '').replace(/^[#\s\-*]+/, '').toLowerCase().trim().includes(q));
       if (generalMatches.length > 0) {
         const tableMatch = generalMatches.find((p) => p.content && p.content.includes('|'));
         return tableMatch || generalMatches[0];
@@ -259,28 +272,71 @@ export function SectionHubDashboard({
     }
 
     if (sectionTitle.includes('WAREHOUSE') || sectionTitle.includes('INVENTORY')) {
-      return {
-        icon: '📦',
-        bannerUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&q=80',
-        infoTitle: 'INFO',
-        infoItems: [
-          { title: 'Non Routine Warehouse', icon: '📑', searchKeywords: ['Non Routine Warehouse', '432'] },
-          { title: 'Daily Warehouse', icon: '📐', searchKeywords: ['Daily Warehouse', '463'] },
-          { title: 'Weekly Warehouse', icon: '📑', searchKeywords: ['Weekly Warehouse', '431'] },
-          { title: 'Monthly Warehouse', icon: '📑', searchKeywords: ['Monthly Warehouse', '462'] },
-          { title: 'Quarterly Warehouse', icon: '📑', searchKeywords: ['Quarterly Warehouse', '461'] },
-          { title: 'Biannual Warehouse', icon: '📑', searchKeywords: ['Biannual Warehouse', '460'] },
-          { title: 'Yearly Warehouse', icon: '📑', searchKeywords: ['Yearly Warehouse', '459'] },
-          { title: 'Agenda Warehouse', icon: '📅', searchKeywords: ['Agenda Warehouse', '476'] },
-        ],
-        rulesTitle: 'RULES',
-        rulesItems: [
-          { title: 'Information Warehouse', icon: '📄', searchKeywords: ['Information Warehouse', '441'] },
-          { title: 'Stock & Inventory Control', icon: '📊', searchKeywords: ['WAREHOUSE / INVENTORY CONTROL', '76'] },
-          { title: 'Karyawan Baru Warehouse', icon: '💃', searchKeywords: ['Karyawan Baru', '524'] },
-        ],
-        extraLinks: []
-      };
+      const isTbp = currentUniverse === 'TBP';
+      if (isTbp) {
+        return {
+          icon: '📦',
+          bannerUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&q=80',
+          infoTitle: 'INFO & RUTINITAS',
+          infoItems: [
+            { title: 'Non Routine Inventory', icon: '📑', searchKeywords: ['Non Routine Inventory', '668', 'Non Routine Warehouse', 'Non Routine'] },
+            { title: 'Daily Inventory', icon: '📐', searchKeywords: ['Daily Inventory', '669', 'Daily Warehouse', 'Daily'] },
+            { title: 'Weekly Inventory', icon: '📑', searchKeywords: ['Weekly Inventory', '670', 'Weekly Warehouse', 'Weekly'] },
+            { title: 'Monthly Inventory', icon: '📑', searchKeywords: ['Monthly Inventory', '671', 'Monthly Warehouse', 'Monthly'] },
+            { title: 'Quarterly Inventory', icon: '📑', searchKeywords: ['Quarterly Inventory', '672', 'Quarterly Warehouse', 'Quarterly'] },
+            { title: 'Biannual Inventory', icon: '📑', searchKeywords: ['Biannual Inventory', '673', 'Biannual Warehouse', 'Biannual'] },
+            { title: 'Yearly Inventory', icon: '📑', searchKeywords: ['Yearly Inventory', '674', 'Yearly Warehouse', 'Yearly'] },
+            { title: 'Inventory Information', icon: '📄', searchKeywords: ['Inventory Information', '683', 'Information Warehouse', '441'] },
+          ],
+          rulesTitle: 'MONITORING PO, ASSET & PROSEDUR',
+          rulesItems: [
+            { title: 'Data Asset', icon: '📊', searchKeywords: ['Data Asset', '681'] },
+            { title: 'Scrap', icon: '🗑️', searchKeywords: ['Scrap', '682'] },
+            { title: 'Monitoring PO TBP', icon: '📦', searchKeywords: ['Monitoring PO TBP', '675'] },
+            { title: 'Monitoring PO GPS', icon: '📦', searchKeywords: ['Monitoring PO GPS', '676'] },
+            { title: 'Monitoring PO GTS', icon: '📦', searchKeywords: ['Monitoring PO GTS', '677'] },
+            { title: 'Monitoring PO JMP', icon: '📦', searchKeywords: ['Monitoring PO JMP', '678'] },
+            { title: 'Kawasi - Monitoring Centralized', icon: '📍', searchKeywords: ['Kawasi - Monitoring Centralized', '679'] },
+            { title: 'Outer - Monitoring Centralized', icon: '📍', searchKeywords: ['Outer - Monitoring Centralized', '680'] },
+            { title: 'CARNAVAL TBP GPS', icon: '🎪', searchKeywords: ['CARNAVAL TBP GPS', '684'] },
+            { title: 'Prosedur Pengajuan BA SCRAB (Alat Prep & Lab)', icon: '📜', searchKeywords: ['Prosedur Pengajuan BA SCRAB', '685'] },
+            { title: 'Prosedur Pembuangan Barang SCRAB ( Mandiri )', icon: '📜', searchKeywords: ['Prosedur Pembuangan Barang SCRAB', '686'] },
+            { title: 'Prosedur Pembuatan Nermi', icon: '📜', searchKeywords: ['Prosedur Pembuatan Nermi', '687'] },
+            { title: 'Prosedur Pengajuan UR RAB dan IM', icon: '📜', searchKeywords: ['Prosedur Pengajuan UR RAB dan IM', '688'] },
+            { title: 'Prosedur Order Barang Internal', icon: '📜', searchKeywords: ['Prosedur Order Barang Internal', '689'] },
+            { title: 'Pengajuan Pengiriman Barang Urgent HO', icon: '✈️', searchKeywords: ['Pengajuan Pengiriman Barang Urgent HO', '690'] },
+            { title: 'Pengajuan Pengiriman Barang Urgent TTE - Site', icon: '🚢', searchKeywords: ['Pengajuan Pengiriman Barang Urgent TTE - Site', '691'] },
+            { title: 'Prosedur Penerimaan Barang RAB Finance, Logistik, Safety, GA, IT dan Enviro', icon: '📜', searchKeywords: ['Prosedur Penerimaan Barang RAB', '692'] },
+            { title: 'Prosedur Form Permintaan Penitipan Pengiriman Barang via HMS ( FPPPB )', icon: '📜', searchKeywords: ['Prosedur Form Permintaan Penitipan Pengiriman', '693'] },
+            { title: 'Prosedur Form Permintaan Pengiriman Barang Urgent via HMS ( FPPBU )', icon: '📜', searchKeywords: ['Prosedur Form Permintaan Pengiriman Barang Urgent', '694'] },
+          ],
+          extraLinks: []
+        };
+      } else {
+        // GTS Universe
+        return {
+          icon: '📦',
+          bannerUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&q=80',
+          infoTitle: 'INFO & RUTINITAS',
+          infoItems: [
+            { title: 'Non Routine Warehouse', icon: '📑', searchKeywords: ['Non Routine Warehouse', '432', 'Non Routine'] },
+            { title: 'Daily Warehouse', icon: '📐', searchKeywords: ['Daily Warehouse', '463', 'Daily'] },
+            { title: 'Weekly Warehouse', icon: '📑', searchKeywords: ['Weekly Warehouse', '431', 'Weekly'] },
+            { title: 'Monthly Warehouse', icon: '📑', searchKeywords: ['Monthly Warehouse', '462', 'Monthly'] },
+            { title: 'Quarterly Warehouse', icon: '📑', searchKeywords: ['Quarterly Warehouse', '461', 'Quarterly'] },
+            { title: 'Biannual Warehouse', icon: '📑', searchKeywords: ['Biannual Warehouse', '460', 'Biannual'] },
+            { title: 'Yearly Warehouse', icon: '📑', searchKeywords: ['Yearly Warehouse', '459', 'Yearly'] },
+            { title: 'Agenda Warehouse', icon: '📅', searchKeywords: ['Agenda Warehouse', '476'] },
+          ],
+          rulesTitle: 'RULES & INFORMASI',
+          rulesItems: [
+            { title: 'Information Warehouse', icon: '📄', searchKeywords: ['Information Warehouse', '441'] },
+            { title: 'Stock & Inventory Control', icon: '📊', searchKeywords: ['WAREHOUSE / INVENTORY CONTROL', '76'] },
+            { title: 'Karyawan Baru Warehouse', icon: '💃', searchKeywords: ['Karyawan Baru', '524'] },
+          ],
+          extraLinks: []
+        };
+      }
     }
 
     if (sectionTitle.includes('MANAJEMEN MUTU') || sectionTitle.includes('MUTU')) {
