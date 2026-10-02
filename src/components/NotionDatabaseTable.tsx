@@ -831,7 +831,9 @@ export function NotionDatabaseTable({
       return l === 'number' || l === 'no' || l === 'no.' || l === '#';
     });
 
-    const hasProgress = inputHeaders.some(h => {
+    const headersWithNumber = hasNumber ? inputHeaders : ['Number', ...inputHeaders];
+
+    const hasProgress = headersWithNumber.some(h => {
       const l = h.toLowerCase().trim();
       return l.includes('progress') || l.includes('progres') || l.includes('capaian');
     });
