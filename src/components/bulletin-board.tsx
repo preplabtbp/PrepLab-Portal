@@ -508,7 +508,11 @@ export function BulletinBoard({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement)?.isContentEditable ||
+        (e.target as HTMLElement)?.closest('[contenteditable="true"]') ||
+        (e.target as HTMLElement)?.closest('[data-notion-inline-editor]') ||
+        Boolean(document.querySelector('[data-notion-inline-editor]'))
       ) {
         return;
       }

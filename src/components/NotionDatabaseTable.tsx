@@ -58,7 +58,7 @@ import { Button } from './ui';
 import { toast } from 'sonner';
 import { uploadPhotoToDrive } from '../sheets-api';
 import { ImageModal } from './image-modal';
-import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, NOTION_COLORS } from './notion/tasklist-utils';
+import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, NOTION_COLORS, TasklistProgress } from './notion/tasklist-utils';
 import { NotionTasklistView } from './notion/NotionTasklistView';
 import { NotionDropdownCell } from './notion/NotionDropdownCell';
 import { NotionInlineEditor } from './notion/NotionInlineEditor';
@@ -2506,6 +2506,78 @@ export function NotionDatabaseTable({
     );
   };
 
+  // Helper to calculate duration for closed/completed tasks in Notion Table
+  const getRowDurationInfo = (row: TableRowData, taskProgress?: TasklistProgress) => {
+    const createdStr = getRowVal(row, 'Created Time') || getRowVal(row, 'Tanggal Dibuat') || getRowVal(row, 'Waktu Dibuat') || getRowVal(row, 'Created') || getRowVal(row, 'Tanggal') || '';
+    let completedStr = getRowVal(row, 'Completed Time') || getRowVal(row, 'Aktual Selesai') || getRowVal(row, 'Waktu Selesai') || getRowVal(row, 'Selesai') || getRowVal(row, 'Completed') || '';
+
+    // If completedStr not in column, check if tasklist items have checkedDate
+    if (!completedStr && taskProgress?.items && taskProgress.items.length > 0) {
+      const dates = taskProgress.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
+      if (dates.length > 0) {
+        completedStr = dates[dates.length - 1];
+      }
+    }
+
+    const parseDateVal = (s: string): Date | null => {
+      if (!s || s === '-') return null;
+      const clean = s.trim();
+      const d = new Date(clean);
+      if (!isNaN(d.getTime())) return d;
+      // Handle DD/MM/YYYY or DD-MM-YYYY
+      const m = clean.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      if (m) {
+        return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+      }
+      return null;
+    };
+
+    const dStart = parseDateVal(createdStr);
+    const dEnd = parseDateVal(completedStr) || new Date();
+
+    if (dStart && dEnd) {
+      const diffMs = dEnd.getTime() - dStart.getTime();
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 0) {
+        if (diffHours > 1) {
+          return {
+            label: `Tuntas ${diffHours} jam`,
+            short: `${diffHours} jam`,
+            detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
+          };
+        }
+        return {
+          label: 'Selesai di hari yg sama',
+          short: '1 hari',
+          detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
+        };
+      }
+
+      const totalDays = diffDays + 1;
+      return {
+        label: `Tuntas dlm ${totalDays} hari`,
+        short: `${totalDays} hari`,
+        detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
+      };
+    }
+
+    if (completedStr) {
+      return {
+        label: `Selesai ${completedStr}`,
+        short: completedStr,
+        detail: `Waktu selesai: ${completedStr}`
+      };
+    }
+
+    return {
+      label: 'Tuntas (Closed)',
+      short: 'Tuntas',
+      detail: 'Tugas telah selesai'
+    };
+  };
+
   // Helper for Priority Badge
   const renderPriorityBadge = (pStr: string) => {
     const p = (pStr || '').toUpperCase().trim();
@@ -3473,6 +3545,7 @@ export function NotionDatabaseTable({
                                         initialValue={val}
                                         fieldLabel="Judul Kegiatan"
                                         multiline={false}
+                                        isNotionLight={isNotionLight}
                                         onSave={(newVal) => {
                                           handleUpdateCellDirect(actualRowIndex, colName, newVal);
                                           setActiveInlineEditor(null);
@@ -3561,6 +3634,7 @@ export function NotionDatabaseTable({
                                         initialValue={val}
                                         fieldLabel="Keterangan & Tasklist"
                                         multiline={true}
+                                        isNotionLight={isNotionLight}
                                         onSave={(newVal) => {
                                           handleUpdateCellDirect(actualRowIndex, colName, newVal);
                                           setActiveInlineEditor(null);
@@ -3636,6 +3710,7 @@ export function NotionDatabaseTable({
                                         initialValue={val}
                                         fieldLabel="Completed Time"
                                         multiline={false}
+                                        isNotionLight={isNotionLight}
                                         onSave={(newVal) => {
                                           handleUpdateCellDirect(actualRowIndex, colName, newVal);
                                           setActiveInlineEditor(null);
@@ -3690,10 +3765,14 @@ export function NotionDatabaseTable({
                                 );
                               }
 
-                              // 7. Status Column (Interactive Dropdown & Progress Bar)
+                              // 7. Status Column (Interactive Dropdown & Progress Bar / Duration when Closed)
                               if (colLower.includes('status')) {
                                 const ketVal = getRowVal(row, 'Keterangan');
                                 const taskProgress = parseTasklist(ketVal);
+                                const isClosed = (val || '').toUpperCase().includes('CLOSE') || 
+                                                 (val || '').toUpperCase().includes('SELESAI') || 
+                                                 (val || '').toUpperCase().includes('DONE');
+                                const durationInfo = isClosed ? getRowDurationInfo(row, taskProgress) : null;
 
                                 return (
                                   <td key={colName} className={`${fitPageMode ? 'px-1 py-1.5 overflow-hidden' : 'px-4 py-2.5 whitespace-nowrap'}`}>
@@ -3704,7 +3783,21 @@ export function NotionDatabaseTable({
                                         compact={fitPageMode}
                                         onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
                                       />
-                                      {taskProgress.hasTasklist && (
+                                      {isClosed ? (
+                                        /* Ketika status closed: progress bar hilang, diganti elemen berapa lama tugas berakhir */
+                                        <div 
+                                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors shadow-2xs select-none ${
+                                            isNotionLight
+                                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300/80 hover:bg-emerald-100'
+                                              : 'bg-emerald-950/70 text-emerald-300 border-emerald-600/50 hover:bg-emerald-900/80'
+                                          }`}
+                                          title={durationInfo?.detail || `Durasi pengerjaan: ${durationInfo?.label}`}
+                                        >
+                                          <Clock className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                          <span className="truncate max-w-[125px]">{durationInfo?.label}</span>
+                                        </div>
+                                      ) : taskProgress.hasTasklist ? (
+                                        /* Ketika status belum closed: progress bar checklist tetap tampil */
                                         <div className="w-full min-w-[95px] max-w-[125px] space-y-0.5 pt-0.5">
                                           <div className="flex items-center justify-between text-[9px] font-mono leading-none">
                                             <span className={`font-bold ${
@@ -3733,7 +3826,7 @@ export function NotionDatabaseTable({
                                             />
                                           </div>
                                         </div>
-                                      )}
+                                      ) : null}
                                     </div>
                                   </td>
                                 );
@@ -6272,6 +6365,7 @@ export function NotionDatabaseTable({
         dirtyRowCount={dirtyRowIndices.size}
         isSaving={isPersistingChanges}
         tableName={title}
+        isNotionLight={isNotionLight}
       />
     </div>
   );

@@ -2569,26 +2569,34 @@ export function LogbookScreen({
               )}
             </div>
 
-            {/* Progress bar kecil di ujung kanan di bagian bawah status */}
-            <div className="flex items-center justify-end gap-1.5 w-24 sm:w-28 mt-0.5">
-              <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
-                <div 
-                  className={`h-full rounded-full transition-all duration-300 ${
-                    isDone 
-                      ? 'bg-emerald-500' 
-                      : isInProgress 
-                      ? 'bg-teal-600' 
-                      : progressPercent > 0 
-                      ? 'bg-sky-500' 
-                      : 'bg-slate-300'
-                  }`}
-                  style={{ width: `${progressPercent}%` }} 
-                />
+            {/* Progress bar kecil di ujung kanan / Lama tugas berakhir jika Closed/Done */}
+            {isDone ? (
+              <div 
+                className="inline-flex items-center justify-end gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs mt-0.5 select-none shrink-0"
+                title={`Mulai: ${durationInfo.displayStartDate || durationInfo.startDateStr} (${durationInfo.durationLabel})`}
+              >
+                <Clock className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                <span>{durationInfo.durationLabel}</span>
               </div>
-              <span className="text-[10px] font-mono font-bold text-slate-600 min-w-[28px] text-right">
-                {progressPercent}%
-              </span>
-            </div>
+            ) : (
+              <div className="flex items-center justify-end gap-1.5 w-24 sm:w-28 mt-0.5">
+                <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      isInProgress 
+                        ? 'bg-teal-600' 
+                        : progressPercent > 0 
+                        ? 'bg-sky-500' 
+                        : 'bg-slate-300'
+                    }`}
+                    style={{ width: `${progressPercent}%` }} 
+                  />
+                </div>
+                <span className="text-[10px] font-mono font-bold text-slate-600 min-w-[28px] text-right">
+                  {progressPercent}%
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

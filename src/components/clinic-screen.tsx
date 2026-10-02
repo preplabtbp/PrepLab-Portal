@@ -92,10 +92,26 @@ const SECTION_OPTIONS = [
   'Laboratory',
   'Maintenance',
   'Quality Assurance',
+  'Inventory Control',
+  'Admin / HR',
   'General',
   'HSE / Safety',
-  'Admin / HR'
+  'Manager',
+  'CREW'
 ];
+
+export const normalizeSectionName = (raw?: string | null): string => {
+  if (!raw) return 'Preparation';
+  const s = raw.trim();
+  const lower = s.toLowerCase();
+  if (lower === 'qa' || lower.includes('quality')) return 'Quality Assurance';
+  if (lower === 'prep' || lower === 'preparation' || lower.includes('preparation')) return 'Preparation';
+  if (lower === 'lab' || lower === 'laboratory' || lower.includes('laboratory')) return 'Laboratory';
+  if (lower === 'maint' || lower === 'maintenance' || lower.includes('maintenance')) return 'Maintenance';
+  if (lower.includes('inventory')) return 'Inventory Control';
+  if (lower === 'admin' || lower.includes('administration') || lower.includes('hr')) return 'Admin / HR';
+  return s;
+};
 
 const CATEGORY_OPTIONS = [
   'ALL',
@@ -178,6 +194,14 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
   const [formRecommendation, setFormRecommendation] = useState('Fit to Work');
   const [formDoctorOrMedicName, setFormDoctorOrMedicName] = useState('');
   const [formNotes, setFormNotes] = useState('');
+  const [formReporterNik, setFormReporterNik] = useState(inspectorNik || '');
+  const [formReporterName, setFormReporterName] = useState(inspectorName || '');
+
+  // Synchronize default reporter when props change
+  useEffect(() => {
+    if (!formReporterNik && inspectorNik) setFormReporterNik(inspectorNik);
+    if (!formReporterName && inspectorName) setFormReporterName(inspectorName);
+  }, [inspectorNik, inspectorName]);
 
   // Autocomplete state
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
@@ -276,17 +300,52 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
     ).slice(0, 12);
   }, [employees, employeeSearchTerm]);
 
-  // Select employee from autocomplete -> AUTOFILL all fields
+  // Dynamic available sections list to guarantee all employee sections can be selected
+  const availableSections = useMemo(() => {
+    const list: string[] = [
+      'Preparation',
+      'Laboratory',
+      'Maintenance',
+      'Quality Assurance',
+      'Inventory Control',
+      'Admin / HR',
+      'General',
+      'HSE / Safety',
+      'Manager',
+      'CREW'
+    ];
+    employees.forEach(emp => {
+      if (emp.section && emp.section.trim()) {
+        const norm = normalizeSectionName(emp.section);
+        if (!list.includes(norm)) list.push(norm);
+        if (!list.includes(emp.section.trim())) list.push(emp.section.trim());
+      }
+    });
+    if (formSection && !list.includes(formSection)) {
+      list.push(formSection);
+    }
+    return list;
+  }, [employees, formSection]);
+
+  // Select employee from autocomplete -> AUTOFILL all fields including Seksi
   const handleSelectEmployee = (emp: EmployeeMaster) => {
     setFormNik(emp.nik);
     setFormName(emp.name);
-    setFormSection(emp.section || 'Preparation');
+    const resolvedSection = normalizeSectionName(emp.section || 'Preparation');
+    setFormSection(resolvedSection);
     setFormDepartment(emp.department || '');
     setFormJabatan(emp.jabatan || '');
-    if (emp.pt) setFormPt(emp.pt);
+    if (emp.pt) {
+      const ptClean = emp.pt.trim().toUpperCase();
+      if (ptClean === 'GTS') {
+        setFormPt('GTS');
+      } else {
+        setFormPt('TBP');
+      }
+    }
     setEmployeeSearchTerm(`${emp.name} (${emp.nik})`);
     setIsEmployeeDropdownOpen(false);
-    toast.success(`Data karyawan ${emp.name} berhasil di-autofill!`);
+    toast.success(`Data karyawan ${emp.name} berhasil di-autofill (${resolvedSection})!`);
   };
 
   // Open Create Modal
@@ -309,6 +368,8 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
     setFormRecommendation('Fit to Work');
     setFormDoctorOrMedicName('');
     setFormNotes('');
+    setFormReporterNik(inspectorNik || '');
+    setFormReporterName(inspectorName || '');
     setEmployeeSearchTerm('');
     setIsFormModalOpen(true);
   };
@@ -319,7 +380,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
     setEditingId(visit.id);
     setFormNik(visit.nik);
     setFormName(visit.name);
-    setFormSection(visit.section || 'Preparation');
+    setFormSection(normalizeSectionName(visit.section || 'Preparation'));
     setFormDepartment(visit.department || '');
     setFormJabatan(visit.jabatan || '');
     setFormPt(visit.pt || 'TBP');
@@ -332,6 +393,8 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
     setFormRecommendation(visit.recommendation || 'Fit to Work');
     setFormDoctorOrMedicName(visit.doctorOrMedicName || '');
     setFormNotes(visit.notes || '');
+    setFormReporterNik(visit.reporterNik || inspectorNik || '');
+    setFormReporterName(visit.reporterName || inspectorName || '');
     setEmployeeSearchTerm(`${visit.name} (${visit.nik})`);
     setIsFormModalOpen(true);
   };
@@ -361,8 +424,8 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
         actionTaken: formActionTaken.trim() || null,
         recommendation: formRecommendation,
         doctorOrMedicName: formDoctorOrMedicName.trim() || null,
-        reporterNik: inspectorNik || null,
-        reporterName: inspectorName || null,
+        reporterNik: formReporterNik.trim() || inspectorNik || null,
+        reporterName: formReporterName.trim() || inspectorName || null,
         notes: formNotes.trim() || null
       };
 
@@ -421,7 +484,9 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
       (v.section && v.section.toLowerCase().includes(q)) ||
       (v.reason && v.reason.toLowerCase().includes(q)) ||
       (v.recommendation && v.recommendation.toLowerCase().includes(q)) ||
-      (v.category && v.category.toLowerCase().includes(q))
+      (v.category && v.category.toLowerCase().includes(q)) ||
+      (v.reporterName && v.reporterName.toLowerCase().includes(q)) ||
+      (v.reporterNik && v.reporterNik.toLowerCase().includes(q))
     );
   }, [visits, searchQuery]);
 
@@ -432,7 +497,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
       return;
     }
 
-    const headers = ['No', 'Tanggal', 'Jam', 'NIK', 'Nama Karyawan', 'Seksi', 'PT', 'Kategori', 'Alasan / Keluhan', 'Diagnosa', 'Tindakan Medis', 'Rekomendasi', 'Tenaga Medis', 'Catatan'];
+    const headers = ['No', 'Tanggal', 'Jam', 'NIK', 'Nama Karyawan', 'Seksi', 'PT', 'Kategori', 'Alasan / Keluhan', 'Diagnosa', 'Tindakan Medis', 'Rekomendasi', 'Tenaga Medis', 'Petugas Pelapor', 'NIK Pelapor', 'Catatan'];
     const rows = displayedVisits.map((v, i) => [
       i + 1,
       v.visitDate,
@@ -447,6 +512,8 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
       `"${(v.actionTaken || '').replace(/"/g, '""')}"`,
       `"${v.recommendation || ''}"`,
       `"${v.doctorOrMedicName || ''}"`,
+      `"${v.reporterName || ''}"`,
+      `"${v.reporterNik || ''}"`,
       `"${(v.notes || '').replace(/"/g, '""')}"`
     ]);
 
@@ -884,6 +951,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                     <th className="py-3 px-4 text-slate-950">Waktu Kunjungan</th>
                     <th className="py-3 px-4 text-slate-950">Alasan &amp; Keluhan</th>
                     <th className="py-3 px-4 text-slate-950">Rekomendasi Dokter</th>
+                    <th className="py-3 px-4 text-slate-950">Petugas Pelapor</th>
                     <th className="py-3 px-4 text-center w-28 text-slate-950">Aksi</th>
                   </tr>
                 </thead>
@@ -980,6 +1048,27 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                             <div className="text-[11px] text-slate-800 font-semibold mt-0.5 truncate">
                               Oleh: {visit.doctorOrMedicName}
                             </div>
+                          )}
+                        </td>
+
+                        {/* Petugas Pelapor */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          {visit.reporterName ? (
+                            <div className="flex items-center gap-1.5 text-slate-950">
+                              <UserCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="font-bold text-xs text-slate-950 truncate max-w-[130px]">
+                                  {visit.reporterName}
+                                </p>
+                                {visit.reporterNik && (
+                                  <p className="text-[10px] font-mono text-slate-600">
+                                    NIK: {visit.reporterNik}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">-</span>
                           )}
                         </td>
 
@@ -1165,7 +1254,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                     onChange={(e) => setFormSection(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white text-slate-950 font-bold outline-none shadow-xs cursor-pointer"
                   >
-                    {SECTION_OPTIONS.filter(s => s !== 'ALL').map(s => (
+                    {availableSections.map(s => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
@@ -1182,6 +1271,45 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                     <option value="TBP">TBP / GPS</option>
                     <option value="GTS">GTS</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Data Petugas Pelapor (Inspector / Inputter) */}
+              <div className="p-3.5 rounded-xl bg-teal-50/70 border border-teal-200/90 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-black text-teal-950 uppercase tracking-wider flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-teal-700" />
+                    <span>Petugas Pelapor (Inspector / Inputter)</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-teal-800 bg-teal-200/60 px-2 py-0.5 rounded-md">
+                    Tercatat Resmi
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-800 block mb-1">
+                      Nama Petugas Pelapor
+                    </label>
+                    <input
+                      type="text"
+                      value={formReporterName}
+                      onChange={(e) => setFormReporterName(e.target.value)}
+                      placeholder="Nama Petugas Pelapor"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-950 font-bold outline-none shadow-2xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-800 block mb-1">
+                      NIK Petugas Pelapor
+                    </label>
+                    <input
+                      type="text"
+                      value={formReporterNik}
+                      onChange={(e) => setFormReporterNik(e.target.value)}
+                      placeholder="NIK Petugas Pelapor"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-950 font-mono font-bold outline-none shadow-2xs"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1469,6 +1597,29 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                   <p className="text-[11px] text-slate-800 font-semibold">
                     <strong className="font-bold text-slate-950">Petugas Medis:</strong> {detailModalVisit.doctorOrMedicName}
                   </p>
+                )}
+              </div>
+
+              {/* Petugas Pelapor */}
+              <div className="p-3 rounded-xl bg-teal-50/70 border border-teal-200/90 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <UserCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black text-teal-900 block uppercase tracking-wider">Petugas Pelapor</span>
+                    <p className="font-black text-slate-950 text-xs">
+                      {detailModalVisit.reporterName || 'Tidak tercatat'}
+                    </p>
+                  </div>
+                </div>
+                {detailModalVisit.reporterNik && (
+                  <div className="text-right">
+                    <span className="text-[10px] font-black text-teal-900 block uppercase tracking-wider">NIK Pelapor</span>
+                    <p className="font-mono font-bold text-slate-800 text-xs">
+                      {detailModalVisit.reporterNik}
+                    </p>
+                  </div>
                 )}
               </div>
 
