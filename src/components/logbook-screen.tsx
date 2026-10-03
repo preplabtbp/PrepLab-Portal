@@ -834,7 +834,10 @@ export function LogbookScreen({
   }, [userProfile]);
 
   const [selectedDate, setSelectedDate] = useState<string>(getTodayStr());
-  const [selectedSection, setSelectedSection] = useState<string>(userSection);
+  const [selectedSection, setSelectedSection] = useState<string>(() => {
+    if (isMeetingRoom || userSection === 'ALL') return 'Semua Seksi';
+    return userSection;
+  });
   const [selectedPt, setSelectedPt] = useState<string>(userPt === 'GTS' ? 'GTS' : 'TBP');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [picFilter, setPicFilter] = useState<string>('ALL');
@@ -1044,8 +1047,10 @@ export function LogbookScreen({
 
   // Keep selectedSection in sync if userSection resolves after boot
   useEffect(() => {
-    if (userSection) setSelectedSection(userSection);
-  }, [userSection]);
+    if (userSection && !isMeetingRoom && userSection !== 'ALL') {
+      setSelectedSection(userSection);
+    }
+  }, [userSection, isMeetingRoom]);
 
   // Loading & Data states
   const [loading, setLoading] = useState(true);
@@ -1108,6 +1113,7 @@ export function LogbookScreen({
   const [newTargetDate, setNewTargetDate] = useState(getTodayStr());
   const [newTargetTime, setNewTargetTime] = useState('');
   const [selectedBulletinPostId, setSelectedBulletinPostId] = useState<string>('');
+  const [targetTaskSection, setTargetTaskSection] = useState<string>('Preparation');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // In Assign Modal: Job Pending Options
@@ -1131,6 +1137,11 @@ export function LogbookScreen({
     setNewPendingPicNik('');
     setNewPendingPicName('');
     setNewPendingReason('');
+    setTargetTaskSection(
+      selectedSection && selectedSection !== 'Semua Seksi' && selectedSection !== 'ALL'
+        ? selectedSection
+        : (userSection !== 'ALL' ? userSection : 'Preparation')
+    );
     setShowAssignModal(true);
   };
 
@@ -1683,13 +1694,17 @@ export function LogbookScreen({
         initPercent = parsedNew.percentage;
       }
 
+      const finalSection = (isSuperAdmin || isMeetingRoom || userSection === 'ALL')
+        ? targetTaskSection
+        : userSection;
+
       const res = await fetch('/api/logbook/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTitle.trim(),
           description: newTaskDescription.trim(),
-          section: userSection,
+          section: finalSection,
           assigneeNik: newAssigneeNiks.join(', '),
           assigneeName: newAssigneeNames.join(', '),
           assignedByNik: inspectorNik || 'SUPERVISOR',
@@ -3289,7 +3304,7 @@ export function LogbookScreen({
             {/* Section & Universe Filters */}
             <div className="flex flex-wrap items-center gap-2">
               {/* Section Filter / Display */}
-              {isSuperAdmin ? (
+              {(isSuperAdmin || isMeetingRoom || userSection === 'ALL') ? (
                 <select
                   value={selectedSection}
                   onChange={(e) => setSelectedSection(e.target.value)}
@@ -3968,19 +3983,45 @@ export function LogbookScreen({
                 />
               </div>
 
-              {/* Seksi Pelaksana (Auto-Locked ke Seksi User) */}
-              <div 
-                className="p-3 rounded-2xl border-2 flex items-center justify-between bg-slate-50 border-slate-300"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
-                  <span className="text-xs font-black text-black">Seksi Pelaksana:</span>
-                  <span className="text-xs font-black text-teal-950 bg-teal-100 px-2.5 py-0.5 rounded-md border border-teal-300">
-                    {userSection}
-                  </span>
+              {/* Seksi Pelaksana */}
+              {(isSuperAdmin || isMeetingRoom || userSection === 'ALL') ? (
+                <div className="space-y-1.5 p-3 rounded-2xl border-2 bg-slate-50 border-teal-300">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-black flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-teal-600 animate-pulse" />
+                      <span>Seksi Pelaksana Tugas *</span>
+                    </label>
+                    <span className="text-[10px] text-teal-800 font-bold bg-teal-100 px-2 py-0.5 rounded-full border border-teal-300">
+                      Pilihan Semua Seksi
+                    </span>
+                  </div>
+                  <select
+                    value={targetTaskSection}
+                    onChange={(e) => setTargetTaskSection(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border-2 text-xs font-bold bg-white text-black border-slate-400 outline-none focus:border-teal-500 cursor-pointer shadow-2xs"
+                  >
+                    <option value="Preparation">Preparation</option>
+                    <option value="Laboratory">Laboratory</option>
+                    <option value="Maintenance">Maintenance</option>
+                    <option value="Quality Assurance">Quality Assurance</option>
+                    <option value="Inventory Control">Inventory Control</option>
+                    <option value="Administration">Administration</option>
+                  </select>
                 </div>
-                <span className="text-[10px] text-slate-600 font-bold italic">Otomatis terkunci</span>
-              </div>
+              ) : (
+                <div 
+                  className="p-3 rounded-2xl border-2 flex items-center justify-between bg-slate-50 border-slate-300"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
+                    <span className="text-xs font-black text-black">Seksi Pelaksana:</span>
+                    <span className="text-xs font-black text-teal-950 bg-teal-100 px-2.5 py-0.5 rounded-md border border-teal-300">
+                      {userSection}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-600 font-bold italic">Otomatis terkunci</span>
+                </div>
+              )}
 
               {/* Pilih PIC Bawahan (Multi-PIC Searchable Select) */}
               <SearchableMultiPicSelect
@@ -3991,7 +4032,7 @@ export function LogbookScreen({
                   setNewAssigneeNames(names);
                 }}
                 employees={employeesList}
-                defaultSection={userSection}
+                defaultSection={(isSuperAdmin || isMeetingRoom || userSection === 'ALL') ? targetTaskSection : userSection}
               />
 
               {/* Toggle Opsi PIC Job Pending */}

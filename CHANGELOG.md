@@ -10,6 +10,10 @@ Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Porta
   - Menambahkan tombol interaktif icon mata (`Eye` & `EyeOff`) pada kolom input password saat proses login maupun setup password awal akun karyawan.
   - Memungkinkan pengguna memeriksa karakter password yang sedang diketik secara instan tanpa khawatir salah input, dengan tombol toggle inline di dalam input dan label helper.
 
+- **Akses Multi-Seksi Pembuatan Tugas & Filter untuk Akun Meeting Room (`src/components/logbook-screen.tsx`)**:
+  - Memberikan hak akses multi-seksi pada akun display ruang rapat (`MEETINGROOM`) dan Super Admin untuk memilih seksi pelaksana tugas (*Preparation, Laboratory, Maintenance, Quality Assurance, Inventory Control, Administration*) secara bebas pada form *Assign Tugas*.
+  - Menghubungkan pilihan seksi dengan daftar pencarian PIC bawahan secara dinamis, serta mengaktifkan dropdown filter antar-seksi pada bilah navigasi Log Book.
+
 - **Pengalihan Otomatis Homepage Khusus Superintendent (SPT) & Manager ke Buletin (`src/App.tsx`)**:
   - Menyesuaikan alur navigasi homepage `/` dan fungsi navigasi `handleNav('home')` agar pengguna dengan jabatan Superintendent (`spt` / `superintendent`) dan Manager langsung diarahkan (*auto-redirect*) masuk ke Buletin Board (`/bulletin/TBP` atau `/bulletin/GTS`).
   - Menjadikan Buletin Board sebagai beranda kerja (*workspace landing page*) utama pimpinan departemen untuk memantau arahan, topik proyek, dan perkembangan seksi secara langsung.
