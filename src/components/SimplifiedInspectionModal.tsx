@@ -166,17 +166,18 @@ export function SimplifiedInspectionModal({
         return false;
       };
 
+      const activeWeekKey = getISOWeekKey(new Date());
       const [wRes, kRes, inspRes] = await Promise.allSettled([
-        fetch('/api/inspection-proofs?week=ALL'),
-        fetch('/api/kta-reports?week=ALL'),
+        fetch(`/api/inspection-proofs?week=${activeWeekKey}`),
+        fetch(`/api/kta-reports?week=${activeWeekKey}`),
         fetch(`/api/inspections/latest-by-user?nik=${encodeURIComponent(cleanNik)}&name=${encodeURIComponent(cleanName)}`)
       ]);
 
       if (wRes.status === 'fulfilled' && wRes.value.ok) {
         const allW: any[] = await wRes.value.json();
         const myW = Array.isArray(allW) ? allW.filter(isMatch) : [];
-        // Add schedule.ssProofUrl if not in list
-        if (schedule?.ssProofUrl && !myW.some(p => p.imageUrl === schedule.ssProofUrl)) {
+        // Add schedule.ssProofUrl if not in list and confirmed for this week
+        if (schedule?.hasSsProof && schedule?.ssProofUrl && !myW.some(p => p.imageUrl === schedule.ssProofUrl)) {
           myW.unshift({
             id: 'sched-proof',
             imageUrl: schedule.ssProofUrl,
@@ -240,6 +241,66 @@ export function SimplifiedInspectionModal({
       fetchFindings();
     }
   }, [isOpen, isPic, currentJabatan]);
+
+  const [isDeletingWeekly, setIsDeletingWeekly] = useState(false);
+
+  const handleDeleteWeeklyProof = async () => {
+    const activeWeek = getISOWeekKey(new Date());
+    if (!window.confirm(`Hapus submission & bukti screenshot inspeksi periode ${activeWeek}?\n\nLaporan yang keliru akan dibersihkan dari sistem agar tidak ada data ganda.`)) return;
+
+    setIsDeletingWeekly(true);
+    try {
+      if (latestWeeklyProof?.id && typeof latestWeeklyProof.id === 'number') {
+        await fetch(`/api/inspection-proofs/${latestWeeklyProof.id}`, { method: 'DELETE' });
+      }
+
+      if (latestInspection?.id) {
+        await fetch(`/api/inspections/${latestInspection.id}?deleteProof=true`, { method: 'DELETE' });
+      }
+
+      const cleanNik = (inspectorNik || '').trim();
+      const cleanName = (inspectorName || '').trim();
+      await fetch(`/api/inspections-reset-submission?nik=${encodeURIComponent(cleanNik)}&name=${encodeURIComponent(cleanName)}&week=${encodeURIComponent(activeWeek)}`, {
+        method: 'DELETE'
+      });
+
+      try {
+        localStorage.removeItem(`p2h_cached_my_schedule_${activeWeek}`);
+        localStorage.removeItem('p2h_cached_my_schedule');
+        localStorage.removeItem('p2h_cached_all_schedules');
+        localStorage.removeItem('p2h_cached_has_ss_proof');
+        localStorage.removeItem('p2h_cached_ss_proof_url');
+        localStorage.removeItem(`p2h_cached_has_ss_proof_${activeWeek}`);
+        localStorage.removeItem(`p2h_cached_ss_proof_url_${activeWeek}`);
+      } catch {}
+
+      setWeeklyProofs([]);
+      setLatestInspection(null);
+      toast.success('Bukti dan laporan inspeksi berhasil dihapus.');
+      fetchUserProofs();
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      toast.error('Gagal menghapus: ' + err.message);
+    } finally {
+      setIsDeletingWeekly(false);
+    }
+  };
+
+  const handleDeleteKtaProof = async (id: number | string) => {
+    if (!window.confirm('Hapus laporan KTA/TTA ini?')) return;
+    try {
+      const res = await fetch(`/api/kta-reports/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Laporan KTA/TTA berhasil dihapus.');
+        fetchUserProofs();
+        if (onSuccess) onSuccess();
+      } else {
+        toast.error('Gagal menghapus laporan KTA/TTA');
+      }
+    } catch (e: any) {
+      toast.error('Error: ' + e.message);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -932,9 +993,20 @@ export function SimplifiedInspectionModal({
                       <button
                         type="button"
                         onClick={() => setShowUploadWeeklyForm(prev => !prev)}
-                        className="py-2 px-3 rounded-xl border border-[var(--border-main)] hover:bg-black/5 text-[var(--text-muted)] hover:text-[var(--text-main)] font-semibold text-xs transition-colors cursor-pointer"
+                        className="py-2 px-2.5 rounded-xl border border-[var(--border-main)] hover:bg-black/5 text-[var(--text-muted)] hover:text-[var(--text-main)] font-semibold text-xs transition-colors cursor-pointer"
                       >
                         {showUploadWeeklyForm ? 'Tutup Form' : 'Unggah Ulang'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleDeleteWeeklyProof}
+                        disabled={isDeletingWeekly}
+                        className="py-2 px-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 font-bold text-xs transition-colors cursor-pointer flex items-center gap-1"
+                        title="Hapus submission jika salah isi form agar rekap tidak duplikat"
+                      >
+                        {isDeletingWeekly ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        <span>Hapus</span>
                       </button>
                     </div>
                   </div>
@@ -1094,9 +1166,21 @@ export function SimplifiedInspectionModal({
                             }`}>
                               {report.reportType || 'KTA'}
                             </span>
-                            <span className="text-[10px] text-[var(--text-muted)]">
-                              {report.date || 'Minggu Ini'}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-[var(--text-muted)]">
+                                {report.date || 'Minggu Ini'}
+                              </span>
+                              {report.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteKtaProof(report.id)}
+                                  className="p-1 rounded-md text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                  title="Hapus laporan KTA ini"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
 
                           {/* Thumbnail Screenshot */}

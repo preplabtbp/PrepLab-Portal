@@ -41,7 +41,17 @@ import {
   Bookmark,
   Save,
   Lock,
-  MessageSquare
+  MessageSquare,
+  Table as TableIcon,
+  Kanban,
+  LayoutList,
+  ZoomIn,
+  ZoomOut,
+  ArrowUp,
+  ArrowDown,
+  ExternalLink,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui';
@@ -2391,6 +2401,114 @@ export function LogbookScreen({
     setExpandedTaskIds(new Set());
   };
 
+  // Notion Database Table System State (Identical aesthetic & ergonomics to NotionDatabaseTable)
+  const [viewMode, setViewMode] = useState<'table' | 'board' | 'list'>('table');
+  const [themeMode, setThemeMode] = useState<'notion-light' | 'dark-studio'>('notion-light');
+  const isNotionLight = themeMode === 'notion-light';
+  const [fitPageMode, setFitPageMode] = useState<boolean>(false);
+  const [zoomPercent, setZoomPercent] = useState<number>(100);
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
+    today: false,
+    yesterday: false
+  });
+  const toggleGroup = (grp: string) => {
+    setCollapsedGroups(prev => ({ ...prev, [grp]: !prev[grp] }));
+  };
+  const [selectedTaskDetail, setSelectedTaskDetail] = useState<LogbookTask | null>(null);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (colKey: string) => {
+    if (sortColumn === colKey) {
+      if (sortDirection === 'asc') setSortDirection('desc');
+      else {
+        setSortColumn(null);
+        setSortDirection('asc');
+      }
+    } else {
+      setSortColumn(colKey);
+      setSortDirection('asc');
+    }
+  };
+
+  const filterByNotionFilters = useCallback((taskList: LogbookTask[]) => {
+    return taskList.filter(t => {
+      if (statusFilter !== 'ALL') {
+        const s = (t.status || '').toUpperCase();
+        const isDone = s === 'CLOSED' || s === 'RESOLVED' || s === 'DONE';
+        const isProg = s === 'IN PROGRESS' || s === 'ON PROGRESS';
+        const isOpen = s === 'OPEN';
+        const isPend = Boolean(t.isPending || s === 'PENDING');
+        const isCanc = s === 'CANCELED';
+
+        if (statusFilter === 'ACTIVE' && (isDone || isCanc)) return false;
+        if (statusFilter === 'ON PROGRESS' && !isProg) return false;
+        if (statusFilter === 'OPEN' && !isOpen) return false;
+        if (statusFilter === 'PENDING' && !isPend) return false;
+        if (statusFilter === 'CLOSE' && !isDone) return false;
+        if (statusFilter === 'CANCELED' && !isCanc) return false;
+      }
+      if (priorityFilter !== 'ALL') {
+        const p = (t.priority || '').toUpperCase();
+        if (priorityFilter === 'URGENT' && p !== 'URGENT' && p !== 'CRITICAL') return false;
+        if (priorityFilter === 'HIGH' && p !== 'HIGH') return false;
+        if (priorityFilter === 'MEDIUM' && p !== 'MEDIUM') return false;
+        if (priorityFilter === 'NORMAL' && p !== 'NORMAL' && p !== 'MEDIUM') return false;
+        if (priorityFilter === 'LOW' && p !== 'LOW') return false;
+      }
+      return true;
+    });
+  }, [statusFilter, priorityFilter]);
+
+  const sortTasks = useCallback((taskList: LogbookTask[]) => {
+    if (!sortColumn) return taskList;
+    return [...taskList].sort((a, b) => {
+      let valA: any = '';
+      let valB: any = '';
+
+      if (sortColumn === 'title') {
+        valA = a.title || '';
+        valB = b.title || '';
+      } else if (sortColumn === 'status') {
+        valA = a.status || '';
+        valB = b.status || '';
+      } else if (sortColumn === 'priority') {
+        const pOrder: Record<string, number> = { Urgent: 4, High: 3, Medium: 2, Normal: 2, Low: 1 };
+        valA = pOrder[a.priority] || 0;
+        valB = pOrder[b.priority] || 0;
+      } else if (sortColumn === 'pic') {
+        valA = a.assigneeName || '';
+        valB = b.assigneeName || '';
+      } else if (sortColumn === 'cadence') {
+        valA = a.activityType || '';
+        valB = b.activityType || '';
+      } else if (sortColumn === 'progress') {
+        valA = calculateTaskProgress(a);
+        valB = calculateTaskProgress(b);
+      } else if (sortColumn === 'date') {
+        valA = a.createdAt || '';
+        valB = b.createdAt || '';
+      }
+
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return sortDirection === 'asc' ? valA - valB : valB - valA;
+      }
+      return sortDirection === 'asc' 
+        ? String(valA).localeCompare(String(valB))
+        : String(valB).localeCompare(String(valA));
+    });
+  }, [sortColumn, sortDirection]);
+
+  const tableTodayTasks = useMemo(() => {
+    return sortTasks(filterByNotionFilters(filteredToday));
+  }, [sortTasks, filterByNotionFilters, filteredToday]);
+
+  const tableYesterdayTasks = useMemo(() => {
+    return sortTasks(filterByNotionFilters(displayedYesterdayTasks));
+  }, [sortTasks, filterByNotionFilters, displayedYesterdayTasks]);
+
   // Enterprise Minimalist Task Row Renderer with Click-to-Expand Details
   const renderTaskCard = (task: LogbookTask, isYesterday: boolean, isReadOnly: boolean = false, currentEvalScope?: 'yesterday' | 'all_carryover') => {
     const parsed = parseTasklist(task.description || '');
@@ -3568,326 +3686,1637 @@ export function LogbookScreen({
         )}
 
         {/* ========================================================================= */}
-        {/* TWO-COLUMN DUAL VIEW WITH ENTERPRISE INTERACTIVE SECTION HIGHLIGHT        */}
+        {/* NOTION DATABASE TOOLBAR & CONTROLS (Identical to NotionDatabaseTable)      */}
         {/* ========================================================================= */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          {/* 1. COLUMN KIRI: PROGRES & EVALUASI */}
-          <div 
-            onClick={() => setActiveSection('yesterday')}
-            onDragOver={(e) => {
-              if (dragSourceColumn === 'planning') {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                if (!isDragOverYesterday) setIsDragOverYesterday(true);
-              }
-            }}
-            onDragLeave={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                setIsDragOverYesterday(false);
-              }
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDragOverYesterday(false);
-              const data = e.dataTransfer.getData('text/plain');
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.taskId && parsed.fromColumn === 'planning') {
-                  handleMoveTaskToBacklog(parsed.taskId);
-                }
-              } catch (err) {
-                if (draggedLogbookTaskId && dragSourceColumn === 'planning') {
-                  handleMoveTaskToBacklog(draggedLogbookTaskId);
-                }
-              }
-            }}
-            className={`rounded-3xl p-5 space-y-4 transition-all duration-300 cursor-pointer relative ${
-              isDragOverYesterday
-                ? 'border-2 border-dashed border-amber-500 bg-amber-50/70 shadow-2xl ring-4 ring-amber-400/40'
-                : activeSection === 'yesterday'
-                ? 'border-2 border-amber-500 bg-gradient-to-b from-amber-50/30 via-white to-white shadow-xl ring-4 ring-amber-400/25'
-                : 'border-2 border-slate-200 bg-white shadow-xs opacity-70 hover:opacity-100 hover:border-amber-300'
-            }`}
-          >
-            {/* Drop Indicator Banner */}
-            {isDragOverYesterday && (
-              <div className="p-3.5 rounded-2xl bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 border-2 border-dashed border-slate-950 shadow-lg animate-pulse">
-                <ArrowLeft className="w-4 h-4 stroke-[3]" />
-                <span>Lepaskan di sini untuk membatalkan progress hari ini & mengembalikan ke Progres & Evaluasi / Backlog</span>
-              </div>
-            )}
-
-            {/* Header Kolom 1 */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-slate-200 pb-4 gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="font-black text-base sm:text-lg flex items-center gap-2 text-black">
-                    <span className={`w-3 h-3 rounded-full transition-all ${
-                      activeSection === 'yesterday'
-                        ? 'bg-amber-500 animate-pulse ring-4 ring-amber-500/30'
-                        : 'bg-slate-400'
-                    }`} />
-                    <span>1. Progres & Evaluasi</span>
-                  </h2>
-
-                  {/* Enterprise Active Badge or Focus Indicator */}
-                  {activeSection === 'yesterday' ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500 text-black shadow-xs ring-2 ring-amber-300 animate-in fade-in">
-                      <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
-                      Active Focus
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-bold text-slate-600">
-                      Klik untuk fokus
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs font-bold text-slate-700 mt-1">
-                  {evalScope === 'yesterday'
-                    ? 'Evaluasi H-1: Khusus subtask yang diceklis kemarin atau catatan yang ditulis kemarin.'
-                    : 'Semua Backlog: Menampilkan seluruh subtask (selesai & belum) dan semua riwayat catatan.'}
-                </p>
-              </div>
-
-              {/* Scope Switcher: Kemarin (H-1) vs Semua Carry-Over */}
-              <div 
-                onClick={(e) => e.stopPropagation()} 
-                className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto bg-slate-200 p-1 rounded-xl border border-slate-300"
+        <div 
+          className={`p-3 rounded-2xl border shadow-xs transition-colors flex flex-col gap-3 ${
+            isNotionLight ? 'bg-white border-slate-200' : 'bg-[#1e1e1e] border-[#334155]'
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            {/* Left: View Switcher (Table / Board / Cards) */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'table'
+                    ? isNotionLight
+                      ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
+                      : 'bg-slate-900 text-teal-300 shadow-xs border border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+                title="Tampilan Tabel Database Notion (Grid Ringkas)"
               >
-                <button
-                  type="button"
-                  onClick={() => setEvalScope('yesterday')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    evalScope === 'yesterday'
-                      ? 'bg-amber-500 text-black font-black shadow-xs'
-                      : 'text-slate-800 hover:text-black font-bold'
-                  }`}
-                  title="Tampilkan khusus pekerjaan shift/hari kemarin (H-1)"
-                >
-                  📅 Kemarin ({yesterdayTasks.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEvalScope('all_carryover')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    evalScope === 'all_carryover'
-                      ? 'bg-slate-900 text-white font-black shadow-xs'
-                      : 'text-slate-800 hover:text-black font-bold'
-                  }`}
-                  title="Tampilkan seluruh akumulasi carry-over / backlog dari hari-hari sebelumnya"
-                >
-                  ⏳ Semua Backlog ({carryOverTasks.length})
-                </button>
-              </div>
+                <TableIcon className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <span>Table</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('board')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'board'
+                    ? isNotionLight
+                      ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
+                      : 'bg-slate-900 text-teal-300 shadow-xs border border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+                title="Tampilan Papan Kanban Berdasarkan Status"
+              >
+                <Kanban className="w-3.5 h-3.5 text-amber-500" />
+                <span>Board</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'list'
+                    ? isNotionLight
+                      ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
+                      : 'bg-slate-900 text-teal-300 shadow-xs border border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+                title="Tampilan Kartu Ringkas (2 Kolom)"
+              >
+                <LayoutList className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Cards</span>
+              </button>
             </div>
 
-            {/* Executive Recap Banner for Management */}
-            <div 
-              onClick={(e) => e.stopPropagation()}
-              className="p-3.5 rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50/50 to-white shadow-2xs space-y-2.5"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-amber-500 text-white">
-                    <TrendingUp className="w-4 h-4 stroke-[3]" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-black text-black">
-                      Rekap Progress Kemarin ({summaryData?.yesterdayDate ? formatDisplayTargetDate(summaryData.yesterdayDate) : 'H-1'})
-                    </h3>
-                    <p className="text-[11px] font-bold text-slate-800">
-                      Laporan transparan saat manajemen menanyakan progres pekerjaan kemarin
-                    </p>
-                  </div>
-                </div>
-
+            {/* Right: Zoom & View Controls */}
+            <div className="flex items-center gap-2">
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
                 <button
                   type="button"
-                  onClick={handleCopyYesterdayManagementReport}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black shadow-xs transition-all cursor-pointer shrink-0"
-                  title="Salin ringkasan progres kemarin dalam format chat resmi untuk WhatsApp Management"
+                  onClick={() => setZoomPercent(prev => Math.max(70, prev - 10))}
+                  className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                  title="Perkecil Tampilan (Zoom Out)"
                 >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Salin Laporan Manajemen</span>
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[11px] font-mono font-bold px-1 min-w-[36px] text-center text-slate-700 dark:text-slate-300">
+                  {zoomPercent}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoomPercent(prev => Math.min(130, prev + 10))}
+                  className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                  title="Perbesar Tampilan (Zoom In)"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              {/* Progress Bar & Badges */}
-              <div className="space-y-1.5 pt-1 border-t border-amber-200">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-black font-bold">Tingkat Capaian Kemarin:</span>
-                  <span className="text-black font-black font-mono">
-                    {summaryData?.yesterdayProgressPercent || 0}% Tercapai
-                  </span>
-                </div>
-                <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden border border-slate-300">
-                  <div 
-                    className="h-full bg-gradient-to-r from-amber-500 to-emerald-600 transition-all duration-500 rounded-full"
-                    style={{ width: `${Math.min(100, Math.max(0, summaryData?.yesterdayProgressPercent || 0))}%` }}
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold pt-1">
-                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-950 border border-emerald-400 font-bold">
-                    ✅ {summaryData?.completedYesterday || 0} Selesai
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-950 border border-blue-400 font-bold">
-                    🔄 {summaryData?.inProgressYesterday || 0} On Progress
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-950 border border-amber-400 font-bold">
-                    ⏳ {summaryData?.pendingYesterday || 0} Carry-Over
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-slate-100 text-black border border-slate-300 font-mono font-black">
-                    Total {summaryData?.totalYesterday || 0} Kegiatan
-                  </span>
-                </div>
-              </div>
-            </div>
+              {/* Fit Screen Toggle */}
+              <button
+                type="button"
+                onClick={() => setFitPageMode(!fitPageMode)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  fitPageMode
+                    ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                    : isNotionLight
+                    ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                }`}
+                title="Sesuaikan lebar tabel dengan resolusi layar penuh (Fit Page)"
+              >
+                {fitPageMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">{fitPageMode ? 'Reset Lebar' : 'Fit Screen'}</span>
+              </button>
 
-            {/* Task List (Evaluasi & Progres Kemarin) */}
-            {displayedYesterdayTasks.length === 0 ? (
-              <div className="py-14 text-center border-2 border-dashed border-amber-200 rounded-2xl bg-amber-50/40 space-y-2">
-                <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
-                <p className="text-sm font-bold text-slate-900">
-                  Tidak ada tugas dalam kategori ini
-                </p>
-                <p className="text-xs text-slate-600 max-w-sm mx-auto">
-                  Belum ada data kegiatan atau progres tugas yang tercatat untuk periode kemarin yang dipilih.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {displayedYesterdayTasks.map((task) => renderTaskCard(task, true, evalScope === 'yesterday', evalScope))}
-              </div>
-            )}
+              {/* Notion Theme Mode Toggle */}
+              <button
+                type="button"
+                onClick={() => setThemeMode(isNotionLight ? 'dark-studio' : 'notion-light')}
+                className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                  isNotionLight
+                    ? 'bg-white hover:bg-slate-100 text-amber-600 border-slate-300'
+                    : 'bg-slate-800 hover:bg-slate-700 text-teal-400 border-slate-700'
+                }`}
+                title={isNotionLight ? 'Ganti ke Dark Studio Theme' : 'Ganti ke Notion Clean Light Theme'}
+              >
+                {isNotionLight ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
-          {/* 2. COLUMN KANAN: PLANNING & ARAHAN HARI INI */}
-          <div 
-            onClick={() => setActiveSection('today')}
-            onDragOver={(e) => {
-              if (dragSourceColumn === 'progress') {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                if (!isDragOverToday) setIsDragOverToday(true);
-              }
-            }}
-            onDragLeave={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                setIsDragOverToday(false);
-              }
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDragOverToday(false);
-              const data = e.dataTransfer.getData('text/plain');
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.taskId && parsed.fromColumn === 'progress') {
-                  handleMoveTaskToToday(parsed.taskId);
-                }
-              } catch (err) {
-                if (draggedLogbookTaskId && dragSourceColumn === 'progress') {
-                  handleMoveTaskToToday(draggedLogbookTaskId);
-                }
-              }
-            }}
-            className={`rounded-3xl p-5 space-y-4 transition-all duration-300 cursor-pointer relative ${
-              isDragOverToday
-                ? 'border-2 border-dashed border-teal-500 bg-teal-50/70 shadow-2xl ring-4 ring-teal-400/40'
-                : activeSection === 'today'
-                ? 'border-2 border-teal-500 bg-gradient-to-b from-teal-50/30 via-white to-white shadow-xl ring-4 ring-teal-400/25'
-                : 'border-2 border-slate-200 bg-white shadow-xs opacity-70 hover:opacity-100 hover:border-teal-300'
-            }`}
-          >
-            {/* Drop Indicator Banner */}
-            {isDragOverToday && (
-              <div className="p-3.5 rounded-2xl bg-teal-600 text-white font-black text-xs flex items-center justify-center gap-2 border-2 border-dashed border-teal-200 shadow-lg animate-pulse">
-                <ArrowRight className="w-4 h-4 stroke-[3]" />
-                <span>Lepaskan di sini untuk menambahkan task ini ke Planning & Arahan Hari Ini</span>
-              </div>
-            )}
-
-            {/* Header Kolom 2 */}
-            <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="font-black text-base sm:text-lg flex items-center gap-2 text-black">
-                    <span className={`w-3 h-3 rounded-full transition-all ${
-                      activeSection === 'today'
-                        ? 'bg-teal-600 animate-pulse ring-4 ring-teal-600/30'
-                        : 'bg-slate-400'
-                    }`} />
-                    <span>2. Planning & Arahan Hari Ini</span>
-                  </h2>
-
-                  {/* Enterprise Active Badge or Focus Indicator */}
-                  {activeSection === 'today' ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-teal-700 text-white shadow-xs ring-2 ring-teal-400 animate-in fade-in">
-                      <span className="w-1.5 h-1.5 rounded-full bg-teal-200 animate-pulse" />
-                      Active Focus
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-bold text-slate-600">
-                      Klik untuk fokus
+          {/* Bottom Filter Pills: Status & Priority */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-200 dark:border-slate-800">
+            {[
+              { key: 'ALL', label: 'Semua Status', count: (summaryData?.totalToday || 0) + displayedYesterdayTasks.length },
+              { key: 'ACTIVE', label: 'Sedang Aktif', count: (summaryData?.openToday || 0) + (summaryData?.inProgressToday || 0) + displayedYesterdayTasks.filter(t => t.status !== 'Closed' && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Canceled').length },
+              { key: 'ON PROGRESS', label: 'On Progress', count: (summaryData?.inProgressToday || 0) + displayedYesterdayTasks.filter(t => t.status === 'In Progress' || t.status === 'On Progress').length },
+              { key: 'OPEN', label: 'Open', count: (summaryData?.openToday || 0) + displayedYesterdayTasks.filter(t => t.status === 'Open').length },
+              { key: 'PENDING', label: 'Job Pending', count: (summaryData?.pendingYesterday || 0) + displayedYesterdayTasks.filter(t => t.isPending || t.status === 'Pending').length },
+              { key: 'CLOSE', label: 'Closed / Selesai', count: (summaryData?.completedToday || 0) + displayedYesterdayTasks.filter(t => t.status === 'Closed' || t.status === 'Resolved' || t.status === 'Done').length },
+              { key: 'CANCELED', label: 'Canceled', count: displayedYesterdayTasks.filter(t => (t.status || '').toLowerCase() === 'canceled').length + filteredToday.filter(t => (t.status || '').toLowerCase() === 'canceled').length },
+            ].map((st) => {
+              const isActive = statusFilter === st.key;
+              return (
+                <button
+                  key={st.key}
+                  type="button"
+                  onClick={() => setStatusFilter(st.key)}
+                  className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1.5 border cursor-pointer shrink-0 ${
+                    isActive
+                      ? isNotionLight
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                        : 'bg-teal-500/20 text-teal-300 border-teal-500'
+                      : isNotionLight
+                      ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                      : 'bg-[#262626] hover:bg-[#333333] text-slate-400 border-slate-700'
+                  }`}
+                >
+                  <span>{st.label}</span>
+                  {st.count !== undefined && st.count > 0 && (
+                    <span 
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                        isActive
+                          ? isNotionLight ? 'bg-slate-700 text-white' : 'bg-teal-500/30 text-teal-200'
+                          : isNotionLight ? 'bg-slate-100 text-slate-600' : 'bg-[#1e293b] text-slate-400'
+                      }`}
+                    >
+                      {st.count}
                     </span>
                   )}
-                </div>
-                <p className="text-xs font-bold text-slate-700 mt-1">
-                  Khusus task yang akan diprogress hari ini &middot; Drag dari kolom kiri atau klik + Tambah
-                </p>
-              </div>
-
-              <div 
-                onClick={(e) => e.stopPropagation()} 
-                className="flex items-center gap-2"
-              >
-                <button
-                  type="button"
-                  onClick={handleCopyMeetingSummary}
-                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 border-slate-400 bg-white hover:bg-slate-50 text-black text-xs font-bold transition-all shadow-xs cursor-pointer"
-                  title="Salin notulensi meeting ke WhatsApp"
-                >
-                  <Copy className="w-3.5 h-3.5 text-teal-700" />
-                  <span>Salin WA</span>
                 </button>
+              );
+            })}
 
-                <button
-                  onClick={openAssignModal}
-                  className="px-3.5 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-black text-xs flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
-                  title="Tambah arahan kegiatan baru"
-                >
-                  <Plus className="w-4 h-4 stroke-[3]" />
-                  <span>+ Tambah</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Today Task List */}
-            {filteredToday.length === 0 ? (
-              <div className="py-14 text-center border-2 border-dashed border-teal-200 rounded-2xl bg-teal-50/40 space-y-3">
-                <Briefcase className="w-8 h-8 text-teal-600 mx-auto" />
-                <p className="text-sm font-bold text-slate-900">
-                  Belum ada task yang diprogress hari ini
-                </p>
-                <p className="text-xs text-slate-600 max-w-sm mx-auto">
-                  Drag tugas dari kolom <span className="font-bold text-amber-700">1. Progres & Evaluasi</span> di sebelah kiri ke sini untuk diprogress hari ini, atau buat tugas baru.
-                </p>
-                <button
-                  type="button"
-                  onClick={openAssignModal}
-                  className="inline-flex items-center gap-1 px-4 py-2 rounded-xl text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white transition-all shadow-xs cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Buat Arahan Kegiatan Baru</span>
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {filteredToday.map((task) => renderTaskCard(task, false, false))}
-              </div>
-            )}
+            {/* Priority Filter */}
+            <select
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
+              className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold outline-none cursor-pointer transition-colors ${
+                isNotionLight
+                  ? 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'
+                  : 'bg-[#262626] border-[#334155] text-[#cbd5e1]'
+              }`}
+            >
+              <option value="ALL">Semua Prioritas</option>
+              <option value="URGENT">🚨 Urgent / Critical</option>
+              <option value="HIGH">🔴 High Priority</option>
+              <option value="MEDIUM">🔵 Medium Priority</option>
+              <option value="NORMAL">🟢 Normal Priority</option>
+              <option value="LOW">⚪ Low Priority</option>
+            </select>
           </div>
         </div>
+
+        {/* ========================================================================= */}
+        {/* 1. NOTION DATABASE TABLE VIEW (Default & Parity with NotionDatabaseTable)  */}
+        {/* ========================================================================= */}
+        {viewMode === 'table' && (
+          <div 
+            className={`overflow-x-auto transition-all rounded-2xl border shadow-xs ${
+              isNotionLight ? 'bg-white border-slate-200' : 'bg-[#191919] border-[#334155]'
+            }`}
+            style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
+          >
+            <table className={`w-full text-left border-collapse ${fitPageMode ? 'table-fixed text-[11px]' : 'text-xs'}`}>
+              {/* Sticky Column Headers */}
+              <thead>
+                <tr 
+                  className={`border-b select-none transition-colors ${
+                    isNotionLight
+                      ? 'bg-[#fbfbfa] border-slate-200 text-slate-600'
+                      : 'bg-[#242424] border-[#303030] text-slate-400'
+                  }`}
+                >
+                  <th className={`text-center ${fitPageMode ? 'w-[3%] px-1 py-2.5' : 'w-10 px-2 py-3'}`}>
+                    <GripVertical className="w-3.5 h-3.5 text-slate-400 mx-auto" />
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('date')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[4%] text-center px-1 py-2.5' : 'w-14 text-center px-2 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <span>#</span>
+                      {sortColumn === 'date' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('title')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[28%] px-2.5 py-2.5' : 'min-w-[280px] px-3.5 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Kegiatan / Arahan Tugas</span>
+                      {sortColumn === 'title' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('cadence')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[120px] px-3 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Frekuensi</span>
+                      {sortColumn === 'cadence' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('status')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[12%] px-1.5 py-2.5' : 'min-w-[140px] px-3 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Status</span>
+                      {sortColumn === 'status' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('priority')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[9%] px-1.5 py-2.5' : 'min-w-[110px] px-3 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Prioritas</span>
+                      {sortColumn === 'priority' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('pic')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[13%] px-2 py-2.5' : 'min-w-[150px] px-3 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-slate-400" />
+                      <span>PIC Pelaksana</span>
+                      {sortColumn === 'pic' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th className={`font-bold ${fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[130px] px-3 py-3'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Mulai & Durasi</span>
+                    </div>
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('progress')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[9%] px-1.5 py-2.5' : 'min-w-[120px] px-3 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Progress</span>
+                      {sortColumn === 'progress' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th className={`text-center font-bold ${fitPageMode ? 'w-[8%] px-1 py-2.5' : 'w-24 px-3 py-3'}`}>
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+
+              {/* Table Body with Notion Collapsible Section Groups */}
+              <tbody className={`divide-y transition-colors ${
+                isNotionLight ? 'bg-white divide-slate-100' : 'bg-[#191919] divide-[#292929]'
+              }`}>
+                {/* ------------------------------------------------------------- */}
+                {/* GROUP 1: PLANNING & ARAHAN HARI INI                           */}
+                {/* ------------------------------------------------------------- */}
+                <tr
+                  onClick={() => toggleGroup('today')}
+                  onDragOver={(e) => {
+                    if (dragSourceColumn === 'progress') {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      if (!isDragOverToday) setIsDragOverToday(true);
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      setIsDragOverToday(false);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragOverToday(false);
+                    const data = e.dataTransfer.getData('text/plain');
+                    try {
+                      const parsed = JSON.parse(data);
+                      if (parsed.taskId && parsed.fromColumn === 'progress') {
+                        handleMoveTaskToToday(parsed.taskId);
+                      }
+                    } catch (err) {
+                      if (draggedLogbookTaskId && dragSourceColumn === 'progress') {
+                        handleMoveTaskToToday(draggedLogbookTaskId);
+                      }
+                    }
+                  }}
+                  className={`cursor-pointer select-none transition-colors border-y font-medium text-xs ${
+                    isDragOverToday
+                      ? 'bg-teal-500/20 border-teal-500 ring-2 ring-teal-400'
+                      : isNotionLight
+                      ? 'bg-teal-50/70 hover:bg-teal-100/60 text-teal-950 border-teal-200'
+                      : 'bg-teal-950/40 hover:bg-teal-950/70 text-teal-300 border-teal-800'
+                  }`}
+                >
+                  <td colSpan={10} className="px-3.5 py-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[11px] text-teal-600 dark:text-teal-400 select-none">
+                          {collapsedGroups.today ? '▶' : '▼'}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-teal-600 animate-pulse" />
+                          <span className="font-black text-sm tracking-tight text-teal-950 dark:text-teal-200">
+                            📌 1. PLANNING & ARAHAN HARI INI
+                          </span>
+                        </div>
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-black ${
+                          isNotionLight ? 'bg-teal-200/80 text-teal-950' : 'bg-teal-900 text-teal-200'
+                        }`}>
+                          {tableTodayTasks.length} kegiatan
+                        </span>
+                        {isDragOverToday && (
+                          <span className="text-xs font-black text-teal-700 dark:text-teal-300 animate-pulse pl-2">
+                            ← Lepaskan di sini untuk masukkan ke Planning Hari Ini
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={openAssignModal}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer active:scale-95"
+                          title="Tambah kegiatan baru ke planning hari ini"
+                        >
+                          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>+ Tambah Kegiatan</span>
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+
+                {/* Rows under Group 1 */}
+                {!collapsedGroups.today && (
+                  tableTodayTasks.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-8 text-center text-xs text-slate-500 italic bg-teal-50/10">
+                        Belum ada tugas yang diprogress hari ini. Tarik (drag) dari Backlog atau klik "+ Tambah Kegiatan".
+                      </td>
+                    </tr>
+                  ) : (
+                    tableTodayTasks.map((task, idx) => {
+                      const parsed = parseTasklist(task.description || '');
+                      const hasSubtasks = parsed.hasTasklist && parsed.total > 0;
+                      const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
+                      const isPending = task.isPending || task.status === 'Pending';
+                      const isInProgress = task.status === 'In Progress' || task.status === 'On Progress';
+                      const isExpanded = expandedTaskIds.has(task.id);
+                      const picList = parsePicList(task.assigneeNik, task.assigneeName);
+                      const durationInfo = getTaskDurationInfo(task, selectedDate);
+                      const progressPercent = calculateTaskProgress(task);
+                      const routineInfo = getTaskRoutineInfo(task, selectedDate);
+                      const autoStatus = parsed.completed === 0 ? 'Open' : parsed.completed === parsed.total ? 'Closed' : 'On Progress';
+                      const isCanceled = (task.status || '').toLowerCase() === 'canceled';
+
+                      const statusOptionsOverride: DropdownOption[] | undefined = hasSubtasks
+                        ? isCanceled
+                          ? [
+                              {
+                                value: autoStatus,
+                                label: `Pulihkan ke [${autoStatus}]`,
+                                badgeClass: autoStatus === 'Closed' ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : autoStatus === 'On Progress' ? 'bg-amber-100 text-amber-950 border-amber-400 font-bold' : 'bg-blue-100 text-blue-950 border-blue-400 font-bold',
+                                icon: <RotateCcw className="w-2.5 h-2.5 text-slate-800" />
+                              },
+                              {
+                                value: 'Canceled',
+                                label: 'Canceled (Batal)',
+                                badgeClass: 'bg-rose-100 text-rose-950 border-rose-400 font-bold',
+                                icon: <AlertCircle className="w-2.5 h-2.5 text-rose-800" />
+                              }
+                            ]
+                          : [
+                              {
+                                value: autoStatus,
+                                label: `${autoStatus} (Auto Checklist: ${parsed.completed}/${parsed.total})`,
+                                badgeClass: autoStatus === 'Closed' ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : autoStatus === 'On Progress' ? 'bg-amber-100 text-amber-950 border-amber-400 font-bold' : 'bg-blue-100 text-blue-950 border-blue-400 font-bold',
+                                icon: autoStatus === 'Closed' ? <CheckCircle2 className="w-2.5 h-2.5 text-emerald-800" /> : autoStatus === 'On Progress' ? <RotateCcw className="w-2.5 h-2.5 text-amber-800" /> : <Clock className="w-2.5 h-2.5 text-blue-800" />
+                              },
+                              {
+                                value: 'Canceled',
+                                label: 'Canceled (Batalkan)',
+                                badgeClass: 'bg-rose-100 text-rose-950 border-rose-400 font-bold',
+                                icon: <AlertCircle className="w-2.5 h-2.5 text-rose-800" />
+                              }
+                            ]
+                        : undefined;
+
+                      return (
+                        <React.Fragment key={task.id}>
+                          <tr
+                            draggable={true}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: task.id, fromColumn: 'planning' }));
+                              setDraggedLogbookTaskId(task.id);
+                              setDragSourceColumn('planning');
+                            }}
+                            onDragEnd={() => {
+                              setDraggedLogbookTaskId(null);
+                              setDragSourceColumn(null);
+                              setIsDragOverToday(false);
+                              setIsDragOverYesterday(false);
+                            }}
+                            className={`transition-colors group ${
+                              draggedLogbookTaskId === task.id ? 'opacity-40 bg-teal-50/50' : ''
+                            } ${
+                              isDone 
+                                ? isNotionLight ? 'bg-emerald-50/20 hover:bg-emerald-50/40' : 'bg-emerald-950/10 hover:bg-emerald-950/20'
+                                : isPending
+                                ? isNotionLight ? 'bg-amber-50/30 hover:bg-amber-50/50' : 'bg-amber-950/10 hover:bg-amber-950/20'
+                                : isNotionLight
+                                ? 'bg-white hover:bg-slate-50'
+                                : 'bg-[#191919] hover:bg-[#202020]'
+                            }`}
+                          >
+                            {/* Drag Handle */}
+                            <td className="text-center px-1 py-2 cursor-grab active:cursor-grabbing text-slate-400 hover:text-teal-600">
+                              <GripVertical className="w-3.5 h-3.5 mx-auto" />
+                            </td>
+
+                            {/* No */}
+                            <td className="text-center font-mono text-[11px] px-2 py-2.5 text-slate-500">
+                              {idx + 1}
+                            </td>
+
+                            {/* Kegiatan / Arahan Tugas */}
+                            <td className="px-3.5 py-2.5">
+                              <div className="flex items-start gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleExpand(task.id);
+                                  }}
+                                  className={`p-0.5 rounded transition-transform mt-0.5 cursor-pointer ${
+                                    isExpanded ? 'rotate-90 text-teal-600' : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                  }`}
+                                  title={isExpanded ? 'Tutup subtask checklist' : 'Buka subtask checklist'}
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+
+                                <div className="min-w-0 flex-1">
+                                  <div 
+                                    onClick={() => setSelectedTaskDetail(task)}
+                                    className="font-bold text-xs sm:text-sm cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 hover:underline transition-colors flex items-center gap-1.5 flex-wrap"
+                                    style={{ color: isDone ? '#64748b' : isNotionLight ? '#0f172a' : '#f8fafc' }}
+                                  >
+                                    <span className={isDone ? 'line-through opacity-75' : ''}>{task.title}</span>
+                                    {hasSubtasks && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 font-bold shrink-0">
+                                        ✓ {parsed.completed}/{parsed.total}
+                                      </span>
+                                    )}
+                                    {task.bulletinPostId && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 shrink-0">
+                                        Buletin #{task.bulletinPostId}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Frekuensi / Cadence */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${routineInfo.color}`}>
+                                {routineInfo.label}
+                              </span>
+                            </td>
+
+                            {/* Status */}
+                            <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <NotionDropdownCell
+                                type="status"
+                                value={task.status}
+                                onChange={(newVal) => handleStatusChange(task.id, newVal)}
+                                optionsOverride={statusOptionsOverride}
+                              />
+                            </td>
+
+                            {/* Prioritas */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                                task.priority === 'Urgent'
+                                  ? 'bg-rose-100 text-rose-950 border border-rose-400 animate-pulse'
+                                  : task.priority === 'High'
+                                  ? 'bg-amber-100 text-amber-950 border border-amber-400'
+                                  : task.priority === 'Low'
+                                  ? 'bg-slate-100 text-slate-800 border border-slate-300'
+                                  : 'bg-blue-100 text-blue-950 border border-blue-300'
+                              }`}>
+                                {task.priority}
+                              </span>
+                            </td>
+
+                            {/* PIC Pelaksana */}
+                            <td className="px-3 py-2.5">
+                              <div className="flex flex-wrap gap-1 items-center max-w-[180px]">
+                                {picList.map((p, pIdx) => (
+                                  <span 
+                                    key={pIdx}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
+                                    title={`${p.name} (${p.nik || '-'})`}
+                                  >
+                                    <span className="w-3.5 h-3.5 rounded-full bg-teal-600 text-white text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
+                                      {p.name.charAt(0).toUpperCase()}
+                                    </span>
+                                    <span className="truncate max-w-[90px]">{p.name}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+
+                            {/* Mulai & Durasi */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <div className="text-[11px] font-medium" title={`Mulai: ${durationInfo.displayStartDate}`}>
+                                <p className="font-bold text-slate-700 dark:text-slate-300">{durationInfo.durationLabel}</p>
+                                <p className="text-[10px] text-slate-500">Mulai: {durationInfo.displayStartDate}</p>
+                              </div>
+                            </td>
+
+                            {/* Progress */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5 w-24">
+                                <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-300 ${
+                                      isDone ? 'bg-emerald-500' : isInProgress ? 'bg-teal-600' : progressPercent > 0 ? 'bg-sky-500' : 'bg-slate-400'
+                                    }`}
+                                    style={{ width: `${progressPercent}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-400 min-w-[28px] text-right">
+                                  {progressPercent}%
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Aksi */}
+                            <td className="text-center px-2 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveTaskToBacklog(task.id)}
+                                  className="p-1 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors cursor-pointer"
+                                  title="Kembalikan kegiatan ini ke Evaluasi & Backlog Kemarin"
+                                >
+                                  <ArrowLeft className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openJobPendingModal(task)}
+                                  className="p-1 rounded-lg text-slate-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-colors cursor-pointer"
+                                  title="Alihkan PIC / Set Job Pending"
+                                >
+                                  <Clock className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyToNewTask(task)}
+                                  className="p-1 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
+                                  title="Salin tugas ini ke penugasan baru"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal(task)}
+                                  className="p-1 rounded-lg text-slate-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors cursor-pointer"
+                                  title="Edit Rincian Tugas"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setTaskToDelete(task)}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                  title="Hapus Tugas"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Nested Subtask Checklist Dropdown Row */}
+                          {isExpanded && (
+                            <tr className={`${isNotionLight ? 'bg-slate-50/70' : 'bg-black/30'}`}>
+                              <td colSpan={10} className="px-6 py-3 border-b border-slate-200 dark:border-slate-800">
+                                <div className="space-y-2 max-w-4xl">
+                                  <div className="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-700">
+                                    <span className="font-bold text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                      <CheckSquare className="w-3.5 h-3.5 text-teal-600" />
+                                      <span>Rincian Subtask ({parsed.completed}/{parsed.total})</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedTaskDetail(task)}
+                                      className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1"
+                                    >
+                                      <span>Buka Panel Detail Notion</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </button>
+                                  </div>
+
+                                  {parsed.items && parsed.items.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      {parsed.items.map((item, itmIdx) => {
+                                        const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                                          ? item.notes
+                                          : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+                                        const noteCount = rawNotes.length;
+
+                                        return (
+                                          <div
+                                            key={item.index}
+                                            draggable={true}
+                                            onDragStart={(e) => {
+                                              e.dataTransfer.setData('text/plain', String(itmIdx));
+                                              setCardDragIdx({ taskId: task.id, itemIdx: itmIdx });
+                                            }}
+                                            onDragOver={(e) => {
+                                              e.preventDefault();
+                                              e.dataTransfer.dropEffect = 'move';
+                                              if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx !== itmIdx) {
+                                                setCardDragOverIdx({ taskId: task.id, itemIdx: itmIdx });
+                                              }
+                                            }}
+                                            onDragLeave={() => {
+                                              if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === itmIdx) {
+                                                setCardDragOverIdx(null);
+                                              }
+                                            }}
+                                            onDrop={(e) => {
+                                              e.preventDefault();
+                                              handleDropCardSubtask(task, itmIdx);
+                                            }}
+                                            onDragEnd={() => {
+                                              setCardDragIdx(null);
+                                              setCardDragOverIdx(null);
+                                            }}
+                                            className={`flex items-center gap-2 p-1.5 px-2.5 rounded-lg border text-xs transition-all ${
+                                              cardDragIdx?.taskId === task.id && cardDragIdx?.itemIdx === itmIdx
+                                                ? 'opacity-40 border-2 border-dashed border-teal-500 bg-teal-50/50'
+                                                : item.checked
+                                                ? 'bg-slate-100/70 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
+                                                : isNotionLight
+                                                ? 'bg-white border-slate-300 hover:border-teal-500'
+                                                : 'bg-[#202020] border-slate-700 hover:border-teal-500'
+                                            }`}
+                                          >
+                                            <div className="cursor-grab active:cursor-grabbing p-0.5 text-slate-400 hover:text-teal-600">
+                                              <GripVertical className="w-3.5 h-3.5" />
+                                            </div>
+
+                                            <input
+                                              type="checkbox"
+                                              checked={item.checked}
+                                              onChange={() => handleToggleSubtask(task, item.index)}
+                                              className="w-3.5 h-3.5 rounded border-slate-400 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                                            />
+
+                                            <span className={`flex-1 break-words ${item.checked ? 'line-through text-slate-400' : 'font-semibold text-slate-800 dark:text-slate-200'}`}>
+                                              {item.text}
+                                            </span>
+
+                                            {item.checkedDate && (
+                                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                                                {item.checkedDate}
+                                              </span>
+                                            )}
+
+                                            <button
+                                              type="button"
+                                              onClick={() => openSubtaskNoteModal(task, item.index, item.text, rawNotes, false)}
+                                              className={`relative p-1 rounded-md transition-colors cursor-pointer ${
+                                                noteCount > 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                              }`}
+                                              title={noteCount > 0 ? `${noteCount} Catatan Subtask` : 'Tambah Catatan Subtask'}
+                                            >
+                                              <AlertCircle className="w-3.5 h-3.5" />
+                                              {noteCount > 0 && (
+                                                <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-rose-600 text-white font-mono text-[8px] font-black flex items-center justify-center">
+                                                  {noteCount}
+                                                </span>
+                                              )}
+                                            </button>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-slate-500 italic">Tidak ada checklist terdaftar pada tugas ini.</p>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )
+                )}
+
+                {/* ------------------------------------------------------------- */}
+                {/* GROUP 2: EVALUASI & PROGRES KEMARIN / BACKLOG                */}
+                {/* ------------------------------------------------------------- */}
+                <tr
+                  onClick={() => toggleGroup('yesterday')}
+                  onDragOver={(e) => {
+                    if (dragSourceColumn === 'planning') {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      if (!isDragOverYesterday) setIsDragOverYesterday(true);
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      setIsDragOverYesterday(false);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragOverYesterday(false);
+                    const data = e.dataTransfer.getData('text/plain');
+                    try {
+                      const parsed = JSON.parse(data);
+                      if (parsed.taskId && parsed.fromColumn === 'planning') {
+                        handleMoveTaskToBacklog(parsed.taskId);
+                      }
+                    } catch (err) {
+                      if (draggedLogbookTaskId && dragSourceColumn === 'planning') {
+                        handleMoveTaskToBacklog(draggedLogbookTaskId);
+                      }
+                    }
+                  }}
+                  className={`cursor-pointer select-none transition-colors border-y font-medium text-xs ${
+                    isDragOverYesterday
+                      ? 'bg-amber-500/20 border-amber-500 ring-2 ring-amber-400'
+                      : isNotionLight
+                      ? 'bg-amber-50/70 hover:bg-amber-100/60 text-amber-950 border-amber-200'
+                      : 'bg-amber-950/40 hover:bg-amber-950/70 text-amber-300 border-amber-800'
+                  }`}
+                >
+                  <td colSpan={10} className="px-3.5 py-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[11px] text-amber-600 dark:text-amber-400 select-none">
+                          {collapsedGroups.yesterday ? '▶' : '▼'}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                          <span className="font-black text-sm tracking-tight text-amber-950 dark:text-amber-200">
+                            ⏳ 2. EVALUASI & PROGRES KEMARIN / BACKLOG
+                          </span>
+                        </div>
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-black ${
+                          isNotionLight ? 'bg-amber-200/80 text-amber-950' : 'bg-amber-900 text-amber-200'
+                        }`}>
+                          {tableYesterdayTasks.length} kegiatan
+                        </span>
+                        {isDragOverYesterday && (
+                          <span className="text-xs font-black text-amber-700 dark:text-amber-300 animate-pulse pl-2">
+                            ← Lepaskan di sini untuk kembalikan ke Backlog Kemarin
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Scope Switcher & Management Report Copy */}
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center bg-white/80 dark:bg-slate-900 p-0.5 rounded-xl border border-amber-300 dark:border-slate-700">
+                          <button
+                            type="button"
+                            onClick={() => setEvalScope('yesterday')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              evalScope === 'yesterday'
+                                ? 'bg-amber-500 text-black font-black shadow-xs'
+                                : 'text-slate-700 dark:text-slate-300 hover:text-black'
+                            }`}
+                            title="Tampilkan khusus pekerjaan shift/hari kemarin (H-1)"
+                          >
+                            📅 Kemarin ({yesterdayTasks.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEvalScope('all_carryover')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              evalScope === 'all_carryover'
+                                ? 'bg-slate-900 text-white font-black shadow-xs'
+                                : 'text-slate-700 dark:text-slate-300 hover:text-black'
+                            }`}
+                            title="Tampilkan seluruh akumulasi carry-over / backlog dari hari-hari sebelumnya"
+                          >
+                            ⏳ Semua Backlog ({carryOverTasks.length})
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleCopyYesterdayManagementReport}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0"
+                          title="Salin rekap capaian kemarin untuk dikirim ke WhatsApp Manajemen"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span className="hidden sm:inline">Salin Laporan Manajemen</span>
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+
+                {/* Rows under Group 2 */}
+                {!collapsedGroups.yesterday && (
+                  tableYesterdayTasks.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-8 text-center text-xs text-slate-500 italic bg-amber-50/10">
+                        Nihil tugas dalam kategori ini. Semua pekerjaan kemarin telah selesai atau tidak ada backlog aktif.
+                      </td>
+                    </tr>
+                  ) : (
+                    tableYesterdayTasks.map((task, idx) => {
+                      const parsed = parseTasklist(task.description || '');
+                      const hasSubtasks = parsed.hasTasklist && parsed.total > 0;
+                      const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
+                      const isPending = task.isPending || task.status === 'Pending';
+                      const isInProgress = task.status === 'In Progress' || task.status === 'On Progress';
+                      const isExpanded = expandedTaskIds.has(task.id);
+                      const picList = parsePicList(task.assigneeNik, task.assigneeName);
+                      const durationInfo = getTaskDurationInfo(task, selectedDate);
+                      const progressPercent = calculateTaskProgress(task);
+                      const routineInfo = getTaskRoutineInfo(task, selectedDate);
+
+                      return (
+                        <React.Fragment key={task.id}>
+                          <tr
+                            draggable={true}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: task.id, fromColumn: 'progress' }));
+                              setDraggedLogbookTaskId(task.id);
+                              setDragSourceColumn('progress');
+                            }}
+                            onDragEnd={() => {
+                              setDraggedLogbookTaskId(null);
+                              setDragSourceColumn(null);
+                              setIsDragOverToday(false);
+                              setIsDragOverYesterday(false);
+                            }}
+                            className={`transition-colors group ${
+                              draggedLogbookTaskId === task.id ? 'opacity-40 bg-amber-50/50' : ''
+                            } ${
+                              isDone 
+                                ? isNotionLight ? 'bg-emerald-50/20 hover:bg-emerald-50/40' : 'bg-emerald-950/10 hover:bg-emerald-950/20'
+                                : isPending
+                                ? isNotionLight ? 'bg-amber-50/30 hover:bg-amber-50/50' : 'bg-amber-950/10 hover:bg-amber-950/20'
+                                : isNotionLight
+                                ? 'bg-white hover:bg-slate-50'
+                                : 'bg-[#191919] hover:bg-[#202020]'
+                            }`}
+                          >
+                            {/* Drag Handle */}
+                            <td className="text-center px-1 py-2 cursor-grab active:cursor-grabbing text-slate-400 hover:text-amber-600">
+                              <GripVertical className="w-3.5 h-3.5 mx-auto" />
+                            </td>
+
+                            {/* No */}
+                            <td className="text-center font-mono text-[11px] px-2 py-2.5 text-slate-500">
+                              {idx + 1}
+                            </td>
+
+                            {/* Kegiatan / Arahan Tugas */}
+                            <td className="px-3.5 py-2.5">
+                              <div className="flex items-start gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleExpand(task.id);
+                                  }}
+                                  className={`p-0.5 rounded transition-transform mt-0.5 cursor-pointer ${
+                                    isExpanded ? 'rotate-90 text-amber-600' : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                  }`}
+                                  title={isExpanded ? 'Tutup subtask checklist' : 'Buka subtask checklist'}
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+
+                                <div className="min-w-0 flex-1">
+                                  <div 
+                                    onClick={() => setSelectedTaskDetail(task)}
+                                    className="font-bold text-xs sm:text-sm cursor-pointer hover:text-amber-600 dark:hover:text-amber-400 hover:underline transition-colors flex items-center gap-1.5 flex-wrap"
+                                    style={{ color: isDone ? '#64748b' : isNotionLight ? '#0f172a' : '#f8fafc' }}
+                                  >
+                                    <span className={isDone ? 'line-through opacity-75' : ''}>{task.title}</span>
+                                    {hasSubtasks && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 font-bold shrink-0">
+                                        ✓ {parsed.completed}/{parsed.total}
+                                      </span>
+                                    )}
+                                    {task.bulletinPostId && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 shrink-0">
+                                        Buletin #{task.bulletinPostId}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Frekuensi / Cadence */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${routineInfo.color}`}>
+                                {routineInfo.label}
+                              </span>
+                            </td>
+
+                            {/* Status */}
+                            <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                                isDone 
+                                  ? 'bg-emerald-100 text-emerald-950 border-emerald-400' 
+                                  : isInProgress 
+                                  ? 'bg-amber-100 text-amber-950 border-amber-400' 
+                                  : 'bg-slate-100 text-slate-900 border-slate-300'
+                              }`}>
+                                {isDone ? <CheckCircle2 className="w-3 h-3 text-emerald-700" /> : <Clock className="w-3 h-3 text-amber-700" />}
+                                <span>{task.status}</span>
+                              </span>
+                            </td>
+
+                            {/* Prioritas */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                                task.priority === 'Urgent'
+                                  ? 'bg-rose-100 text-rose-950 border border-rose-400 animate-pulse'
+                                  : task.priority === 'High'
+                                  ? 'bg-amber-100 text-amber-950 border border-amber-400'
+                                  : task.priority === 'Low'
+                                  ? 'bg-slate-100 text-slate-800 border border-slate-300'
+                                  : 'bg-blue-100 text-blue-950 border border-blue-300'
+                              }`}>
+                                {task.priority}
+                              </span>
+                            </td>
+
+                            {/* PIC Pelaksana */}
+                            <td className="px-3 py-2.5">
+                              <div className="flex flex-wrap gap-1 items-center max-w-[180px]">
+                                {picList.map((p, pIdx) => (
+                                  <span 
+                                    key={pIdx}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
+                                    title={`${p.name} (${p.nik || '-'})`}
+                                  >
+                                    <span className="w-3.5 h-3.5 rounded-full bg-amber-600 text-white text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
+                                      {p.name.charAt(0).toUpperCase()}
+                                    </span>
+                                    <span className="truncate max-w-[90px]">{p.name}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+
+                            {/* Mulai & Durasi */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <div className="text-[11px] font-medium" title={`Mulai: ${durationInfo.displayStartDate}`}>
+                                <p className="font-bold text-slate-700 dark:text-slate-300">{durationInfo.durationLabel}</p>
+                                <p className="text-[10px] text-slate-500">Mulai: {durationInfo.displayStartDate}</p>
+                              </div>
+                            </td>
+
+                            {/* Progress */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5 w-24">
+                                <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-300 ${
+                                      isDone ? 'bg-emerald-500' : isInProgress ? 'bg-amber-500' : progressPercent > 0 ? 'bg-sky-500' : 'bg-slate-400'
+                                    }`}
+                                    style={{ width: `${progressPercent}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-400 min-w-[28px] text-right">
+                                  {progressPercent}%
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Aksi */}
+                            <td className="text-center px-2 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveTaskToToday(task.id)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white transition-all cursor-pointer shadow-2xs"
+                                  title="Jadwalkan kegiatan ini ke Planning Hari Ini"
+                                >
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                  <span>Planning</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyToNewTask(task)}
+                                  className="p-1 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
+                                  title="Salin tugas ini ke penugasan baru"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setTaskToDelete(task)}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                  title="Hapus Tugas"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Nested Subtask Checklist Dropdown Row */}
+                          {isExpanded && (
+                            <tr className={`${isNotionLight ? 'bg-slate-50/70' : 'bg-black/30'}`}>
+                              <td colSpan={10} className="px-6 py-3 border-b border-slate-200 dark:border-slate-800">
+                                <div className="space-y-2 max-w-4xl">
+                                  <div className="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-700">
+                                    <span className="font-bold text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                      <CheckSquare className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>Rincian Subtask ({parsed.completed}/{parsed.total})</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedTaskDetail(task)}
+                                      className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+                                    >
+                                      <span>Buka Panel Detail Notion</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </button>
+                                  </div>
+
+                                  {parsed.items && parsed.items.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      {parsed.items.map((item) => {
+                                        const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                                          ? item.notes
+                                          : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+                                        const noteCount = rawNotes.length;
+
+                                        return (
+                                          <div
+                                            key={item.index}
+                                            className={`flex items-center gap-2 p-1.5 px-2.5 rounded-lg border text-xs ${
+                                              item.checked
+                                                ? 'bg-slate-100/70 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
+                                                : isNotionLight
+                                                ? 'bg-white border-slate-300'
+                                                : 'bg-[#202020] border-slate-700'
+                                            }`}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={item.checked}
+                                              disabled={true}
+                                              className="w-3.5 h-3.5 rounded border-slate-400 text-teal-600 cursor-not-allowed opacity-75"
+                                            />
+
+                                            <span className={`flex-1 break-words ${item.checked ? 'line-through text-slate-400' : 'font-semibold text-slate-800 dark:text-slate-200'}`}>
+                                              {item.text}
+                                            </span>
+
+                                            {item.checkedDate && (
+                                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                                                {item.checkedDate}
+                                              </span>
+                                            )}
+
+                                            {noteCount > 0 && (
+                                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                                {noteCount} Catatan
+                                              </span>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-slate-500 italic">Tidak ada checklist terdaftar pada tugas ini.</p>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* 2. NOTION KANBAN BOARD VIEW (`viewMode === 'board'`)                      */}
+        {/* ========================================================================= */}
+        {viewMode === 'board' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+            {[
+              { statusKey: 'OPEN', label: 'Open', colorClass: 'border-t-sky-500 bg-sky-50/30 dark:bg-sky-950/10' },
+              { statusKey: 'ON PROGRESS', label: 'On Progress', colorClass: 'border-t-amber-500 bg-amber-50/30 dark:bg-amber-950/10' },
+              { statusKey: 'PENDING', label: 'Pending / Job Handover', colorClass: 'border-t-purple-500 bg-purple-50/30 dark:bg-purple-950/10' },
+              { statusKey: 'CLOSED', label: 'Closed / Selesai', colorClass: 'border-t-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/10' },
+            ].map(({ statusKey, label, colorClass }) => {
+              const allBoardTasks = [...filteredToday, ...displayedYesterdayTasks];
+              const colTasks = allBoardTasks.filter(t => {
+                const s = (t.status || '').toUpperCase();
+                if (statusKey === 'OPEN') return s === 'OPEN';
+                if (statusKey === 'ON PROGRESS') return s === 'IN PROGRESS' || s === 'ON PROGRESS';
+                if (statusKey === 'PENDING') return t.isPending || s === 'PENDING';
+                if (statusKey === 'CLOSED') return s === 'CLOSED' || s === 'RESOLVED' || s === 'DONE';
+                return false;
+              });
+
+              return (
+                <div 
+                  key={statusKey}
+                  className={`rounded-2xl border border-t-4 p-3.5 space-y-3 shadow-xs ${colorClass} ${
+                    isNotionLight ? 'bg-white border-slate-200' : 'bg-[#191919] border-[#334155]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+                    <span className="font-bold text-xs tracking-tight text-slate-800 dark:text-slate-200 uppercase">
+                      {label}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                      {colTasks.length}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5 max-h-[70vh] overflow-y-auto pr-1">
+                    {colTasks.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-slate-400 italic">
+                        Tidak ada kegiatan
+                      </div>
+                    ) : (
+                      colTasks.map((task) => {
+                        const parsed = parseTasklist(task.description || '');
+                        const hasSub = parsed.hasTasklist && parsed.total > 0;
+                        const durationInfo = getTaskDurationInfo(task, selectedDate);
+                        const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
+
+                        return (
+                          <div
+                            key={task.id}
+                            onClick={() => setSelectedTaskDetail(task)}
+                            className={`p-3 rounded-xl border transition-all cursor-pointer shadow-2xs hover:shadow-md hover:scale-[1.01] space-y-2 ${
+                              isNotionLight ? 'bg-white border-slate-200 hover:border-teal-500' : 'bg-[#222222] border-slate-700 hover:border-teal-500'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span className={`text-[10px] font-black px-1.5 py-0.2 rounded uppercase ${
+                                task.priority === 'Urgent' ? 'bg-rose-100 text-rose-950 border border-rose-300' :
+                                task.priority === 'High' ? 'bg-amber-100 text-amber-950 border border-amber-300' :
+                                'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+                              }`}>
+                                {task.priority}
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-500">
+                                {task.section}
+                              </span>
+                            </div>
+
+                            <p className={`font-bold text-xs leading-snug line-clamp-2 ${isDone ? 'line-through text-slate-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                              {task.title}
+                            </p>
+
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-500">
+                              <span>PIC: {task.assigneeName.split(' ')[0]}</span>
+                              {hasSub && (
+                                <span className="font-mono font-bold text-teal-600 dark:text-teal-400">
+                                  ✓ {parsed.completed}/{parsed.total}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* 3. NOTION CARDS LIST VIEW (`viewMode === 'list'`)                         */}
+        {/* ========================================================================= */}
+        {viewMode === 'list' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            {/* Column Kiri: Progres & Evaluasi Kemarin */}
+            <div className={`rounded-3xl p-5 space-y-4 border ${isNotionLight ? 'bg-white border-slate-200' : 'bg-[#191919] border-[#334155]'}`}>
+              <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+                <h3 className="font-black text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  <span>1. Progres & Evaluasi Kemarin ({displayedYesterdayTasks.length})</span>
+                </h3>
+              </div>
+              <div className="space-y-2.5">
+                {displayedYesterdayTasks.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic py-8 text-center">Nihil kegiatan.</p>
+                ) : (
+                  displayedYesterdayTasks.map(task => renderTaskCard(task, true, evalScope === 'yesterday', evalScope))
+                )}
+              </div>
+            </div>
+
+            {/* Column Kanan: Planning & Arahan Hari Ini */}
+            <div className={`rounded-3xl p-5 space-y-4 border ${isNotionLight ? 'bg-white border-slate-200' : 'bg-[#191919] border-[#334155]'}`}>
+              <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+                <h3 className="font-black text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
+                  <span>2. Planning & Arahan Hari Ini ({filteredToday.length})</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={openAssignModal}
+                  className="px-3 py-1 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tambah</span>
+                </button>
+              </div>
+              <div className="space-y-2.5">
+                {filteredToday.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic py-8 text-center">Belum ada tugas hari ini.</p>
+                ) : (
+                  filteredToday.map(task => renderTaskCard(task, false, false))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* SLIDE-OVER DETAIL DRAWER (Exact Notion Page View Experience)              */}
+        {/* ========================================================================= */}
+        {selectedTaskDetail && (
+          <div className="fixed inset-0 z-50 flex justify-end animate-in fade-in duration-200">
+            {/* Backdrop */}
+            <div 
+              onClick={() => setSelectedTaskDetail(null)}
+              className="absolute inset-0 bg-black/50 backdrop-blur-xs cursor-pointer"
+            />
+
+            {/* Drawer Panel */}
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className={`relative z-10 w-full max-w-2xl h-full shadow-2xl border-l flex flex-col overflow-hidden animate-in slide-in-from-right duration-250 ${
+                isNotionLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#191919] border-[#334155] text-slate-100'
+              }`}
+            >
+              {/* Drawer Top Navigation & Actions */}
+              <div className="p-4 border-b flex items-center justify-between border-slate-200 dark:border-slate-800 shrink-0">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                  <span className="p-1.5 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                    <ClipboardCheck className="w-4 h-4" />
+                  </span>
+                  <span>Log Book</span>
+                  <span>/</span>
+                  <span className="text-teal-600 dark:text-teal-400 font-bold">{selectedTaskDetail.section}</span>
+                  <span>/</span>
+                  <span>{selectedTaskDetail.pt}</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyToNewTask(selectedTaskDetail)}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
+                    title="Salin tugas ini ke penugasan baru"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = selectedTaskDetail;
+                      setSelectedTaskDetail(null);
+                      openEditModal(t);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-teal-600 transition-colors cursor-pointer"
+                    title="Edit Tugas"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTaskDetail(null)}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Drawer Scrollable Body */}
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+                {/* Title */}
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-black leading-snug tracking-tight text-slate-900 dark:text-slate-100">
+                    {selectedTaskDetail.title}
+                  </h2>
+                </div>
+
+                {/* Notion 2-Column Key-Value Properties Table */}
+                <div className="rounded-2xl border divide-y border-slate-200 dark:border-slate-800 divide-slate-100 dark:divide-slate-800/80 text-xs">
+                  {/* Status */}
+                  <div className="grid grid-cols-3 p-3 items-center">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                      Status
+                    </span>
+                    <div className="col-span-2">
+                      <NotionDropdownCell
+                        type="status"
+                        value={selectedTaskDetail.status}
+                        onChange={(newVal) => {
+                          handleStatusChange(selectedTaskDetail.id, newVal);
+                          setSelectedTaskDetail(prev => prev ? { ...prev, status: newVal } : null);
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Prioritas */}
+                  <div className="grid grid-cols-3 p-3 items-center">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
+                      Prioritas
+                    </span>
+                    <div className="col-span-2">
+                      <span className={`text-[11px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider ${
+                        selectedTaskDetail.priority === 'Urgent'
+                          ? 'bg-rose-100 text-rose-950 border border-rose-400'
+                          : selectedTaskDetail.priority === 'High'
+                          ? 'bg-amber-100 text-amber-950 border border-amber-400'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700'
+                      }`}>
+                        {selectedTaskDetail.priority}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* PIC Pelaksana */}
+                  <div className="grid grid-cols-3 p-3 items-center">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-slate-400" />
+                      PIC Pelaksana
+                    </span>
+                    <div className="col-span-2 flex flex-wrap gap-1.5">
+                      {parsePicList(selectedTaskDetail.assigneeNik, selectedTaskDetail.assigneeName).map((p, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20 font-bold text-xs">
+                          <span>{p.name}</span>
+                          {p.nik && <span className="opacity-75 font-mono text-[10px]">({p.nik})</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Frekuensi Cadence */}
+                  <div className="grid grid-cols-3 p-3 items-center">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                      Frekuensi
+                    </span>
+                    <div className="col-span-2">
+                      {(() => {
+                        const rInfo = getTaskRoutineInfo(selectedTaskDetail, selectedDate);
+                        return (
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${rInfo.color}`}>
+                            {rInfo.label} • {rInfo.windowDesc}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Mulai & Durasi */}
+                  <div className="grid grid-cols-3 p-3 items-center">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      Mulai & Durasi
+                    </span>
+                    <div className="col-span-2 text-xs font-semibold">
+                      {(() => {
+                        const dur = getTaskDurationInfo(selectedTaskDetail, selectedDate);
+                        return (
+                          <div className="space-y-0.5">
+                            <p className="font-bold text-slate-800 dark:text-slate-200">{dur.durationLabel}</p>
+                            <p className="text-[11px] text-slate-500">Mulai: {dur.displayStartDate}</p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Dokumen Buletin */}
+                  <div className="grid grid-cols-3 p-3 items-center">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-slate-400" />
+                      Buletin
+                    </span>
+                    <div className="col-span-2">
+                      {selectedTaskDetail.bulletinPostId ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-teal-700 bg-teal-50 dark:bg-teal-950/60 border border-teal-300 dark:border-teal-700 px-2 py-0.5 rounded-lg">
+                          Buletin #{selectedTaskDetail.bulletinPostId}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs italic">Belum terhubung ke dokumen Buletin</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Job Pending Handover */}
+                  {selectedTaskDetail.isPending && (
+                    <div className="grid grid-cols-3 p-3 items-center bg-amber-500/10">
+                      <span className="font-semibold text-amber-700 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        Job Pending
+                      </span>
+                      <div className="col-span-2 text-xs text-amber-900 dark:text-amber-200">
+                        <p className="font-bold">Dialihkan ke: {selectedTaskDetail.pendingPicName || '-'}</p>
+                        {selectedTaskDetail.pendingReason && <p className="text-[11px]">Alasan: {selectedTaskDetail.pendingReason}</p>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Subtask Checklist Section */}
+                {(() => {
+                  const parsed = parseTasklist(selectedTaskDetail.description || '');
+                  if (!parsed.hasTasklist || !parsed.items) return null;
+
+                  return (
+                    <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2">
+                          <CheckSquare className="w-4 h-4 text-teal-600" />
+                          <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">
+                            Checklist Subtask ({parsed.completed}/{parsed.total})
+                          </h4>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-teal-600 dark:text-teal-400">
+                          {Math.round((parsed.completed / parsed.total) * 100)}% Selesai
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {parsed.items.map((item) => {
+                          const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                            ? item.notes
+                            : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+
+                          return (
+                            <div
+                              key={item.index}
+                              className={`p-2.5 rounded-xl border flex items-center gap-2.5 transition-colors ${
+                                item.checked
+                                  ? 'bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
+                                  : 'bg-white dark:bg-[#222222] border-slate-300 dark:border-slate-700 shadow-2xs'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={item.checked}
+                                onChange={() => handleToggleSubtask(selectedTaskDetail, item.index)}
+                                className="w-4 h-4 rounded border-slate-400 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                              />
+                              <span className={`flex-1 text-xs break-words ${item.checked ? 'line-through text-slate-400' : 'font-semibold text-slate-800 dark:text-slate-200'}`}>
+                                {item.text}
+                              </span>
+                              {item.checkedDate && (
+                                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 shrink-0">
+                                  {item.checkedDate}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => openSubtaskNoteModal(selectedTaskDetail, item.index, item.text, rawNotes, false)}
+                                className={`p-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
+                                  rawNotes.length > 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                }`}
+                                title="Catatan Subtask"
+                              >
+                                <AlertCircle className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Deskripsi & Notulensi Tambahan */}
+                {selectedTaskDetail.description && (
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500">Deskripsi / Notulensi</h4>
+                    <div 
+                      className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#202020] text-xs leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(selectedTaskDetail.description) }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Drawer Bottom Actions */}
+              <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 shrink-0 bg-slate-50 dark:bg-slate-900">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const isToday = filteredToday.some(t => t.id === selectedTaskDetail.id);
+                    if (isToday) {
+                      handleMoveTaskToBacklog(selectedTaskDetail.id);
+                    } else {
+                      handleMoveTaskToToday(selectedTaskDetail.id);
+                    }
+                    setSelectedTaskDetail(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  {filteredToday.some(t => t.id === selectedTaskDetail.id) ? (
+                    <>
+                      <ArrowLeft className="w-4 h-4" />
+                      <span>Kembalikan ke Backlog</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight className="w-4 h-4" />
+                      <span>Jadwalkan ke Planning Hari Ini</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = selectedTaskDetail;
+                      setSelectedTaskDetail(null);
+                      openEditModal(t);
+                    }}
+                    className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = selectedTaskDetail;
+                      setSelectedTaskDetail(null);
+                      setTaskToDelete(t);
+                    }}
+                    className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                    title="Hapus Kegiatan"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}

@@ -259,13 +259,14 @@ export const submitPemantauanBatch = async (data: any) => {
   if (data.gasData) {
     Object.keys(data.gasData).forEach(gas => {
       const vals = data.gasData[gas];
-      if (vals.flow || vals.pressure) {
+      if (vals.flow || vals.pressure || vals.catatan) {
         items.push({
           kategori: 'GAS',
           lokasi: gas,
           flow: vals.flow,
           tekananGas: vals.pressure,
-          kebocoran: vals.leak
+          kebocoran: vals.leak,
+          catatan: vals.catatan || (gas.includes('Helium') ? data.catatan : '-')
         });
       }
     });
@@ -275,8 +276,13 @@ export const submitPemantauanBatch = async (data: any) => {
     inspektor: data.inspectorName,
     shift: data.shift,
     catatan: data.catatan,
-    foto: data.photoUrl || data.sigUrl, // using photoUrl if any, else sigUrl
-    items: items
+    foto: data.photoUrl || data.sigUrl || data.ttd, // using photoUrl if any, else sigUrl
+    ttd: data.ttd || data.sigUrl || data.photoUrl,
+    items: items,
+    tanggal: data.tanggal,
+    jam: data.jam,
+    forceOverwrite: data.forceOverwrite,
+    isOperationalDate: data.isOperationalDate
   };
 
   const res = await fetch('/api/pemantauan', { 
@@ -284,6 +290,29 @@ export const submitPemantauanBatch = async (data: any) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload) 
   });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({ error: 'Gagal submit pemantauan' }));
+    throw new Error(errData.error || 'Gagal submit pemantauan');
+  }
+  return await res.json();
+};
+
+export const updatePemantauanSignature = async (payload: {
+  ids?: number[];
+  tanggal?: string;
+  inspektor?: string;
+  sigUrl: string;
+  updateAllForInspector?: boolean;
+}) => {
+  const res = await fetch('/api/pemantauan/update-signature', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({ error: 'Gagal update tanda tangan' }));
+    throw new Error(errData.error || 'Gagal update tanda tangan');
+  }
   return await res.json();
 };
 
@@ -294,16 +323,49 @@ export const getRekapanPemantauan = async (tglMulai: string, tglAkhir: string) =
     return data;
   } catch (e) {
     console.error(e); return [];
-}
+  }
 };
 
-export const buatPdfRekapan = async (tglMulai: string, tglAkhir: string, tipeLaporan: string) => {
-  const res = await fetch('/api/pdf/generate', {
-    method: 'POST',
+export const updatePemantauanRecord = async (id: number | string, updateData: any) => {
+  const res = await fetch(`/api/pemantauan/${id}`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tglMulai, tglAkhir, tipeLaporan })
+    body: JSON.stringify(updateData)
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Gagal update record pemantauan' }));
+    throw new Error(err.error || 'Gagal update record');
+  }
   return await res.json();
+};
+
+export const deletePemantauanRecord = async (id: number | string) => {
+  const res = await fetch(`/api/pemantauan/${id}`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Gagal menghapus record pemantauan' }));
+    throw new Error(err.error || 'Gagal menghapus record');
+  }
+  return await res.json();
+};
+
+export const buatPdfRekapan = async (tglMulai: string, tglAkhir: string, tipeLaporan: string, periodeLabel?: string) => {
+  try {
+    const res = await fetch('/api/pdf/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tglMulai, tglAkhir, tipeLaporan, periodeLabel })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: `HTTP ${res.status}: Gagal memproses permintaan PDF` }));
+      return { status: 'error', message: err.message || err.error || 'Gagal membuat PDF' };
+    }
+    return await res.json();
+  } catch (err: any) {
+    console.error('buatPdfRekapan fetch error:', err);
+    return { status: 'error', message: err.message || 'Koneksi ke server terputus saat membuat PDF.' };
+  }
 };
 
 export const getDowntimeRecords = async () => {

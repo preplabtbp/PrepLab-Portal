@@ -12,12 +12,15 @@ const TABUNG_GAS = ["Tabung Gas Zetium A (Argon)", "Tabung Gas Zetium B (Argon)"
 
 export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorName: string, inspectorNik: string }) {
   const [mode, setMode] = useState<'SUHU' | 'GAS'>('SUHU');
-  const [shift, setShift] = useState('');
+  const [shift, setShift] = useState(() => {
+    const h = new Date().getHours();
+    return (h >= 6 && h < 18) ? 'Pagi' : 'Malam';
+  });
   const [catatan, setCatatan] = useState('');
   
   // Data State
   const [suhuData, setSuhuData] = useState<Record<string, { suhu: string, kel: string}>>({});
-  const [gasData, setGasData] = useState<Record<string, { flow: string, pressure: string, leak: 'Y' | 'N' }>>({});
+  const [gasData, setGasData] = useState<Record<string, { flow: string, pressure: string, leak: 'Y' | 'N', catatan?: string }>>({});
   
   const [loading, setLoading] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -33,7 +36,7 @@ export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorNam
     }));
   };
 
-  const handleGasChange = (gas: string, field: 'flow' | 'pressure' | 'leak', val: string) => {
+  const handleGasChange = (gas: string, field: 'flow' | 'pressure' | 'leak' | 'catatan', val: string) => {
     setGasData(prev => ({
       ...prev,
       [gas]: { ...prev[gas], leak: prev[gas]?.leak || 'N', [field]: val }
@@ -136,6 +139,11 @@ export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorNam
                 ]}
                 required
               />
+              {new Date().getHours() < 6 && (
+                <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5 mt-3 leading-relaxed">
+                  ⏰ <strong>Cut-Off 06:00 WIT:</strong> Sesuai jam operasional, input dini hari sebelum jam 6 pagi otomatis tercatat ke Shift Malam hari operasional kemarin.
+                </p>
+              )}
            </Card>
         </div>
         
@@ -255,9 +263,10 @@ export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorNam
                 <thead>
                   <tr className="bg-slate-50/50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     <th className="px-5 py-3">Tabung Gas</th>
-                    <th className="px-3 py-3 w-28">Flow</th>
-                    <th className="px-3 py-3 w-28">Pressure</th>
-                    <th className="px-5 py-3 w-28 text-center">Leakage</th>
+                    <th className="px-3 py-3 w-24">Flow</th>
+                    <th className="px-3 py-3 w-24">Pressure</th>
+                    <th className="px-3 py-3 w-24 text-center">Leakage</th>
+                    <th className="px-4 py-3 min-w-[160px]">Keterangan</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -265,16 +274,25 @@ export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorNam
                     <tr key={gas} className="hover:bg-slate-50/50 transition-colors">
                        <td className="px-5 py-3.5 font-semibold text-slate-700 text-sm whitespace-nowrap">{gas}</td>
                        <td className="px-3 py-2.5">
-                          <input type="number" step="0.1" value={gasData[gas]?.flow || ''} onChange={e => handleGasChange(gas, 'flow', e.target.value)} placeholder="L/m" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-semibold focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all focus:bg-white text-center" />
+                          <input type="number" step="0.1" value={gasData[gas]?.flow || ''} onChange={e => handleGasChange(gas, 'flow', e.target.value)} placeholder="L/m" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2.5 text-sm font-semibold focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all focus:bg-white text-center" />
                        </td>
                        <td className="px-3 py-2.5">
-                          <input type="number" step="1" value={gasData[gas]?.pressure || ''} onChange={e => handleGasChange(gas, 'pressure', e.target.value)} placeholder="psi" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-semibold focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all focus:bg-white text-center" />
+                          <input type="number" step="1" value={gasData[gas]?.pressure || ''} onChange={e => handleGasChange(gas, 'pressure', e.target.value)} placeholder="psi" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2.5 text-sm font-semibold focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all focus:bg-white text-center" />
                        </td>
-                       <td className="px-5 py-2.5 text-center">
-                           <div className="inline-flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-                              <button onClick={() => handleGasChange(gas, 'leak', 'Y')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${gasData[gas]?.leak === 'Y' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`}>Y</button>
-                              <button onClick={() => handleGasChange(gas, 'leak', 'N')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${(gasData[gas]?.leak || 'N') === 'N' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`}>N</button>
-                           </div>
+                       <td className="px-3 py-2.5 text-center">
+                            <div className="inline-flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                              <button onClick={() => handleGasChange(gas, 'leak', 'Y')} className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition-all ${gasData[gas]?.leak === 'Y' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`}>Y</button>
+                              <button onClick={() => handleGasChange(gas, 'leak', 'N')} className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition-all ${(gasData[gas]?.leak || 'N') === 'N' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`}>N</button>
+                            </div>
+                       </td>
+                       <td className="px-4 py-2.5">
+                          <input
+                            type="text"
+                            value={gasData[gas]?.catatan || ''}
+                            onChange={e => handleGasChange(gas, 'catatan', e.target.value)}
+                            placeholder={gas.includes('Helium') ? "Cth: Ganti gas helium" : "Keterangan (opsional)"}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs font-medium focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all focus:bg-white"
+                          />
                        </td>
                     </tr>
                   ))}
@@ -299,12 +317,25 @@ export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorNam
                      </div>
                    </div>
 
-                   <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                   <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                      <label className="text-xs font-bold text-slate-600">Ada Kebocoran?</label>
                      <div className="inline-flex bg-slate-100 p-1 rounded-lg border border-slate-200">
                         <button onClick={() => handleGasChange(gas, 'leak', 'Y')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${gasData[gas]?.leak === 'Y' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`}>Y</button>
                         <button onClick={() => handleGasChange(gas, 'leak', 'N')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${(gasData[gas]?.leak || 'N') === 'N' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`}>N</button>
                      </div>
+                   </div>
+
+                   <div>
+                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                       Keterangan Khusus {gas.includes('Helium') ? '(Helium)' : ''}
+                     </label>
+                     <input
+                       type="text"
+                       value={gasData[gas]?.catatan || ''}
+                       onChange={e => handleGasChange(gas, 'catatan', e.target.value)}
+                       placeholder={gas.includes('Helium') ? "Cth: Ganti tabung gas helium" : "Keterangan (opsional)"}
+                       className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all focus:bg-white"
+                     />
                    </div>
                 </div>
               ))}

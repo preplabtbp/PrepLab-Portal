@@ -10,7 +10,7 @@ import {
   mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi,
   developerUsers, communityQuotes, rekapManualOverrides, ktaReports, inspectionProofs
 } from "../../src/db/schema.js";
-import { generatePdfFromTemplate, drive } from '../../google-services.js';
+import { generatePdfFromTemplate, generateMonitoringPdfWithDynamicTable, drive } from '../../google-services.js';
 import { 
   sendWebPush, getUniverse, uploadFileToDrive, syncBulletinToAgenda, 
   getNotificationTargets, getTableObj, sanitizePayload 
@@ -2181,25 +2181,39 @@ router.get("/api/gallery", async (req, res) => {
 
 router.post("/api/pdf/generate", async (req, res) => {
     try {
-      const { tglMulai, tglAkhir, tipeLaporan } = req.body;
+      const { tglMulai, tglAkhir, tipeLaporan, periodeLabel } = req.body;
+      const cleanTipe = (tipeLaporan || '').toUpperCase().trim();
       let data = await db.select().from(pemantauan);
       
       // Filter by date
       if (tglMulai && tglAkhir) {
-        const start = new Date(tglMulai);
-        const end = new Date(tglAkhir);
-        end.setHours(23, 59, 59, 999);
+        const cleanStart = tglMulai.trim();
+        const cleanEnd = tglAkhir.trim();
         data = data.filter(d => {
-          const dDate = new Date(d.tanggal || (d as any).date);
+          const tgl = (d.tanggal || '').trim();
+          if (!tgl) return false;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(tgl) && /^\d{4}-\d{2}-\d{2}$/.test(cleanStart) && /^\d{4}-\d{2}-\d{2}$/.test(cleanEnd)) {
+            return tgl >= cleanStart && tgl <= cleanEnd;
+          }
+          const dDate = new Date(tgl);
+          const start = new Date(cleanStart);
+          const end = new Date(cleanEnd);
+          end.setHours(23, 59, 59, 999);
           return dDate >= start && dDate <= end;
         });
       }
       
-      // Filter by type
-      if (tipeLaporan === 'SUHU') {
-        data = data.filter(d => d.kategori === 'Suhu & Kelembapan');
-      } else if (tipeLaporan === 'GAS') {
-        data = data.filter(d => d.kategori === 'Gas' || d.kategori === 'Gas Medis');
+      // Filter by type (case-insensitive & matches 'GAS', 'SUHU', etc.)
+      if (cleanTipe === 'SUHU') {
+        data = data.filter(d => {
+          const k = (d.kategori || '').toUpperCase();
+          return k === 'SUHU' || k.includes('SUHU') || k.includes('KELEMBAPAN');
+        });
+      } else if (cleanTipe === 'GAS') {
+        data = data.filter(d => {
+          const k = (d.kategori || '').toUpperCase();
+          return k === 'GAS' || k.includes('GAS');
+        });
       }
 
       if (data.length === 0) {
@@ -2207,15 +2221,15 @@ router.post("/api/pdf/generate", async (req, res) => {
       }
 
       // Group by location
-      const dataPerLokasi = {};
+      const dataPerLokasi: Record<string, any[]> = {};
       data.forEach(row => {
-        const loc = (row as any).lokasi || '-';
+        const loc = row.lokasiArea || (row as any).lokasi || '-';
         if (!dataPerLokasi[loc]) dataPerLokasi[loc] = [];
         dataPerLokasi[loc].push(row);
       });
 
       // Fetch settings from DB for Template IDs
-      const settingsObj = {};
+      const settingsObj: Record<string, string> = {};
       const allSettings = await db.select().from(appSettings);
       allSettings.forEach(s => {
         settingsObj[s.settingKey] = s.settingValue || '';
@@ -2223,93 +2237,173 @@ router.post("/api/pdf/generate", async (req, res) => {
 
       const TEMPLATE_SUHU_ID = settingsObj['INSPECTION_SUHU_TEMPLATE_DOC_ID'] || '1NEmvv2ZzVICoU_3TZWsdfIQNqc2pq6gLZnJHNFLbezk';
       const TEMPLATE_GAS_ID = settingsObj['INSPECTION_GAS_TEMPLATE_DOC_ID'] || '1EzTAqn_8Xm0zL3Eo9kqMrbWT-GAGDVuwAVXP8kiUY44';
-      const FOLDER_ID = settingsObj['INSPECTION_PDF_DRIVE_FOLDER_ID'] || process.env.GOOGLE_DRIVE_FOLDER_ID || '1hRG-NQ5GWCkzHCSjwJw7kIaDcS7l3_ij';
+      const FOLDER_ID = settingsObj['INSPECTION_PDF_DRIVE_FOLDER_ID'] || process.env.GOOGLE_DRIVE_FOLDER_ID || '1mit_4h0qI80mLOa-uE8TBGo6RY-_-PKW';
 
-      const pdfLinks = [];
-      const parts = tglMulai.split("-");
+      const pdfLinks: Array<{ name: string; nama: string; url: string }> = [];
+      const parts = (tglMulai || '').split("-");
       const namaBulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
       const bulanTeks = parts.length === 3 ? (namaBulan[parseInt(parts[1], 10) - 1] + " " + parts[0]) : tglMulai;
       const periodeTeks = tglMulai + " s.d " + tglAkhir;
 
-      for (const lokasi in dataPerLokasi) {
-        const rows = dataPerLokasi[lokasi];
-        const templateId = (tipeLaporan === "SUHU") ? TEMPLATE_SUHU_ID : TEMPLATE_GAS_ID;
-        
-        let instr = lokasi;
-        let gasType = "-";
-        
-        if (tipeLaporan === "GAS") {
-           if (lokasi.includes("Zetium A")) { instr = 'Zetium "Panalytical" (A)'; gasType = "Argon Mixture Methane 10% P10"; }
-           else if (lokasi.includes("Zetium B")) { instr = 'Zetium "Panalytical" (B)'; gasType = "Argon Mixture Methane 10% P10"; }
-           else if (lokasi.includes("Epsilon C")) { instr = 'Epsilon "Panalytical" (C)'; gasType = "Helium"; }
-           else { instr = lokasi.replace("Tabung Gas", "").trim(); }
+      const formatDateIndo = (tglStr: string) => {
+        if (!tglStr) return "-";
+        const m = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
+        const p = tglStr.split("-");
+        if (p.length === 3) {
+          const y = p[0].length === 4 ? p[0].substring(2) : p[0];
+          const monIdx = parseInt(p[1], 10) - 1;
+          return `${p[2]}-${m[monIdx] || p[1]}-${y}`;
         }
+        const dt = new Date(tglStr);
+        if (!isNaN(dt.getTime())) {
+          return `${dt.getDate()}-${m[dt.getMonth()]}-${dt.getFullYear().toString().substring(2)}`;
+        }
+        return tglStr;
+      };
 
-        // We join the values with newlines so they look like a table column
-        const replacements = {};
-        
-        if (tipeLaporan === "SUHU") {
-           replacements['<<Ruangan>>'] = lokasi;
-           replacements['<<Periode>>'] = periodeTeks;
-           
-           replacements['<<Tanggal>>'] = rows.map(d => {
-             const dt = new Date(d.tanggal || (d as any).date);
-             const m = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
-             return dt.getDate() + "-" + m[dt.getMonth()] + "-" + dt.getFullYear().toString().substring(2);
-           }).join("");
-           
-           replacements['<<Shift>>'] = rows.map(d => d.shift || "-").join("");
-           replacements['<<Petugas>>'] = rows.map(d => d.inspectorName || "-").join("");
-           
-           replacements['<<Jam>>'] = rows.map(d => {
-             const dt = new Date(d.tanggal || (d as any).date);
-             return dt.getHours().toString().padStart(2, '0') + ":" + dt.getMinutes().toString().padStart(2, '0');
-           }).join("");
-           
-           replacements['<<Suhu>>'] = rows.map(d => d.suhu || "-").join("");
-           replacements['<<Kelembapan>>'] = rows.map(d => d.kelembapan ? (d.kelembapan + "") : "-").join("");
-           replacements['<<TTD>>'] = rows.map(d => "").join("");
-           
-        } else {
-           replacements['<<Instrument>>'] = instr;
-           replacements['<<TipeGas>>'] = gasType;
-           replacements['<<Bulan>>'] = bulanTeks;
-           
-           replacements['<<No>>'] = rows.map((_, i) => (i+1).toString()).join("");
-           
-           replacements['<<Date>>'] = rows.map(d => {
-             const dt = new Date(d.tanggal || (d as any).date);
-             const m = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
-             const dateStr = dt.getDate() + "-" + m[dt.getMonth()] + "-" + dt.getFullYear().toString().substring(2);
-             const timeStr = dt.getHours().toString().padStart(2, '0') + ":" + dt.getMinutes().toString().padStart(2, '0');
-             return dateStr + "" + timeStr;
-           }).join("");
-           
-           replacements['<<Flow>>'] = rows.map(d => d.flow || "-").join("");
-           replacements['<<Pressure>>'] = rows.map(d => d.tekananGas || "-").join("");
-           replacements['<<Shift>>'] = rows.map(d => d.shift || "-").join("");
-           replacements['<<PIC>>'] = rows.map(d => d.inspectorName || "-").join("");
-           replacements['<<Remark>>'] = rows.map(d => d.notes || "-").join("");
-           replacements['<<TTD>>'] = rows.map(d => "").join("");
-           
-           replacements['<<Y>>'] = rows.map(d => (d.kebocoran === "Y" || d.kebocoran === "Ya") ? "V" : "-").join("");
-           replacements['<<N>>'] = rows.map(d => (d.kebocoran === "N" || d.kebocoran === "Tidak") ? "V" : "-").join("");
+      const formatJamPadded = (j: string) => {
+        if (!j) return '';
+        const match = j.trim().match(/^(\d{1,2}):(\d{1,2})/);
+        if (match) {
+          return `${match[1].padStart(2, '0')}:${match[2].padStart(2, '0')}`;
         }
-        
-        const safeName = lokasi.replace(/[^a-zA-Z0-9_]/g, '_'); 
-        const targetName = "Laporan_Pemantauan_" + tipeLaporan + "_" + safeName;
-        
-        // Use our google-services function
-        const pdfRes = await generatePdfFromTemplate(
-           templateId,
-           FOLDER_ID,
-           replacements,
-           targetName
-        );
-        
-        if (pdfRes.success) {
-           pdfLinks.push({ name: lokasi, url: pdfRes.pdfUrl });
+        return j.trim();
+      };
+
+      const lokasiList = Object.keys(dataPerLokasi);
+      const results = await Promise.allSettled(
+        lokasiList.map(async (lokasi) => {
+          const rows = dataPerLokasi[lokasi];
+          // Sort chronologically by date, shift, padded time, and id
+          const parseRowSortKey = (r: any) => {
+            const tgl = (r.tanggal || '').trim();
+            const shiftStr = String(r.shift || '').toLowerCase();
+            let sPriority = 2;
+            if (shiftStr.includes('pagi') || shiftStr.includes('ds') || shiftStr === '1') sPriority = 1;
+            else if (shiftStr.includes('siang') || shiftStr === '2') sPriority = 2;
+            else if (shiftStr.includes('malam') || shiftStr.includes('ns') || shiftStr === '3') sPriority = 3;
+
+            let jamPadded = '12:00';
+            if (r.jam && typeof r.jam === 'string') {
+              const m = r.jam.trim().match(/^(\d{1,2}):(\d{1,2})/);
+              if (m) {
+                jamPadded = `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}`;
+              }
+            } else if (sPriority === 1) {
+              jamPadded = '07:00';
+            } else if (sPriority === 3) {
+              jamPadded = '19:00';
+            }
+
+            return `${tgl}__${sPriority}__${jamPadded}__${String(r.id || '').padStart(8, '0')}`;
+          };
+
+          rows.sort((a, b) => parseRowSortKey(a).localeCompare(parseRowSortKey(b)));
+
+          const templateId = (cleanTipe === "SUHU") ? TEMPLATE_SUHU_ID : TEMPLATE_GAS_ID;
+          
+          let instr = lokasi;
+          let gasType = "-";
+          
+          if (cleanTipe === "GAS") {
+             if (lokasi.includes("Zetium A")) { instr = 'Zetium "Panalytical" (A)'; gasType = "Argon Mixture Methane 10% P10"; }
+             else if (lokasi.includes("Zetium B")) { instr = 'Zetium "Panalytical" (B)'; gasType = "Argon Mixture Methane 10% P10"; }
+             else if (lokasi.includes("Epsilon C")) { instr = 'Epsilon "Panalytical" (C)'; gasType = "Helium"; }
+             else { instr = lokasi.replace("Tabung Gas", "").trim(); }
+          }
+
+          const headerReplacements: Record<string, string> = {};
+          let formattedRows: any[] = [];
+          
+          // Determine header period text
+          let displayHeaderPeriod = bulanTeks;
+          if (periodeLabel && typeof periodeLabel === 'string' && periodeLabel.trim()) {
+            displayHeaderPeriod = periodeLabel.replace(/_/g, ' ');
+          }
+
+          if (cleanTipe === "SUHU") {
+             headerReplacements['<<Ruangan>>'] = lokasi;
+             headerReplacements['<<Periode>>'] = displayHeaderPeriod || periodeTeks;
+
+             formattedRows = rows.map(d => ({
+               tgl: formatDateIndo(d.tanggal),
+               shift: d.shift || "-",
+               petugas: d.inspektorPetugas || (d as any).inspectorName || "-",
+               jam: formatJamPadded(d.jam || ""),
+               suhu: d.suhuCelcius || (d as any).suhu || "-",
+               kel: d.kelembapanPersen || (d as any).kelembapan || "-",
+               ttd: (d.ttd || d.foto) ? "✓ TTD" : "-",
+               sigUrl: d.ttd || d.foto || ""
+             }));
+          } else {
+             headerReplacements['<<Instrument>>'] = instr;
+             headerReplacements['<<TipeGas>>'] = gasType;
+             headerReplacements['<<Bulan>>'] = displayHeaderPeriod;
+             headerReplacements['<<Month>>'] = displayHeaderPeriod;
+             headerReplacements['<<Periode>>'] = displayHeaderPeriod;
+
+             formattedRows = rows.map(d => {
+               const leak = (d.kebocoranYn || (d as any).kebocoran || '').toUpperCase();
+               return {
+                 tgl: formatDateIndo(d.tanggal),
+                 jam: formatJamPadded(d.jam || ""),
+                 flow: d.flowGas || (d as any).flow || "-",
+                 pressure: d.tekananGasPsi || (d as any).tekananGas || "-",
+                 shift: d.shift || "-",
+                 pic: d.inspektorPetugas || (d as any).inspectorName || "-",
+                 remark: d.catatanRemark || (d as any).notes || "-",
+                 y: (leak === "Y" || leak === "YA") ? "V" : "-",
+                 n: (leak === "N" || leak === "TIDAK") ? "V" : "-",
+                 ttd: (d.ttd || d.foto) ? "✓ TTD" : "-",
+                 sigUrl: d.ttd || d.foto || ""
+               };
+             });
+          }
+          
+          const safeName = lokasi.replace(/[^a-zA-Z0-9_]/g, '_').replace(/__+/g, '_'); 
+
+          // Generate clean period suffix for PDF filename
+          let periodSuffix = '';
+          if (periodeLabel && typeof periodeLabel === 'string' && periodeLabel.trim()) {
+            periodSuffix = periodeLabel.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+          } else if (bulanTeks) {
+            periodSuffix = bulanTeks.replace(/[^a-zA-Z0-9_-]/g, '_');
+          } else if (tglMulai && tglAkhir) {
+            periodSuffix = `${tglMulai}_sd_${tglAkhir}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+          }
+
+          const targetName = `Laporan_Pemantauan_${cleanTipe}_${safeName}${periodSuffix ? '_' + periodSuffix : ''}`;
+          const displayLabel = periodSuffix ? `${lokasi} (${periodSuffix.replace(/_/g, ' ')})` : lokasi;
+          
+          const pdfRes = await generateMonitoringPdfWithDynamicTable({
+             templateDocId: templateId,
+             folderId: FOLDER_ID,
+             outputFileName: targetName,
+             headerReplacements,
+             tipe: cleanTipe as 'SUHU' | 'GAS',
+             tableRows: formattedRows
+          });
+          
+          if (pdfRes.success) {
+             return { name: displayLabel, nama: displayLabel, url: pdfRes.pdfUrl };
+          }
+          return null;
+        })
+      );
+
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled' && res.value) {
+          pdfLinks.push(res.value);
+        } else if (res.status === 'rejected') {
+          console.error(`Gagal membuat PDF untuk ${lokasiList[idx]}:`, res.reason?.message || res.reason);
         }
+      });
+
+      if (pdfLinks.length === 0) {
+        return res.status(500).json({
+          status: "error",
+          message: "Gagal membuat PDF ke Google Drive. Pastikan kredensial Google Drive aktif dan ID Template valid."
+        });
       }
 
       res.json({
@@ -2318,7 +2412,7 @@ router.post("/api/pdf/generate", async (req, res) => {
         links: pdfLinks
       });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating PDF:', error);
       res.status(500).json({ status: "error", message: error.message });
     }

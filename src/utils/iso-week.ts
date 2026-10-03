@@ -122,3 +122,22 @@ export function getYearISOWeeksList(year: number = new Date().getFullYear()): Ar
   }
   return list;
 }
+
+export const INDONESIAN_MONTHS = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+
+export function getYearMonthsList(year: number = new Date().getFullYear()): Array<{ value: string; label: string; monthNum: number; year: number }> {
+  return INDONESIAN_MONTHS.map((name, idx) => {
+    const monthNum = idx + 1;
+    const mm = String(monthNum).padStart(2, '0');
+    return {
+      value: `month_${year}_${mm}`,
+      label: `🗓️ ${name} ${year}`,
+      monthNum,
+      year
+    };
+  });
+}
+

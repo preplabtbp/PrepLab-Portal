@@ -125,6 +125,8 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
 
   const mobileViewUrl1 = getMobileViewUrl(pdfUrl);
   const previewUrl1 = getPreviewUrl(pdfUrl);
+  const fallbackPdfUrl = data.id ? `/api/inspections/${data.id}/pdf?pt=tbp` : null;
+  const downloadUrl1 = mobileViewUrl1 || fallbackPdfUrl;
 
   const mobileViewUrl2 = getMobileViewUrl(linkPdf2);
   const previewUrl2 = getPreviewUrl(linkPdf2);
@@ -262,7 +264,8 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
                     rel="noopener noreferrer"
                     className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md shadow-amber-500/25 transition-all transform active:scale-98 cursor-pointer text-center"
                   >
-                    <span>Buka Form General Submit K3</span>
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Submit General Inspection</span>
                     <ExternalLink className="w-4 h-4" />
                   </a>
 
@@ -300,16 +303,16 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
 
             {/* Primary Document (TBP / Universal / APD) */}
             <div className="flex flex-col sm:flex-row gap-2 pt-1">
-              {mobileViewUrl1 ? (
+              {downloadUrl1 ? (
                 <>
                   <a
-                    href={mobileViewUrl1}
+                    href={downloadUrl1}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm transition-all transform active:scale-98 cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
-                    <span>Buka / Unduh PDF {linkPdf2 ? '(TBP)' : 'Laporan'}</span>
+                    <span>Download PDF Laporan {linkPdf2 ? '(TBP)' : ''}</span>
                   </a>
 
                   {previewUrl1 && (
@@ -327,9 +330,9 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
 
                   <button
                     type="button"
-                    onClick={() => handleCopyPdfLink(mobileViewUrl1 || pdfUrl || '', 1)}
+                    onClick={() => handleCopyPdfLink(downloadUrl1, 1)}
                     className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-[var(--border-main,#cbd5e1)] bg-[var(--card-bg,#ffffff)] text-[var(--text-main,#334155)] hover:bg-slate-100 font-semibold text-xs transition-colors cursor-pointer"
-                    title="Salin Link Google Drive PDF"
+                    title="Salin Link Dokumen PDF"
                   >
                     {copiedPdf1 ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                     <span>{copiedPdf1 ? 'Tersalin' : 'Salin Link'}</span>

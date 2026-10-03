@@ -27,6 +27,7 @@ import {
   isThisISOWeek, 
   isLastISOWeek, 
   getYearISOWeeksList, 
+  getYearMonthsList,
   getISOWeekRange,
   formatISOWeekLabel 
 } from '../utils/iso-week';
@@ -78,6 +79,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   const ITEMS_PER_PAGE = 20;
 
   const isoWeeksList = useMemo(() => getYearISOWeeksList(new Date().getFullYear()), []);
+  const monthsList = useMemo(() => getYearMonthsList(new Date().getFullYear()), []);
 
   // Reset pagination to page 1 whenever any filter or search changes
   useEffect(() => {
@@ -186,6 +188,28 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
       filtered = filtered.filter(wo => wo.date && new Date(wo.date) >= start);
+    } else if (period === 'last_month') {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      filtered = filtered.filter(wo => {
+        if (!wo.date) return false;
+        const d = new Date(wo.date);
+        return d >= start && d <= end;
+      });
+    } else if (period.startsWith('month_')) {
+      const parts = period.split('_');
+      const targetYear = parseInt(parts[1], 10);
+      const targetMonth = parseInt(parts[2], 10);
+      if (!isNaN(targetYear) && !isNaN(targetMonth)) {
+        const start = new Date(targetYear, targetMonth - 1, 1);
+        const end = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
+        filtered = filtered.filter(wo => {
+          if (!wo.date) return false;
+          const d = new Date(wo.date);
+          return d >= start && d <= end;
+        });
+      }
     } else if (period === 'last_30_days') {
       const past = new Date();
       past.setDate(past.getDate() - 30);
@@ -929,7 +953,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
               className="text-[10px] sm:text-[11px] font-bold block mb-1 uppercase tracking-wide"
               style={{ color: 'var(--text-main, #0f172a)' }}
             >
-              Rentang Waktu
+              Filter Otomatis / Waktu
             </label>
             <select
               value={filterPeriod}
@@ -941,16 +965,26 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                 borderColor: 'var(--border-main, #CBD5E1)'
               }}
             >
-              <optgroup label="⚡ Filter Cepat & Minggu ISO">
+              <optgroup label="⚡ Filter Cepat">
                 <option value="all" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>📅 Semua Waktu</option>
-                <option value="this_iso_week" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⚡ Minggu ISO Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
-                <option value="last_iso_week" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⏮️ Minggu ISO Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
-                <option value="this_month" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>🗓️ Bulan Ini (Mulai Tgl 1)</option>
                 <option value="last_30_days" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⏱️ 30 Hari Terakhir</option>
                 <option value="this_year" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>📆 Tahun Berjalan ({new Date().getFullYear()})</option>
                 <option value="custom" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>🎯 Kustom Rentang Tanggal...</option>
               </optgroup>
-              <optgroup label="📋 Pilih Spesifik Minggu ISO">
+              <optgroup label="📅 Filter Bulanan">
+                <option value="this_month" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>📅 Bulan Ini</option>
+                <option value="last_month" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⏮️ Bulan Lalu</option>
+                {monthsList.map(m => (
+                  <option key={m.value} value={m.value} style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>
+                    {m.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="⚡ Minggu ISO">
+                <option value="this_iso_week" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⚡ Minggu ISO Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
+                <option value="last_iso_week" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⏮️ Minggu ISO Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
+              </optgroup>
+              <optgroup label="📋 Daftar Spesifik Minggu ISO">
                 {isoWeeksList.map(iw => (
                   <option key={iw.value} value={iw.value} style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>
                     {iw.label}

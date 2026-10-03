@@ -1262,6 +1262,120 @@ router.post("/api/admin/inspections/:id/regenerate-pdf", async (req, res) => {
     }
 });
 
+// ── DELETE INSPECTION BY ID ──────────────────────────────────────────
+router.delete("/api/inspections/:id", async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const id = parseInt(rawId, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: "ID inspeksi tidak valid" });
+    }
+
+    const existing = await db.select().from(inspections).where(eq(inspections.id, id)).limit(1);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: "Laporan inspeksi tidak ditemukan" });
+    }
+
+    const inspRecord = existing[0];
+    const inspDate = inspRecord.date ? new Date(inspRecord.date) : new Date();
+    const weekTag = getISOWeekTagForSchedule(inspDate);
+
+    // 1. Delete inspection from DB
+    await db.delete(inspections).where(eq(inspections.id, id));
+
+    // 2. Also clean related inspection_proofs for this week & inspector to ensure clean rekap
+    let inspName = (inspRecord.inspectorName || '').toLowerCase().trim();
+    let dataFObj: any = {};
+    if (inspRecord.dataF && typeof inspRecord.dataF === 'string') {
+      try { dataFObj = JSON.parse(inspRecord.dataF); } catch (e) {}
+    }
+    const insp1 = (dataFObj.insp1 || inspName).toLowerCase().trim();
+
+    const proofs = await db.select().from(inspectionProofs).where(eq(inspectionProofs.week, weekTag));
+    for (const p of proofs) {
+      const pName = (p.name || '').toLowerCase().trim();
+      if (pName && (insp1.includes(pName) || pName.includes(insp1))) {
+        await db.delete(inspectionProofs).where(eq(inspectionProofs.id, p.id));
+      }
+    }
+
+    // 3. Invalidate caches so schedule status is immediately reset
+    invalidateScheduleCache();
+
+    res.json({
+      success: true,
+      message: "Laporan inspeksi berhasil dihapus dari sistem.",
+      deletedId: id
+    });
+  } catch (error: any) {
+    console.error("Error deleting inspection:", error);
+    res.status(500).json({ error: "Gagal menghapus inspeksi: " + error.message });
+  }
+});
+
+// ── RESET/DELETE USER INSPECTION SUBMISSION FOR THE WEEK ─────────────
+router.delete("/api/inspections-reset-submission", async (req, res) => {
+  try {
+    const nik = typeof req.query.nik === 'string' ? req.query.nik.trim().toLowerCase() : '';
+    const name = typeof req.query.name === 'string' ? req.query.name.trim().toLowerCase() : '';
+    const week = typeof req.query.week === 'string' ? req.query.week.trim().toUpperCase() : getISOWeekTagForSchedule(new Date());
+
+    if (!nik && !name) {
+      return res.status(400).json({ error: "Parameter nik atau name wajib diisi" });
+    }
+
+    // Find and delete matching inspections for this week
+    const recent = await db.select().from(inspections).orderBy(desc(inspections.date)).limit(100);
+    const toDeleteIds: number[] = [];
+
+    for (const insp of recent) {
+      if (!insp.date) continue;
+      if (insp.type === 'Harian') continue;
+      const inspWeek = getISOWeekTagForSchedule(new Date(insp.date));
+      if (inspWeek !== week) continue;
+
+      let dataFObj: any = {};
+      if (insp.dataF && typeof insp.dataF === 'string') {
+        try { dataFObj = JSON.parse(insp.dataF); } catch (e) {}
+      }
+      const insp1 = (dataFObj.insp1 || insp.inspectorName || '').toLowerCase().trim();
+      const insp2 = (dataFObj.insp2 || '').toLowerCase().trim();
+      const insp3 = (dataFObj.insp3 || '').toLowerCase().trim();
+
+      const match = (nik && (insp1.includes(nik) || insp2.includes(nik) || insp3.includes(nik))) ||
+                    (name && (insp1.includes(name) || name.includes(insp1) || insp2.includes(name) || insp3.includes(name)));
+      if (match) {
+        toDeleteIds.push(insp.id);
+      }
+    }
+
+    for (const id of toDeleteIds) {
+      await db.delete(inspections).where(eq(inspections.id, id));
+    }
+
+    // Delete proof from inspection_proofs as well
+    const proofs = await db.select().from(inspectionProofs).where(eq(inspectionProofs.week, week));
+    for (const p of proofs) {
+      const pNik = (p.nik || '').toLowerCase().trim();
+      const pName = (p.name || '').toLowerCase().trim();
+      if ((nik && pNik === nik) || (name && (pName.includes(name) || name.includes(pName)))) {
+        await db.delete(inspectionProofs).where(eq(inspectionProofs.id, p.id));
+      }
+    }
+
+    invalidateScheduleCache();
+
+    res.json({
+      success: true,
+      message: `Berhasil mereset submission inspeksi periode ${week}.`,
+      deletedCount: toDeleteIds.length
+    });
+  } catch (error: any) {
+    console.error("Error resetting inspection submission:", error);
+    res.status(500).json({ error: "Gagal mereset submission: " + error.message });
+  }
+});
+
 router.post("/api/inspections/bulk-harian", async (req, res) => {
     try {
         const { rows } = req.body;
@@ -1404,7 +1518,9 @@ router.post("/api/pemantauan/migrate", async (req, res) => {
 
 router.get("/api/pemantauan", async (req, res) => {
     try {
-      const data = await db.select().from(pemantauan).orderBy(sql`tanggal ASC, jam ASC, id ASC`);
+      const data = await db.select().from(pemantauan).orderBy(
+        sql`tanggal ASC, CASE WHEN LOWER(shift) LIKE '%pagi%' OR LOWER(shift) LIKE '%ds%' OR LOWER(shift) = '1' THEN 1 WHEN LOWER(shift) LIKE '%siang%' OR LOWER(shift) = '2' THEN 2 WHEN LOWER(shift) LIKE '%malam%' OR LOWER(shift) LIKE '%ns%' OR LOWER(shift) = '3' THEN 3 ELSE 4 END ASC, LPAD(TRIM(jam), 5, '0') ASC, id ASC`
+      );
       res.json(data);
     } catch (error) {
       console.error("Error fetching pemantauan:", error);
@@ -1419,14 +1535,52 @@ router.post("/api/pemantauan", async (req, res) => {
       const yyyy = ts.getFullYear();
       const mm = String(ts.getMonth() + 1).padStart(2, '0');
       const dd = String(ts.getDate()).padStart(2, '0');
-      const tanggalStr = `${yyyy}-${mm}-${dd}`;
-      const jamStr = `${ts.getHours()}:${String(ts.getMinutes()).padStart(2, '0')}`;
+      const currentHour = ts.getHours();
+      const currentMinute = String(ts.getMinutes()).padStart(2, '0');
+
+      let jamStr = payload.jam || `${currentHour}:${currentMinute}`;
+      let tanggalStr = payload.tanggal;
+
+      if (!tanggalStr) {
+        // Live submission (e.g. dari pemantauan-screen.tsx)
+        // CUT-OFF JAM 06:00 PAGI:
+        // Jika inspeksi dilakukan antara pukul 00:00 - 05:59 (dini hari) untuk Shift Malam (atau bukan Pagi),
+        // otomatis masih masuk ke hari operasional sebelumnya (H-1).
+        const shiftStr = String(payload.shift || '').toLowerCase();
+        const isNight = shiftStr.includes('malam') || shiftStr.includes('ns') || !shiftStr.includes('pagi');
+        if (currentHour < 6 && isNight) {
+          const yesterday = new Date(ts.getTime() - 24 * 60 * 60 * 1000);
+          const y = yesterday.getFullYear();
+          const m = String(yesterday.getMonth() + 1).padStart(2, '0');
+          const d = String(yesterday.getDate()).padStart(2, '0');
+          tanggalStr = `${y}-${m}-${d}`;
+        } else {
+          tanggalStr = `${yyyy}-${mm}-${dd}`;
+        }
+      } else if (!payload.isOperationalDate) {
+        // Jika tanggal kalender dikirim tapi jam dini hari (< 06:00) pada Shift Malam
+        const shiftStr = String(payload.shift || '').toLowerCase();
+        const isNight = shiftStr.includes('malam') || shiftStr.includes('ns') || !shiftStr.includes('pagi');
+        let hr: number | null = null;
+        if (jamStr) {
+          const m = jamStr.match(/^(\d{1,2}):/);
+          if (m) hr = parseInt(m[1], 10);
+        }
+        if (hr !== null && hr < 6 && isNight) {
+          const [y, m, d] = tanggalStr.split('-').map(Number);
+          const yesterday = new Date(y, m - 1, d - 1, 12, 0, 0);
+          const py = yesterday.getFullYear();
+          const pm = String(yesterday.getMonth() + 1).padStart(2, '0');
+          const pd = String(yesterday.getDate()).padStart(2, '0');
+          tanggalStr = `${py}-${pm}-${pd}`;
+        }
+      }
+
       const randBase = Math.floor(Math.random() * 90000) + 10000;
 
-      // VALIDASI: cek apakah suhu sudah diinput hari ini
+      // VALIDASI: cek apakah suhu sudah diinput pada tanggal ini
       const hasSuhu = payload.items.some((i: any) => i.kategori === 'SUHU');
       if (hasSuhu) {
-        const { and, eq } = require("drizzle-orm");
         const existingSuhu = await db.select().from(pemantauan).where(
           and(
             eq(pemantauan.kategori, 'SUHU'),
@@ -1435,27 +1589,74 @@ router.post("/api/pemantauan", async (req, res) => {
         ).limit(1);
         
         if (existingSuhu.length > 0) {
-          const personil = existingSuhu[0].inspektorPetugas || 'seseorang';
-          return res.status(400).json({ error: `Pemantauan suhu sudah dilakukan oleh "${personil}" hari ini` });
+          if (payload.forceOverwrite) {
+            await db.delete(pemantauan).where(
+              and(
+                eq(pemantauan.kategori, 'SUHU'),
+                eq(pemantauan.tanggal, tanggalStr)
+              )
+            );
+          } else {
+            const personil = existingSuhu[0].inspektorPetugas || 'seseorang';
+            return res.status(400).json({ error: `Pemantauan suhu sudah pernah dilakukan oleh "${personil}" pada tanggal ${tanggalStr}. Gunakan opsi timpa jika ingin mengganti data.` });
+          }
         }
       }
 
-      const rowsToInsert = payload.items.map((item: any, idx: number) => ({
-        inspektorPetugas: payload.inspektor,
-        shift: payload.shift,
-        catatanRemark: payload.catatan,
-        foto: payload.foto,
-        lokasiArea: item.lokasi,
-        kategori: item.kategori,
-        suhuCelcius: item.suhu,
-        kelembapanPersen: item.kelembapan,
-        flowGas: item.flow,
-        tekananGasPsi: item.tekananGas,
-        kebocoranYn: item.kebocoran,
-        tanggal: tanggalStr,
-        jam: jamStr,
-        idPemantauan: `PMT-${randBase}-${idx + 1}`
-      }));
+      // Jika forceOverwrite untuk GAS pada tanggal dan shift tersebut
+      const hasGas = payload.items.some((i: any) => i.kategori === 'GAS');
+      if (hasGas && payload.forceOverwrite) {
+        const delConditions = [
+          eq(pemantauan.kategori, 'GAS'),
+          eq(pemantauan.tanggal, tanggalStr)
+        ];
+        if (payload.shift) {
+          delConditions.push(eq(pemantauan.shift, payload.shift));
+        }
+        await db.delete(pemantauan).where(and(...delConditions));
+      }
+
+      const DEFAULT_LIMITS: Record<string, { sLow?: string; sUp?: string; kLow?: string; kUp?: string }> = {
+        'Balance Room': { sLow: '10', sUp: '30', kLow: '15', kUp: '80' },
+        'R. Timbang': { sLow: '10', sUp: '30', kLow: '15', kUp: '80' },
+        'XRF Room': { sLow: '5', sUp: '35', kLow: '20', kUp: '80' },
+        'R. XRF': { sLow: '5', sUp: '35', kLow: '20', kUp: '80' },
+        'Chiller Room': { sLow: '10', sUp: '42' },
+        'R. Chiller': { sLow: '10', sUp: '42' },
+        'Chemical Room': { sUp: '25' },
+        'R. Chemical': { sUp: '25' },
+        'Fusion Room': { sLow: '5', sUp: '40' },
+        'R. Fusion': { sLow: '5', sUp: '40' },
+      };
+
+      const rowsToInsert = payload.items.map((item: any, idx: number) => {
+        const std = DEFAULT_LIMITS[item.lokasi] || {};
+        const isGas = item.kategori === 'GAS';
+        const isHelium = (item.lokasi || '').includes('Helium');
+        const resolvedCatatan = item.catatan || item.keterangan || (isGas ? (isHelium ? payload.catatan : '-') : payload.catatan) || '-';
+
+        return {
+          inspektorPetugas: payload.inspektor,
+          shift: payload.shift,
+          catatanRemark: resolvedCatatan,
+          foto: payload.foto || payload.sigUrl || payload.ttd || null,
+          ttd: payload.ttd || payload.sigUrl || payload.foto || null,
+          lokasiArea: item.lokasi,
+          kategori: item.kategori,
+          suhuCelcius: item.suhu,
+          kelembapanPersen: item.kelembapan,
+          flowGas: item.flow,
+          tekananGasPsi: item.tekananGas,
+          kebocoranYn: item.kebocoran,
+          suhuUpper: item.suhuUpper ?? std.sUp ?? null,
+          suhuLower: item.suhuLower ?? std.sLow ?? null,
+          kelembapanUpper: item.kelembapanUpper ?? std.kUp ?? null,
+          kelembapanLower: item.kelembapanLower ?? std.kLow ?? null,
+          tanggal: tanggalStr,
+          jam: jamStr,
+          idPemantauan: `PMT-${randBase}-${idx + 1}`
+        };
+      });
       if (rowsToInsert.length > 0) {
         await db.insert(pemantauan).values(rowsToInsert);
       }
@@ -1463,6 +1664,92 @@ router.post("/api/pemantauan", async (req, res) => {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to save pemantauan" });
+    }
+  });
+
+router.post("/api/pemantauan/update-signature", async (req, res) => {
+    try {
+      const { ids, tanggal, inspektor, sigUrl, updateAllForInspector } = req.body;
+      if (!sigUrl) {
+        return res.status(400).json({ error: "Signature URL (sigUrl) is required" });
+      }
+
+      if (Array.isArray(ids) && ids.length > 0) {
+        await db.update(pemantauan)
+          .set({ ttd: sigUrl, foto: sigUrl })
+          .where(inArray(pemantauan.id, ids));
+      } else if (updateAllForInspector && inspektor) {
+        await db.update(pemantauan)
+          .set({ ttd: sigUrl, foto: sigUrl })
+          .where(
+            and(
+              eq(pemantauan.inspektorPetugas, inspektor),
+              or(isNull(pemantauan.ttd), eq(pemantauan.ttd, ''))
+            )
+          );
+      } else if (tanggal) {
+        const conditions: any[] = [eq(pemantauan.tanggal, tanggal)];
+        if (inspektor) conditions.push(eq(pemantauan.inspektorPetugas, inspektor));
+        await db.update(pemantauan)
+          .set({ ttd: sigUrl, foto: sigUrl })
+          .where(and(...conditions));
+      } else {
+        return res.status(400).json({ error: "Target tanggal, inspektor, or ids required" });
+      }
+
+      res.json({ success: true, message: "Tanda tangan berhasil diperbarui!" });
+    } catch (error) {
+      console.error("Error updating signature:", error);
+      res.status(500).json({ error: "Failed to update signature" });
+    }
+  });
+
+router.put("/api/pemantauan/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid record ID" });
+
+      const {
+        tanggal, jam, shift, lokasiArea, suhuCelcius, kelembapanPersen,
+        flowGas, tekananGasPsi, kebocoranYn, catatanRemark, inspektorPetugas, kategori
+      } = req.body;
+
+      const updateData: Record<string, any> = {};
+      if (tanggal !== undefined) updateData.tanggal = String(tanggal).trim();
+      if (jam !== undefined) updateData.jam = String(jam).trim();
+      if (shift !== undefined) updateData.shift = String(shift).trim();
+      if (lokasiArea !== undefined) updateData.lokasiArea = String(lokasiArea).trim();
+      if (suhuCelcius !== undefined) updateData.suhuCelcius = suhuCelcius === null ? null : String(suhuCelcius).trim();
+      if (kelembapanPersen !== undefined) updateData.kelembapanPersen = kelembapanPersen === null ? null : String(kelembapanPersen).trim();
+      if (flowGas !== undefined) updateData.flowGas = flowGas === null ? null : String(flowGas).trim();
+      if (tekananGasPsi !== undefined) updateData.tekananGasPsi = tekananGasPsi === null ? null : String(tekananGasPsi).trim();
+      if (kebocoranYn !== undefined) updateData.kebocoranYn = kebocoranYn === null ? null : String(kebocoranYn).trim();
+      if (catatanRemark !== undefined) updateData.catatanRemark = catatanRemark === null ? null : String(catatanRemark).trim();
+      if (inspektorPetugas !== undefined) updateData.inspektorPetugas = String(inspektorPetugas).trim();
+      if (kategori !== undefined) updateData.kategori = String(kategori).trim();
+
+      const updated = await db.update(pemantauan).set(updateData).where(eq(pemantauan.id, id)).returning();
+      if (!updated || updated.length === 0) {
+        return res.status(404).json({ error: "Record tidak ditemukan" });
+      }
+
+      res.json({ success: true, message: "Record pemantauan berhasil diperbarui", data: updated[0] });
+    } catch (error) {
+      console.error("Error updating pemantauan record:", error);
+      res.status(500).json({ error: "Failed to update record pemantauan" });
+    }
+  });
+
+router.delete("/api/pemantauan/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid record ID" });
+
+      await db.delete(pemantauan).where(eq(pemantauan.id, id));
+      res.json({ success: true, message: "Record pemantauan berhasil dihapus" });
+    } catch (error) {
+      console.error("Error deleting pemantauan record:", error);
+      res.status(500).json({ error: "Failed to delete record pemantauan" });
     }
   });
 
@@ -1738,17 +2025,23 @@ export async function fetchInspectionScheduleFromSheet(forceRefresh = false, she
   return scheduleList;
 }
 
-function getISOWeekTagForSchedule(d: Date = new Date(), advanceOnWeekend = false): string {
-  const date = new Date(d.getTime());
-  if (advanceOnWeekend && (date.getDay() === 0 || date.getDay() === 6)) {
-    const daysToAdd = date.getDay() === 6 ? 2 : 1;
-    date.setDate(date.getDate() + daysToAdd);
+function getISOWeekTagForSchedule(d: Date = new Date()): string {
+  // Convert strictly to WIT (Eastern Indonesia Time, UTC+9, site Kawasi/Obi)
+  // The inspection period opens on Monday at 00:01 WIT and closes on Sunday at 23:59:59 WIT.
+  // We NEVER advance on Saturday or Sunday.
+  const utc = d.getTime();
+  const witDate = new Date(utc + (9 * 60 * 60 * 1000));
+  
+  const target = new Date(Date.UTC(witDate.getUTCFullYear(), witDate.getUTCMonth(), witDate.getUTCDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = target.getTime();
+  target.setUTCMonth(0, 1);
+  if (target.getUTCDay() !== 4) {
+    target.setUTCMonth(0, 1 + ((4 - target.getUTCDay()) + 7) % 7);
   }
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-  const week1 = new Date(date.getFullYear(), 0, 4);
-  const weekNum = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-  return `W${weekNum}`;
+  const weekNumber = 1 + Math.ceil((firstThursday - target.getTime()) / 604800000);
+  return `W${weekNumber}`;
 }
 
 let cachedAllEmployees: any[] | null = null;
@@ -1768,7 +2061,7 @@ export async function getAllEmployeesCached(force = false): Promise<any[]> {
 
 async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: string): Promise<any[]> {
   try {
-    const currentWeekTag = targetWeekTag || getISOWeekTagForSchedule(new Date(), true);
+    const currentWeekTag = targetWeekTag || getISOWeekTagForSchedule(new Date());
 
     // Execute queries in parallel for high performance over remote SQL
     const nowUtc = new Date();
@@ -1892,6 +2185,7 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
       s.hasSsProof = !!pMatch;
       s.ssProofUrl = pMatch?.imageUrl || null;
       s.ssProofDate = pMatch?.date || null;
+      s.ssProofId = pMatch?.id || null;
 
       const personNames = [s.name, ...(s.partners || []).map((p: any) => p.name)].filter(Boolean).map((n: string) => n.trim().toLowerCase());
       const personNiks = personNames.map(pName => empNameToNik.get(pName)).filter(Boolean) as string[];
@@ -1942,17 +2236,21 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
         );
 
         if (isPersonMatch) {
-          if (!matchedAny) {
-            matchedAny = { insp, dataFObj };
-          }
-          if (isAreaMatch || !s.inspeksi) {
+          // If schedule specifically assigns an area/form, require area match or form match to prevent false positives
+          if (s.inspeksi && s.inspeksi.trim() !== '' && s.inspeksi !== '-') {
+            if (isAreaMatch) {
+              matchedStrict = { insp, dataFObj };
+              break;
+            }
+          } else {
+            // If no specific area was scheduled, any valid routine inspection by this person counts
             matchedStrict = { insp, dataFObj };
             break;
           }
         }
       }
 
-      const matchedInsp = matchedStrict || matchedAny;
+      const matchedInsp = matchedStrict;
 
       if (matchedInsp) {
         const { insp, dataFObj } = matchedInsp;
@@ -1966,7 +2264,7 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
 
         if (!displayPdf || displayPdf === '#' || displayPdf === '-') {
           if (insp.id) {
-            displayPdf = `/api/inspections/${insp.id}/pdf`;
+            displayPdf = `/api/inspections/${insp.id}/pdf?pt=tbp`;
           }
         }
 
@@ -2078,10 +2376,10 @@ router.get("/api/inspection-schedule", async (req, res) => {
       if (targetSheet.toLowerCase().includes('37')) {
         targetWeekTag = 'W37';
       } else if (targetSheet.toLowerCase().includes('currentweek')) {
-        targetWeekTag = getISOWeekTagForSchedule(new Date(), true);
+        targetWeekTag = getISOWeekTagForSchedule(new Date());
       } else {
         const match = targetSheet.match(/\d+/);
-        targetWeekTag = match ? `W${match[0]}` : getISOWeekTagForSchedule(new Date(), true);
+        targetWeekTag = match ? `W${match[0]}` : getISOWeekTagForSchedule(new Date());
       }
     } else if (!targetWeekTag.startsWith('W') && !targetWeekTag.startsWith('w')) {
       targetWeekTag = `W${targetWeekTag.replace(/\D/g, '')}`;

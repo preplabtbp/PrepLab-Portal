@@ -46,9 +46,14 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-// Pass all requests through to the network - no caching
+// Pass all requests through to the network - no caching with safe error handling
 self.addEventListener('fetch', function(event) {
-  event.respondWith(fetch(event.request));
+  event.respondWith(
+    fetch(event.request).catch((err) => {
+      // Gracefully handle aborted or failed network requests
+      return new Response(null, { status: 504, statusText: 'Gateway Timeout' });
+    })
+  );
 });
 
 
