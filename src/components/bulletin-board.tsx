@@ -369,6 +369,8 @@ export function BulletinBoard({
       "GENERAL ISSUE",
       "MANAJEMEN MUTU",
       "INFORMATION",
+      "PROSEDUR",
+      "SOP",
     ];
     if (sectionHubTitles.some((t) => titleUpper === t || titleUpper.replace(/^[#\s\-*]+/, "") === t)) {
       return true;
@@ -1034,9 +1036,9 @@ ${aiMeetingNotes
           : 'h-[calc(100vh-80px)] rounded-xl border'
       }`}
       style={{
-        backgroundColor: 'var(--card-bg, #191919)',
-        borderColor: 'var(--border-main, #2d2d2d)',
-        color: 'var(--text-main, #e2e8f0)'
+        backgroundColor: 'var(--card-bg, #ffffff)',
+        borderColor: 'var(--border-main, #e2e8f0)',
+        color: 'var(--text-main, #1e293b)'
       }}
     >
       {/* Notion Sidebar */}
@@ -1048,17 +1050,17 @@ ${aiMeetingNotes
             exit={{ width: 0, opacity: 0 }}
             className="flex-shrink-0 border-r overflow-y-auto flex flex-col font-sans select-none transition-colors"
             style={{
-              backgroundColor: 'var(--card-bg, #191919)',
-              borderColor: 'var(--border-main, #262626)',
-              color: 'var(--text-main, #e2e8f0)'
+              backgroundColor: 'var(--card-bg, #fbfbfa)',
+              borderColor: 'var(--border-main, #ececeb)',
+              color: 'var(--text-main, #1e293b)'
             }}
           >
             {/* Header: Preparation & Lab Notion */}
             <div 
               className="px-3 py-3 flex items-center justify-between cursor-pointer transition-colors border-b"
               style={{
-                borderColor: 'var(--border-main, #242424)',
-                color: 'var(--text-main, #f1f5f9)'
+                borderColor: 'var(--border-main, #ececeb)',
+                color: 'var(--text-main, #0f172a)'
               }}
             >
               <div
@@ -1066,15 +1068,15 @@ ${aiMeetingNotes
                 className="flex items-center gap-2 min-w-0 flex-1"
                 title="Buka Beranda Workspace"
               >
-                <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0 shadow-inner">
+                <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-500 font-bold text-xs flex-shrink-0 shadow-inner">
                   ☢
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="font-bold text-xs truncate tracking-tight" style={{ color: 'var(--text-main, #f1f5f9)' }}>
+                  <span className="font-bold text-xs truncate tracking-tight text-slate-900">
                     Prep & Lab Bulletin
                   </span>
                   {isDev && (
-                    <span className="text-xs font-mono text-teal-400 font-semibold tracking-wider">
+                    <span className="text-xs font-mono text-teal-600 font-semibold tracking-wider">
                       ★ ALL ACCESS
                     </span>
                   )}
@@ -1095,20 +1097,20 @@ ${aiMeetingNotes
 
             {/* SuperAdmin & Developer Universe Filter Selector vs Static Non-Dev Indicator */}
             {isDev ? (
-              <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-main, #242424)' }}>
+              <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-main, #ececeb)' }}>
                 <div className="flex items-center justify-between mb-2 gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                  <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap text-slate-500">
                     Workspace Universe
                   </span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 font-bold border border-teal-500/20 whitespace-nowrap shrink-0">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 font-bold border border-teal-200 whitespace-nowrap shrink-0">
                     {posts.length} Dokumen
                   </span>
                 </div>
                 <div 
                   className="grid grid-cols-3 gap-1 p-1 rounded-xl border"
                   style={{
-                    backgroundColor: 'var(--input-bg, rgba(0,0,0,0.2))',
-                    borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+                    backgroundColor: 'var(--input-bg, #f1f1ef)',
+                    borderColor: 'var(--border-main, #e2e8f0)'
                   }}
                 >
                   {(['ALL', 'TBP', 'GTS'] as const).map((ptKey) => {
@@ -1134,18 +1136,14 @@ ${aiMeetingNotes
                           }
                         }}
                         className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all cursor-pointer overflow-hidden ${
-                          isActive ? 'shadow-xs scale-[1.02]' : 'hover:opacity-80 opacity-70'
+                          isActive ? 'shadow-2xs bg-white text-slate-900 border border-slate-200 font-bold' : 'hover:bg-slate-200/50 text-slate-600'
                         }`}
-                        style={{
-                          backgroundColor: isActive ? 'var(--primary, #2A9D8F)' : 'transparent',
-                          color: isActive ? '#ffffff' : 'var(--text-main, #cbd5e1)'
-                        }}
                         title={`Tampilkan buletin ${ptKey}`}
                       >
                         <span className="text-xs font-bold leading-tight truncate max-w-full">
                           {ptKey === 'ALL' ? 'Semua' : ptKey}
                         </span>
-                        <span className={`text-[10px] font-mono leading-tight mt-0.5 whitespace-nowrap ${isActive ? 'text-white/95 font-bold' : 'opacity-70'}`}>
+                        <span className={`text-[10px] font-mono leading-tight mt-0.5 whitespace-nowrap ${isActive ? 'text-teal-700 font-bold' : 'opacity-70'}`}>
                           {count}
                         </span>
                       </button>
@@ -1154,11 +1152,11 @@ ${aiMeetingNotes
                 </div>
               </div>
             ) : (
-              <div className="px-3 py-2 border-b flex items-center justify-between gap-2" style={{ borderColor: 'var(--border-main, #242424)' }}>
-                <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+              <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-main, #ececeb)' }}>
+                <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap text-slate-500">
                   Workspace Universe
                 </span>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 whitespace-nowrap shrink-0">
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200 whitespace-nowrap shrink-0">
                   {userUniverse === 'GTS' ? 'PT GTS' : 'PT TBP / GPS'}
                 </span>
               </div>
@@ -1168,8 +1166,8 @@ ${aiMeetingNotes
             <div 
               className="px-3 py-2.5 flex items-center justify-between gap-1 border-b"
               style={{
-                borderColor: 'var(--border-main, #242424)',
-                color: 'var(--text-muted, #94a3b8)'
+                borderColor: 'var(--border-main, #ececeb)',
+                color: 'var(--text-muted, #64748b)'
               }}
             >
               {/* Home Pill */}
@@ -1177,8 +1175,8 @@ ${aiMeetingNotes
                 onClick={() => navigateToPost(null)}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer"
                 style={{
-                  backgroundColor: (!selectedPost && !isEditing) ? 'var(--primary, #2A9D8F)' : 'var(--input-bg, #222222)',
-                  color: (!selectedPost && !isEditing) ? '#ffffff' : 'var(--text-main, #cbd5e1)'
+                  backgroundColor: (!selectedPost && !isEditing) ? '#2A9D8F' : '#f1f1ef',
+                  color: (!selectedPost && !isEditing) ? '#ffffff' : '#334155'
                 }}
                 title="Beranda Dashboard"
               >
@@ -1370,17 +1368,17 @@ ${aiMeetingNotes
       <div 
         className="flex-1 flex flex-col h-full relative overflow-y-auto transition-colors"
         style={{
-          backgroundColor: 'var(--bg-main, #1b1b1b)',
-          color: 'var(--text-main, #e2e8f0)'
+          backgroundColor: 'var(--bg-main, #ffffff)',
+          color: 'var(--text-main, #1e293b)'
         }}
       >
         {/* Topbar with Hierarchical Navigation */}
         <div 
           className="h-12 border-b flex items-center px-4 justify-between sticky top-0 backdrop-blur-md z-10 transition-colors"
           style={{
-            backgroundColor: 'var(--card-bg, #1b1b1b)',
-            borderColor: 'var(--border-main, #334155)',
-            color: 'var(--text-main, #e2e8f0)'
+            backgroundColor: 'var(--card-bg, #ffffff)',
+            borderColor: 'var(--border-main, #e2e8f0)',
+            color: 'var(--text-main, #1e293b)'
           }}
         >
           <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
@@ -1825,22 +1823,17 @@ ${aiMeetingNotes
           ) : isSectionHubPost(selectedPost) ? (
             <div className="space-y-6 w-full max-w-none animate-in fade-in duration-200">
               {/* View Mode Contextual Header Bar */}
-              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
                 <button
                   onClick={goBack}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-xs border group cursor-pointer hover:opacity-80"
-                  style={{
-                    backgroundColor: 'var(--card-bg, #242424)',
-                    borderColor: 'var(--border-main, #334155)',
-                    color: 'var(--text-main, #cbd5e1)'
-                  }}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs transition-all group cursor-pointer"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5 text-teal-400 group-hover:-translate-x-0.5 transition-transform" />
-                  <span>Kembali ke <strong className="text-teal-400 font-semibold">{immediateParentTitle}</strong></span>
+                  <ArrowLeft className="w-3.5 h-3.5 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
+                  <span>Kembali ke <strong className="text-slate-900 font-bold">{immediateParentTitle}</strong></span>
                 </button>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-teal-950/60 text-teal-300 border border-teal-700/50 font-mono">
+                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200 font-mono font-medium">
                     SECTION HOMEPAGE
                   </span>
                 </div>
@@ -1852,37 +1845,29 @@ ${aiMeetingNotes
                 activePt={selectedPtFilter !== 'ALL' ? selectedPtFilter : (selectedPost.pt || 'TBP')}
                 onSelectPost={(p) => navigateToPost(p)}
                 onGoHome={() => navigateToPost(null)}
+                agendaEvents={agendaEventsList}
+                onOpenCalendar={() => navigate('/agenda')}
               />
             </div>
           ) : parsedTableData ? (
             <div className="space-y-6 w-full max-w-none animate-in fade-in duration-200">
               {/* View Mode Contextual Header Bar */}
-              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
                 <button
                   onClick={goBack}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-xs border group cursor-pointer hover:opacity-80"
-                  style={{
-                    backgroundColor: 'var(--card-bg, #242424)',
-                    borderColor: 'var(--border-main, #334155)',
-                    color: 'var(--text-main, #cbd5e1)'
-                  }}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs transition-all group cursor-pointer"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5 text-teal-400 group-hover:-translate-x-0.5 transition-transform" />
-                  <span>Kembali ke <strong className="text-teal-400 font-semibold">{immediateParentTitle}</strong></span>
+                  <ArrowLeft className="w-3.5 h-3.5 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
+                  <span>Kembali ke <strong className="text-slate-900 font-bold">{immediateParentTitle}</strong></span>
                 </button>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-500 dark:text-blue-400 border border-blue-500/30 font-mono flex items-center gap-1.5 font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono flex items-center gap-1.5 font-bold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
                     DATABASE TABLE
                   </span>
                   <span 
-                    className="text-[11px] px-2.5 py-1 rounded-full font-mono border"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #1e293b)',
-                      color: 'var(--text-muted, #94a3b8)',
-                      borderColor: 'var(--border-main, #334155)'
-                    }}
+                    className="text-[11px] px-2.5 py-1 rounded-full font-mono border bg-slate-50 text-slate-600 border-slate-200"
                   >
                     {selectedPost.category || "PAGE"}
                   </span>
@@ -1892,8 +1877,7 @@ ${aiMeetingNotes
               {/* Cover Image */}
               {selectedPost.coverImage && (
                 <div 
-                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border shadow-md"
-                  style={{ borderColor: 'var(--border-main, #334155)' }}
+                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border border-slate-200/80 shadow-xs"
                 >
                   <img
                     src={selectedPost.coverImage}
@@ -1906,8 +1890,7 @@ ${aiMeetingNotes
               {/* Title & Metadata */}
               <div>
                 <h1 
-                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3"
-                  style={{ color: 'var(--text-main, #f8fafc)' }}
+                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3 text-slate-900"
                 >
                   {getPostTitle(selectedPost)}
                 </h1>
@@ -2230,36 +2213,26 @@ ${aiMeetingNotes
           ) : (
             <div className="space-y-6 w-full max-w-none">
               {/* View Mode Contextual Header Bar */}
-              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
                 <button
                   onClick={goBack}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-xs border group cursor-pointer hover:opacity-80"
-                  style={{
-                    backgroundColor: 'var(--card-bg, #242424)',
-                    borderColor: 'var(--border-main, #334155)',
-                    color: 'var(--text-main, #cbd5e1)'
-                  }}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs transition-all group cursor-pointer"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5 text-teal-400 group-hover:-translate-x-0.5 transition-transform" />
-                  <span>Kembali ke <strong className="text-teal-400 font-semibold">{immediateParentTitle}</strong></span>
+                  <ArrowLeft className="w-3.5 h-3.5 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
+                  <span>Kembali ke <strong className="text-slate-900 font-bold">{immediateParentTitle}</strong></span>
                 </button>
 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleInitializeTableForPost}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white shadow-xs transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white shadow-2xs transition-all cursor-pointer"
                     title="Buat tabel database topik/kegiatan di halaman ini"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>+ Buat Tabel Topik</span>
                   </button>
                   <span 
-                    className="text-[11px] px-2.5 py-1 rounded-full font-mono border"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #1e293b)',
-                      color: 'var(--text-muted, #94a3b8)',
-                      borderColor: 'var(--border-main, #334155)'
-                    }}
+                    className="text-[11px] px-2.5 py-1 rounded-full font-mono border bg-slate-50 text-slate-600 border-slate-200"
                   >
                     {selectedPost.category || "PAGE"}
                   </span>
@@ -2269,8 +2242,7 @@ ${aiMeetingNotes
               {/* Cover Image */}
               {selectedPost.coverImage && (
                 <div 
-                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border shadow-md"
-                  style={{ borderColor: 'var(--border-main, #334155)' }}
+                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border border-slate-200/80 shadow-xs"
                 >
                   <img
                     src={selectedPost.coverImage}
@@ -2283,8 +2255,7 @@ ${aiMeetingNotes
               {/* Title & Metadata */}
               <div>
                 <h1 
-                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3"
-                  style={{ color: 'var(--text-main, #f8fafc)' }}
+                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3 text-slate-900"
                 >
                   {getPostTitle(selectedPost)}
                 </h1>
@@ -2446,12 +2417,7 @@ ${aiMeetingNotes
                       if (text.includes("menu info") || !text) return null;
                       return (
                         <blockquote 
-                          className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
-                          style={{
-                            backgroundColor: 'var(--input-bg, #222)',
-                            color: 'var(--text-main, #cbd5e1)',
-                            borderColor: 'var(--primary, #2A9D8F)'
-                          }}
+                          className="border-l-4 border-sky-400 bg-[#f0f6fd] px-4 py-2.5 my-3 rounded-r-xl italic text-slate-800 shadow-2xs"
                         >
                           {children}
                         </blockquote>
@@ -2463,7 +2429,7 @@ ${aiMeetingNotes
                         .trim()
                         .toLowerCase();
                       if (text.includes("menu info")) return null;
-                      return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
+                      return <p className="mb-3 leading-relaxed text-slate-700">{children}</p>;
                     },
                     a: ({ href, children }) => {
                       const url = href || "";
@@ -2481,21 +2447,12 @@ ${aiMeetingNotes
                             href={url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-3 py-1.5 my-1.5 rounded-lg border text-xs font-medium transition-all shadow-xs group no-underline hover:border-teal-500"
-                            style={{
-                              backgroundColor: 'var(--card-bg, #282828)',
-                              borderColor: 'var(--border-main, #334155)',
-                              color: 'var(--primary, #2A9D8F)'
-                            }}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 my-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-medium transition-all shadow-2xs group no-underline hover:border-sky-300"
                           >
-                            <FileText className="w-4 h-4 text-teal-400 group-hover:scale-110 transition-transform" />
-                            <span className="font-semibold" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</span>
+                            <FileText className="w-4 h-4 text-sky-600 group-hover:scale-110 transition-transform" />
+                            <span className="font-semibold text-slate-800">{children}</span>
                             <span 
-                              className="text-[10px] px-1.5 py-0.5 rounded ml-1"
-                              style={{
-                                backgroundColor: 'var(--input-bg, #181818)',
-                                color: 'var(--text-muted, #94a3b8)'
-                              }}
+                              className="text-[10px] px-1.5 py-0.5 rounded ml-1 bg-slate-100 text-slate-500 font-mono"
                             >
                               {isDrive ? "Google Drive" : "Unduh File"}
                             </span>
