@@ -381,6 +381,8 @@ export async function generateMonitoringPdfWithDynamicTable(options: {
         const tag = `<<SIGTAG_ROW_${idx}>>`;
         signatureTagsMap[tag] = formattedSig;
         ttdVal = tag;
+      } else if (d.ttd === '✓ TTD') {
+        ttdVal = '✓ TTD';
       }
 
       if (tipe === 'SUHU') {
@@ -518,62 +520,67 @@ export async function generateMonitoringPdfWithDynamicTable(options: {
       searchElements(content);
       foundTags.sort((a, b) => b.startIndex - a.startIndex);
 
-      // Process each signature tag individually in descending order (highest index first)
-      // This ensures that inserting an image does not invalidate preceding indices,
-      // and if one image URL is unreachable, only that single cell falls back to ✓ TTD.
-      for (const item of foundTags) {
-        try {
-          await docs.documents.batchUpdate({
-            documentId: tempDocId,
-            requestBody: {
-              requests: [
-                {
-                  insertInlineImage: {
-                    uri: item.url,
-                    location: { index: item.startIndex },
-                    objectSize: {
-                      width: { magnitude: 45, unit: 'PT' },
-                      height: { magnitude: 25, unit: 'PT' }
-                    }
-                  }
-                },
-                {
-                  deleteContentRange: {
-                    range: { startIndex: item.startIndex + 1, endIndex: item.endIndex + 1 }
-                  }
-                }
-              ]
+      const buildRequestsForTags = (items: typeof foundTags) => {
+        const reqs: any[] = [];
+        for (const item of items) {
+          reqs.push({
+            insertInlineImage: {
+              uri: item.url,
+              location: { index: item.startIndex },
+              objectSize: {
+                width: { magnitude: 45, unit: 'PT' },
+                height: { magnitude: 25, unit: 'PT' }
+              }
             }
           });
-        } catch (singleImgErr: any) {
-          console.warn(`Gagal menyisipkan inline signature untuk tag ${item.uniqueTag} (${item.url}), fallback ke teks:`, singleImgErr?.message || singleImgErr);
-          try {
-            await docs.documents.batchUpdate({
-              documentId: tempDocId,
-              requestBody: {
-                requests: [
-                  {
-                    replaceAllText: {
-                      containsText: { text: item.uniqueTag, matchCase: true },
-                      replaceText: '✓ TTD'
-                    }
-                  }
-                ]
-              }
-            });
-          } catch (cleanErr) {
-            console.error("Gagal membersihkan tag fallback:", cleanErr);
-          }
+          reqs.push({
+            deleteContentRange: {
+              range: { startIndex: item.startIndex + 1, endIndex: item.endIndex + 1 }
+            }
+          });
         }
-      }
+        return reqs;
+      };
 
-      // Pastikan jika ada tag yang tersisa (tidak ditemukan), bersihkan dengan '-'
-      const missingTags = Object.keys(signatureTagsMap).filter(t => !foundTags.some(ft => ft.uniqueTag === t));
-      if (missingTags.length > 0) {
-        const cleanupRequests = missingTags.map(tag => ({
+      const successfullyInsertedTags = new Set<string>();
+
+      // Batch runner with divide-and-conquer fallback:
+      // Tries to insert all images in a single batchUpdate.
+      // If a batch fails (e.g. 1 broken image URL), it splits into halves so all valid
+      // signatures succeed while staying well within the Google Docs API write quota (60 req/min).
+      const insertBatch = async (items: typeof foundTags) => {
+        if (items.length === 0) return;
+        try {
+          const reqs = buildRequestsForTags(items);
+          await docs.documents.batchUpdate({
+            documentId: tempDocId,
+            requestBody: { requests: reqs }
+          });
+          items.forEach(it => successfullyInsertedTags.add(it.uniqueTag));
+        } catch (batchErr: any) {
+          if (items.length === 1) {
+            console.warn(`Gagal menyisipkan inline signature untuk tag ${items[0].uniqueTag} (${items[0].url}):`, batchErr?.message || batchErr);
+            return;
+          }
+          const mid = Math.floor(items.length / 2);
+          const firstHalf = items.slice(0, mid);
+          const secondHalf = items.slice(mid);
+          await insertBatch(firstHalf);
+          await insertBatch(secondHalf);
+        }
+      };
+
+      await insertBatch(foundTags);
+
+      // Final cleanup: Any tag in signatureTagsMap that wasn't replaced with an image
+      // (due to image download failure, missing from foundTags, etc.) MUST be replaced with '✓ TTD'.
+      // This guarantees no raw <<SIGTAG_ROW_*>> tags ever leak into the generated PDF.
+      const remainingTags = Object.keys(signatureTagsMap).filter(t => !successfullyInsertedTags.has(t));
+      if (remainingTags.length > 0) {
+        const cleanupRequests = remainingTags.map(tag => ({
           replaceAllText: {
             containsText: { text: tag, matchCase: true },
-            replaceText: '-'
+            replaceText: '✓ TTD'
           }
         }));
         try {
@@ -581,7 +588,9 @@ export async function generateMonitoringPdfWithDynamicTable(options: {
             documentId: tempDocId,
             requestBody: { requests: cleanupRequests }
           });
-        } catch (e) {}
+        } catch (cleanErr: any) {
+          console.error("Gagal membersihkan sisa tag signature:", cleanErr?.message || cleanErr);
+        }
       }
     }
 
