@@ -91,6 +91,52 @@ const SUB_KATEGORI_OPTIONS = [
   { value: 'Maintenance', label: 'Teknis Maintenance' }
 ];
 
+export function isTopicForbiddenForSection(title?: string, sec?: string): boolean {
+  if (!title) return false;
+  const t = title.toLowerCase();
+  const s = (sec || '').toLowerCase();
+
+  const isMaintTopic = t.includes('pengelasan') || t.includes('welding') || t.includes('las') ||
+    t.includes('gerinda') || t.includes('cutting plasma') || t.includes('pengerutan kayu') ||
+    t.includes('instalasi listrik') || t.includes('panel listrik') || t.includes('dust collector') ||
+    t.includes('ducting') || t.includes('kompresor') || t.includes('kompressor') ||
+    t.includes('kegagalan rem') || t.includes('alat berat') || t.includes('dashcam') ||
+    t.includes('blind spot') || t.includes('manuver') || t.includes('lubrikasi');
+
+  const isIcTopic = t.includes('inventory control') || t.includes('gudang') ||
+    t.includes('warehouse') || t.includes('sparepart') || t.includes('spare part') ||
+    t.includes('penyimpanan bahan kimia') || /\bic\b/.test(t);
+
+  const isPrepTopic = t.includes('jaw crusher') || t.includes('pulverizer') ||
+    t.includes('cup mill') || t.includes('sample basah') || t.includes('sampel basah') ||
+    t.includes('sample kering') || t.includes('sampel kering') || t.includes('double roll') ||
+    t.includes('sieve shaker') || t.includes('screen test') || t.includes('oven kontainer');
+
+  const isLabTopic = t.includes('xrf') || t.includes('aas') || t.includes('fusion') ||
+    t.includes('fused bead') || t.includes('titrasi') || t.includes('loi') ||
+    t.includes('gravimetri') || t.includes('press powder') || t.includes('neraca') ||
+    t.includes('timbangan digital') || t.includes('chiller') || t.includes('muffle furnace') ||
+    t.includes('platinum ware') || t.includes('fume hood') || t.includes('scrubber');
+
+  if (s.includes('lab')) {
+    // Lab: TIDAK BOLEH dapat materi Maintenance, IC, atau Prep!
+    if (isMaintTopic || isIcTopic || isPrepTopic) return true;
+  } else if (s.includes('prep')) {
+    // Prep: TIDAK BOLEH dapat materi Maintenance, IC, atau Lab!
+    if (isMaintTopic || isIcTopic || isLabTopic) return true;
+  } else if (s.includes('maint')) {
+    // Maintenance: TIDAK BOLEH dapat materi Lab, Prep, atau IC!
+    if (isLabTopic || isPrepTopic || isIcTopic) return true;
+  } else if (s.includes('ic') || s.includes('inventory')) {
+    // IC: TIDAK BOLEH dapat materi Maintenance, Lab, atau Prep!
+    if (isMaintTopic || isLabTopic || isPrepTopic) return true;
+  } else if (s.includes('admin')) {
+    if (isMaintTopic || isIcTopic || isPrepTopic || isLabTopic) return true;
+  }
+
+  return false;
+}
+
 function buildDefaultConfig() {
   const slot = (divisi: string, kelas: string, kategori: string, extra?: any) => ({
     divisi,
@@ -105,16 +151,16 @@ function buildDefaultConfig() {
   cfg['Senin'] = {
     pagi: {
       gabungan: [
-        slot('Preparation', 'SPV', 'Non-Teknis'),
+        slot('Preparation', 'SPV', 'Teknis'),
         slot('Laboratory', 'SPV', 'Teknis'),
-        slot('Administration', 'Admin', 'Teknis')
+        slot('All', 'All', 'Senam', { isSenam: true })
       ]
     },
     malam: {
       gabungan: [
-        slot('Preparation', 'SPV', 'Non-Teknis'),
+        slot('Preparation', 'SPV', 'Teknis'),
         slot('Laboratory', 'SPV', 'Teknis'),
-        slot('All', 'Foreman/Officer', 'Teknis')
+        slot('All', 'All', 'Senam', { isSenam: true })
       ]
     }
   };
@@ -171,16 +217,16 @@ function buildDefaultConfig() {
   cfg['Kamis'] = {
     pagi: {
       gabungan: [
-        slot('All', 'SPV', 'Non-Teknis'),
-        slot('All', 'SPV', 'Teknis'),
-        slot('All', 'All', 'Teknis')
+        slot('Preparation', 'SPV', 'Teknis'),
+        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('All', 'All', 'Senam', { isSenam: true })
       ]
     },
     malam: {
       gabungan: [
-        slot('All', 'SPV', 'Non-Teknis'),
-        slot('All', 'Foreman/Officer', 'Teknis'),
-        slot('All', 'All', 'Teknis')
+        slot('Preparation', 'SPV', 'Teknis'),
+        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('All', 'All', 'Senam', { isSenam: true })
       ]
     }
   };
@@ -189,16 +235,16 @@ function buildDefaultConfig() {
   cfg['Jumat'] = {
     pagi: {
       gabungan: [
-        slot('All', 'SPV', 'Senam'),
-        slot('All', 'SPV', 'Teknis'),
-        slot('All', 'All', 'Teknis')
+        slot('Preparation', 'SPV', 'Teknis'),
+        slot('Laboratory', 'SPV', 'Teknis'),
+        slot('All', 'Foreman/Officer', 'Teknis')
       ]
     },
     malam: {
       gabungan: [
-        slot('All', 'SPV', 'Teknis'),
-        slot('All', 'SPV', 'Teknis'),
-        slot('All', 'All', 'Teknis')
+        slot('All', 'Foreman/Officer', 'Teknis', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
+        slot('Preparation', 'Foreman/Officer', 'Teknis'),
+        slot('Laboratory', 'Foreman/Officer', 'Teknis')
       ]
     }
   };
@@ -233,7 +279,7 @@ function buildDefaultConfig() {
       gabungan: [
         slot('All', 'SPV', 'Teknis'),
         slot('All', 'SPV', 'Teknis'),
-        slot('All', 'All', 'Teknis')
+        slot('All', 'All', 'Senam', { isSenam: true })
       ]
     },
     malam: {
@@ -280,7 +326,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
   // Config State
   const [uiConfig, setUiConfig] = useState<Record<string, any>>(() => {
-    const saved = localStorage.getItem('p5m_ui_config_v4');
+    const saved = localStorage.getItem('p5m_ui_config_v5');
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
@@ -759,18 +805,70 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         : copy[day][shift][location];
 
       if (targetArray && targetArray[index]) {
+        let materiTitle = '';
+        let kat = 'Teknis';
+        let subKat = 'General';
+        let fUrl: string | null = null;
+        let mId: number | null = null;
+        let isSenam = false;
+        let isLogbook = false;
+
         if (typeof materiItem === 'string') {
-          targetArray[index].materi = materiItem;
-          targetArray[index].isSenam = materiItem.toLowerCase().includes('senam');
-          targetArray[index].isLogbook = materiItem.toLowerCase().includes('logbook');
+          materiTitle = materiItem;
+          isSenam = materiItem.toLowerCase().includes('senam');
+          isLogbook = materiItem.toLowerCase().includes('logbook');
         } else {
-          targetArray[index].materi = materiItem.judul || '';
-          targetArray[index].kategori = materiItem.kategori || 'Teknis';
-          targetArray[index].subKategori = materiItem.subKategori || 'General';
-          targetArray[index].fileUrl = materiItem.fileUrl || null;
-          targetArray[index].materiId = materiItem.id || null;
-          targetArray[index].isSenam = materiItem.kategori === 'Senam' || (materiItem.judul || '').toLowerCase().includes('senam');
-          targetArray[index].isLogbook = (materiItem.judul || '').toLowerCase().includes('logbook');
+          materiTitle = materiItem.judul || '';
+          kat = materiItem.kategori || 'Teknis';
+          subKat = materiItem.subKategori || 'General';
+          fUrl = materiItem.fileUrl || null;
+          mId = materiItem.id || null;
+          isSenam = materiItem.kategori === 'Senam' || (materiItem.judul || '').toLowerCase().includes('senam');
+          isLogbook = (materiItem.judul || '').toLowerCase().includes('logbook');
+        }
+
+        targetArray[index].materi = materiTitle;
+        targetArray[index].kategori = kat;
+        targetArray[index].subKategori = subKat;
+        targetArray[index].fileUrl = fUrl;
+        targetArray[index].materiId = mId;
+        targetArray[index].isSenam = isSenam;
+        targetArray[index].isLogbook = isLogbook;
+
+        // Auto-sync pagi -> malam: Jika pengaturan materi di shift pagi diubah,
+        // di shift malam juga otomatis berubah (Senin & Kamis slot 3 senam juga ikut sync),
+        // dan KECUALI jika shift malam sudah diedit manual
+        if (shift === 'pagi' && copy[day].malam) {
+          const nightTargetArray = copy[day].tipe === 'gabungan'
+            ? copy[day].malam.gabungan
+            : copy[day].malam[location];
+
+          if (nightTargetArray && nightTargetArray[index] && !nightTargetArray[index].isManualEdited) {
+            if (isSenam || kat === 'Senam' || materiTitle.toLowerCase().includes('senam')) {
+              // Jika hari Senin atau Kamis slot 3, sinkronkan Senam ke shift malam
+              if (['Senin', 'Kamis'].includes(day) && index === 2) {
+                nightTargetArray[index].materi = 'Senam';
+                nightTargetArray[index].kategori = 'Senam';
+                nightTargetArray[index].subKategori = 'General';
+                nightTargetArray[index].fileUrl = null;
+                nightTargetArray[index].materiId = null;
+                nightTargetArray[index].isSenam = true;
+                nightTargetArray[index].isLogbook = false;
+              }
+            } else {
+              nightTargetArray[index].materi = materiTitle;
+              nightTargetArray[index].kategori = kat;
+              nightTargetArray[index].subKategori = subKat;
+              nightTargetArray[index].fileUrl = fUrl;
+              nightTargetArray[index].materiId = mId;
+              nightTargetArray[index].isSenam = false;
+              nightTargetArray[index].isLogbook = isLogbook;
+            }
+          }
+        } else if (shift === 'malam') {
+          // Tandai bahwa slot shift malam ini telah diedit secara manual
+          targetArray[index].isManualEdited = true;
+          targetArray[index].isSenam = isSenam;
         }
       }
       return copy;
@@ -790,6 +888,29 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
       if (targetArray && targetArray[index]) {
         targetArray[index][field] = value;
+
+        if (field === 'materi') {
+          if (shift === 'pagi' && copy[day].malam) {
+            const nightTargetArray = copy[day].tipe === 'gabungan'
+              ? copy[day].malam.gabungan
+              : copy[day].malam[location];
+
+            if (nightTargetArray && nightTargetArray[index] && !nightTargetArray[index].isManualEdited) {
+              const valLower = String(value || '').toLowerCase();
+              if (valLower.includes('senam')) {
+                if (['Senin', 'Kamis'].includes(day) && index === 2) {
+                  nightTargetArray[index].materi = value;
+                  nightTargetArray[index].isSenam = true;
+                }
+              } else {
+                nightTargetArray[index].materi = value;
+                nightTargetArray[index].isSenam = false;
+              }
+            }
+          } else if (shift === 'malam') {
+            targetArray[index].isManualEdited = true;
+          }
+        }
       }
       return copy;
     });
@@ -1918,10 +2039,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 slots={dayCfg.pagi?.gabungan || []} 
                                 allowedSections={DIVISI_OPTIONS}
                                 onChange={(newSlots) => {
-                                  setUiConfig(prev => ({
-                                    ...prev,
-                                    [day]: { ...prev[day], pagi: { ...prev[day].pagi, gabungan: newSlots } }
-                                  }));
+                                  setUiConfig(prev => {
+                                    const curDay = prev[day] || {};
+                                    const isManual = curDay.isManualNight;
+                                    return {
+                                      ...prev,
+                                      [day]: {
+                                        ...curDay,
+                                        pagi: { ...curDay.pagi, gabungan: newSlots },
+                                        malam: (!isManual && day !== 'Minggu')
+                                          ? { ...curDay.malam, gabungan: JSON.parse(JSON.stringify(newSlots)) }
+                                          : curDay.malam
+                                      }
+                                    };
+                                  });
                                 }}
                               />
                             ) : (
@@ -1932,10 +2063,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                     slots={dayCfg.pagi?.preparasi || []} 
                                     allowedSections={PREPARATION_GROUP_OPTIONS}
                                     onChange={(newSlots) => {
-                                      setUiConfig(prev => ({
-                                        ...prev,
-                                        [day]: { ...prev[day], pagi: { ...prev[day].pagi, preparasi: newSlots } }
-                                      }));
+                                      setUiConfig(prev => {
+                                        const curDay = prev[day] || {};
+                                        const isManual = curDay.isManualNight;
+                                        return {
+                                          ...prev,
+                                          [day]: {
+                                            ...curDay,
+                                            pagi: { ...curDay.pagi, preparasi: newSlots },
+                                            malam: (!isManual && day !== 'Minggu')
+                                              ? { ...curDay.malam, preparasi: JSON.parse(JSON.stringify(newSlots)) }
+                                              : curDay.malam
+                                          }
+                                        };
+                                      });
                                     }}
                                   />
                                 </div>
@@ -1945,10 +2086,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                     slots={dayCfg.pagi?.laboratorium || []} 
                                     allowedSections={LABORATORY_GROUP_OPTIONS}
                                     onChange={(newSlots) => {
-                                      setUiConfig(prev => ({
-                                        ...prev,
-                                        [day]: { ...prev[day], pagi: { ...prev[day].pagi, laboratorium: newSlots } }
-                                      }));
+                                      setUiConfig(prev => {
+                                        const curDay = prev[day] || {};
+                                        const isManual = curDay.isManualNight;
+                                        return {
+                                          ...prev,
+                                          [day]: {
+                                            ...curDay,
+                                            pagi: { ...curDay.pagi, laboratorium: newSlots },
+                                            malam: (!isManual && day !== 'Minggu')
+                                              ? { ...curDay.malam, laboratorium: JSON.parse(JSON.stringify(newSlots)) }
+                                              : curDay.malam
+                                          }
+                                        };
+                                      });
                                     }}
                                   />
                                 </div>
@@ -1959,9 +2110,42 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                           {/* Night Shift Slots (except Sunday) */}
                           {day !== 'Minggu' && (
                             <div>
-                              <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400 font-bold block mb-1.5">
-                                🌙 Night Shift (Malam)
-                              </span>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400 font-bold">
+                                  🌙 Night Shift (Malam)
+                                </span>
+                                {dayCfg.isManualNight ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 font-bold" title="Slot malam telah dikustom manual">
+                                      ✏️ Kustom Manual
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setUiConfig(prev => {
+                                          const curDay = prev[day] || {};
+                                          return {
+                                            ...prev,
+                                            [day]: {
+                                              ...curDay,
+                                              isManualNight: false,
+                                              malam: JSON.parse(JSON.stringify(curDay.pagi || {}))
+                                            }
+                                          };
+                                        });
+                                        toast.info(`Slot malam ${day} disinkronkan kembali mengikuti shift pagi`);
+                                      }}
+                                      className="text-[9px] text-blue-600 hover:text-blue-800 underline font-semibold flex items-center gap-0.5"
+                                    >
+                                      <RotateCcw className="w-2.5 h-2.5" /> Sinkron Pagi
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold flex items-center gap-1" title="Konfigurasi slot malam otomatis mengikuti slot shift pagi">
+                                    🔗 Otomatis sama dgn Pagi
+                                  </span>
+                                )}
+                              </div>
                               {isG ? (
                                 <SlotListEditor 
                                   slots={dayCfg.malam?.gabungan || []} 
@@ -1969,7 +2153,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                   onChange={(newSlots) => {
                                     setUiConfig(prev => ({
                                       ...prev,
-                                      [day]: { ...prev[day], malam: { ...prev[day].malam, gabungan: newSlots } }
+                                      [day]: {
+                                        ...prev[day],
+                                        isManualNight: true,
+                                        malam: { ...prev[day]?.malam, gabungan: newSlots }
+                                      }
                                     }));
                                   }}
                                 />
@@ -1983,7 +2171,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                       onChange={(newSlots) => {
                                         setUiConfig(prev => ({
                                           ...prev,
-                                          [day]: { ...prev[day], malam: { ...prev[day].malam, preparasi: newSlots } }
+                                          [day]: {
+                                            ...prev[day],
+                                            isManualNight: true,
+                                            malam: { ...prev[day]?.malam, preparasi: newSlots }
+                                          }
                                         }));
                                       }}
                                     />
@@ -1996,7 +2188,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                       onChange={(newSlots) => {
                                         setUiConfig(prev => ({
                                           ...prev,
-                                          [day]: { ...prev[day], malam: { ...prev[day].malam, laboratorium: newSlots } }
+                                          [day]: {
+                                            ...prev[day],
+                                            isManualNight: true,
+                                            malam: { ...prev[day]?.malam, laboratorium: newSlots }
+                                          }
                                         }));
                                       }}
                                     />
@@ -3876,7 +4072,28 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
   const [mKatFilter, setMKatFilter] = useState('All');
   const [isCustomText, setIsCustomText] = useState(false);
 
+  // ESC key listener to cancel/close manual edit modals immediately
+  useEffect(() => {
+    if (!selectNameOpen && !selectMateriOpen && !isCustomText) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectNameOpen(false);
+        setSelectMateriOpen(false);
+        setIsCustomText(false);
+        setNameSearch('');
+        setMSearch('');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [selectNameOpen, selectMateriOpen, isCustomText]);
+
   const isSpecial = slot.isSenam || slot.isLogbook || slot.materi?.toLowerCase().includes('senam') || slot.materi?.toLowerCase().includes('logbook');
+
+  // Senam slot detection (Pagi atau Malam)
+  const isSenamSlot = Boolean(slot.isSenam || slot.kategori === 'Senam' || (slot.materi || '').toLowerCase().includes('senam'));
 
   // Candidate grouping for this specific day & shift
   const { eligibleCandidates, otherCandidates } = useMemo(() => {
@@ -3897,29 +4114,166 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       }
     });
 
+    // Khusus slot Senam, prioritaskan personil yang belum pernah senam (0x) paling atas
+    if (isSenamSlot) {
+      el.sort((a, b) => (a.senamCount || 0) - (b.senamCount || 0));
+    }
+
     return { eligibleCandidates: el, otherCandidates: ot };
-  }, [karyawanPool, day, shift, nameSearch]);
+  }, [karyawanPool, day, shift, nameSearch, isSenamSlot]);
+
+  const isGabungan = zone === 'gabungan' || HARI_GABUNGAN.has(day);
+
+  // Cari data karyawan presenter jika ada
+  const matchedPerson = useMemo(() => {
+    if (!slot.nik && !slot.nama) return null;
+    return karyawanPool.find(k => (slot.nik && k.nik === slot.nik) || (slot.nama && k.nama === slot.nama));
+  }, [karyawanPool, slot.nik, slot.nama]);
+
+  const personDivisi = useMemo(() => {
+    const raw = (
+      matchedPerson?.divisi || 
+      matchedPerson?.departemen || 
+      (slot.divisi && slot.divisi !== 'All' ? slot.divisi : (zone === 'prep' ? 'Preparation' : zone === 'lab' ? 'Laboratory' : 'All'))
+    ).toLowerCase();
+    return raw;
+  }, [matchedPerson, slot.divisi, zone]);
+
+  // Tab filter kategori yang relevan untuk sesi & section ini (mencegah tab cross-division)
+  const availableTabs = useMemo(() => {
+    if (isGabungan) {
+      return [
+        { key: 'All', label: 'Semua' },
+        { key: 'General', label: 'Teknis General' },
+        { key: 'Non-Teknis', label: 'Non-Teknis' },
+        { key: 'SOP / IK', label: 'SOP & IK' }
+      ];
+    }
+    if (personDivisi.includes('lab')) {
+      return [
+        { key: 'All', label: 'Semua' },
+        { key: 'Laboratory', label: 'Teknis Lab' },
+        { key: 'General', label: 'Teknis General' },
+        { key: 'Non-Teknis', label: 'Non-Teknis' },
+        { key: 'SOP / IK', label: 'SOP & IK' }
+      ];
+    }
+    if (personDivisi.includes('prep')) {
+      return [
+        { key: 'All', label: 'Semua' },
+        { key: 'Preparation', label: 'Teknis Prep' },
+        { key: 'General', label: 'Teknis General' },
+        { key: 'Non-Teknis', label: 'Non-Teknis' },
+        { key: 'SOP / IK', label: 'SOP & IK' }
+      ];
+    }
+    if (personDivisi.includes('maint')) {
+      return [
+        { key: 'All', label: 'Semua' },
+        { key: 'Maintenance', label: 'Teknis Maint' },
+        { key: 'General', label: 'Teknis General' },
+        { key: 'Non-Teknis', label: 'Non-Teknis' },
+        { key: 'SOP / IK', label: 'SOP & IK' }
+      ];
+    }
+    if (personDivisi.includes('ic') || personDivisi.includes('inventory')) {
+      return [
+        { key: 'All', label: 'Semua' },
+        { key: 'IC', label: 'Teknis IC' },
+        { key: 'General', label: 'Teknis General' },
+        { key: 'Non-Teknis', label: 'Non-Teknis' },
+        { key: 'SOP / IK', label: 'SOP & IK' }
+      ];
+    }
+    return [
+      { key: 'All', label: 'Semua' },
+      { key: 'General', label: 'General' },
+      { key: 'Non-Teknis', label: 'Non-Teknis' },
+      { key: 'SOP / IK', label: 'SOP & IK' }
+    ];
+  }, [isGabungan, personDivisi]);
 
   // Filtered materi list
   const filteredMateriList = useMemo(() => {
     return materiList.filter(m => {
-      const matchSearch = !mSearch || m.judul?.toLowerCase().includes(mSearch.toLowerCase());
+      const judul = m.judul || '';
+      const matchSearch = !mSearch || judul.toLowerCase().includes(mSearch.toLowerCase());
       if (!matchSearch) return false;
+
+      // 1. ATURAN HARI GABUNGAN:
+      // "ketika materi teknis dipilih di briefing gabungan maka akan otomatis yang terpilih harus teknis general"
+      if (isGabungan) {
+        if (m.kategori === 'Senam') {
+          if (mKatFilter !== 'All' && mKatFilter !== 'Senam') return false;
+          return true;
+        }
+        if (m.kategori === 'Non-Teknis') {
+          if (mKatFilter !== 'All' && mKatFilter !== 'Non-Teknis') return false;
+          return true;
+        }
+
+        // Untuk materi Teknis / SOP: HANYA izinkan General universal
+        const isGeneral = (m.subKategori === 'General' || !m.subKategori) && (m.divisi === 'All' || !m.divisi || m.divisi === 'General');
+        if (!isGeneral) return false;
+
+        // Blokir topik spesifik section agar tidak bocor ke briefing gabungan
+        if (isTopicForbiddenForSection(judul, 'lab') || isTopicForbiddenForSection(judul, 'prep')) return false;
+
+        if (mKatFilter === 'Non-Teknis') return false;
+        if (mKatFilter === 'Senam') return false;
+        if (mKatFilter === 'SOP / IK') {
+          const j = judul.toLowerCase();
+          return /\b(sop|ik)\b|instruksi kerja/i.test(j) || j.startsWith('sop') || j.startsWith('ik ');
+        }
+        return true;
+      }
+
+      // 2. ATURAN SESI SPLIT:
+      // "jangan biarkan juga ada pemilihan materi yang cross division contoh personil lab mendapatkan materi pengelasan yang khusus maintenance atau mendapatkan JSA inventory control dimana itu khusus section inventory"
+      if (isTopicForbiddenForSection(judul, personDivisi)) return false;
+
+      // Filter sub-kategori/divisi materi agar tidak cross-division
+      const sub = (m.subKategori || '').toLowerCase();
+      const mDiv = (m.divisi || '').toLowerCase();
+
+      if (personDivisi.includes('lab')) {
+        if (sub === 'preparation' || sub === 'maintenance' || sub === 'ic' ||
+            mDiv === 'preparation' || mDiv === 'maintenance' || mDiv === 'ic') {
+          return false;
+        }
+      } else if (personDivisi.includes('prep')) {
+        if (sub === 'laboratory' || sub === 'maintenance' || sub === 'ic' ||
+            mDiv === 'laboratory' || mDiv === 'maintenance' || mDiv === 'ic') {
+          return false;
+        }
+      } else if (personDivisi.includes('maint')) {
+        if (sub === 'laboratory' || sub === 'preparation' || sub === 'ic' ||
+            mDiv === 'laboratory' || mDiv === 'preparation' || mDiv === 'ic') {
+          return false;
+        }
+      } else if (personDivisi.includes('ic') || personDivisi.includes('inventory')) {
+        if (sub === 'laboratory' || sub === 'preparation' || sub === 'maintenance' ||
+            mDiv === 'laboratory' || mDiv === 'preparation' || mDiv === 'maintenance') {
+          return false;
+        }
+      }
 
       if (mKatFilter === 'All') return true;
       if (mKatFilter === 'SOP / IK') {
-        const j = (m.judul || '').toLowerCase();
+        const j = judul.toLowerCase();
         return /\b(sop|ik)\b|instruksi kerja/i.test(j) || j.startsWith('sop') || j.startsWith('ik ') || j.includes('sop') || j.includes('ik -');
       }
       if (mKatFilter === 'Senam') return m.kategori === 'Senam';
       if (mKatFilter === 'Non-Teknis') return m.kategori === 'Non-Teknis';
       if (mKatFilter === 'General') return m.subKategori === 'General';
-      if (mKatFilter === 'Preparation') return m.subKategori === 'Preparation' || m.divisi === 'Preparation' || (m.judul || '').toLowerCase().includes('prep');
-      if (mKatFilter === 'Laboratory') return m.subKategori === 'Laboratory' || m.divisi === 'Laboratory' || (m.judul || '').toLowerCase().includes('lab');
+      if (mKatFilter === 'Preparation') return m.subKategori === 'Preparation' || m.divisi === 'Preparation';
+      if (mKatFilter === 'Laboratory') return m.subKategori === 'Laboratory' || m.divisi === 'Laboratory';
+      if (mKatFilter === 'Maintenance') return m.subKategori === 'Maintenance' || m.divisi === 'Maintenance';
+      if (mKatFilter === 'IC') return m.subKategori === 'IC' || m.divisi === 'IC';
 
       return m.kategori === mKatFilter || m.subKategori === mKatFilter;
     });
-  }, [materiList, mSearch, mKatFilter]);
+  }, [materiList, mSearch, mKatFilter, isGabungan, personDivisi]);
 
   const isEmptySDM = !slot.nama || slot.nama.includes('KOSONG');
 
@@ -3948,10 +4302,13 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       {/* Backdrop for click outside */}
       {(selectNameOpen || selectMateriOpen) && (
         <div 
-          className="fixed inset-0 z-40 bg-transparent cursor-default" 
-          onClick={() => {
+          className="fixed inset-0 z-40 bg-slate-900/10 backdrop-blur-[0.5px] cursor-pointer" 
+          onClick={(e) => {
+            e.stopPropagation();
             setSelectNameOpen(false);
             setSelectMateriOpen(false);
+            setNameSearch('');
+            setMSearch('');
           }} 
         />
       )}
@@ -3974,9 +4331,29 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
 
             {selectNameOpen && (
               <div className={`absolute z-50 ${popupPlacementClass} w-64 bg-white border border-slate-200 text-slate-800 rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 duration-100`}>
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+                  <div className="flex items-center gap-1 font-bold text-[11px] text-slate-800">
+                    <Users className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Pilih Personil</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectNameOpen(false);
+                      setNameSearch('');
+                    }}
+                    className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors flex items-center gap-0.5 cursor-pointer"
+                    title="Batal / Tutup (Esc)"
+                  >
+                    <X className="w-3 h-3" />
+                    <span>Batal (Esc)</span>
+                  </button>
+                </div>
+
                 <input
                   type="text"
-                  placeholder="Cari personil / NIK..."
+                  placeholder="Cari personil / NIK... (Esc utk batal)"
                   value={nameSearch}
                   onChange={e => setNameSearch(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-[11px] text-slate-800 outline-none focus:border-amber-500 mb-1"
@@ -3984,7 +4361,12 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                 />
 
                 <div className="text-[10px] font-bold font-mono text-emerald-700 px-1 py-0.5 border-b border-slate-100 flex items-center justify-between">
-                  <span>Shift Sesuai ({eligibleCandidates.length})</span>
+                  <span>{isSenamSlot ? `Kandidat Senam ${shift === 'malam' ? 'Malam' : 'Pagi'}` : 'Shift Sesuai'} ({eligibleCandidates.length})</span>
+                  {isSenamSlot && (
+                    <span className="text-[9px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded font-bold">
+                      Prioritas 0×
+                    </span>
+                  )}
                 </div>
                 {eligibleCandidates.map(c => (
                   <button
@@ -3999,8 +4381,21 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                       slot.nik === c.nik ? 'bg-amber-100 text-amber-900 font-bold' : 'text-slate-700'
                     }`}
                   >
-                    <span className="font-semibold truncate pr-2">{c.nama}</span>
-                    <span className="text-[9px] text-slate-500 font-mono flex-shrink-0">{c.kelas || ''} ({c.pt})</span>
+                    <div className="flex flex-col min-w-0 pr-2">
+                      <span className="font-semibold truncate">{c.nama}</span>
+                      <span className="text-[9px] text-slate-500 font-mono">{c.kelas || ''} • {c.divisi || ''}</span>
+                    </div>
+                    {isSenamSlot ? (
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                        (c.senamCount || 0) === 0
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-amber-100 text-amber-800 border border-amber-300'
+                      }`}>
+                        {(c.senamCount || 0) === 0 ? '0× (Belum)' : `${c.senamCount}×`}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-slate-500 font-mono flex-shrink-0">{c.kelas || ''} ({c.pt})</span>
+                    )}
                   </button>
                 ))}
 
@@ -4056,14 +4451,14 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                   type="text"
                   value={slot.materi || ''}
                   onChange={e => onSelectMateri(e.target.value)}
-                  placeholder="Ketik judul materi..."
+                  placeholder="Ketik judul materi... (Esc utk batal)"
                   className="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] text-slate-800 outline-none focus:border-amber-500 font-medium"
                 />
                 <button
                   type="button"
                   onClick={() => setIsCustomText(false)}
                   className="px-1 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[9px] font-mono border"
-                  title="Pilih dari database materi"
+                  title="Pilih dari database materi (Esc)"
                 >
                   List
                 </button>
@@ -4084,9 +4479,29 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
 
                 {selectMateriOpen && (
                   <div className={`absolute z-50 ${popupPlacementClass} w-72 sm:w-80 bg-white border border-slate-200 text-slate-800 rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 sm:max-h-72 overflow-y-auto animate-in fade-in zoom-in-95 duration-100`}>
+                    <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+                      <div className="flex items-center gap-1 font-bold text-[11px] text-slate-800">
+                        <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Pilih Materi Briefing</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectMateriOpen(false);
+                          setMSearch('');
+                        }}
+                        className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors flex items-center gap-0.5 cursor-pointer"
+                        title="Batal / Tutup (Esc)"
+                      >
+                        <X className="w-3 h-3" />
+                        <span>Batal (Esc)</span>
+                      </button>
+                    </div>
+
                     <input
                       type="text"
-                      placeholder="Cari materi briefing..."
+                      placeholder="Cari materi briefing... (Esc utk batal)"
                       value={mSearch}
                       onChange={e => setMSearch(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-[11px] text-slate-800 outline-none focus:border-amber-500"
@@ -4095,34 +4510,36 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
 
                     {/* Filter Category Tabs */}
                     <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[9px] font-mono scrollbar-none">
-                      {['All', 'SOP / IK', 'Preparation', 'Laboratory', 'General', 'Non-Teknis'].map(kat => (
+                      {availableTabs.map(tab => (
                         <button
-                          key={kat}
+                          key={tab.key}
                           type="button"
-                          onClick={() => setMKatFilter(kat)}
+                          onClick={() => setMKatFilter(tab.key)}
                           className={`px-1.5 py-0.5 rounded-md flex-shrink-0 transition-colors ${
-                            mKatFilter === kat
+                            mKatFilter === tab.key
                               ? 'bg-amber-500 text-slate-950 font-bold'
                               : 'bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200'
                           }`}
                         >
-                          {kat === 'All' ? 'Semua' : kat}
+                          {tab.label}
                         </button>
                       ))}
                     </div>
 
                     {/* Standard Routine Actions */}
-                    <div className="grid grid-cols-2 gap-1 border-b border-slate-100 pb-1.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onSelectMateri({ judul: 'Senam Bersama', kategori: 'Senam', subKategori: 'General' });
-                          setSelectMateriOpen(false);
-                        }}
-                        className="px-2 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 rounded-lg text-[10px] font-bold text-center"
-                      >
-                        🤸 Senam Bersama
-                      </button>
+                    <div className={`grid ${shift === 'pagi' ? 'grid-cols-2' : 'grid-cols-1'} gap-1 border-b border-slate-100 pb-1.5`}>
+                      {shift === 'pagi' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSelectMateri({ judul: 'Senam Bersama', kategori: 'Senam', subKategori: 'General' });
+                            setSelectMateriOpen(false);
+                          }}
+                          className="px-2 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 rounded-lg text-[10px] font-bold text-center"
+                        >
+                          🤸 Senam Bersama
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -4131,7 +4548,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                         }}
                         className="px-2 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-lg text-[10px] font-bold text-center"
                       >
-                        📋 Logbook
+                        📋 Logbook & Evaluasi
                       </button>
                     </div>
 
@@ -4242,6 +4659,16 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
           {isSpecial && slot.kategori !== 'Senam' && (
             <span className="text-[8px] font-bold font-mono px-1.5 py-0.2 bg-purple-100 text-purple-800 border border-purple-300/60 rounded uppercase">
               {slot.isLogbook ? 'Logbook' : 'Senam'}
+            </span>
+          )}
+          {shift === 'malam' && slot.isManualEdited && (
+            <span className="text-[8px] font-bold font-mono px-1.5 py-0.2 bg-amber-100 text-amber-800 border border-amber-300 rounded" title="Materi diedit manual di shift malam">
+              Manual Malam
+            </span>
+          )}
+          {shift === 'malam' && !slot.isManualEdited && slot.materi && (
+            <span className="text-[8px] font-medium font-mono px-1 py-0.2 text-emerald-700 bg-emerald-50 rounded border border-emerald-200" title="Materi otomatis disinkronkan dari shift pagi">
+              🔗 Sync Pagi
             </span>
           )}
         </div>
