@@ -367,6 +367,31 @@ export function SectionHubDashboard({
       };
     }
 
+    if (sectionTitle.includes('PROSEDUR') || sectionTitle.toUpperCase() === 'SOP') {
+      return {
+        icon: '📚',
+        bannerUrl: 'https://images.unsplash.com/photo-1596464750157-3965eeddc923?auto=format&fit=crop&w=1200&q=80',
+        infoTitle: 'SOP & INSTRUKSI KERJA',
+        infoItems: [
+          { title: 'SOP Preparasi', icon: '📄', searchKeywords: ['SOP Preparasi', 'Preparasi Basah', 'Preparasi Kering'] },
+          { title: 'SOP Laboratorium', icon: '🔬', searchKeywords: ['SOP Laboratorium', 'ED-XRF', 'LOI', 'Fused Bead'] },
+          { title: 'SOP Smelter', icon: '🏭', searchKeywords: ['SOP Smelter', 'HJF', 'KPS'] },
+          { title: 'IK Preparasi', icon: '🛠️', searchKeywords: ['IK Preparasi', 'Jaw Crusher', 'Pulverizer', 'Oven'] },
+          { title: 'IK Laboratorium', icon: '🧪', searchKeywords: ['IK Laboratorium', 'Zetium', 'Epsilon', 'Muffle'] },
+          { title: 'Flow Chart', icon: '📊', searchKeywords: ['Flow Chart', 'Flow Sheet'] },
+          { title: 'JSA', icon: '🛡️', searchKeywords: ['JSA', 'Job Safety Analysis'] },
+          { title: 'Guidance', icon: '💡', searchKeywords: ['Guidance', 'Panduan'] },
+        ],
+        rulesTitle: 'STANDAR KESELAMATAN & REGULASI',
+        rulesItems: [
+          { title: 'Golden Rules', icon: '⭐', searchKeywords: ['Golden Rules'] },
+          { title: 'Kebijakan Perusahaan', icon: '📜', searchKeywords: ['Kebijakan Perusahaan'] },
+          { title: 'Standard Methods', icon: '📘', searchKeywords: ['Standard Methods'] },
+        ],
+        extraLinks: []
+      };
+    }
+
     if (sectionTitle === 'INFORMATION' || sectionTitle.includes('INFORMASI')) {
       return {
         icon: '📘',
