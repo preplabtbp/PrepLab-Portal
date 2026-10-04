@@ -100,6 +100,9 @@ export function MonitoringDashboard({
 }) {
   const [loading, setLoading] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [generatingTarget, setGeneratingTarget] = useState<string>('');
+  const [selectedGasOption, setSelectedGasOption] = useState<string>('ALL');
+  const [selectedSuhuOption, setSelectedSuhuOption] = useState<string>('ALL');
   const [dataSuhu, setDataSuhu] = useState<Record<string, any>>({});
   const [dataGas, setDataGas] = useState<Record<string, any>>({});
   const [rawRecords, setRawRecords] = useState<any[]>([]);
@@ -522,22 +525,26 @@ export function MonitoringDashboard({
     return '';
   };
 
-  const generatePDF = async (tipe: string) => {
+  const generatePDF = async (tipe: string, targetLokasi?: string) => {
     setGeneratingPdf(true);
+    const locName = targetLokasi && targetLokasi !== 'ALL' ? targetLokasi : '';
+    setGeneratingTarget(locName ? `${tipe} ${locName}` : tipe);
     try {
       const periodLabel = getActivePeriodLabel();
-      const res = await buatPdfRekapan(tglMulai, tglAkhir, tipe, periodLabel);
+      const res = await buatPdfRekapan(tglMulai, tglAkhir, tipe, periodLabel, locName || undefined);
       if (res.status === 'error') {
-        toast.error(res.message || `Tidak ada data ${tipe} pada rentang waktu tersebut.`);
+        toast.error(res.message || `Tidak ada data ${tipe}${locName ? ' (' + locName + ')' : ''} pada rentang waktu tersebut.`);
       } else {
         setPdfLinks(res.links || []);
-        toast.success(`PDF ${tipe} (${periodLabel.replace(/_/g, ' ') || 'Periode Terpilih'}) berhasil dibuat! Silakan cek daftar link.`);
+        const targetDesc = locName ? locName : `Semua ${tipe}`;
+        toast.success(`PDF ${targetDesc} (${periodLabel.replace(/_/g, ' ') || 'Periode Terpilih'}) berhasil dibuat! Silakan cek daftar link di bawah.`);
       }
     } catch (e) {
       console.error(e);
       toast.error('Gagal membuat PDF');
     }
     setGeneratingPdf(false);
+    setGeneratingTarget('');
   };
 
   // Generate range of dates YYYY-MM-DD capped at today
@@ -1227,13 +1234,93 @@ export function MonitoringDashboard({
         </Button>
 
         {Object.keys(dataSuhu).length > 0 || Object.keys(dataGas).length > 0 ? (
-          <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100">
-            <Button onClick={() => generatePDF('SUHU')} variant="secondary" disabled={generatingPdf} className="border-rose-200 text-rose-600 hover:bg-rose-50">
-              {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <FileDown className="w-3.5 h-3.5 mr-1" />} PDF Suhu
-            </Button>
-            <Button onClick={() => generatePDF('GAS')} variant="secondary" disabled={generatingPdf} className="border-rose-200 text-rose-600 hover:bg-rose-50">
-              {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <FileDown className="w-3.5 h-3.5 mr-1" />} PDF Gas
-            </Button>
+          <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <FileDown className="w-4 h-4 text-rose-500" /> Ekspor Dokumen Rekap PDF:
+              </span>
+              <span className="text-[11px] text-slate-500">Pilih per instrumen/ruangan atau buat sekaligus semua</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Opsi PDF Gas */}
+              {Object.keys(dataGas).length > 0 && (
+                <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/40 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                      <Wind className="w-3.5 h-3.5 text-emerald-600" /> Tabung Gas
+                    </span>
+                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      {Object.keys(dataGas).length} Instrumen
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <select
+                      value={selectedGasOption}
+                      onChange={e => setSelectedGasOption(e.target.value)}
+                      className="flex-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-white text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-2xs cursor-pointer"
+                    >
+                      <option value="ALL">⚡ Buat Semua Tabung Gas Sekaligus</option>
+                      {Object.keys(dataGas).map(lok => (
+                        <option key={lok} value={lok}>🎯 Hanya {lok}</option>
+                      ))}
+                    </select>
+                    <Button 
+                      onClick={() => generatePDF('GAS', selectedGasOption)} 
+                      variant="secondary" 
+                      disabled={generatingPdf} 
+                      className="border-emerald-300 text-emerald-700 hover:bg-emerald-100 font-semibold text-xs px-3 shadow-2xs whitespace-nowrap"
+                    >
+                      {generatingPdf && (generatingTarget === `GAS ${selectedGasOption}` || (!generatingTarget && selectedGasOption === 'ALL')) ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                      ) : (
+                        <FileDown className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                      )} 
+                      {selectedGasOption === 'ALL' ? 'Cetak Semua' : 'Cetak'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Opsi PDF Suhu */}
+              {Object.keys(dataSuhu).length > 0 && (
+                <div className="p-3 rounded-xl border border-blue-200 bg-blue-50/40 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-blue-800 flex items-center gap-1.5">
+                      <ThermometerSun className="w-3.5 h-3.5 text-blue-600" /> Suhu & Kelembapan
+                    </span>
+                    <span className="text-[10px] font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                      {Object.keys(dataSuhu).length} Ruangan
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <select
+                      value={selectedSuhuOption}
+                      onChange={e => setSelectedSuhuOption(e.target.value)}
+                      className="flex-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-blue-300 bg-white text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs cursor-pointer"
+                    >
+                      <option value="ALL">⚡ Buat Semua Ruangan Sekaligus</option>
+                      {Object.keys(dataSuhu).map(lok => (
+                        <option key={lok} value={lok}>🎯 Hanya {lok}</option>
+                      ))}
+                    </select>
+                    <Button 
+                      onClick={() => generatePDF('SUHU', selectedSuhuOption)} 
+                      variant="secondary" 
+                      disabled={generatingPdf} 
+                      className="border-blue-300 text-blue-700 hover:bg-blue-100 font-semibold text-xs px-3 shadow-2xs whitespace-nowrap"
+                    >
+                      {generatingPdf && (generatingTarget === `SUHU ${selectedSuhuOption}` || (!generatingTarget && selectedSuhuOption === 'ALL')) ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                      ) : (
+                        <FileDown className="w-3.5 h-3.5 mr-1 text-blue-600" />
+                      )} 
+                      {selectedSuhuOption === 'ALL' ? 'Cetak Semua' : 'Cetak'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ) : null}
       </Card>
@@ -1299,14 +1386,30 @@ export function MonitoringDashboard({
               return (
                 <Card key={lok} className="border-l-4 border-l-blue-500 shadow-sm p-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-                    <h4 className="font-bold text-blue-700 flex items-center gap-2">
-                      <ThermometerSun className="w-4 h-4" /> {lok}
-                    </h4>
-                    {std?.refText && (
-                      <span className="text-xs font-semibold px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md">
-                        Acceptable Range: {std.refText}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-bold text-blue-700 flex items-center gap-2">
+                        <ThermometerSun className="w-4 h-4" /> {lok}
+                      </h4>
+                      {std?.refText && (
+                        <span className="text-xs font-semibold px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md">
+                          Acceptable Range: {std.refText}
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={generatingPdf}
+                      onClick={() => generatePDF('SUHU', lok)}
+                      className="border-blue-200 text-blue-700 hover:bg-blue-50 font-semibold text-xs px-2.5 py-1 h-auto shrink-0 shadow-2xs"
+                    >
+                      {generatingPdf && generatingTarget === `SUHU ${lok}` ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                      ) : (
+                        <FileDown className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
+                      )}
+                      Cetak PDF {lok}
+                    </Button>
                   </div>
                   <div className="space-y-6">
                     <div className="h-64">
@@ -1340,7 +1443,25 @@ export function MonitoringDashboard({
 
               return (
                 <Card key={lok} className="border-l-4 border-l-emerald-500 shadow-sm p-4">
-                  <h4 className="font-bold text-emerald-700 mb-4 flex items-center gap-2"><Wind className="w-4 h-4" /> {lok}</h4>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                    <h4 className="font-bold text-emerald-700 flex items-center gap-2">
+                      <Wind className="w-4 h-4" /> {lok}
+                    </h4>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={generatingPdf}
+                      onClick={() => generatePDF('GAS', lok)}
+                      className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-semibold text-xs px-2.5 py-1 h-auto shrink-0 shadow-2xs"
+                    >
+                      {generatingPdf && generatingTarget === `GAS ${lok}` ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                      ) : (
+                        <FileDown className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+                      )}
+                      Cetak PDF {lok}
+                    </Button>
+                  </div>
                   <div className="space-y-6">
                     <div className="h-64">
                       <Line 

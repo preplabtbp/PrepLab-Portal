@@ -2181,7 +2181,7 @@ router.get("/api/gallery", async (req, res) => {
 
 router.post("/api/pdf/generate", async (req, res) => {
     try {
-      const { tglMulai, tglAkhir, tipeLaporan, periodeLabel } = req.body;
+      const { tglMulai, tglAkhir, tipeLaporan, periodeLabel, targetLokasi } = req.body;
       const cleanTipe = (tipeLaporan || '').toUpperCase().trim();
       let data = await db.select().from(pemantauan);
       
@@ -2228,6 +2228,22 @@ router.post("/api/pdf/generate", async (req, res) => {
         dataPerLokasi[loc].push(row);
       });
 
+      // Filter by target location if specified (e.g. single instrument like Epsilon C or specific room)
+      let lokasiList = Object.keys(dataPerLokasi);
+      if (targetLokasi && typeof targetLokasi === 'string' && targetLokasi.trim() && targetLokasi.toUpperCase() !== 'ALL') {
+        const cleanTarget = targetLokasi.trim().toLowerCase();
+        lokasiList = lokasiList.filter(loc => {
+          const l = loc.toLowerCase();
+          return l === cleanTarget || l.includes(cleanTarget) || cleanTarget.includes(l);
+        });
+        if (lokasiList.length === 0) {
+          return res.status(404).json({
+            status: "error",
+            message: `Tidak ada data ${tipeLaporan} untuk lokasi "${targetLokasi}" pada rentang waktu tersebut.`
+          });
+        }
+      }
+
       // Fetch settings from DB for Template IDs
       const settingsObj: Record<string, string> = {};
       const allSettings = await db.select().from(appSettings);
@@ -2236,7 +2252,10 @@ router.post("/api/pdf/generate", async (req, res) => {
       });
 
       const TEMPLATE_SUHU_ID = settingsObj['INSPECTION_SUHU_TEMPLATE_DOC_ID'] || '1NEmvv2ZzVICoU_3TZWsdfIQNqc2pq6gLZnJHNFLbezk';
-      const TEMPLATE_GAS_ID = settingsObj['INSPECTION_GAS_TEMPLATE_DOC_ID'] || '1EzTAqn_8Xm0zL3Eo9kqMrbWT-GAGDVuwAVXP8kiUY44';
+      let TEMPLATE_GAS_ID = settingsObj['INSPECTION_GAS_TEMPLATE_DOC_ID'] || '1uVouTQjvR-izdhffN9kAe-axvXDK6TRuGeJZjZzM3b4';
+      if (!TEMPLATE_GAS_ID || TEMPLATE_GAS_ID === '1EzTAqn_8Xm0zL3Eo9kqMrbWT-GAGDVuwAVXP8kiUY44') {
+        TEMPLATE_GAS_ID = '1uVouTQjvR-izdhffN9kAe-axvXDK6TRuGeJZjZzM3b4';
+      }
       const FOLDER_ID = settingsObj['INSPECTION_PDF_DRIVE_FOLDER_ID'] || process.env.GOOGLE_DRIVE_FOLDER_ID || '1mit_4h0qI80mLOa-uE8TBGo6RY-_-PKW';
 
       const pdfLinks: Array<{ name: string; nama: string; url: string }> = [];
@@ -2270,7 +2289,6 @@ router.post("/api/pdf/generate", async (req, res) => {
         return j.trim();
       };
 
-      const lokasiList = Object.keys(dataPerLokasi);
       const results = await Promise.allSettled(
         lokasiList.map(async (lokasi) => {
           const rows = dataPerLokasi[lokasi];

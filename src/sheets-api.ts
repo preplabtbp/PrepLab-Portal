@@ -350,12 +350,12 @@ export const deletePemantauanRecord = async (id: number | string) => {
   return await res.json();
 };
 
-export const buatPdfRekapan = async (tglMulai: string, tglAkhir: string, tipeLaporan: string, periodeLabel?: string) => {
+export const buatPdfRekapan = async (tglMulai: string, tglAkhir: string, tipeLaporan: string, periodeLabel?: string, targetLokasi?: string) => {
   try {
     const res = await fetch('/api/pdf/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tglMulai, tglAkhir, tipeLaporan, periodeLabel })
+      body: JSON.stringify({ tglMulai, tglAkhir, tipeLaporan, periodeLabel, targetLokasi })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: `HTTP ${res.status}: Gagal memproses permintaan PDF` }));
