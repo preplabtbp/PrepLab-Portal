@@ -1885,20 +1885,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   const dayCfg = uiConfig[day] || { pagi: {}, malam: {} };
 
                   return (
-                    <div key={day} className="bg-slate-900/80 border border-slate-700/80 rounded-xl overflow-hidden shadow-sm">
+                    <div key={day} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
                       <div 
                         onClick={() => {
                           const next = new Set(openDays);
                           next.has(day) ? next.delete(day) : next.add(day);
                           setOpenDays(next);
                         }}
-                        className="flex items-center justify-between p-3 cursor-pointer hover:bg-slate-800/80 transition-colors select-none"
+                        className="flex items-center justify-between p-3 cursor-pointer hover:bg-slate-50 transition-colors select-none"
                       >
                         <div className="flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: DAY_COLORS[day] }} />
-                          <span className="font-bold text-xs text-slate-200">{day}</span>
+                          <span className="font-bold text-xs text-slate-800">{day}</span>
                           <span className={`text-[9px] font-mono uppercase px-1.5 py-0.2 rounded border ${
-                            isG ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                            isG ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'
                           }`}>
                             {isG ? 'Gabungan' : 'Split'}
                           </span>
@@ -1907,7 +1907,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       </div>
 
                       {isOpen && (
-                        <div className="p-3 border-t border-slate-700/60 bg-slate-950/40 space-y-3 text-xs">
+                        <div className="p-3 border-t border-slate-200 bg-slate-50/50 space-y-3 text-xs">
                           {/* Day Shift Slots */}
                           <div>
                             <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold block mb-1.5">
@@ -3672,17 +3672,17 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         const hasValidUrl = Boolean(previewImage.url && previewImage.url.trim() && previewImage.url !== '#' && previewImage.url !== 'undefined');
 
         return (
-          <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
-            <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-5xl h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
+            <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-5xl h-[88vh] flex flex-col shadow-2xl overflow-hidden">
               {/* Header */}
-              <div className="bg-slate-900 border-b border-slate-800 p-3 sm:p-4 flex items-center justify-between gap-3 shrink-0">
+              <div className="bg-slate-50 border-b border-slate-200 p-3 sm:p-4 flex items-center justify-between gap-3 shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-xs ${
                     info.isExcel 
-                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       : info.isPdf 
-                      ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30'
-                      : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                      ? 'bg-orange-50 text-orange-700 border border-orange-200'
+                      : 'bg-blue-50 text-blue-700 border border-blue-200'
                   }`}>
                     {info.isExcel ? (
                       <FileSpreadsheet className="w-5 h-5" />
@@ -3693,10 +3693,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     )}
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-bold text-sm sm:text-base text-white truncate">
+                    <h3 className="font-bold text-sm sm:text-base text-slate-800 truncate">
                       {previewImage.title}
                     </h3>
-                    <p className="text-[11px] text-slate-400 font-mono truncate">
+                    <p className="text-[11px] text-slate-500 font-mono truncate">
                       {info.isExcel 
                         ? '📊 Dokumen Spreadsheet Excel (.xlsx / .xls)' 
                         : info.isPdf 
@@ -3710,7 +3710,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   {hasValidUrl && info.isPdf && (
                     <button
                       onClick={() => setPdfViewerMode(prev => prev === 'drive' ? 'stream' : 'drive')}
-                      className="px-2.5 py-1.5 bg-indigo-900/60 hover:bg-indigo-800/80 text-indigo-200 rounded-xl text-xs flex items-center gap-1.5 border border-indigo-700/60 font-semibold transition-colors"
+                      className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs flex items-center gap-1.5 border border-indigo-200 font-semibold transition-colors"
                       title="Ganti Mode Viewer (Server Stream / Google Drive)"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
@@ -3724,7 +3724,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       href={info.viewUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold transition-colors cursor-pointer"
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs flex items-center gap-1.5 border border-slate-200 font-semibold transition-colors cursor-pointer"
                       title="Buka Stream di Tab Baru"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -3736,7 +3736,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       href={info.driveViewUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs flex items-center gap-1.5 border border-slate-200 transition-colors cursor-pointer"
                       title="Buka Dokumen Asli di Google Drive"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -3746,7 +3746,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   {hasValidUrl && (
                     <a
                       href={info.downloadUrl}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs flex items-center gap-1.5 font-bold shadow-md shadow-emerald-950 transition-colors cursor-pointer"
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs flex items-center gap-1.5 font-bold shadow-xs transition-colors cursor-pointer"
                       title="Unduh File"
                     >
                       <Download className="w-3.5 h-3.5" />
@@ -3755,7 +3755,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   )}
                   <button 
                     onClick={() => setPreviewImage(null)} 
-                    className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 flex items-center justify-center transition-colors font-bold cursor-pointer"
+                    className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-500 flex items-center justify-center transition-colors font-bold cursor-pointer border border-slate-200"
                     title="Tutup Pratinjau"
                   >
                     <X className="w-4 h-4" />
@@ -3764,7 +3764,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               </div>
 
               {/* Viewer Body */}
-              <div className="flex-1 bg-slate-950 relative min-h-0 w-full flex flex-col items-center justify-center p-2">
+              <div className="flex-1 bg-slate-100 relative min-h-0 w-full flex flex-col items-center justify-center p-2">
                 {hasValidUrl ? (
                   info.isExcel ? (
                     <ExcelViewer 
@@ -3776,7 +3776,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     <iframe 
                       src={pdfViewerMode === 'drive' ? (info.drivePreviewUrl || info.embedUrl) : info.streamUrl} 
                       title={previewImage.title}
-                      className="w-full h-full rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
+                      className="w-full h-full rounded-2xl border border-slate-200 shadow-inner bg-white"
                       allow="autoplay; encrypted-media; fullscreen"
                     />
                   ) : (
@@ -3795,17 +3795,17 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   )
                 ) : (
                   <div className="text-center p-8 max-w-md space-y-3">
-                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-700 border border-amber-200 flex items-center justify-center mx-auto">
                       <FileText className="w-8 h-8" />
                     </div>
-                    <h4 className="text-sm font-bold text-white">Dokumen Belum Dilampirkan</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
+                    <h4 className="text-sm font-bold text-slate-800">Dokumen Belum Dilampirkan</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed">
                       Belum ada tautan PDF, Excel, atau Flyer Google Drive untuk materi <b>"{previewImage.title}"</b>. Silakan perbarui materi pada menu <b>Bank Materi</b> atau hubungi tim QA.
                     </p>
                     <div className="pt-2">
                       <Button
                         onClick={() => setPreviewImage(null)}
-                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-4 rounded-xl shadow-md"
+                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs h-8 px-4 rounded-xl shadow-xs"
                       >
                         Tutup
                       </Button>
@@ -3815,7 +3815,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               </div>
 
               {/* Footer */}
-              <div className="bg-slate-900 border-t border-slate-800 px-4 py-2.5 flex items-center justify-between text-xs text-slate-400 shrink-0">
+              <div className="bg-slate-50 border-t border-slate-200 px-4 py-2.5 flex items-center justify-between text-xs text-slate-600 shrink-0">
                 <span className="font-mono text-[11px]">
                   {hasValidUrl 
                     ? (info.isExcel
@@ -3825,7 +3825,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </span>
                 <Button
                   onClick={() => setPreviewImage(null)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs h-7 px-3 rounded-lg"
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs h-7 px-3 rounded-lg"
                 >
                   Tutup
                 </Button>
@@ -3973,17 +3973,17 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
             </button>
 
             {selectNameOpen && (
-              <div className={`absolute z-50 ${popupPlacementClass} w-64 bg-slate-900 border border-slate-700 text-white rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 duration-100`}>
+              <div className={`absolute z-50 ${popupPlacementClass} w-64 bg-white border border-slate-200 text-slate-800 rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 duration-100`}>
                 <input
                   type="text"
                   placeholder="Cari personil / NIK..."
                   value={nameSearch}
                   onChange={e => setNameSearch(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white outline-none focus:border-amber-500 mb-1"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-[11px] text-slate-800 outline-none focus:border-amber-500 mb-1"
                   autoFocus
                 />
 
-                <div className="text-[10px] font-bold font-mono text-emerald-400 px-1 py-0.5 border-b border-slate-800 flex items-center justify-between">
+                <div className="text-[10px] font-bold font-mono text-emerald-700 px-1 py-0.5 border-b border-slate-100 flex items-center justify-between">
                   <span>Shift Sesuai ({eligibleCandidates.length})</span>
                 </div>
                 {eligibleCandidates.map(c => (
@@ -3995,18 +3995,18 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                       setSelectNameOpen(false);
                       setNameSearch('');
                     }}
-                    className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] hover:bg-slate-800 flex items-center justify-between transition-colors ${
-                      slot.nik === c.nik ? 'bg-amber-500/20 text-amber-300 font-bold' : 'text-slate-200'
+                    className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] hover:bg-slate-100 flex items-center justify-between transition-colors ${
+                      slot.nik === c.nik ? 'bg-amber-100 text-amber-900 font-bold' : 'text-slate-700'
                     }`}
                   >
                     <span className="font-semibold truncate pr-2">{c.nama}</span>
-                    <span className="text-[9px] text-slate-400 font-mono flex-shrink-0">{c.kelas || ''} ({c.pt})</span>
+                    <span className="text-[9px] text-slate-500 font-mono flex-shrink-0">{c.kelas || ''} ({c.pt})</span>
                   </button>
                 ))}
 
                 {otherCandidates.length > 0 && (
                   <>
-                    <div className="text-[10px] font-bold font-mono text-slate-500 px-1 pt-1.5 border-t border-slate-800">
+                    <div className="text-[10px] font-bold font-mono text-slate-500 px-1 pt-1.5 border-t border-slate-200">
                       Personil Shift Lain / Off ({otherCandidates.length})
                     </div>
                     {otherCandidates.slice(0, 15).map(c => (
@@ -4018,10 +4018,10 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                           setSelectNameOpen(false);
                           setNameSearch('');
                         }}
-                        className="w-full text-left px-2 py-1 rounded text-[10px] text-slate-400 hover:bg-slate-800 flex items-center justify-between"
+                        className="w-full text-left px-2 py-1 rounded text-[10px] text-slate-600 hover:bg-slate-100 flex items-center justify-between"
                       >
                         <span className="truncate pr-2">{c.nama}</span>
-                        <span className="text-[9px] font-mono text-slate-500 flex-shrink-0">({c.jadwal?.[day] || 'Off'})</span>
+                        <span className="text-[9px] font-mono text-slate-400 flex-shrink-0">({c.jadwal?.[day] || 'Off'})</span>
                       </button>
                     ))}
                   </>
@@ -4038,7 +4038,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
               {slot.nama || '— Tidak Ada SDM —'}
             </span>
             {isDouble && (
-              <span className="px-1.5 py-0.2 bg-slate-900 text-white font-black text-[9px] rounded font-mono shadow-sm shrink-0 mt-0.5">
+              <span className="px-1.5 py-0.2 bg-teal-50 text-teal-800 border border-teal-200 font-black text-[9px] rounded font-mono shadow-xs shrink-0 mt-0.5">
                 2×
               </span>
             )}
@@ -4083,13 +4083,13 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                 </button>
 
                 {selectMateriOpen && (
-                  <div className={`absolute z-50 ${popupPlacementClass} w-72 sm:w-80 bg-slate-900 border border-slate-700 text-white rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 sm:max-h-72 overflow-y-auto animate-in fade-in zoom-in-95 duration-100`}>
+                  <div className={`absolute z-50 ${popupPlacementClass} w-72 sm:w-80 bg-white border border-slate-200 text-slate-800 rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 sm:max-h-72 overflow-y-auto animate-in fade-in zoom-in-95 duration-100`}>
                     <input
                       type="text"
                       placeholder="Cari materi briefing..."
                       value={mSearch}
                       onChange={e => setMSearch(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white outline-none focus:border-amber-500"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-[11px] text-slate-800 outline-none focus:border-amber-500"
                       autoFocus
                     />
 
@@ -4103,7 +4103,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                           className={`px-1.5 py-0.5 rounded-md flex-shrink-0 transition-colors ${
                             mKatFilter === kat
                               ? 'bg-amber-500 text-slate-950 font-bold'
-                              : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                              : 'bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200'
                           }`}
                         >
                           {kat === 'All' ? 'Semua' : kat}
@@ -4112,14 +4112,14 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                     </div>
 
                     {/* Standard Routine Actions */}
-                    <div className="grid grid-cols-2 gap-1 border-b border-slate-800 pb-1.5">
+                    <div className="grid grid-cols-2 gap-1 border-b border-slate-100 pb-1.5">
                       <button
                         type="button"
                         onClick={() => {
                           onSelectMateri({ judul: 'Senam Bersama', kategori: 'Senam', subKategori: 'General' });
                           setSelectMateriOpen(false);
                         }}
-                        className="px-2 py-1 bg-purple-950/80 hover:bg-purple-900 border border-purple-700/60 text-purple-300 rounded-lg text-[10px] font-bold text-center"
+                        className="px-2 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 rounded-lg text-[10px] font-bold text-center"
                       >
                         🤸 Senam Bersama
                       </button>
@@ -4129,7 +4129,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                           onSelectMateri({ judul: 'Logbook & Evaluasi', kategori: 'Teknis', subKategori: 'General' });
                           setSelectMateriOpen(false);
                         }}
-                        className="px-2 py-1 bg-blue-950/80 hover:bg-blue-900 border border-blue-700/60 text-blue-300 rounded-lg text-[10px] font-bold text-center"
+                        className="px-2 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-lg text-[10px] font-bold text-center"
                       >
                         📋 Logbook
                       </button>
@@ -4151,26 +4151,26 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                               setSelectMateriOpen(false);
                               setMSearch('');
                             }}
-                            className={`w-full text-left p-1.5 rounded-lg hover:bg-slate-800 flex flex-col gap-0.5 transition-colors border ${
+                            className={`w-full text-left p-1.5 rounded-lg hover:bg-slate-50 flex flex-col gap-0.5 transition-colors border ${
                               slot.materi === item.judul
-                                ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
-                                : 'border-transparent text-slate-200'
+                                ? 'bg-amber-50 border-amber-300 text-amber-900'
+                                : 'border-transparent text-slate-700'
                             }`}
                           >
                             <span className="font-semibold text-[11px] leading-snug line-clamp-2">
                               {item.judul}
                             </span>
-                            <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-400">
-                              <span className={`px-1 rounded ${item.kategori === 'Teknis' ? 'bg-emerald-950 text-emerald-400' : 'bg-indigo-950 text-indigo-400'}`}>
+                            <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-500">
+                              <span className={`px-1 rounded ${item.kategori === 'Teknis' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'}`}>
                                 {item.kategori}
                               </span>
                               {item.subKategori && item.subKategori !== 'General' && (
-                                <span className="text-slate-400">
+                                <span className="text-slate-500">
                                   • {item.subKategori}
                                 </span>
                               )}
                               {item.fileUrl && (
-                                <span className="text-amber-400 flex items-center gap-0.5 ml-auto">
+                                <span className="text-amber-600 flex items-center gap-0.5 ml-auto font-semibold">
                                   <ImageIcon className="w-2.5 h-2.5" /> Flyer
                                 </span>
                               )}
@@ -4295,14 +4295,14 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
   return (
     <div className="space-y-2">
       {slots.map((sl, i) => (
-        <div key={i} className="bg-slate-900 border border-slate-700/80 rounded-xl p-2.5 space-y-2 shadow-sm">
+        <div key={i} className="bg-white border border-slate-200 rounded-xl p-2.5 space-y-2 shadow-xs">
           {/* Top Bar: Slot label, Category selector & Delete */}
-          <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-1.5">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
             <div className="flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-mono flex items-center justify-center font-bold">
+              <span className="w-5 h-5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-mono flex items-center justify-center font-bold">
                 {i + 1}
               </span>
-              <span className="text-[11px] font-bold text-slate-300">Slot {i + 1}</span>
+              <span className="text-[11px] font-bold text-slate-800">Slot {i + 1}</span>
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -4311,12 +4311,12 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
                 onChange={e => handleUpdate(i, 'kategori', e.target.value)}
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border outline-none cursor-pointer transition-colors ${
                   sl.kategori === 'Senam'
-                    ? 'bg-amber-950/80 text-amber-300 border-amber-700/60'
+                    ? 'bg-amber-50 text-amber-800 border-amber-200'
                     : sl.kategori === 'SOP / IK'
-                    ? 'bg-blue-950/80 text-blue-300 border-blue-700/60'
+                    ? 'bg-blue-50 text-blue-800 border-blue-200'
                     : sl.kategori === 'Non-Teknis'
-                    ? 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60'
-                    : 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
+                    ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                    : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                 }`}
                 title="Pilih Kategori Materi"
               >
@@ -4330,7 +4330,7 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
                 <button
                   type="button"
                   onClick={() => handleRemove(i)}
-                  className="text-slate-500 hover:text-rose-400 p-1 rounded-md hover:bg-slate-800 transition-colors"
+                  className="text-slate-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-colors"
                   title="Hapus slot ini"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -4342,13 +4342,13 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
           {/* Bottom Grid: Section & Level Selector */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[9px] uppercase font-mono font-bold text-slate-400 block mb-1">
+              <label className="text-[9px] uppercase font-mono font-bold text-slate-500 block mb-1">
                 Section
               </label>
               <select
                 value={sl.divisi || 'All'}
                 onChange={e => handleUpdate(i, 'divisi', e.target.value)}
-                className="w-full bg-slate-800 text-amber-300 border border-slate-700 rounded-lg px-2 py-1.5 outline-none text-[11px] font-semibold truncate hover:border-slate-600 focus:border-amber-500"
+                className="w-full bg-slate-50 text-slate-800 border border-slate-300 rounded-lg px-2 py-1.5 outline-none text-[11px] font-semibold truncate hover:border-slate-400 focus:border-amber-500"
                 title="Pilih Target Section"
               >
                 {sectionOptions.map(o => (
@@ -4358,13 +4358,13 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
             </div>
 
             <div>
-              <label className="text-[9px] uppercase font-mono font-bold text-slate-400 block mb-1">
+              <label className="text-[9px] uppercase font-mono font-bold text-slate-500 block mb-1">
                 Level Jabatan
               </label>
               <select
                 value={sl.kelas || 'All'}
                 onChange={e => handleUpdate(i, 'kelas', e.target.value)}
-                className="w-full bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-2 py-1.5 outline-none text-[11px] font-medium truncate hover:border-slate-600 focus:border-amber-500"
+                className="w-full bg-slate-50 text-slate-800 border border-slate-300 rounded-lg px-2 py-1.5 outline-none text-[11px] font-medium truncate hover:border-slate-400 focus:border-amber-500"
                 title="Pilih Target Level Jabatan"
               >
                 {KELAS_OPTIONS.map(o => (
@@ -4379,7 +4379,7 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
       <button
         type="button"
         onClick={handleAdd}
-        className="w-full text-center text-[11px] text-amber-400 hover:text-amber-300 py-1.5 border border-dashed border-slate-700 rounded-xl hover:bg-slate-900 transition-colors flex items-center justify-center gap-1.5 font-bold"
+        className="w-full text-center text-[11px] text-amber-700 hover:text-amber-800 py-1.5 border border-dashed border-amber-300 rounded-xl bg-amber-50/50 hover:bg-amber-100/60 transition-colors flex items-center justify-center gap-1.5 font-bold"
       >
         <Plus className="w-3.5 h-3.5" /> Tambah Slot
       </button>

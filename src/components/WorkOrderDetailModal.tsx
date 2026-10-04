@@ -431,7 +431,7 @@ export function WorkOrderDetailModal({
                       Laporan WO dibuat oleh section <strong className="text-teal-700 dark:text-teal-300">{wo.section || wo.department || 'Section Pemohon'}</strong> dan diteruskan ke tim Maintenance.
                     </span>
                   </div>
-                  <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-white dark:bg-slate-800 border shrink-0" style={{ borderColor: 'var(--border-main)' }}>
+                  <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-slate-50 text-slate-700 border shrink-0" style={{ borderColor: 'var(--border-main, #E2E8F0)' }}>
                     {wo.woId}
                   </span>
                 </div>

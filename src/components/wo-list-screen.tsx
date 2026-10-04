@@ -218,17 +218,17 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
       </div>
 
       {/* FILTER CONTROLS (Minggu ISO, Status, Search) */}
-      <Card className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+      <Card className="p-4 bg-white border border-slate-200 shadow-xs space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Filter Otomatis / Waktu */}
           <div>
-            <label className="text-[11px] font-bold block mb-1 text-slate-700 dark:text-slate-300">
+            <label className="text-[11px] font-bold block mb-1 text-slate-700">
               Filter Otomatis / Waktu
             </label>
             <select
               value={filterPeriod}
               onChange={e => setFilterPeriod(e.target.value)}
-              className="w-full h-9 text-xs font-semibold px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
+              className="w-full h-9 text-xs font-semibold px-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 outline-none focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
             >
               <optgroup label="⚡ Filter Cepat">
                 <option value="all">📅 Semua Waktu</option>
@@ -261,13 +261,13 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
 
           {/* Filter Status */}
           <div>
-            <label className="text-[11px] font-bold block mb-1 text-slate-700 dark:text-slate-300">
+            <label className="text-[11px] font-bold block mb-1 text-slate-700">
               Status WO
             </label>
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="w-full h-9 text-xs font-semibold px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
+              className="w-full h-9 text-xs font-semibold px-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 outline-none focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
             >
               <option value="ALL">Semua Status</option>
               <option value="OPEN">🔴 Open / Menunggu Perbaikan</option>
@@ -278,7 +278,7 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
 
           {/* Search Bar */}
           <div>
-            <label className="text-[11px] font-bold block mb-1 text-slate-700 dark:text-slate-300">
+            <label className="text-[11px] font-bold block mb-1 text-slate-700">
               Pencarian
             </label>
             <div className="relative">
@@ -288,7 +288,7 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
                 placeholder="Cari WO, alat, kendala..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full h-9 text-xs pl-8 pr-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500/30"
+                className="w-full h-9 text-xs pl-8 pr-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 outline-none focus:ring-2 focus:ring-teal-500/30"
               />
             </div>
           </div>
@@ -296,20 +296,20 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
 
         {/* Custom date range picker if custom selected */}
         {filterPeriod === 'custom' && (
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
             <span className="text-xs font-semibold text-slate-500">Rentang:</span>
             <input
               type="date"
               value={customStartDate}
               onChange={e => setCustomStartDate(e.target.value)}
-              className="text-xs px-2 py-1 rounded-lg border bg-white dark:bg-slate-800"
+              className="text-xs px-2 py-1 rounded-lg border border-slate-300 bg-white text-slate-800"
             />
             <span className="text-xs text-slate-400">-</span>
             <input
               type="date"
               value={customEndDate}
               onChange={e => setCustomEndDate(e.target.value)}
-              className="text-xs px-2 py-1 rounded-lg border bg-white dark:bg-slate-800"
+              className="text-xs px-2 py-1 rounded-lg border border-slate-300 bg-white text-slate-800"
             />
           </div>
         )}

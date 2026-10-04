@@ -1115,7 +1115,7 @@ export function SimplifiedInspectionModal({
                       <button
                         type="submit"
                         disabled={submittingWeekly || (!weeklyImagePreview && !weeklyImageFile)}
-                        className="w-full py-2.5 rounded-2xl bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 active:scale-95 transition-all cursor-pointer"
+                        className="w-full py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 active:scale-95 transition-all cursor-pointer"
                       >
                         {submittingWeekly ? (
                           <>
@@ -1415,7 +1415,7 @@ export function SimplifiedInspectionModal({
                         <ChevronLeft className="w-4 h-4" />
                         <span>Kembali ke Daftar</span>
                       </button>
-                      <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[var(--text-main)]">
+                      <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                         {closingTicket.ticketId}
                       </span>
                     </div>

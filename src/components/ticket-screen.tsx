@@ -420,7 +420,7 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
             </button>
             <button
               onClick={() => setShowGallery(false)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Kembali ke Tiket</span>
@@ -429,38 +429,38 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
         </PageHeader>
 
         {/* QA Weekly Presentation Banner */}
-        <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 p-5 rounded-2xl border border-teal-900/50 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="bg-gradient-to-r from-teal-50 via-emerald-50 to-slate-50 p-5 rounded-2xl border border-teal-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="bg-teal-500/20 text-teal-300 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full tracking-wider border border-teal-500/30">
+              <span className="bg-teal-500/15 text-teal-800 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full tracking-wider border border-teal-500/30">
                 QA Weekly Presentation Mode
               </span>
-              <span className="text-slate-400 text-xs font-medium">
+              <span className="text-slate-600 text-xs font-medium">
                 {selectedGalleryWeek === 'ALL' ? 'Semua Minggu' : selectedGalleryWeek}
               </span>
             </div>
-            <h3 className="text-lg font-bold text-white">Dokumentasi Visual Hasil Inspeksi</h3>
-            <p className="text-xs text-slate-300">
-              Gunakan tombol <span className="font-semibold text-teal-300">Unduh Foto</span> atau <span className="font-semibold text-teal-300">Download ZIP</span> untuk merekap foto dengan nama file standar inspeksi.
+            <h3 className="text-lg font-bold text-slate-900">Dokumentasi Visual Hasil Inspeksi</h3>
+            <p className="text-xs text-slate-600">
+              Gunakan tombol <span className="font-semibold text-teal-700">Unduh Foto</span> atau <span className="font-semibold text-teal-700">Download ZIP</span> untuk merekap foto dengan nama file standar inspeksi.
             </p>
           </div>
           
-          <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/10 shrink-0 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-3 bg-white/90 backdrop-blur-md p-3 rounded-xl border border-teal-200/80 shrink-0 flex-wrap sm:flex-nowrap shadow-xs">
             <div className="text-center px-2">
-              <p className="text-2xl font-black text-teal-400">{filteredGalleryPhotos.length}</p>
-              <p className="text-[10px] uppercase font-bold text-slate-300 tracking-wider">Total Foto</p>
+              <p className="text-2xl font-black text-teal-600">{filteredGalleryPhotos.length}</p>
+              <p className="text-[10px] uppercase font-bold text-slate-600 tracking-wider">Total Foto</p>
             </div>
-            <div className="w-[1px] h-8 bg-white/20" />
+            <div className="w-[1px] h-8 bg-slate-200" />
             <div className="text-center px-2">
-              <p className="text-2xl font-black text-amber-400">{Object.keys(galleryGroupedByCategory).length}</p>
-              <p className="text-[10px] uppercase font-bold text-slate-300 tracking-wider">Kategori Form</p>
+              <p className="text-2xl font-black text-amber-600">{Object.keys(galleryGroupedByCategory).length}</p>
+              <p className="text-[10px] uppercase font-bold text-slate-600 tracking-wider">Kategori Form</p>
             </div>
-            <div className="w-[1px] h-8 bg-white/20" />
+            <div className="w-[1px] h-8 bg-slate-200" />
             <button
               type="button"
               onClick={handleDownloadAllZip}
               disabled={isZipping || filteredGalleryPhotos.length === 0}
-              className="px-3.5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-teal-500/20 transition-all cursor-pointer disabled:opacity-50"
+              className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
             >
               {isZipping ? (
                 <>
@@ -863,14 +863,14 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
             <select 
               value={filter} 
               onChange={(e) => setFilter(e.target.value)}
-              className="h-10 pl-9 pr-8 text-xs font-bold rounded-xl bg-slate-800/90 hover:bg-slate-750 text-white border border-slate-600/70 backdrop-blur-md transition-all outline-none focus:ring-2 focus:ring-amber-400/50 cursor-pointer shadow-sm appearance-none"
+              className="h-10 pl-9 pr-8 text-xs font-bold rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 transition-all outline-none focus:ring-2 focus:ring-teal-500/40 cursor-pointer shadow-xs appearance-none"
             >
-              <option value="OPEN" className="bg-slate-900 text-white py-1">🔴 Tiket Terbuka</option>
-              <option value="CLOSED" className="bg-slate-900 text-white py-1">🟢 Tiket Selesai</option>
-              <option value="ALL" className="bg-slate-900 text-white py-1">📋 Semua Tiket</option>
+              <option value="OPEN" className="py-1">🔴 Tiket Terbuka</option>
+              <option value="CLOSED" className="py-1">🟢 Tiket Selesai</option>
+              <option value="ALL" className="py-1">📋 Semua Tiket</option>
             </select>
-            <Filter className="w-3.5 h-3.5 text-amber-300 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <ChevronDown className="w-3.5 h-3.5 text-white/60 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Filter className="w-3.5 h-3.5 text-teal-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
 
           {/* Tombol Buka Galeri Foto */}
