@@ -560,21 +560,21 @@ export function SectionHubDashboard({
   }, [currentCalDate, sectionAgendaEvents]);
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300 pb-16 bg-white min-h-screen">
-      {/* 1. Cover Banner Image (Matching Notion Banner Aesthetics) */}
-      <div className="w-full h-44 sm:h-56 md:h-64 lg:h-72 overflow-hidden relative group rounded-2xl md:rounded-3xl border border-slate-200/80 shadow-xs bg-slate-100">
+    <div className="w-full space-y-6 animate-in fade-in duration-300 pb-20 bg-white min-h-screen">
+      {/* 1. Cover Banner Image (Matching Notion Banner Aesthetics - Full Width) */}
+      <div className="w-full h-48 sm:h-60 md:h-72 lg:h-80 overflow-hidden relative group rounded-2xl border border-slate-200/80 shadow-xs bg-slate-100">
         <img
           src={post.coverImage && post.coverImage.startsWith('http') ? post.coverImage : config.bannerUrl}
           alt={sectionTitle}
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).src = config.bannerUrl;
           }}
-          className="w-full h-full object-cover object-center group-hover:scale-102 transition-transform duration-700"
+          className="w-full h-full object-cover object-center group-hover:scale-101 transition-transform duration-700"
         />
       </div>
 
       {/* 2. Header Area: Floating Icon, Metadata Actions, Big Title, Home Button */}
-      <div className="px-4 sm:px-8 space-y-2">
+      <div className="px-2 sm:px-4 md:px-6 space-y-2">
         {/* Floating Page Icon */}
         <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-white border border-slate-200/90 shadow-md flex items-center justify-center text-3xl md:text-4xl -mt-10 md:-mt-12 relative z-10">
           {config.icon}
@@ -613,7 +613,7 @@ export function SectionHubDashboard({
           - If hasRules: 2 Columns side-by-side (INFO in soft blue, RULES in soft cream)
           - If !hasRules (e.g. PROSEDUR, INFORMATION): Single column spanning full width matching Notion screenshots
       */}
-      <div className="px-4 sm:px-8 pt-4">
+      <div className="px-2 sm:px-4 md:px-6 pt-4">
         {hasRules ? (
           /* Two Column Layout (Laboratorium, Administrasi, Preparasi, etc.) */
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
@@ -686,8 +686,8 @@ export function SectionHubDashboard({
             </div>
           </div>
         ) : (
-          /* Single Column Layout (PROSEDUR & INFORMATION) */
-          <div className="max-w-4xl space-y-3">
+          /* Single Column Layout (PROSEDUR & INFORMATION) - FULL FLUID WIDTH */
+          <div className="w-full space-y-3">
             {/* INFO Title Banner Bar */}
             <div className="bg-[#eef5fc] border border-[#dcecfb] rounded-lg px-4 py-2 flex items-center justify-between">
               <span className="font-serif italic font-normal text-2xl md:text-3xl text-[#1e3a5f] tracking-wide">
@@ -724,7 +724,7 @@ export function SectionHubDashboard({
 
       {/* 4. Section Agenda / Calendar View (Matching Image 3: "Agenda Laboratorium") */}
       {config.showAgenda && (
-        <div className="px-4 sm:px-8 pt-8 space-y-4">
+        <div className="px-2 sm:px-4 md:px-6 pt-8 space-y-4">
           {/* Header Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
             <div>
@@ -888,7 +888,7 @@ export function SectionHubDashboard({
       )}
 
       {/* 5. HARITA WAYS Banner (Soft Natural Sage/Emerald Notion Callout) */}
-      <div className="px-4 sm:px-8 pt-4">
+      <div className="px-2 sm:px-4 md:px-6 pt-4">
         <div className="rounded-2xl border border-emerald-200 bg-[#f0fdf4] p-4 shadow-2xs flex items-center justify-between">
           <div className="flex items-start sm:items-center gap-3 w-full">
             <div className="p-2 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 text-base shrink-0 mt-0.5 sm:mt-0">
@@ -923,7 +923,7 @@ export function SectionHubDashboard({
 
       {/* 6. Extra Links / Bookmarks if present */}
       {config.extraLinks && config.extraLinks.length > 0 && (
-        <div className="px-4 sm:px-8 pt-2">
+        <div className="px-2 sm:px-4 md:px-6 pt-2">
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-700">
