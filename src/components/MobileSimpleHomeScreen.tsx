@@ -326,24 +326,25 @@ export function MobileSimpleHomeScreen({
           </div>
         </div>
 
-        {/* Compact Daily Motivational Quote Ticker */}
+        {/* Daily Motivational Quote Ticker (Adaptive Card Height, No Cutoff) */}
         {activeCommunityQuote && (
           <div 
             onClick={() => {
               setQuotesModalTab('details');
               setShowQuotesPoolModal(true);
             }}
-            className="mt-3.5 pt-2.5 border-t border-[var(--border-main)]/60 flex items-center justify-between gap-2 text-xs cursor-pointer group hover:bg-amber-500/5 -mx-1 px-1 rounded-lg transition-colors"
+            className="mt-3.5 pt-2.5 border-t border-[var(--border-main)]/60 flex items-start justify-between gap-2.5 text-xs cursor-pointer group hover:bg-amber-500/5 -mx-1 px-1.5 py-1 rounded-xl transition-all"
             title="Buka Detail & Kumpulan Quotes Komunitas"
           >
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <p className="text-[11px] italic text-[var(--text-muted)] truncate group-hover:text-[var(--text-main)] transition-colors">
+            <div className="flex items-start gap-2 min-w-0 flex-1">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-[11px] sm:text-xs italic text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors break-words leading-relaxed whitespace-normal">
                 "{activeCommunityQuote.quote}"
               </p>
             </div>
-            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold shrink-0 flex items-center">
-              Quote <ChevronRight className="w-3 h-3 inline" />
+            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold shrink-0 flex items-center gap-0.5 mt-0.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 group-hover:bg-amber-500/20 transition-colors">
+              <span>Quote</span>
+              <ChevronRight className="w-3 h-3" />
             </span>
           </div>
         )}
