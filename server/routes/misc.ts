@@ -970,8 +970,20 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     const registerCompletedUser = (key: string, info: any) => {
       if (!key) return;
       const cleanKey = key.toString().trim().toLowerCase();
-      if (cleanKey && !completedSet.has(cleanKey)) {
+      if (!cleanKey) return;
+
+      const existing = completedSet.get(cleanKey);
+      if (!existing) {
         completedSet.set(cleanKey, info);
+      } else {
+        // If current info has a valid pdfUrl and existing does not, or info is newer, prioritize it!
+        const existingHasPdf = existing.pdfUrl && existing.pdfUrl !== '-' && existing.pdfUrl !== '#';
+        const newHasPdf = info.pdfUrl && info.pdfUrl !== '-' && info.pdfUrl !== '#';
+        if (!existingHasPdf && newHasPdf) {
+          completedSet.set(cleanKey, { ...existing, ...info });
+        } else if (newHasPdf && existingHasPdf && info.timestamp && existing.timestamp && new Date(info.timestamp) >= new Date(existing.timestamp)) {
+          completedSet.set(cleanKey, { ...existing, ...info });
+        }
       }
     };
 
@@ -981,9 +993,23 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       allGroupReports.forEach(msg => {
         const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
         if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
+          let cleanPdfUrl = msg.pdfUrl;
+          let pdfUrlTbp: string | null = null;
+          let pdfUrlGps: string | null = null;
+          if (cleanPdfUrl && typeof cleanPdfUrl === 'string' && cleanPdfUrl.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(cleanPdfUrl);
+              pdfUrlTbp = parsed.tbp || null;
+              pdfUrlGps = parsed.gps || null;
+              cleanPdfUrl = pdfUrlTbp || pdfUrlGps || (Object.values(parsed)[0] as string) || null;
+            } catch (e) {}
+          }
+
           const info = {
             timestamp: msg.timestamp,
-            pdfUrl: msg.pdfUrl,
+            pdfUrl: cleanPdfUrl,
+            pdfUrlTbp,
+            pdfUrlGps,
             pdfTitle: msg.pdfTitle || 'Laporan Inspeksi',
             week: msgWeek
           };
@@ -1012,9 +1038,9 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       console.error('Error in fetchAllGroupReports for rekap:', e);
     }
 
-    // 2. Direct deep scan of DB `inspections` table (including dataF inspector payloads)
+    // 2. Direct deep scan of DB `inspections` table (ordered by ID desc so newest are evaluated first)
     try {
-      const dbInspections = await db.select().from(inspections);
+      const dbInspections = await db.select().from(inspections).orderBy(desc(inspections.id));
       dbInspections.forEach((insp: any) => {
         let dataFObj: any = {};
         let dataFArray: any[] = [];
@@ -1040,10 +1066,24 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         const inspWeek = getISOWeekTag(actualDate);
 
         if (selectedWeek === 'ALL' || inspWeek === selectedWeek) {
+          let cleanPdfUrl = insp.pdfUrl;
+          let pdfUrlTbp: string | null = null;
+          let pdfUrlGps: string | null = null;
+          if (cleanPdfUrl && typeof cleanPdfUrl === 'string' && cleanPdfUrl.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(cleanPdfUrl);
+              pdfUrlTbp = parsed.tbp || null;
+              pdfUrlGps = parsed.gps || null;
+              cleanPdfUrl = pdfUrlTbp || pdfUrlGps || (Object.values(parsed)[0] as string) || null;
+            } catch (e) {}
+          }
+
           const title = insp.type || insp.judulForm || dataFObj.judulForm || 'Laporan Inspeksi';
           const info = {
             timestamp: createdIso,
-            pdfUrl: insp.pdfUrl,
+            pdfUrl: cleanPdfUrl,
+            pdfUrlTbp,
+            pdfUrlGps,
             pdfTitle: title,
             week: inspWeek
           };
@@ -1175,9 +1215,18 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       let isDone = false;
       let isManualOverride = false;
 
+      let resolvedPdfUrl = pdfInfo?.pdfUrl || null;
+      if (emp.pt === 'GPS' && pdfInfo?.pdfUrlGps) {
+        resolvedPdfUrl = pdfInfo.pdfUrlGps;
+      } else if (emp.pt === 'TBP' && pdfInfo?.pdfUrlTbp) {
+        resolvedPdfUrl = pdfInfo.pdfUrlTbp;
+      }
+
       let checkDetails = {
         pdfDone: hasPdf,
-        pdfUrl: pdfInfo?.pdfUrl || null,
+        pdfUrl: resolvedPdfUrl,
+        pdfUrlTbp: pdfInfo?.pdfUrlTbp || null,
+        pdfUrlGps: pdfInfo?.pdfUrlGps || null,
         pdfTitle: pdfInfo?.pdfTitle || null,
         pdfTimestamp: pdfInfo?.timestamp || null,
         ssDone: hasSs,
@@ -1217,7 +1266,9 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         isCuti: false,
         checkDetails,
         completedAt: ssInfo?.timestamp || pdfInfo?.timestamp || null,
-        pdfUrl: pdfInfo?.pdfUrl || null,
+        pdfUrl: resolvedPdfUrl,
+        pdfUrlTbp: pdfInfo?.pdfUrlTbp || null,
+        pdfUrlGps: pdfInfo?.pdfUrlGps || null,
         pdfTitle: pdfInfo?.pdfTitle || null,
         ssUrl: ssInfo?.imageUrl || null,
         week: isDone ? (pdfInfo?.week || selectedWeek) : selectedWeek

@@ -56,10 +56,6 @@ export function FloatingFeedbackButton({
   ) && !jab.includes('spv') && !jab.includes('supervisor') && !jab.includes('foreman') && !jab.includes('officer') &&
     !jab.includes('analyst') && !jab.includes('superintendent') && !jab.includes('manager') && !jab.includes('admin'));
 
-  if (currentPath === '/feedback-support' || isCrew) {
-    return null;
-  }
-
   const [isOpen, setIsOpen] = useState(false);
   const [type, setType] = useState<'suggestion' | 'bug' | 'improvement' | 'question'>('suggestion');
   const [module, setModule] = useState(() => {
@@ -173,6 +169,10 @@ export function FloatingFeedbackButton({
       setSubmitting(false);
     }
   };
+
+  if (currentPath === '/feedback-support' || isCrew) {
+    return null;
+  }
 
   return (
     <>

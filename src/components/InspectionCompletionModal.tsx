@@ -43,6 +43,9 @@ interface InspectionCompletionModalProps {
 export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionCompletionModalProps) {
   const [targetNumber, setTargetNumber] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copiedPdf1, setCopiedPdf1] = useState(false);
+  const [copiedPdf2, setCopiedPdf2] = useState(false);
+  const [copiedGeneralUrl, setCopiedGeneralUrl] = useState(false);
   const alertedRef = React.useRef<string | null>(null);
 
   useEffect(() => {
@@ -96,10 +99,6 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
     const match = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
     return match ? match[1] : null;
   };
-
-  const [copiedPdf1, setCopiedPdf1] = useState(false);
-  const [copiedPdf2, setCopiedPdf2] = useState(false);
-  const [copiedGeneralUrl, setCopiedGeneralUrl] = useState(false);
 
   // Return a mobile-friendly view URL that avoids Google Drive virus scan block / login loops on smartphones
   const getMobileViewUrl = (rawUrl?: string | null) => {

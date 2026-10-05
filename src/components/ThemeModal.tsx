@@ -360,8 +360,6 @@ export default function ThemeModal({
   inspectorNik: string | null;
   onThemeUpdated: (mode: string, colors: ThemeColors, applyToAll?: boolean) => void;
 }) {
-  if (!show) return null;
-
   const [activeTab, setActiveTab] = useState<'templates' | 'studio' | 'preview'>('templates');
   const [targetMode, setTargetMode] = useState(currentMode || 'morning');
   const [applyToAllModes, setApplyToAllModes] = useState(true);
@@ -762,6 +760,8 @@ export default function ThemeModal({
     setEditingTemplateId(null);
     toast.success('Palet acak cantik berhasil dimuat!');
   };
+
+  if (!show) return null;
 
   return (
     <div className={`fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center animate-in fade-in duration-200 ${
