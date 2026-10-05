@@ -211,22 +211,20 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
         return false;
       }
 
+      // If taskDate is set in the future (after targetDate), strictly do not display in planning yet!
+      if (t.taskDate && t.taskDate > targetDate) {
+        return false;
+      }
+
       const cadence = resolveRoutineCadence(t);
       const windowDays = getRoutineWindowDays(cadence);
 
-      // Daily Routine appears continuous every day
+      // Daily Routine appears continuous every day once taskDate is reached
       if (windowDays >= 99999) return true;
 
-      // For Weekly (D-3), Monthly (D-7), Quarterly (M-1 / 30d), Biannual (M-2 / 60d), Yearly (M-3 / 90d):
-      const deadlineStr = t.targetDate || t.taskDate;
-      if (!deadlineStr) return true;
-
-      const deadlineTime = new Date(deadlineStr).getTime();
-      const targetTime = new Date(targetDate).getTime();
-      const diffDays = Math.ceil((deadlineTime - targetTime) / (1000 * 60 * 60 * 24));
-
-      // Eligible when within threshold window or overdue before completion
-      return diffDays <= windowDays;
+      // For Weekly, Monthly, Quarterly, Biannual, Yearly:
+      // Once its start date is reached (taskDate <= targetDate), it stays active until finished or past deadline
+      return true;
     };
 
     // Helper to check if task is planned/scheduled for targetDateStr
@@ -241,8 +239,13 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
     // 1. Today tasks:
     //    - STRICTLY tasks planned/scheduled to be progressed on targetDateStr (today)
     //    - Either originally created for targetDateStr, OR explicitly scheduled/planned for targetDateStr (plannedDate)
-    //    - OR active Routine tasks eligible for targetDateStr (Daily continuous, Weekly within D-3, Monthly within D-7)
+    //    - OR active Routine tasks eligible for targetDateStr (Daily continuous, Weekly, Monthly)
+    //    - STRICT GUARD: If a task is scheduled for a future period (taskDate > today), NEVER show in today's planning!
     const todayTasks = allMatching.filter(t => {
+      // Future tasks must NOT appear in today's planning
+      if (t.taskDate && t.taskDate > targetDateStr) return false;
+      if (t.plannedDate && t.plannedDate > targetDateStr && !isTaskPlannedForDate(t, targetDateStr)) return false;
+
       if (isTaskPlannedForDate(t, targetDateStr)) return true;
       if (isRoutineEligibleForDate(t, targetDateStr) && t.taskDate <= targetDateStr) return true;
       return false;
@@ -436,6 +439,7 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
       priority,
       activityType,
       taskDate: assignedDate,
+      plannedDate: req.body.plannedDate || assignedDate,
       targetDate: targetDate || '-',
       targetTime: finalTargetTime,
       status: initialStatus,

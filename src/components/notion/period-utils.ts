@@ -326,6 +326,128 @@ export function getNextDefaultTargetDate(
   return next.toISOString().split('T')[0];
 }
 
+export interface NextPeriodSchedule {
+  nextPeriod: string;
+  nextStartDate: string; // 'YYYY-MM-DD' - Tanggal mulai periode baru (kapan pertama kali muncul di planning)
+  nextTargetDate: string; // 'YYYY-MM-DD' - Target selesai periode baru
+}
+
+/**
+ * Calculates next period label, start date (first day it appears in planning kerja),
+ * and target date according to routine rules:
+ * - Daily: starts tomorrow (+1 day), targets tomorrow
+ * - Weekly: starts on the FIRST DAY of next week (Monday/Senin), targets Sunday
+ * - Monthly: starts on the FIRST DAY of next month (1st), targets last day of month
+ * - Quarterly: starts on 1st day of next quarter, targets last day of quarter
+ * - Biannual: starts on 1st day of next semester, targets last day of semester
+ * - Yearly: starts on Jan 1st of next year, targets Dec 31st of next year
+ */
+export function getNextPeriodSchedule(
+  cadence: RoutineCadence | string | null | undefined,
+  currentPeriod?: string | null,
+  baseDateStr?: string | null
+): NextPeriodSchedule {
+  const norm = normalizeCadence(cadence) || 'Daily';
+  let base = new Date();
+  if (baseDateStr) {
+    const parsed = new Date(baseDateStr.includes('T') ? baseDateStr : `${baseDateStr}T12:00:00`);
+    if (!isNaN(parsed.getTime())) {
+      base = parsed;
+    }
+  }
+
+  const nextPeriodLabel = getNextSubPeriod(currentPeriod, norm);
+
+  const formatYMD = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  let nextStartDate = '';
+  let nextTargetDate = '';
+
+  switch (norm) {
+    case 'Daily': {
+      const nextDay = new Date(base);
+      nextDay.setDate(base.getDate() + 1);
+      nextStartDate = formatYMD(nextDay);
+      nextTargetDate = nextStartDate;
+      break;
+    }
+
+    case 'Weekly': {
+      // First day of next week: Monday (Senin)
+      const dayOfWeek = base.getDay(); // 0 = Sunday, 1 = Monday, 2 = Tuesday, ...
+      const daysUntilNextMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+      const nextMonday = new Date(base);
+      nextMonday.setDate(base.getDate() + daysUntilNextMonday);
+      nextStartDate = formatYMD(nextMonday);
+
+      // Target date: Sunday of that week (+6 days from Monday)
+      const nextSunday = new Date(nextMonday);
+      nextSunday.setDate(nextMonday.getDate() + 6);
+      nextTargetDate = formatYMD(nextSunday);
+      break;
+    }
+
+    case 'Monthly': {
+      // First day of next month: Tanggal 1 bulan berikutnya
+      const nextMonthFirst = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+      nextStartDate = formatYMD(nextMonthFirst);
+
+      // Target date: Last day of that next month
+      const nextMonthLast = new Date(base.getFullYear(), base.getMonth() + 2, 0);
+      nextTargetDate = formatYMD(nextMonthLast);
+      break;
+    }
+
+    case 'Quarterly': {
+      const curQuarter = Math.floor(base.getMonth() / 3);
+      const nextQuarterFirst = new Date(base.getFullYear(), (curQuarter + 1) * 3, 1);
+      nextStartDate = formatYMD(nextQuarterFirst);
+
+      const nextQuarterLast = new Date(nextQuarterFirst.getFullYear(), nextQuarterFirst.getMonth() + 3, 0);
+      nextTargetDate = formatYMD(nextQuarterLast);
+      break;
+    }
+
+    case 'Biannual': {
+      const curSem = base.getMonth() < 6 ? 0 : 1;
+      const nextSemFirst = new Date(base.getFullYear(), (curSem + 1) * 6, 1);
+      nextStartDate = formatYMD(nextSemFirst);
+
+      const nextSemLast = new Date(nextSemFirst.getFullYear(), nextSemFirst.getMonth() + 6, 0);
+      nextTargetDate = formatYMD(nextSemLast);
+      break;
+    }
+
+    case 'Yearly': {
+      const nextYearFirst = new Date(base.getFullYear() + 1, 0, 1);
+      nextStartDate = formatYMD(nextYearFirst);
+
+      const nextYearLast = new Date(base.getFullYear() + 1, 11, 31);
+      nextTargetDate = formatYMD(nextYearLast);
+      break;
+    }
+
+    default: {
+      const nextDay = new Date(base);
+      nextDay.setDate(base.getDate() + 1);
+      nextStartDate = formatYMD(nextDay);
+      nextTargetDate = nextStartDate;
+      break;
+    }
+  }
+
+  return {
+    nextPeriod: nextPeriodLabel,
+    nextStartDate,
+    nextTargetDate
+  };
+}
+
 /**
  * Resets all checklist items in a markdown text to unchecked (- [ ])
  * and strips any checked date annotations

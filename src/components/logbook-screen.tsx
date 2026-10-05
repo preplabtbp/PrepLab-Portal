@@ -71,6 +71,7 @@ import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
 import {
   getNextSubPeriod,
   getNextDefaultTargetDate,
+  getNextPeriodSchedule,
   resetAllTasklistItems,
   normalizeCadence
 } from './notion/period-utils';
@@ -870,7 +871,7 @@ export function LogbookScreen({
         isRoutine: false,
         cadence: 'Non Routine',
         label: '⚡ Non Routine',
-        color: 'bg-slate-100 text-slate-950 border-slate-300 font-black',
+        color: 'bg-slate-100 text-slate-800 border-slate-200 font-medium',
         windowDesc: 'Harian (Ad-hoc)',
         dDayText: null
       };
@@ -904,32 +905,32 @@ export function LogbookScreen({
 
     const cLower = cadence.toLowerCase();
     let label = '🔁 Routine';
-    let color = 'bg-teal-100 text-teal-950 border-teal-400 font-black';
+    let color = 'bg-teal-50 text-teal-900 border-teal-200/80 font-medium';
     let windowDesc = 'Harian';
 
     if (cLower.includes('daily')) {
       label = '🔁 Daily';
-      color = 'bg-teal-100 text-teal-950 border-teal-400 font-black';
+      color = 'bg-teal-50 text-teal-900 border-teal-200/80 font-medium';
       windowDesc = 'Muncul Tiap Hari';
     } else if (cLower.includes('weekly')) {
       label = '📅 Weekly';
-      color = 'bg-blue-100 text-blue-950 border-blue-400 font-black';
+      color = 'bg-sky-50 text-sky-900 border-sky-200/80 font-medium';
       windowDesc = 'Muncul Mulai D-3';
     } else if (cLower.includes('monthly')) {
       label = '🗓️ Monthly';
-      color = 'bg-indigo-100 text-indigo-950 border-indigo-400 font-black';
+      color = 'bg-indigo-50 text-indigo-900 border-indigo-200/80 font-medium';
       windowDesc = 'Muncul Mulai D-7';
     } else if (cLower.includes('quarterly')) {
       label = '📊 Quarterly';
-      color = 'bg-purple-100 text-purple-950 border-purple-400 font-black';
+      color = 'bg-purple-50 text-purple-900 border-purple-200/80 font-medium';
       windowDesc = 'Muncul Mulai M-1';
     } else if (cLower.includes('biannual')) {
       label = '⏳ Biannual';
-      color = 'bg-amber-100 text-amber-950 border-amber-400 font-black';
+      color = 'bg-amber-50 text-amber-900 border-amber-200/80 font-medium';
       windowDesc = 'Muncul Mulai M-2';
     } else if (cLower.includes('yearly')) {
       label = '🎯 Yearly';
-      color = 'bg-rose-100 text-rose-950 border-rose-400 font-black';
+      color = 'bg-rose-50 text-rose-900 border-rose-200/80 font-medium';
       windowDesc = 'Muncul Mulai M-3';
     }
 
@@ -1000,18 +1001,18 @@ export function LogbookScreen({
         durationLabel = `Tuntas dalam ${dayCount} Hari`;
         durationShort = `${dayCount} Hari`;
       }
-      badgeClass = 'bg-emerald-100 text-emerald-950 border-emerald-400 font-black';
+      badgeClass = 'bg-emerald-50 text-emerald-900 border-emerald-200/80 font-medium';
     } else {
       if (rawDays <= 0) {
         durationLabel = 'Hari ke-1 (Mulai Hari Ini)';
         durationShort = 'Hari ke-1';
-        badgeClass = 'bg-sky-100 text-sky-950 border-sky-400 font-black';
+        badgeClass = 'bg-sky-50 text-sky-900 border-sky-200/80 font-medium';
       } else {
         durationLabel = `Berjalan ${dayCount} Hari`;
         durationShort = `Hari ke-${dayCount}`;
         badgeClass = dayCount > 14 
-          ? 'bg-amber-100 text-amber-950 border-amber-400 font-black' 
-          : 'bg-teal-100 text-teal-950 border-teal-400 font-black';
+          ? 'bg-amber-50 text-amber-900 border-amber-200/80 font-medium' 
+          : 'bg-slate-100 text-slate-800 border-slate-200 font-medium';
       }
     }
 
@@ -1097,6 +1098,7 @@ export function LogbookScreen({
   // Delete confirmation modal state
   const [taskToDelete, setTaskToDelete] = useState<LogbookTask | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDetailedKpi, setShowDetailedKpi] = useState(false);
 
   // Job Pending handover modal state
   const [pendingModalTask, setPendingModalTask] = useState<LogbookTask | null>(null);
@@ -1312,13 +1314,14 @@ export function LogbookScreen({
     task: LogbookTask;
     currentPeriod: string;
     nextPeriod: string;
+    nextStartDate: string;
     nextTargetDate: string;
     resetDescription: string;
   } | null>(null);
 
   const handleConfirmLogbookNextPeriod = async () => {
     if (!routineCompletionModal) return;
-    const { task, nextPeriod, nextTargetDate, resetDescription } = routineCompletionModal;
+    const { task, nextPeriod, nextStartDate, nextTargetDate, resetDescription } = routineCompletionModal;
     
     try {
       let newBulletinTopicTitle = task.bulletinTopicTitle;
@@ -1342,7 +1345,8 @@ export function LogbookScreen({
           assignedByName: task.assignedByName || inspectorName || 'Atasan / Manajemen',
           priority: task.priority || 'Normal',
           activityType: task.activityType || 'Daily',
-          taskDate: selectedDate || getTodayStr(),
+          taskDate: nextStartDate, // Tanggal mulai periode baru (besok untuk Daily, Senin depan untuk Weekly, tgl 1 untuk Monthly)
+          plannedDate: nextStartDate,
           targetDate: nextTargetDate,
           targetTime: task.targetTime || '23:59',
           status: 'Open',
@@ -1780,15 +1784,15 @@ export function LogbookScreen({
       if (isRoutine) {
         const normCad = normalizeCadence(actType) || 'Daily';
         const curPeriod = task.bulletinTopicTitle?.split(' - ')[1] || (normCad === 'Yearly' ? String(new Date().getFullYear()) : task.targetDate || selectedDate);
-        const nextPeriod = getNextSubPeriod(curPeriod, normCad);
-        const nextTargetDate = getNextDefaultTargetDate(normCad, task.targetDate || selectedDate);
+        const schedule = getNextPeriodSchedule(normCad, curPeriod, task.targetDate || selectedDate);
         const resetDesc = resetAllTasklistItems(updatedDesc);
 
         setRoutineCompletionModal({
           task,
           currentPeriod: curPeriod,
-          nextPeriod,
-          nextTargetDate,
+          nextPeriod: schedule.nextPeriod,
+          nextStartDate: schedule.nextStartDate,
+          nextTargetDate: schedule.nextTargetDate,
           resetDescription: resetDesc
         });
       }
@@ -1853,10 +1857,16 @@ export function LogbookScreen({
     const isReopening = newStatus === 'Open' || newStatus === 'On Progress' || newStatus === 'In Progress';
     const compDateVal = isClosing ? selectedDate : (isReopening ? null : undefined);
 
+    // Find the task immediately for routine detection (works for tasks with or without subtask lists)
+    const targetTask = todayTasks.find(t => String(t.id) === String(taskId)) || 
+      yesterdayTasks.find(t => String(t.id) === String(taskId)) || 
+      carryOverTasks.find(t => String(t.id) === String(taskId)) ||
+      (selectedTaskDetail && String(selectedTaskDetail.id) === String(taskId) ? selectedTaskDetail : null);
+
     // Optimistic Update
-    setTodayTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
-    setYesterdayTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
-    setCarryOverTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
+    setTodayTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
+    setYesterdayTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
+    setCarryOverTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
 
     try {
       const res = await fetch(`/api/logbook/tasks/${taskId}`, {
@@ -1872,6 +1882,26 @@ export function LogbookScreen({
       const json = await res.json();
       if (json.status === 'success') {
         toast.success(`Status diubah menjadi [${newStatus}] & tersinkron ke Buletin!`);
+
+        // If routine task is being completed (whether it has subtasks or not!), prompt for next period schedule
+        if (isClosing && targetTask) {
+          const rInfo = getTaskRoutineInfo(targetTask, selectedDate);
+          if (rInfo.isRoutine) {
+            const normCad = rInfo.cadence || 'Daily';
+            const curPeriod = targetTask.bulletinTopicTitle?.split(' - ')[1] || (normCad === 'Yearly' ? String(new Date().getFullYear()) : targetTask.targetDate || selectedDate);
+            const schedule = getNextPeriodSchedule(normCad, curPeriod, targetTask.targetDate || selectedDate);
+            const resetDesc = resetAllTasklistItems(targetTask.description || '');
+
+            setRoutineCompletionModal({
+              task: targetTask,
+              currentPeriod: curPeriod,
+              nextPeriod: schedule.nextPeriod,
+              nextStartDate: schedule.nextStartDate,
+              nextTargetDate: schedule.nextTargetDate,
+              resetDescription: resetDesc
+            });
+          }
+        }
       }
     } catch (e) {
       toast.error('Gagal memperbarui status');
@@ -3360,21 +3390,21 @@ export function LogbookScreen({
             </div>
 
             {/* Header Module Mode Switcher: Log Book All Task | Log Book Routine | Log Book Non Routine */}
-            <div className="flex items-center p-1 rounded-2xl border bg-slate-100/90 dark:bg-slate-800/80 shadow-2xs gap-1">
+            <div className="flex items-center p-1 rounded-xl border bg-slate-100/90 dark:bg-slate-800/80 shadow-2xs gap-1 border-slate-200 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => setModuleMode('ALL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                   moduleMode === 'ALL'
-                    ? 'bg-white dark:bg-slate-900 text-teal-800 dark:text-teal-300 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs border border-slate-200/80 dark:border-slate-700'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
                 }`}
                 title="Tampilkan seluruh modul kegiatan (Routine & Non Routine)"
               >
-                <ClipboardCheck className="w-3.5 h-3.5" />
+                <ClipboardCheck className="w-3.5 h-3.5 text-slate-500" />
                 <span>Log Book All Task</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                  moduleMode === 'ALL' ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium ${
+                  moduleMode === 'ALL' ? 'bg-slate-200/80 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
                 }`}>
                   {allTasksCount}
                 </span>
@@ -3383,17 +3413,17 @@ export function LogbookScreen({
               <button
                 type="button"
                 onClick={() => setModuleMode('ROUTINE')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                   moduleMode === 'ROUTINE'
-                    ? 'bg-teal-700 text-white shadow-xs ring-2 ring-teal-400/40'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-teal-700 dark:hover:text-teal-300'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs border border-slate-200/80 dark:border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
                 }`}
                 title="Khusus memantau tugas Routine: Daily, Weekly (D-3), Monthly (D-7), Quarterly (M-1), Biannual (M-2), Yearly (M-3)"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
                 <span>Log Book Routine</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                  moduleMode === 'ROUTINE' ? 'bg-teal-900/60 text-teal-100' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium ${
+                  moduleMode === 'ROUTINE' ? 'bg-slate-200/80 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
                 }`}>
                   {routineCount}
                 </span>
@@ -3402,17 +3432,17 @@ export function LogbookScreen({
               <button
                 type="button"
                 onClick={() => setModuleMode('NON_ROUTINE')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                   moduleMode === 'NON_ROUTINE'
-                    ? 'bg-amber-600 text-white shadow-xs ring-2 ring-amber-400/40'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-amber-700 dark:hover:text-amber-300'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs border border-slate-200/80 dark:border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
                 }`}
                 title="Khusus memantau instruksi operasional non rutin / penugasan harian"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <Sparkles className="w-3.5 h-3.5 text-slate-500" />
                 <span>Log Book Non Routine</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                  moduleMode === 'NON_ROUTINE' ? 'bg-amber-800/60 text-amber-100' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium ${
+                  moduleMode === 'NON_ROUTINE' ? 'bg-slate-200/80 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
                 }`}>
                   {nonRoutineCount}
                 </span>
@@ -3565,123 +3595,158 @@ export function LogbookScreen({
       </div>
 
       {/* Main Content Body */}
-      <div className="w-full px-4 sm:px-8 lg:px-10 py-5 sm:py-6 space-y-6 transition-all duration-300">
-        {/* Enterprise KPI Summary Cards */}
+      <div className="w-full px-4 sm:px-8 lg:px-10 py-3 sm:py-4 space-y-4 transition-all duration-300">
+        {/* Compact Notion-Style KPI Summary Bar */}
         {summaryData && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 sm:gap-4">
-            {/* Card 1: Fokus Hari Ini */}
-            <div 
-              onClick={() => setActiveSection('today')}
-              title="Klik untuk menyorot bagian Hari Ini"
-              className={`p-4 rounded-2xl border-2 border-t-4 border-t-sky-700 bg-gradient-to-b from-sky-50/80 to-white shadow-xs transition-all cursor-pointer ${
-                activeSection === 'today' ? 'border-sky-500 ring-2 ring-sky-400/40 shadow-md scale-[1.01]' : 'border-sky-300 hover:border-sky-400'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black tracking-wider uppercase text-black">
-                  Fokus Hari Ini
-                </span>
-                <span className="p-2 rounded-xl bg-sky-200 text-sky-900 border border-sky-300">
-                  <Clock className="w-4 h-4 stroke-[2.5]" />
-                </span>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-[#fbfbfa] dark:bg-[#1a1a1a] text-xs">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-slate-800 dark:text-slate-200">
+                <div 
+                  className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
+                  onClick={() => setActiveSection('today')}
+                  title="Fokus Pekerjaan Hari Ini"
+                >
+                  <Clock className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="font-semibold text-slate-900 dark:text-white">Fokus Hari Ini:</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{summaryData.totalToday}</span>
+                  <span className="text-[11px] text-slate-500 hidden sm:inline">({summaryData.openToday} Open, {summaryData.inProgressToday} On Progress)</span>
+                </div>
+
+                <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+
+                <div 
+                  className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
+                  onClick={() => setActiveSection('today')}
+                  title="Pekerjaan Selesai Hari Ini"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="font-semibold text-slate-900 dark:text-white">Selesai:</span>
+                  <span className="font-mono font-bold text-emerald-800 dark:text-emerald-400">{summaryData.completedToday}</span>
+                </div>
+
+                <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+
+                <div 
+                  className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
+                  onClick={() => {
+                    setActiveSection('yesterday');
+                    setEvalScope('yesterday');
+                  }}
+                  title="Progres Evaluasi Kemarin (H-1)"
+                >
+                  <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="font-semibold text-slate-900 dark:text-white">Progres Kemarin:</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{summaryData.completedYesterday || 0}/{summaryData.totalYesterday || 0}</span>
+                  <span className="text-[11px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-900 border border-amber-200/80 font-medium">
+                    {summaryData.yesterdayProgressPercent || 0}%
+                  </span>
+                  <span className="text-[11px] text-slate-500 hidden md:inline">({summaryData.totalCarryOver || 0} carry-over)</span>
+                </div>
+
+                <span className="text-slate-300 dark:text-slate-700 hidden md:inline">•</span>
+
+                <div className="flex items-center gap-1.5 hidden md:flex" title="Persentase Target Kegiatan Hari Ini">
+                  <span className="font-semibold text-slate-900 dark:text-white">Target Capaian:</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+                    {summaryData.totalToday > 0 ? Math.round((summaryData.completedToday / summaryData.totalToday) * 100) : 0}%
+                  </span>
+                </div>
               </div>
-              <p className="text-2xl sm:text-3xl font-black mt-2 text-black">
-                {summaryData.totalToday} <span className="text-xs font-black text-slate-800">kegiatan</span>
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="inline-block w-2.5 h-2.5 rounded-full bg-sky-600" />
-                <p className="text-xs text-black font-bold">
-                  {summaryData.openToday} Open • {summaryData.inProgressToday} In Progress
-                </p>
-              </div>
+
+              <button 
+                type="button"
+                onClick={() => setShowDetailedKpi(!showDetailedKpi)}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer px-2 py-1 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ml-auto shrink-0"
+              >
+                <span>{showDetailedKpi ? 'Sembunyikan Kartu' : 'Detail Kartu'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showDetailedKpi ? 'rotate-180' : ''}`} />
+              </button>
             </div>
 
-            {/* Card 2: Selesai Hari Ini */}
-            <div 
-              onClick={() => setActiveSection('today')}
-              title="Klik untuk menyorot bagian Hari Ini"
-              className={`p-4 rounded-2xl border-2 border-t-4 border-t-teal-700 bg-gradient-to-b from-teal-50/80 to-white shadow-xs transition-all cursor-pointer ${
-                activeSection === 'today' ? 'border-teal-500 ring-2 ring-teal-400/40 shadow-md scale-[1.01]' : 'border-teal-300 hover:border-teal-400'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black tracking-wider uppercase text-black">
-                  Selesai Hari Ini
-                </span>
-                <span className="p-2 rounded-xl bg-teal-200 text-teal-900 border border-teal-300">
-                  <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                </span>
-              </div>
-              <p className="text-2xl sm:text-3xl font-black mt-2 text-black">
-                {summaryData.completedToday}
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="inline-block w-2.5 h-2.5 rounded-full bg-teal-600" />
-                <p className="text-xs text-black font-bold">
-                  Resolved & Closed
-                </p>
-              </div>
-            </div>
+            {/* Expandable Detailed KPI Cards (Clean Notion Styling) */}
+            {showDetailedKpi && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
+                {/* Card 1: Fokus Hari Ini */}
+                <div 
+                  onClick={() => setActiveSection('today')}
+                  className={`p-3.5 rounded-xl border bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer ${
+                    activeSection === 'today' ? 'border-slate-400 dark:border-slate-600 ring-1 ring-slate-300' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                    <span>Fokus Hari Ini</span>
+                    <Clock className="w-3.5 h-3.5 text-slate-500" />
+                  </div>
+                  <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">
+                    {summaryData.totalToday} <span className="text-xs font-normal text-slate-500">kegiatan</span>
+                  </p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                    {summaryData.openToday} Open • {summaryData.inProgressToday} In Progress
+                  </p>
+                </div>
 
-            {/* Card 3: Progres Kemarin (H-1) & Carry Over */}
-            <div 
-              onClick={() => {
-                setActiveSection('yesterday');
-                setEvalScope('yesterday');
-              }}
-              title="Klik untuk menyorot capaian progres pekerjaan kemarin"
-              className={`p-4 rounded-2xl border-2 border-t-4 border-t-amber-600 bg-gradient-to-b from-amber-50/80 to-white shadow-xs transition-all cursor-pointer ${
-                activeSection === 'yesterday' ? 'border-amber-500 ring-2 ring-amber-400/40 shadow-md scale-[1.01]' : 'border-amber-300 hover:border-amber-400'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black tracking-wider uppercase text-black">
-                  Progres Kemarin (H-1)
-                </span>
-                <span className="p-2 rounded-xl bg-amber-200 text-amber-950 border border-amber-300">
-                  <TrendingUp className="w-4 h-4 stroke-[2.5]" />
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2 mt-2">
-                <p className="text-2xl sm:text-3xl font-black text-black">
-                  {summaryData?.completedYesterday || 0} / {summaryData?.totalYesterday || 0}
-                </p>
-                <span className="text-xs font-black text-emerald-950 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-400">
-                  {summaryData?.yesterdayProgressPercent || 0}% Selesai
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500" />
-                <p className="text-xs text-black font-bold">
-                  {summaryData?.totalCarryOver || 0} total carry-over berjalan
-                </p>
-              </div>
-            </div>
+                {/* Card 2: Selesai Hari Ini */}
+                <div 
+                  onClick={() => setActiveSection('today')}
+                  className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer hover:border-slate-300"
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                    <span>Selesai Hari Ini</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  </div>
+                  <p className="text-2xl font-bold mt-1 text-emerald-700 dark:text-emerald-400">
+                    {summaryData.completedToday}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Resolved & Closed
+                  </p>
+                </div>
 
-            {/* Card 4: Target Penyelesaian */}
-            <div 
-              onClick={() => setActiveSection('today')}
-              title="Klik untuk menyorot target hari ini"
-              className="p-4 rounded-2xl border-2 border-slate-300 border-t-4 border-t-slate-800 bg-gradient-to-b from-slate-100 to-white shadow-xs transition-all cursor-pointer hover:border-slate-400"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black tracking-wider uppercase text-black">
-                  Target Penyelesaian
-                </span>
-                <span className="p-2 rounded-xl bg-slate-200 text-slate-900 border border-slate-300">
-                  <TrendingUp className="w-4 h-4 stroke-[2.5]" />
-                </span>
+                {/* Card 3: Progres Kemarin */}
+                <div 
+                  onClick={() => {
+                    setActiveSection('yesterday');
+                    setEvalScope('yesterday');
+                  }}
+                  className={`p-3.5 rounded-xl border bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer ${
+                    activeSection === 'yesterday' ? 'border-slate-400 dark:border-slate-600 ring-1 ring-slate-300' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                    <span>Progres Kemarin (H-1)</span>
+                    <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                      {summaryData.completedYesterday || 0}/{summaryData.totalYesterday || 0}
+                    </p>
+                    <span className="text-[11px] font-medium text-amber-900 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/80">
+                      {summaryData.yesterdayProgressPercent || 0}%
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {summaryData.totalCarryOver || 0} carry-over berjalan
+                  </p>
+                </div>
+
+                {/* Card 4: Target Penyelesaian */}
+                <div 
+                  onClick={() => setActiveSection('today')}
+                  className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer hover:border-slate-300"
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                    <span>Target Penyelesaian</span>
+                    <TrendingUp className="w-3.5 h-3.5 text-slate-500" />
+                  </div>
+                  <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">
+                    {summaryData.totalToday > 0 ? Math.round((summaryData.completedToday / summaryData.totalToday) * 100) : 0}%
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Target Kegiatan Seksi
+                  </p>
+                </div>
               </div>
-              <p className="text-2xl sm:text-3xl font-black mt-2 text-black">
-                {summaryData.totalToday > 0 ? Math.round((summaryData.completedToday / summaryData.totalToday) * 100) : 0}%
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="inline-block w-2.5 h-2.5 rounded-full bg-slate-700" />
-                <p className="text-xs text-black font-bold">
-                  Target Kegiatan Seksi
-                </p>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -4031,31 +4096,30 @@ export function LogbookScreen({
                   }}
                   className={`cursor-pointer select-none transition-colors border-y font-medium text-xs ${
                     isDragOverToday
-                      ? 'bg-teal-500/20 border-teal-500 ring-2 ring-teal-400'
+                      ? 'bg-slate-200/60 border-slate-400 ring-1 ring-slate-400'
                       : isNotionLight
-                      ? 'bg-teal-50/70 hover:bg-teal-100/60 text-teal-950 border-teal-200'
-                      : 'bg-teal-950/40 hover:bg-teal-950/70 text-teal-300 border-teal-800'
+                      ? 'bg-[#f7f6f5] hover:bg-[#efedea] text-slate-900 border-slate-200'
+                      : 'bg-[#202020] hover:bg-[#282828] text-slate-100 border-slate-800'
                   }`}
                 >
-                  <td colSpan={10} className="px-3.5 py-2.5">
+                  <td colSpan={10} className="px-3.5 py-2">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-[11px] text-teal-600 dark:text-teal-400 select-none">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-500 select-none">
                           {collapsedGroups.today ? '▶' : '▼'}
                         </span>
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-teal-600 animate-pulse" />
-                          <span className="font-black text-sm tracking-tight text-teal-950 dark:text-teal-200">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-xs tracking-tight text-slate-900 dark:text-slate-100">
                             📌 1. PLANNING & ARAHAN HARI INI
                           </span>
                         </div>
-                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-black ${
-                          isNotionLight ? 'bg-teal-200/80 text-teal-950' : 'bg-teal-900 text-teal-200'
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-medium ${
+                          isNotionLight ? 'bg-slate-200/80 text-slate-800' : 'bg-slate-800 text-slate-200'
                         }`}>
                           {tableTodayTasks.length} kegiatan
                         </span>
                         {isDragOverToday && (
-                          <span className="text-xs font-black text-teal-700 dark:text-teal-300 animate-pulse pl-2">
+                          <span className="text-xs font-semibold text-teal-700 dark:text-teal-300 animate-pulse pl-2">
                             ← Lepaskan di sini untuk masukkan ke Planning Hari Ini
                           </span>
                         )}
@@ -4065,10 +4129,10 @@ export function LogbookScreen({
                         <button
                           type="button"
                           onClick={openAssignModal}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer active:scale-95"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-semibold text-xs shadow-2xs transition-all cursor-pointer active:scale-95"
                           title="Tambah kegiatan baru ke planning hari ini"
                         >
-                          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <Plus className="w-3.5 h-3.5" />
                           <span>+ Tambah Kegiatan</span>
                         </button>
                       </div>
@@ -4226,14 +4290,14 @@ export function LogbookScreen({
 
                             {/* Prioritas */}
                             <td className="px-3 py-2.5 whitespace-nowrap">
-                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md uppercase tracking-wider ${
                                 task.priority === 'Urgent'
-                                  ? 'bg-rose-100 text-rose-950 border border-rose-400 animate-pulse'
+                                  ? 'bg-rose-50 text-rose-900 border border-rose-200/80'
                                   : task.priority === 'High'
-                                  ? 'bg-amber-100 text-amber-950 border border-amber-400'
+                                  ? 'bg-amber-50 text-amber-900 border border-amber-200/80'
                                   : task.priority === 'Low'
-                                  ? 'bg-slate-100 text-slate-800 border border-slate-300'
-                                  : 'bg-blue-100 text-blue-950 border border-blue-300'
+                                  ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                                  : 'bg-slate-100 text-slate-800 border border-slate-200'
                               }`}>
                                 {task.priority}
                               </span>
@@ -4245,10 +4309,10 @@ export function LogbookScreen({
                                 {picList.map((p, pIdx) => (
                                   <span 
                                     key={pIdx}
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
                                     title={`${p.name} (${p.nik || '-'})`}
                                   >
-                                    <span className="w-3.5 h-3.5 rounded-full bg-teal-600 text-white text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
+                                    <span className="w-3.5 h-3.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
                                       {p.name.charAt(0).toUpperCase()}
                                     </span>
                                     <span className="truncate max-w-[90px]">{p.name}</span>
@@ -4482,31 +4546,30 @@ export function LogbookScreen({
                   }}
                   className={`cursor-pointer select-none transition-colors border-y font-medium text-xs ${
                     isDragOverYesterday
-                      ? 'bg-amber-500/20 border-amber-500 ring-2 ring-amber-400'
+                      ? 'bg-slate-200/60 border-slate-400 ring-1 ring-slate-400'
                       : isNotionLight
-                      ? 'bg-amber-50/70 hover:bg-amber-100/60 text-amber-950 border-amber-200'
-                      : 'bg-amber-950/40 hover:bg-amber-950/70 text-amber-300 border-amber-800'
+                      ? 'bg-[#f7f6f5] hover:bg-[#efedea] text-slate-900 border-slate-200'
+                      : 'bg-[#202020] hover:bg-[#282828] text-slate-100 border-slate-800'
                   }`}
                 >
-                  <td colSpan={10} className="px-3.5 py-2.5">
+                  <td colSpan={10} className="px-3.5 py-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-[11px] text-amber-600 dark:text-amber-400 select-none">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-500 select-none">
                           {collapsedGroups.yesterday ? '▶' : '▼'}
                         </span>
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
-                          <span className="font-black text-sm tracking-tight text-amber-950 dark:text-amber-200">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-xs tracking-tight text-slate-900 dark:text-slate-100">
                             ⏳ 2. EVALUASI & PROGRES KEMARIN / BACKLOG
                           </span>
                         </div>
-                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-black ${
-                          isNotionLight ? 'bg-amber-200/80 text-amber-950' : 'bg-amber-900 text-amber-200'
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-medium ${
+                          isNotionLight ? 'bg-slate-200/80 text-slate-800' : 'bg-slate-800 text-slate-200'
                         }`}>
                           {tableYesterdayTasks.length} kegiatan
                         </span>
                         {isDragOverYesterday && (
-                          <span className="text-xs font-black text-amber-700 dark:text-amber-300 animate-pulse pl-2">
+                          <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 animate-pulse pl-2">
                             ← Lepaskan di sini untuk kembalikan ke Backlog Kemarin
                           </span>
                         )}
@@ -4514,14 +4577,14 @@ export function LogbookScreen({
 
                       {/* Scope Switcher & Management Report Copy */}
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center bg-white/80 dark:bg-slate-900 p-0.5 rounded-xl border border-amber-300 dark:border-slate-700">
+                        <div className="flex items-center bg-slate-200/60 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-300 dark:border-slate-700">
                           <button
                             type="button"
                             onClick={() => setEvalScope('yesterday')}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                               evalScope === 'yesterday'
-                                ? 'bg-amber-500 text-black font-black shadow-xs'
-                                : 'text-slate-700 dark:text-slate-300 hover:text-black'
+                                ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                             }`}
                             title="Tampilkan khusus pekerjaan shift/hari kemarin (H-1)"
                           >
@@ -4530,10 +4593,10 @@ export function LogbookScreen({
                           <button
                             type="button"
                             onClick={() => setEvalScope('all_carryover')}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                               evalScope === 'all_carryover'
-                                ? 'bg-slate-900 text-white font-black shadow-xs'
-                                : 'text-slate-700 dark:text-slate-300 hover:text-black'
+                                ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                             }`}
                             title="Tampilkan seluruh akumulasi carry-over / backlog dari hari-hari sebelumnya"
                           >
@@ -4544,10 +4607,10 @@ export function LogbookScreen({
                         <button
                           type="button"
                           onClick={handleCopyYesterdayManagementReport}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-semibold shadow-2xs transition-all cursor-pointer shrink-0"
                           title="Salin rekap capaian kemarin untuk dikirim ke WhatsApp Manajemen"
                         >
-                          <Copy className="w-3 h-3" />
+                          <Copy className="w-3.5 h-3.5" />
                           <span className="hidden sm:inline">Salin Laporan Manajemen</span>
                         </button>
                       </div>
@@ -4661,28 +4724,23 @@ export function LogbookScreen({
 
                             {/* Status */}
                             <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${
-                                isDone 
-                                  ? 'bg-emerald-100 text-emerald-950 border-emerald-400' 
-                                  : isInProgress 
-                                  ? 'bg-amber-100 text-amber-950 border-amber-400' 
-                                  : 'bg-slate-100 text-slate-900 border-slate-300'
-                              }`}>
-                                {isDone ? <CheckCircle2 className="w-3 h-3 text-emerald-700" /> : <Clock className="w-3 h-3 text-amber-700" />}
-                                <span>{task.status}</span>
-                              </span>
+                              <NotionDropdownCell
+                                type="status"
+                                value={task.status}
+                                onChange={(newVal) => handleStatusChange(task.id, newVal)}
+                              />
                             </td>
 
                             {/* Prioritas */}
                             <td className="px-3 py-2.5 whitespace-nowrap">
-                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md uppercase tracking-wider ${
                                 task.priority === 'Urgent'
-                                  ? 'bg-rose-100 text-rose-950 border border-rose-400 animate-pulse'
+                                  ? 'bg-rose-50 text-rose-900 border border-rose-200/80'
                                   : task.priority === 'High'
-                                  ? 'bg-amber-100 text-amber-950 border border-amber-400'
+                                  ? 'bg-amber-50 text-amber-900 border border-amber-200/80'
                                   : task.priority === 'Low'
-                                  ? 'bg-slate-100 text-slate-800 border border-slate-300'
-                                  : 'bg-blue-100 text-blue-950 border border-blue-300'
+                                  ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                                  : 'bg-slate-100 text-slate-800 border border-slate-200'
                               }`}>
                                 {task.priority}
                               </span>
@@ -4694,10 +4752,10 @@ export function LogbookScreen({
                                 {picList.map((p, pIdx) => (
                                   <span 
                                     key={pIdx}
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
                                     title={`${p.name} (${p.nik || '-'})`}
                                   >
-                                    <span className="w-3.5 h-3.5 rounded-full bg-amber-600 text-white text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
+                                    <span className="w-3.5 h-3.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
                                       {p.name.charAt(0).toUpperCase()}
                                     </span>
                                     <span className="truncate max-w-[90px]">{p.name}</span>
@@ -6582,11 +6640,17 @@ export function LogbookScreen({
                 <span className="text-[10px] uppercase font-black text-slate-700 tracking-wider block">
                   Rencana Periode Baru
                 </span>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
                   <div>
                     <span className="text-[10px] text-slate-600 font-bold block">Periode / Sub-Topik:</span>
                     <span className="font-mono font-black text-teal-950 text-sm">
                       {routineCompletionModal.nextPeriod}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-600 font-bold block">Mulai Masuk Planning:</span>
+                    <span className="font-mono font-black text-emerald-800 text-sm">
+                      {routineCompletionModal.nextStartDate}
                     </span>
                   </div>
                   <div>
@@ -6597,6 +6661,7 @@ export function LogbookScreen({
                   </div>
                 </div>
                 <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-700 font-bold space-y-1">
+                  <div className="text-emerald-700 font-black">✓ Tugas akan otomatis mulai muncul di Planning Kerja pada {routineCompletionModal.nextStartDate} (tidak di hari yang sama dengan penyelesaian)</div>
                   <div>✓ Daftar subtask akan diduplikasi dengan status belum dicentang (0%)</div>
                   <div>✓ Target selesai disesuaikan otomatis untuk periode berikutnya</div>
                   <div>✓ Status awal otomatis menjadi [Open]</div>

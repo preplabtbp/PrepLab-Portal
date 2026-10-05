@@ -17,6 +17,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseTasklist, toggleTasklistItem } from './notion/tasklist-utils';
+import { 
+  getNextPeriodSchedule, 
+  normalizeCadence, 
+  resetAllTasklistItems 
+} from './notion/period-utils';
 
 interface SectionLogBookBarProps {
   inspectorNik?: string | null;
@@ -176,6 +181,46 @@ export function SectionLogBookBar({
 
       if (!res.ok) throw new Error('Gagal update log book');
       toast.success(nextStatus === 'Closed' ? 'Semua subtask selesai! Status: Closed' : 'Progres subtask diperbarui');
+
+      // Jadwalkan otomatis periode selanjutnya jika tugas rutin diselesaikan
+      if (nextStatus === 'Closed') {
+        const actType = (task as any).activityType || 'Routine';
+        const isRoutine = !actType.toLowerCase().includes('non');
+        if (isRoutine) {
+          const normCad = normalizeCadence(actType) || 'Daily';
+          const curPeriod = (task as any).bulletinTopicTitle?.split(' - ')[1] || (normCad === 'Yearly' ? String(new Date().getFullYear()) : task.targetDate);
+          const schedule = getNextPeriodSchedule(normCad, curPeriod, task.targetDate);
+          const resetDesc = resetAllTasklistItems(updatedDesc);
+
+          try {
+            await fetch('/api/logbook/tasks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: task.title,
+                description: resetDesc,
+                section: task.section,
+                assigneeNik: task.assigneeNik || task.picNik,
+                assigneeName: task.assigneeName || task.picName,
+                assignedByNik: inspectorNik || 'SUPERVISOR',
+                assignedByName: inspectorName || 'Atasan / Manajemen',
+                priority: task.priority || 'Normal',
+                activityType: actType,
+                taskDate: schedule.nextStartDate,
+                plannedDate: schedule.nextStartDate,
+                targetDate: schedule.nextTargetDate,
+                targetTime: task.targetTime || '23:59',
+                status: 'Open',
+                progressPercent: 0,
+                bulletinTopicTitle: task.title ? `${task.title} - ${schedule.nextPeriod}` : undefined
+              })
+            });
+            toast.success(`🎉 Tugas periode baru (${schedule.nextPeriod}) dijadwalkan mulai ${schedule.nextStartDate}!`);
+          } catch (rErr) {
+            console.warn('Auto rollover next period error:', rErr);
+          }
+        }
+      }
     } catch (e) {
       console.error(e);
       toast.error('Gagal memperbarui progres subtask');
@@ -210,6 +255,46 @@ export function SectionLogBookBar({
 
       if (!res.ok) throw new Error('Gagal update status task');
       toast.success(nextStatus === 'Closed' ? 'Tugas ditandai selesai!' : 'Tugas dibuka kembali');
+
+      // Jadwalkan otomatis periode selanjutnya jika tugas rutin diselesaikan
+      if (nextStatus === 'Closed') {
+        const actType = (task as any).activityType || 'Routine';
+        const isRoutine = !actType.toLowerCase().includes('non');
+        if (isRoutine) {
+          const normCad = normalizeCadence(actType) || 'Daily';
+          const curPeriod = (task as any).bulletinTopicTitle?.split(' - ')[1] || (normCad === 'Yearly' ? String(new Date().getFullYear()) : task.targetDate);
+          const schedule = getNextPeriodSchedule(normCad, curPeriod, task.targetDate);
+          const resetDesc = resetAllTasklistItems(task.description || '');
+
+          try {
+            await fetch('/api/logbook/tasks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: task.title,
+                description: resetDesc,
+                section: task.section,
+                assigneeNik: task.assigneeNik || task.picNik,
+                assigneeName: task.assigneeName || task.picName,
+                assignedByNik: inspectorNik || 'SUPERVISOR',
+                assignedByName: inspectorName || 'Atasan / Manajemen',
+                priority: task.priority || 'Normal',
+                activityType: actType,
+                taskDate: schedule.nextStartDate,
+                plannedDate: schedule.nextStartDate,
+                targetDate: schedule.nextTargetDate,
+                targetTime: task.targetTime || '23:59',
+                status: 'Open',
+                progressPercent: 0,
+                bulletinTopicTitle: task.title ? `${task.title} - ${schedule.nextPeriod}` : undefined
+              })
+            });
+            toast.success(`🎉 Tugas periode baru (${schedule.nextPeriod}) dijadwalkan mulai ${schedule.nextStartDate}!`);
+          } catch (rErr) {
+            console.warn('Auto rollover next period error:', rErr);
+          }
+        }
+      }
     } catch (e) {
       console.error(e);
       toast.error('Gagal memperbarui status tugas');

@@ -72,6 +72,7 @@ import {
   getDefaultActiveSubPeriod,
   getNextSubPeriod,
   getNextDefaultTargetDate,
+  getNextPeriodSchedule,
   resetAllTasklistItems,
   detectRowSubPeriod,
   getTopicSubPeriods,
@@ -631,6 +632,7 @@ export function NotionDatabaseTable({
     colName: string;
     currentPeriod: string;
     nextPeriod: string;
+    nextStartDate: string;
     nextTargetDate: string;
     resetKeterangan: string;
   }
@@ -1552,6 +1554,28 @@ export function NotionDatabaseTable({
           if (!curVal || curVal === '-') {
             targetRow[compKey] = new Date().toISOString().slice(0, 10);
           }
+
+          // Trigger routine task rollover for routine tasks when closed directly
+          const rowAct = getRowVal(targetRow, 'Activity (routine/non routine)') || getRowVal(targetRow, 'period') || getRowVal(targetRow, 'Frekuensi') || '';
+          const rowCad = normalizeCadence(rowAct) || currentCadence;
+          if (rowCad && rowCad !== 'Non-Routine') {
+            const curPeriod = activeSubPeriod || detectRowSubPeriod(targetRow, rowCad) || getDefaultActiveSubPeriod(rowCad);
+            const targetVal = getRowVal(targetRow, 'Target Selesai') || getRowVal(targetRow, 'Deadline') || getRowVal(targetRow, 'Created Time');
+            const schedule = getNextPeriodSchedule(rowCad, curPeriod, targetVal);
+            const curKeterangan = getRowVal(targetRow, 'Keterangan') || getRowVal(targetRow, 'Description') || '';
+            const resetDesc = resetAllTasklistItems(curKeterangan);
+
+            setRoutineCompletionModal({
+              row: targetRow,
+              rowIndex: targetRowIndex,
+              colName: 'Keterangan',
+              currentPeriod: curPeriod,
+              nextPeriod: schedule.nextPeriod,
+              nextStartDate: schedule.nextStartDate,
+              nextTargetDate: schedule.nextTargetDate,
+              resetKeterangan: resetDesc
+            });
+          }
         } else if (stUpper.includes('OPEN') || stUpper.includes('PROGRESS')) {
           targetRow[compKey] = '-';
         }
@@ -1595,9 +1619,8 @@ export function NotionDatabaseTable({
       const rowCad = normalizeCadence(rowAct) || currentCadence;
       if (rowCad && rowCad !== 'Non-Routine') {
         const curPeriod = activeSubPeriod || detectRowSubPeriod(row, rowCad) || getDefaultActiveSubPeriod(rowCad);
-        const nextPeriod = getNextSubPeriod(curPeriod, rowCad);
         const targetVal = getRowVal(row, 'Target Selesai') || getRowVal(row, 'Deadline') || getRowVal(row, 'Created Time');
-        const nextTarget = getNextDefaultTargetDate(rowCad, targetVal);
+        const schedule = getNextPeriodSchedule(rowCad, curPeriod, targetVal);
         const resetDesc = resetAllTasklistItems(updatedVal);
 
         setRoutineCompletionModal({
@@ -1605,8 +1628,9 @@ export function NotionDatabaseTable({
           rowIndex: targetRowIndex,
           colName,
           currentPeriod: curPeriod,
-          nextPeriod,
-          nextTargetDate: nextTarget,
+          nextPeriod: schedule.nextPeriod,
+          nextStartDate: schedule.nextStartDate,
+          nextTargetDate: schedule.nextTargetDate,
           resetKeterangan: resetDesc
         });
       }
@@ -1616,7 +1640,7 @@ export function NotionDatabaseTable({
   // Handler saat user konfirmasi untuk membuat kembali task routine untuk periode selanjutnya
   const handleConfirmNextPeriod = async () => {
     if (!routineCompletionModal) return;
-    const { row, rowIndex, colName, nextPeriod, nextTargetDate, resetKeterangan } = routineCompletionModal;
+    const { row, rowIndex, colName, nextPeriod, nextStartDate, nextTargetDate, resetKeterangan } = routineCompletionModal;
     const baseTopic = (getRowVal(row, 'Jenis kegiatan') || '').trim();
 
     // 1. Tambah periode selanjutnya ke customPeriodsMap
@@ -1725,7 +1749,8 @@ export function NotionDatabaseTable({
               assignedByName: matched.assignedByName || currentAuthorName,
               priority: matched.priority || 'Normal',
               activityType: matched.activityType || currentCadence || 'Yearly',
-              taskDate: new Date().toISOString().split('T')[0],
+              taskDate: nextStartDate || nextTargetDate,
+              plannedDate: nextStartDate || nextTargetDate,
               targetDate: nextTargetDate,
               targetTime: matched.targetTime || '23:59',
               status: 'Open',

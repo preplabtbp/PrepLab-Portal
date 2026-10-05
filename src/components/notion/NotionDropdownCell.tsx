@@ -23,25 +23,25 @@ export const STATUS_OPTIONS: DropdownOption[] = [
   {
     value: 'Open',
     label: 'Open',
-    badgeClass: 'bg-blue-100 text-blue-950 border-blue-400 font-bold hover:bg-blue-200',
-    icon: <Clock className="w-2.5 h-2.5 text-blue-700" />
+    badgeClass: 'bg-slate-100 text-slate-900 border-slate-200 font-medium hover:bg-slate-200',
+    icon: <Clock className="w-2.5 h-2.5 text-slate-700" />
   },
   {
     value: 'On Progress',
     label: 'On Progress',
-    badgeClass: 'bg-amber-100 text-amber-950 border-amber-400 font-bold hover:bg-amber-200',
+    badgeClass: 'bg-amber-50 text-amber-900 border-amber-200/80 font-medium hover:bg-amber-100',
     icon: <RotateCcw className="w-2.5 h-2.5 text-amber-700" />
   },
   {
     value: 'Closed',
     label: 'Closed',
-    badgeClass: 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold hover:bg-emerald-200',
+    badgeClass: 'bg-emerald-50 text-emerald-900 border-emerald-200/80 font-medium hover:bg-emerald-100',
     icon: <CheckCircle2 className="w-2.5 h-2.5 text-emerald-700" />
   },
   {
     value: 'Canceled',
     label: 'Canceled',
-    badgeClass: 'bg-rose-100 text-rose-950 border-rose-400 font-bold hover:bg-rose-200',
+    badgeClass: 'bg-rose-50 text-rose-900 border-rose-200/80 font-medium hover:bg-rose-100',
     icon: <AlertCircle className="w-2.5 h-2.5 text-rose-700" />
   }
 ];
@@ -50,52 +50,52 @@ const ACTIVITY_OPTIONS: DropdownOption[] = [
   {
     value: 'Daily',
     label: 'Daily (Harian)',
-    badgeClass: 'bg-emerald-500/15 text-slate-950 font-bold border-emerald-400 hover:bg-emerald-500/25'
+    badgeClass: 'bg-teal-50 text-teal-900 font-medium border-teal-200/80 hover:bg-teal-100'
   },
   {
     value: 'Weekly',
     label: 'Weekly (Mingguan)',
-    badgeClass: 'bg-blue-500/15 text-slate-950 font-bold border-blue-400 hover:bg-blue-500/25'
+    badgeClass: 'bg-sky-50 text-sky-900 font-medium border-sky-200/80 hover:bg-sky-100'
   },
   {
     value: 'Monthly',
     label: 'Monthly (Bulanan)',
-    badgeClass: 'bg-indigo-500/15 text-slate-950 font-bold border-indigo-400 hover:bg-indigo-500/25'
+    badgeClass: 'bg-indigo-50 text-indigo-900 font-medium border-indigo-200/80 hover:bg-indigo-100'
   },
   {
     value: 'Quarterly',
     label: 'Quarterly (Triwulan)',
-    badgeClass: 'bg-amber-500/15 text-slate-950 font-bold border-amber-400 hover:bg-amber-500/25'
+    badgeClass: 'bg-purple-50 text-purple-900 font-medium border-purple-200/80 hover:bg-purple-100'
   },
   {
     value: 'Biannual',
     label: 'Biannual (Semesteran)',
-    badgeClass: 'bg-teal-500/15 text-slate-950 font-bold border-teal-400 hover:bg-teal-500/25'
+    badgeClass: 'bg-amber-50 text-amber-900 font-medium border-amber-200/80 hover:bg-amber-100'
   },
   {
     value: 'Yearly',
     label: 'Yearly (Tahunan)',
-    badgeClass: 'bg-cyan-500/15 text-slate-950 font-bold border-cyan-400 hover:bg-cyan-500/25'
+    badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80 hover:bg-rose-100'
   },
   {
     value: 'Non Routine',
     label: 'Non Routine (Insidentil)',
-    badgeClass: 'bg-purple-500/15 text-slate-950 font-bold border-purple-400 hover:bg-purple-500/25'
+    badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
   },
   {
     value: 'Routine',
     label: 'Routine (Umum)',
-    badgeClass: 'bg-slate-500/15 text-slate-950 font-bold border-slate-400 hover:bg-slate-500/25'
+    badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
   },
   {
     value: 'Periodic',
     label: 'Periodic (Umum)',
-    badgeClass: 'bg-slate-500/15 text-slate-950 font-bold border-slate-400 hover:bg-slate-500/25'
+    badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
   },
   {
     value: 'Special Task',
     label: 'Special Task',
-    badgeClass: 'bg-rose-500/15 text-slate-950 font-bold border-rose-400 hover:bg-rose-500/25'
+    badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80 hover:bg-rose-100'
   }
 ];
 
@@ -103,41 +103,41 @@ const PRIORITY_OPTIONS: DropdownOption[] = [
   {
     value: 'Low',
     label: 'Low',
-    badgeClass: 'bg-slate-500/15 text-slate-950 font-bold border-slate-400 hover:bg-slate-500/25'
+    badgeClass: 'bg-slate-100 text-slate-700 font-medium border-slate-200 hover:bg-slate-200'
   },
   {
     value: 'Normal',
     label: 'Normal',
-    badgeClass: 'bg-teal-500/15 text-slate-950 font-bold border-teal-400 hover:bg-teal-500/25'
+    badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
   },
   {
     value: 'Medium',
     label: 'Medium',
-    badgeClass: 'bg-blue-500/15 text-slate-950 font-bold border-blue-400 hover:bg-blue-500/25'
+    badgeClass: 'bg-sky-50 text-sky-900 font-medium border-sky-200/80 hover:bg-sky-100'
   },
   {
     value: 'High',
     label: 'High',
-    badgeClass: 'bg-amber-500/15 text-slate-950 font-bold border-amber-400 hover:bg-amber-500/25',
+    badgeClass: 'bg-amber-50 text-amber-900 font-medium border-amber-200/80 hover:bg-amber-100',
     icon: <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
   },
   {
     value: 'Urgent',
     label: 'Urgent',
-    badgeClass: 'bg-rose-500/20 text-slate-950 font-bold border-rose-400 hover:bg-rose-500/30',
+    badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80 hover:bg-rose-100',
     icon: <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
   }
 ];
 
 const PERIOD_OPTIONS: DropdownOption[] = [
-  { value: 'Daily', label: 'Daily', badgeClass: 'bg-emerald-500/15 text-slate-950 font-bold border-emerald-400' },
-  { value: 'Weekly', label: 'Weekly', badgeClass: 'bg-blue-500/15 text-slate-950 font-bold border-blue-400' },
-  { value: 'Monthly', label: 'Monthly', badgeClass: 'bg-indigo-500/15 text-slate-950 font-bold border-indigo-400' },
-  { value: 'Quarterly', label: 'Quarterly', badgeClass: 'bg-amber-500/15 text-slate-950 font-bold border-amber-400' },
-  { value: 'Biannual', label: 'Biannual', badgeClass: 'bg-teal-500/15 text-slate-950 font-bold border-teal-400' },
-  { value: 'Yearly', label: 'Yearly', badgeClass: 'bg-cyan-500/15 text-slate-950 font-bold border-cyan-400' },
-  { value: 'Non-Routine', label: 'Non-Routine', badgeClass: 'bg-purple-500/15 text-slate-950 font-bold border-purple-400' },
-  { value: 'Ad-hoc', label: 'Ad-hoc', badgeClass: 'bg-slate-500/15 text-slate-950 font-bold border-slate-400' }
+  { value: 'Daily', label: 'Daily', badgeClass: 'bg-teal-50 text-teal-900 font-medium border-teal-200/80' },
+  { value: 'Weekly', label: 'Weekly', badgeClass: 'bg-sky-50 text-sky-900 font-medium border-sky-200/80' },
+  { value: 'Monthly', label: 'Monthly', badgeClass: 'bg-indigo-50 text-indigo-900 font-medium border-indigo-200/80' },
+  { value: 'Quarterly', label: 'Quarterly', badgeClass: 'bg-purple-50 text-purple-900 font-medium border-purple-200/80' },
+  { value: 'Biannual', label: 'Biannual', badgeClass: 'bg-amber-50 text-amber-900 font-medium border-amber-200/80' },
+  { value: 'Yearly', label: 'Yearly', badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80' },
+  { value: 'Non-Routine', label: 'Non-Routine', badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200' },
+  { value: 'Ad-hoc', label: 'Ad-hoc', badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200' }
 ];
 
 interface NotionDropdownCellProps {

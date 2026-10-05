@@ -19,6 +19,7 @@ import { isPicTemuanRole, getOpenFindingsForSupervisor } from '../utils/inspecti
 import { ActionCenterBar } from './ActionCenterBar';
 import { SectionLogBookBar } from './SectionLogBookBar';
 import { ModuleSearchBar } from './ModuleSearchBar';
+import { HomeWidgetDashboard } from './home-widgets/HomeWidgetDashboard';
 
 interface MobileSimpleHomeScreenProps {
   inspectorName: string;
@@ -308,10 +309,14 @@ export function MobileSimpleHomeScreen({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.25 }}
-      className="w-full pb-28 px-3.5 sm:px-6 space-y-4 max-w-4xl mx-auto"
+      className="w-full pb-28 px-3.5 sm:px-6 lg:px-8 xl:px-10 space-y-6 max-w-[1560px] mx-auto"
     >
-      {/* ── TOP HERO PROFILE CARD (CLEAN & ELEGANT) ── */}
-      <div 
+      {/* ── TOP SECTION: ENTERPRISE 2-COLUMN ON DESKTOP, FLUID ON MOBILE ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
+        {/* Left Column (Desktop 5 cols: Profile & Search) */}
+        <div className="lg:col-span-5 xl:col-span-5 space-y-4">
+          {/* ── TOP HERO PROFILE CARD (CLEAN & ELEGANT) ── */}
+          <div 
         className="relative overflow-hidden rounded-3xl p-4 sm:p-5 border shadow-sm"
         style={{
           backgroundColor: 'var(--card-bg, #FFFFFF)',
@@ -379,8 +384,29 @@ export function MobileSimpleHomeScreen({
         )}
       </div>
 
-      {/* ── CONDITIONAL BODY: CREW DEDICATED MENU vs REGULAR/SUPERVISOR DASHBOARD ── */}
-      {isCrew ? (
+          {/* Module Search Bar (Desktop Position - under Profile) */}
+          {!isCrew && (
+            <div className="hidden lg:block">
+              <ModuleSearchBar
+                inspectorNik={effectiveNik}
+                inspectorName={effectiveName}
+                inspectorRole={effectiveRole}
+                inspectorSection={effectiveSection}
+                onNav={onNav}
+                onOpenKta={() => {
+                  setInspectionDefaultTab('kta_tta');
+                  setShowInspectionModal(true);
+                }}
+                onOpenP5m={() => setShowP5mModal(true)}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Right Column (Desktop 7 cols: Action Center & Log Book) */}
+        <div className="lg:col-span-7 xl:col-span-7 space-y-4">
+          {/* ── CONDITIONAL BODY: CREW DEDICATED MENU vs REGULAR/SUPERVISOR DASHBOARD ── */}
+          {isCrew ? (
         <div className="space-y-4 pt-1">
           {/* Header Banner */}
           <div className="flex items-center justify-between px-1">
@@ -648,7 +674,14 @@ export function MobileSimpleHomeScreen({
             </button>
           )}
 
-          {/* ── MODULE SEARCH BAR (WITH RECOMMENDATIONS ON FOCUS) ── */}
+        </>
+      )}
+        </div>
+      </div>
+
+      {/* ── MODULE SEARCH BAR (MOBILE ONLY POSITION: BELOW TOP CARDS) ── */}
+      {!isCrew && (
+        <div className="block lg:hidden">
           <ModuleSearchBar
             inspectorNik={effectiveNik}
             inspectorName={effectiveName}
@@ -661,8 +694,11 @@ export function MobileSimpleHomeScreen({
             }}
             onOpenP5m={() => setShowP5mModal(true)}
           />
-        </>
+        </div>
       )}
+
+      {/* ── CUSTOMIZABLE WIDGET DASHBOARD (FULL WIDTH) ── */}
+      <HomeWidgetDashboard userNik={effectiveNik} />
 
       {/* Food Report Modal */}
       <FoodReportModal 
