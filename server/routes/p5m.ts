@@ -2328,7 +2328,9 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
               kategori: slot.kategori,
               subKategori: slot.subKategori,
               fileUrl: freshFileUrl,
-              isSenam: slot.isSenam
+              isSenam: slot.isSenam,
+              isCompleted: Boolean(slot.isCompleted),
+              completedAt: slot.completedAt || null
             };
 
             if (!isPast) {
@@ -2348,6 +2350,88 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
     res.json({ success: true, assignment: finalAssignment });
   } catch (error: any) {
     console.error("Error checking user P5M assignment:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Endpoint untuk menandai materi P5M sudah selesai dibawakan / dilakukan oleh pemateri
+p5mRouter.post("/schedules/mark-completed", async (req, res) => {
+  try {
+    const { scheduleId, day, shift, zone, nik, name, completed = true } = req.body;
+    const cleanNik = (nik || '').trim().toLowerCase();
+    const cleanName = (name || '').trim().toLowerCase();
+
+    let targetSchedule: any = null;
+    if (scheduleId) {
+      const found = await db.select().from(p5mSchedules).where(eq(p5mSchedules.id, Number(scheduleId))).limit(1);
+      if (found.length > 0) targetSchedule = found[0];
+    }
+    if (!targetSchedule) {
+      const latest = await db.select().from(p5mSchedules).orderBy(desc(p5mSchedules.id)).limit(1);
+      if (latest.length > 0) targetSchedule = latest[0];
+    }
+
+    if (!targetSchedule || !targetSchedule.scheduleData) {
+      return res.status(404).json({ success: false, message: "Jadwal P5M tidak ditemukan" });
+    }
+
+    const sch = JSON.parse(JSON.stringify(targetSchedule.scheduleData));
+    let slotUpdated = false;
+    const nowIso = new Date().toISOString();
+
+    for (const [sDay, dayData] of Object.entries(sch)) {
+      if (day && sDay.toLowerCase() !== String(day).toLowerCase()) continue;
+      if (!dayData) continue;
+
+      for (const sShift of ['pagi', 'malam']) {
+        const sData = (dayData as any)[sShift];
+        if (!sData) continue;
+
+        const slotArrays: any[][] = [];
+        if ((dayData as any).tipe === 'gabungan') {
+          if (sData.gabungan) slotArrays.push(sData.gabungan);
+        } else {
+          if (sData.preparasi) slotArrays.push(sData.preparasi);
+          if (sData.laboratorium) slotArrays.push(sData.laboratorium);
+        }
+
+        for (const arr of slotArrays) {
+          for (const slot of arr) {
+            const slotNik = (slot.nik || '').trim().toLowerCase();
+            const slotNama = (slot.nama || '').trim().toLowerCase();
+            let isMatch = false;
+
+            if (cleanNik && slotNik) {
+              isMatch = slotNik === cleanNik || slotNik.replace(/[^a-z0-9]/gi, '') === cleanNik.replace(/[^a-z0-9]/gi, '');
+            } else if (cleanName && slotNama) {
+              isMatch = slotNama === cleanName || slotNama.includes(cleanName) || cleanName.includes(slotNama);
+            }
+
+            if (isMatch) {
+              slot.isCompleted = Boolean(completed);
+              slot.completedAt = completed ? nowIso : null;
+              slot.completedBy = name || nik || 'User';
+              slotUpdated = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (slotUpdated) {
+      await db.update(p5mSchedules)
+        .set({ scheduleData: sch })
+        .where(eq(p5mSchedules.id, targetSchedule.id));
+    }
+
+    res.json({
+      success: true,
+      message: completed ? "Materi P5M berhasil ditandai sudah dilakukan!" : "Status materi P5M direset",
+      isCompleted: Boolean(completed),
+      completedAt: completed ? nowIso : null
+    });
+  } catch (error: any) {
+    console.error("Error marking P5M as completed:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 });

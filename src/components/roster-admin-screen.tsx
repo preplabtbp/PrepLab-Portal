@@ -466,7 +466,31 @@ export function RosterAdminScreen() {
     if (!actualCuti && !planDate && (emp.lastTrvDate || pastTrv)) {
       const lTrv = new Date(emp.lastTrvDate || pastTrv!);
       if (!isNaN(lTrv.getTime())) {
-        actualCuti = new Date(lTrv.getTime() + (70 * 24 * 60 * 60 * 1000));
+        let tourCycle = 56;
+        const rotStr = String(emp.rotation || emp.rotasi || '').trim();
+        const match = rotStr.match(/^(\d+)\s*:\s*(\d+)$/);
+        if (match) {
+          const workWeeks = parseInt(match[1], 10);
+          tourCycle = (workWeeks === 8 || (workWeeks === 7 && parseInt(match[2], 10) === 1)) ? 56 : workWeeks * 7;
+        } else {
+          const golUpper = String(emp.gol || emp.golongan || emp.jobGrade || '').trim().toUpperCase();
+          const jabLower = String(emp.jabatan || emp.position || emp.role || '').trim().toLowerCase();
+          if (
+            golUpper === 'I' || golUpper === '1' || golUpper === 'I.1' || golUpper === '1.1' ||
+            ((jabLower.includes('crew') || jabLower.includes('helper') || jabLower.includes('operator')) && 
+             !jabLower.includes('foreman') && !jabLower.includes('supervisor') && !jabLower.includes('officer') && !jabLower.includes('admin'))
+          ) {
+            tourCycle = 70;
+          } else if (
+            golUpper === 'III' || golUpper === '3' || golUpper === 'IV' || golUpper === '4' || golUpper === 'V' || golUpper === '5' ||
+            jabLower.includes('superintendent') || jabLower.includes('manager')
+          ) {
+            tourCycle = 42;
+          } else {
+            tourCycle = 56;
+          }
+        }
+        actualCuti = new Date(lTrv.getTime() + (tourCycle * 24 * 60 * 60 * 1000));
       }
     }
 

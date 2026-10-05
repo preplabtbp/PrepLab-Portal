@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ClipboardCheck, ClipboardList, Camera, X, Check, Copy,
@@ -13,6 +13,7 @@ import { triggerExpGain } from '../lib/gamificationEvents';
 import { isPicTemuanRole, getOpenFindingsForSupervisor } from '../utils/inspection-pic-matcher';
 import { getISOWeekKey } from '../utils/iso-week';
 import { GENERAL_INSPECTION_FORM_URL } from './InspectionCompletionModal';
+import { getKtaObligation } from './GroupReportScreen';
 
 const SAFETY_KTA_FORM_URL = 'https://docs.google.com/forms/d/1YMympG3aA-8l978aAlRJFSoi-SVQAKiS7KmJjNRfuBI/viewform?edit_requested=true';
 
@@ -86,8 +87,11 @@ export function SimplifiedInspectionModal({
   onNav,
   onSuccess
 }: SimplifiedInspectionModalProps) {
-  const currentJabatan = userJabatan || localStorage.getItem('p2h_inspector_jabatan') || '';
+  const currentJabatan = userJabatan || localStorage.getItem('p2h_inspector_jabatan') || localStorage.getItem('user_role') || localStorage.getItem('user_jabatan') || '';
   const isPic = isPicTemuanRole(currentJabatan);
+  const obligation = useMemo(() => {
+    return getKtaObligation(inspectorNik, currentJabatan, userSection);
+  }, [inspectorNik, currentJabatan, userSection]);
 
   const [activeTab, setActiveTab] = useState<'weekly' | 'kta_tta' | 'findings' | 'p2h'>(defaultTab);
   
@@ -107,8 +111,21 @@ export function SimplifiedInspectionModal({
   const [submittingWeekly, setSubmittingWeekly] = useState(false);
   const weeklyFileInputRef = useRef<HTMLInputElement>(null);
 
-  // KTA/TTA upload state
-  const [selectedKtaType, setSelectedKtaType] = useState<'KTA' | 'TTA' | 'BOTH'>('BOTH');
+  // KTA/TTA upload state (supports 2_TTA for QA/Maintenance/Admin)
+  type KtaOptionType = 'KTA' | 'TTA' | 'BOTH' | '2_TTA';
+  const [selectedKtaType, setSelectedKtaType] = useState<KtaOptionType>('BOTH');
+
+  // Auto-sync default choice based on personil's obligation
+  useEffect(() => {
+    if (obligation.type === '2_TTA') {
+      setSelectedKtaType('2_TTA');
+    } else if (obligation.type === '1_KTA_OR_TTA') {
+      setSelectedKtaType('TTA');
+    } else {
+      setSelectedKtaType('BOTH');
+    }
+  }, [obligation.type, isOpen]);
+
   const [ktaDescription, setKtaDescription] = useState('');
   const [ktaImagePreview, setKtaImagePreview] = useState<string | null>(null);
   const [ktaImageFile, setKtaImageFile] = useState<File | null>(null);
@@ -468,11 +485,13 @@ export function SimplifiedInspectionModal({
       }
 
       const typesToSubmit: ('KTA' | 'TTA')[] = 
+        selectedKtaType === '2_TTA' ? ['TTA', 'TTA'] :
         selectedKtaType === 'BOTH' ? ['KTA', 'TTA'] : [selectedKtaType];
 
       const todayStr = new Date().toISOString().split('T')[0];
 
-      for (const t of typesToSubmit) {
+      for (let i = 0; i < typesToSubmit.length; i++) {
+        const t = typesToSubmit[i];
         await fetch('/api/kta-reports', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -483,14 +502,21 @@ export function SimplifiedInspectionModal({
             reportType: t,
             date: todayStr,
             imageUrl: uploadedUrl,
-            description: ktaDescription.trim() || `Laporan bukti formulir ${t} disederhanakan`,
+            description: ktaDescription.trim() 
+              ? (typesToSubmit.length > 1 ? `${ktaDescription.trim()} (Laporan ${i + 1}/${typesToSubmit.length})` : ktaDescription.trim())
+              : `Laporan bukti formulir ${t} disederhanakan`,
             location: '-'
           })
         });
       }
 
-      const expGain = selectedKtaType === 'BOTH' ? 60 : 35;
-      toast.success('✅ Bukti laporan KTA/TTA berhasil dikirim ke Safety!', { id: 'upload-kta', duration: 4000 });
+      const expGain = (selectedKtaType === 'BOTH' || selectedKtaType === '2_TTA') ? 60 : 35;
+      toast.success(
+        selectedKtaType === '2_TTA'
+          ? '✅ 2 Bukti laporan TTA berhasil dikirim ke Safety (Target Mingguan Terpenuhi)!'
+          : '✅ Bukti laporan KTA/TTA berhasil dikirim ke Safety!',
+        { id: 'upload-kta', duration: 4000 }
+      );
       triggerExpGain(expGain, 'Laporan KTA/TTA Terkirim!', 'Kontribusi K3L Harita Nickel');
       window.dispatchEvent(new Event('gamification_updated'));
       window.dispatchEvent(new CustomEvent('refresh-group-reports'));
@@ -1264,44 +1290,129 @@ export function SimplifiedInspectionModal({
 
                     {/* Jenis Laporan */}
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold text-[var(--text-main)] block">
-                        Jenis Laporan yang Diisi:
-                      </label>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedKtaType('KTA')}
-                          className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
-                            selectedKtaType === 'KTA'
-                              ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
-                              : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
-                          }`}
-                        >
-                          KTA Saja
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedKtaType('TTA')}
-                          className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
-                            selectedKtaType === 'TTA'
-                              ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
-                              : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
-                          }`}
-                        >
-                          TTA Saja
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedKtaType('BOTH')}
-                          className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
-                            selectedKtaType === 'BOTH'
-                              ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
-                              : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
-                          }`}
-                        >
-                          Keduanya (+60 EXP)
-                        </button>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-[var(--text-main)] block">
+                          Jenis Laporan yang Diisi:
+                        </label>
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                          Target Anda: {obligation.label}
+                        </span>
                       </div>
+
+                      {obligation.type === '2_TTA' ? (
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('2_TTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === '2_TTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">2 TTA Sekaligus</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === '2_TTA' ? 'text-amber-100' : 'text-emerald-500'}`}>+60 EXP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('TTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'TTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">1 TTA Saja</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'TTA' ? 'text-amber-100' : 'text-[var(--text-muted)]'}`}>+35 EXP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('KTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'KTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">KTA Saja</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'KTA' ? 'text-amber-100' : 'text-[var(--text-muted)]'}`}>+35 EXP</span>
+                          </button>
+                        </div>
+                      ) : obligation.type === '1_KTA_OR_TTA' ? (
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('TTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'TTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">TTA Saja</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'TTA' ? 'text-amber-100' : 'text-[var(--text-muted)]'}`}>+35 EXP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('KTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'KTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">KTA Saja</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'KTA' ? 'text-amber-100' : 'text-[var(--text-muted)]'}`}>+35 EXP</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('BOTH')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'BOTH'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">Keduanya</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'BOTH' ? 'text-amber-100' : 'text-emerald-500'}`}>+60 EXP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('KTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'KTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">KTA Saja</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'KTA' ? 'text-amber-100' : 'text-[var(--text-muted)]'}`}>+35 EXP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('TTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'TTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">TTA Saja</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'TTA' ? 'text-amber-100' : 'text-[var(--text-muted)]'}`}>+35 EXP</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Helper description */}
+                      <p className="text-[10px] text-[var(--text-muted)] bg-[var(--card-bg)] px-2.5 py-1.5 rounded-lg border border-[var(--border-main)]">
+                        {selectedKtaType === '2_TTA' && '💡 Mengirim 2 bukti laporan TTA sekaligus untuk memenuhi kewajiban mingguan Anda.'}
+                        {selectedKtaType === 'BOTH' && '💡 Mengirim 1 KTA + 1 TTA sekaligus untuk memenuhi kewajiban mingguan Anda.'}
+                        {selectedKtaType === 'TTA' && (obligation.type === '2_TTA' ? '💡 Mengirim 1 laporan TTA (tersisa 1 TTA lagi untuk memenuhi target).' : '💡 Mengirim 1 laporan TTA.')}
+                        {selectedKtaType === 'KTA' && '💡 Mengirim 1 laporan Kondisi Tidak Aman (KTA).'}
+                      </p>
                     </div>
 
                     {/* Catatan Singkat (Opsional) */}
@@ -1387,7 +1498,12 @@ export function SimplifiedInspectionModal({
                       ) : (
                         <>
                           <Check className="w-4 h-4" />
-                          <span>Kirim Bukti Laporan KTA/TTA</span>
+                          <span>
+                            {selectedKtaType === '2_TTA' ? 'Kirim Bukti 2 Laporan TTA (+60 EXP)' :
+                             selectedKtaType === 'BOTH' ? 'Kirim Bukti KTA & TTA (+60 EXP)' :
+                             selectedKtaType === 'TTA' ? 'Kirim Bukti Laporan TTA (+35 EXP)' :
+                             'Kirim Bukti Laporan KTA (+35 EXP)'}
+                          </span>
                         </>
                       )}
                     </button>

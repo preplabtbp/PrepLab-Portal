@@ -16,13 +16,16 @@ import { DevRoleplaySwitcher, getSimulatedProfile, SimulatedProfile } from './De
 import { LeadershipDashboardModal } from './LeadershipDashboardModal';
 import { getDailySkenaQuote, SkenaQuote } from '../utils/skena-quotes';
 import { isPicTemuanRole, getOpenFindingsForSupervisor } from '../utils/inspection-pic-matcher';
+import { ActionCenterBar } from './ActionCenterBar';
+import { SectionLogBookBar } from './SectionLogBookBar';
+import { ModuleSearchBar } from './ModuleSearchBar';
 
 interface MobileSimpleHomeScreenProps {
   inspectorName: string;
   inspectorNik: string;
   onNav: (tab: any) => void;
   userPt?: string;
-  onSwitchToFullMode: () => void;
+  onSwitchToFullMode?: () => void;
 }
 
 export function MobileSimpleHomeScreen({
@@ -52,8 +55,22 @@ export function MobileSimpleHomeScreen({
     const handleSimChange = (e: any) => {
       setSimProfile(e.detail || null);
     };
+    const handleOpenSimplified = (e: any) => {
+      const tab = e?.detail?.tab || 'weekly';
+      setInspectionDefaultTab(tab);
+      setShowInspectionModal(true);
+    };
+    const handleOpenP5m = () => {
+      setShowP5mModal(true);
+    };
     window.addEventListener('dev-roleplay-changed', handleSimChange);
-    return () => window.removeEventListener('dev-roleplay-changed', handleSimChange);
+    window.addEventListener('open-simplified-inspection', handleOpenSimplified);
+    window.addEventListener('open-simplified-p5m-modal', handleOpenP5m);
+    return () => {
+      window.removeEventListener('dev-roleplay-changed', handleSimChange);
+      window.removeEventListener('open-simplified-inspection', handleOpenSimplified);
+      window.removeEventListener('open-simplified-p5m-modal', handleOpenP5m);
+    };
   }, []);
 
   // Quotes Pool & Modal State
@@ -262,13 +279,9 @@ export function MobileSimpleHomeScreen({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.25 }}
-      className="w-full pb-28 px-3.5 space-y-4 max-w-lg mx-auto"
+      className="w-full pb-28 px-3.5 sm:px-6 space-y-4 max-w-4xl mx-auto"
     >
-      {/* ── DEV ROLEPLAY SWITCHER (DEV/ADMIN ONLY) ── */}
-      {isDeveloper && (
-        <DevRoleplaySwitcher onProfileChange={(sim) => setSimProfile(sim)} />
-      )}
-      {/* ── TOP HERO PROFILE CARD (SIMPLE & FOCUSED) ── */}
+      {/* ── TOP HERO PROFILE CARD (CLEAN & ELEGANT) ── */}
       <div 
         className="relative overflow-hidden rounded-3xl p-4 sm:p-5 border shadow-sm"
         style={{
@@ -276,54 +289,41 @@ export function MobileSimpleHomeScreen({
           borderColor: 'var(--border-main, #E2E8F0)'
         }}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            {/* Avatar Profile */}
-            <div 
-              className="w-12 h-12 rounded-2xl flex items-center justify-center font-display font-black text-lg shadow-inner border border-teal-500/20 shrink-0 text-white"
-              style={{
-                background: 'linear-gradient(135deg, var(--primary, #0D9488) 0%, #059669 100%)'
-              }}
-            >
-              {profile?.avatar ? (
-                <img src={profile.avatar} alt={inspectorName} className="w-full h-full object-cover rounded-2xl" />
-              ) : (
-                <span>{inspectorName ? inspectorName.charAt(0).toUpperCase() : 'P'}</span>
-              )}
-            </div>
-
-            {/* Name & Role */}
-            <div className="min-w-0">
-              <span className="text-[11px] font-bold text-[var(--text-muted)] block leading-none mb-1">
-                {greetingText},
-              </span>
-              <h2 className="text-base font-black text-[var(--text-main)] font-display truncate leading-tight">
-                {effectiveName}
-              </h2>
-              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                <span className="text-[10px] font-semibold text-[var(--text-muted)] truncate">
-                  {effectiveRole}
-                </span>
-                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/25">
-                  {effectiveSection}
-                </span>
-                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
-                  ● Onsite
-                </span>
-              </div>
-            </div>
+        <div className="flex items-center gap-3 sm:gap-4">
+          {/* Avatar Profile */}
+          <div 
+            className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-display font-black text-xl shadow-inner border border-teal-500/20 shrink-0 text-white"
+            style={{
+              background: 'linear-gradient(135deg, var(--primary, #0D9488) 0%, #059669 100%)'
+            }}
+          >
+            {profile?.avatar ? (
+              <img src={profile.avatar} alt={inspectorName} className="w-full h-full object-cover rounded-2xl" />
+            ) : (
+              <span>{inspectorName ? inspectorName.charAt(0).toUpperCase() : 'P'}</span>
+            )}
           </div>
 
-          {/* Mode Switch Pill Button */}
-          <button
-            type="button"
-            onClick={onSwitchToFullMode}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/25 text-[10px] font-bold shrink-0 transition-all active:scale-95 shadow-2xs"
-            title="Klik untuk beralih ke Mode Lengkap"
-          >
-            <Smartphone className="w-3 h-3 text-teal-600 dark:text-teal-400" />
-            <span>Mode Sederhana</span>
-          </button>
+          {/* Name & Role (Elegantly Wrapped Without Cutoffs) */}
+          <div className="min-w-0 flex-1">
+            <span className="text-[11px] sm:text-xs font-bold text-[var(--text-muted)] block leading-none mb-1">
+              {greetingText},
+            </span>
+            <h2 className="text-base sm:text-lg font-black text-[var(--text-main)] font-display leading-snug break-words">
+              {effectiveName}
+            </h2>
+            <div className="flex items-center gap-1.5 sm:gap-2 mt-1 flex-wrap">
+              <span className="text-xs sm:text-sm font-semibold text-[var(--text-muted)]">
+                {effectiveRole}
+              </span>
+              <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-md bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/25 shrink-0">
+                {effectiveSection}
+              </span>
+              <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 shrink-0">
+                ● Onsite
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Compact Daily Motivational Quote Ticker */}
@@ -348,6 +348,26 @@ export function MobileSimpleHomeScreen({
           </div>
         )}
       </div>
+
+      {/* ── OPERATIONAL ACTION CENTER DIGEST BAR ── */}
+      <ActionCenterBar
+        inspectorNik={effectiveNik}
+        inspectorName={effectiveName}
+        inspectorJabatan={effectiveRole}
+        onNav={onNav}
+        onOpenKta={() => {
+          setInspectionDefaultTab('kta_tta');
+          setShowInspectionModal(true);
+        }}
+        onOpenP5m={() => setShowP5mModal(true)}
+      />
+
+      {/* ── SECTION LOG BOOK ACCORDION (PIC TASKS & CHECKLIST) ── */}
+      <SectionLogBookBar
+        inspectorNik={effectiveNik}
+        inspectorName={effectiveName}
+        onNav={onNav}
+      />
 
       {/* ── EXECUTIVE / LEADERSHIP DASHBOARD TRIGGER CARD (SPT UP) ── */}
       {hasLeadershipDashboard && (
@@ -402,980 +422,19 @@ export function MobileSimpleHomeScreen({
         </button>
       )}
 
-      {/* ── SECTION: 4 TUGAS UTAMA (ADAPTIF SESUAI SEKSI) ── */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between px-1">
-          <h3 className="text-xs font-black uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
-            <ClipboardList className="w-3.5 h-3.5 text-teal-600" />
-            <span>Aksi Cepat Tugas Hari Ini</span>
-          </h3>
-          <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400">
-            {effectiveSection}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2.5">
-          {/* ═══════════════════════════════════════════
-              KONDISI 1: SECTION ADMINISTRASI & HR
-             ═══════════════════════════════════════════ */}
-          {isAdministrasi ? (
-            <>
-              {/* 1. UPDATE ROSTER HARIAN */}
-              <button
-                type="button"
-                onClick={() => onNav('roster-admin')}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'rgba(99, 102, 241, 0.4)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 bg-indigo-500/10 text-indigo-600 border-indigo-500/25">
-                    <Clock className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full border bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30">
-                    Administrasi
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-indigo-600 transition-colors leading-tight">
-                    Update Roster Harian
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    Kelola status shift &amp; cuti kerja
-                  </p>
-                </div>
-              </button>
-
-              {/* 2. SAP MANAGEMENT MINGGUAN */}
-              <button
-                type="button"
-                onClick={() => onNav('sap-dashboard')}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'rgba(168, 85, 247, 0.4)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 bg-purple-500/10 text-purple-600 border-purple-500/25">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full border bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30">
-                    Mingguan
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-purple-600 transition-colors leading-tight">
-                    SAP Management
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    Sinkronisasi &amp; notifikasi SAP
-                  </p>
-                </div>
-              </button>
-
-              {/* 3. INSPEKSI, KTA & TTA */}
-              <button
-                type="button"
-                onClick={() => {
-                  setInspectionDefaultTab('weekly');
-                  setShowInspectionModal(true);
-                }}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: weeklyInspectionDone ? 'rgba(16, 185, 129, 0.4)' : 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
-                    weeklyInspectionDone
-                      ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
-                      : 'bg-amber-500/10 text-amber-600 border-amber-500/25'
-                  }`}>
-                    <ClipboardCheck className="w-5 h-5" />
-                  </div>
-                  <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border ${
-                    weeklyInspectionDone
-                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
-                  }`}>
-                    {weeklyInspectionDone ? '✓ Sudah Diisi' : 'Inspeksi & K3L'}
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-amber-600 transition-colors leading-tight">
-                    Inspeksi, KTA &amp; TTA
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {weeklyInspectionDone ? '✓ PDF Laporan & General Submit' : 'Inspeksi rutin & lapor K3L'}
-                  </p>
-                </div>
-              </button>
-
-              {/* 4. BUAT WORK ORDER PERMINTAAN */}
-              <button
-                type="button"
-                onClick={() => onNav('create-wo')}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-600 border border-orange-500/25 flex items-center justify-center shrink-0">
-                    <PlusCircle className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30">
-                    Request / WO
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-orange-600 transition-colors leading-tight">
-                    Buat Work Order (WO)
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    Pengajuan sarana / perbaikan
-                  </p>
-                </div>
-              </button>
-            </>
-          ) : isMaintenance ? (
-            /* ═══════════════════════════════════════════
-               KONDISI 2: SECTION MAINTENANCE
-               ═══════════════════════════════════════════ */
-            <>
-              {/* 1. MONITORING & SELESAIKAN WO */}
-              <button
-                type="button"
-                onClick={() => onNav('wo-list')}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'rgba(245, 158, 11, 0.4)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 bg-amber-500/10 text-amber-600 border-amber-500/25">
-                    <Wrench className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full border bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30">
-                    Maintenance
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-amber-600 transition-colors leading-tight">
-                    Monitoring &amp; Selesaikan WO
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    Daftar WO &amp; closing perbaikan
-                  </p>
-                </div>
-              </button>
-
-              {/* 2. BUAT WORK ORDER MAINTENANCE */}
-              <button
-                type="button"
-                onClick={() => onNav('create-wo')}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-600 border border-orange-500/25 flex items-center justify-center shrink-0">
-                    <PlusCircle className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30">
-                    WO Internal
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-orange-600 transition-colors leading-tight">
-                    Buat WO Baru
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    Form overhaul &amp; preventive
-                  </p>
-                </div>
-              </button>
-
-              {/* 3. INSPEKSI, KTA & TTA */}
-              <button
-                type="button"
-                onClick={() => {
-                  setInspectionDefaultTab('weekly');
-                  setShowInspectionModal(true);
-                }}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: weeklyInspectionDone ? 'rgba(16, 185, 129, 0.4)' : 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
-                    weeklyInspectionDone
-                      ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
-                      : 'bg-amber-500/10 text-amber-600 border-amber-500/25'
-                  }`}>
-                    <ClipboardCheck className="w-5 h-5" />
-                  </div>
-                  <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border ${
-                    weeklyInspectionDone
-                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
-                  }`}>
-                    {weeklyInspectionDone ? '✓ Sudah Diisi' : 'Inspeksi & K3L'}
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-amber-600 transition-colors leading-tight">
-                    Inspeksi, KTA &amp; TTA
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {weeklyInspectionDone ? '✓ PDF Laporan & General Submit' : 'Inspeksi rutin & lapor K3L'}
-                  </p>
-                </div>
-              </button>
-
-              {/* 4. BRIEFING P5M */}
-              <button
-                type="button"
-                onClick={() => setShowP5mModal(true)}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 border border-purple-500/25 flex items-center justify-center shrink-0">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                    Briefing
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-purple-600 transition-colors leading-tight">
-                    Briefing P5M
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {p5mAssignment?.materi || p5mAssignment?.topicTitle || 'Pertemuan 5 menit'}
-                  </p>
-                </div>
-              </button>
-            </>
-          ) : isLaboratory ? (
-            /* ═══════════════════════════════════════════
-               KONDISI 3: SECTION LABORATORY
-               ═══════════════════════════════════════════ */
-            <>
-              {/* 1. PEMANTAUAN HARIAN LAB */}
-              <button
-                type="button"
-                onClick={() => onNav('pemantauan')}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: pemantauanDone ? 'rgba(16, 185, 129, 0.4)' : 'rgba(14, 165, 233, 0.4)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 bg-sky-500/10 text-sky-600 border-sky-500/25">
-                    <ThermometerSun className="w-5 h-5" />
-                  </div>
-                  <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border ${
-                    pemantauanDone 
-                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' 
-                      : 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30'
-                  }`}>
-                    {pemantauanDone ? '✓ Sudah Input' : 'Wajib Tiap Hari'}
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-sky-600 transition-colors leading-tight">
-                    Pemantauan Lab
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    Suhu, kelembaban &amp; gas detector
-                  </p>
-                </div>
-              </button>
-
-              {/* 2. INSPEKSI HARIAN (P2H) INSTRUMEN LAB */}
-              <button
-                type="button"
-                onClick={() => onNav('inspect')}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: p2hDone ? 'rgba(16, 185, 129, 0.4)' : 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
-                    p2hDone 
-                      ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' 
-                      : 'bg-teal-500/10 text-teal-600 border-teal-500/25'
-                  }`}>
-                    <ClipboardList className="w-5 h-5" />
-                  </div>
-                  <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border ${
-                    p2hDone 
-                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' 
-                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
-                  }`}>
-                    {p2hDone ? '✓ Sudah Diisi' : 'Instrumen Lab'}
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-teal-600 transition-colors leading-tight">
-                    P2H Instrumen Lab
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    XRF, timbangan, &amp; furnace
-                  </p>
-                </div>
-              </button>
-
-              {/* 3. BRIEFING P5M */}
-              <button
-                type="button"
-                onClick={() => setShowP5mModal(true)}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 border border-purple-500/25 flex items-center justify-center shrink-0">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                    Briefing
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-purple-600 transition-colors leading-tight">
-                    Briefing P5M
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {p5mAssignment?.materi || p5mAssignment?.topicTitle || 'Pertemuan 5 menit'}
-                  </p>
-                </div>
-              </button>
-
-              {/* 4. INSPEKSI, KTA & TTA */}
-              <button
-                type="button"
-                onClick={() => {
-                  setInspectionDefaultTab('weekly');
-                  setShowInspectionModal(true);
-                }}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: weeklyInspectionDone ? 'rgba(16, 185, 129, 0.4)' : 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
-                    weeklyInspectionDone
-                      ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
-                      : 'bg-amber-500/10 text-amber-600 border-amber-500/25'
-                  }`}>
-                    <ClipboardCheck className="w-5 h-5" />
-                  </div>
-                  <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border ${
-                    weeklyInspectionDone
-                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
-                  }`}>
-                    {weeklyInspectionDone ? '✓ Sudah Diisi' : 'Inspeksi & K3L'}
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-amber-600 transition-colors leading-tight">
-                    Inspeksi, KTA &amp; TTA
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {weeklyInspectionDone ? '✓ PDF Laporan & General Submit' : 'Inspeksi rutin & lapor K3L'}
-                  </p>
-                </div>
-              </button>
-
-              {/* 5. BUAT WORK ORDER (WO) */}
-              <button
-                type="button"
-                onClick={() => onNav('create-wo')}
-                className="col-span-2 sm:col-span-1 group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-600 border border-orange-500/25 flex items-center justify-center shrink-0">
-                    <Wrench className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30">
-                    Lapor Alat
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-orange-600 transition-colors leading-tight">
-                    Buat Work Order (WO)
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    Lapor alat rusak ke Maintenance
-                  </p>
-                </div>
-              </button>
-            </>
-          ) : isInventoryControl ? (
-            /* ═══════════════════════════════════════════
-               KONDISI 4: SECTION INVENTORY CONTROL
-               ═══════════════════════════════════════════ */
-            <>
-              {/* 1. INVENTORY CONTROL APD & DOKUMEN */}
-              <button
-                type="button"
-                onClick={() => onNav('inventory')}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'rgba(245, 158, 11, 0.4)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 bg-amber-500/10 text-amber-600 border-amber-500/25">
-                    <Shield className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full border bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30">
-                    Inventory
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-amber-600 transition-colors leading-tight">
-                    Inventory Control (APD)
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    Distribusi APD &amp; stok barang
-                  </p>
-                </div>
-              </button>
-
-              {/* 2. BRIEFING P5M */}
-              <button
-                type="button"
-                onClick={() => setShowP5mModal(true)}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 border border-purple-500/25 flex items-center justify-center shrink-0">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                    Briefing
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-purple-600 transition-colors leading-tight">
-                    Briefing P5M
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {p5mAssignment?.materi || p5mAssignment?.topicTitle || 'Pertemuan 5 menit'}
-                  </p>
-                </div>
-              </button>
-
-              {/* 3. INSPEKSI, KTA & TTA */}
-              <button
-                type="button"
-                onClick={() => {
-                  setInspectionDefaultTab('weekly');
-                  setShowInspectionModal(true);
-                }}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: weeklyInspectionDone ? 'rgba(16, 185, 129, 0.4)' : 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
-                    weeklyInspectionDone
-                      ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
-                      : 'bg-amber-500/10 text-amber-600 border-amber-500/25'
-                  }`}>
-                    <ClipboardCheck className="w-5 h-5" />
-                  </div>
-                  <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border ${
-                    weeklyInspectionDone
-                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
-                  }`}>
-                    {weeklyInspectionDone ? '✓ Sudah Diisi' : 'Inspeksi & K3L'}
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-amber-600 transition-colors leading-tight">
-                    Inspeksi, KTA &amp; TTA
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {weeklyInspectionDone ? '✓ PDF Laporan & General Submit' : 'Inspeksi rutin & lapor K3L'}
-                  </p>
-                </div>
-              </button>
-
-              {/* 4. BUAT WORK ORDER (WO) */}
-              <button
-                type="button"
-                onClick={() => onNav('create-wo')}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-600 border border-orange-500/25 flex items-center justify-center shrink-0">
-                    <PlusCircle className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30">
-                    Request / WO
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-orange-600 transition-colors leading-tight">
-                    Buat Work Order (WO)
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    Pengajuan sarana / perbaikan
-                  </p>
-                </div>
-              </button>
-            </>
-          ) : (
-            /* ═══════════════════════════════════════════
-               KONDISI 4: SECTION PREPARATION (DEFAULT)
-               ═══════════════════════════════════════════ */
-            <>
-              {/* 1. INSPEKSI HARIAN (P2H) */}
-              <button
-                type="button"
-                onClick={() => onNav('inspect')}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: p2hDone ? 'rgba(16, 185, 129, 0.4)' : 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
-                    p2hDone 
-                      ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' 
-                      : 'bg-teal-500/10 text-teal-600 border-teal-500/25'
-                  }`}>
-                    <ClipboardList className="w-5 h-5" />
-                  </div>
-                  <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border ${
-                    p2hDone 
-                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' 
-                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
-                  }`}>
-                    {p2hDone ? '✓ Sudah Diisi' : '⏳ Belum Diisi'}
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-teal-600 transition-colors leading-tight">
-                    Inspeksi Harian (P2H)
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    Peralatan preparasi pra-operasi
-                  </p>
-                </div>
-              </button>
-
-              {/* 2. INSPEKSI, KTA & TTA */}
-              <button
-                type="button"
-                onClick={() => {
-                  setInspectionDefaultTab('weekly');
-                  setShowInspectionModal(true);
-                }}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: weeklyInspectionDone ? 'rgba(16, 185, 129, 0.4)' : 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
-                    weeklyInspectionDone
-                      ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
-                      : 'bg-amber-500/10 text-amber-600 border-amber-500/25'
-                  }`}>
-                    <ClipboardCheck className="w-5 h-5" />
-                  </div>
-                  <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border ${
-                    weeklyInspectionDone
-                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
-                  }`}>
-                    {weeklyInspectionDone ? '✓ Sudah Diisi' : 'Inspeksi & K3L'}
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-amber-600 transition-colors leading-tight">
-                    Inspeksi, KTA &amp; TTA
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {weeklyInspectionDone ? '✓ PDF Laporan & General Submit' : 'Inspeksi rutin & lapor K3L'}
-                  </p>
-                </div>
-              </button>
-
-              {/* 3. BRIEFING P5M */}
-              <button
-                type="button"
-                onClick={() => setShowP5mModal(true)}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 border border-purple-500/25 flex items-center justify-center shrink-0">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                    Briefing
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-purple-600 transition-colors leading-tight">
-                    Briefing P5M
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    {p5mAssignment?.materi || p5mAssignment?.topicTitle || 'Pertemuan 5 menit'}
-                  </p>
-                </div>
-              </button>
-
-              {/* 4. BUAT WORK ORDER (WO) */}
-              <button
-                type="button"
-                onClick={() => onNav('create-wo')}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl border text-left transition-all active:scale-95 shadow-xs hover:shadow-md cursor-pointer overflow-hidden min-h-[120px]"
-                style={{
-                  backgroundColor: 'var(--card-bg, #FFFFFF)',
-                  borderColor: 'var(--border-main, #E2E8F0)'
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-600 border border-orange-500/25 flex items-center justify-center shrink-0">
-                    <Wrench className="w-5 h-5" />
-                  </div>
-                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30">
-                    Lapor Alat
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-orange-600 transition-colors leading-tight">
-                    Buat Work Order (WO)
-                  </h4>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-                    Lapor kerusakan alat ke Maintenance
-                  </p>
-                </div>
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ── SECTION KHUSUS PIC TEMUAN (SPV & SPECIALIST) ── */}
-      {isPic && (
-        <button
-          type="button"
-          onClick={() => {
-            setInspectionDefaultTab('findings');
-            setShowInspectionModal(true);
-          }}
-          className="w-full p-3.5 rounded-2xl border text-left flex items-center justify-between gap-3 shadow-xs hover:shadow-md active:scale-98 transition-all cursor-pointer overflow-hidden relative group"
-          style={{
-            backgroundColor: 'var(--card-bg, #FFFFFF)',
-            borderColor: openFindingsCount > 0 ? 'rgba(239, 68, 68, 0.4)' : 'var(--border-main, #E2E8F0)'
-          }}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border ${
-              openFindingsCount > 0 
-                ? 'bg-rose-500/15 text-rose-600 border-rose-500/30' 
-                : 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
-            }`}>
-              <ShieldAlert className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-rose-600 transition-colors">
-                  Manajemen Temuan Inspeksi
-                </h4>
-                <span className="text-[9px] font-black px-1.5 py-0.2 rounded-md bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/25 uppercase">
-                  PIC Area
-                </span>
-              </div>
-              <p className="text-[10.5px] text-[var(--text-muted)] truncate mt-0.5">
-                {openFindingsCount > 0 
-                  ? `${openFindingsCount} temuan inspeksi perlu tindakan & closing (+60 EXP)` 
-                  : 'Semua temuan di area Anda telah tuntas'}
-              </p>
-            </div>
-          </div>
-
-          <span className={`px-2.5 py-1 rounded-full text-[10.5px] font-black shrink-0 border ${
-            openFindingsCount > 0 
-              ? 'bg-rose-500 text-white border-rose-600 shadow-2xs' 
-              : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-          }`}>
-            {openFindingsCount > 0 ? `${openFindingsCount} Open` : '✓ Selesai'}
-          </span>
-        </button>
-      )}
-
-      {/* ── SECTION: TUGAS TAMBAHAN & MODUL CEPAT ── */}
-      {/* ── SECTION: TUGAS TAMBAHAN & MODUL CEPAT ── */}
-      <div className="space-y-2.5">
-        <div className="flex items-center justify-between px-1">
-          <h3 className="text-xs font-black uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-            <span>Modul Pendukung &amp; Edukasi</span>
-          </h3>
-          <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
-            Akses Cepat
-          </span>
-        </div>
-
-        <div className="grid grid-cols-4 gap-2">
-          {/* Pemantauan Lab (if lab) or Inspeksi Mingguan */}
-          {isLaboratory ? (
-            <button
-              type="button"
-              onClick={() => onNav('pemantauan')}
-              className="flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer group"
-              style={{
-                backgroundColor: 'var(--card-bg, #FFFFFF)',
-                borderColor: 'var(--border-main, #E2E8F0)'
-              }}
-            >
-              <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-                <ThermometerSun className="w-4 h-4" />
-              </div>
-              <span className="text-[9.5px] font-bold text-[var(--text-main)] leading-tight truncate w-full">
-                Pemantauan
-              </span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setInspectionDefaultTab('weekly');
-                setShowInspectionModal(true);
-              }}
-              className="flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer group"
-              style={{
-                backgroundColor: 'var(--card-bg, #FFFFFF)',
-                borderColor: 'var(--border-main, #E2E8F0)'
-              }}
-            >
-              <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-                <ClipboardList className="w-4 h-4" />
-              </div>
-              <span className="text-[9.5px] font-bold text-[var(--text-main)] leading-tight truncate w-full">
-                Inspeksi
-              </span>
-            </button>
-          )}
-
-          {/* Menu Quiz Safety & SOP */}
-          <button
-            type="button"
-            onClick={() => onNav('quiz')}
-            className="flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer group"
-            style={{
-              backgroundColor: 'var(--card-bg, #FFFFFF)',
-              borderColor: 'rgba(59, 130, 246, 0.4)'
-            }}
-          >
-            <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-              <BookOpen className="w-4 h-4" />
-            </div>
-            <span className="text-[9.5px] font-bold text-[var(--text-main)] leading-tight truncate w-full">
-              Quiz Safety
-            </span>
-          </button>
-
-          {/* Sistem APD */}
-          <button
-            type="button"
-            onClick={() => onNav('apd-input')}
-            className="flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer group"
-            style={{
-              backgroundColor: 'var(--card-bg, #FFFFFF)',
-              borderColor: 'var(--border-main, #E2E8F0)'
-            }}
-          >
-            <div className="w-8 h-8 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-              <Shield className="w-4 h-4" />
-            </div>
-            <span className="text-[9.5px] font-bold text-[var(--text-main)] leading-tight truncate w-full">
-              Sistem APD
-            </span>
-          </button>
-
-          {/* Buletin K3 */}
-          <button
-            type="button"
-            onClick={() => onNav('bulletin')}
-            className="flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center transition-all active:scale-95 shadow-2xs hover:shadow-xs cursor-pointer group"
-            style={{
-              backgroundColor: 'var(--card-bg, #FFFFFF)',
-              borderColor: 'var(--border-main, #E2E8F0)'
-            }}
-          >
-            <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-              <FileText className="w-4 h-4" />
-            </div>
-            <span className="text-[9.5px] font-bold text-[var(--text-main)] leading-tight truncate w-full">
-              Buletin K3
-            </span>
-          </button>
-        </div>
-
-        {/* Featured Quiz Banner Card for Crew */}
-        <button
-          type="button"
-          onClick={() => onNav('quiz')}
-          className="w-full p-3.5 rounded-2xl border text-left flex items-center justify-between gap-3 shadow-xs hover:shadow-md active:scale-98 transition-all cursor-pointer overflow-hidden relative group"
-          style={{
-            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(99, 102, 241, 0.05) 100%)',
-            borderColor: 'rgba(59, 130, 246, 0.35)'
-          }}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 bg-blue-500/15 text-blue-600 border-blue-500/30 group-hover:scale-105 transition-transform">
-              <BookOpen className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9.5px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded-md border bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/25">
-                  Quiz Safety &amp; SOP
-                </span>
-                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
-                  <Sparkles className="w-3 h-3 inline" /> +250 EXP
-                </span>
-              </div>
-              <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-blue-600 transition-colors leading-tight mt-0.5 truncate">
-                Uji Pemahaman Prosedur &amp; Keselamatan
-              </h4>
-              <p className="text-[10px] text-[var(--text-muted)] truncate">
-                Ikuti kuis mingguan untuk asah SOP &amp; tingkatkan peringkat di Leaderboard
-              </p>
-            </div>
-          </div>
-          <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0 group-hover:translate-x-0.5 transition-transform">
-            <ChevronRight className="w-4 h-4" />
-          </div>
-        </button>
-      </div>
-
-      {/* ── SECTION: CHAT & HALL OF FAME ROW ── */}
-      <div className="grid grid-cols-2 gap-2.5">
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent('open-chat-drawer'))}
-          className="flex items-center gap-2.5 p-3 rounded-2xl border transition-all active:scale-95 shadow-2xs cursor-pointer"
-          style={{
-            backgroundColor: 'var(--card-bg, #FFFFFF)',
-            borderColor: 'var(--border-main, #E2E8F0)'
-          }}
-        >
-          <div className="w-8 h-8 rounded-xl bg-teal-500/15 text-teal-600 flex items-center justify-center shrink-0">
-            <MessageSquare className="w-4 h-4" />
-          </div>
-          <div className="text-left min-w-0">
-            <h4 className="text-xs font-bold text-[var(--text-main)] leading-tight truncate">
-              Ruang Chat
-            </h4>
-            <span className="text-[9.5px] text-[var(--text-muted)] truncate block">
-              Diskusi shift
-            </span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onNav('leaderboard')}
-          className="flex items-center gap-2.5 p-3 rounded-2xl border transition-all active:scale-95 shadow-2xs cursor-pointer"
-          style={{
-            backgroundColor: 'var(--card-bg, #FFFFFF)',
-            borderColor: 'var(--border-main, #E2E8F0)'
-          }}
-        >
-          <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
-            <Trophy className="w-4 h-4" />
-          </div>
-          <div className="text-left min-w-0">
-            <h4 className="text-xs font-bold text-[var(--text-main)] leading-tight truncate">
-              Leaderboard
-            </h4>
-            <span className="text-[9.5px] text-[var(--text-muted)] truncate block">
-              Peringkat EXP
-            </span>
-          </div>
-        </button>
-      </div>
-
-      {/* ── BOTTOM BANNER: SWITCH TO FULL MODE ── */}
-      <div 
-        className="rounded-2xl p-3.5 border flex items-center justify-between gap-3 text-xs shadow-xs"
-        style={{
-          backgroundColor: 'var(--input-bg, #F8FAFC)',
-          borderColor: 'var(--border-main, #E2E8F0)'
+      {/* ── MODULE SEARCH BAR (WITH RECOMMENDATIONS ON FOCUS) ── */}
+      <ModuleSearchBar
+        inspectorNik={effectiveNik}
+        inspectorName={effectiveName}
+        inspectorRole={effectiveRole}
+        inspectorSection={effectiveSection}
+        onNav={onNav}
+        onOpenKta={() => {
+          setInspectionDefaultTab('kta_tta');
+          setShowInspectionModal(true);
         }}
-      >
-        <div className="min-w-0">
-          <p className="font-bold text-[11px] text-[var(--text-main)] flex items-center gap-1.5">
-            <Smartphone className="w-3.5 h-3.5 text-teal-600" />
-            <span>Mode Sederhana Aktif</span>
-          </p>
-          <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
-            Ingin melihat grafik analitik &amp; tabel lengkap?
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={onSwitchToFullMode}
-          className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shrink-0 transition-all active:scale-95 cursor-pointer shadow-xs flex items-center gap-1"
-        >
-          <span>Mode Lengkap</span>
-          <ArrowRight className="w-3 h-3" />
-        </button>
-      </div>
+        onOpenP5m={() => setShowP5mModal(true)}
+      />
 
       {/* Food Report Modal */}
       <FoodReportModal 

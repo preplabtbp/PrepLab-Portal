@@ -193,8 +193,8 @@ export function GlobalOpenFindingsReminder({
     const role = normalizeUserRole(inspectorJabatan);
     if (role === 'Other') return;
 
-    // Do not show global modal if already on sap-dashboard (sap-dashboard has its own targeted modal)
-    if (location.pathname === '/sap-dashboard') {
+    // Do not show intrusive global modal on homepage '/' or '/sap-dashboard' (homepage has the dedicated ActionCenterBar, sap-dashboard has its own targeted view)
+    if (location.pathname === '/' || location.pathname === '/sap-dashboard') {
       setIsOpen(false);
       return;
     }

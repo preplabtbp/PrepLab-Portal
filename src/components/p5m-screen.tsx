@@ -14,6 +14,7 @@ import { Card, Button, Input } from './ui';
 import { toast } from 'sonner';
 import { getFlyerInfo } from '../lib/p5m-flyer';
 import { ExcelViewer } from './ExcelViewer';
+import { triggerExpGain } from '../lib/gamificationEvents';
 
 // Helper to clean file names into well-formatted material titles
 export const cleanFilenameToTitle = (filename: string, stripNumbering = true): string => {
@@ -525,6 +526,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       fileUrl?: string;
       isSenam?: boolean;
       isLogbook?: boolean;
+      isCompleted?: boolean;
     }> = [];
 
     DAYS.forEach(day => {
@@ -561,7 +563,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               subKategori: slot.subKategori || matchingMateri?.subKategori || 'General',
               fileUrl: resolvedFileUrl,
               isSenam: Boolean(slot.isSenam),
-              isLogbook: Boolean(slot.isLogbook)
+              isLogbook: Boolean(slot.isLogbook),
+              isCompleted: Boolean(slot.isCompleted)
             });
           }
         };
@@ -1835,6 +1838,48 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                           <Download className="w-3.5 h-3.5" />
                           <span>Unduh File</span>
                         </a>
+
+                        {/* Tombol Sudah Dilakukan */}
+                        {ass.isCompleted ? (
+                          <div className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            <span>Sudah Dilakukan ✓</span>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const res = await fetch('/api/p5m/schedules/mark-completed', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    scheduleId: activeScheduleId,
+                                    day: ass.day,
+                                    shift: ass.shift,
+                                    zone: ass.location,
+                                    nik: currentNik,
+                                    name: currentName,
+                                    completed: true
+                                  })
+                                });
+                                if (res.ok) {
+                                  toast.success('✅ Materi P5M berhasil ditandai sudah dilakukan! (+60 EXP)');
+                                  triggerExpGain(60, 'Materi P5M Selesai Dibawakan!', 'Briefing Keselamatan Kerja');
+                                  window.dispatchEvent(new Event('gamification_updated'));
+                                  window.dispatchEvent(new CustomEvent('refresh-action-center'));
+                                  fetchScheduleForWeek();
+                                }
+                              } catch {
+                                toast.error('Gagal menandai materi P5M');
+                              }
+                            }}
+                            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>Sudah Dilakukan (+60 EXP)</span>
+                          </Button>
+                        )}
                       </div>
 
                       <span className="text-[11px] text-slate-400 italic text-center sm:text-right">

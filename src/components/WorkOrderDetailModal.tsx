@@ -113,7 +113,19 @@ export function WorkOrderDetailModal({
       getSpareparts().then(res => setAvailableSpareparts(res || [])).catch(() => {});
       fetch('/api/employees')
         .then(res => res.json())
-        .then(data => setEmployees(data || []))
+        .then(data => {
+          const list = Array.isArray(data) ? data : (data?.employees || []);
+          const mapped = list.map((emp: any) => {
+            const resolvedName = emp.nama || emp.name || emp.displayName || 'Personil';
+            return {
+              ...emp,
+              nama: resolvedName,
+              name: resolvedName,
+              jabatan: emp.jabatan || emp.position || 'Crew'
+            };
+          });
+          setEmployees(mapped);
+        })
         .catch(() => {});
     } catch (e) {}
   };
@@ -189,7 +201,7 @@ export function WorkOrderDetailModal({
 
     try {
       const teknisiString = selectedTechs.length > 0
-        ? selectedTechs.map(t => t.nama).join(', ')
+        ? selectedTechs.map(t => t.nama || (t as any).name || t.nik).join(', ')
         : inspectorName;
 
       const sparepartNameString = useSparepart && spareparts.filter(s => s.name.trim()).length > 0
@@ -674,10 +686,26 @@ export function WorkOrderDetailModal({
                               placeholder="Ketik nama personil atau default Anda..."
                               value={techSearch}
                               onChange={(e) => {
-                                setTechSearch(e.target.value);
-                                const match = employees.find(emp => emp.nama === e.target.value || `${emp.nik} - ${emp.nama}` === e.target.value);
+                                const val = e.target.value;
+                                setTechSearch(val);
+                                const trimmed = val.trim();
+                                if (!trimmed) return;
+
+                                const match = employees.find(emp => {
+                                  const empName = emp.nama || emp.name || '';
+                                  const fullOption = `${emp.nik} - ${empName}`;
+                                  return (
+                                    empName.toLowerCase() === trimmed.toLowerCase() ||
+                                    emp.nik.toLowerCase() === trimmed.toLowerCase() ||
+                                    fullOption.toLowerCase() === trimmed.toLowerCase()
+                                  );
+                                });
+
                                 if (match && !selectedTechs.some(t => t.nik === match.nik)) {
-                                  setSelectedTechs([...selectedTechs, match]);
+                                  setSelectedTechs([
+                                    ...selectedTechs, 
+                                    { nik: match.nik, nama: match.nama || match.name || match.nik }
+                                  ]);
                                   setTechSearch('');
                                 }
                               }}
@@ -689,11 +717,15 @@ export function WorkOrderDetailModal({
                               }}
                             />
                             <datalist id="modal-employees-list">
-                              {employees.map((emp) => (
-                                <option key={emp.nik} value={`${emp.nik} - ${emp.nama}`}>
-                                  {emp.jabatan || 'Crew'}
-                                </option>
-                              ))}
+                              {employees.map((emp) => {
+                                const empName = emp.nama || emp.name || '';
+                                const displayValue = empName ? `${emp.nik} - ${empName}` : emp.nik;
+                                return (
+                                  <option key={emp.nik} value={displayValue}>
+                                    {emp.jabatan || emp.position || 'Crew'}
+                                  </option>
+                                );
+                              })}
                             </datalist>
                           </div>
 
@@ -705,7 +737,7 @@ export function WorkOrderDetailModal({
                                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-2xs"
                                   style={{ backgroundColor: 'var(--primary)' }}
                                 >
-                                  {t.nama}
+                                  {t.nama || (t as any).name || t.nik}
                                   <X 
                                     className="w-3 h-3 cursor-pointer hover:text-rose-200" 
                                     onClick={() => setSelectedTechs(selectedTechs.filter(x => x.nik !== t.nik))} 

@@ -14,12 +14,7 @@ import { Palette } from 'lucide-react';
 import { initAuth, googleSignIn } from './google-auth';
 import { WhatsAppModal } from './components/whatsapp-modal';
 import { InspectionCompletionModal, InspectionCompletionData } from './components/InspectionCompletionModal';
-import { P5MNotificationModal } from './components/p5m-notification-modal';
 import { GroupReportScreen } from './components/GroupReportScreen';
-import { ReminderNotificationModal } from './components/ReminderNotificationModal';
-import { InspectionNotificationModal } from './components/InspectionNotificationModal';
-import { GlobalOpenFindingsReminder } from './components/OpenFindingsReminderModal';
-import { GlobalKtaPartialReminderModal } from './components/GlobalKtaPartialReminderModal';
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
 import { PushNotificationPrompt } from './components/PushNotificationPrompt';
 import { PromotionWelcomeModal } from './components/PromotionWelcomeModal';
@@ -2037,68 +2032,7 @@ export default function App() {
         data={inspectionCompletionData}
       />
 
-      {/* Global P5M Assignment Notification Modal */}
-      <P5MNotificationModal
-        inspectorNik={inspectorNik}
-        inspectorName={inspectorName}
-        onNavigateToP5M={() => navigate('/p5m')}
-      />
 
-      {/* Global Weekly Inspection Assignment Notification Modal (Google Sheet Live) */}
-      <InspectionNotificationModal
-        inspectorNik={inspectorNik}
-        inspectorName={inspectorName}
-        onNavigateToInspection={(formId, subArea) => {
-          if (formId) sessionStorage.setItem('preselected_form_id', formId);
-          if (subArea) sessionStorage.setItem('preselected_sub_area', subArea);
-          navigate('/weekly-inspection');
-        }}
-      />
-
-
-
-      {/* Global Push Popup Inspection Reminder Modal */}
-      {inspectorNik && (
-        <ReminderNotificationModal
-          userNik={inspectorNik}
-          onNavigateToInspection={() => navigate('/weekly-inspection')}
-          onNavigateToKta={() => navigate('/group-reports')}
-        />
-      )}
-
-      {/* Global Interactive LabBot AI Assistant (SOP & K3) - Hidden as requested */}
-      {/* 
-      <LabBotWidget
-        inspectorNik={inspectorNik || undefined}
-        inspectorName={inspectorName || undefined}
-      />
-      */}
-
-      {/* Global Open Inspection Findings Reminder Modal for Assigned Supervisors */}
-      {inspectorNik && (
-        <GlobalOpenFindingsReminder
-          inspectorNik={inspectorNik}
-          inspectorName={inspectorName}
-          inspectorJabatan={userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan')}
-          onNavigateToDashboard={() => {
-            navigate('/sap-dashboard');
-          }}
-        />
-      )}
-
-      {/* Global KTA/TTA 1x Partial Reminder Modal on Page Load / Refresh */}
-      {inspectorNik && (
-        <GlobalKtaPartialReminderModal
-          inspectorNik={inspectorNik}
-          inspectorName={inspectorName}
-          inspectorJabatan={userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan')}
-          inspectorSection={userProfile?.section}
-          onOpenKtaUpload={() => {
-            navigate('/group-reports?action=upload-kta');
-            window.dispatchEvent(new CustomEvent('open-kta-upload-modal'));
-          }}
-        />
-      )}
 
       {/* Global Logout Confirmation Modal */}
       <LogoutConfirmModal

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Card } from './ui';
 import { Server, ChevronDown, ChevronUp } from 'lucide-react';
 import { triggerReminderManual, triggerRutinitasJumatManual } from '../sheets-api';
+import { DevRoleplaySwitcher } from './DevRoleplaySwitcher';
 
 interface DevModeOptions {
   db: boolean;
@@ -120,6 +121,12 @@ export function DevModeAccordion({ inspectorNik, devOptions, setDevOptions, onTr
              >
                 📊 Tembak Rapor Jumat Pagi
              </button>
+          </div>
+
+          {/* Simulasi Peran Operasional (Dev Mode Only) */}
+          <div className="mt-4 pt-3 border-t border-red-200">
+            <h4 className="text-xs font-bold text-red-800 mb-2">Simulasi Peran Operasional (Testing View)</h4>
+            <DevRoleplaySwitcher />
           </div>
         </div>
       )}

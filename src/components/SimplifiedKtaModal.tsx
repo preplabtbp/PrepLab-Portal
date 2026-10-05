@@ -7,6 +7,7 @@ import {
 import { toast } from 'sonner';
 import { compressImage } from '../features/inspections/hooks/useInspection';
 import { triggerExpGain } from '../lib/gamificationEvents';
+import { getKtaObligation } from './GroupReportScreen';
 
 const SAFETY_KTA_FORM_URL = 'https://docs.google.com/forms/d/1YMympG3aA-8l978aAlRJFSoi-SVQAKiS7KmJjNRfuBI/viewform?edit_requested=true';
 
@@ -27,7 +28,24 @@ export function SimplifiedKtaModal({
   userSection = 'Preparasi & Lab',
   onSuccess
 }: SimplifiedKtaModalProps) {
-  const [selectedType, setSelectedType] = useState<'KTA' | 'TTA' | 'BOTH'>('BOTH');
+  const userJabatan = localStorage.getItem('p2h_inspector_jabatan') || localStorage.getItem('user_role') || localStorage.getItem('user_jabatan') || '';
+  const obligation = React.useMemo(() => {
+    return getKtaObligation(inspectorNik, userJabatan, userSection);
+  }, [inspectorNik, userJabatan, userSection]);
+
+  type KtaOptionType = 'KTA' | 'TTA' | 'BOTH' | '2_TTA';
+  const [selectedType, setSelectedType] = useState<KtaOptionType>('BOTH');
+
+  React.useEffect(() => {
+    if (obligation.type === '2_TTA') {
+      setSelectedType('2_TTA');
+    } else if (obligation.type === '1_KTA_OR_TTA') {
+      setSelectedType('TTA');
+    } else {
+      setSelectedType('BOTH');
+    }
+  }, [obligation.type, isOpen]);
+
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
@@ -108,11 +126,13 @@ export function SimplifiedKtaModal({
       }
 
       const typesToSubmit: ('KTA' | 'TTA')[] = 
+        selectedType === '2_TTA' ? ['TTA', 'TTA'] :
         selectedType === 'BOTH' ? ['KTA', 'TTA'] : [selectedType];
 
       const todayStr = new Date().toISOString().split('T')[0];
 
-      for (const t of typesToSubmit) {
+      for (let i = 0; i < typesToSubmit.length; i++) {
+        const t = typesToSubmit[i];
         await fetch('/api/kta-reports', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -123,14 +143,21 @@ export function SimplifiedKtaModal({
             reportType: t,
             date: todayStr,
             imageUrl: uploadedUrl,
-            description: description.trim() || `Laporan bukti formulir ${t} disederhanakan`,
+            description: description.trim() 
+              ? (typesToSubmit.length > 1 ? `${description.trim()} (#${i + 1})` : description.trim())
+              : `Laporan bukti formulir ${t} disederhanakan`,
             location: '-'
           })
         });
       }
 
-      toast.success('✅ Bukti laporan KTA/TTA berhasil dikirim ke Safety!', { id: 'upload-kta', duration: 4000 });
-      triggerExpGain(35, 'Laporan KTA/TTA Terkirim!', 'Kontribusi K3L Harita Nickel');
+      toast.success(
+        selectedType === '2_TTA'
+          ? '✅ 2 Bukti laporan TTA berhasil dikirim ke Safety (Target Terpenuhi)!'
+          : '✅ Bukti laporan KTA/TTA berhasil dikirim ke Safety!',
+        { id: 'upload-kta', duration: 4000 }
+      );
+      triggerExpGain(selectedType === 'BOTH' || selectedType === '2_TTA' ? 60 : 35, 'Laporan KTA/TTA Terkirim!', 'Kontribusi K3L Harita Nickel');
       window.dispatchEvent(new Event('gamification_updated'));
       window.dispatchEvent(new CustomEvent('refresh-group-reports'));
 
@@ -224,32 +251,84 @@ export function SimplifiedKtaModal({
 
             {/* Step 2: Jenis Laporan */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
-                2. Pilih Jenis Observasi yang Dilaporkan:
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
+                  2. Pilih Jenis Observasi yang Dilaporkan:
+                </label>
+                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                  Target: {obligation.label}
+                </span>
+              </div>
               <div className="grid grid-cols-3 gap-1.5">
-                {[
-                  { id: 'BOTH', label: '1 KTA & 1 TTA', sub: 'Standar Mingguan' },
-                  { id: 'KTA', label: 'KTA Saja', sub: 'Kondisi Tdk Aman' },
-                  { id: 'TTA', label: 'TTA Saja', sub: 'Tindakan Tdk Aman' }
-                ].map(opt => {
-                  const isSelected = selectedType === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setSelectedType(opt.id as any)}
-                      className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-amber-500/15 border-amber-500/50 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/30 font-bold'
-                          : 'bg-[var(--input-bg)] border-[var(--border-main)] opacity-70 hover:opacity-100 font-medium'
-                      }`}
-                    >
-                      <div className="text-[11px] leading-tight">{opt.label}</div>
-                      <div className="text-[9px] text-[var(--text-muted)] mt-0.5">{opt.sub}</div>
-                    </button>
-                  );
-                })}
+                {obligation.type === '2_TTA' ? (
+                  [
+                    { id: '2_TTA', label: '2 TTA Sekaligus', sub: '+60 EXP (Target Terpenuhi)' },
+                    { id: 'TTA', label: '1 TTA Saja', sub: '+35 EXP' },
+                    { id: 'KTA', label: 'KTA Saja', sub: '+35 EXP' }
+                  ].map(opt => {
+                    const isSelected = selectedType === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setSelectedType(opt.id as any)}
+                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-500/15 border-amber-500/50 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/30 font-bold'
+                            : 'bg-[var(--input-bg)] border-[var(--border-main)] opacity-70 hover:opacity-100 font-medium'
+                        }`}
+                      >
+                        <div className="text-[11px] leading-tight">{opt.label}</div>
+                        <div className="text-[9px] text-[var(--text-muted)] mt-0.5">{opt.sub}</div>
+                      </button>
+                    );
+                  })
+                ) : obligation.type === '1_KTA_OR_TTA' ? (
+                  [
+                    { id: 'TTA', label: 'TTA Saja', sub: 'Tindakan Tdk Aman' },
+                    { id: 'KTA', label: 'KTA Saja', sub: 'Kondisi Tdk Aman' }
+                  ].map(opt => {
+                    const isSelected = selectedType === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setSelectedType(opt.id as any)}
+                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-500/15 border-amber-500/50 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/30 font-bold'
+                            : 'bg-[var(--input-bg)] border-[var(--border-main)] opacity-70 hover:opacity-100 font-medium'
+                        }`}
+                      >
+                        <div className="text-[11px] leading-tight">{opt.label}</div>
+                        <div className="text-[9px] text-[var(--text-muted)] mt-0.5">{opt.sub}</div>
+                      </button>
+                    );
+                  })
+                ) : (
+                  [
+                    { id: 'BOTH', label: '1 KTA & 1 TTA', sub: '+60 EXP' },
+                    { id: 'KTA', label: 'KTA Saja', sub: '+35 EXP' },
+                    { id: 'TTA', label: 'TTA Saja', sub: '+35 EXP' }
+                  ].map(opt => {
+                    const isSelected = selectedType === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setSelectedType(opt.id as any)}
+                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-500/15 border-amber-500/50 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/30 font-bold'
+                            : 'bg-[var(--input-bg)] border-[var(--border-main)] opacity-70 hover:opacity-100 font-medium'
+                        }`}
+                      >
+                        <div className="text-[11px] leading-tight">{opt.label}</div>
+                        <div className="text-[9px] text-[var(--text-muted)] mt-0.5">{opt.sub}</div>
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
 
