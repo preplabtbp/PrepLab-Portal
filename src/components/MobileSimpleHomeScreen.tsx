@@ -268,6 +268,35 @@ export function MobileSimpleHomeScreen({
   const isPreparation = secLower.includes('prep') || secLower.includes('preparasi');
   const isPic = isPicTemuanRole(effectiveRole);
 
+  // Crew checks (including simulated crew in dev roleplay)
+  const isSimulatedCrew = Boolean(
+    simProfile && (
+      simProfile.id === 'crew' || 
+      simProfile.role.toLowerCase().includes('crew') || 
+      simProfile.role.toLowerCase().includes('operator') || 
+      simProfile.role.toLowerCase().includes('helper') ||
+      simProfile.role.toLowerCase().includes('teknisi')
+    )
+  );
+
+  const isCrew = isSimulatedCrew || (
+    (roleLower.includes('crew') || roleLower.includes('operator') || roleLower.includes('helper') || roleLower.includes('teknisi')) &&
+    !roleLower.includes('spv') && !roleLower.includes('supervisor') && !roleLower.includes('foreman') && !roleLower.includes('officer') &&
+    !roleLower.includes('analyst') && !roleLower.includes('superintendent') && !roleLower.includes('manager') && !roleLower.includes('admin') &&
+    !isDeveloper && !isSuperAdmin
+  );
+
+  const isCrewMaintenance = isCrew && (
+    secLower.includes('maint') || 
+    secLower.includes('pemeliharaan') || 
+    roleLower.includes('maint') || 
+    roleLower.includes('mekanik') || 
+    roleLower.includes('listrik') || 
+    roleLower.includes('electric') || 
+    roleLower.includes('welder') ||
+    roleLower.includes('teknisi')
+  );
+
   // Status checks
   const p2hDone = !!(dailyTasks?.p2h?.completedToday);
   const pemantauanDone = !!(dailyTasks?.pemantauan?.completedToday);
@@ -350,92 +379,290 @@ export function MobileSimpleHomeScreen({
         )}
       </div>
 
-      {/* ── OPERATIONAL ACTION CENTER DIGEST BAR ── */}
-      <ActionCenterBar
-        inspectorNik={effectiveNik}
-        inspectorName={effectiveName}
-        inspectorJabatan={effectiveRole}
-        onNav={onNav}
-        onOpenKta={() => {
-          setInspectionDefaultTab('kta_tta');
-          setShowInspectionModal(true);
-        }}
-        onOpenP5m={() => setShowP5mModal(true)}
-      />
-
-      {/* ── SECTION LOG BOOK ACCORDION (PIC TASKS & CHECKLIST) ── */}
-      <SectionLogBookBar
-        inspectorNik={effectiveNik}
-        inspectorName={effectiveName}
-        onNav={onNav}
-      />
-
-      {/* ── EXECUTIVE / LEADERSHIP DASHBOARD TRIGGER CARD (SPT UP) ── */}
-      {hasLeadershipDashboard && (
-        <button
-          type="button"
-          onClick={() => {
-            if (isManager) setLeadershipTargetRole('manager');
-            else if (isSptPrep) setLeadershipTargetRole('spt_prep');
-            else setLeadershipTargetRole('spt_lab');
-            setShowLeadershipModal(true);
-          }}
-          className="w-full p-3.5 rounded-2xl border text-left flex items-center justify-between gap-3 shadow-xs hover:shadow-md active:scale-98 transition-all cursor-pointer overflow-hidden relative group"
-          style={{
-            backgroundColor: 'var(--card-bg, #FFFFFF)',
-            borderColor: isManager ? 'rgba(245, 158, 11, 0.4)' : isSptPrep ? 'rgba(16, 185, 129, 0.4)' : 'rgba(168, 85, 247, 0.4)'
-          }}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 ${
-              isManager 
-                ? 'bg-amber-500/15 text-amber-600 border-amber-500/30' 
-                : isSptPrep 
-                  ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' 
-                  : 'bg-purple-500/15 text-purple-600 border-purple-500/30'
-            }`}>
-              <BarChart3 className="w-5 h-5" />
+      {/* ── CONDITIONAL BODY: CREW DEDICATED MENU vs REGULAR/SUPERVISOR DASHBOARD ── */}
+      {isCrew ? (
+        <div className="space-y-4 pt-1">
+          {/* Header Banner */}
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse" />
+              <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-[var(--text-main)] font-display">
+                Menu Crew Operasional
+              </h3>
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className={`text-[9.5px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded-md border ${
-                  isManager 
-                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25' 
-                    : isSptPrep 
-                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25' 
-                      : 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/25'
-                }`}>
-                  Executive Panel
-                </span>
-                <span className="text-[10px] text-[var(--text-muted)]">● Realtime Sync</span>
+            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/25">
+              {isCrewMaintenance ? '5 Menu Utama' : '4 Menu Utama'}
+            </span>
+          </div>
+
+          {/* Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+            {/* 1. Pengisian Quiz */}
+            <motion.button
+              whileHover={{ y: -3, scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => onNav('quiz')}
+              className="w-full text-left p-4 sm:p-5 rounded-3xl border shadow-xs hover:shadow-md transition-all cursor-pointer relative overflow-hidden group flex flex-col justify-between"
+              style={{
+                backgroundColor: 'var(--card-bg, #FFFFFF)',
+                borderColor: 'var(--border-main, #E2E8F0)'
+              }}
+            >
+              <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-indigo-500/15 via-purple-500/5 to-transparent rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform">
+                    <GraduationCap className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/25">
+                    Edukasi
+                  </span>
+                </div>
+                <h4 className="font-bold text-sm sm:text-base text-[var(--text-main)] group-hover:text-indigo-600 transition-colors">
+                  Pengisian Quiz
+                </h4>
+                <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
+                  Ikuti evaluasi berkala dan uji pemahaman prosedur keselamatan &amp; teknis kerja harian.
+                </p>
               </div>
-              <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-amber-600 transition-colors leading-tight mt-0.5 truncate">
-                {isManager ? 'Executive Dashboard PrepLab' : isSptPrep ? 'Dashboard SPT Preparation' : 'Dashboard SPT Laboratory'}
-              </h4>
-              <p className="text-[10px] text-[var(--text-muted)] truncate">
-                {isManager ? 'Tinjauan keselamatan, kesiapan alat, & manpower' : isSptPrep ? 'Kesiapan armada alat berat & kepatuhan P2H kru' : 'Integritas suhu/gas, instrumen lab, & analis'}
-              </p>
-            </div>
-          </div>
-          <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 group-hover:translate-x-0.5 transition-transform">
-            <ChevronRight className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--text-main)]" />
-          </div>
-        </button>
-      )}
+              <div className="mt-4 pt-3 border-t border-[var(--border-main)]/60 flex items-center justify-between text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                <span>Mulai Kerjakan Quiz</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </motion.button>
 
-      {/* ── MODULE SEARCH BAR (WITH RECOMMENDATIONS ON FOCUS) ── */}
-      <ModuleSearchBar
-        inspectorNik={effectiveNik}
-        inspectorName={effectiveName}
-        inspectorRole={effectiveRole}
-        inspectorSection={effectiveSection}
-        onNav={onNav}
-        onOpenKta={() => {
-          setInspectionDefaultTab('kta_tta');
-          setShowInspectionModal(true);
-        }}
-        onOpenP5m={() => setShowP5mModal(true)}
-      />
+            {/* 2. Pelaporan Klinik */}
+            <motion.button
+              whileHover={{ y: -3, scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => onNav('clinic')}
+              className="w-full text-left p-4 sm:p-5 rounded-3xl border shadow-xs hover:shadow-md transition-all cursor-pointer relative overflow-hidden group flex flex-col justify-between"
+              style={{
+                backgroundColor: 'var(--card-bg, #FFFFFF)',
+                borderColor: 'var(--border-main, #E2E8F0)'
+              }}
+            >
+              <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-rose-500/15 via-red-500/5 to-transparent rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-red-600 text-white flex items-center justify-center shadow-lg shadow-rose-500/25 group-hover:scale-105 transition-transform">
+                    <Heart className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/25">
+                    Kesehatan
+                  </span>
+                </div>
+                <h4 className="font-bold text-sm sm:text-base text-[var(--text-main)] group-hover:text-rose-600 transition-colors">
+                  Pelaporan Klinik
+                </h4>
+                <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
+                  Pencatatan kunjungan periksa klinik, keluhan fisik atau sakit, dan surat istirahat.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-[var(--border-main)]/60 flex items-center justify-between text-xs font-bold text-rose-600 dark:text-rose-400">
+                <span>Buka Formulir Klinik</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </motion.button>
+
+            {/* 3. Pelaporan Makanan */}
+            <motion.button
+              whileHover={{ y: -3, scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowFoodModal(true)}
+              className="w-full text-left p-4 sm:p-5 rounded-3xl border shadow-xs hover:shadow-md transition-all cursor-pointer relative overflow-hidden group flex flex-col justify-between"
+              style={{
+                backgroundColor: 'var(--card-bg, #FFFFFF)',
+                borderColor: 'var(--border-main, #E2E8F0)'
+              }}
+            >
+              <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-amber-500/15 via-orange-500/5 to-transparent rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-amber-500/25 group-hover:scale-105 transition-transform">
+                    <Utensils className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                    Catering &amp; Mess
+                  </span>
+                </div>
+                <h4 className="font-bold text-sm sm:text-base text-[var(--text-main)] group-hover:text-amber-600 transition-colors">
+                  Pelaporan Makanan
+                </h4>
+                <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
+                  Lapor ulasan menu makanan: rasa masakan, porsi, kebersihan, serta foto kondisi makanan.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-[var(--border-main)]/60 flex items-center justify-between text-xs font-bold text-amber-600 dark:text-amber-400">
+                <span>Isi Laporan Makanan</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </motion.button>
+
+            {/* 4. Profile Karyawan */}
+            <motion.button
+              whileHover={{ y: -3, scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                onNav('profile');
+                window.dispatchEvent(new CustomEvent('open-profile-screen'));
+              }}
+              className="w-full text-left p-4 sm:p-5 rounded-3xl border shadow-xs hover:shadow-md transition-all cursor-pointer relative overflow-hidden group flex flex-col justify-between"
+              style={{
+                backgroundColor: 'var(--card-bg, #FFFFFF)',
+                borderColor: 'var(--border-main, #E2E8F0)'
+              }}
+            >
+              <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-teal-500/15 via-emerald-500/5 to-transparent rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white flex items-center justify-center shadow-lg shadow-teal-500/25 group-hover:scale-105 transition-transform">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/25">
+                    Data Akun
+                  </span>
+                </div>
+                <h4 className="font-bold text-sm sm:text-base text-[var(--text-main)] group-hover:text-teal-600 transition-colors">
+                  Profile Karyawan
+                </h4>
+                <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
+                  Lihat data kepegawaian, avatar profil, sertifikasi, status roster cuti, dan keamanan akun.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-[var(--border-main)]/60 flex items-center justify-between text-xs font-bold text-teal-600 dark:text-teal-400">
+                <span>Buka Profile Karyawan</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </motion.button>
+
+            {/* 5. Khusus Crew Maintenance: Penyelesaian Work Order */}
+            {isCrewMaintenance && (
+              <motion.button
+                whileHover={{ y: -3, scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => onNav('wo-list')}
+                className="w-full text-left p-4 sm:p-5 rounded-3xl border shadow-xs hover:shadow-md transition-all cursor-pointer relative overflow-hidden group flex flex-col justify-between sm:col-span-2"
+                style={{
+                  backgroundColor: 'var(--card-bg, #FFFFFF)',
+                  borderColor: 'rgba(37, 99, 235, 0.4)'
+                }}
+              >
+                <div className="absolute top-0 right-0 w-36 h-36 bg-gradient-to-bl from-blue-500/15 via-cyan-500/5 to-transparent rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform" />
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/25 group-hover:scale-105 transition-transform">
+                      <Wrench className="w-6 h-6" />
+                    </div>
+                    <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 uppercase tracking-wider">
+                      Khusus Tim Maintenance
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-sm sm:text-base text-[var(--text-main)] group-hover:text-blue-600 transition-colors">
+                    Penyelesaian Work Order (WO)
+                  </h4>
+                  <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
+                    Update status perbaikan alat yang sedang dikerjakan, input pemakaian suku cadang / sparepart, serta dokumentasi foto penyelesaian.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-[var(--border-main)]/60 flex items-center justify-between text-xs font-bold text-blue-600 dark:text-blue-400">
+                  <span>Buka Modul Penyelesaian WO</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </motion.button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* ── OPERATIONAL ACTION CENTER DIGEST BAR ── */}
+          <ActionCenterBar
+            inspectorNik={effectiveNik}
+            inspectorName={effectiveName}
+            inspectorJabatan={effectiveRole}
+            onNav={onNav}
+            onOpenKta={() => {
+              setInspectionDefaultTab('kta_tta');
+              setShowInspectionModal(true);
+            }}
+            onOpenP5m={() => setShowP5mModal(true)}
+          />
+
+          {/* ── SECTION LOG BOOK ACCORDION (PIC TASKS & CHECKLIST) ── */}
+          <SectionLogBookBar
+            inspectorNik={effectiveNik}
+            inspectorName={effectiveName}
+            onNav={onNav}
+          />
+
+          {/* ── EXECUTIVE / LEADERSHIP DASHBOARD TRIGGER CARD (SPT UP) ── */}
+          {hasLeadershipDashboard && (
+            <button
+              type="button"
+              onClick={() => {
+                if (isManager) setLeadershipTargetRole('manager');
+                else if (isSptPrep) setLeadershipTargetRole('spt_prep');
+                else setLeadershipTargetRole('spt_lab');
+                setShowLeadershipModal(true);
+              }}
+              className="w-full p-3.5 rounded-2xl border text-left flex items-center justify-between gap-3 shadow-xs hover:shadow-md active:scale-98 transition-all cursor-pointer overflow-hidden relative group"
+              style={{
+                backgroundColor: 'var(--card-bg, #FFFFFF)',
+                borderColor: isManager ? 'rgba(245, 158, 11, 0.4)' : isSptPrep ? 'rgba(16, 185, 129, 0.4)' : 'rgba(168, 85, 247, 0.4)'
+              }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 ${
+                  isManager 
+                    ? 'bg-amber-500/15 text-amber-600 border-amber-500/30' 
+                    : isSptPrep 
+                      ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' 
+                      : 'bg-purple-500/15 text-purple-600 border-purple-500/30'
+                }`}>
+                  <BarChart3 className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[9.5px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded-md border ${
+                      isManager 
+                        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25' 
+                        : isSptPrep 
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25' 
+                          : 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/25'
+                    }`}>
+                      Executive Panel
+                    </span>
+                    <span className="text-[10px] text-[var(--text-muted)]">● Realtime Sync</span>
+                  </div>
+                  <h4 className="font-bold text-xs sm:text-sm text-[var(--text-main)] group-hover:text-amber-600 transition-colors leading-tight mt-0.5 truncate">
+                    {isManager ? 'Executive Dashboard PrepLab' : isSptPrep ? 'Dashboard SPT Preparation' : 'Dashboard SPT Laboratory'}
+                  </h4>
+                  <p className="text-[10px] text-[var(--text-muted)] truncate">
+                    {isManager ? 'Tinjauan keselamatan, kesiapan alat, & manpower' : isSptPrep ? 'Kesiapan armada alat berat & kepatuhan P2H kru' : 'Integritas suhu/gas, instrumen lab, & analis'}
+                  </p>
+                </div>
+              </div>
+              <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 group-hover:translate-x-0.5 transition-transform">
+                <ChevronRight className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--text-main)]" />
+              </div>
+            </button>
+          )}
+
+          {/* ── MODULE SEARCH BAR (WITH RECOMMENDATIONS ON FOCUS) ── */}
+          <ModuleSearchBar
+            inspectorNik={effectiveNik}
+            inspectorName={effectiveName}
+            inspectorRole={effectiveRole}
+            inspectorSection={effectiveSection}
+            onNav={onNav}
+            onOpenKta={() => {
+              setInspectionDefaultTab('kta_tta');
+              setShowInspectionModal(true);
+            }}
+            onOpenP5m={() => setShowP5mModal(true)}
+          />
+        </>
+      )}
 
       {/* Food Report Modal */}
       <FoodReportModal 

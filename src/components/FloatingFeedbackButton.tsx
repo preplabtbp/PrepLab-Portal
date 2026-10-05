@@ -47,8 +47,16 @@ export function FloatingFeedbackButton({
   currentPath = '',
   onNavigate
 }: FloatingFeedbackButtonProps) {
-  // Hide on feedback support page itself to avoid redundancy
-  if (currentPath === '/feedback-support') {
+  // Hide on feedback support page itself to avoid redundancy, or completely hide for crew roles
+  const jab = (userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+  const role = (userProfile?.role || '').toLowerCase();
+  const isDev = localStorage.getItem('p2h_is_developer') === 'true';
+  const isCrew = isCrewRole || (!isDev && (
+    jab.includes('crew') || jab.includes('operator') || jab.includes('helper') || jab.includes('teknisi') || role.includes('crew')
+  ) && !jab.includes('spv') && !jab.includes('supervisor') && !jab.includes('foreman') && !jab.includes('officer') &&
+    !jab.includes('analyst') && !jab.includes('superintendent') && !jab.includes('manager') && !jab.includes('admin'));
+
+  if (currentPath === '/feedback-support' || isCrew) {
     return null;
   }
 

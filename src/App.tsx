@@ -356,8 +356,28 @@ export default function App() {
 
   const isCrewRole = React.useMemo(() => {
     if (isMeetingRoom) return false;
-    return userProfile?.jabatan?.toLowerCase().includes('crew') || false;
-  }, [userProfile, isMeetingRoom]);
+    if (isDeveloper) return false;
+    const jab = (userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+    const role = (userProfile?.role || '').toLowerCase();
+    const isCrew = jab.includes('crew') || jab.includes('operator') || jab.includes('helper') || 
+                   jab.includes('teknisi') || role.includes('crew');
+    const isHigher = jab.includes('spv') || jab.includes('supervisor') || jab.includes('foreman') || 
+                     jab.includes('officer') || jab.includes('analyst') || jab.includes('superintendent') || 
+                     jab.includes('manager') || jab.includes('admin') || jab.includes('lead') ||
+                     role.includes('admin') || role.includes('supervisor');
+    return isCrew && !isHigher;
+  }, [userProfile, isMeetingRoom, isDeveloper]);
+
+  const isMaintenanceCrew = React.useMemo(() => {
+    if (!isCrewRole) return false;
+    const sec = (userProfile?.section || '').toLowerCase();
+    const jab = (userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+    const role = (userProfile?.role || '').toLowerCase();
+    return sec.includes('maint') || sec.includes('pemeliharaan') || 
+           jab.includes('maint') || jab.includes('mekanik') || jab.includes('listrik') || 
+           jab.includes('electric') || jab.includes('welder') || jab.includes('teknisi') ||
+           role.includes('maint') || role.includes('teknisi');
+  }, [isCrewRole, userProfile]);
 
   const userDept = React.useMemo(() => {
     if (isMeetingRoom) return "ALL";
@@ -445,12 +465,16 @@ export default function App() {
     return () => window.removeEventListener('open-hazard-report-modal', handleOpenHazard);
   }, [isAdminOrDeveloper]);
 
-  // Listen for global open modules drawer requests and Alt+M shortcut
+  // Listen for global open modules drawer requests and Alt+M shortcut (blocked for Crew)
   useEffect(() => {
-    const handleOpenDrawer = () => setShowModulesDrawer(true);
+    const handleOpenDrawer = () => {
+      if (isCrewRole) return;
+      setShowModulesDrawer(true);
+    };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && (e.key === 'm' || e.key === 'M')) {
         e.preventDefault();
+        if (isCrewRole) return;
         setShowModulesDrawer(prev => !prev);
       }
     };
@@ -460,7 +484,27 @@ export default function App() {
       window.removeEventListener('open-modules-drawer', handleOpenDrawer);
       window.removeEventListener('keydown', handleKeyDown);
     };
+  }, [isCrewRole]);
+
+  // Listen for open-profile-screen request
+  useEffect(() => {
+    const handleOpenProfile = () => setShowProfileScreen(true);
+    window.addEventListener('open-profile-screen', handleOpenProfile);
+    return () => window.removeEventListener('open-profile-screen', handleOpenProfile);
   }, []);
+
+  // Crew Route Protection: ensure crew cannot access unauthorized pages via direct URL or link
+  useEffect(() => {
+    if (!isCrewRole) return;
+    const path = location.pathname.replace(/^\//, '');
+    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'settings'];
+    if (isMaintenanceCrew) {
+      allowedCrewPaths.push('wo-list');
+    }
+    if (path && !allowedCrewPaths.includes(path)) {
+      navigate('/', { replace: true });
+    }
+  }, [isCrewRole, isMaintenanceCrew, location.pathname, navigate]);
 
   // Theme state
   const [currentMode, setCurrentMode] = useState('morning');
@@ -650,6 +694,24 @@ export default function App() {
       setShowMeetingRoomDevModal(true);
       return;
     }
+    if (cleanTab === 'profile') {
+      setShowProfileScreen(true);
+      return;
+    }
+
+    // Role guard for Crew: restrict navigation to allowed modules only
+    if (isCrewRole) {
+      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'settings'];
+      if (isMaintenanceCrew) {
+        allowedCrewTabs.push('wo-list');
+      }
+      if (!allowedCrewTabs.includes(cleanTab)) {
+        toast.error('Akses modul ini tidak tersedia untuk akun Crew.');
+        navigate('/');
+        return;
+      }
+    }
+
     if (tab === 'home' || tab === '' || tab === '/') {
       if (isSptOrManager) {
         const universe = userProfile?.pt === 'GTS' ? 'GTS' : 'TBP';
@@ -1462,123 +1524,125 @@ export default function App() {
 
       {/* Main Layout Body: Dedicated Left Rail + Content Area */}
       <div className="flex-1 flex w-full relative">
-        {/* Dedicated Left Rail for All Menus (Desktop View, Non-overlapping) */}
-        <aside 
-          className={`flex-col items-center w-20 lg:w-24 shrink-0 border-r transition-all duration-300 sticky top-[57px] h-[calc(100dvh-57px)] z-30 select-none py-4 gap-2 justify-start overflow-y-auto ${
-            isBulletin && bulletinFocusMode ? 'hidden' : 'hidden md:flex'
-          }`}
-          style={{
-            backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
-            borderColor: 'var(--border-main, #E2E8F0)'
-          }}
-        >
-          {/* Primary "Semua Menu" Launcher Button */}
-          <button
-            onClick={() => setShowModulesDrawer(true)}
-            className="group relative flex flex-col items-center justify-center w-14 lg:w-16 py-2.5 rounded-2xl bg-gradient-to-b from-teal-500 via-teal-600 to-emerald-600 hover:from-teal-400 hover:via-teal-500 hover:to-emerald-500 text-white shadow-xl shadow-teal-500/25 border-2 border-white/25 transition-all duration-300 active:scale-95 cursor-pointer hover:shadow-teal-500/45 hover:-translate-y-0.5"
-            title="Buka Semua Menu & Modul Portal"
+        {/* Dedicated Left Rail for All Menus (Desktop View, Non-overlapping, Hidden for Crew) */}
+        {!isCrewRole && (
+          <aside 
+            className={`flex-col items-center w-20 lg:w-24 shrink-0 border-r transition-all duration-300 sticky top-[57px] h-[calc(100dvh-57px)] z-30 select-none py-4 gap-2 justify-start overflow-y-auto ${
+              isBulletin && bulletinFocusMode ? 'hidden' : 'hidden md:flex'
+            }`}
+            style={{
+              backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
+              borderColor: 'var(--border-main, #E2E8F0)'
+            }}
           >
-            {/* Glow ring on hover */}
-            <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-teal-400 to-emerald-500 opacity-0 group-hover:opacity-60 blur-xs transition-opacity duration-300 pointer-events-none" />
-
-            {/* Icon Container with subtle glass effect and micro-rotation */}
-            <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 shadow-inner">
-              <LayoutGrid className="w-4 h-4 lg:w-4.5 lg:h-4.5 text-white" />
-            </div>
-
-            {/* Text Labels: Semua Menu */}
-            <span className="relative text-[10px] lg:text-[11px] font-black uppercase tracking-wider mt-1.5 font-display text-center leading-tight">
-              Semua
-            </span>
-            <span className="relative text-[8px] font-bold text-teal-100 uppercase tracking-widest mt-0.5 leading-none">
-              Menu
-            </span>
-          </button>
-
-          {/* Subtle divider */}
-          <div className="w-8 h-px bg-[var(--border-main,#E2E8F0)] my-1 shrink-0" />
-
-          {/* Navigation Items transferred from footer to Left Rail */}
-          <div className="flex flex-col items-center gap-1.5 w-full px-1">
-            {/* Home */}
+            {/* Primary "Semua Menu" Launcher Button */}
             <button
-              onClick={() => handleNav('home')}
-              className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                activeTab === 'home'
-                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                  : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-              }`}
-              title="Beranda / Home"
+              onClick={() => setShowModulesDrawer(true)}
+              className="group relative flex flex-col items-center justify-center w-14 lg:w-16 py-2.5 rounded-2xl bg-gradient-to-b from-teal-500 via-teal-600 to-emerald-600 hover:from-teal-400 hover:via-teal-500 hover:to-emerald-500 text-white shadow-xl shadow-teal-500/25 border-2 border-white/25 transition-all duration-300 active:scale-95 cursor-pointer hover:shadow-teal-500/45 hover:-translate-y-0.5"
+              title="Buka Semua Menu & Modul Portal"
             >
-              <Home className="w-5 h-5" />
-              <span className="text-[10px] font-semibold leading-none">Home</span>
+              {/* Glow ring on hover */}
+              <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-teal-400 to-emerald-500 opacity-0 group-hover:opacity-60 blur-xs transition-opacity duration-300 pointer-events-none" />
+
+              {/* Icon Container with subtle glass effect and micro-rotation */}
+              <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                <LayoutGrid className="w-4 h-4 lg:w-4.5 lg:h-4.5 text-white" />
+              </div>
+
+              {/* Text Labels: Semua Menu */}
+              <span className="relative text-[10px] lg:text-[11px] font-black uppercase tracking-wider mt-1.5 font-display text-center leading-tight">
+                Semua
+              </span>
+              <span className="relative text-[8px] font-bold text-teal-100 uppercase tracking-widest mt-0.5 leading-none">
+                Menu
+              </span>
             </button>
 
-            {/* Buletin */}
-            <button
-              onClick={() => {
-                const activeUniv = localStorage.getItem('bulletin_active_universe');
-                const targetUniverse = isDeveloper
-                  ? (activeUniv === 'GTS' ? 'GTS' : 'TBP')
-                  : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
-                handleNav(`bulletin/${targetUniverse}`);
-              }}
-              className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                activeTab.startsWith('bulletin')
-                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                  : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-              }`}
-              title="Buletin K3 & Pengumuman"
-            >
-              <FileText className="w-5 h-5" />
-              <span className="text-[10px] font-semibold leading-none">Buletin</span>
-            </button>
+            {/* Subtle divider */}
+            <div className="w-8 h-px bg-[var(--border-main,#E2E8F0)] my-1 shrink-0" />
 
-            {/* Cloud */}
-            <button
-              onClick={() => handleNav('preplab-cloud')}
-              className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                activeTab === 'preplab-cloud'
-                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                  : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-              }`}
-              title="PrepLab Cloud Storage"
-            >
-              <Cloud className="w-5 h-5" />
-              <span className="text-[10px] font-semibold leading-none">Cloud</span>
-            </button>
-
-            {/* Settings */}
-            <button
-              onClick={() => handleNav('settings')}
-              className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                activeTab === 'settings'
-                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                  : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-              }`}
-              title="Pengaturan Akun & Tema"
-            >
-              <Settings className="w-5 h-5" />
-              <span className="text-[10px] font-semibold leading-none">Settings</span>
-            </button>
-
-            {/* Developer (if applicable) */}
-            {(isDeveloper || isMeetingRoom) && (
+            {/* Navigation Items transferred from footer to Left Rail */}
+            <div className="flex flex-col items-center gap-1.5 w-full px-1">
+              {/* Home */}
               <button
-                onClick={() => handleNav('admin-dashboard')}
+                onClick={() => handleNav('home')}
                 className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                  activeTab === 'admin-dashboard'
+                  activeTab === 'home'
                     ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
                     : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
                 }`}
-                title="Developer Dashboard"
+                title="Beranda / Home"
               >
-                <Code2 className="w-5 h-5" />
-                <span className="text-[10px] font-semibold leading-none">Dev</span>
+                <Home className="w-5 h-5" />
+                <span className="text-[10px] font-semibold leading-none">Home</span>
               </button>
-            )}
-          </div>
-        </aside>
+
+              {/* Buletin */}
+              <button
+                onClick={() => {
+                  const activeUniv = localStorage.getItem('bulletin_active_universe');
+                  const targetUniverse = isDeveloper
+                    ? (activeUniv === 'GTS' ? 'GTS' : 'TBP')
+                    : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
+                  handleNav(`bulletin/${targetUniverse}`);
+                }}
+                className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                  activeTab.startsWith('bulletin')
+                    ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                    : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+                }`}
+                title="Buletin K3 & Pengumuman"
+              >
+                <FileText className="w-5 h-5" />
+                <span className="text-[10px] font-semibold leading-none">Buletin</span>
+              </button>
+
+              {/* Cloud */}
+              <button
+                onClick={() => handleNav('preplab-cloud')}
+                className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                  activeTab === 'preplab-cloud'
+                    ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                    : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+                }`}
+                title="PrepLab Cloud Storage"
+              >
+                <Cloud className="w-5 h-5" />
+                <span className="text-[10px] font-semibold leading-none">Cloud</span>
+              </button>
+
+              {/* Settings */}
+              <button
+                onClick={() => handleNav('settings')}
+                className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                  activeTab === 'settings'
+                    ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                    : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+                }`}
+                title="Pengaturan Akun & Tema"
+              >
+                <Settings className="w-5 h-5" />
+                <span className="text-[10px] font-semibold leading-none">Settings</span>
+              </button>
+
+              {/* Developer (if applicable) */}
+              {(isDeveloper || isMeetingRoom) && (
+                <button
+                  onClick={() => handleNav('admin-dashboard')}
+                  className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                    activeTab === 'admin-dashboard'
+                      ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                      : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+                  }`}
+                  title="Developer Dashboard"
+                >
+                  <Code2 className="w-5 h-5" />
+                  <span className="text-[10px] font-semibold leading-none">Dev</span>
+                </button>
+              )}
+            </div>
+          </aside>
+        )}
 
         {/* Main Content Area */}
         <main className={`@container flex-1 flex flex-col w-full bg-transparent min-w-0 transition-all duration-300 ${
@@ -1673,8 +1737,8 @@ export default function App() {
       </Suspense>
       </main>
 
-        {/* Dedicated Right Rail on Homepage (SAP Management & Chat - 2 Buttons Only) */}
-        {activeTab === 'home' && (
+        {/* Dedicated Right Rail on Homepage (SAP Management & Chat - 2 Buttons Only, Hidden for Crew) */}
+        {!isCrewRole && activeTab === 'home' && (
           <aside 
             className="hidden md:flex flex-col items-center w-20 lg:w-24 shrink-0 border-l transition-colors sticky top-[57px] h-[calc(100dvh-57px)] z-30 select-none py-4 gap-3 justify-start overflow-y-auto"
             style={{
@@ -1925,18 +1989,20 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* All Menu Modules Drawer (Slides in from Left, Wider than Profile View) */}
-      <ModulesDrawer
-        isOpen={showModulesDrawer}
-        onClose={() => setShowModulesDrawer(false)}
-        onNav={(tab) => {
-          handleNav(tab);
-          setShowModulesDrawer(false);
-        }}
-        inspectorNik={inspectorNik || undefined}
-        inspectorName={inspectorName || undefined}
-        userPt={userProfile?.pt}
-      />
+      {/* All Menu Modules Drawer (Slides in from Left, Wider than Profile View, Hidden for Crew) */}
+      {!isCrewRole && (
+        <ModulesDrawer
+          isOpen={showModulesDrawer}
+          onClose={() => setShowModulesDrawer(false)}
+          onNav={(tab) => {
+            handleNav(tab);
+            setShowModulesDrawer(false);
+          }}
+          inspectorNik={inspectorNik || undefined}
+          inspectorName={inspectorName || undefined}
+          userPt={userProfile?.pt}
+        />
+      )}
 
       {/* SAP Management Drawer (Slides in from RIGHT, wider than profile view) */}
       <AnimatePresence>
