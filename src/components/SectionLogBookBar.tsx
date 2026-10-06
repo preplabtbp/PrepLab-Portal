@@ -43,6 +43,7 @@ interface LogbookTaskItem {
   assigneeNiks?: string | null;
   picNik?: string | null;
   picName?: string | null;
+  assigneeName?: string | null;
   assigneeNames?: string | null;
   progressPercent?: number | null;
 }

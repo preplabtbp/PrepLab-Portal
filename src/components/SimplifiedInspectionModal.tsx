@@ -5,13 +5,13 @@ import {
   Upload, ArrowRight, Loader2, Trash2, Calendar,
   ShieldAlert, CheckCircle2, AlertTriangle, ChevronLeft, ExternalLink, MapPin,
   Sparkles, FileText, Clock, AlertCircle, Eye, Download, ZoomIn, Image as ImageIcon,
-  RefreshCw
+  RefreshCw, Plus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { compressImage } from '../features/inspections/hooks/useInspection';
 import { triggerExpGain } from '../lib/gamificationEvents';
 import { isPicTemuanRole, getOpenFindingsForSupervisor } from '../utils/inspection-pic-matcher';
-import { getISOWeekKey } from '../utils/iso-week';
+import { getISOWeekKey, getISOWeekTag } from '../utils/iso-week';
 import { GENERAL_INSPECTION_FORM_URL } from './InspectionCompletionModal';
 import { getKtaObligation } from './GroupReportScreen';
 
@@ -71,6 +71,7 @@ interface SimplifiedInspectionModalProps {
   userJabatan?: string | null;
   schedule?: any | null;
   defaultTab?: 'weekly' | 'kta_tta' | 'findings' | 'p2h';
+  initialOpenForm?: boolean;
   onNav: (tab: any) => void;
   onSuccess?: () => void;
 }
@@ -84,6 +85,7 @@ export function SimplifiedInspectionModal({
   userJabatan,
   schedule,
   defaultTab = 'weekly',
+  initialOpenForm = false,
   onNav,
   onSuccess
 }: SimplifiedInspectionModalProps) {
@@ -183,10 +185,10 @@ export function SimplifiedInspectionModal({
         return false;
       };
 
-      const activeWeekKey = getISOWeekKey(new Date());
+      const targetWeek = schedule?.week || getISOWeekTag();
       const [wRes, kRes, inspRes] = await Promise.allSettled([
-        fetch(`/api/inspection-proofs?week=${activeWeekKey}`),
-        fetch(`/api/kta-reports?week=${activeWeekKey}`),
+        fetch(`/api/inspection-proofs?week=${targetWeek}`),
+        fetch(`/api/kta-reports?week=${targetWeek}`),
         fetch(`/api/inspections/latest-by-user?nik=${encodeURIComponent(cleanNik)}&name=${encodeURIComponent(cleanName)}`)
       ]);
 
@@ -194,7 +196,7 @@ export function SimplifiedInspectionModal({
         const allW: any[] = await wRes.value.json();
         const myW = Array.isArray(allW) ? allW.filter(isMatch) : [];
         // Add schedule.ssProofUrl if not in list and confirmed for this week
-        if (schedule?.hasSsProof && schedule?.ssProofUrl && !myW.some(p => p.imageUrl === schedule.ssProofUrl)) {
+        if ((schedule?.hasSsProof || schedule?.isCompleted) && schedule?.ssProofUrl && !myW.some(p => p.imageUrl === schedule.ssProofUrl)) {
           myW.unshift({
             id: 'sched-proof',
             imageUrl: schedule.ssProofUrl,
@@ -224,6 +226,21 @@ export function SimplifiedInspectionModal({
     }
   };
 
+  // Listen to open-simplified-inspection custom event
+  useEffect(() => {
+    const handleOpenEvent = (e: any) => {
+      const tab = e?.detail?.tab;
+      const openForm = Boolean(e?.detail?.openForm);
+      if (tab) setActiveTab(tab);
+      if (openForm) {
+        if (tab === 'kta_tta') setShowUploadKtaForm(true);
+        if (tab === 'weekly') setShowUploadWeeklyForm(true);
+      }
+    };
+    window.addEventListener('open-simplified-inspection', handleOpenEvent);
+    return () => window.removeEventListener('open-simplified-inspection', handleOpenEvent);
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       if (defaultTab === 'findings' && isPic) {
@@ -231,9 +248,13 @@ export function SimplifiedInspectionModal({
       } else if (defaultTab) {
         setActiveTab(defaultTab);
       }
+      if (initialOpenForm) {
+        if (defaultTab === 'kta_tta') setShowUploadKtaForm(true);
+        if (defaultTab === 'weekly') setShowUploadWeeklyForm(true);
+      }
       fetchUserProofs();
     }
-  }, [isOpen, defaultTab, isPic, inspectorNik, inspectorName, schedule]);
+  }, [isOpen, defaultTab, isPic, inspectorNik, inspectorName, schedule, initialOpenForm]);
 
   // Fetch tickets for PIC findings
   const fetchFindings = async () => {
@@ -504,7 +525,7 @@ export function SimplifiedInspectionModal({
             imageUrl: uploadedUrl,
             description: ktaDescription.trim() 
               ? (typesToSubmit.length > 1 ? `${ktaDescription.trim()} (Laporan ${i + 1}/${typesToSubmit.length})` : ktaDescription.trim())
-              : `Laporan bukti formulir ${t} disederhanakan`,
+              : (typesToSubmit.length > 1 ? `Laporan bukti formulir ${t} #${i + 1} disederhanakan` : `Laporan bukti formulir ${t} disederhanakan`),
             location: '-'
           })
         });
@@ -520,6 +541,7 @@ export function SimplifiedInspectionModal({
       triggerExpGain(expGain, 'Laporan KTA/TTA Terkirim!', 'Kontribusi K3L Harita Nickel');
       window.dispatchEvent(new Event('gamification_updated'));
       window.dispatchEvent(new CustomEvent('refresh-group-reports'));
+      window.dispatchEvent(new CustomEvent('refresh-action-center'));
 
       setKtaImagePreview(null);
       setKtaImageFile(null);
@@ -608,7 +630,13 @@ export function SimplifiedInspectionModal({
   };
 
   const isAnySubmitting = submittingWeekly || submittingKta || submittingClose;
-  const latestWeeklyProof = weeklyProofs[0] || null;
+  const latestWeeklyProof = weeklyProofs[0] || ((schedule?.ssProofUrl || schedule?.hasSsProof) ? {
+    id: 'sched-proof',
+    imageUrl: schedule.ssProofUrl,
+    date: schedule.date || 'Minggu Ini',
+    name: schedule.name || inspectorName,
+    description: `Bukti SS Formulir Inspeksi ${schedule?.area || ''}`
+  } : null);
   const effectivePdfUrl = 
     (schedule?.completedPdfUrl && schedule.completedPdfUrl !== '#' && schedule.completedPdfUrl !== '-') 
       ? schedule.completedPdfUrl 
@@ -1019,9 +1047,10 @@ export function SimplifiedInspectionModal({
                       <button
                         type="button"
                         onClick={() => setShowUploadWeeklyForm(prev => !prev)}
-                        className="py-2 px-2.5 rounded-xl border border-[var(--border-main)] hover:bg-black/5 text-[var(--text-muted)] hover:text-[var(--text-main)] font-semibold text-xs transition-colors cursor-pointer"
+                        className="py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                       >
-                        {showUploadWeeklyForm ? 'Tutup Form' : 'Unggah Ulang'}
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{showUploadWeeklyForm ? 'Tutup Form' : '+ Lapor Tambahan'}</span>
                       </button>
 
                       <button
@@ -1167,17 +1196,23 @@ export function SimplifiedInspectionModal({
                 {/* ── JIKA SUDAH ADA BUKTI KTA/TTA: TAMPILKAN DAFTAR THUMBNAIL & TOMBOL LIHAT BUKTI ── */}
                 {ktaProofs.length > 0 && (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-[var(--text-main)] flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        <span>Bukti Laporan KTA/TTA Terkirim ({ktaProofs.length})</span>
-                      </span>
+                    <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/5 border border-amber-500/25">
+                      <div className="min-w-0 pr-2">
+                        <span className="font-bold text-xs text-[var(--text-main)] flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>Bukti Laporan Terkirim ({ktaProofs.length})</span>
+                        </span>
+                        <span className="text-[10.5px] text-[var(--text-muted)] block truncate">
+                          Target terpenuhi. Anda dapat mengirim laporan tambahan.
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setShowUploadKtaForm(prev => !prev)}
-                        className="text-[11px] font-bold text-amber-600 hover:underline cursor-pointer"
+                        className="py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
                       >
-                        {showUploadKtaForm ? '✕ Tutup Form' : '+ Lapor Lagi'}
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{showUploadKtaForm ? 'Tutup Form' : '+ Lapor Tambahan'}</span>
                       </button>
                     </div>
 

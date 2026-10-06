@@ -17,11 +17,18 @@ import {
   Camera,
   Car,
   Wrench,
-  Check
+  Check,
+  Eye,
+  Plus,
+  X,
+  Download,
+  ExternalLink,
+  ChevronLeft
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getOpenFindingsForSupervisor, isPicTemuanRole } from '../utils/inspection-pic-matcher';
 import { getKtaObligation } from './GroupReportScreen';
+import { formatProofImageUrl } from './SimplifiedInspectionModal';
 
 interface ActionCenterBarProps {
   inspectorNik?: string | null;
@@ -117,6 +124,15 @@ export function ActionCenterBar({
 
   const [openFindings, setOpenFindings] = useState<any[]>([]);
   const [lvDamageTickets, setLvDamageTickets] = useState<any[]>([]);
+  const [completedInspectionInfo, setCompletedInspectionInfo] = useState<any | null>(null);
+  const [userInspectionProof, setUserInspectionProof] = useState<any | null>(null);
+  const [lightboxData, setLightboxData] = useState<{
+    isOpen: boolean;
+    title: string;
+    subtitle?: string;
+    images: Array<{ url: string; label?: string; description?: string }>;
+    currentIndex: number;
+  } | null>(null);
 
   const [loading, setLoading] = useState<boolean>(() => {
     return !localStorage.getItem('p2h_cached_my_schedule') && !localStorage.getItem('p2h_cached_daily_tasks');
@@ -129,6 +145,16 @@ export function ActionCenterBar({
       return {};
     }
   }, []);
+
+  const effectiveNik = useMemo(() => {
+    if (inspectorNik) return inspectorNik;
+    return userProfile.nik || localStorage.getItem('p2h_inspector_nik') || localStorage.getItem('user_nik') || '';
+  }, [inspectorNik, userProfile]);
+
+  const effectiveName = useMemo(() => {
+    if (inspectorName) return inspectorName;
+    return userProfile.name || userProfile.nama || localStorage.getItem('p2h_inspector_name') || localStorage.getItem('user_name') || '';
+  }, [inspectorName, userProfile]);
 
   const effectiveJabatan = useMemo(() => {
     if (inspectorJabatan) return inspectorJabatan;
@@ -161,7 +187,7 @@ export function ActionCenterBar({
   }, [jLower, sLower]);
 
   const fetchActionItems = async (manualRefresh = false) => {
-    if (!inspectorNik && !inspectorName) {
+    if (!effectiveNik && !effectiveName) {
       setLoading(false);
       return;
     }
@@ -169,8 +195,8 @@ export function ActionCenterBar({
     try {
       if (manualRefresh) setIsRefreshing(true);
       const queryParams = new URLSearchParams();
-      if (inspectorNik) queryParams.set('nik', inspectorNik);
-      if (inspectorName) queryParams.set('name', inspectorName);
+      if (effectiveNik) queryParams.set('nik', effectiveNik);
+      if (effectiveName) queryParams.set('name', effectiveName);
 
       const safeFetch = async (url: string) => {
         try {
@@ -199,20 +225,42 @@ export function ActionCenterBar({
       // 5. Fetch Open Tickets ONLY IF user is a Supervisor or Leadership role
       const ticketsPromise = isSupervisorOrLead ? safeFetch('/api/tickets') : Promise.resolve([]);
 
-      const [schedData, p5mData, dailyData, ktaData, ticketsData] = await Promise.all([
+      // 6. Fetch Inspection Proofs for Screenshot Confirmation
+      const proofsPromise = safeFetch(`/api/inspection-proofs?week=${currentWeekTag}`);
+
+      const [schedData, p5mData, dailyData, ktaData, ticketsData, proofsData] = await Promise.all([
         schedPromise,
         p5mPromise,
         dailyPromise,
         ktaPromise,
-        ticketsPromise
+        ticketsPromise,
+        proofsPromise
       ]);
 
       // Process Weekly Inspection Schedule
-      if (schedData && schedData.found && schedData.schedule && !schedData.schedule.isCompleted && !schedData.schedule.isCuti) {
-        setInspectionSchedule(schedData.schedule);
-        try { localStorage.setItem('p2h_cached_my_schedule', JSON.stringify(schedData.schedule)); } catch {}
+      if (schedData && schedData.found && schedData.schedule) {
+        setCompletedInspectionInfo(schedData.schedule);
+        if (!schedData.schedule.isCompleted && !schedData.schedule.isCuti) {
+          setInspectionSchedule(schedData.schedule);
+          try { localStorage.setItem('p2h_cached_my_schedule', JSON.stringify(schedData.schedule)); } catch {}
+        } else {
+          setInspectionSchedule(null);
+        }
       } else {
         setInspectionSchedule(null);
+        setCompletedInspectionInfo(null);
+      }
+
+      // Process User Inspection Proof
+      if (Array.isArray(proofsData)) {
+        const cleanNik = (effectiveNik || '').trim().toLowerCase();
+        const cleanName = (effectiveName || '').trim().toLowerCase();
+        const matchedProof = proofsData.find((p: any) => {
+          const pNik = (p.nik || '').trim().toLowerCase();
+          const pName = (p.name || '').trim().toLowerCase();
+          return (cleanNik && pNik === cleanNik) || (cleanName && (pName.includes(cleanName) || cleanName.includes(pName)));
+        });
+        setUserInspectionProof(matchedProof || null);
       }
 
       // Process P5M Assignment
@@ -231,8 +279,8 @@ export function ActionCenterBar({
 
       // Process KTA Status
       if (ktaData && Array.isArray(ktaData.rekapList)) {
-        const cleanNik = (inspectorNik || '').trim().toLowerCase();
-        const cleanName = (inspectorName || '').trim().toLowerCase();
+        const cleanNik = (effectiveNik || '').trim().toLowerCase();
+        const cleanName = (effectiveName || '').trim().toLowerCase();
         const match = ktaData.rekapList.find((r: any) => {
           const rNik = (r.nik || '').trim().toLowerCase();
           const rName = (r.name || '').trim().toLowerCase();
@@ -293,7 +341,7 @@ export function ActionCenterBar({
 
   useEffect(() => {
     fetchActionItems();
-  }, [inspectorNik, inspectorName, effectiveJabatan]);
+  }, [effectiveNik, effectiveName, effectiveJabatan]);
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -305,7 +353,7 @@ export function ActionCenterBar({
       window.removeEventListener('refresh-group-reports', handleRefresh);
       window.removeEventListener('refresh-action-center', handleRefresh);
     };
-  }, [inspectorNik, inspectorName, effectiveJabatan]);
+  }, [effectiveNik, effectiveName, effectiveJabatan]);
 
   // Operational status checks
   const isCutiToday = Boolean(dailyTasks?.rosterToday?.isCuti || myKtaRecord?.isCuti || inspectionSchedule?.isCuti);
@@ -325,19 +373,26 @@ export function ActionCenterBar({
 
   // 3. KTA / TTA Pending Check
   const ktaObligation = useMemo(() => {
-    return getKtaObligation(inspectorNik, effectiveJabatan, effectiveSection);
-  }, [inspectorNik, effectiveJabatan, effectiveSection]);
+    return getKtaObligation(effectiveNik, effectiveJabatan, effectiveSection);
+  }, [effectiveNik, effectiveJabatan, effectiveSection]);
 
   const isKtaPending = useMemo(() => {
     if (isCutiToday) return false;
+    const targetCount = ktaObligation.targetCount || 1;
+    const totalReports = (myKtaRecord?.reports?.length) ?? (myKtaRecord?.count || 0);
     const isDone = Boolean(
-      myKtaRecord?.hasSubmitted || 
-      (myKtaRecord?.count || 0) > 0 || 
+      myKtaRecord?.status === 'SUDAH' || 
       myKtaRecord?.status === 'TERPENUHI' || 
-      myKtaRecord?.status === 'SUDAH'
+      myKtaRecord?.hasSubmitted || 
+      totalReports >= targetCount ||
+      (targetCount === 1 && totalReports >= 1) ||
+      (targetCount === 2 && (
+        (myKtaRecord?.checkDetails?.check1Done && myKtaRecord?.checkDetails?.check2Done) ||
+        totalReports >= 2
+      ))
     );
     return !isDone;
-  }, [myKtaRecord, isCutiToday]);
+  }, [myKtaRecord, isCutiToday, ktaObligation]);
 
   // Build the list of Operational Categories (Compact Category Cards)
   const categoriesList = useMemo(() => {
@@ -530,6 +585,66 @@ export function ActionCenterBar({
       }
       window.dispatchEvent(new CustomEvent('open-simplified-inspection', { detail: { tab: 'kta_tta' } }));
     }
+  };
+
+  const handleViewKtaProof = () => {
+    const reports = myKtaRecord?.reports || [];
+    const images: Array<{ url: string; label?: string; description?: string }> = [];
+    if (reports.length > 0) {
+      reports.forEach((r: any, idx: number) => {
+        if (r.imageUrl) {
+          images.push({
+            url: r.imageUrl,
+            label: `${r.reportType || 'KTA/TTA'} #${idx + 1}`,
+            description: r.description || undefined
+          });
+        }
+      });
+    } else if (myKtaRecord?.imageUrl) {
+      images.push({
+        url: myKtaRecord.imageUrl,
+        label: `${myKtaRecord.reportType || 'KTA/TTA'}`,
+        description: myKtaRecord.description || undefined
+      });
+    }
+
+    if (images.length > 0) {
+      setLightboxData({
+        isOpen: true,
+        title: `Bukti Laporan KTA & TTA (${currentWeekTag})`,
+        subtitle: `${effectiveName || 'Personil'} • ${images.length} Laporan Terkirim`,
+        images,
+        currentIndex: 0
+      });
+    } else {
+      window.dispatchEvent(new CustomEvent('open-simplified-inspection', { detail: { tab: 'kta_tta' } }));
+    }
+  };
+
+  const handleAddAdditionalKta = () => {
+    window.dispatchEvent(new CustomEvent('open-simplified-inspection', { detail: { tab: 'kta_tta', openForm: true } }));
+  };
+
+  const handleViewInspectionProof = () => {
+    const ssUrl = userInspectionProof?.imageUrl || completedInspectionInfo?.ssProofUrl;
+    const pdfUrl = completedInspectionInfo?.completedPdfUrl || completedInspectionInfo?.pdfUrl;
+    if (ssUrl) {
+      setLightboxData({
+        isOpen: true,
+        title: 'Bukti Form Inspeksi Mingguan',
+        subtitle: `${completedInspectionInfo?.inspeksi || 'Inspeksi Mingguan'} • ${completedInspectionInfo?.area || ''} (${currentWeekTag})`,
+        images: [{ url: ssUrl, label: 'Bukti Screenshot Form Inspeksi' }],
+        currentIndex: 0
+      });
+    } else if (pdfUrl && pdfUrl !== '#' && pdfUrl !== '-') {
+      window.open(pdfUrl, '_blank');
+    } else {
+      window.dispatchEvent(new CustomEvent('open-simplified-inspection', { detail: { tab: 'weekly' } }));
+    }
+  };
+
+  const handleAddAdditionalInspection = () => {
+    window.dispatchEvent(new CustomEvent('open-simplified-inspection', { detail: { tab: 'weekly', openForm: true } }));
   };
 
   return (
@@ -729,14 +844,69 @@ export function ActionCenterBar({
                           <span>{cat.count}</span>
                           <span className="hidden sm:inline font-bold text-[9.5px]">Pending</span>
                         </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          <span className="hidden sm:inline">Selesai</span>
-                        </span>
-                      )}
+                      ) : cat.id === 'kta' ? (
+                        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            <span>Selesai</span>
+                          </span>
 
-                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-transform" />
+                          <button
+                            type="button"
+                            onClick={handleViewKtaProof}
+                            className="py-1 px-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
+                            title="Lihat screenshot bukti formulir KTA/TTA yang telah terkirim"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                            <span>Lihat Bukti</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleAddAdditionalKta}
+                            className="py-1 px-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
+                            title="Buat laporan bahaya KTA / TTA tambahan minggu ini"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>+ Lapor Tambahan</span>
+                          </button>
+                        </div>
+                      ) : cat.id === 'inspection' ? (
+                        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            <span>Selesai</span>
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={handleViewInspectionProof}
+                            className="py-1 px-2 rounded-lg bg-teal-500/15 hover:bg-teal-500/25 text-teal-700 dark:text-teal-300 border border-teal-500/30 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
+                            title="Lihat screenshot bukti konfirmasi formulir atau dokumen inspeksi"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                            <span>Lihat Bukti</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleAddAdditionalInspection}
+                            className="py-1 px-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
+                            title="Buat laporan inspeksi tambahan atau unggah screenshot bukti formulir"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>+ Lapor Tambahan</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            <span className="hidden sm:inline">Selesai</span>
+                          </span>
+                          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -745,6 +915,125 @@ export function ActionCenterBar({
           )}
         </AnimatePresence>
       </div>
+
+      {/* Lightbox Modal for viewing proof screenshots */}
+      {lightboxData && lightboxData.isOpen && (
+        <div 
+          onClick={() => setLightboxData(null)}
+          className="fixed inset-0 z-[250] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-2xl w-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-200 dark:border-slate-800">
+              <div className="min-w-0 pr-2">
+                <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+                  {lightboxData.title}
+                </h4>
+                {lightboxData.subtitle && (
+                  <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
+                    {lightboxData.subtitle}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setLightboxData(null)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 cursor-pointer shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Image viewport */}
+            <div className="flex-1 bg-black/95 p-2 flex items-center justify-center overflow-auto min-h-[260px] max-h-[68vh] relative">
+              {lightboxData.images[lightboxData.currentIndex] && (
+                <img
+                  src={formatProofImageUrl(lightboxData.images[lightboxData.currentIndex].url)}
+                  alt="Bukti Screenshot"
+                  className="max-w-full max-h-[64vh] object-contain rounded-xl shadow-lg"
+                />
+              )}
+
+              {/* Prev / Next controls if multiple images */}
+              {lightboxData.images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLightboxData(prev => prev ? {
+                        ...prev,
+                        currentIndex: (prev.currentIndex - 1 + prev.images.length) % prev.images.length
+                      } : null);
+                    }}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white cursor-pointer shadow-md"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLightboxData(prev => prev ? {
+                        ...prev,
+                        currentIndex: (prev.currentIndex + 1) % prev.images.length
+                      } : null);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white cursor-pointer shadow-md"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Pagination / Thumbnails & Footer Actions */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-850 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 text-xs shrink-0 flex-wrap">
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                {lightboxData.images.length > 1 && (
+                  <span className="font-bold px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                    {lightboxData.currentIndex + 1} / {lightboxData.images.length}
+                  </span>
+                )}
+                <span className="truncate max-w-[200px]">
+                  {lightboxData.images[lightboxData.currentIndex]?.description || lightboxData.images[lightboxData.currentIndex]?.label || 'Screenshot Terlampir'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={lightboxData.images[lightboxData.currentIndex]?.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-[11px] flex items-center gap-1 hover:bg-slate-50 cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Buka Asli</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const imgUrl = lightboxData.images[lightboxData.currentIndex]?.url;
+                    if (imgUrl) {
+                      const a = document.createElement('a');
+                      a.href = imgUrl;
+                      a.download = `Bukti_${Date.now()}.jpg`;
+                      a.click();
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-2xs cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

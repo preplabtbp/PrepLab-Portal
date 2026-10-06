@@ -71,6 +71,21 @@ function parseWeekNumber(weekStr?: string): number {
   return match && match[1] ? parseInt(match[1], 10) : 0;
 }
 
+function normalizeWeekQuery(raw?: string): string {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  if (trimmed.toUpperCase() === 'ALL') return 'ALL';
+  const match = trimmed.match(/W(?:EEK)?\s*(\d+)/i);
+  if (match && match[1]) {
+    return `W${parseInt(match[1], 10)}`;
+  }
+  const numMatch = trimmed.match(/(\d+)/);
+  if (numMatch && numMatch[1]) {
+    return `W${parseInt(numMatch[1], 10)}`;
+  }
+  return trimmed.toUpperCase();
+}
+
 function parseInspectionDate(insp: any, dataFObj?: any): Date {
   const userDateFields = [
     dataFObj?.tanggal,
@@ -953,7 +968,8 @@ export async function getRekapPersonnelClassification(
 
 router.get('/api/rekap-inspeksi', async (req, res) => {
   try {
-    const selectedWeek = (req.query.week as string) || getISOWeekTag();
+    const rawWeek = (req.query.week as string) || '';
+    const selectedWeek = rawWeek ? normalizeWeekQuery(rawWeek) : getISOWeekTag();
     const allEmployees = await db.select().from(employees);
     const allRoster = await db.select().from(roster);
 
@@ -1323,8 +1339,9 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
 router.get('/api/kta-reports', async (req, res) => {
   try {
     const rawWeek = (req.query.week as string) || '';
-    if (rawWeek && rawWeek !== 'ALL') {
-      const reports = await db.select().from(ktaReports).where(eq(ktaReports.week, rawWeek)).orderBy(desc(ktaReports.createdAt));
+    const normWeek = normalizeWeekQuery(rawWeek);
+    if (normWeek && normWeek !== 'ALL') {
+      const reports = await db.select().from(ktaReports).where(eq(ktaReports.week, normWeek)).orderBy(desc(ktaReports.createdAt));
       return res.json(reports);
     }
     const reports = await db.select().from(ktaReports).orderBy(desc(ktaReports.createdAt));
@@ -1341,7 +1358,7 @@ router.post('/api/kta-reports', async (req, res) => {
       return res.status(400).json({ error: 'NIK, Nama, dan Bukti Screenshot formulir wajib dilampirkan!' });
     }
 
-    const reportWeek = week || getISOWeekTag(date ? new Date(date) : new Date());
+    const reportWeek = normalizeWeekQuery(week || getISOWeekTag(date ? new Date(date) : new Date()));
     const cleanType = (reportType || 'KTA').toUpperCase() === 'TTA' ? 'TTA' : 'KTA';
     const reportDate = date || new Date().toISOString().split('T')[0];
     const cleanNik = String(nik).trim();
@@ -1349,7 +1366,7 @@ router.post('/api/kta-reports', async (req, res) => {
     const cleanImg = String(imageUrl).trim();
 
     // Idempotency / Deduplication check:
-    // Prevent duplicate entries if the exact same submission was already recorded
+    // Only flag as accidental duplicate if submitted within the last 5 seconds with identical image AND identical description (e.g. rapid double-click)
     const existingReports = await db.select().from(ktaReports).where(
       and(
         eq(ktaReports.nik, cleanNik),
@@ -1358,13 +1375,15 @@ router.post('/api/kta-reports', async (req, res) => {
       )
     );
 
-    const duplicate = existingReports.find(r => 
-      (cleanDesc && r.description && r.description.trim().toLowerCase() === cleanDesc.toLowerCase()) ||
-      (!cleanDesc && r.imageUrl && r.imageUrl.trim() === cleanImg)
-    );
+    const duplicate = existingReports.find(r => {
+      const isSameImg = cleanImg && r.imageUrl && r.imageUrl.trim() === cleanImg;
+      const isSameDesc = cleanDesc && r.description && r.description.trim().toLowerCase() === cleanDesc.toLowerCase();
+      const timeDiff = r.createdAt ? (Date.now() - new Date(r.createdAt).getTime()) : Infinity;
+      return isSameImg && isSameDesc && timeDiff < 5000;
+    });
 
     if (duplicate) {
-      console.log(`[Deduplication] Prevented duplicate KTA report for NIK ${cleanNik} (${reportWeek}): id ${duplicate.id}`);
+      console.log(`[Deduplication] Prevented rapid duplicate KTA report for NIK ${cleanNik} (${reportWeek}): id ${duplicate.id}`);
       return res.status(200).json(duplicate);
     }
 
@@ -1456,7 +1475,7 @@ router.post('/api/inspection-proofs', async (req, res) => {
       return res.status(400).json({ error: 'NIK, Nama, dan Bukti Screenshot Form General Inspeksi wajib dilampirkan!' });
     }
 
-    const reportWeek = week || getISOWeekTag(date ? new Date(date) : new Date());
+    const reportWeek = normalizeWeekQuery(week || getISOWeekTag(date ? new Date(date) : new Date()));
     const reportDate = date || new Date().toISOString().split('T')[0];
     const cleanNik = String(nik).trim();
     const cleanDesc = description ? String(description).trim() : 'Bukti Screenshot Form General Inspeksi';
@@ -1522,7 +1541,8 @@ router.post('/api/inspection-proofs', async (req, res) => {
 
 router.get('/api/inspection-proofs', async (req, res) => {
   try {
-    const selectedWeek = (req.query.week as string) || getISOWeekTag();
+    const rawWeek = (req.query.week as string) || '';
+    const selectedWeek = rawWeek ? normalizeWeekQuery(rawWeek) : getISOWeekTag();
     const proofs = selectedWeek === 'ALL'
       ? await db.select().from(inspectionProofs).orderBy(desc(inspectionProofs.createdAt))
       : await db.select().from(inspectionProofs).where(eq(inspectionProofs.week, selectedWeek)).orderBy(desc(inspectionProofs.createdAt));
@@ -1568,7 +1588,8 @@ export function invalidateRekapKtaCache() {
 // --- REKAPITULASI KTA / TTA MINGGUAN ---
 router.get('/api/rekap-kta', async (req, res) => {
   try {
-    const selectedWeek = (req.query.week as string) || getISOWeekTag();
+    const rawWeek = (req.query.week as string) || '';
+    const selectedWeek = rawWeek ? normalizeWeekQuery(rawWeek) : getISOWeekTag();
     const forceRefresh = req.query.refresh === 'true';
 
     const cached = rekapKtaCache.get(selectedWeek);
@@ -1714,32 +1735,76 @@ router.get('/api/rekap-kta', async (req, res) => {
       } else if (obligation.type === '1_KTA_AND_1_TTA') {
         const hasKta = ktaList.length >= 1;
         const hasTta = ttaList.length >= 1;
-        isDone = hasKta && hasTta;
-        const count = (hasKta ? 1 : 0) + (hasTta ? 1 : 0);
-        checkDetails = {
-          check1Label: 'KTA',
-          check1Done: hasKta,
-          check1Proof: ktaList[0]?.imageUrl || null,
-          check1Timestamp: ktaList[0]?.timestamp || null,
-          check2Label: 'TTA',
-          check2Done: hasTta,
-          check2Proof: ttaList[0]?.imageUrl || null,
-          check2Timestamp: ttaList[0]?.timestamp || null,
-          summaryProgress: `${count}/2`
-        };
+        const totalReports = reports.length;
+        // Fulfilled if user has 1 KTA & 1 TTA, OR has >= 2 TTA, OR >= 2 KTA, OR total >= 2 reports
+        isDone = (hasKta && hasTta) || totalReports >= 2;
+        
+        if (hasKta && hasTta) {
+          checkDetails = {
+            check1Label: 'KTA',
+            check1Done: true,
+            check1Proof: ktaList[0]?.imageUrl || null,
+            check1Timestamp: ktaList[0]?.timestamp || null,
+            check2Label: 'TTA',
+            check2Done: true,
+            check2Proof: ttaList[0]?.imageUrl || null,
+            check2Timestamp: ttaList[0]?.timestamp || null,
+            summaryProgress: '2/2'
+          };
+        } else if (ttaList.length >= 2) {
+          checkDetails = {
+            check1Label: 'TTA 1',
+            check1Done: true,
+            check1Proof: ttaList[0]?.imageUrl || null,
+            check1Timestamp: ttaList[0]?.timestamp || null,
+            check2Label: 'TTA 2',
+            check2Done: true,
+            check2Proof: ttaList[1]?.imageUrl || null,
+            check2Timestamp: ttaList[1]?.timestamp || null,
+            summaryProgress: '2/2'
+          };
+        } else if (ktaList.length >= 2) {
+          checkDetails = {
+            check1Label: 'KTA 1',
+            check1Done: true,
+            check1Proof: ktaList[0]?.imageUrl || null,
+            check1Timestamp: ktaList[0]?.timestamp || null,
+            check2Label: 'KTA 2',
+            check2Done: true,
+            check2Proof: ktaList[1]?.imageUrl || null,
+            check2Timestamp: ktaList[1]?.timestamp || null,
+            summaryProgress: '2/2'
+          };
+        } else {
+          const count = (hasKta ? 1 : 0) + (hasTta ? 1 : 0);
+          checkDetails = {
+            check1Label: 'KTA',
+            check1Done: hasKta,
+            check1Proof: ktaList[0]?.imageUrl || null,
+            check1Timestamp: ktaList[0]?.timestamp || null,
+            check2Label: 'TTA',
+            check2Done: hasTta,
+            check2Proof: ttaList[0]?.imageUrl || null,
+            check2Timestamp: ttaList[0]?.timestamp || null,
+            summaryProgress: `${count}/2`
+          };
+        }
       } else if (obligation.type === '2_TTA') {
         const count = ttaList.length;
-        isDone = count >= 2;
+        const total = reports.length;
+        isDone = count >= 2 || total >= 2;
+        const firstReport = ttaList[0] || reports[0];
+        const secondReport = ttaList[1] || reports[1];
         checkDetails = {
-          check1Label: 'TTA 1',
-          check1Done: count >= 1,
-          check1Proof: ttaList[0]?.imageUrl || null,
-          check1Timestamp: ttaList[0]?.timestamp || null,
-          check2Label: 'TTA 2',
-          check2Done: count >= 2,
-          check2Proof: ttaList[1]?.imageUrl || null,
-          check2Timestamp: ttaList[1]?.timestamp || null,
-          summaryProgress: `${Math.min(count, 2)}/2`
+          check1Label: firstReport ? `${firstReport.reportType || 'TTA'} 1` : 'TTA 1',
+          check1Done: Boolean(firstReport),
+          check1Proof: firstReport?.imageUrl || null,
+          check1Timestamp: firstReport?.timestamp || null,
+          check2Label: secondReport ? `${secondReport.reportType || 'TTA'} 2` : 'TTA 2',
+          check2Done: Boolean(secondReport),
+          check2Proof: secondReport?.imageUrl || null,
+          check2Timestamp: secondReport?.timestamp || null,
+          summaryProgress: `${Math.min(total, 2)}/2`
         };
       }
 

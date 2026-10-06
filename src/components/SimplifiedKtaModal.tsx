@@ -145,7 +145,7 @@ export function SimplifiedKtaModal({
             imageUrl: uploadedUrl,
             description: description.trim() 
               ? (typesToSubmit.length > 1 ? `${description.trim()} (#${i + 1})` : description.trim())
-              : `Laporan bukti formulir ${t} disederhanakan`,
+              : (typesToSubmit.length > 1 ? `Laporan bukti formulir ${t} #${i + 1} disederhanakan` : `Laporan bukti formulir ${t} disederhanakan`),
             location: '-'
           })
         });
@@ -160,6 +160,7 @@ export function SimplifiedKtaModal({
       triggerExpGain(selectedType === 'BOTH' || selectedType === '2_TTA' ? 60 : 35, 'Laporan KTA/TTA Terkirim!', 'Kontribusi K3L Harita Nickel');
       window.dispatchEvent(new Event('gamification_updated'));
       window.dispatchEvent(new CustomEvent('refresh-group-reports'));
+      window.dispatchEvent(new CustomEvent('refresh-action-center'));
 
       if (onSuccess) onSuccess();
       onClose();

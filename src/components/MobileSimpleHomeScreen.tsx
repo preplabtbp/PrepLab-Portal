@@ -52,13 +52,17 @@ export function MobileSimpleHomeScreen({
   const [showLeadershipModal, setShowLeadershipModal] = useState(false);
   const [leadershipTargetRole, setLeadershipTargetRole] = useState<'spt_prep' | 'spt_lab' | 'manager'>('manager');
 
+  const [inspectionOpenForm, setInspectionOpenForm] = useState(false);
+
   useEffect(() => {
     const handleSimChange = (e: any) => {
       setSimProfile(e.detail || null);
     };
     const handleOpenSimplified = (e: any) => {
       const tab = e?.detail?.tab || 'weekly';
+      const openForm = Boolean(e?.detail?.openForm);
       setInspectionDefaultTab(tab);
+      setInspectionOpenForm(openForm);
       setShowInspectionModal(true);
     };
     const handleOpenP5m = () => {
@@ -688,6 +692,7 @@ export function MobileSimpleHomeScreen({
         userJabatan={effectiveRole}
         schedule={mySchedule}
         defaultTab={inspectionDefaultTab}
+        initialOpenForm={inspectionOpenForm}
         onNav={onNav}
         onSuccess={() => {
           // Refresh findings

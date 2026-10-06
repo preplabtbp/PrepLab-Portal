@@ -988,54 +988,57 @@ export function NotionDatabaseTable({
     if (row[colName] !== undefined && row[colName] !== '') return row[colName];
 
     const targetLower = colName.toLowerCase().trim();
+    const cleanTarget = targetLower.replace(/^[^a-z0-9]+/i, '').trim();
     let fallbackVal: string | undefined = undefined;
 
     for (const key of Object.keys(row)) {
       const val = row[key];
       const keyLower = key.toLowerCase().trim();
+      const cleanKey = keyLower.replace(/^[^a-z0-9]+/i, '').trim();
 
-      if (keyLower === targetLower) {
+      if (keyLower === targetLower || (cleanKey && cleanKey === cleanTarget)) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
 
-      if (targetLower === 'number' && (keyLower === 'no' || keyLower === 'no.' || keyLower === '#' || keyLower === 'index')) {
+      if (targetLower === 'number' && (keyLower === 'no' || keyLower === 'no.' || keyLower === '#' || keyLower === 'index' || cleanKey === 'no' || cleanKey === 'number')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if ((targetLower === 'jenis kegiatan' || targetLower === 'judul') && (keyLower.includes('jenis kegiatan') || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
+      if ((targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'name' || targetLower === 'title') && 
+          (cleanKey.includes('jenis kegiatan') || cleanKey === 'task' || cleanKey === 'judul' || cleanKey === 'name' || cleanKey === 'nama' || cleanKey === 'kegiatan' || cleanKey === 'title' || cleanKey === 'materi')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'keterangan' && (keyLower.includes('keterangan') || keyLower.includes('catatan') || keyLower.includes('deskripsi') || keyLower.includes('content') || keyLower.includes('rincian'))) {
+      if (targetLower === 'keterangan' && (cleanKey.includes('keterangan') || cleanKey.includes('catatan') || cleanKey.includes('deskripsi') || cleanKey.includes('content') || cleanKey.includes('rincian'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'pic' && (keyLower === 'pic' || keyLower.includes('assignee') || keyLower.includes('pj') || keyLower === 'personil')) {
+      if (targetLower === 'pic' && (cleanKey === 'pic' || cleanKey.includes('assignee') || cleanKey.includes('pj') || cleanKey === 'personil')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'priority' && (keyLower.includes('prioritas') || keyLower.includes('priority'))) {
+      if (targetLower === 'priority' && (cleanKey.includes('prioritas') || cleanKey.includes('priority'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'status' && keyLower.includes('status')) {
+      if (targetLower === 'status' && cleanKey.includes('status')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'created time' && (keyLower.includes('created') || keyLower.includes('tanggal dibuat') || keyLower.includes('waktu dibuat') || keyLower === 'dibuat')) {
+      if (targetLower === 'created time' && (cleanKey.includes('created') || cleanKey.includes('tanggal dibuat') || cleanKey.includes('waktu dibuat') || cleanKey === 'dibuat')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'kategori' && (keyLower.includes('kategori') || keyLower.includes('category') || keyLower === 'dept')) {
+      if (targetLower === 'kategori' && (cleanKey.includes('kategori') || cleanKey.includes('category') || cleanKey === 'dept')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'activity (routine/non routine)' && (keyLower.includes('activity') || keyLower.includes('aktivitas'))) {
+      if (targetLower === 'activity (routine/non routine)' && (cleanKey.includes('activity') || cleanKey.includes('aktivitas'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'period' && (keyLower === 'period' || keyLower === 'periode')) {
+      if (targetLower === 'period' && (cleanKey === 'period' || cleanKey === 'periode')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
@@ -1064,7 +1067,7 @@ export function NotionDatabaseTable({
     fetchComments();
   }, [fetchComments]);
 
-  // Comment counts per topic title (aggregates sub-periods to base topic as well)
+  // Comment counts per topic title and topic ID (aggregates sub-periods to base topic as well)
   const topicCommentCounts = useMemo(() => {
     const map: Record<string, number> = {};
     allComments.forEach((c) => {
@@ -1076,6 +1079,10 @@ export function NotionDatabaseTable({
           map[baseKey] = (map[baseKey] || 0) + 1;
         }
       }
+      if (c.topicId) {
+        const idKey = c.topicId.toLowerCase().trim();
+        map[idKey] = (map[idKey] || 0) + 1;
+      }
     });
     return map;
   }, [allComments]);
@@ -1083,7 +1090,16 @@ export function NotionDatabaseTable({
   // Base topic title from row
   const baseTopicTitle = useMemo(() => {
     if (!selectedRow) return '';
-    return (getRowVal(selectedRow, 'Jenis kegiatan') || '').trim();
+    const cand = getRowVal(selectedRow, 'Jenis kegiatan')
+      || getRowVal(selectedRow, 'Judul')
+      || getRowVal(selectedRow, 'Name')
+      || getRowVal(selectedRow, 'Title')
+      || getRowVal(selectedRow, 'Kegiatan')
+      || getRowVal(selectedRow, 'Materi')
+      || (selectedRow['Name'] || selectedRow['= Name'] || selectedRow['name'] || selectedRow['title'] || selectedRow['Judul'])
+      || Object.values(selectedRow).find(v => typeof v === 'string' && v.trim().length > 0 && !v.startsWith('http') && v !== '-')
+      || '';
+    return (cand || '').trim();
   }, [selectedRow, getRowVal]);
 
   // Current normalized cadence (prioritize page title itself, e.g. "Weekly Manajemen Mutu" -> Weekly)
@@ -1374,22 +1390,29 @@ export function NotionDatabaseTable({
   }, [baseTopicTitle, activeSubPeriod]);
 
   const activeTopicComments = useMemo(() => {
-    if (!selectedTopicTitle) return [];
-    const q = selectedTopicTitle.toLowerCase().trim();
-    return allComments.filter((c) => (c.topicTitle || '').toLowerCase().trim() === q);
-  }, [allComments, selectedTopicTitle]);
+    if (!baseTopicTitle && !selectedRow?.id) return [];
+    const baseQ = baseTopicTitle.toLowerCase().trim();
+    const selQ = selectedTopicTitle ? selectedTopicTitle.toLowerCase().trim() : '';
+    const rowId = (selectedRow?.id || '').toLowerCase().trim();
+
+    return allComments.filter((c) => {
+      const cTopic = (c.topicTitle || '').toLowerCase().trim();
+      const cTopicId = (c.topicId || '').toLowerCase().trim();
+      if (rowId && cTopicId && cTopicId === rowId) return true;
+      if (selQ && cTopic === selQ) return true;
+      if (baseQ && cTopic === baseQ) return true;
+      return false;
+    });
+  }, [allComments, selectedTopicTitle, baseTopicTitle, selectedRow]);
 
   // Notion-style sorted comment stream (chronological oldest to newest)
   const sortedTopicComments = useMemo(() => {
-    if (!selectedTopicTitle) return [];
-    const q = selectedTopicTitle.toLowerCase().trim();
-    const list = allComments.filter((c) => (c.topicTitle || '').toLowerCase().trim() === q);
-    return [...list].sort((a, b) => {
+    return [...activeTopicComments].sort((a, b) => {
       const tA = new Date(a.createdAt || 0).getTime();
       const tB = new Date(b.createdAt || 0).getTime();
       return tA - tB;
     });
-  }, [allComments, selectedTopicTitle]);
+  }, [activeTopicComments]);
 
   // Ekstrak semua lampiran file dari komentar topik untuk Galeri Media
   const galleryItems = useMemo(() => {
@@ -3235,7 +3258,8 @@ export function NotionDatabaseTable({
                 {displayHeaders.map((colHeader) => {
                   const isSorted = sortColumn === colHeader;
                   const isNum = colHeader.toLowerCase() === 'number' || colHeader.toLowerCase() === 'no';
-                  const isJudul = colHeader.toLowerCase().includes('jenis kegiatan') || colHeader.toLowerCase() === 'task' || colHeader.toLowerCase() === 'judul';
+                  const cleanHeader = colHeader.toLowerCase().replace(/^[^a-z0-9]+/i, '').trim();
+                  const isJudul = cleanHeader.includes('jenis kegiatan') || cleanHeader === 'task' || cleanHeader === 'judul' || cleanHeader === 'name' || cleanHeader === 'title' || cleanHeader === 'nama' || cleanHeader === 'materi';
                   const colLower = colHeader.toLowerCase();
                   const colIdx = displayHeaders.indexOf(colHeader);
 
@@ -3549,9 +3573,10 @@ export function NotionDatabaseTable({
                         const actualRowIndex = localRows.indexOf(row) !== -1 ? localRows.indexOf(row) : 0;
                         const isDirty = dirtyRowIndices.has(actualRowIndex);
                         const isSelected = selectedRowIndices.has(actualRowIndex);
-                        const topicTitle = getRowVal(row, 'Jenis kegiatan') || `Baris ${actualRowIndex + 1}`;
+                        const topicTitle = (getRowVal(row, 'Jenis kegiatan') || getRowVal(row, 'Name') || getRowVal(row, 'Judul') || row['Name'] || row['= Name'] || `Baris ${actualRowIndex + 1}`).trim();
                         const topicKey = topicTitle.toLowerCase().trim();
-                        const cCount = topicCommentCounts[topicKey] || 0;
+                        const rowIdKey = (row.id || '').toLowerCase().trim();
+                        const cCount = topicCommentCounts[topicKey] || (rowIdKey ? topicCommentCounts[rowIdKey] : 0) || 0;
 
                         return (
                           <tr
@@ -3591,6 +3616,7 @@ export function NotionDatabaseTable({
                             {displayHeaders.map((colName) => {
                               const val = getRowVal(row, colName);
                               const colLower = colName.toLowerCase();
+                              const cleanCol = colLower.replace(/^[^a-z0-9]+/i, '').trim();
 
                               // 1. Number Column
                               if (colLower === 'number' || colLower === 'no') {
@@ -3608,8 +3634,8 @@ export function NotionDatabaseTable({
                                 );
                               }
 
-                              // 2. Jenis kegiatan Column (Judul)
-                              if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') {
+                              // 2. Jenis kegiatan Column (Judul / Name / Materi)
+                              if (cleanCol.includes('jenis kegiatan') || cleanCol === 'task' || cleanCol === 'judul' || cleanCol === 'name' || cleanCol === 'title' || cleanCol === 'nama' || cleanCol === 'materi') {
                                 const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
 
                                 return (
