@@ -208,6 +208,25 @@ export default function App() {
   const activeTab = (location.pathname === '/' || location.pathname === '/home') ? 'home' : location.pathname.substring(1);
   const isBulletin = location.pathname.startsWith('/bulletin');
   const [bulletinFocusMode, setBulletinFocusMode] = useState(true);
+  const [hoveredNav, setHoveredNav] = useState<string | null>(null);
+
+  // Dynamic background & contrast styling matching currently displayed module
+  const activeModuleStyle = useMemo(() => {
+    if (location.pathname.startsWith('/admin-dashboard') || location.pathname.startsWith('/sap-dashboard')) {
+      return {
+        bg: '#0f172a',
+        activeIconColor: '#38bdf8',
+        activeTextColor: '#ffffff',
+        isDark: true
+      };
+    }
+    return {
+      bg: '#FFFFFF',
+      activeIconColor: '#168a96',
+      activeTextColor: '#106771',
+      isDark: false
+    };
+  }, [location.pathname]);
 
   // Auto-minimize header and sidebar whenever user enters bulletin
   useEffect(() => {
@@ -1389,10 +1408,226 @@ export default function App() {
 
 
   return (
-    <div className="flex w-full min-h-[100dvh] overflow-hidden" style={{ backgroundColor: 'var(--bg-main, #F4F7F6)' }}>
+    <div className="flex w-full min-h-[100dvh] h-[100dvh] overflow-hidden transition-colors duration-300" style={{ backgroundColor: activeModuleStyle.bg }}>
+      {/* 1. Left Sidebar: Full-height past the header, unified navigation rail */}
+      {!isCrewRole && (
+        <aside 
+          onMouseLeave={() => setHoveredNav(null)}
+          className={`flex-col items-center w-20 lg:w-22 shrink-0 transition-all duration-300 h-[100dvh] z-50 select-none py-3 justify-between overflow-y-auto overflow-x-hidden ${
+            isBulletin && bulletinFocusMode ? 'hidden' : 'hidden md:flex'
+          }`}
+          style={{
+            background: 'linear-gradient(180deg, #1da8b5 0%, #168a96 45%, #106771 100%)',
+            boxShadow: 'inset -1px 0 0 0 rgba(255,255,255,0.18), 4px 0 20px rgba(0,0,0,0.08)'
+          }}
+        >
+          {/* Top Branding Section with PrepLab & HARITA NICKEL */}
+          <div className="flex flex-col items-center justify-center w-full px-1 pt-1 pb-1.5 select-none">
+            <div 
+              className="w-9 h-9 lg:w-10 lg:h-10 rounded-2xl bg-white/15 p-1.5 flex items-center justify-center border border-white/25 shadow-md mb-1.5 backdrop-blur-xs group cursor-pointer active:scale-95 transition-transform" 
+              onClick={handleLogoClick} 
+              title="Beranda PrepLab"
+            >
+              <img 
+                src="/preplab-logo.png" 
+                alt="PrepLab" 
+                className="w-full h-full object-contain filter drop-shadow-sm" 
+                onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} 
+              />
+            </div>
+            <div className="flex items-center gap-0.5 font-black text-xs lg:text-sm tracking-tight font-display text-center leading-tight">
+              <span className="text-white font-black drop-shadow-xs">Prep</span>
+              <span className="text-teal-200 font-black drop-shadow-xs">Lab</span>
+            </div>
+            <span className="text-[7px] lg:text-[7.5px] font-black tracking-widest uppercase text-teal-100/90 leading-none mt-1 text-center font-mono">
+              HARITA NICKEL
+            </span>
+            <div className="w-6 h-0.5 bg-gradient-to-r from-teal-300 to-cyan-300 rounded-full mt-1.5 opacity-75" />
+          </div>
+
+          {/* Navigation Items List with Smooth Follower Notch (Merged Left & Right Rails) */}
+          <div className="flex flex-col items-center w-full flex-1 gap-1 pt-1 overflow-y-auto no-scrollbar">
+            {[
+              {
+                id: 'modules',
+                label: 'Menu',
+                icon: LayoutGrid,
+                onClick: () => setShowModulesDrawer(true),
+                title: 'Buka Semua Menu & Modul Portal',
+              },
+              {
+                id: 'home',
+                label: 'Home',
+                icon: Home,
+                onClick: () => handleNav('home'),
+                title: 'Beranda / Home',
+              },
+              {
+                id: 'bulletin',
+                label: 'Labnote',
+                icon: FileText,
+                onClick: () => {
+                  const activeUniv = localStorage.getItem('bulletin_active_universe');
+                  const targetUniverse = isDeveloper
+                    ? (activeUniv === 'GTS' ? 'GTS' : 'TBP')
+                    : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
+                  handleNav(`bulletin/${targetUniverse}`);
+                },
+                title: 'Labnote & Pengumuman',
+              },
+              {
+                id: 'chat',
+                label: 'Chat',
+                icon: MessageSquare,
+                onClick: () => setShowChatDrawer(true),
+                title: 'Buka Portal Chat (Global & Section)',
+              },
+              ...(isAdminOrDeveloper ? [{
+                id: 'sap',
+                label: 'SAP',
+                icon: ShieldAlert,
+                onClick: () => setShowSapDrawer(true),
+                title: 'SAP Management (Safety & Rekap Laporan)',
+              }] : []),
+              {
+                id: 'leaderboard',
+                label: 'Rank',
+                icon: Trophy,
+                onClick: () => handleNav('leaderboard'),
+                title: 'PrepLab Hall of Fame & Leaderboard',
+              },
+              {
+                id: 'cloud',
+                label: 'Cloud',
+                icon: Cloud,
+                onClick: () => handleNav('preplab-cloud'),
+                title: 'PrepLab Cloud Storage',
+              },
+              {
+                id: 'settings',
+                label: 'Settings',
+                icon: Settings,
+                onClick: () => handleNav('settings'),
+                title: 'Pengaturan Akun & Tema',
+              },
+              ...(isDeveloper || isMeetingRoom ? [{
+                id: 'dev',
+                label: 'Dev',
+                icon: Code2,
+                onClick: () => handleNav('admin-dashboard'),
+                title: 'Developer Dashboard',
+              }] : [])
+            ].map((item) => {
+              const currentActiveKey = activeTab.startsWith('bulletin') 
+                ? 'bulletin' 
+                : (activeTab === 'home' || !activeTab 
+                  ? 'home' 
+                  : (activeTab === 'chat' || activeTab === 'group-reports'
+                    ? 'chat'
+                    : (activeTab === 'leaderboard'
+                      ? 'leaderboard'
+                      : (activeTab === 'preplab-cloud' 
+                        ? 'cloud' 
+                        : (activeTab === 'settings' 
+                          ? 'settings' 
+                          : (activeTab === 'admin-dashboard' || activeTab === 'sap-dashboard' ? 'dev' : ''))))));
+              
+              const isHighlighted = hoveredNav ? hoveredNav === item.id : currentActiveKey === item.id;
+              const Icon = item.icon;
+
+              return (
+                <div
+                  key={item.id}
+                  className="relative w-full flex items-center justify-center py-0.5"
+                  onMouseEnter={() => setHoveredNav(item.id)}
+                >
+                  {/* Animated Sliding Notch with Inverted Corner Fillets */}
+                  {isHighlighted && (
+                    <motion.div
+                      layoutId="curved-sidebar-notch"
+                      className="absolute inset-y-0 right-0 left-2.5 rounded-l-2xl z-0 pointer-events-none"
+                      style={{
+                        backgroundColor: activeModuleStyle.bg,
+                      }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 420,
+                        damping: 34,
+                        mass: 0.8
+                      }}
+                    >
+                      {/* Top Inverted Concave Fillet (20x20 smooth curve) */}
+                      <svg
+                        className="absolute -top-5 right-0 w-5 h-5 pointer-events-none z-10"
+                        viewBox="0 0 20 20"
+                        fill="none"
+                      >
+                        <path
+                          d="M20,0 C20,11.046 11.046,20 0,20 L20,20 Z"
+                          style={{ fill: activeModuleStyle.bg }}
+                        />
+                      </svg>
+
+                      {/* Bottom Inverted Concave Fillet (20x20 smooth curve) */}
+                      <svg
+                        className="absolute -bottom-5 right-0 w-5 h-5 pointer-events-none z-10"
+                        viewBox="0 0 20 20"
+                        fill="none"
+                      >
+                        <path
+                          d="M0,0 C11.046,0 20,8.954 20,20 L20,0 Z"
+                          style={{ fill: activeModuleStyle.bg }}
+                        />
+                      </svg>
+                    </motion.div>
+                  )}
+
+                  {/* Interactive Button */}
+                  <button
+                    onClick={item.onClick}
+                    className="relative z-10 w-full py-1.5 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 cursor-pointer group"
+                    title={item.title}
+                  >
+                    <div 
+                      className={`transition-all duration-200 ${
+                        isHighlighted 
+                          ? 'scale-110 drop-shadow-xs' 
+                          : 'text-white/70 group-hover:text-white group-hover:scale-105'
+                      }`}
+                      style={isHighlighted ? { color: activeModuleStyle.activeIconColor } : undefined}
+                    >
+                      <Icon className="w-4.5 h-4.5" />
+                    </div>
+                    <span 
+                      className={`text-[9.5px] leading-none transition-all duration-200 ${
+                        isHighlighted 
+                          ? 'font-bold' 
+                          : 'text-white/70 group-hover:text-white font-medium'
+                      }`}
+                      style={isHighlighted ? { color: activeModuleStyle.activeTextColor } : undefined}
+                    >
+                      {item.label}
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Bottom Subtle Indicator */}
+          <div className="w-full px-2 py-1.5 flex flex-col items-center justify-center border-t border-white/10">
+            <div className="flex items-center gap-1.5 text-[9px] text-white/50 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="hidden lg:inline font-bold">ONLINE</span>
+            </div>
+          </div>
+        </aside>
+      )}
+
+      {/* 2. Main Right Column: Top Header + Scrollable Content Area */}
       <div 
-        className="flex-1 relative transition-all duration-300 overflow-x-hidden overflow-y-auto h-[100dvh]"
-        style={{ backgroundColor: 'var(--bg-main, #F4F7F6)', color: 'var(--text-main, #000000)' }}
+        className="flex-1 flex flex-col h-[100dvh] relative transition-all duration-300 overflow-x-hidden overflow-y-auto"
+        style={{ backgroundColor: activeModuleStyle.bg, color: 'var(--text-main, #000000)' }}
       >
         {appEnv === 'staging' && (
           <div className="w-full bg-orange-500 text-white text-xs font-bold py-1 px-4 text-center z-[100] relative tracking-widest uppercase">
@@ -1458,7 +1693,7 @@ export default function App() {
 
       {/* Header */}
       <header 
-        className={`px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-50 backdrop-blur-md border-b w-full flex justify-center transition-all duration-300 ${
+        className={`px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-40 backdrop-blur-md border-b w-full flex justify-center transition-all duration-300 ${
           isBulletin && bulletinFocusMode ? 'hidden' : ''
         }`}
         style={{
@@ -1483,28 +1718,16 @@ export default function App() {
             </button>
           )}
 
+          {/* Mobile-only logo icon (hidden on desktop because sidebar has full branding) */}
           <div 
-            className="flex items-center gap-2.5 cursor-pointer group select-none"
+            className="flex md:hidden items-center gap-2 cursor-pointer select-none"
             onClick={handleLogoClick}
-            title="Klik untuk Easter Egg / Kembali ke Beranda"
+            title="Kembali ke Beranda"
           >
-            <div className="w-9 h-9 rounded-xl bg-slate-900/40 p-1 flex items-center justify-center border border-slate-700/50 shadow-sm group-hover:scale-105 transition-transform overflow-hidden">
+            <div className="w-8 h-8 rounded-lg bg-teal-600/10 p-1 flex items-center justify-center border border-teal-500/20 shadow-xs overflow-hidden">
                <img src="/preplab-logo.png" alt="Prep & Lab Logo" className="w-full h-full object-contain" onError={(e) => {
                  (e.target as HTMLImageElement).src = '/logo.png'; 
                }} />
-            </div>
-            <div className="flex flex-col">
-              <span 
-                className="font-black font-display tracking-tight text-sm leading-tight group-hover:text-teal-500 transition-colors whitespace-nowrap"
-                style={{
-                  color: 'var(--header-text, var(--text-main, #0f172a))'
-                }}
-              >
-                PREP &amp; LAB
-              </span>
-              <span className="text-[9px] font-bold tracking-wider uppercase text-teal-600 dark:text-teal-400 leading-none">
-                HARITA NICKEL
-              </span>
             </div>
           </div>
         </div>
@@ -1558,132 +1781,10 @@ export default function App() {
             )}
           </button></div></div></header>
 
-      {/* Main Layout Body: Dedicated Left Rail + Content Area */}
-      <div className="flex-1 flex w-full relative">
-        {/* Dedicated Left Rail for All Menus (Desktop View, Non-overlapping, Hidden for Crew) */}
-        {!isCrewRole && (
-          <aside 
-            className={`flex-col items-center w-20 lg:w-24 shrink-0 border-r transition-all duration-300 sticky top-[57px] h-[calc(100dvh-57px)] z-30 select-none py-4 gap-2 justify-start overflow-y-auto ${
-              isBulletin && bulletinFocusMode ? 'hidden' : 'hidden md:flex'
-            }`}
-            style={{
-              backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
-              borderColor: 'var(--border-main, #E2E8F0)'
-            }}
-          >
-            {/* Primary "Semua Menu" Launcher Button */}
-            <button
-              onClick={() => setShowModulesDrawer(true)}
-              className="group relative flex flex-col items-center justify-center w-14 lg:w-16 py-2.5 rounded-2xl bg-gradient-to-b from-teal-500 via-teal-600 to-emerald-600 hover:from-teal-400 hover:via-teal-500 hover:to-emerald-500 text-white shadow-xl shadow-teal-500/25 border-2 border-white/25 transition-all duration-300 active:scale-95 cursor-pointer hover:shadow-teal-500/45 hover:-translate-y-0.5"
-              title="Buka Semua Menu & Modul Portal"
-            >
-              {/* Glow ring on hover */}
-              <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-teal-400 to-emerald-500 opacity-0 group-hover:opacity-60 blur-xs transition-opacity duration-300 pointer-events-none" />
-
-              {/* Icon Container with subtle glass effect and micro-rotation */}
-              <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 shadow-inner">
-                <LayoutGrid className="w-4 h-4 lg:w-4.5 lg:h-4.5 text-white" />
-              </div>
-
-              {/* Text Labels: Semua Menu */}
-              <span className="relative text-[10px] lg:text-[11px] font-black uppercase tracking-wider mt-1.5 font-display text-center leading-tight">
-                Semua
-              </span>
-              <span className="relative text-[8px] font-bold text-teal-100 uppercase tracking-widest mt-0.5 leading-none">
-                Menu
-              </span>
-            </button>
-
-            {/* Subtle divider */}
-            <div className="w-8 h-px bg-[var(--border-main,#E2E8F0)] my-1 shrink-0" />
-
-            {/* Navigation Items transferred from footer to Left Rail */}
-            <div className="flex flex-col items-center gap-1.5 w-full px-1">
-              {/* Home */}
-              <button
-                onClick={() => handleNav('home')}
-                className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                  activeTab === 'home'
-                    ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                    : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-                }`}
-                title="Beranda / Home"
-              >
-                <Home className="w-5 h-5" />
-                <span className="text-[10px] font-semibold leading-none">Home</span>
-              </button>
-
-              {/* Labnote */}
-              <button
-                onClick={() => {
-                  const activeUniv = localStorage.getItem('bulletin_active_universe');
-                  const targetUniverse = isDeveloper
-                    ? (activeUniv === 'GTS' ? 'GTS' : 'TBP')
-                    : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
-                  handleNav(`bulletin/${targetUniverse}`);
-                }}
-                className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                  activeTab.startsWith('bulletin')
-                    ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                    : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-                }`}
-                title="Labnote & Pengumuman"
-              >
-                <FileText className="w-5 h-5" />
-                <span className="text-[10px] font-semibold leading-none">Labnote</span>
-              </button>
-
-              {/* Cloud */}
-              <button
-                onClick={() => handleNav('preplab-cloud')}
-                className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                  activeTab === 'preplab-cloud'
-                    ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                    : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-                }`}
-                title="PrepLab Cloud Storage"
-              >
-                <Cloud className="w-5 h-5" />
-                <span className="text-[10px] font-semibold leading-none">Cloud</span>
-              </button>
-
-              {/* Settings */}
-              <button
-                onClick={() => handleNav('settings')}
-                className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                  activeTab === 'settings'
-                    ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                    : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-                }`}
-                title="Pengaturan Akun & Tema"
-              >
-                <Settings className="w-5 h-5" />
-                <span className="text-[10px] font-semibold leading-none">Settings</span>
-              </button>
-
-              {/* Developer (if applicable) */}
-              {(isDeveloper || isMeetingRoom) && (
-                <button
-                  onClick={() => handleNav('admin-dashboard')}
-                  className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                    activeTab === 'admin-dashboard'
-                      ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                      : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-                  }`}
-                  title="Developer Dashboard"
-                >
-                  <Code2 className="w-5 h-5" />
-                  <span className="text-[10px] font-semibold leading-none">Dev</span>
-                </button>
-              )}
-            </div>
-          </aside>
-        )}
-
-        {/* Main Content Area */}
-        <main className={`@container flex-1 flex flex-col w-full bg-transparent min-w-0 transition-all duration-300 ${
-          isBulletin && bulletinFocusMode ? 'h-[100dvh] overflow-hidden p-0' : 'h-full'
-        }`}>
+      {/* Main Content Area */}
+      <main className={`@container flex-1 flex flex-col w-full bg-transparent min-w-0 transition-all duration-300 ${
+        isBulletin && bulletinFocusMode ? 'h-[100dvh] overflow-hidden p-0' : 'h-full'
+      }`}>
         
       <Suspense fallback={<div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
               <AnimatePresence mode="wait">
@@ -1778,86 +1879,6 @@ export default function App() {
   </AnimatePresence>
       </Suspense>
       </main>
-
-        {/* Dedicated Right Rail on Homepage (SAP Management & Chat - 2 Buttons Only, Hidden for Crew) */}
-        {!isCrewRole && activeTab === 'home' && (
-          <aside 
-            className="hidden md:flex flex-col items-center w-20 lg:w-24 shrink-0 border-l transition-colors sticky top-[57px] h-[calc(100dvh-57px)] z-30 select-none py-4 gap-3 justify-start overflow-y-auto"
-            style={{
-              backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
-              borderColor: 'var(--border-main, #E2E8F0)'
-            }}
-          >
-            {/* 1. SAP Management Launcher Button (Khusus Developer & Tim Admin, selain itu di-hide) */}
-            {isAdminOrDeveloper && (
-              <button
-                onClick={() => setShowSapDrawer(true)}
-                className="group relative flex flex-col items-center justify-center w-14 lg:w-16 py-2.5 rounded-2xl bg-gradient-to-b from-amber-500 via-amber-600 to-orange-600 hover:from-amber-400 hover:via-amber-500 hover:to-orange-500 text-white shadow-xl shadow-amber-500/25 border-2 border-white/25 transition-all duration-300 active:scale-95 cursor-pointer hover:shadow-amber-500/45 hover:-translate-y-0.5"
-                title="Buka SAP Management (Safety & Rekap Laporan)"
-              >
-                {/* Glow ring on hover */}
-                <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-amber-400 to-orange-500 opacity-0 group-hover:opacity-60 blur-xs transition-opacity duration-300 pointer-events-none" />
-
-                {/* Icon Container with subtle glass effect and micro-rotation */}
-                <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 shadow-inner">
-                  <ShieldAlert className="w-4 h-4 lg:w-4.5 lg:h-4.5 text-white" />
-                </div>
-
-                {/* Text Labels: SAP Management */}
-                <span className="relative text-[9px] lg:text-[10px] font-black uppercase tracking-wider mt-1.5 font-display text-center leading-tight">
-                  SAP
-                </span>
-                <span className="relative text-[7.5px] lg:text-[8px] font-bold text-amber-100 uppercase tracking-tight mt-0.5 leading-none">
-                  Management
-                </span>
-              </button>
-            )}
-
-            {/* 2. Chat Launcher Button (Tersedia untuk semua pengguna) */}
-            <button
-              onClick={() => setShowChatDrawer(true)}
-              className="group relative flex flex-col items-center justify-center w-14 lg:w-16 py-2.5 rounded-2xl bg-gradient-to-b from-teal-500 via-teal-600 to-emerald-600 hover:from-teal-400 hover:via-teal-500 hover:to-emerald-500 text-white shadow-xl shadow-teal-500/25 border-2 border-white/25 transition-all duration-300 active:scale-95 cursor-pointer hover:shadow-teal-500/45 hover:-translate-y-0.5"
-              title="Buka Portal Chat (Global & Section)"
-            >
-              {/* Glow ring on hover */}
-              <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-teal-400 to-emerald-500 opacity-0 group-hover:opacity-60 blur-xs transition-opacity duration-300 pointer-events-none" />
-
-              {/* Icon Container with subtle glass effect and micro-rotation */}
-              <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 shadow-inner">
-                <MessageSquare className="w-4 h-4 lg:w-4.5 lg:h-4.5 text-white" />
-              </div>
-
-              {/* Text Labels: Chat */}
-              <span className="relative text-[10px] lg:text-[11px] font-black uppercase tracking-wider mt-1.5 font-display text-center leading-tight">
-                Chat
-              </span>
-            </button>
-
-            {/* 3. Leaderboard Launcher Button (Tersedia untuk semua pengguna) */}
-            <button
-              onClick={() => handleNav('leaderboard')}
-              className="group relative flex flex-col items-center justify-center w-14 lg:w-16 py-2.5 rounded-2xl bg-gradient-to-b from-amber-500 via-amber-600 to-yellow-600 hover:from-amber-400 hover:via-amber-500 hover:to-yellow-500 text-white shadow-xl shadow-amber-500/25 border-2 border-white/25 transition-all duration-300 active:scale-95 cursor-pointer hover:shadow-amber-500/45 hover:-translate-y-0.5"
-              title="Buka PrepLab Hall of Fame & Leaderboard"
-            >
-              {/* Glow ring on hover */}
-              <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-amber-400 to-yellow-500 opacity-0 group-hover:opacity-60 blur-xs transition-opacity duration-300 pointer-events-none" />
-
-              {/* Icon Container with subtle glass effect and micro-rotation */}
-              <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 shadow-inner">
-                <Trophy className="w-4 h-4 lg:w-4.5 lg:h-4.5 text-white" />
-              </div>
-
-              {/* Text Labels: Leaderboard */}
-              <span className="relative text-[8.5px] lg:text-[9.5px] font-black uppercase tracking-wider mt-1.5 font-display text-center leading-tight">
-                Leader
-              </span>
-              <span className="relative text-[7.5px] lg:text-[8px] font-bold text-amber-100 uppercase tracking-tight mt-0.5 leading-none">
-                Board
-              </span>
-            </button>
-          </aside>
-        )}
-      </div>
       </div>
       </div>
 
