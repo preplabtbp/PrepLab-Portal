@@ -436,16 +436,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     Status & Kehadiran
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-[#32AEB8] rounded-xl p-4 text-white shadow-md">
-                      <p className="text-[#e2f9fb] text-xs uppercase font-bold tracking-wider mb-1">Status Karyawan</p>
-                      <p className="font-extrabold text-base">{selectedEmployee.statusKaryawan || '-'}</p>
+                    <div className="bg-[#369CA3] rounded-2xl p-4 text-white shadow-md">
+                      <p className="text-white text-xs uppercase font-bold tracking-wider mb-1">Status Karyawan</p>
+                      <p className="font-extrabold text-base text-white">{selectedEmployee.statusKaryawan || '-'}</p>
                     </div>
-                    <div className="bg-[#f09b13] rounded-xl p-4 text-white shadow-md">
+                    <div className="bg-[#f09b13] rounded-2xl p-4 text-white shadow-md">
                       <p className="text-[#fef6e7] text-xs uppercase font-bold tracking-wider mb-1">Status Kontrak</p>
                       <p className="font-extrabold text-base">{selectedEmployee.statusKontrak || '-'}</p>
                     </div>
                     {selectedEmployee.tanggalEfektifTidakBekerja && (
-                      <div className="col-span-2 bg-gradient-to-br from-rose-600 to-rose-700 rounded-xl p-4 text-white shadow-md flex justify-between items-center">
+                      <div className="col-span-2 bg-gradient-to-br from-rose-600 to-rose-700 rounded-2xl p-4 text-white shadow-md flex justify-between items-center">
                         <div>
                           <p className="text-rose-100 text-xs uppercase font-bold tracking-wider mb-1">Tgl Efektif Tidak Bekerja</p>
                           <p className="font-bold">{selectedEmployee.tanggalEfektifTidakBekerja}</p>
@@ -453,13 +453,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         <Calendar className="w-6 h-6 text-rose-200 opacity-60" />
                       </div>
                     )}
-                    <div className="bg-[#269ca6] rounded-xl p-4 text-white shadow-md">
-                      <p className="text-[#e2f9fb] text-xs uppercase font-bold tracking-wider mb-1">Sisa Cuti (CT)</p>
-                      <p className="font-extrabold text-lg">{selectedEmployee.sisaCt || '-'}</p>
+                    <div className="bg-[#369CA3] rounded-2xl p-4 text-white shadow-md">
+                      <p className="text-white text-xs uppercase font-bold tracking-wider mb-1">Sisa Cuti (CT)</p>
+                      <p className="font-extrabold text-lg text-white">{selectedEmployee.sisaCt || '-'}</p>
                     </div>
-                    <div className="bg-[#1c7e87] rounded-xl p-4 text-white shadow-md">
-                      <p className="text-[#e2f9fb] text-xs uppercase font-bold tracking-wider mb-1">Jatuh Tempo CT</p>
-                      <p className="font-bold">{selectedEmployee.jatuhTempoCt || '-'}</p>
+                    <div className="bg-[#369CA3] rounded-2xl p-4 text-white shadow-md">
+                      <p className="text-white text-xs uppercase font-bold tracking-wider mb-1">Jatuh Tempo CT</p>
+                      <p className="font-extrabold text-white">{selectedEmployee.jatuhTempoCt || '-'}</p>
                     </div>
                     <div className="col-span-2 bg-gradient-to-r from-[#558ED5] to-[#4379be] rounded-xl p-4 text-white shadow-md flex justify-between items-center">
                       <div>
