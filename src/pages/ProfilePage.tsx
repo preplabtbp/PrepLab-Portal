@@ -22,6 +22,7 @@ import {
 import { DynamicAvatarFrame } from '../components/DynamicAvatarFrame';
 import { PromotionWelcomeModal } from '../components/PromotionWelcomeModal';
 import { ExpAuditModal } from '../components/ExpAuditModal';
+import { formatAvatarUrl } from '../lib/avatarUtils';
 
 export const PRESET_PROFILE_COVERS = [
   {
@@ -418,6 +419,14 @@ export function ProfilePage({
           if (emp?.avatar) {
             setAvatar(emp.avatar);
             localStorage.setItem(`p2h_inspector_avatar_${inspectorNik}`, emp.avatar);
+          } else if (cachedAvatar && cachedAvatar.trim()) {
+            // Jika foto di backend sempat hilang tapi di cache lokal masih ada, pulihkan ke database!
+            setAvatar(cachedAvatar);
+            fetch('/api/employees/avatar', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ nik: inspectorNik, avatar: cachedAvatar.trim() })
+            }).catch(() => {});
           }
           if (emp?.cover) {
             setCover(emp.cover);
@@ -967,9 +976,10 @@ export function ProfilePage({
                   >
                     {avatar ? (
                       <img 
-                        src={avatar} 
+                        src={formatAvatarUrl(avatar)} 
                         alt={inspectorName || 'Foto Profil'} 
                         className="w-full h-full rounded-full object-cover"
+                        referrerPolicy="no-referrer"
                       />
                     ) : (
                       <div 
@@ -1632,7 +1642,7 @@ export function ProfilePage({
                         style={{ borderColor: 'var(--border-main)' }}
                       >
                         {avatar ? (
-                          <img src={avatar} alt="Avatar" className="w-full h-full object-cover rounded-lg" />
+                          <img src={formatAvatarUrl(avatar)} alt="Avatar" className="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" />
                         ) : (
                           <div className="w-full h-full rounded-lg bg-teal-500/20 text-teal-600 flex items-center justify-center font-bold text-sm">
                             {initials}

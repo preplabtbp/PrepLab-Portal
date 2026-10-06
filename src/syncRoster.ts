@@ -194,8 +194,11 @@ export async function syncRosterData(): Promise<{ success: boolean; staffCount: 
     }
 
     if (ghostNiks.length > 0) {
-      console.log(`Menghapus ${ghostNiks.length} karyawan resign/keluar dari database:`, ghostNiks);
-      await db.delete(employees).where(inArray(employees.nik, ghostNiks));
+      console.log(`Menandai ${ghostNiks.length} karyawan resign/keluar di database:`, ghostNiks);
+      // JANGAN hapus baris karyawan dari tabel employees agar foto profile, avatar, password & riwayat akun tidak hilang
+      await db.update(employees)
+        .set({ statusKaryawan: 'Resign' })
+        .where(inArray(employees.nik, ghostNiks));
       await db.delete(roster).where(inArray(roster.nik, ghostNiks));
       resignedCount = ghostNiks.length;
     }
@@ -343,11 +346,14 @@ async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; r
 
   // Upsert employees
   for (const emp of uniqueEmps) {
+    // Spreadsheet Google Sheets tidak mengelola foto avatar/profil atau kredensial akun
+    // Selalu kecualikan kolom ini dari update set agar foto profil karyawan tetap aman
+    const { avatar, cover, passwordHash, firstLoginComplete, homeTutorialCompleted, equippedFrame, equippedTitle, ...safeFields } = emp;
     await db.insert(employees)
       .values(emp)
       .onConflictDoUpdate({
         target: employees.nik,
-        set: emp
+        set: safeFields
       });
   }
 

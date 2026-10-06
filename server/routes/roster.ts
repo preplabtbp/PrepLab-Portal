@@ -481,11 +481,21 @@ router.post("/api/roster/import-excel", async (req, res) => {
       }
 
       for (const emp of uniqueEmpMap.values()) {
+        // Lindungi foto profil (avatar) dan kredensial akun agar tidak tertimpa NULL saat import roster/excel
+        const { avatar, cover, passwordHash, firstLoginComplete, homeTutorialCompleted, equippedFrame, equippedTitle, ...safeFields } = emp;
+        const updateSet: any = { ...safeFields };
+        if (avatar && typeof avatar === 'string' && avatar.trim() && avatar !== 'null') {
+          updateSet.avatar = avatar.trim();
+        }
+        if (cover && typeof cover === 'string' && cover.trim() && cover !== 'null') {
+          updateSet.cover = cover.trim();
+        }
+
         await db.insert(employees)
           .values(emp)
           .onConflictDoUpdate({
             target: employees.nik,
-            set: emp
+            set: updateSet
           });
         updatedEmpsCount++;
       }

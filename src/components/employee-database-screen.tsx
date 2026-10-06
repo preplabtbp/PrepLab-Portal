@@ -1,21 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud, Camera } from 'lucide-react';
 import { Card, Input, Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
 import { EmployeeImportModal } from './EmployeeImportModal';
-
-function getSafeAvatarUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const str = String(url).trim();
-  if (!str || str === '-' || str === '#N/A') return null;
-  if (str.includes('drive.google.com')) {
-    const idMatch = str.match(/\/d\/([a-zA-Z0-9_-]+)/) || str.match(/id=([a-zA-Z0-9_-]+)/);
-    if (idMatch && idMatch[1]) {
-      return `/api/employees/photo/${idMatch[1]}`;
-    }
-  }
-  return str;
-}
+import { toast } from 'sonner';
+import { formatAvatarUrl } from '../lib/avatarUtils';
 
 export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik: string, onBack?: () => void }) {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -26,6 +15,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   const [isSyncing, setIsSyncing] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
 
   const fetchEmployees = async () => {
@@ -72,6 +63,79 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       setSyncFeedback({ type: 'error', message: 'Koneksi gagal: ' + e.message });
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedEmployee) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Harap pilih file gambar (JPG, PNG, WebP)');
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    toast.loading('Mengompresi & memperbarui foto...', { id: 'emp-avatar-upload' });
+
+    try {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = async () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const maxDim = 320;
+            let width = img.width;
+            let height = img.height;
+            if (width > height) {
+              if (width > maxDim) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              }
+            } else {
+              if (height > maxDim) {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Gagal memproses kanvas foto');
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+
+            const res = await fetch('/api/employees/avatar', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ nik: selectedEmployee.nik, avatar: compressedDataUrl })
+            });
+            const resData = await res.json();
+            if (resData.status === 'success') {
+              setSelectedEmployee((prev: any) => ({ ...prev, avatar: compressedDataUrl }));
+              setEmployees((prev: any[]) => prev.map(emp => emp.nik === selectedEmployee.nik ? { ...emp, avatar: compressedDataUrl } : emp));
+              if (selectedEmployee.nik === inspectorNik) {
+                localStorage.setItem(`p2h_inspector_avatar_${inspectorNik}`, compressedDataUrl);
+                window.dispatchEvent(new Event('profile_updated'));
+              }
+              toast.success(`Foto profil ${selectedEmployee.name || 'karyawan'} berhasil diperbarui!`, { id: 'emp-avatar-upload' });
+            } else {
+              throw new Error(resData.message || 'Gagal menyimpan foto ke server');
+            }
+          } catch (uploadErr: any) {
+            toast.error('Gagal mengunggah foto: ' + uploadErr.message, { id: 'emp-avatar-upload' });
+          } finally {
+            setIsUploadingPhoto(false);
+            if (photoInputRef.current) photoInputRef.current.value = '';
+          }
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      setIsUploadingPhoto(false);
+      toast.error('Gagal memproses gambar: ' + err.message, { id: 'emp-avatar-upload' });
     }
   };
 
@@ -156,14 +220,19 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center transition-colors border-b border-slate-50 last:border-0"
                     >
                       <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 mr-3 overflow-hidden bg-[#e6f7f9] text-[#22a7b8] font-bold border border-[#a2e0e8]">
-                        {(() => {
-                          const av = getSafeAvatarUrl(emp.avatar);
-                          return av ? (
-                            <img src={av} alt={emp.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <span>{emp.name?.charAt(0) || '?'}</span>
-                          );
-                        })()}
+                        {emp.avatar ? (
+                          <img 
+                            src={formatAvatarUrl(emp.avatar)} 
+                            alt={emp.name} 
+                            className="w-full h-full object-cover" 
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <span>{emp.name?.charAt(0) || '?'}</span>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-slate-800 truncate">{emp.name}</h4>
@@ -337,22 +406,46 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             <div className="lg:w-80 bg-gradient-to-b from-[#32AEB8] via-[#269ca6] to-[#1c7e87] text-white shrink-0 shadow-2xl z-10 p-6 lg:p-8 flex flex-col items-center lg:items-start text-center lg:text-left relative overflow-hidden border-r border-[#32AEB8]/30">
               <div className="absolute top-0 right-0 p-32 bg-white/10 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2"></div>
               
-              <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-white/20 border-2 border-white/40 overflow-hidden mb-6 flex items-center justify-center shrink-0 shadow-xl relative backdrop-blur-xs ring-4 ring-black/5">
-                {(() => {
-                  const avatarUrl = getSafeAvatarUrl(selectedEmployee.avatar);
-                  return avatarUrl ? (
+              <div className="flex flex-col items-center lg:items-start mb-6 w-full">
+                <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-white/20 border-2 border-white/40 overflow-hidden flex items-center justify-center shrink-0 shadow-xl relative backdrop-blur-xs ring-4 ring-black/5 group">
+                  {selectedEmployee.avatar ? (
                     <img 
-                      src={avatarUrl} 
+                      src={formatAvatarUrl(selectedEmployee.avatar)} 
                       alt={selectedEmployee.name} 
                       className="w-full h-full object-cover" 
+                      referrerPolicy="no-referrer"
                       onError={(e) => {
                         (e.target as HTMLElement).style.display = 'none';
                       }}
                     />
                   ) : (
                     <User className="w-16 h-16 text-white" />
-                  );
-                })()}
+                  )}
+                  {isUploadingPhoto && (
+                    <div className="absolute inset-0 bg-[#1c7e87]/90 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white">
+                      <RefreshCw className="w-6 h-6 animate-spin text-white mb-1" />
+                      <span>Mengunggah...</span>
+                    </div>
+                  )}
+                </div>
+
+                <input 
+                  type="file" 
+                  ref={photoInputRef} 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={handlePhotoUpload} 
+                />
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={isUploadingPhoto}
+                  className="mt-3 text-xs font-bold px-3.5 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-sm border border-white/30 cursor-pointer backdrop-blur-xs"
+                  title="Perbarui atau unggah foto karyawan"
+                >
+                  <Camera className="w-3.5 h-3.5 text-white" />
+                  <span>{selectedEmployee.avatar ? 'Ganti Foto' : 'Unggah Foto'}</span>
+                </button>
               </div>
 
               <h2 className="text-xl lg:text-2xl font-black mb-1 leading-tight text-white drop-shadow-xs">{selectedEmployee.name}</h2>

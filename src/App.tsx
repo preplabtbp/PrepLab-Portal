@@ -22,6 +22,7 @@ import { GamificationAlertCenter } from './components/GamificationAlertCenter';
 import { MeetingRoomDevModal } from './components/MeetingRoomDevModal';
 import { FloatingFeedbackButton } from './components/FloatingFeedbackButton';
 import { initFontSize } from './utils/fontSize';
+import { formatAvatarUrl } from './lib/avatarUtils';
 
 // Initialize portal-wide font scale on boot
 initFontSize();
@@ -269,12 +270,13 @@ export default function App() {
   }, [inspectorNik, syncTick]);
 
   const headerAvatar = React.useMemo(() => {
+    let raw: string | null = null;
     if (inspectorNik) {
       const savedAvatar = localStorage.getItem(`p2h_inspector_avatar_${inspectorNik}`);
-      if (savedAvatar) return savedAvatar;
+      if (savedAvatar) raw = savedAvatar;
     }
-    if (userProfile?.avatar) return userProfile.avatar;
-    return null;
+    if (!raw && userProfile?.avatar) raw = userProfile.avatar;
+    return raw ? formatAvatarUrl(raw) : null;
   }, [inspectorNik, userProfile, syncTick]);
 
   // Real-time Global Portal Presence Registration
@@ -673,12 +675,17 @@ export default function App() {
           if (data.employee.avatar) {
             localStorage.setItem(`p2h_inspector_avatar_${inspectorNik}`, data.employee.avatar);
           } else {
-            localStorage.removeItem(`p2h_inspector_avatar_${inspectorNik}`);
+            // Lindungi foto sebelumnya: jangan pernah hapus cache avatar lokal jika backend belum memiliki foto!
+            // Justru sinkronkan kembali cache lokal ke backend agar foto tersimpan permanen
+            const localCached = localStorage.getItem(`p2h_inspector_avatar_${inspectorNik}`);
+            if (localCached && localCached.trim()) {
+              fetch('/api/employees/avatar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nik: inspectorNik, avatar: localCached.trim() })
+              }).catch(() => {});
+            }
           }
-          // Force a re-render by dispatching a storage event if needed, but the profile-screen and others usually load dynamically.
-          // In App.tsx, the userProfile useMemo might not trigger unless inspectorNik changes.
-          // To fix that, we can reload or rely on next interactions, or state.
-          // We can dispatch a custom event.
           window.dispatchEvent(new Event('profile_updated'));
         }
       } catch (err) {
@@ -1530,7 +1537,7 @@ export default function App() {
             title="Lihat Profile"
           >
             {headerAvatar ? (
-              <img src={headerAvatar} alt={inspectorName || 'Profile'} className="w-full h-full object-cover" />
+              <img src={headerAvatar} alt={inspectorName || 'Profile'} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
               <span className="font-bold font-display text-xs" style={{ color: 'var(--primary, #0f766e)' }}>{inspectorName ? inspectorName.charAt(0).toUpperCase() : '?'}</span>
             )}

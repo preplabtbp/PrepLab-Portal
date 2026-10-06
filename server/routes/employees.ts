@@ -386,14 +386,29 @@ employeesRouter.post("/import", async (req, res) => {
 
 employeesRouter.post("/avatar", async (req, res) => {
   try {
-    const { nik, avatar } = req.body;
+    const { nik, avatar, forceClear } = req.body;
     if (!nik) {
       return res.status(400).json({ status: "error", message: "NIK required" });
     }
+
+    // Lindungi foto sebelumnya: jangan pernah hapus foto jika payload avatar kosong kecuali forceClear: true
+    if (!forceClear && (!avatar || typeof avatar !== 'string' || !avatar.trim() || avatar === 'null')) {
+      return res.status(400).json({ 
+        status: "error", 
+        message: "Data avatar tidak boleh kosong. Foto sebelumnya dipertahankan." 
+      });
+    }
+
+    const finalAvatar = forceClear ? null : avatar.trim();
     const result = await db.update(employees)
-      .set({ avatar: avatar || null })
+      .set({ avatar: finalAvatar })
       .where(eq(employees.nik, nik))
       .returning();
+
+    if (result.length === 0) {
+      return res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan" });
+    }
+
     return res.json({ status: "success", employee: toPublicEmployee(result[0]) || null });
   } catch (error) {
     console.error("Error updating avatar:", error);
