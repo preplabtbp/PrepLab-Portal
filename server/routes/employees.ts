@@ -217,6 +217,23 @@ employeesRouter.post("/", async (req, res) => {
   }
 });
 
+function cleanDateVal(v: any): string | null {
+  if (v === undefined || v === null) return null;
+  const str = String(v).trim();
+  if (!str || str === '-' || str === '#N/A' || str.toLowerCase() === 'null') return null;
+  const num = Number(str);
+  if (!isNaN(num) && num > 20000 && num < 70000 && Number.isInteger(num)) {
+    const date = new Date(Math.round((num - 25569) * 86400 * 1000));
+    if (!isNaN(date.getTime())) {
+      const y = date.getUTCFullYear();
+      const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(date.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+  }
+  return str;
+}
+
 employeesRouter.post("/import", async (req, res) => {
   try {
     const { rows, editorNik } = req.body;
@@ -252,9 +269,9 @@ employeesRouter.post("/import", async (req, res) => {
         continue;
       }
 
-      const rawFoto = normalized['foto'] || normalized['photo'] || normalized['avatar'] || normalized['fotoprofil'] || normalized['image'] || '';
+      const rawFoto = raw['Foto'] || raw['foto'] || normalized['foto'] || normalized['photo'] || normalized['avatar'] || normalized['fotoprofil'] || normalized['kolomfoto'] || normalized['gambar'] || normalized['image'] || '';
       let driveAvatarUrl: string | null = null;
-      if (rawFoto) {
+      if (rawFoto && rawFoto !== '-' && rawFoto !== '#N/A') {
         driveAvatarUrl = await uploadEmployeePhotoToDrive(nik, name, rawFoto);
       }
 
@@ -266,9 +283,9 @@ employeesRouter.post("/import", async (req, res) => {
         poh: normalized['poh'] || null,
         sponsor: normalized['sponsor'] || null,
         statusKaryawan: normalized['statuskaryawan'] || normalized['status'] || null,
-        tanggalEfektifTidakBekerja: normalized['tanggalefektiftidakbekerja'] || normalized['tgleftidakbekerja'] || normalized['tanggaltidakbekerja'] || normalized['efektiftidakbekerja'] || null,
-        tanggalAwalBergabung: normalized['dohawal'] || normalized['doh'] || normalized['tanggalawalbergabung'] || null,
-        tanggalJabatanBaru: normalized['tanggaljabatanbaru'] || normalized['tgljabatanbaru'] || null,
+        tanggalEfektifTidakBekerja: cleanDateVal(normalized['tanggalefektiftidakbekerja'] || normalized['tgleftidakbekerja'] || normalized['tanggaltidakbekerja'] || normalized['efektiftidakbekerja']),
+        tanggalAwalBergabung: cleanDateVal(normalized['dohawal'] || normalized['doh'] || normalized['tanggalawalbergabung']),
+        tanggalJabatanBaru: cleanDateVal(normalized['tanggaljabatanbaru'] || normalized['tgljabatanbaru']),
         masaKerja: normalized['masakerja'] || null,
         masaKerjaJabatanTerakhir: normalized['masakerjajabatanterakhir'] || normalized['masakerjajabatan'] || null,
         department: normalized['departemen'] || normalized['department'] || null,
@@ -277,9 +294,9 @@ employeesRouter.post("/import", async (req, res) => {
         gol: normalized['gol'] || normalized['golongan'] || null,
         jabatan: normalized['jabatanbaru'] || normalized['jabatan'] || null,
         statusKontrak: normalized['statuskontrak'] || null,
-        tanggalPermanent: normalized['tanggalpermanent'] || normalized['tanggalpermanen'] || null,
+        tanggalPermanent: cleanDateVal(normalized['tanggalpermanent'] || normalized['tanggalpermanen']),
         tempatLahir: normalized['tempatlahir'] || null,
-        tanggalLahir: normalized['tanggallahir'] || null,
+        tanggalLahir: cleanDateVal(normalized['tanggallahir']),
         phone: normalized['nomortelppribadi'] || normalized['notelp'] || normalized['nomortelp'] || normalized['phone'] || null,
         keluargaKandung: normalized['keluargakandungyangbisadihubungi'] || normalized['keluargakandung'] || normalized['kelkandung'] || null,
         phoneKeluarga: normalized['notelephonekeluargakandung'] || normalized['notelpkeluarga'] || normalized['telpkel'] || normalized['telpkeluarga'] || null,

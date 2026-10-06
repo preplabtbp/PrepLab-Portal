@@ -142,8 +142,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       }}
                       className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center transition-colors border-b border-slate-50 last:border-0"
                     >
-                      <div className="bg-indigo-50 w-10 h-10 rounded-full flex items-center justify-center shrink-0 mr-3 text-indigo-600 font-bold">
-                        {emp.name?.charAt(0) || '?'}
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 mr-3 overflow-hidden bg-indigo-50 text-indigo-600 font-bold border border-indigo-200">
+                        {emp.avatar ? (
+                          <img src={emp.avatar} alt={emp.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span>{emp.name?.charAt(0) || '?'}</span>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-slate-800 truncate">{emp.name}</h4>
@@ -311,9 +315,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             <div className="lg:w-80 bg-indigo-900 text-white shrink-0 shadow-xl z-10 p-6 lg:p-8 flex flex-col items-center lg:items-start text-center lg:text-left relative overflow-hidden">
               <div className="absolute top-0 right-0 p-32 bg-indigo-800/50 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2"></div>
               
-              <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-indigo-200/20 border-2 border-indigo-300/30 overflow-hidden mb-6 flex items-center justify-center shrink-0">
-                {/* Placeholder Avatar */}
-                <User className="w-16 h-16 text-indigo-200" />
+              <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-indigo-200/20 border-2 border-indigo-300/30 overflow-hidden mb-6 flex items-center justify-center shrink-0 shadow-lg relative bg-indigo-950/40">
+                {selectedEmployee.avatar ? (
+                  <img 
+                    src={selectedEmployee.avatar} 
+                    alt={selectedEmployee.name} 
+                    className="w-full h-full object-cover" 
+                  />
+                ) : (
+                  <User className="w-16 h-16 text-indigo-200" />
+                )}
               </div>
 
               <h2 className="text-xl lg:text-2xl font-bold mb-1 leading-tight">{selectedEmployee.name}</h2>

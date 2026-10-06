@@ -5,6 +5,185 @@ import {
 } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
+
+function formatExcelDate(val: any): string {
+  if (val === undefined || val === null || val === '') return '';
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return '';
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const num = Number(val);
+  if (!isNaN(num) && num > 20000 && num < 70000 && Number.isInteger(num)) {
+    const date = new Date(Math.round((num - 25569) * 86400 * 1000));
+    if (!isNaN(date.getTime())) {
+      const y = date.getUTCFullYear();
+      const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(date.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+  }
+  return String(val).trim();
+}
+
+async function extractImagesFromXlsx(data: ArrayBuffer | Uint8Array): Promise<{
+  cellImageMap: Map<string, string>;
+  sortedPhotos: string[];
+}> {
+  const cellImageMap = new Map<string, string>();
+  const rawList: { row: number; col: number; dataUrl: string }[] = [];
+
+  try {
+    const zip = await JSZip.loadAsync(data);
+    const fileNames = Object.keys(zip.files);
+
+    // 1. Drawings
+    const drawingFiles = fileNames.filter(f => f.startsWith('xl/drawings/drawing') && f.endsWith('.xml'));
+    for (const dFile of drawingFiles) {
+      const relsFile = dFile.replace('xl/drawings/', 'xl/drawings/_rels/') + '.rels';
+      const relsZip = zip.file(relsFile);
+      const drawingZip = zip.file(dFile);
+      if (!drawingZip) continue;
+
+      const drawingXml = await drawingZip.async('string');
+      const relsXml = relsZip ? await relsZip.async('string') : '';
+
+      const relsMap = new Map<string, string>();
+      if (relsXml) {
+        const relMatches = relsXml.matchAll(/<Relationship[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g);
+        for (const match of relMatches) {
+          let target = match[2];
+          if (target.startsWith('../')) target = 'xl/' + target.replace(/^\.\.\//, '');
+          else if (!target.startsWith('xl/')) target = 'xl/drawings/' + target;
+          relsMap.set(match[1], target);
+        }
+      }
+
+      const anchorRegex = /<xdr:(?:twoCellAnchor|oneCellAnchor|absoluteAnchor)[^>]*>([\s\S]*?)<\/xdr:(?:twoCellAnchor|oneCellAnchor|absoluteAnchor)>/g;
+      let anchorMatch;
+      while ((anchorMatch = anchorRegex.exec(drawingXml)) !== null) {
+        const anchorContent = anchorMatch[1];
+        const fromBlock = anchorContent.match(/<xdr:from>([\s\S]*?)<\/xdr:from>/i)?.[1] || anchorContent;
+        const colMatch = fromBlock.match(/<xdr:col>(\d+)<\/xdr:col>/i);
+        const rowMatch = fromBlock.match(/<xdr:row>(\d+)<\/xdr:row>/i);
+        const blipMatch = anchorContent.match(/r:embed="([^"]+)"/i) || anchorContent.match(/embed="([^"]+)"/i);
+
+        if (blipMatch) {
+          const rId = blipMatch[1];
+          const mediaPath = relsMap.get(rId);
+
+          if (mediaPath && zip.file(mediaPath)) {
+            const mediaZip = zip.file(mediaPath);
+            if (mediaZip) {
+              const base64 = await mediaZip.async('base64');
+              const ext = mediaPath.split('.').pop()?.toLowerCase() || 'png';
+              const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'png' ? 'image/png' : 'image/webp';
+              const dataUrl = `data:${mime};base64,${base64}`;
+
+              const col = colMatch ? parseInt(colMatch[1], 10) : 29;
+              const row = rowMatch ? parseInt(rowMatch[1], 10) : rawList.length;
+
+              cellImageMap.set(`${row}_${col}`, dataUrl);
+              cellImageMap.set(`row_${row}`, dataUrl);
+
+              // If top-left anchored in row 0 (or header row), also map to row 1 (first data row)
+              if (row === 0) {
+                cellImageMap.set(`1_${col}`, dataUrl);
+                cellImageMap.set(`row_1`, dataUrl);
+              }
+
+              rawList.push({ row, col, dataUrl });
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Modern cell images (cellimages.xml)
+    if (zip.file('xl/cellimages.xml')) {
+      const cellImgXml = await zip.file('xl/cellimages.xml')!.async('string');
+      const relsFile = 'xl/_rels/cellimages.xml.rels';
+      const relsZip = zip.file(relsFile);
+      const relsXml = relsZip ? await relsZip.async('string') : '';
+
+      const relsMap = new Map<string, string>();
+      if (relsXml) {
+        const relMatches = relsXml.matchAll(/<Relationship[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g);
+        for (const match of relMatches) {
+          let target = match[2];
+          if (target.startsWith('../')) target = 'xl/' + target.replace(/^\.\.\//, '');
+          else if (!target.startsWith('xl/')) target = 'xl/' + target;
+          relsMap.set(match[1], target);
+        }
+      }
+
+      const cellImgMatches = cellImgXml.matchAll(/<etc:cellImage[^>]*>[\s\S]*?<a:blip[^>]*r:embed="([^"]+)"/g);
+      let imgIdx = 0;
+      for (const m of cellImgMatches) {
+        const rId = m[1];
+        const mediaPath = relsMap.get(rId);
+        if (mediaPath && zip.file(mediaPath)) {
+          const mediaZip = zip.file(mediaPath);
+          if (mediaZip) {
+            const base64 = await mediaZip.async('base64');
+            const ext = mediaPath.split('.').pop()?.toLowerCase() || 'png';
+            const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'png' ? 'image/png' : 'image/webp';
+            const dataUrl = `data:${mime};base64,${base64}`;
+            cellImageMap.set(`seq_${imgIdx}`, dataUrl);
+            rawList.push({ row: imgIdx, col: 29, dataUrl });
+            imgIdx++;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Error extracting images from xlsx zip archive:', e);
+  }
+
+  // Sort rawList by row index ascending to guarantee sequential order alignment
+  rawList.sort((a, b) => a.row - b.row);
+  const sortedPhotos = rawList.map(item => item.dataUrl);
+
+  return { cellImageMap, sortedPhotos };
+}
+
+async function compressImageBase64(dataUrl: string, maxDimension = 450, quality = 0.8): Promise<string> {
+  if (!dataUrl || !dataUrl.startsWith('data:image')) return dataUrl;
+  return new Promise((resolve) => {
+    try {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } else {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    } catch {
+      resolve(dataUrl);
+    }
+  });
+}
 
 export const MASTER_EMPLOYEE_COLUMNS = [
   "No.",
@@ -52,6 +231,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
   const [detectedHeaders, setDetectedHeaders] = useState<string[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number; percent: number; message: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<{
     status: 'success' | 'error';
@@ -174,7 +354,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
     }
   };
 
-  const processFile = (selectedFile: File) => {
+  const processFile = async (selectedFile: File) => {
     setFile(selectedFile);
     setIsParsing(true);
     setErrorMsg(null);
@@ -205,32 +385,193 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         }
       });
     } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const json: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+      try {
+        const buffer = await selectedFile.arrayBuffer();
+        const data = new Uint8Array(buffer);
 
-          setIsParsing(false);
-          if (json && json.length > 0) {
-            setParsedRows(json);
-            setDetectedHeaders(Object.keys(json[0] || {}));
-          } else {
-            setErrorMsg("Sheet Excel kosong.");
-          }
-        } catch (err: any) {
-          setIsParsing(false);
-          setErrorMsg("Gagal membaca Excel: " + err.message);
+        // 1. Extract embedded images if .xlsx
+        let cellImageMap = new Map<string, string>();
+        let sortedPhotos: string[] = [];
+        if (fileName.endsWith('.xlsx')) {
+          const imgResult = await extractImagesFromXlsx(data);
+          cellImageMap = imgResult.cellImageMap;
+          sortedPhotos = imgResult.sortedPhotos;
         }
-      };
-      reader.onerror = () => {
+
+        // 2. Read workbook with full attributes
+        const workbook = XLSX.read(data, { 
+          type: 'array',
+          cellDates: true,
+          cellFormula: true,
+          cellStyles: true
+        });
+
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        if (!worksheet || !worksheet['!ref']) {
+          setIsParsing(false);
+          setErrorMsg("Sheet Excel kosong.");
+          return;
+        }
+
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+
+        // Find header row (check row 0, 1, 2)
+        let headerRowIdx = 0;
+        for (let r = 0; r <= Math.min(3, range.e.r); r++) {
+          let rowCells: string[] = [];
+          for (let c = range.s.c; c <= range.e.c; c++) {
+            const cell = worksheet[XLSX.utils.encode_cell({ r, c })];
+            if (cell && cell.v !== undefined) {
+              rowCells.push(String(cell.v).toLowerCase().trim());
+            }
+          }
+          const rowText = rowCells.join(' ');
+          if (rowText.includes('nik') || rowText.includes('nama') || rowText.includes('ktp') || rowText.includes('status')) {
+            headerRowIdx = r;
+            break;
+          }
+        }
+
+        // Build header mapping: colIndex -> headerName
+        const headers: { colIdx: number; name: string; clean: string }[] = [];
+        const detectedHeaderNames: string[] = [];
+
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const cell = worksheet[XLSX.utils.encode_cell({ r: headerRowIdx, c })];
+          let headerName = cell && cell.v !== undefined ? String(cell.v).trim() : '';
+
+          // Fallback to MASTER_EMPLOYEE_COLUMNS if header text is blank
+          if (!headerName && c < MASTER_EMPLOYEE_COLUMNS.length) {
+            headerName = MASTER_EMPLOYEE_COLUMNS[c];
+          } else if (!headerName) {
+            // Column AD is index 29 (30th column)
+            if (c === 29) {
+              headerName = 'Foto';
+            } else {
+              headerName = `Col_${XLSX.utils.encode_col(c)}`;
+            }
+          }
+
+          const clean = headerName.toLowerCase().replace(/[^a-z0-9]/g, '');
+          headers.push({ colIdx: c, name: headerName, clean });
+          detectedHeaderNames.push(headerName);
+        }
+
+        // Ensure "Foto" is recognized if column AD (index 29) exists
+        if (headers.some(h => h.colIdx === 29) && !headers.some(h => h.clean === 'foto' || h.clean === 'photo')) {
+          const col29 = headers.find(h => h.colIdx === 29);
+          if (col29) {
+            col29.name = 'Foto';
+            col29.clean = 'foto';
+          }
+        }
+
+        setDetectedHeaders(detectedHeaderNames);
+
+        // Process data rows
+        const rows: any[] = [];
+        let rowCounter = 0;
+
+        for (let r = headerRowIdx + 1; r <= range.e.r; r++) {
+          const rowObj: Record<string, any> = {};
+          let hasAnyData = false;
+
+          for (const h of headers) {
+            const cellAddr = XLSX.utils.encode_cell({ r, c: h.colIdx });
+            const cell = worksheet[cellAddr];
+            const isFotoCol = h.clean === 'foto' || h.clean === 'photo' || h.clean === 'avatar' || h.clean === 'gambar' || h.clean === 'image' || h.colIdx === 29;
+            const isDateCol = h.clean.includes('tanggal') || h.clean.includes('tgl') || h.clean === 'dohawal' || h.clean === 'doh';
+
+            let val: any = '';
+
+            // 1. Check embedded image in xlsx zip
+            const imgKey = `${r}_${h.colIdx}`;
+            if (cellImageMap.has(imgKey)) {
+              val = cellImageMap.get(imgKey);
+            } else if (isFotoCol && cellImageMap.has(`row_${r}`)) {
+              val = cellImageMap.get(`row_${r}`);
+            } else if (isFotoCol && rowCounter === 0 && (cellImageMap.has('1_29') || cellImageMap.has('0_29') || cellImageMap.has('row_1') || cellImageMap.has('row_0'))) {
+              val = cellImageMap.get('1_29') || cellImageMap.get('0_29') || cellImageMap.get('row_1') || cellImageMap.get('row_0');
+            } else if (isFotoCol && cellImageMap.has(`seq_${rowCounter}`)) {
+              val = cellImageMap.get(`seq_${rowCounter}`);
+            } else if (isFotoCol && sortedPhotos[rowCounter]) {
+              val = sortedPhotos[rowCounter];
+            }
+            // 2. Check hyperlink Target
+            else if (cell && cell.l && cell.l.Target) {
+              val = cell.l.Target;
+            }
+            // 3. Check formula
+            else if (cell && cell.f) {
+              const fStr = String(cell.f);
+              const linkMatch = fStr.match(/HYPERLINK\s*\(\s*["']([^"']+)["']/i) || fStr.match(/IMAGE\s*\(\s*["']([^"']+)["']/i);
+              if (linkMatch && linkMatch[1]) {
+                val = linkMatch[1];
+              } else {
+                val = cell.w !== undefined ? cell.w : cell.v !== undefined ? cell.v : '';
+              }
+            }
+            // 4. Check formatted date or standard value
+            else if (cell) {
+              if (isDateCol) {
+                val = formatExcelDate(cell.v !== undefined ? cell.v : cell.w);
+              } else {
+                val = cell.w !== undefined ? String(cell.w).trim() : cell.v !== undefined ? String(cell.v).trim() : '';
+              }
+            }
+
+            // Also format any date serial number in 'tanggal_efektif_tidak_bekerja' or date columns
+            if (isDateCol && typeof val === 'string' && /^\d{5}$/.test(val)) {
+              val = formatExcelDate(Number(val));
+            }
+
+            if (val !== undefined && val !== null && val !== '') {
+              hasAnyData = true;
+            }
+
+            rowObj[h.name] = val;
+
+            // Normalize standard key access
+            if (h.clean === 'nik') rowObj['NIK'] = val;
+            if (h.clean === 'nama' || h.clean === 'name') rowObj['Nama'] = val;
+            if (h.clean === 'jabatanbaru' || h.clean === 'jabatan') rowObj['Jabatan Baru'] = val;
+            if (h.clean === 'statuskaryawan' || h.clean === 'status') rowObj['Status Karyawan'] = val;
+            if (h.clean === 'tanggalefektiftidakbekerja' || h.clean === 'tgleftidakbekerja') rowObj['Tanggal Efektif Tidak Bekerja'] = val;
+            if (h.clean === 'sponsor') rowObj['Sponsor'] = val;
+            if (isFotoCol) rowObj['Foto'] = val;
+          }
+
+          // Fallback for Foto if missing
+          if (!rowObj['Foto'] || rowObj['Foto'] === '-') {
+            if (cellImageMap.has(`${r}_29`)) {
+              rowObj['Foto'] = cellImageMap.get(`${r}_29`);
+            } else if (cellImageMap.has(`row_${r}`)) {
+              rowObj['Foto'] = cellImageMap.get(`row_${r}`);
+            } else if (rowCounter === 0 && (cellImageMap.has('1_29') || cellImageMap.has('0_29') || cellImageMap.has('row_1') || cellImageMap.has('row_0'))) {
+              rowObj['Foto'] = cellImageMap.get('1_29') || cellImageMap.get('0_29') || cellImageMap.get('row_1') || cellImageMap.get('row_0');
+            } else if (sortedPhotos[rowCounter]) {
+              rowObj['Foto'] = sortedPhotos[rowCounter];
+            }
+          }
+
+          const hasNikOrName = rowObj['NIK'] || rowObj['Nama'] || (headers[1] && rowObj[headers[1].name]);
+          if (hasAnyData && hasNikOrName && String(rowObj['NIK'] || '').toUpperCase() !== 'NIK') {
+            rows.push(rowObj);
+            rowCounter++;
+          }
+        }
+
         setIsParsing(false);
-        setErrorMsg("Gagal membaca file.");
-      };
-      reader.readAsArrayBuffer(selectedFile);
+        if (rows.length > 0) {
+          setParsedRows(rows);
+        } else {
+          setErrorMsg("Tidak ada data karyawan yang valid ditemukan di sheet Excel.");
+        }
+      } catch (err: any) {
+        setIsParsing(false);
+        setErrorMsg("Gagal membaca Excel: " + err.message);
+      }
     } else {
       setIsParsing(false);
       setErrorMsg("Format file tidak didukung. Harap gunakan .csv, .xlsx, atau .xls");
@@ -243,40 +584,90 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
     setErrorMsg(null);
     setImportResult(null);
 
-    try {
-      const res = await fetch('/api/employees/import', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-nik': inspectorNik
-        },
-        body: JSON.stringify({
-          rows: parsedRows,
-          editorNik: inspectorNik
-        })
-      });
+    const BATCH_SIZE = 20;
+    const totalRows = parsedRows.length;
+    let totalInserted = 0;
+    let totalUpdated = 0;
+    let totalErrors = 0;
+    const allErrors: string[] = [];
 
-      const data = await res.json();
-      if (res.ok && data.status === 'success') {
-        setImportResult({
-          status: 'success',
-          message: data.message,
-          stats: data.stats
+    try {
+      for (let i = 0; i < totalRows; i += BATCH_SIZE) {
+        const batch = parsedRows.slice(i, i + BATCH_SIZE);
+        const currentProcessed = Math.min(i + batch.length, totalRows);
+        const percent = Math.round((currentProcessed / totalRows) * 100);
+
+        setImportProgress({
+          current: currentProcessed,
+          total: totalRows,
+          percent,
+          message: `Mengunggah data & foto ${currentProcessed} dari ${totalRows} karyawan (${percent}%)...`
         });
-        onSuccess();
-      } else {
-        setImportResult({
-          status: 'error',
-          message: data.message || "Gagal mengimport data."
+
+        // Compress images client-side before sending over the network
+        const processedBatch = await Promise.all(
+          batch.map(async (row) => {
+            const foto = row['Foto'] || row['foto'];
+            if (foto && typeof foto === 'string' && foto.startsWith('data:image')) {
+              try {
+                const compressed = await compressImageBase64(foto, 450, 0.82);
+                return { ...row, Foto: compressed };
+              } catch {
+                return row;
+              }
+            }
+            return row;
+          })
+        );
+
+        const res = await fetch('/api/employees/import', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-nik': inspectorNik
+          },
+          body: JSON.stringify({
+            rows: processedBatch,
+            editorNik: inspectorNik
+          })
         });
+
+        if (!res.ok) {
+          const textErr = await res.text();
+          throw new Error(`Server error (${res.status}): ${textErr.slice(0, 120)}`);
+        }
+
+        const data = await res.json();
+        if (data.stats) {
+          totalInserted += data.stats.inserted || 0;
+          totalUpdated += data.stats.updated || 0;
+          totalErrors += data.stats.errors || 0;
+          if (Array.isArray(data.stats.errorList)) {
+            allErrors.push(...data.stats.errorList);
+          }
+        }
       }
+
+      setImportResult({
+        status: 'success',
+        message: `Import berhasil selesai! ${totalUpdated} diperbarui, ${totalInserted} ditambahkan ke sistem.`,
+        stats: {
+          total: totalRows,
+          updated: totalUpdated,
+          inserted: totalInserted,
+          errors: totalErrors,
+          errorList: allErrors.slice(0, 10)
+        }
+      });
+      onSuccess();
     } catch (err: any) {
       setImportResult({
         status: 'error',
-        message: "Koneksi server gagal: " + err.message
+        message: "Proses import terhenti: " + (err.message || 'Koneksi terputus.')
       });
     } finally {
       setIsImporting(false);
+      setImportProgress(null);
     }
   };
 
@@ -490,11 +881,19 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                   }`}>
                     {hasNameHeader ? <Check className="w-3 h-3" /> : '✕'} Nama
                   </span>
-                  <span className={`px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-                    hasFotoHeader ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
-                  }`}>
-                    <ImageIcon className="w-3 h-3" /> Kolom Foto
-                  </span>
+                  {(() => {
+                    const fotoCount = parsedRows.filter(r => {
+                      const f = r['Foto'] || r['foto'] || r['Photo'] || r['avatar'] || '';
+                      return Boolean(f && String(f).trim() && String(f).trim() !== '-');
+                    }).length;
+                    return (
+                      <span className={`px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                        fotoCount > 0 || hasFotoHeader ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                      }`}>
+                        <ImageIcon className="w-3 h-3" /> Kolom Foto ({fotoCount} Terdeteksi)
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -534,13 +933,26 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                               {status}
                             </span>
                           </td>
-                          <td className="p-2.5 text-slate-600">{tglOff || '-'}</td>
+                          <td className="p-2.5 text-slate-600 font-mono text-[11px]">{tglOff || '-'}</td>
                           <td className="p-2.5 text-slate-600">{sponsor}</td>
                           <td className="p-2.5">
-                            {foto ? (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1 w-fit">
-                                <Check className="w-2.5 h-2.5" /> Terisi
-                              </span>
+                            {foto && foto !== '-' ? (
+                              <div className="flex items-center gap-1.5">
+                                {foto.startsWith('data:image') || foto.startsWith('http') ? (
+                                  <img 
+                                    src={foto} 
+                                    alt="Avatar" 
+                                    className="w-6 h-6 rounded-full object-cover border border-indigo-300 shadow-xs shrink-0" 
+                                  />
+                                ) : (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    Link
+                                  </span>
+                                )}
+                                <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-0.5">
+                                  <Check className="w-2.5 h-2.5" /> Ada
+                                </span>
+                              </div>
                             ) : (
                               <span className="text-slate-400 text-[10px]">-</span>
                             )}
@@ -561,33 +973,58 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-slate-200 flex items-center justify-between bg-white">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-          >
-            Tutup
-          </button>
-
-          <button
-            type="button"
-            disabled={parsedRows.length === 0 || isImporting || isParsing || !hasNikHeader}
-            onClick={handleExecuteImport}
-            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-2"
-          >
-            {isImporting ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Mengimport {parsedRows.length} Karyawan...</span>
-              </>
-            ) : (
-              <>
-                <span>Mulai Import & Update Database</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
+        <div className="p-4 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white">
+          <div className="flex-1">
+            {isImporting && importProgress && (
+              <div className="space-y-1.5 mr-0 sm:mr-4">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="text-indigo-700 flex items-center gap-1.5">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    {importProgress.message}
+                  </span>
+                  <span className="text-slate-500 font-mono">{importProgress.percent}%</span>
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                  <div 
+                    className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${importProgress.percent}%` }}
+                  />
+                </div>
+              </div>
             )}
-          </button>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 shrink-0">
+            <button
+              type="button"
+              disabled={isImporting}
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Tutup
+            </button>
+
+            <button
+              type="button"
+              disabled={parsedRows.length === 0 || isImporting || isParsing || !hasNikHeader}
+              onClick={handleExecuteImport}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-2"
+            >
+              {isImporting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>
+                    Proses ({importProgress ? `${importProgress.current}/${importProgress.total}` : 'Memulai...'})
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span>Mulai Import & Update Database</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
