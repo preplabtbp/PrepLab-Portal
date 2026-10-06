@@ -1,25 +1,45 @@
 import { toast } from 'sonner';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { uploadPhotoToDrive } from '../../sheets-api';
 import { Card, Button, Input, Select } from '../ui';
-import { Camera, PlusCircle, Pill } from 'lucide-react';
+import { Camera, PlusCircle, Pill, Info, ShieldAlert } from 'lucide-react';
 import { InspectorSignatures, SignatureData } from '../InspectorSignatures';
+
+const EXCLUDED_P3K_NAMES = ['gunting', 'lampu senter', 'pinset', 'silet'];
+
+const isExcludedP3KItem = (itemName: string) => {
+  if (!itemName) return false;
+  const lower = itemName.trim().toLowerCase();
+  return EXCLUDED_P3K_NAMES.some(name => lower === name || lower.startsWith(name + ' ') || lower.endsWith(' ' + name));
+};
 
 export function FormP3K({ data, inspectorName, inspectorNik, onSubmit, autoFillAllYa }: { data: any[], inspectorName: string, inspectorNik: string, onSubmit: (payload: any) => void, autoFillAllYa?: number }) {
   const [answers, setAnswers] = useState<Record<string, any>>({});
 
+  // Filter out items not provided by safety team from displayed questions
+  const activeQuestions = useMemo(() => {
+    return (data || []).filter(q => !isExcludedP3KItem(q.item || q.questionText || ''));
+  }, [data]);
+
+  // Keep reference of excluded questions to preserve official standard and unit
+  const excludedQuestions = useMemo(() => {
+    return (data || []).filter(q => isExcludedP3KItem(q.item || q.questionText || ''));
+  }, [data]);
+
   useEffect(() => {
-    if (autoFillAllYa && autoFillAllYa > 0 && data && data.length > 0) {
+    if (autoFillAllYa && autoFillAllYa > 0 && activeQuestions.length > 0) {
       const allAnswers: Record<string, any> = {};
-      data.forEach(q => {
+      activeQuestions.forEach(q => {
         const key = q.item || q.id_pertanyaan || q.idPertanyaan || q.id;
         if (key) {
-          allAnswers[key] = { status: 'LENGKAP', ket: '' };
+          const numMatch = (q.info1 || '').match(/\d+/);
+          const defaultAktual = numMatch ? numMatch[0] : '1';
+          allAnswers[key] = { stok: 'Ada', aktual: defaultAktual, exp: '', ket: '' };
         }
       });
       setAnswers(allAnswers);
     }
-  }, [autoFillAllYa, data]);
+  }, [autoFillAllYa, activeQuestions]);
   const [tambahan, setTambahan] = useState<any[]>([
     { id: 1, item: '', stok: '', aktual: '', satuan: '', expDate: '', ket: '' },
     { id: 2, item: '', stok: '', aktual: '', satuan: '', expDate: '', ket: '' }
@@ -103,7 +123,9 @@ export function FormP3K({ data, inspectorName, inspectorNik, onSubmit, autoFillA
     }
 
     const payload: any[] = [];
-    data.forEach(q => {
+    
+    // 1. Process active inspected items (excluding Gunting, Lampu senter, Pinset, Silet)
+    activeQuestions.forEach(q => {
       const ans = answers[q.item] || {};
       payload.push({
         item: q.item,
@@ -114,6 +136,43 @@ export function FormP3K({ data, inspectorName, inspectorNik, onSubmit, autoFillA
         expDate: ans.exp || '',
         keterangan: ans.ket || ''
       });
+    });
+
+    // 2. Automatically populate excluded items as 'Kosong' with keterangan 'Tidak disediakan'
+    const handledExcluded = new Set<string>();
+    excludedQuestions.forEach(q => {
+      handledExcluded.add(q.item.toLowerCase());
+      payload.push({
+        item: q.item,
+        standar: q.info1 || '-',
+        ketersediaan: 'Kosong',
+        jumlah: '0',
+        satuan: q.info2 || '-',
+        expDate: '',
+        keterangan: 'Tidak disediakan'
+      });
+    });
+
+    // Safety fallback: Ensure all 4 items are present in payload even if missing from input data
+    const defaultExcludedList = [
+      { item: 'Gunting', standar: '1 buah', satuan: 'buah' },
+      { item: 'Lampu senter', standar: '1 buah', satuan: 'buah' },
+      { item: 'Pinset', standar: '1 buah', satuan: 'buah' },
+      { item: 'Silet', standar: '2 pasang', satuan: 'pasang' }
+    ];
+
+    defaultExcludedList.forEach(def => {
+      if (!handledExcluded.has(def.item.toLowerCase()) && !payload.some(p => p.item.toLowerCase() === def.item.toLowerCase())) {
+        payload.push({
+          item: def.item,
+          standar: def.standar,
+          ketersediaan: 'Kosong',
+          jumlah: '0',
+          satuan: def.satuan,
+          expDate: '',
+          keterangan: 'Tidak disediakan'
+        });
+      }
     });
 
     tambahan.forEach(t => {
@@ -139,7 +198,20 @@ export function FormP3K({ data, inspectorName, inspectorNik, onSubmit, autoFillA
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {data.map((q, idx) => {
+      {/* Notice box regarding items not provided by safety */}
+      <div className="bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/80 rounded-xl p-3.5 text-xs text-sky-800 dark:text-sky-300 flex items-start gap-3 shadow-xs">
+        <div className="p-1 rounded-lg bg-sky-100 dark:bg-sky-900/60 text-sky-600 dark:text-sky-300 shrink-0 mt-0.5">
+          <Info className="w-4 h-4" />
+        </div>
+        <div>
+          <h6 className="font-bold text-sky-900 dark:text-sky-200">Standar Khusus Item Kotak P3K:</h6>
+          <p className="mt-0.5 text-sky-700 dark:text-sky-300 leading-relaxed text-[11px] sm:text-xs">
+            Item <strong>Gunting, Lampu Senter, Pinset, dan Silet</strong> memang tidak disediakan dari tim safety. Keempat item ini telah dihilangkan dari pertanyaan inspeksi dan otomatis terisi <strong>Kosong (Keterangan: Tidak disediakan)</strong> pada laporan rekapan.
+          </p>
+        </div>
+      </div>
+
+      {activeQuestions.map((q, idx) => {
         const ans = answers[q.item] || {};
         return (
           <Card key={idx} className="border-l-4 border-l-blue-500 p-4 space-y-4 bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)]">

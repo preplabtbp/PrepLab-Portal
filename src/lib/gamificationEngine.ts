@@ -124,12 +124,12 @@ export const EXP_SOURCES_CONFIG: ExpSourceDefinition[] = [
   },
   {
     key: 'BULLETIN',
-    name: 'Diskusi & Baca Buletin K3 (Maks 5/Hari)',
+    name: 'Diskusi & Baca Labnote K3 (Maks 5/Hari)',
     category: 'community',
     icon: '📰',
     unit: 'Komentar',
     weight: 10,
-    description: 'Membaca dan berdiskusi pada artikel buletin K3 (maksimal perolehan EXP 5 komentar per hari kalender)'
+    description: 'Membaca dan berdiskusi pada artikel Labnote K3 (maksimal perolehan EXP 5 komentar per hari kalender)'
   },
   {
     key: 'P5M_SPEAKER',
@@ -313,17 +313,17 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     ]
   },
 
-  // 8. Komunikasi & Buletin Kerja (bulletin_comments & posts) - NON-HIDDEN TASK RUTIN
+  // 8. Komunikasi & Labnote Kerja (bulletin_comments & posts) - NON-HIDDEN TASK RUTIN
   {
     id: 'ach_bulletin',
     code: 'BRANCH_BULLETIN',
-    name: 'Field Intelligence & Bulletin',
+    name: 'Field Intelligence & Labnote',
     category: 'community',
     icon: '📰',
-    unit: 'Aksi Diskusi Buletin',
-    description: 'Menerbitkan topik buletin atau mengirimkan komentar pembaruan progres kerja.',
+    unit: 'Aksi Diskusi Labnote',
+    description: 'Menerbitkan topik Labnote atau mengirimkan komentar pembaruan progres kerja.',
     isHidden: false,
-    howToGet: 'Buka menu Papan Buletin, kirimkan komentar tanggapan, konfirmasi pekerjaan, atau update informasi pada postingan buletin.',
+    howToGet: 'Buka menu Papan Labnote, kirimkan komentar tanggapan, konfirmasi pekerjaan, atau update informasi pada postingan Labnote.',
     tiers: [
       { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 5, xpReward: 15, titleReward: 'Field Correspondent', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
       { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 25, xpReward: 30, titleReward: 'Intelligence Operative', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },
@@ -537,7 +537,7 @@ export const TIERED_ACHIEVEMENTS: AchievementBranch[] = [
     description: 'Membuktikan kepiawaian serba bisa dengan aktif berkontribusi di berbagai modul portal yang berbeda.',
     isHidden: true,
     hiddenHint: 'Seorang komandan sejati tidak hanya menguasai satu bilah senjata, melainkan memahami denyut nadi di setiap penjuru benteng komando.',
-    howToGet: 'Pencapaian rahasia: Miliki kontribusi aktif minimal di 3, 5, 8, hingga 10 modul berbeda dari total 13 modul operasional PrepLab (KTA, Inspeksi, Penuntasan Temuan, Buat WO, Selesai WO, Cuti Site, Feedback, Quotes, Tema K3, Buletin, P5M, Kuis 100, Login Streak).',
+    howToGet: 'Pencapaian rahasia: Miliki kontribusi aktif minimal di 3, 5, 8, hingga 10 modul berbeda dari total 13 modul operasional PrepLab (KTA, Inspeksi, Penuntasan Temuan, Buat WO, Selesai WO, Cuti Site, Feedback, Quotes, Tema K3, Labnote, P5M, Kuis 100, Login Streak).',
     tiers: [
       { tierLevel: 1, tierName: 'Tier I (Bronze)', requiredCount: 3, xpReward: 30, titleReward: 'Versatile Operator', badgeColor: 'border-amber-700/60 bg-amber-900/20 text-amber-300' },
       { tierLevel: 2, tierName: 'Tier II (Silver)', requiredCount: 5, xpReward: 75, titleReward: 'Tactical Polymath', badgeColor: 'border-slate-300 bg-slate-500/20 text-slate-100' },

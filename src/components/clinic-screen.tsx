@@ -92,10 +92,26 @@ const SECTION_OPTIONS = [
   'Laboratory',
   'Maintenance',
   'Quality Assurance',
+  'Inventory Control',
+  'Admin / HR',
   'General',
   'HSE / Safety',
-  'Admin / HR'
+  'Manager',
+  'CREW'
 ];
+
+export const normalizeSectionName = (raw?: string | null): string => {
+  if (!raw) return 'Preparation';
+  const s = raw.trim();
+  const lower = s.toLowerCase();
+  if (lower === 'qa' || lower.includes('quality')) return 'Quality Assurance';
+  if (lower === 'prep' || lower === 'preparation' || lower.includes('preparation')) return 'Preparation';
+  if (lower === 'lab' || lower === 'laboratory' || lower.includes('laboratory')) return 'Laboratory';
+  if (lower === 'maint' || lower === 'maintenance' || lower.includes('maintenance')) return 'Maintenance';
+  if (lower.includes('inventory')) return 'Inventory Control';
+  if (lower === 'admin' || lower.includes('administration') || lower.includes('hr')) return 'Admin / HR';
+  return s;
+};
 
 const CATEGORY_OPTIONS = [
   'ALL',
@@ -178,6 +194,14 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
   const [formRecommendation, setFormRecommendation] = useState('Fit to Work');
   const [formDoctorOrMedicName, setFormDoctorOrMedicName] = useState('');
   const [formNotes, setFormNotes] = useState('');
+  const [formReporterNik, setFormReporterNik] = useState(inspectorNik || '');
+  const [formReporterName, setFormReporterName] = useState(inspectorName || '');
+
+  // Synchronize default reporter when props change
+  useEffect(() => {
+    if (!formReporterNik && inspectorNik) setFormReporterNik(inspectorNik);
+    if (!formReporterName && inspectorName) setFormReporterName(inspectorName);
+  }, [inspectorNik, inspectorName]);
 
   // Autocomplete state
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
@@ -276,17 +300,52 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
     ).slice(0, 12);
   }, [employees, employeeSearchTerm]);
 
-  // Select employee from autocomplete -> AUTOFILL all fields
+  // Dynamic available sections list to guarantee all employee sections can be selected
+  const availableSections = useMemo(() => {
+    const list: string[] = [
+      'Preparation',
+      'Laboratory',
+      'Maintenance',
+      'Quality Assurance',
+      'Inventory Control',
+      'Admin / HR',
+      'General',
+      'HSE / Safety',
+      'Manager',
+      'CREW'
+    ];
+    employees.forEach(emp => {
+      if (emp.section && emp.section.trim()) {
+        const norm = normalizeSectionName(emp.section);
+        if (!list.includes(norm)) list.push(norm);
+        if (!list.includes(emp.section.trim())) list.push(emp.section.trim());
+      }
+    });
+    if (formSection && !list.includes(formSection)) {
+      list.push(formSection);
+    }
+    return list;
+  }, [employees, formSection]);
+
+  // Select employee from autocomplete -> AUTOFILL all fields including Seksi
   const handleSelectEmployee = (emp: EmployeeMaster) => {
     setFormNik(emp.nik);
     setFormName(emp.name);
-    setFormSection(emp.section || 'Preparation');
+    const resolvedSection = normalizeSectionName(emp.section || 'Preparation');
+    setFormSection(resolvedSection);
     setFormDepartment(emp.department || '');
     setFormJabatan(emp.jabatan || '');
-    if (emp.pt) setFormPt(emp.pt);
+    if (emp.pt) {
+      const ptClean = emp.pt.trim().toUpperCase();
+      if (ptClean === 'GTS') {
+        setFormPt('GTS');
+      } else {
+        setFormPt('TBP');
+      }
+    }
     setEmployeeSearchTerm(`${emp.name} (${emp.nik})`);
     setIsEmployeeDropdownOpen(false);
-    toast.success(`Data karyawan ${emp.name} berhasil di-autofill!`);
+    toast.success(`Data karyawan ${emp.name} berhasil di-autofill (${resolvedSection})!`);
   };
 
   // Open Create Modal
@@ -309,6 +368,8 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
     setFormRecommendation('Fit to Work');
     setFormDoctorOrMedicName('');
     setFormNotes('');
+    setFormReporterNik(inspectorNik || '');
+    setFormReporterName(inspectorName || '');
     setEmployeeSearchTerm('');
     setIsFormModalOpen(true);
   };
@@ -319,7 +380,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
     setEditingId(visit.id);
     setFormNik(visit.nik);
     setFormName(visit.name);
-    setFormSection(visit.section || 'Preparation');
+    setFormSection(normalizeSectionName(visit.section || 'Preparation'));
     setFormDepartment(visit.department || '');
     setFormJabatan(visit.jabatan || '');
     setFormPt(visit.pt || 'TBP');
@@ -332,6 +393,8 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
     setFormRecommendation(visit.recommendation || 'Fit to Work');
     setFormDoctorOrMedicName(visit.doctorOrMedicName || '');
     setFormNotes(visit.notes || '');
+    setFormReporterNik(visit.reporterNik || inspectorNik || '');
+    setFormReporterName(visit.reporterName || inspectorName || '');
     setEmployeeSearchTerm(`${visit.name} (${visit.nik})`);
     setIsFormModalOpen(true);
   };
@@ -361,8 +424,8 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
         actionTaken: formActionTaken.trim() || null,
         recommendation: formRecommendation,
         doctorOrMedicName: formDoctorOrMedicName.trim() || null,
-        reporterNik: inspectorNik || null,
-        reporterName: inspectorName || null,
+        reporterNik: formReporterNik.trim() || inspectorNik || null,
+        reporterName: formReporterName.trim() || inspectorName || null,
         notes: formNotes.trim() || null
       };
 
@@ -421,7 +484,9 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
       (v.section && v.section.toLowerCase().includes(q)) ||
       (v.reason && v.reason.toLowerCase().includes(q)) ||
       (v.recommendation && v.recommendation.toLowerCase().includes(q)) ||
-      (v.category && v.category.toLowerCase().includes(q))
+      (v.category && v.category.toLowerCase().includes(q)) ||
+      (v.reporterName && v.reporterName.toLowerCase().includes(q)) ||
+      (v.reporterNik && v.reporterNik.toLowerCase().includes(q))
     );
   }, [visits, searchQuery]);
 
@@ -432,7 +497,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
       return;
     }
 
-    const headers = ['No', 'Tanggal', 'Jam', 'NIK', 'Nama Karyawan', 'Seksi', 'PT', 'Kategori', 'Alasan / Keluhan', 'Diagnosa', 'Tindakan Medis', 'Rekomendasi', 'Tenaga Medis', 'Catatan'];
+    const headers = ['No', 'Tanggal', 'Jam', 'NIK', 'Nama Karyawan', 'Seksi', 'PT', 'Kategori', 'Alasan / Keluhan', 'Diagnosa', 'Tindakan Medis', 'Rekomendasi', 'Tenaga Medis', 'Petugas Pelapor', 'NIK Pelapor', 'Catatan'];
     const rows = displayedVisits.map((v, i) => [
       i + 1,
       v.visitDate,
@@ -447,6 +512,8 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
       `"${(v.actionTaken || '').replace(/"/g, '""')}"`,
       `"${v.recommendation || ''}"`,
       `"${v.doctorOrMedicName || ''}"`,
+      `"${v.reporterName || ''}"`,
+      `"${v.reporterNik || ''}"`,
       `"${(v.notes || '').replace(/"/g, '""')}"`
     ]);
 
@@ -503,23 +570,23 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
     window.print();
   };
 
-  // Section badge styles helper
+  // Section badge styles helper - high contrast text
   const getSectionBadgeClass = (sec?: string | null) => {
     const s = (sec || '').toLowerCase();
-    if (s.includes('prep')) return 'bg-amber-100 text-amber-950 border border-amber-300';
-    if (s.includes('lab')) return 'bg-indigo-100 text-indigo-950 border border-indigo-300';
-    if (s.includes('maint')) return 'bg-orange-100 text-orange-950 border border-orange-300';
-    if (s.includes('qa') || s.includes('quality')) return 'bg-cyan-100 text-cyan-950 border border-cyan-300';
-    return 'bg-slate-200 text-slate-800 border border-slate-300';
+    if (s.includes('prep')) return 'bg-amber-100 text-slate-950 font-bold border border-amber-300';
+    if (s.includes('lab')) return 'bg-indigo-100 text-slate-950 font-bold border border-indigo-300';
+    if (s.includes('maint')) return 'bg-orange-100 text-slate-950 font-bold border border-orange-300';
+    if (s.includes('qa') || s.includes('quality')) return 'bg-cyan-100 text-slate-950 font-bold border border-cyan-300';
+    return 'bg-slate-200 text-slate-950 font-bold border border-slate-300';
   };
 
-  // Recommendation badge styles helper
+  // Recommendation badge styles helper - clear black text on soft pastel
   const getRecommendationBadgeClass = (rec?: string | null) => {
     const r = (rec || '').toLowerCase();
-    if (r.includes('istirahat')) return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40 font-bold';
-    if (r.includes('rujuk')) return 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/40 font-bold';
-    if (r.includes('batasan') || r.includes('observasi')) return 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/40 font-bold';
-    return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 font-bold';
+    if (r.includes('istirahat')) return 'bg-amber-100 text-slate-950 border border-amber-400 font-bold';
+    if (r.includes('rujuk')) return 'bg-rose-100 text-slate-950 border border-rose-400 font-bold';
+    if (r.includes('batasan') || r.includes('observasi')) return 'bg-blue-100 text-slate-950 border border-blue-400 font-bold';
+    return 'bg-emerald-100 text-slate-950 border border-emerald-400 font-bold';
   };
 
   return (
@@ -540,14 +607,14 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-black tracking-tight" style={{ color: 'var(--text-main, #0f172a)' }}>
+                <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-950">
                   Pelaporan Kunjungan Klinik
                 </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-teal-500/15 text-slate-950 border border-teal-500/30">
                   {summary ? `${summary.todayCount} Hari Ini` : 'Enterprise'}
                 </span>
               </div>
-              <p className="text-xs font-medium" style={{ color: 'var(--text-muted, #64748b)' }}>
+              <p className="text-xs font-semibold text-slate-700">
                 Pencatatan rekap medis, keluhan kesehatan personil & rekomendasi dokter
               </p>
             </div>
@@ -567,37 +634,36 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
             <button
               type="button"
               onClick={handleCopyWhatsAppReport}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-2xs text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-300 bg-emerald-50/50 hover:bg-emerald-100 text-xs font-bold transition-all cursor-pointer shadow-2xs text-slate-950"
               title="Salin rekap format WhatsApp untuk Morning Meeting"
             >
-              <Share2 className="w-3.5 h-3.5" />
+              <Share2 className="w-3.5 h-3.5 text-emerald-700" />
               <span className="hidden sm:inline">Kirim WA</span>
             </button>
 
             <button
               type="button"
               onClick={handleExportCSV}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-2xs text-slate-700 dark:text-slate-300"
-              style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold transition-all cursor-pointer shadow-2xs text-slate-950"
               title="Ekspor data ke file Excel / CSV"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5 text-slate-700" />
               <span className="hidden sm:inline">Ekspor CSV</span>
             </button>
 
             <button
               type="button"
               onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-2xs text-slate-700 dark:text-slate-300"
-              style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold transition-all cursor-pointer shadow-2xs text-slate-950"
               title="Cetak ringkasan halaman"
             >
-              <Printer className="w-3.5 h-3.5" />
+              <Printer className="w-3.5 h-3.5 text-slate-700" />
             </button>
           </div>
         </div>
       </div>
 
+      {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5">
         {/* 2. Executive KPI & Analytics Overview Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -607,20 +673,20 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
             style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Kunjungan Bulan Ini</span>
-              <div className="w-7 h-7 rounded-lg bg-teal-500/10 text-teal-600 flex items-center justify-center">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-900">Kunjungan Bulan Ini</span>
+              <div className="w-7 h-7 rounded-lg bg-teal-500/10 text-teal-700 flex items-center justify-center font-bold">
                 <Calendar className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight" style={{ color: 'var(--text-main, #0f172a)' }}>
+              <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-slate-950">
                 {summary?.thisMonthCount ?? visits.length}
               </span>
-              <span className="text-xs font-bold text-teal-600">
+              <span className="text-xs font-black text-teal-800">
                 ({summary?.todayCount ?? 0} hari ini)
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 mt-1">Total kunjungan aktif tercatat</p>
+            <p className="text-[10px] text-slate-600 font-semibold mt-1">Total kunjungan aktif tercatat</p>
           </div>
 
           {/* Card 2: Status Istirahat di Mess / Rujukan */}
@@ -629,20 +695,20 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
             style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600">Istirahat di Mess</span>
-              <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center">
+              <span className="text-[11px] font-black uppercase tracking-wider text-amber-900">Istirahat di Mess</span>
+              <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-700 flex items-center justify-center">
                 <Bed className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-amber-600">
+              <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-slate-950">
                 {summary?.restingCount ?? 0}
               </span>
-              <span className="text-xs font-medium text-slate-500">
+              <span className="text-xs font-bold text-slate-800">
                 Karyawan Izin
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 mt-1">Perlu pemantauan & penggantian shift</p>
+            <p className="text-[10px] text-slate-600 font-semibold mt-1">Perlu pemantauan & penggantian shift</p>
           </div>
 
           {/* Card 3: Fit to Work */}
@@ -651,20 +717,20 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
             style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Fit to Work</span>
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+              <span className="text-[11px] font-black uppercase tracking-wider text-emerald-900">Fit to Work</span>
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-700 flex items-center justify-center">
                 <UserCheck className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-emerald-600">
+              <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-slate-950">
                 {summary?.fitCount ?? 0}
               </span>
-              <span className="text-xs font-medium text-slate-500">
+              <span className="text-xs font-bold text-slate-800">
                 Lanjut Tugas
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 mt-1">Diberikan obat & kembali bertugas</p>
+            <p className="text-[10px] text-slate-600 font-semibold mt-1">Diberikan obat & kembali bertugas</p>
           </div>
 
           {/* Card 4: Seksi Terbanyak Berkunjung */}
@@ -673,24 +739,24 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
             style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Seksi Teratas</span>
-              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-900">Seksi Teratas</span>
+              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-700 flex items-center justify-center">
                 <Building2 className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-sm font-black truncate max-w-[170px]" style={{ color: 'var(--text-main, #0f172a)' }}>
+              <span className="text-sm font-black truncate max-w-[170px] text-slate-950">
                 {summary && Object.keys(summary.sectionBreakdown).length > 0 
                   ? Object.entries(summary.sectionBreakdown).sort((a, b) => b[1] - a[1])[0][0] 
                   : 'Nihil'}
               </span>
-              <span className="text-xs font-bold text-indigo-600">
+              <span className="text-xs font-black text-indigo-800">
                 {summary && Object.keys(summary.sectionBreakdown).length > 0 
                   ? `${Object.entries(summary.sectionBreakdown).sort((a, b) => b[1] - a[1])[0][1]}x` 
                   : ''}
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 mt-1">Konsentrasi kunjungan tertinggi</p>
+            <p className="text-[10px] text-slate-600 font-semibold mt-1">Konsentrasi kunjungan tertinggi</p>
           </div>
         </div>
 
@@ -701,13 +767,15 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
         >
           {/* Quick Preset Pills & Search */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
-            {/* Date Range Preset Buttons */}
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold shrink-0">
+            {/* Date Range Preset Buttons (Clean Light Container with solid black text) */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-200/80 border border-slate-300 text-xs shrink-0">
               <button
                 type="button"
                 onClick={() => handleDatePreset('today')}
-                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                  dateRangePreset === 'today' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer font-bold ${
+                  dateRangePreset === 'today' 
+                    ? 'bg-white text-slate-950 shadow-sm border border-slate-200' 
+                    : 'text-slate-700 hover:text-slate-950 hover:bg-white/60'
                 }`}
               >
                 Hari Ini
@@ -715,8 +783,10 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
               <button
                 type="button"
                 onClick={() => handleDatePreset('7days')}
-                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                  dateRangePreset === '7days' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer font-bold ${
+                  dateRangePreset === '7days' 
+                    ? 'bg-white text-slate-950 shadow-sm border border-slate-200' 
+                    : 'text-slate-700 hover:text-slate-950 hover:bg-white/60'
                 }`}
               >
                 7 Hari Terakhir
@@ -724,8 +794,10 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
               <button
                 type="button"
                 onClick={() => handleDatePreset('month')}
-                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                  dateRangePreset === 'month' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer font-bold ${
+                  dateRangePreset === 'month' 
+                    ? 'bg-white text-slate-950 shadow-sm border border-slate-200' 
+                    : 'text-slate-700 hover:text-slate-950 hover:bg-white/60'
                 }`}
               >
                 Bulan Ini
@@ -733,8 +805,10 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
               <button
                 type="button"
                 onClick={() => handleDatePreset('all')}
-                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                  dateRangePreset === 'all' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer font-bold ${
+                  dateRangePreset === 'all' 
+                    ? 'bg-white text-slate-950 shadow-sm border border-slate-200' 
+                    : 'text-slate-700 hover:text-slate-950 hover:bg-white/60'
                 }`}
               >
                 Semua
@@ -743,24 +817,19 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
 
             {/* Realtime Search Input */}
             <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Cari NIK, Nama Karyawan, Seksi, Keluhan..."
-                className="w-full pl-9 pr-8 py-1.5 text-xs rounded-xl border outline-none focus:border-teal-500 transition-all font-medium"
-                style={{
-                  backgroundColor: 'var(--input-bg, #f8fafc)',
-                  borderColor: 'var(--border-main, #cbd5e1)',
-                  color: 'var(--text-main, #0f172a)'
-                }}
+                className="w-full pl-9 pr-8 py-1.5 text-xs rounded-xl border border-slate-300 bg-white text-slate-950 placeholder:text-slate-400 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-semibold"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -769,19 +838,14 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
           </div>
 
           {/* Secondary Dropdown Filters: Section, Category, Recommendation, Custom Dates */}
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 text-xs">
             {/* Seksi Filter */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-slate-500">Seksi:</span>
+              <span className="text-[11px] font-black text-slate-900">Seksi:</span>
               <select
                 value={selectedSection}
                 onChange={(e) => setSelectedSection(e.target.value)}
-                className="px-2.5 py-1 rounded-lg border text-xs font-semibold outline-none cursor-pointer"
-                style={{
-                  backgroundColor: 'var(--input-bg, #ffffff)',
-                  borderColor: 'var(--border-main, #cbd5e1)',
-                  color: 'var(--text-main, #0f172a)'
-                }}
+                className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-slate-950 text-xs font-bold outline-none cursor-pointer"
               >
                 {SECTION_OPTIONS.map(s => (
                   <option key={s} value={s}>{s === 'ALL' ? 'Semua Seksi' : s}</option>
@@ -791,16 +855,11 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
 
             {/* PT Filter */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-slate-500">PT:</span>
+              <span className="text-[11px] font-black text-slate-900">PT:</span>
               <select
                 value={selectedPt}
                 onChange={(e) => setSelectedPt(e.target.value)}
-                className="px-2.5 py-1 rounded-lg border text-xs font-semibold outline-none cursor-pointer"
-                style={{
-                  backgroundColor: 'var(--input-bg, #ffffff)',
-                  borderColor: 'var(--border-main, #cbd5e1)',
-                  color: 'var(--text-main, #0f172a)'
-                }}
+                className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-slate-950 text-xs font-bold outline-none cursor-pointer"
               >
                 <option value="ALL">Semua PT</option>
                 <option value="TBP">TBP / GPS</option>
@@ -810,16 +869,11 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
 
             {/* Kategori Filter */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-slate-500">Kategori:</span>
+              <span className="text-[11px] font-black text-slate-900">Kategori:</span>
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-2.5 py-1 rounded-lg border text-xs font-semibold outline-none cursor-pointer"
-                style={{
-                  backgroundColor: 'var(--input-bg, #ffffff)',
-                  borderColor: 'var(--border-main, #cbd5e1)',
-                  color: 'var(--text-main, #0f172a)'
-                }}
+                className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-slate-950 text-xs font-bold outline-none cursor-pointer"
               >
                 {CATEGORY_OPTIONS.map(c => (
                   <option key={c} value={c}>{c === 'ALL' ? 'Semua Kategori' : c}</option>
@@ -829,16 +883,11 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
 
             {/* Rekomendasi Filter */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-slate-500">Rekomendasi:</span>
+              <span className="text-[11px] font-black text-slate-900">Rekomendasi:</span>
               <select
                 value={selectedRecommendation}
                 onChange={(e) => setSelectedRecommendation(e.target.value)}
-                className="px-2.5 py-1 rounded-lg border text-xs font-semibold outline-none cursor-pointer"
-                style={{
-                  backgroundColor: 'var(--input-bg, #ffffff)',
-                  borderColor: 'var(--border-main, #cbd5e1)',
-                  color: 'var(--text-main, #0f172a)'
-                }}
+                className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-slate-950 text-xs font-bold outline-none cursor-pointer"
               >
                 {RECOMMENDATION_OPTIONS.map(r => (
                   <option key={r} value={r}>{r === 'ALL' ? 'Semua Rekomendasi' : r}</option>
@@ -848,7 +897,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
 
             {/* Date Pickers (Custom) */}
             <div className="flex items-center gap-1.5 ml-auto">
-              <span className="text-[11px] font-bold text-slate-500">Rentang:</span>
+              <span className="text-[11px] font-black text-slate-900">Rentang:</span>
               <input
                 type="date"
                 value={startDate}
@@ -856,10 +905,9 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                   setStartDate(e.target.value);
                   setDateRangePreset('all');
                 }}
-                className="px-2 py-1 text-xs rounded-lg border outline-none font-mono"
-                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                className="px-2 py-1 text-xs rounded-lg border border-slate-300 bg-white text-slate-950 outline-none font-mono font-bold"
               />
-              <span className="text-slate-400">s/d</span>
+              <span className="text-slate-700 font-bold">s/d</span>
               <input
                 type="date"
                 value={endDate}
@@ -867,8 +915,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                   setEndDate(e.target.value);
                   setDateRangePreset('all');
                 }}
-                className="px-2 py-1 text-xs rounded-lg border outline-none font-mono"
-                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                className="px-2 py-1 text-xs rounded-lg border border-slate-300 bg-white text-slate-950 outline-none font-mono font-bold"
               />
             </div>
           </div>
@@ -876,19 +923,18 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
 
         {/* 4. Main Data Presentation Table */}
         <div 
-          className="rounded-2xl border shadow-sm overflow-hidden"
-          style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}
+          className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden"
         >
           {isLoading ? (
-            <div className="p-12 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
+            <div className="p-12 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
               <RotateCcw className="w-5 h-5 animate-spin text-teal-600" />
-              <span>Memuat data kunjungan klinik...</span>
+              <span className="font-bold text-slate-900">Memuat data kunjungan klinik...</span>
             </div>
           ) : displayedVisits.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
-              <BriefcaseMedical className="w-8 h-8 text-slate-300" />
-              <span className="font-bold text-slate-600 text-sm">Belum ada catatan kunjungan klinik</span>
-              <p className="text-[11px] text-slate-400 max-w-sm">
+            <div className="p-12 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
+              <BriefcaseMedical className="w-8 h-8 text-slate-400" />
+              <span className="font-black text-slate-950 text-sm">Belum ada catatan kunjungan klinik</span>
+              <p className="text-[11px] text-slate-600 font-medium max-w-sm">
                 Tidak ada data kunjungan pada filter yang dipilih. Klik tombol <strong>+ Lapor Kunjungan</strong> di atas untuk mencatat data baru.
               </p>
             </div>
@@ -897,51 +943,47 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr 
-                    className="border-b font-black uppercase tracking-wider text-[10px]"
-                    style={{ 
-                      backgroundColor: 'var(--input-bg, #f8fafc)', 
-                      borderColor: 'var(--border-main, #e2e8f0)',
-                      color: 'var(--text-muted, #475569)'
-                    }}
+                    className="border-b border-slate-200 bg-slate-100 font-black uppercase tracking-wider text-[11px] text-slate-950"
                   >
-                    <th className="py-3 px-4 w-12 text-center">#</th>
-                    <th className="py-3 px-4">Karyawan</th>
-                    <th className="py-3 px-4">Seksi &amp; PT</th>
-                    <th className="py-3 px-4">Waktu Kunjungan</th>
-                    <th className="py-3 px-4">Alasan &amp; Keluhan</th>
-                    <th className="py-3 px-4">Rekomendasi Dokter</th>
-                    <th className="py-3 px-4 text-center w-28">Aksi</th>
+                    <th className="py-3 px-4 w-12 text-center text-slate-950">#</th>
+                    <th className="py-3 px-4 text-slate-950">Karyawan</th>
+                    <th className="py-3 px-4 text-slate-950">Seksi &amp; PT</th>
+                    <th className="py-3 px-4 text-slate-950">Waktu Kunjungan</th>
+                    <th className="py-3 px-4 text-slate-950">Alasan &amp; Keluhan</th>
+                    <th className="py-3 px-4 text-slate-950">Rekomendasi Dokter</th>
+                    <th className="py-3 px-4 text-slate-950">Petugas Pelapor</th>
+                    <th className="py-3 px-4 text-center w-28 text-slate-950">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-slate-100">
                   {displayedVisits.map((visit, index) => {
                     return (
                       <tr 
                         key={visit.id}
-                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group cursor-pointer"
+                        className="hover:bg-slate-50 transition-colors group cursor-pointer"
                         onClick={() => setDetailModalVisit(visit)}
                       >
                         {/* No */}
-                        <td className="py-3 px-4 text-center font-mono text-slate-400 text-[11px]">
+                        <td className="py-3 px-4 text-center font-mono text-slate-950 font-bold text-xs">
                           {index + 1}
                         </td>
 
-                        {/* Karyawan (Name, NIK, Jabatan) */}
+                        {/* Karyawan (Name, NIK, Jabatan) - crisp black */}
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-full bg-teal-600 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-2xs">
                               {visit.name.charAt(0).toUpperCase()}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-bold text-slate-900 dark:text-slate-100 leading-tight">
+                              <p className="font-black text-slate-950 text-sm leading-tight">
                                 {visit.name}
                               </p>
-                              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono mt-0.5">
+                              <div className="flex items-center gap-1.5 text-[11px] text-slate-800 font-mono font-semibold mt-0.5">
                                 <span>NIK: {visit.nik}</span>
                                 {visit.jabatan && (
                                   <>
-                                    <span>•</span>
-                                    <span className="truncate max-w-[120px]">{visit.jabatan}</span>
+                                    <span className="text-slate-400">•</span>
+                                    <span className="truncate max-w-[130px] text-slate-700">{visit.jabatan}</span>
                                   </>
                                 )}
                               </div>
@@ -955,7 +997,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${getSectionBadgeClass(visit.section)}`}>
                               {visit.section || 'General'}
                             </span>
-                            <span className="text-[10px] font-mono font-bold text-slate-400">
+                            <span className="text-[11px] font-mono font-bold text-slate-900">
                               {visit.pt || 'TBP'}
                             </span>
                           </div>
@@ -963,49 +1005,70 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
 
                         {/* Waktu Kunjungan */}
                         <td className="py-3 px-4 whitespace-nowrap">
-                          <div className="flex items-center gap-1 text-slate-800 dark:text-slate-200 font-semibold font-mono text-[11px]">
-                            <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                          <div className="flex items-center gap-1.5 text-slate-950 font-bold font-mono text-xs">
+                            <Calendar className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                             <span>{visit.visitDate}</span>
                           </div>
-                          <div className="flex items-center gap-1 text-slate-400 font-mono text-[10px] mt-0.5">
-                            <Clock className="w-3 h-3 shrink-0" />
+                          <div className="flex items-center gap-1.5 text-slate-800 font-mono font-semibold text-[11px] mt-0.5">
+                            <Clock className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                             <span>{visit.visitTime} WIT</span>
                           </div>
                         </td>
 
                         {/* Alasan & Keluhan */}
                         <td className="py-3 px-4 max-w-xs">
-                          <div className="flex items-center gap-1 mb-0.5">
-                            <span className="text-[9.5px] px-1.5 py-0.2 rounded font-black bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                          <div className="flex items-center gap-1 mb-1">
+                            <span className="text-[10px] px-2 py-0.5 rounded-md font-bold bg-slate-200 border border-slate-300 text-slate-950">
                               {visit.category || 'Keluhan Sakit'}
                             </span>
                           </div>
-                          <p className="text-slate-800 dark:text-slate-200 font-medium line-clamp-2 leading-relaxed">
+                          <p className="text-slate-950 font-medium text-xs line-clamp-2 leading-relaxed">
                             {visit.reason}
                           </p>
                           {visit.diagnosis && (
-                            <p className="text-[10px] text-teal-700 dark:text-teal-400 font-medium mt-0.5 truncate">
-                              Diagnosa: {visit.diagnosis}
+                            <p className="text-[11px] text-slate-900 font-semibold mt-0.5 truncate">
+                              <span className="font-bold text-teal-800">Diagnosa:</span> {visit.diagnosis}
                             </p>
                           )}
                         </td>
 
                         {/* Rekomendasi Medis */}
                         <td className="py-3 px-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10.5px] border ${getRecommendationBadgeClass(visit.recommendation)}`}>
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs border ${getRecommendationBadgeClass(visit.recommendation)}`}>
                             {(visit.recommendation || '').toLowerCase().includes('istirahat') ? (
-                              <Bed className="w-3 h-3 text-amber-600 shrink-0" />
+                              <Bed className="w-3.5 h-3.5 text-amber-700 shrink-0" />
                             ) : (visit.recommendation || '').toLowerCase().includes('rujuk') ? (
-                              <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" />
+                              <AlertCircle className="w-3.5 h-3.5 text-rose-700 shrink-0" />
                             ) : (
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                             )}
                             <span>{visit.recommendation || 'Fit to Work'}</span>
                           </span>
                           {visit.doctorOrMedicName && (
-                            <div className="text-[10px] text-slate-400 mt-0.5 truncate">
+                            <div className="text-[11px] text-slate-800 font-semibold mt-0.5 truncate">
                               Oleh: {visit.doctorOrMedicName}
                             </div>
+                          )}
+                        </td>
+
+                        {/* Petugas Pelapor */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          {visit.reporterName ? (
+                            <div className="flex items-center gap-1.5 text-slate-950">
+                              <UserCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="font-bold text-xs text-slate-950 truncate max-w-[130px]">
+                                  {visit.reporterName}
+                                </p>
+                                {visit.reporterNik && (
+                                  <p className="text-[10px] font-mono text-slate-600">
+                                    NIK: {visit.reporterNik}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">-</span>
                           )}
                         </td>
 
@@ -1015,26 +1078,26 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                             <button
                               type="button"
                               onClick={() => setDetailModalVisit(visit)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-slate-600 hover:text-teal-700 hover:bg-teal-50 transition-colors cursor-pointer"
                               title="Lihat Rincian Lengkap"
                             >
-                              <Eye className="w-3.5 h-3.5" />
+                              <Eye className="w-4 h-4" />
                             </button>
                             <button
                               type="button"
                               onClick={() => openEditModal(visit)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-slate-600 hover:text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer"
                               title="Edit Data Kunjungan"
                             >
-                              <Edit3 className="w-3.5 h-3.5" />
+                              <Edit3 className="w-4 h-4" />
                             </button>
                             <button
                               type="button"
                               onClick={() => setDeleteConfirmVisit(visit)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-slate-600 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
                               title="Hapus Data Kunjungan"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
@@ -1052,19 +1115,18 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
       {isFormModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div 
-            className="w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
-            style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #cbd5e1)' }}
+            className="w-full max-w-2xl rounded-2xl border border-slate-300 bg-white shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
           >
             {/* Modal Header */}
-            <div className="px-5 py-3.5 border-b flex items-center justify-between bg-gradient-to-r from-teal-600 to-emerald-600 text-white shrink-0">
+            <div className="px-5 py-3.5 border-b border-teal-700 flex items-center justify-between bg-gradient-to-r from-teal-600 to-emerald-600 text-white shrink-0">
               <div className="flex items-center gap-2.5">
-                <BriefcaseMedical className="w-5 h-5" />
+                <BriefcaseMedical className="w-5 h-5 text-white" />
                 <div>
-                  <h3 className="text-sm font-black tracking-tight leading-tight">
+                  <h3 className="text-sm font-black tracking-tight leading-tight text-white">
                     {isEditing ? 'Edit Laporan Kunjungan Klinik' : 'Form Pelaporan Kunjungan Klinik Baru'}
                   </h3>
                   <p className="text-[11px] text-teal-100 font-medium">
-                    Autofill data NIK & Seksi, pilih kalender & detail alasan kunjungan
+                    Autofill data NIK &amp; Seksi, pilih kalender &amp; detail alasan kunjungan
                   </p>
                 </div>
               </div>
@@ -1081,11 +1143,11 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
             <form onSubmit={handleSubmitForm} className="p-5 overflow-y-auto space-y-4 flex-1">
               {/* Autocomplete Employee Search Field */}
               <div className="space-y-1.5" ref={employeeDropdownRef}>
-                <label className="text-xs font-bold block text-slate-800 dark:text-slate-200">
+                <label className="text-xs font-black block text-slate-950">
                   Cari Karyawan (Ketik NIK atau Nama) <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                   <input
                     type="text"
                     value={employeeSearchTerm}
@@ -1095,12 +1157,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                     }}
                     onFocus={() => setIsEmployeeDropdownOpen(true)}
                     placeholder="Ketik NIK atau nama untuk autofill otomatis..."
-                    className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border outline-none focus:border-teal-500 font-semibold"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)',
-                      color: 'var(--text-main, #0f172a)'
-                    }}
+                    className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-300 bg-white text-slate-950 placeholder:text-slate-400 outline-none focus:border-teal-500 font-bold"
                   />
                   {employeeSearchTerm && (
                     <button
@@ -1110,7 +1167,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                         setFormNik('');
                         setFormName('');
                       }}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -1119,14 +1176,10 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                   {/* Autocomplete Dropdown */}
                   {isEmployeeDropdownOpen && (
                     <div 
-                      className="absolute left-0 right-0 top-full mt-1.5 rounded-xl border shadow-2xl z-50 max-h-56 overflow-y-auto divide-y animate-in fade-in zoom-in-95 duration-150"
-                      style={{
-                        backgroundColor: 'var(--card-bg, #ffffff)',
-                        borderColor: 'var(--border-main, #cbd5e1)'
-                      }}
+                      className="absolute left-0 right-0 top-full mt-1.5 rounded-xl border border-slate-300 bg-white shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-150"
                     >
                       {filteredEmployees.length === 0 ? (
-                        <div className="p-3 text-center text-xs text-slate-400 italic">
+                        <div className="p-3 text-center text-xs text-slate-500 italic font-medium">
                           Tidak ditemukan karyawan dengan kata kunci "{employeeSearchTerm}"
                         </div>
                       ) : (
@@ -1134,28 +1187,28 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                           <div
                             key={emp.nik}
                             onClick={() => handleSelectEmployee(emp)}
-                            className="p-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors hover:bg-teal-500/10"
+                            className="p-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors hover:bg-teal-50"
                           >
                             <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate flex items-center gap-1.5">
+                              <div className="font-bold text-xs text-slate-950 truncate flex items-center gap-1.5">
                                 <span>{emp.name}</span>
-                                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-bold">
+                                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 text-slate-900 font-bold">
                                   {emp.nik}
                                 </span>
                               </div>
-                              <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                              <div className="text-[11px] text-slate-700 font-medium flex items-center gap-1.5 mt-0.5">
                                 <span>{emp.section || 'General'}</span>
                                 <span>•</span>
                                 <span>{emp.jabatan || 'Personil'}</span>
                                 {emp.pt && (
                                   <>
                                     <span>•</span>
-                                    <span className="font-mono">{emp.pt}</span>
+                                    <span className="font-mono font-bold text-slate-900">{emp.pt}</span>
                                   </>
                                 )}
                               </div>
                             </div>
-                            <span className="text-[10px] text-teal-600 font-bold">Pilih</span>
+                            <span className="text-xs text-teal-700 font-black">Pilih</span>
                           </div>
                         ))
                       )}
@@ -1164,10 +1217,10 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                 </div>
               </div>
 
-              {/* Autofilled Fields: NIK, Nama, Seksi, PT */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
+              {/* Autofilled Fields: NIK, Nama, Seksi, PT - Clean Light Card with Crisp Black Text */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-slate-100 border border-slate-200">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block mb-1">
                     Nama Karyawan
                   </label>
                   <input
@@ -1176,12 +1229,11 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                     onChange={(e) => setFormName(e.target.value)}
                     placeholder="Nama Lengkap"
                     required
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border outline-none font-bold bg-white dark:bg-slate-900"
-                    style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white text-slate-950 font-bold outline-none shadow-xs"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block mb-1">
                     NIK Karyawan
                   </label>
                   <input
@@ -1190,34 +1242,31 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                     onChange={(e) => setFormNik(e.target.value)}
                     placeholder="Contoh: 04D2..."
                     required
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border outline-none font-mono font-bold bg-white dark:bg-slate-900"
-                    style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white text-slate-950 font-mono font-bold outline-none shadow-xs"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block mb-1">
                     Seksi / Section
                   </label>
                   <select
                     value={formSection}
                     onChange={(e) => setFormSection(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border outline-none font-semibold bg-white dark:bg-slate-900 cursor-pointer"
-                    style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white text-slate-950 font-bold outline-none shadow-xs cursor-pointer"
                   >
-                    {SECTION_OPTIONS.filter(s => s !== 'ALL').map(s => (
+                    {availableSections.map(s => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block mb-1">
                     Universe / PT
                   </label>
                   <select
                     value={formPt}
                     onChange={(e) => setFormPt(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border outline-none font-semibold bg-white dark:bg-slate-900 cursor-pointer"
-                    style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white text-slate-950 font-bold outline-none shadow-xs cursor-pointer"
                   >
                     <option value="TBP">TBP / GPS</option>
                     <option value="GTS">GTS</option>
@@ -1225,10 +1274,49 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                 </div>
               </div>
 
+              {/* Data Petugas Pelapor (Inspector / Inputter) */}
+              <div className="p-3.5 rounded-xl bg-teal-50/70 border border-teal-200/90 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-black text-teal-950 uppercase tracking-wider flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-teal-700" />
+                    <span>Petugas Pelapor (Inspector / Inputter)</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-teal-800 bg-teal-200/60 px-2 py-0.5 rounded-md">
+                    Tercatat Resmi
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-800 block mb-1">
+                      Nama Petugas Pelapor
+                    </label>
+                    <input
+                      type="text"
+                      value={formReporterName}
+                      onChange={(e) => setFormReporterName(e.target.value)}
+                      placeholder="Nama Petugas Pelapor"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-950 font-bold outline-none shadow-2xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-800 block mb-1">
+                      NIK Petugas Pelapor
+                    </label>
+                    <input
+                      type="text"
+                      value={formReporterNik}
+                      onChange={(e) => setFormReporterNik(e.target.value)}
+                      placeholder="NIK Petugas Pelapor"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-950 font-mono font-bold outline-none shadow-2xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Tanggal & Jam Kunjungan */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold block text-slate-800 dark:text-slate-200 mb-1">
+                  <label className="text-xs font-black block text-slate-950 mb-1">
                     Hari / Tanggal Kunjungan <span className="text-rose-500">*</span>
                   </label>
                   <input
@@ -1236,15 +1324,11 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                     value={formVisitDate}
                     onChange={(e) => setFormVisitDate(e.target.value)}
                     required
-                    className="w-full px-3 py-2 text-xs rounded-xl border outline-none font-mono font-semibold"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)'
-                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white text-slate-950 outline-none font-mono font-bold"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold block text-slate-800 dark:text-slate-200 mb-1">
+                  <label className="text-xs font-black block text-slate-950 mb-1">
                     Jam Kunjungan (WIT) <span className="text-rose-500">*</span>
                   </label>
                   <div className="flex items-center gap-1.5">
@@ -1253,11 +1337,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                       value={formVisitTime}
                       onChange={(e) => setFormVisitTime(e.target.value)}
                       required
-                      className="w-full px-3 py-2 text-xs rounded-xl border outline-none font-mono font-semibold"
-                      style={{
-                        backgroundColor: 'var(--input-bg, #f8fafc)',
-                        borderColor: 'var(--border-main, #cbd5e1)'
-                      }}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white text-slate-950 outline-none font-mono font-bold"
                     />
                     <button
                       type="button"
@@ -1265,7 +1345,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                         const d = new Date();
                         setFormVisitTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
                       }}
-                      className="px-2.5 py-2 rounded-xl border text-[11px] font-bold hover:bg-slate-100 transition-colors shrink-0"
+                      className="px-3 py-2 rounded-xl border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-950 text-xs font-bold transition-colors shrink-0 cursor-pointer"
                       title="Set jam saat ini"
                     >
                       Sekarang
@@ -1274,32 +1354,35 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                 </div>
               </div>
 
-              {/* Kategori Kunjungan */}
+              {/* Kategori Kunjungan - Soft Light Buttons with Crisp Black Text */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold block text-slate-800 dark:text-slate-200">
+                <label className="text-xs font-black block text-slate-950">
                   Kategori Kunjungan
                 </label>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {CATEGORY_OPTIONS.filter(c => c !== 'ALL').map(cat => (
-                    <button
-                      type="button"
-                      key={cat}
-                      onClick={() => setFormCategory(cat)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                        formCategory === cat 
-                          ? 'bg-teal-600 text-white border-teal-600 shadow-xs' 
-                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-teal-400'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
+                  {CATEGORY_OPTIONS.filter(c => c !== 'ALL').map(cat => {
+                    const isSelected = formCategory === cat;
+                    return (
+                      <button
+                        type="button"
+                        key={cat}
+                        onClick={() => setFormCategory(cat)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                          isSelected 
+                            ? 'bg-teal-600 text-white border-teal-700 shadow-sm ring-2 ring-teal-500/30' 
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-950 border-slate-300'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Alasan Berkunjung / Keluhan Detail */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold block text-slate-800 dark:text-slate-200">
+                <label className="text-xs font-black block text-slate-950">
                   Alasan Berkunjung &amp; Keluhan Kesehatan <span className="text-rose-500">*</span>
                 </label>
                 <textarea
@@ -1308,28 +1391,20 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                   onChange={(e) => setFormReason(e.target.value)}
                   placeholder="Deskripsikan alasan berkunjung, gejala atau keluhan yang dirasakan personil (misal: pusing, batuk demam, cek tensi rutin, luka gores, dll)..."
                   required
-                  className="w-full px-3 py-2 text-xs rounded-xl border outline-none focus:border-teal-500 transition-all font-medium leading-relaxed"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #f8fafc)',
-                    borderColor: 'var(--border-main, #cbd5e1)'
-                  }}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white text-slate-950 placeholder:text-slate-400 outline-none focus:border-teal-500 transition-all font-semibold leading-relaxed"
                 />
               </div>
 
               {/* Rekomendasi Dokter & Diagnosa Medis */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200">
                 <div>
-                  <label className="text-xs font-bold block text-slate-800 dark:text-slate-200 mb-1">
+                  <label className="text-xs font-black block text-slate-950 mb-1">
                     Rekomendasi Medis
                   </label>
                   <select
                     value={formRecommendation}
                     onChange={(e) => setFormRecommendation(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border outline-none font-semibold cursor-pointer"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)'
-                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white text-slate-950 font-bold outline-none cursor-pointer"
                   >
                     {RECOMMENDATION_OPTIONS.filter(r => r !== 'ALL').map(r => (
                       <option key={r} value={r}>{r}</option>
@@ -1338,7 +1413,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold block text-slate-800 dark:text-slate-200 mb-1">
+                  <label className="text-xs font-black block text-slate-950 mb-1">
                     Tenaga Medis / Paramedik (Opsional)
                   </label>
                   <input
@@ -1346,11 +1421,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                     value={formDoctorOrMedicName}
                     onChange={(e) => setFormDoctorOrMedicName(e.target.value)}
                     placeholder="Nama Dokter / Perawat pemeriksa..."
-                    className="w-full px-3 py-2 text-xs rounded-xl border outline-none font-medium"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)'
-                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white text-slate-950 placeholder:text-slate-400 outline-none font-semibold"
                   />
                 </div>
               </div>
@@ -1358,7 +1429,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
               {/* Tindakan / Obat & Catatan */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold block text-slate-800 dark:text-slate-200 mb-1">
+                  <label className="text-xs font-black block text-slate-950 mb-1">
                     Tindakan &amp; Obat yang Diberikan (Opsional)
                   </label>
                   <input
@@ -1366,15 +1437,11 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                     value={formActionTaken}
                     onChange={(e) => setFormActionTaken(e.target.value)}
                     placeholder="Misal: Paracetamol 3x1, Betadine, Perban..."
-                    className="w-full px-3 py-2 text-xs rounded-xl border outline-none font-medium"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)'
-                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white text-slate-950 placeholder:text-slate-400 outline-none font-semibold"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold block text-slate-800 dark:text-slate-200 mb-1">
+                  <label className="text-xs font-black block text-slate-950 mb-1">
                     Diagnosa Sementara (Opsional)
                   </label>
                   <input
@@ -1382,18 +1449,14 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                     value={formDiagnosis}
                     onChange={(e) => setFormDiagnosis(e.target.value)}
                     placeholder="Misal: Febris, Vulnus Laceratum, Fatigue..."
-                    className="w-full px-3 py-2 text-xs rounded-xl border outline-none font-medium"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)'
-                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white text-slate-950 placeholder:text-slate-400 outline-none font-semibold"
                   />
                 </div>
               </div>
 
               {/* Catatan Tambahan */}
               <div className="space-y-1">
-                <label className="text-xs font-bold block text-slate-800 dark:text-slate-200">
+                <label className="text-xs font-black block text-slate-950">
                   Catatan Tambahan (Opsional)
                 </label>
                 <input
@@ -1401,21 +1464,16 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}
                   placeholder="Keterangan pengawasan shift atau follow-up..."
-                  className="w-full px-3 py-2 text-xs rounded-xl border outline-none font-medium"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #f8fafc)',
-                    borderColor: 'var(--border-main, #cbd5e1)'
-                  }}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white text-slate-950 placeholder:text-slate-400 outline-none font-semibold"
                 />
               </div>
 
               {/* Modal Footer Buttons */}
-              <div className="pt-3 border-t flex items-center justify-end gap-2.5 border-slate-200 dark:border-slate-700">
+              <div className="pt-3 border-t flex items-center justify-end gap-2.5 border-slate-200">
                 <button
                   type="button"
                   onClick={() => setIsFormModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
-                  style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                  className="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-950 text-xs font-bold transition-colors cursor-pointer"
                 >
                   Batal
                 </button>
@@ -1446,35 +1504,34 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
       {detailModalVisit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div 
-            className="w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
-            style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #cbd5e1)' }}
+            className="w-full max-w-lg rounded-2xl border border-slate-300 bg-white shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
           >
-            <div className="px-5 py-3.5 border-b flex items-center justify-between bg-gradient-to-r from-teal-700 to-emerald-700 text-white">
+            <div className="px-5 py-3.5 border-b border-teal-700 flex items-center justify-between bg-gradient-to-r from-teal-700 to-emerald-700 text-white">
               <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-teal-200" />
-                <h3 className="text-sm font-black">Rincian Kunjungan Klinik</h3>
+                <FileText className="w-5 h-5 text-white" />
+                <h3 className="text-sm font-black text-white">Rincian Kunjungan Klinik</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setDetailModalVisit(null)}
-                className="p-1 rounded-lg hover:bg-white/20 transition-colors cursor-pointer"
+                className="p-1 rounded-lg hover:bg-white/20 transition-colors cursor-pointer text-white"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
-              {/* Employee Header */}
-              <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
+              {/* Employee Header - Clean soft background with crisp black text */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-100 border border-slate-200">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-teal-600 text-white font-black flex items-center justify-center text-sm shadow-xs">
                     {detailModalVisit.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <h4 className="font-black text-slate-900 dark:text-slate-100 text-sm">
+                    <h4 className="font-black text-slate-950 text-sm">
                       {detailModalVisit.name}
                     </h4>
-                    <p className="text-[11px] font-mono text-slate-500 font-bold">
+                    <p className="text-[11px] font-mono text-slate-800 font-bold mt-0.5">
                       NIK: {detailModalVisit.nik} • {detailModalVisit.pt || 'TBP'}
                     </p>
                   </div>
@@ -1486,15 +1543,15 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
 
               {/* Visit Date & Time */}
               <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <span className="text-[10px] font-bold text-slate-400 block uppercase">Tanggal Kunjungan</span>
-                  <p className="font-black text-slate-800 dark:text-slate-200 font-mono mt-0.5">
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] font-black text-slate-900 block uppercase">Tanggal Kunjungan</span>
+                  <p className="font-black text-slate-950 font-mono text-xs mt-1">
                     {detailModalVisit.visitDate}
                   </p>
                 </div>
-                <div className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <span className="text-[10px] font-bold text-slate-400 block uppercase">Jam Kunjungan</span>
-                  <p className="font-black text-slate-800 dark:text-slate-200 font-mono mt-0.5">
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] font-black text-slate-900 block uppercase">Jam Kunjungan</span>
+                  <p className="font-black text-slate-950 font-mono text-xs mt-1">
                     {detailModalVisit.visitTime} WIT
                   </p>
                 </div>
@@ -1503,19 +1560,19 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
               {/* Category & Reason */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Alasan &amp; Keluhan</span>
-                  <span className="px-2 py-0.2 rounded font-black text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                  <span className="text-[11px] font-black text-slate-900 uppercase tracking-wider">Alasan &amp; Keluhan</span>
+                  <span className="px-2 py-0.5 rounded font-black text-[10px] bg-slate-200 border border-slate-300 text-slate-950">
                     {detailModalVisit.category || 'Keluhan Sakit'}
                   </span>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 text-xs font-medium leading-relaxed whitespace-pre-wrap">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-950 leading-relaxed whitespace-pre-wrap">
                   {detailModalVisit.reason}
                 </div>
               </div>
 
               {/* Medical Assessment & Recommendation */}
-              <div className="p-3.5 rounded-xl bg-teal-500/10 border border-teal-500/25 space-y-2">
-                <span className="text-[11px] font-bold text-teal-800 dark:text-teal-300 uppercase tracking-wider block">
+              <div className="p-3.5 rounded-xl bg-teal-50 border border-teal-200 space-y-2">
+                <span className="text-[11px] font-black text-teal-950 uppercase tracking-wider block">
                   Hasil Pemeriksaan &amp; Rekomendasi
                 </span>
                 <div className="flex items-center gap-2">
@@ -1525,34 +1582,57 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                 </div>
 
                 {detailModalVisit.diagnosis && (
-                  <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
-                    <strong>Diagnosa:</strong> {detailModalVisit.diagnosis}
+                  <p className="text-xs text-slate-950 font-medium">
+                    <strong className="font-bold text-slate-950">Diagnosa:</strong> {detailModalVisit.diagnosis}
                   </p>
                 )}
 
                 {detailModalVisit.actionTaken && (
-                  <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
-                    <strong>Tindakan / Obat:</strong> {detailModalVisit.actionTaken}
+                  <p className="text-xs text-slate-950 font-medium">
+                    <strong className="font-bold text-slate-950">Tindakan / Obat:</strong> {detailModalVisit.actionTaken}
                   </p>
                 )}
 
                 {detailModalVisit.doctorOrMedicName && (
-                  <p className="text-[11px] text-slate-500 font-medium">
-                    Petugas Medis: {detailModalVisit.doctorOrMedicName}
+                  <p className="text-[11px] text-slate-800 font-semibold">
+                    <strong className="font-bold text-slate-950">Petugas Medis:</strong> {detailModalVisit.doctorOrMedicName}
                   </p>
+                )}
+              </div>
+
+              {/* Petugas Pelapor */}
+              <div className="p-3 rounded-xl bg-teal-50/70 border border-teal-200/90 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <UserCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black text-teal-900 block uppercase tracking-wider">Petugas Pelapor</span>
+                    <p className="font-black text-slate-950 text-xs">
+                      {detailModalVisit.reporterName || 'Tidak tercatat'}
+                    </p>
+                  </div>
+                </div>
+                {detailModalVisit.reporterNik && (
+                  <div className="text-right">
+                    <span className="text-[10px] font-black text-teal-900 block uppercase tracking-wider">NIK Pelapor</span>
+                    <p className="font-mono font-bold text-slate-800 text-xs">
+                      {detailModalVisit.reporterNik}
+                    </p>
+                  </div>
                 )}
               </div>
 
               {/* Additional Notes */}
               {detailModalVisit.notes && (
-                <div className="text-xs text-slate-600 dark:text-slate-400 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <strong>Catatan Tambahan:</strong> {detailModalVisit.notes}
+                <div className="text-xs text-slate-950 font-medium p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <strong className="font-bold text-slate-950">Catatan Tambahan:</strong> {detailModalVisit.notes}
                 </div>
               )}
             </div>
 
             {/* Modal Actions */}
-            <div className="px-5 py-3 border-t flex items-center justify-between border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850">
+            <div className="px-5 py-3 border-t flex items-center justify-between border-slate-200 bg-slate-50">
               <button
                 type="button"
                 onClick={() => {
@@ -1569,8 +1649,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
               <button
                 type="button"
                 onClick={() => setDetailModalVisit(null)}
-                className="px-4 py-1.5 rounded-xl border text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
-                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                className="px-4 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
               >
                 Tutup
               </button>
@@ -1583,20 +1662,19 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
       {deleteConfirmVisit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div 
-            className="w-full max-w-sm rounded-2xl border shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-150"
-            style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #cbd5e1)' }}
+            className="w-full max-w-sm rounded-2xl border border-slate-300 bg-white shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-150"
           >
             <div className="flex items-center gap-3 text-rose-600">
-              <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-950/60 flex items-center justify-center shrink-0">
-                <AlertCircle className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5 text-rose-600" />
               </div>
               <div>
-                <h4 className="text-sm font-black text-slate-900 dark:text-slate-100">Hapus Laporan Kunjungan?</h4>
-                <p className="text-xs text-slate-500 font-medium">Tindakan ini tidak dapat dibatalkan.</p>
+                <h4 className="text-sm font-black text-slate-950">Hapus Laporan Kunjungan?</h4>
+                <p className="text-xs text-slate-600 font-semibold">Tindakan ini tidak dapat dibatalkan.</p>
               </div>
             </div>
 
-            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+            <p className="text-xs text-slate-950 font-medium bg-slate-50 p-3 rounded-xl border border-slate-200">
               Apakah Anda yakin ingin menghapus catatan kunjungan <strong>{deleteConfirmVisit.name}</strong> ({deleteConfirmVisit.nik}) pada tanggal {deleteConfirmVisit.visitDate}?
             </p>
 
@@ -1604,8 +1682,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
               <button
                 type="button"
                 onClick={() => setDeleteConfirmVisit(null)}
-                className="px-4 py-1.5 rounded-xl border text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
-                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                className="px-4 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
               >
                 Batal
               </button>
@@ -1623,3 +1700,4 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
     </div>
   );
 }
+

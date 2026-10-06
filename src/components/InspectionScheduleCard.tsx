@@ -32,12 +32,14 @@ interface ScheduleItem {
   isCompleted?: boolean;
   completedAt?: string;
   completedPdfUrl?: string;
+  completedInspectionId?: number | string;
   completedInspector?: string;
   completedFormTitle?: string;
   completedLocation?: string;
   hasSsProof?: boolean;
   ssProofUrl?: string | null;
   ssProofDate?: string | null;
+  ssProofId?: number | string | null;
   partners?: SchedulePartner[];
   formInfo?: {
     formId: string;
@@ -59,17 +61,23 @@ interface InspectionScheduleCardProps {
   onNavigateToWo?: () => void;
 }
 
-function getLocalISOWeekTag(d: Date = new Date(), advanceOnWeekend = true): string {
-  const date = new Date(d.getTime());
-  if (advanceOnWeekend && (date.getDay() === 0 || date.getDay() === 6)) {
-    const daysToAdd = date.getDay() === 6 ? 2 : 1;
-    date.setDate(date.getDate() + daysToAdd);
+function getLocalISOWeekTag(d: Date = new Date()): string {
+  // Convert strictly to WIT (Eastern Indonesia Time, UTC+9)
+  // The inspection period opens on Monday at 00:01 WIT and closes on Sunday at 23:59:59 WIT.
+  // Never advance on Saturday or Sunday.
+  const utc = d.getTime();
+  const witDate = new Date(utc + (9 * 60 * 60 * 1000));
+  
+  const target = new Date(Date.UTC(witDate.getUTCFullYear(), witDate.getUTCMonth(), witDate.getUTCDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = target.getTime();
+  target.setUTCMonth(0, 1);
+  if (target.getUTCDay() !== 4) {
+    target.setUTCMonth(0, 1 + ((4 - target.getUTCDay()) + 7) % 7);
   }
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-  const week1 = new Date(date.getFullYear(), 0, 4);
-  const weekNum = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-  return `W${weekNum}`;
+  const weekNumber = 1 + Math.ceil((firstThursday - target.getTime()) / 604800000);
+  return `W${weekNumber}`;
 }
 
 const GENERAL_INSPECTION_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform';
@@ -86,12 +94,13 @@ export function InspectionScheduleCard({
   onNavigateToPemantauan,
   onNavigateToWo
 }: InspectionScheduleCardProps) {
-  const [currentWeekTag, setCurrentWeekTag] = useState<string>(() => getLocalISOWeekTag(new Date(), true));
+  const [currentWeekTag, setCurrentWeekTag] = useState<string>(() => getLocalISOWeekTag(new Date()));
 
-  // Instant SWR Hydration: Render immediately from cache if available (0ms load time)
+  // Instant SWR Hydration: Render immediately from cache if available for CURRENT WEEK ONLY
   const [mySchedule, setMySchedule] = useState<ScheduleItem | null>(() => {
     try {
-      const saved = localStorage.getItem('p2h_cached_my_schedule');
+      const activeWeek = getLocalISOWeekTag(new Date());
+      const saved = localStorage.getItem(`p2h_cached_my_schedule_${activeWeek}`);
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -199,6 +208,9 @@ export function InspectionScheduleCard({
   const [ktaImagePreview, setKtaImagePreview] = useState<string | null>(null);
   const [isSubmittingKta, setIsSubmittingKta] = useState(false);
   const isSubmittingKtaRef = useRef(false);
+
+  // Deleting Submission State
+  const [isDeletingSubmission, setIsDeletingSubmission] = useState(false);
 
   // Minimize / Compact Mode States (Persisted in localStorage, default: ringkas / true)
   const [isScheduleMinimized, setIsScheduleMinimized] = useState<boolean>(() => {
@@ -449,15 +461,15 @@ export function InspectionScheduleCard({
           setHasSsProof(true);
           setSsProofUrl(found.imageUrl || null);
           try {
-            localStorage.setItem('p2h_cached_has_ss_proof', 'true');
-            if (found.imageUrl) localStorage.setItem('p2h_cached_ss_proof_url', found.imageUrl);
+            localStorage.setItem(`p2h_cached_has_ss_proof_${currentWeekTag}`, 'true');
+            if (found.imageUrl) localStorage.setItem(`p2h_cached_ss_proof_url_${currentWeekTag}`, found.imageUrl);
           } catch {}
         } else {
           setHasSsProof(false);
           setSsProofUrl(null);
           try {
-            localStorage.setItem('p2h_cached_has_ss_proof', 'false');
-            localStorage.removeItem('p2h_cached_ss_proof_url');
+            localStorage.setItem(`p2h_cached_has_ss_proof_${currentWeekTag}`, 'false');
+            localStorage.removeItem(`p2h_cached_ss_proof_url_${currentWeekTag}`);
           } catch {}
         }
       }
@@ -588,7 +600,8 @@ export function InspectionScheduleCard({
         }
         if (json.found && json.schedule) {
           setMySchedule(json.schedule);
-          try { localStorage.setItem('p2h_cached_my_schedule', JSON.stringify(json.schedule)); } catch {}
+          const weekKey = json.week || currentWeekTag;
+          try { localStorage.setItem(`p2h_cached_my_schedule_${weekKey}`, JSON.stringify(json.schedule)); } catch {}
 
           if (json.rosterToday) {
             setDailyTasks((prev: any) => ({
@@ -613,22 +626,22 @@ export function InspectionScheduleCard({
           }
           if (json.schedule.hasSsProof) {
             setHasSsProof(true);
-            try { localStorage.setItem('p2h_cached_has_ss_proof', 'true'); } catch {}
+            try { localStorage.setItem(`p2h_cached_has_ss_proof_${weekKey}`, 'true'); } catch {}
             if (json.schedule.ssProofUrl) {
               setSsProofUrl(json.schedule.ssProofUrl);
-              try { localStorage.setItem('p2h_cached_ss_proof_url', json.schedule.ssProofUrl); } catch {}
+              try { localStorage.setItem(`p2h_cached_ss_proof_url_${weekKey}`, json.schedule.ssProofUrl); } catch {}
             }
           } else {
             setHasSsProof(false);
             setSsProofUrl(null);
             try {
-              localStorage.setItem('p2h_cached_has_ss_proof', 'false');
-              localStorage.removeItem('p2h_cached_ss_proof_url');
+              localStorage.setItem(`p2h_cached_has_ss_proof_${weekKey}`, 'false');
+              localStorage.removeItem(`p2h_cached_ss_proof_url_${weekKey}`);
             } catch {}
           }
         } else {
           setMySchedule(null);
-          try { localStorage.removeItem('p2h_cached_my_schedule'); } catch {}
+          try { localStorage.removeItem(`p2h_cached_my_schedule_${currentWeekTag}`); } catch {}
         }
       }
 
@@ -732,6 +745,68 @@ export function InspectionScheduleCard({
     fetchKtaStatus(true);
     fetchP5mAssignment();
     fetchDailyTasks();
+  };
+
+  const handleDeleteSubmission = async () => {
+    const confirmMsg =
+      `Hapus data inspeksi minggu ini (${currentWeekTag})?\n\n` +
+      `• Submission formulir dan dokumen PDF sebelumnya akan dibatalkan & dihapus dari sistem.\n` +
+      `• Bukti screenshot (jika ada) akan dibersihkan.\n` +
+      `• Status kembali menjadi 'Belum Dilakukan' dan Anda dapat mengisi ulang dengan bersih tanpa duplikasi data di rekap.\n\n` +
+      `Lanjutkan penghapusan?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsDeletingSubmission(true);
+    try {
+      if (mySchedule?.completedInspectionId) {
+        await fetch(`/api/inspections/${mySchedule.completedInspectionId}?deleteProof=true`, {
+          method: 'DELETE'
+        });
+      }
+
+      if (mySchedule?.ssProofId) {
+        await fetch(`/api/inspection-proofs/${mySchedule.ssProofId}`, {
+          method: 'DELETE'
+        });
+      }
+
+      const cleanNik = (inspectorNik || '').trim();
+      const cleanName = (inspectorName || mySchedule?.name || '').trim();
+      await fetch(`/api/inspections-reset-submission?nik=${encodeURIComponent(cleanNik)}&name=${encodeURIComponent(cleanName)}&week=${encodeURIComponent(currentWeekTag)}`, {
+        method: 'DELETE'
+      });
+
+      const activeWeek = getLocalISOWeekTag(new Date());
+      try {
+        localStorage.removeItem(`p2h_cached_my_schedule_${activeWeek}`);
+        localStorage.removeItem('p2h_cached_my_schedule');
+        localStorage.removeItem('p2h_cached_all_schedules');
+        localStorage.removeItem('p2h_cached_has_ss_proof');
+        localStorage.removeItem('p2h_cached_ss_proof_url');
+        localStorage.removeItem(`p2h_cached_has_ss_proof_${activeWeek}`);
+        localStorage.removeItem(`p2h_cached_ss_proof_url_${activeWeek}`);
+      } catch {}
+
+      setHasSsProof(false);
+      setSsProofUrl(null);
+      setMySchedule(prev => prev ? {
+        ...prev,
+        isCompleted: false,
+        completedPdfUrl: undefined,
+        completedInspectionId: undefined,
+        hasSsProof: false,
+        ssProofUrl: null,
+        ssProofId: null
+      } : null);
+
+      toast.success('Data inspeksi berhasil dihapus. Anda dapat mengisi ulang formulir baru.');
+      await fetchSchedule(true);
+    } catch (err: any) {
+      toast.error('Gagal menghapus inspeksi: ' + (err.message || String(err)));
+    } finally {
+      setIsDeletingSubmission(false);
+    }
   };
 
   useEffect(() => {
@@ -996,8 +1071,8 @@ export function InspectionScheduleCard({
       item.jabatan.toLowerCase().includes(searchQuery.toLowerCase());
     const matchShift = 
       filterShift === 'all' || 
-      (filterShift === 'siang' && item.shift.toLowerCase().includes('siang')) ||
-      (filterShift === 'malam' && item.shift.toLowerCase().includes('malam')) ||
+      (filterShift === 'siang' && (item.shift.toLowerCase().includes('siang') || item.shift.toLowerCase().includes('pagi') || item.shift.toLowerCase().includes('day'))) ||
+      (filterShift === 'malam' && (item.shift.toLowerCase().includes('malam') || item.shift.toLowerCase().includes('night'))) ||
       (filterShift === 'nonshift' && item.shift.toLowerCase().includes('nonshift')) ||
       (filterShift === 'cuti' && item.isCuti);
     return matchSearch && matchShift;
@@ -1188,21 +1263,21 @@ export function InspectionScheduleCard({
                         <span>🏖️</span> Bebas Tugas (Cuti)
                       </span>
                     ) : mySchedule?.isCompleted ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap shrink-0">
-                        <Check className="w-3 h-3" /> Selesai
+                      <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap shrink-0 shadow-2xs">
+                        <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Sudah Dilakukan
                       </span>
                     ) : hasSsProof ? (
                       <button
                         type="button"
                         onClick={handleViewSsProof}
-                        className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 border border-emerald-500/30 flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap shrink-0"
+                        className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap shrink-0"
                         title="Klik untuk melihat bukti screenshot"
                       >
-                        <Check className="w-3 h-3" /> Bukti SS
+                        <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Sudah Dilakukan (Bukti SS)
                       </button>
                     ) : (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30 whitespace-nowrap shrink-0">
-                        Belum Selesai
+                      <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap shrink-0 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" /> Belum Dilakukan
                       </span>
                     )}
                   </div>
@@ -1349,11 +1424,13 @@ export function InspectionScheduleCard({
                   </>
                 ) : mySchedule?.isCompleted || hasSsProof ? (
                   <>
-                    {mySchedule?.completedPdfUrl && mySchedule.completedPdfUrl !== '#' && (
+                    {(mySchedule?.completedPdfUrl && mySchedule.completedPdfUrl !== '#') || mySchedule?.completedInspectionId ? (
                       <button
                         type="button"
                         onClick={() => {
-                          const rawUrl = mySchedule.completedPdfUrl!;
+                          const rawUrl = (mySchedule?.completedPdfUrl && mySchedule.completedPdfUrl !== '#')
+                            ? mySchedule.completedPdfUrl
+                            : `/api/inspections/${mySchedule?.completedInspectionId}/pdf?pt=tbp`;
                           const fileIdMatch = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
                           const viewUrl = fileIdMatch && fileIdMatch[1]
                             ? `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`
@@ -1361,10 +1438,11 @@ export function InspectionScheduleCard({
                           window.open(viewUrl, '_blank');
                         }}
                         className="flex-1 py-1.5 px-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-emerald-600 hover:text-white transition-colors cursor-pointer"
+                        title="Buka / Unduh Dokumen PDF Laporan"
                       >
-                        <Download className="w-3 h-3" /> Unduh PDF
+                        <Download className="w-3.5 h-3.5" /> Lihat PDF Laporan
                       </button>
-                    )}
+                    ) : null}
                     {hasSsProof && ssProofUrl && (
                       <div
                         onClick={handleViewSsProof}
@@ -1407,10 +1485,17 @@ export function InspectionScheduleCard({
                     )}
                     <button
                       type="button"
-                      onClick={handleStartInspection}
-                      className="text-[10px] text-[var(--text-muted)] hover:text-emerald-600 underline py-1 px-1 cursor-pointer"
+                      onClick={handleDeleteSubmission}
+                      disabled={isDeletingSubmission}
+                      className="py-1.5 px-2 rounded-xl border border-rose-500/30 bg-rose-50/60 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 text-[11px] font-bold hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                      title="Hapus / batalkan submission ini jika terdapat kesalahan pengisian"
                     >
-                      Isi Ulang
+                      {isDeletingSubmission ? (
+                        <RefreshCw className="w-3 h-3 animate-spin text-rose-600" />
+                      ) : (
+                        <Trash2 className="w-3 h-3 text-rose-600" />
+                      )}
+                      <span>Hapus / Batalkan</span>
                     </button>
                   </>
                 ) : (
@@ -2903,9 +2988,9 @@ export function InspectionScheduleCard({
                     let shiftBadgeClass = 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
                     if (item.isCuti) {
                       shiftBadgeClass = 'bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800';
-                    } else if (shiftLower.includes('malam') || shiftLower.includes('shift a') || shiftLower.includes('shift b')) {
+                    } else if (shiftLower.includes('malam') || shiftLower.includes('night')) {
                       shiftBadgeClass = 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800';
-                    } else if (shiftLower.includes('siang') || shiftLower.includes('shift r')) {
+                    } else if (shiftLower.includes('siang') || shiftLower.includes('pagi') || shiftLower.includes('day')) {
                       shiftBadgeClass = 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800';
                     }
 

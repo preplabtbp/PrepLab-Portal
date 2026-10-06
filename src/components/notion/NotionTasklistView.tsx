@@ -1,6 +1,6 @@
 import React from 'react';
 import { CheckSquare, Square, CheckCircle2 } from 'lucide-react';
-import { TasklistProgress } from './tasklist-utils';
+import { TasklistProgress, formatColorTagsToHtml } from './tasklist-utils';
 
 interface NotionTasklistViewProps {
   progress: TasklistProgress;
@@ -70,7 +70,7 @@ export const NotionTasklistView: React.FC<NotionTasklistViewProps> = ({
               }
             }}
             className={`flex items-start gap-1.5 text-xs select-none transition-colors rounded px-1 py-0.5 ${
-              disabled ? 'cursor-default' : 'cursor-pointer hover:bg-slate-800/60'
+              disabled ? 'cursor-default' : 'cursor-pointer hover:bg-slate-100/60'
             }`}
           >
             <button
@@ -79,20 +79,19 @@ export const NotionTasklistView: React.FC<NotionTasklistViewProps> = ({
               className="mt-0.5 shrink-0 focus:outline-none"
             >
               {item.checked ? (
-                <CheckSquare className="w-3.5 h-3.5 text-teal-400 hover:text-teal-300" />
+                <CheckSquare className="w-3.5 h-3.5 text-teal-600 hover:text-teal-700" />
               ) : (
-                <Square className="w-3.5 h-3.5 text-slate-400 hover:text-slate-300" />
+                <Square className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600" />
               )}
             </button>
             <span
               className={`leading-snug text-left flex-1 break-words ${
                 item.checked
-                  ? 'line-through text-slate-500 dark:text-slate-500 font-normal'
-                  : 'text-slate-200 dark:text-slate-200 font-medium'
+                  ? 'line-through text-slate-500 font-normal'
+                  : 'text-slate-900 font-medium'
               }`}
-            >
-              {item.text}
-            </span>
+              dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(item.text) }}
+            />
           </div>
         ))}
       </div>

@@ -23,26 +23,26 @@ export const STATUS_OPTIONS: DropdownOption[] = [
   {
     value: 'Open',
     label: 'Open',
-    badgeClass: 'bg-blue-500/15 text-blue-500 dark:text-blue-400 border-blue-500/40 hover:bg-blue-500/25',
-    icon: <Clock className="w-2.5 h-2.5 text-blue-500 dark:text-blue-400" />
+    badgeClass: 'bg-slate-100 text-slate-900 border-slate-200 font-medium hover:bg-slate-200',
+    icon: <Clock className="w-2.5 h-2.5 text-slate-700" />
   },
   {
     value: 'On Progress',
     label: 'On Progress',
-    badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25',
-    icon: <RotateCcw className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+    badgeClass: 'bg-amber-50 text-amber-900 border-amber-200/80 font-medium hover:bg-amber-100',
+    icon: <RotateCcw className="w-2.5 h-2.5 text-amber-700" />
   },
   {
     value: 'Closed',
     label: 'Closed',
-    badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25',
-    icon: <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+    badgeClass: 'bg-emerald-50 text-emerald-900 border-emerald-200/80 font-medium hover:bg-emerald-100',
+    icon: <CheckCircle2 className="w-2.5 h-2.5 text-emerald-700" />
   },
   {
     value: 'Canceled',
     label: 'Canceled',
-    badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/40 hover:bg-rose-500/25',
-    icon: <AlertCircle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" />
+    badgeClass: 'bg-rose-50 text-rose-900 border-rose-200/80 font-medium hover:bg-rose-100',
+    icon: <AlertCircle className="w-2.5 h-2.5 text-rose-700" />
   }
 ];
 
@@ -50,52 +50,52 @@ const ACTIVITY_OPTIONS: DropdownOption[] = [
   {
     value: 'Daily',
     label: 'Daily (Harian)',
-    badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25'
+    badgeClass: 'bg-teal-50 text-teal-900 font-medium border-teal-200/80 hover:bg-teal-100'
   },
   {
     value: 'Weekly',
     label: 'Weekly (Mingguan)',
-    badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/40 hover:bg-blue-500/25'
+    badgeClass: 'bg-sky-50 text-sky-900 font-medium border-sky-200/80 hover:bg-sky-100'
   },
   {
     value: 'Monthly',
     label: 'Monthly (Bulanan)',
-    badgeClass: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/40 hover:bg-indigo-500/25'
+    badgeClass: 'bg-indigo-50 text-indigo-900 font-medium border-indigo-200/80 hover:bg-indigo-100'
   },
   {
     value: 'Quarterly',
     label: 'Quarterly (Triwulan)',
-    badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
+    badgeClass: 'bg-purple-50 text-purple-900 font-medium border-purple-200/80 hover:bg-purple-100'
   },
   {
     value: 'Biannual',
     label: 'Biannual (Semesteran)',
-    badgeClass: 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/40 hover:bg-teal-500/25'
+    badgeClass: 'bg-amber-50 text-amber-900 font-medium border-amber-200/80 hover:bg-amber-100'
   },
   {
     value: 'Yearly',
     label: 'Yearly (Tahunan)',
-    badgeClass: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/25'
+    badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80 hover:bg-rose-100'
   },
   {
     value: 'Non Routine',
     label: 'Non Routine (Insidentil)',
-    badgeClass: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/40 hover:bg-purple-500/25'
+    badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
   },
   {
     value: 'Routine',
     label: 'Routine (Umum)',
-    badgeClass: 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/40 hover:bg-slate-500/25'
+    badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
   },
   {
     value: 'Periodic',
     label: 'Periodic (Umum)',
-    badgeClass: 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/40 hover:bg-slate-500/25'
+    badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
   },
   {
     value: 'Special Task',
     label: 'Special Task',
-    badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/40 hover:bg-rose-500/25'
+    badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80 hover:bg-rose-100'
   }
 ];
 
@@ -103,41 +103,41 @@ const PRIORITY_OPTIONS: DropdownOption[] = [
   {
     value: 'Low',
     label: 'Low',
-    badgeClass: 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/40 hover:bg-slate-500/25'
+    badgeClass: 'bg-slate-100 text-slate-700 font-medium border-slate-200 hover:bg-slate-200'
   },
   {
     value: 'Normal',
     label: 'Normal',
-    badgeClass: 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/40 hover:bg-teal-500/25'
+    badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
   },
   {
     value: 'Medium',
     label: 'Medium',
-    badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/40 hover:bg-blue-500/25'
+    badgeClass: 'bg-sky-50 text-sky-900 font-medium border-sky-200/80 hover:bg-sky-100'
   },
   {
     value: 'High',
     label: 'High',
-    badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25',
-    icon: <AlertTriangle className="w-2.5 h-2.5 text-amber-500 dark:text-amber-400" />
+    badgeClass: 'bg-amber-50 text-amber-900 font-medium border-amber-200/80 hover:bg-amber-100',
+    icon: <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
   },
   {
     value: 'Urgent',
     label: 'Urgent',
-    badgeClass: 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/50 hover:bg-rose-500/30 font-bold',
-    icon: <AlertCircle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" />
+    badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80 hover:bg-rose-100',
+    icon: <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
   }
 ];
 
 const PERIOD_OPTIONS: DropdownOption[] = [
-  { value: 'Daily', label: 'Daily', badgeClass: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' },
-  { value: 'Weekly', label: 'Weekly', badgeClass: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700' },
-  { value: 'Monthly', label: 'Monthly', badgeClass: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700' },
-  { value: 'Quarterly', label: 'Quarterly', badgeClass: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700' },
-  { value: 'Biannual', label: 'Biannual', badgeClass: 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-700' },
-  { value: 'Yearly', label: 'Yearly', badgeClass: 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-300 dark:border-cyan-700' },
-  { value: 'Non-Routine', label: 'Non-Routine', badgeClass: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700' },
-  { value: 'Ad-hoc', label: 'Ad-hoc', badgeClass: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700' }
+  { value: 'Daily', label: 'Daily', badgeClass: 'bg-teal-50 text-teal-900 font-medium border-teal-200/80' },
+  { value: 'Weekly', label: 'Weekly', badgeClass: 'bg-sky-50 text-sky-900 font-medium border-sky-200/80' },
+  { value: 'Monthly', label: 'Monthly', badgeClass: 'bg-indigo-50 text-indigo-900 font-medium border-indigo-200/80' },
+  { value: 'Quarterly', label: 'Quarterly', badgeClass: 'bg-purple-50 text-purple-900 font-medium border-purple-200/80' },
+  { value: 'Biannual', label: 'Biannual', badgeClass: 'bg-amber-50 text-amber-900 font-medium border-amber-200/80' },
+  { value: 'Yearly', label: 'Yearly', badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80' },
+  { value: 'Non-Routine', label: 'Non-Routine', badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200' },
+  { value: 'Ad-hoc', label: 'Ad-hoc', badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200' }
 ];
 
 interface NotionDropdownCellProps {
@@ -258,13 +258,13 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
         type="button"
         onClick={handleToggle}
         title="Klik untuk ubah langsung"
-        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-medium transition-all group/btn cursor-pointer ${currentOpt.badgeClass} ${
+        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-black transition-all group/btn cursor-pointer ${currentOpt.badgeClass} ${
           compact ? 'text-[10px] px-1.5 py-0.2' : ''
         }`}
       >
         {currentOpt.icon}
         <span className="truncate max-w-[120px]">{currentOpt.label}</span>
-        <ChevronDown className="w-2.5 h-2.5 opacity-60 group-hover/btn:opacity-100 group-hover/btn:translate-y-0.2 transition-all shrink-0" />
+        <ChevronDown className="w-2.5 h-2.5 opacity-70 group-hover/btn:opacity-100 group-hover/btn:translate-y-0.2 transition-all shrink-0" />
       </button>
 
       {/* Popover Menu Rendered in Body via React Portal (Never Covered by Sibling Rows, 100% Solid) */}
@@ -272,7 +272,7 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
         <div
           ref={menuRef}
           onClick={(e) => e.stopPropagation()}
-          className="fixed rounded-xl border p-1 font-sans animate-in fade-in zoom-in-95 duration-100"
+          className="fixed rounded-xl border p-1 font-sans animate-in fade-in zoom-in-95 duration-100 bg-white border-slate-300"
           style={{
             top: position.openUpwards ? undefined : `${position.top}px`,
             bottom: position.openUpwards ? `${window.innerHeight - position.top}px` : undefined,
@@ -280,18 +280,12 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
             minWidth: '150px',
             maxWidth: '220px',
             zIndex: 99999,
-            backgroundColor: 'var(--card-bg, #ffffff)',
-            borderColor: 'var(--border-main, #cbd5e1)',
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.15)'
           }}
         >
           {/* Header Title */}
           <div 
-            className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider border-b mb-1 font-bold"
-            style={{
-              borderColor: 'var(--border-main, #e2e8f0)',
-              color: 'var(--text-muted, #64748b)'
-            }}
+            className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider border-b mb-1 font-black text-slate-800 border-slate-200"
           >
             Pilih {type}
           </div>
@@ -307,18 +301,15 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
                   onClick={(e) => handleSelect(opt.value, e)}
                   className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer ${
                     isSelected 
-                      ? 'bg-teal-500/15 text-teal-600 dark:text-teal-300 font-bold' 
-                      : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                      ? 'bg-teal-50 text-teal-950 font-black border border-teal-300' 
+                      : 'hover:bg-slate-100 text-black font-bold'
                   }`}
-                  style={{
-                    color: isSelected ? undefined : 'var(--text-main, #0f172a)'
-                  }}
                 >
                   <div className="flex items-center gap-2">
                     {opt.icon}
-                    <span className="font-medium">{opt.label}</span>
+                    <span>{opt.label}</span>
                   </div>
-                  {isSelected && <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />}
+                  {isSelected && <Check className="w-3.5 h-3.5 text-teal-700 shrink-0" />}
                 </button>
               );
             })}

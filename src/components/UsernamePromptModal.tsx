@@ -178,14 +178,14 @@ export function UsernamePromptModal({
             </div>
 
             {/* Live Preview Greeting Card */}
-            <div className="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 text-left">
+            <div className="bg-teal-50/70 text-slate-800 rounded-2xl p-4 border border-teal-200 text-left shadow-xs">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-teal-400">Live Preview Sapaan Beranda</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[10px] uppercase font-bold tracking-wider text-teal-700">Live Preview Sapaan Beranda</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               </div>
-              <p className="text-sm font-semibold flex items-center gap-1">
+              <p className="text-sm font-semibold flex items-center gap-1 text-slate-800">
                 <span>Selamat Pagi,</span>
-                <span className="text-teal-300 font-bold">{previewName}</span>
+                <span className="text-teal-700 font-bold">{previewName}</span>
                 <span>!</span>
                 <AnimatedSunCondition type="morning" />
               </p>

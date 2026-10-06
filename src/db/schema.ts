@@ -56,6 +56,7 @@ export const employees = pgTable('employees', {
   sisaCt: text('sisa_ct'),
   jatuhTempoCt: text('jatuh_tempo_ct'),
   firstLoginComplete: boolean('first_login_complete').default(false),
+  homeTutorialCompleted: boolean('home_tutorial_completed').default(false),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -650,6 +651,8 @@ export const portalLogins = pgTable('portal_logins', {
   id: serial('id').primaryKey(),
   nik: text('nik').notNull(),
   loginDate: text('login_date').notNull(), // 'YYYY-MM-DD'
+  greetingShown: boolean('greeting_shown').default(false),
+  greetingShownAt: timestamp('greeting_shown_at'),
   createdAt: timestamp('created_at').defaultNow(),
 }, (t) => [
   uniqueIndex('idx_portal_logins_nik_date').on(t.nik, t.loginDate),

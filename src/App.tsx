@@ -3,7 +3,7 @@ import React, { useState, useEffect, Suspense, lazy, useRef, useMemo, useCallbac
 import { AnimatePresence, motion } from 'motion/react';
 import { registerPresence, pingPresence, unregisterPresence } from './lib/socketClient';
 
-import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare, Trophy, Maximize2, Minimize2 } from 'lucide-react';
+import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, EyeOff, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare, Trophy, Maximize2, Minimize2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { appendRowsToSheet, getDowntimeRecords,updateDowntimeRepair, getEmployees, loginEmployee, getEquipments, ToolRecord, updateToolPhotoUrl, uploadPhotoToDrive } from './sheets-api';
@@ -14,12 +14,7 @@ import { Palette } from 'lucide-react';
 import { initAuth, googleSignIn } from './google-auth';
 import { WhatsAppModal } from './components/whatsapp-modal';
 import { InspectionCompletionModal, InspectionCompletionData } from './components/InspectionCompletionModal';
-import { P5MNotificationModal } from './components/p5m-notification-modal';
 import { GroupReportScreen } from './components/GroupReportScreen';
-import { ReminderNotificationModal } from './components/ReminderNotificationModal';
-import { InspectionNotificationModal } from './components/InspectionNotificationModal';
-import { GlobalOpenFindingsReminder } from './components/OpenFindingsReminderModal';
-import { GlobalKtaPartialReminderModal } from './components/GlobalKtaPartialReminderModal';
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
 import { PushNotificationPrompt } from './components/PushNotificationPrompt';
 import { PromotionWelcomeModal } from './components/PromotionWelcomeModal';
@@ -110,6 +105,8 @@ const LogbookScreen = lazyWithRetry(() => import('./components/logbook-screen').
 const ClinicScreen = lazyWithRetry(() => import('./components/clinic-screen').then(m => ({ default: m.ClinicScreen })));
 import { ModulesDrawer } from './components/ModulesDrawer';
 import { LabBotWidget } from './components/LabBotWidget';
+import { HeaderModuleSearchBar } from './components/HeaderModuleSearchBar';
+import { DailySplashScreen } from './components/DailySplashScreen';
 
 export default function App() {
 
@@ -207,7 +204,7 @@ export default function App() {
   
   const navigate = useNavigate();
   const location = useLocation();
-  const activeTab = location.pathname === '/' ? 'home' : location.pathname.substring(1);
+  const activeTab = (location.pathname === '/' || location.pathname === '/home') ? 'home' : location.pathname.substring(1);
   const isBulletin = location.pathname.startsWith('/bulletin');
   const [bulletinFocusMode, setBulletinFocusMode] = useState(true);
 
@@ -361,8 +358,28 @@ export default function App() {
 
   const isCrewRole = React.useMemo(() => {
     if (isMeetingRoom) return false;
-    return userProfile?.jabatan?.toLowerCase().includes('crew') || false;
-  }, [userProfile, isMeetingRoom]);
+    if (isDeveloper) return false;
+    const jab = (userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+    const role = (userProfile?.role || '').toLowerCase();
+    const isCrew = jab.includes('crew') || jab.includes('operator') || jab.includes('helper') || 
+                   jab.includes('teknisi') || role.includes('crew');
+    const isHigher = jab.includes('spv') || jab.includes('supervisor') || jab.includes('foreman') || 
+                     jab.includes('officer') || jab.includes('analyst') || jab.includes('superintendent') || 
+                     jab.includes('manager') || jab.includes('admin') || jab.includes('lead') ||
+                     role.includes('admin') || role.includes('supervisor');
+    return isCrew && !isHigher;
+  }, [userProfile, isMeetingRoom, isDeveloper]);
+
+  const isMaintenanceCrew = React.useMemo(() => {
+    if (!isCrewRole) return false;
+    const sec = (userProfile?.section || '').toLowerCase();
+    const jab = (userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+    const role = (userProfile?.role || '').toLowerCase();
+    return sec.includes('maint') || sec.includes('pemeliharaan') || 
+           jab.includes('maint') || jab.includes('mekanik') || jab.includes('listrik') || 
+           jab.includes('electric') || jab.includes('welder') || jab.includes('teknisi') ||
+           role.includes('maint') || role.includes('teknisi');
+  }, [isCrewRole, userProfile]);
 
   const userDept = React.useMemo(() => {
     if (isMeetingRoom) return "ALL";
@@ -399,6 +416,17 @@ export default function App() {
       sec.includes('quality assurance')
     );
   }, [isDeveloper, userProfile, isMeetingRoom]);
+
+  // SPT (Superintendent) & Manager Homepage Routing
+  const isSptOrManager = React.useMemo(() => {
+    if (isMeetingRoom) return false;
+    const jab = (userProfile?.jabatan || '').toLowerCase();
+    return (
+      jab.includes('superintendent') ||
+      jab.includes('spt') ||
+      jab.includes('manager')
+    );
+  }, [userProfile, isMeetingRoom]);
 
   const [showProfileScreen, setShowProfileScreen] = useState(false);
   const [showModulesDrawer, setShowModulesDrawer] = useState(false);
@@ -439,12 +467,16 @@ export default function App() {
     return () => window.removeEventListener('open-hazard-report-modal', handleOpenHazard);
   }, [isAdminOrDeveloper]);
 
-  // Listen for global open modules drawer requests and Alt+M shortcut
+  // Listen for global open modules drawer requests and Alt+M shortcut (blocked for Crew)
   useEffect(() => {
-    const handleOpenDrawer = () => setShowModulesDrawer(true);
+    const handleOpenDrawer = () => {
+      if (isCrewRole) return;
+      setShowModulesDrawer(true);
+    };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && (e.key === 'm' || e.key === 'M')) {
         e.preventDefault();
+        if (isCrewRole) return;
         setShowModulesDrawer(prev => !prev);
       }
     };
@@ -454,7 +486,27 @@ export default function App() {
       window.removeEventListener('open-modules-drawer', handleOpenDrawer);
       window.removeEventListener('keydown', handleKeyDown);
     };
+  }, [isCrewRole]);
+
+  // Listen for open-profile-screen request
+  useEffect(() => {
+    const handleOpenProfile = () => setShowProfileScreen(true);
+    window.addEventListener('open-profile-screen', handleOpenProfile);
+    return () => window.removeEventListener('open-profile-screen', handleOpenProfile);
   }, []);
+
+  // Crew Route Protection: ensure crew cannot access unauthorized pages via direct URL or link
+  useEffect(() => {
+    if (!isCrewRole) return;
+    const path = location.pathname.replace(/^\//, '');
+    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'settings'];
+    if (isMaintenanceCrew) {
+      allowedCrewPaths.push('wo-list');
+    }
+    if (path && !allowedCrewPaths.includes(path)) {
+      navigate('/', { replace: true });
+    }
+  }, [isCrewRole, isMaintenanceCrew, location.pathname, navigate]);
 
   // Theme state
   const [currentMode, setCurrentMode] = useState('morning');
@@ -644,7 +696,27 @@ export default function App() {
       setShowMeetingRoomDevModal(true);
       return;
     }
-    if (tab === 'home' || tab === '' || tab === '/') navigate('/');
+    if (cleanTab === 'profile') {
+      setShowProfileScreen(true);
+      return;
+    }
+
+    // Role guard for Crew: restrict navigation to allowed modules only
+    if (isCrewRole) {
+      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'settings'];
+      if (isMaintenanceCrew) {
+        allowedCrewTabs.push('wo-list');
+      }
+      if (!allowedCrewTabs.includes(cleanTab)) {
+        toast.error('Akses modul ini tidak tersedia untuk akun Crew.');
+        navigate('/');
+        return;
+      }
+    }
+
+    if (tab === 'home' || tab === '' || tab === '/') {
+      navigate('/home');
+    }
     else navigate('/' + cleanTab);
   };
 
@@ -726,9 +798,12 @@ export default function App() {
   
   const [loginStep, setLoginStep] = useState<'nik' | 'password' | 'setup' | 'forgot'>('nik');
   const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [requireSetup, setRequireSetup] = useState(false);
   const [setupPassword1, setSetupPassword1] = useState('');
+  const [showSetupPassword1, setShowSetupPassword1] = useState(false);
   const [setupPassword2, setSetupPassword2] = useState('');
+  const [showSetupPassword2, setShowSetupPassword2] = useState(false);
   const [setupTanggalLahir, setSetupTanggalLahir] = useState('');
   const [setupEmail, setSetupEmail] = useState('');
   
@@ -856,6 +931,14 @@ export default function App() {
                   toast.success("Login berhasil");
                   setLoginStep('nik');
                   setPasswordInput('');
+                  setShowPassword(false);
+
+                  const jab = (data.employee?.jabatan || '').toLowerCase();
+                  const isSuperOrMgr = jab.includes('superintendent') || jab.includes('spt') || jab.includes('manager');
+                  if (isSuperOrMgr) {
+                      const targetUniverse = data.employee?.pt === 'GTS' ? 'GTS' : 'TBP';
+                      navigate(`/bulletin/${targetUniverse}`);
+                  }
               }
           } else {
              const errMsg = data.message || 'Error login';
@@ -1040,19 +1123,48 @@ export default function App() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-teal-400" />
-                    <span>Password Akun</span>
-                  </label>
-                  <input 
-                    type="password"
-                    placeholder="••••••••"
-                    value={passwordInput}
-                    onChange={e => setPasswordInput(e.target.value)}
-                    required
-                    autoFocus
-                    className="w-full px-4 py-3 bg-slate-950/70 border border-slate-700/80 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all shadow-inner font-sans"
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Password Akun</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-[11px] text-slate-400 hover:text-teal-400 flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      {showPassword ? (
+                        <>
+                          <EyeOff className="w-3 h-3 text-teal-400" />
+                          <span className="text-teal-400 font-medium">Sembunyikan</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-3 h-3" />
+                          <span>Lihat Password</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input 
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={passwordInput}
+                      onChange={e => setPasswordInput(e.target.value)}
+                      required
+                      autoFocus
+                      className="w-full px-4 py-3 pr-11 bg-slate-950/70 border border-slate-700/80 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all shadow-inner font-sans"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-400 p-1 cursor-pointer transition-colors"
+                      title={showPassword ? "Sembunyikan password" : "Lihat password"}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4 text-teal-400" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <button 
@@ -1108,27 +1220,63 @@ export default function App() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-300">Password Baru</label>
-                  <input 
-                    type="password"
-                    placeholder="Minimal 6 karakter"
-                    value={setupPassword1}
-                    onChange={e => setSetupPassword1(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-300">Password Baru</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowSetupPassword1(!showSetupPassword1)}
+                      className="text-[10px] text-slate-400 hover:text-teal-400 flex items-center gap-1 cursor-pointer"
+                    >
+                      {showSetupPassword1 ? <EyeOff className="w-3 h-3 text-teal-400" /> : <Eye className="w-3 h-3" />}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input 
+                      type={showSetupPassword1 ? "text" : "password"}
+                      placeholder="Minimal 6 karakter"
+                      value={setupPassword1}
+                      onChange={e => setSetupPassword1(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 pr-9 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSetupPassword1(!showSetupPassword1)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-400 p-0.5 cursor-pointer"
+                    >
+                      {showSetupPassword1 ? <EyeOff className="w-3.5 h-3.5 text-teal-400" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-300">Konfirmasi Password Baru</label>
-                  <input 
-                    type="password"
-                    placeholder="Ulangi password baru"
-                    value={setupPassword2}
-                    onChange={e => setSetupPassword2(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-300">Konfirmasi Password Baru</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowSetupPassword2(!showSetupPassword2)}
+                      className="text-[10px] text-slate-400 hover:text-teal-400 flex items-center gap-1 cursor-pointer"
+                    >
+                      {showSetupPassword2 ? <EyeOff className="w-3 h-3 text-teal-400" /> : <Eye className="w-3 h-3" />}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input 
+                      type={showSetupPassword2 ? "text" : "password"}
+                      placeholder="Ulangi password baru"
+                      value={setupPassword2}
+                      onChange={e => setSetupPassword2(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 pr-9 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSetupPassword2(!showSetupPassword2)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-400 p-0.5 cursor-pointer"
+                    >
+                      {showSetupPassword2 ? <EyeOff className="w-3.5 h-3.5 text-teal-400" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
 
                 <button 
@@ -1248,6 +1396,12 @@ export default function App() {
               </Suspense>
             )}
           </AnimatePresence>
+
+          {/* Daily Splash Screen (Cross-device synced 1x per day via Server API) */}
+          <DailySplashScreen
+            userName={inspectorName || undefined}
+            userNik={inspectorNik || undefined}
+          />
           
       <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-slate-200/50 to-transparent pointer-events-none"></div>
       
@@ -1333,6 +1487,17 @@ export default function App() {
           </div>
         </div>
 
+        {/* Center Header: Module Search Bar */}
+        <HeaderModuleSearchBar
+          onNav={handleNav}
+          onOpenKta={() => {
+            window.dispatchEvent(new CustomEvent('open-simplified-inspection', { detail: { tab: 'kta_tta' } }));
+          }}
+          onOpenP5m={() => {
+            window.dispatchEvent(new CustomEvent('open-simplified-p5m-modal'));
+          }}
+        />
+
         <div className="flex items-center gap-3">
           {isBulletin && !bulletinFocusMode && (
             <button
@@ -1373,123 +1538,125 @@ export default function App() {
 
       {/* Main Layout Body: Dedicated Left Rail + Content Area */}
       <div className="flex-1 flex w-full relative">
-        {/* Dedicated Left Rail for All Menus (Desktop View, Non-overlapping) */}
-        <aside 
-          className={`flex-col items-center w-20 lg:w-24 shrink-0 border-r transition-all duration-300 sticky top-[57px] h-[calc(100dvh-57px)] z-30 select-none py-4 gap-2 justify-start overflow-y-auto ${
-            isBulletin && bulletinFocusMode ? 'hidden' : 'hidden md:flex'
-          }`}
-          style={{
-            backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
-            borderColor: 'var(--border-main, #E2E8F0)'
-          }}
-        >
-          {/* Primary "Semua Menu" Launcher Button */}
-          <button
-            onClick={() => setShowModulesDrawer(true)}
-            className="group relative flex flex-col items-center justify-center w-14 lg:w-16 py-2.5 rounded-2xl bg-gradient-to-b from-teal-500 via-teal-600 to-emerald-600 hover:from-teal-400 hover:via-teal-500 hover:to-emerald-500 text-white shadow-xl shadow-teal-500/25 border-2 border-white/25 transition-all duration-300 active:scale-95 cursor-pointer hover:shadow-teal-500/45 hover:-translate-y-0.5"
-            title="Buka Semua Menu & Modul Portal"
+        {/* Dedicated Left Rail for All Menus (Desktop View, Non-overlapping, Hidden for Crew) */}
+        {!isCrewRole && (
+          <aside 
+            className={`flex-col items-center w-20 lg:w-24 shrink-0 border-r transition-all duration-300 sticky top-[57px] h-[calc(100dvh-57px)] z-30 select-none py-4 gap-2 justify-start overflow-y-auto ${
+              isBulletin && bulletinFocusMode ? 'hidden' : 'hidden md:flex'
+            }`}
+            style={{
+              backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
+              borderColor: 'var(--border-main, #E2E8F0)'
+            }}
           >
-            {/* Glow ring on hover */}
-            <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-teal-400 to-emerald-500 opacity-0 group-hover:opacity-60 blur-xs transition-opacity duration-300 pointer-events-none" />
-
-            {/* Icon Container with subtle glass effect and micro-rotation */}
-            <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 shadow-inner">
-              <LayoutGrid className="w-4 h-4 lg:w-4.5 lg:h-4.5 text-white" />
-            </div>
-
-            {/* Text Labels: Semua Menu */}
-            <span className="relative text-[10px] lg:text-[11px] font-black uppercase tracking-wider mt-1.5 font-display text-center leading-tight">
-              Semua
-            </span>
-            <span className="relative text-[8px] font-bold text-teal-100 uppercase tracking-widest mt-0.5 leading-none">
-              Menu
-            </span>
-          </button>
-
-          {/* Subtle divider */}
-          <div className="w-8 h-px bg-[var(--border-main,#E2E8F0)] my-1 shrink-0" />
-
-          {/* Navigation Items transferred from footer to Left Rail */}
-          <div className="flex flex-col items-center gap-1.5 w-full px-1">
-            {/* Home */}
+            {/* Primary "Semua Menu" Launcher Button */}
             <button
-              onClick={() => handleNav('home')}
-              className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                activeTab === 'home'
-                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                  : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-              }`}
-              title="Beranda / Home"
+              onClick={() => setShowModulesDrawer(true)}
+              className="group relative flex flex-col items-center justify-center w-14 lg:w-16 py-2.5 rounded-2xl bg-gradient-to-b from-teal-500 via-teal-600 to-emerald-600 hover:from-teal-400 hover:via-teal-500 hover:to-emerald-500 text-white shadow-xl shadow-teal-500/25 border-2 border-white/25 transition-all duration-300 active:scale-95 cursor-pointer hover:shadow-teal-500/45 hover:-translate-y-0.5"
+              title="Buka Semua Menu & Modul Portal"
             >
-              <Home className="w-5 h-5" />
-              <span className="text-[10px] font-semibold leading-none">Home</span>
+              {/* Glow ring on hover */}
+              <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-teal-400 to-emerald-500 opacity-0 group-hover:opacity-60 blur-xs transition-opacity duration-300 pointer-events-none" />
+
+              {/* Icon Container with subtle glass effect and micro-rotation */}
+              <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                <LayoutGrid className="w-4 h-4 lg:w-4.5 lg:h-4.5 text-white" />
+              </div>
+
+              {/* Text Labels: Semua Menu */}
+              <span className="relative text-[10px] lg:text-[11px] font-black uppercase tracking-wider mt-1.5 font-display text-center leading-tight">
+                Semua
+              </span>
+              <span className="relative text-[8px] font-bold text-teal-100 uppercase tracking-widest mt-0.5 leading-none">
+                Menu
+              </span>
             </button>
 
-            {/* Buletin */}
-            <button
-              onClick={() => {
-                const activeUniv = localStorage.getItem('bulletin_active_universe');
-                const targetUniverse = isDeveloper
-                  ? (activeUniv === 'GTS' ? 'GTS' : 'TBP')
-                  : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
-                handleNav(`bulletin/${targetUniverse}`);
-              }}
-              className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                activeTab.startsWith('bulletin')
-                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                  : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-              }`}
-              title="Buletin K3 & Pengumuman"
-            >
-              <FileText className="w-5 h-5" />
-              <span className="text-[10px] font-semibold leading-none">Buletin</span>
-            </button>
+            {/* Subtle divider */}
+            <div className="w-8 h-px bg-[var(--border-main,#E2E8F0)] my-1 shrink-0" />
 
-            {/* Cloud */}
-            <button
-              onClick={() => handleNav('preplab-cloud')}
-              className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                activeTab === 'preplab-cloud'
-                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                  : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-              }`}
-              title="PrepLab Cloud Storage"
-            >
-              <Cloud className="w-5 h-5" />
-              <span className="text-[10px] font-semibold leading-none">Cloud</span>
-            </button>
-
-            {/* Settings */}
-            <button
-              onClick={() => handleNav('settings')}
-              className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                activeTab === 'settings'
-                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
-                  : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
-              }`}
-              title="Pengaturan Akun & Tema"
-            >
-              <Settings className="w-5 h-5" />
-              <span className="text-[10px] font-semibold leading-none">Settings</span>
-            </button>
-
-            {/* Developer (if applicable) */}
-            {(isDeveloper || isMeetingRoom) && (
+            {/* Navigation Items transferred from footer to Left Rail */}
+            <div className="flex flex-col items-center gap-1.5 w-full px-1">
+              {/* Home */}
               <button
-                onClick={() => handleNav('admin-dashboard')}
+                onClick={() => handleNav('home')}
                 className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                  activeTab === 'admin-dashboard'
+                  activeTab === 'home'
                     ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
                     : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
                 }`}
-                title="Developer Dashboard"
+                title="Beranda / Home"
               >
-                <Code2 className="w-5 h-5" />
-                <span className="text-[10px] font-semibold leading-none">Dev</span>
+                <Home className="w-5 h-5" />
+                <span className="text-[10px] font-semibold leading-none">Home</span>
               </button>
-            )}
-          </div>
-        </aside>
+
+              {/* Labnote */}
+              <button
+                onClick={() => {
+                  const activeUniv = localStorage.getItem('bulletin_active_universe');
+                  const targetUniverse = isDeveloper
+                    ? (activeUniv === 'GTS' ? 'GTS' : 'TBP')
+                    : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
+                  handleNav(`bulletin/${targetUniverse}`);
+                }}
+                className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                  activeTab.startsWith('bulletin')
+                    ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                    : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+                }`}
+                title="Labnote & Pengumuman"
+              >
+                <FileText className="w-5 h-5" />
+                <span className="text-[10px] font-semibold leading-none">Labnote</span>
+              </button>
+
+              {/* Cloud */}
+              <button
+                onClick={() => handleNav('preplab-cloud')}
+                className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                  activeTab === 'preplab-cloud'
+                    ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                    : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+                }`}
+                title="PrepLab Cloud Storage"
+              >
+                <Cloud className="w-5 h-5" />
+                <span className="text-[10px] font-semibold leading-none">Cloud</span>
+              </button>
+
+              {/* Settings */}
+              <button
+                onClick={() => handleNav('settings')}
+                className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                  activeTab === 'settings'
+                    ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                    : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+                }`}
+                title="Pengaturan Akun & Tema"
+              >
+                <Settings className="w-5 h-5" />
+                <span className="text-[10px] font-semibold leading-none">Settings</span>
+              </button>
+
+              {/* Developer (if applicable) */}
+              {(isDeveloper || isMeetingRoom) && (
+                <button
+                  onClick={() => handleNav('admin-dashboard')}
+                  className={`w-full max-w-[62px] py-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                    activeTab === 'admin-dashboard'
+                      ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
+                      : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
+                  }`}
+                  title="Developer Dashboard"
+                >
+                  <Code2 className="w-5 h-5" />
+                  <span className="text-[10px] font-semibold leading-none">Dev</span>
+                </button>
+              )}
+            </div>
+          </aside>
+        )}
 
         {/* Main Content Area */}
         <main className={`@container flex-1 flex flex-col w-full bg-transparent min-w-0 transition-all duration-300 ${
@@ -1499,7 +1666,22 @@ export default function App() {
       <Suspense fallback={<div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
               <AnimatePresence mode="wait">
 <Routes location={location} key={location.pathname}>
-  <Route path="/" element={<HomeScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} userPt={userProfile?.pt} />} />
+  <Route 
+    path="/" 
+    element={
+      isSptOrManager ? (
+        <Navigate to={`/bulletin/${userProfile?.pt === 'GTS' ? 'GTS' : 'TBP'}`} replace />
+      ) : (
+        <HomeScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} userPt={userProfile?.pt} />
+      )
+    } 
+  />
+  <Route 
+    path="/home" 
+    element={
+      <HomeScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} userPt={userProfile?.pt} />
+    } 
+  />
   <Route path="/modules" element={<ModulesScreen onNav={handleNav} inspectorNik={inspectorNik!} inspectorName={inspectorName!} userPt={userProfile?.pt} />} />
   <Route path="/chat" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
   <Route path="/group-reports" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
@@ -1529,7 +1711,7 @@ export default function App() {
     } 
   />
   <Route path="/pemantauan" element={<PemantauanScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} />} />
-  <Route path="/monitoring" element={<MonitoringDashboard inspectorNik={inspectorNik!} />} />
+  <Route path="/monitoring" element={<MonitoringDashboard inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} />} />
   <Route path="/quiz-admin" element={<QuizAdminScreen userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
   <Route path="/quiz" element={<QuizScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
   <Route path="/apd" element={<Navigate to="/apd-input" replace />} />
@@ -1539,7 +1721,7 @@ export default function App() {
   <Route path="/apd-monitoring" element={<ApdMonitoringScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
   <Route path="/induksi" element={<InduksiScreen />} />
   <Route path="/preplab-cloud" element={<PreplabCloudScreen onBack={() => handleNav('home')} userProfile={userProfile} inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
-  <Route path="/manual" element={<UserManualScreen onBack={() => handleNav('home')} />} />
+  <Route path="/manual" element={<UserManualScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
   <Route path="/employee-database" element={<EmployeeDatabaseScreen inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
   <Route path="/roster-admin" element={<RosterAdminScreen />} />
   <Route path="/settings" element={<SettingsScreen inspectorName={inspectorName} inspectorNik={inspectorNik} onLogoutKaryawan={handleLogoutKaryawan} onOpenThemeModal={() => setShowGlobalThemeModal(true)} onNav={handleNav} />} />
@@ -1575,8 +1757,8 @@ export default function App() {
       </Suspense>
       </main>
 
-        {/* Dedicated Right Rail on Homepage (SAP Management & Chat - 2 Buttons Only) */}
-        {activeTab === 'home' && (
+        {/* Dedicated Right Rail on Homepage (SAP Management & Chat - 2 Buttons Only, Hidden for Crew) */}
+        {!isCrewRole && activeTab === 'home' && (
           <aside 
             className="hidden md:flex flex-col items-center w-20 lg:w-24 shrink-0 border-l transition-colors sticky top-[57px] h-[calc(100dvh-57px)] z-30 select-none py-4 gap-3 justify-start overflow-y-auto"
             style={{
@@ -1687,7 +1869,7 @@ export default function App() {
               />
               <div className="flex justify-between items-center mb-6">
                 <h3 className="font-bold text-lg font-display" style={{ color: 'var(--text-main, #1E293B)' }}>
-                  Pilih Buletin
+                  Pilih Labnote
                 </h3>
                 <button 
                   onClick={() => setShowBulletinMenu(false)} 
@@ -1763,7 +1945,7 @@ export default function App() {
           />
           <NavItem 
             icon={<FileText className="w-5 h-5" />} 
-            label="Buletin" 
+            label="Labnote" 
             active={activeTab.startsWith('bulletin')} 
             onClick={() => { 
               const activeUniv = localStorage.getItem('bulletin_active_universe');
@@ -1827,18 +2009,20 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* All Menu Modules Drawer (Slides in from Left, Wider than Profile View) */}
-      <ModulesDrawer
-        isOpen={showModulesDrawer}
-        onClose={() => setShowModulesDrawer(false)}
-        onNav={(tab) => {
-          handleNav(tab);
-          setShowModulesDrawer(false);
-        }}
-        inspectorNik={inspectorNik || undefined}
-        inspectorName={inspectorName || undefined}
-        userPt={userProfile?.pt}
-      />
+      {/* All Menu Modules Drawer (Slides in from Left, Wider than Profile View, Hidden for Crew) */}
+      {!isCrewRole && (
+        <ModulesDrawer
+          isOpen={showModulesDrawer}
+          onClose={() => setShowModulesDrawer(false)}
+          onNav={(tab) => {
+            handleNav(tab);
+            setShowModulesDrawer(false);
+          }}
+          inspectorNik={inspectorNik || undefined}
+          inspectorName={inspectorName || undefined}
+          userPt={userProfile?.pt}
+        />
+      )}
 
       {/* SAP Management Drawer (Slides in from RIGHT, wider than profile view) */}
       <AnimatePresence>
@@ -1934,68 +2118,7 @@ export default function App() {
         data={inspectionCompletionData}
       />
 
-      {/* Global P5M Assignment Notification Modal */}
-      <P5MNotificationModal
-        inspectorNik={inspectorNik}
-        inspectorName={inspectorName}
-        onNavigateToP5M={() => navigate('/p5m')}
-      />
 
-      {/* Global Weekly Inspection Assignment Notification Modal (Google Sheet Live) */}
-      <InspectionNotificationModal
-        inspectorNik={inspectorNik}
-        inspectorName={inspectorName}
-        onNavigateToInspection={(formId, subArea) => {
-          if (formId) sessionStorage.setItem('preselected_form_id', formId);
-          if (subArea) sessionStorage.setItem('preselected_sub_area', subArea);
-          navigate('/weekly-inspection');
-        }}
-      />
-
-
-
-      {/* Global Push Popup Inspection Reminder Modal */}
-      {inspectorNik && (
-        <ReminderNotificationModal
-          userNik={inspectorNik}
-          onNavigateToInspection={() => navigate('/weekly-inspection')}
-          onNavigateToKta={() => navigate('/group-reports')}
-        />
-      )}
-
-      {/* Global Interactive LabBot AI Assistant (SOP & K3) - Hidden as requested */}
-      {/* 
-      <LabBotWidget
-        inspectorNik={inspectorNik || undefined}
-        inspectorName={inspectorName || undefined}
-      />
-      */}
-
-      {/* Global Open Inspection Findings Reminder Modal for Assigned Supervisors */}
-      {inspectorNik && (
-        <GlobalOpenFindingsReminder
-          inspectorNik={inspectorNik}
-          inspectorName={inspectorName}
-          inspectorJabatan={userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan')}
-          onNavigateToDashboard={() => {
-            navigate('/sap-dashboard');
-          }}
-        />
-      )}
-
-      {/* Global KTA/TTA 1x Partial Reminder Modal on Page Load / Refresh */}
-      {inspectorNik && (
-        <GlobalKtaPartialReminderModal
-          inspectorNik={inspectorNik}
-          inspectorName={inspectorName}
-          inspectorJabatan={userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan')}
-          inspectorSection={userProfile?.section}
-          onOpenKtaUpload={() => {
-            navigate('/group-reports?action=upload-kta');
-            window.dispatchEvent(new CustomEvent('open-kta-upload-modal'));
-          }}
-        />
-      )}
 
       {/* Global Logout Confirmation Modal */}
       <LogoutConfirmModal

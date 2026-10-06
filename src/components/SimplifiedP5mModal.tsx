@@ -3,9 +3,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, Megaphone, Calendar, Clock, BookOpen, 
   Download, Eye, ExternalLink, X, FileText, 
-  Sparkles, CheckCircle2, AlertCircle, RefreshCw, Loader2
+  Sparkles, CheckCircle2, AlertCircle, RefreshCw, Loader2, Check
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { getFlyerInfo, FlyerInfo } from '../lib/p5m-flyer';
+import { triggerExpGain } from '../lib/gamificationEvents';
 
 interface SimplifiedP5mModalProps {
   isOpen: boolean;
@@ -28,10 +30,13 @@ export function SimplifiedP5mModal({
   const [loading, setLoading] = useState(false);
   const [showViewer, setShowViewer] = useState(false);
   const [viewerMode, setViewerMode] = useState<'stream' | 'drive'>('stream');
+  const [isCompleted, setIsCompleted] = useState<boolean>(Boolean(initialAssignment?.isCompleted));
+  const [markingCompleted, setMarkingCompleted] = useState(false);
 
   useEffect(() => {
     if (initialAssignment) {
       setAssignment(initialAssignment);
+      setIsCompleted(Boolean(initialAssignment.isCompleted));
     }
   }, [initialAssignment]);
 
@@ -51,6 +56,7 @@ export function SimplifiedP5mModal({
         .then(data => {
           if (data?.success && data?.assignment) {
             setAssignment(data.assignment);
+            setIsCompleted(Boolean(data.assignment.isCompleted));
           }
         })
         .catch(err => {
@@ -61,6 +67,51 @@ export function SimplifiedP5mModal({
         });
     }
   }, [isOpen, inspectorNik, inspectorName, assignment]);
+
+  const handleMarkCompleted = async () => {
+    if (!assignment || markingCompleted) return;
+    setMarkingCompleted(true);
+    try {
+      const res = await fetch('/api/p5m/schedules/mark-completed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scheduleId: assignment.scheduleId,
+          day: assignment.day,
+          shift: assignment.shiftKey || (assignment.shift?.toLowerCase().includes('malam') ? 'malam' : 'pagi'),
+          zone: assignment.zone,
+          nik: inspectorNik || assignment.nik,
+          name: inspectorName || assignment.nama,
+          completed: true
+        })
+      });
+
+      if (res.ok) {
+        setIsCompleted(true);
+        setAssignment((prev: any) => prev ? { ...prev, isCompleted: true, completedAt: new Date().toISOString() } : prev);
+        toast.success('✅ Materi P5M berhasil ditandai sudah dilakukan! (+60 EXP)', { duration: 4000 });
+        triggerExpGain(60, 'Materi P5M Selesai Dibawakan!', 'Briefing Keselamatan Kerja');
+        window.dispatchEvent(new Event('gamification_updated'));
+        window.dispatchEvent(new CustomEvent('refresh-action-center'));
+        window.dispatchEvent(new CustomEvent('p5m-status-updated'));
+
+        try {
+          const cached = localStorage.getItem('p2h_cached_p5m_assignment');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            parsed.isCompleted = true;
+            localStorage.setItem('p2h_cached_p5m_assignment', JSON.stringify(parsed));
+          }
+        } catch {}
+      } else {
+        toast.error('Gagal menyimpan status P5M');
+      }
+    } catch (err: any) {
+      toast.error('Terjadi kesalahan jaringan: ' + (err.message || ''));
+    } finally {
+      setMarkingCompleted(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -235,6 +286,40 @@ export function SimplifiedP5mModal({
                     </button>
                   </div>
                 </div>
+
+                {/* Tombol Aksi Utama: Sudah Dilakukan */}
+                <div className="pt-1">
+                  {isCompleted ? (
+                    <div className="w-full py-3 px-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-between text-xs shadow-2xs">
+                      <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>Materi P5M Selesai Dibawakan</span>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white">
+                        Tuntas (+60 EXP)
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleMarkCompleted}
+                      disabled={markingCompleted}
+                      className="w-full py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-600/25 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {markingCompleted ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Menyimpan Status Selesai...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>Sudah Dilakukan (+60 EXP)</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               /* User sebagai PESERTA (Belum Terjadwal Jadi Pemateri) */
@@ -350,6 +435,37 @@ export function SimplifiedP5mModal({
                     <Download className="w-3 h-3" />
                     <span>Download File</span>
                   </button>
+                </div>
+
+                {/* Tombol Sudah Dilakukan dari dalam Previewer */}
+                <div className="pt-2 border-t border-[var(--border-main)]">
+                  {isCompleted ? (
+                    <div className="w-full py-2 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-between text-xs">
+                      <span className="text-emerald-700 dark:text-emerald-300 font-bold flex items-center gap-1.5 text-xs">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Materi Selesai Dibawakan
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-600">Tuntas ✓</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleMarkCompleted}
+                      disabled={markingCompleted}
+                      className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {markingCompleted ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Menyimpan...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Sudah Dilakukan (+60 EXP)</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             )}

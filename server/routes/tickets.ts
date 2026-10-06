@@ -224,17 +224,22 @@ router.post("/api/tickets", async (req, res) => {
         `*Saran Tindakan/Pengendalian:*\n${ticket.initialControl || '-'}\n\n` +
         `*Lampiran:*\n${ticket.photoUrl && ticket.photoUrl.startsWith('data:image') ? '(Gambar terlampir di sistem)' : (ticket.photoUrl || '-')}`;
     
-    // Push Notification to Safety / QA / Maintenance if needed
+    // In-App Notification (Temuan Inspeksi tetap masuk di list notifikasi, tidak di-push ke all)
     try {
       const _n = await db.insert(notifications).values({
         userId: null,
-        role: isInternal ? 'Maintenance' : 'Safety',
+        role: isInternal ? 'Maintenance' : null,
         title: isInternal ? 'WO Permintaan Baru' : 'Temuan Inspeksi Baru',
         message: isInternal ? `${ticket.requestorName} mengajukan permintaan pekerjaan di ${ticket.location || '-'}` : `${ticket.requestorName} mencatat temuan di ${ticket.location || '-'}`,
         type: 'warning',
         link: isInternal ? '/wo' : '/ticket'
       }).returning();
-      sendWebPush(_n);
+      if (isInternal) {
+        sendWebPush(_n);
+      } else {
+        // Tidak perlu push ke all untuk temuan inspeksi
+        sendWebPush(_n, { skipWebPush: true });
+      }
     } catch(e) { console.error('Ticket push error:', e); }
 
     res.status(201).json({ ...ticket, waMessageText });

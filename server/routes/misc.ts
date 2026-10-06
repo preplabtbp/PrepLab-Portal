@@ -10,7 +10,7 @@ import {
   mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi,
   developerUsers, communityQuotes, rekapManualOverrides, ktaReports, inspectionProofs
 } from "../../src/db/schema.js";
-import { generatePdfFromTemplate, drive } from '../../google-services.js';
+import { generatePdfFromTemplate, generateMonitoringPdfWithDynamicTable, drive } from '../../google-services.js';
 import { 
   sendWebPush, getUniverse, uploadFileToDrive, syncBulletinToAgenda, 
   getNotificationTargets, getTableObj, sanitizePayload 
@@ -69,6 +69,21 @@ function parseWeekNumber(weekStr?: string): number {
   if (!weekStr) return 0;
   const match = weekStr.match(/W(?:EEK)?\s*(\d+)/i);
   return match && match[1] ? parseInt(match[1], 10) : 0;
+}
+
+function normalizeWeekQuery(raw?: string): string {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  if (trimmed.toUpperCase() === 'ALL') return 'ALL';
+  const match = trimmed.match(/W(?:EEK)?\s*(\d+)/i);
+  if (match && match[1]) {
+    return `W${parseInt(match[1], 10)}`;
+  }
+  const numMatch = trimmed.match(/(\d+)/);
+  if (numMatch && numMatch[1]) {
+    return `W${parseInt(numMatch[1], 10)}`;
+  }
+  return trimmed.toUpperCase();
 }
 
 function parseInspectionDate(insp: any, dataFObj?: any): Date {
@@ -953,7 +968,8 @@ export async function getRekapPersonnelClassification(
 
 router.get('/api/rekap-inspeksi', async (req, res) => {
   try {
-    const selectedWeek = (req.query.week as string) || getISOWeekTag();
+    const rawWeek = (req.query.week as string) || '';
+    const selectedWeek = rawWeek ? normalizeWeekQuery(rawWeek) : getISOWeekTag();
     const allEmployees = await db.select().from(employees);
     const allRoster = await db.select().from(roster);
 
@@ -970,8 +986,20 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     const registerCompletedUser = (key: string, info: any) => {
       if (!key) return;
       const cleanKey = key.toString().trim().toLowerCase();
-      if (cleanKey && !completedSet.has(cleanKey)) {
+      if (!cleanKey) return;
+
+      const existing = completedSet.get(cleanKey);
+      if (!existing) {
         completedSet.set(cleanKey, info);
+      } else {
+        // If current info has a valid pdfUrl and existing does not, or info is newer, prioritize it!
+        const existingHasPdf = existing.pdfUrl && existing.pdfUrl !== '-' && existing.pdfUrl !== '#';
+        const newHasPdf = info.pdfUrl && info.pdfUrl !== '-' && info.pdfUrl !== '#';
+        if (!existingHasPdf && newHasPdf) {
+          completedSet.set(cleanKey, { ...existing, ...info });
+        } else if (newHasPdf && existingHasPdf && info.timestamp && existing.timestamp && new Date(info.timestamp) >= new Date(existing.timestamp)) {
+          completedSet.set(cleanKey, { ...existing, ...info });
+        }
       }
     };
 
@@ -981,9 +1009,23 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       allGroupReports.forEach(msg => {
         const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
         if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
+          let cleanPdfUrl = msg.pdfUrl;
+          let pdfUrlTbp: string | null = null;
+          let pdfUrlGps: string | null = null;
+          if (cleanPdfUrl && typeof cleanPdfUrl === 'string' && cleanPdfUrl.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(cleanPdfUrl);
+              pdfUrlTbp = parsed.tbp || null;
+              pdfUrlGps = parsed.gps || null;
+              cleanPdfUrl = pdfUrlTbp || pdfUrlGps || (Object.values(parsed)[0] as string) || null;
+            } catch (e) {}
+          }
+
           const info = {
             timestamp: msg.timestamp,
-            pdfUrl: msg.pdfUrl,
+            pdfUrl: cleanPdfUrl,
+            pdfUrlTbp,
+            pdfUrlGps,
             pdfTitle: msg.pdfTitle || 'Laporan Inspeksi',
             week: msgWeek
           };
@@ -997,21 +1039,24 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
             });
           }
 
-          allEmployees.forEach(e => {
-            if (e.name && (msg.senderName?.toLowerCase().includes(e.name.toLowerCase().trim()) || msg.text?.toLowerCase().includes(e.name.toLowerCase().trim()))) {
-              registerCompletedUser(e.nik, info);
-              registerCompletedUser(e.name, info);
+          // Strict match senderName against allEmployees (full name exact match)
+          if (msg.senderName) {
+            const senderClean = msg.senderName.trim().toLowerCase();
+            const matchedEmp = allEmployees.find(e => e.name && e.name.trim().toLowerCase() === senderClean);
+            if (matchedEmp) {
+              registerCompletedUser(matchedEmp.nik, info);
+              registerCompletedUser(matchedEmp.name, info);
             }
-          });
+          }
         }
       });
     } catch (e) {
       console.error('Error in fetchAllGroupReports for rekap:', e);
     }
 
-    // 2. Direct deep scan of DB `inspections` table (including dataF inspector payloads)
+    // 2. Direct deep scan of DB `inspections` table (ordered by ID desc so newest are evaluated first)
     try {
-      const dbInspections = await db.select().from(inspections);
+      const dbInspections = await db.select().from(inspections).orderBy(desc(inspections.id));
       dbInspections.forEach((insp: any) => {
         let dataFObj: any = {};
         let dataFArray: any[] = [];
@@ -1037,10 +1082,24 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         const inspWeek = getISOWeekTag(actualDate);
 
         if (selectedWeek === 'ALL' || inspWeek === selectedWeek) {
+          let cleanPdfUrl = insp.pdfUrl;
+          let pdfUrlTbp: string | null = null;
+          let pdfUrlGps: string | null = null;
+          if (cleanPdfUrl && typeof cleanPdfUrl === 'string' && cleanPdfUrl.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(cleanPdfUrl);
+              pdfUrlTbp = parsed.tbp || null;
+              pdfUrlGps = parsed.gps || null;
+              cleanPdfUrl = pdfUrlTbp || pdfUrlGps || (Object.values(parsed)[0] as string) || null;
+            } catch (e) {}
+          }
+
           const title = insp.type || insp.judulForm || dataFObj.judulForm || 'Laporan Inspeksi';
           const info = {
             timestamp: createdIso,
-            pdfUrl: insp.pdfUrl,
+            pdfUrl: cleanPdfUrl,
+            pdfUrlTbp,
+            pdfUrlGps,
             pdfTitle: title,
             week: inspWeek
           };
@@ -1081,11 +1140,22 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
                 const cleanName = part.split('|')[0].trim();
                 if (cleanName) registerCompletedUser(cleanName, info);
 
-                const nikMatches = part.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
+                const nikMatches: string[] = part.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
                 nikMatches.forEach((nik: string) => registerCompletedUser(nik, info));
 
                 allEmployees.forEach(e => {
-                  if (e.name && (part.toLowerCase().includes(e.name.toLowerCase().trim()) || e.name.toLowerCase().trim().includes(part.toLowerCase()))) {
+                  const empName = (e.name || '').trim().toLowerCase();
+                  const empNik = (e.nik || '').trim().toLowerCase();
+                  const partClean = part.toLowerCase().trim();
+                  const cleanNameLower = cleanName.toLowerCase().trim();
+
+                  if (empNik && (partClean === empNik || nikMatches.some(n => n.toLowerCase() === empNik))) {
+                    registerCompletedUser(e.nik, info);
+                    registerCompletedUser(e.name, info);
+                  } else if (empName && (cleanNameLower === empName || partClean === empName)) {
+                    registerCompletedUser(e.nik, info);
+                    registerCompletedUser(e.name, info);
+                  } else if (empName && empName.length >= 4 && partClean.includes(empName)) {
                     registerCompletedUser(e.nik, info);
                     registerCompletedUser(e.name, info);
                   }
@@ -1161,9 +1231,18 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       let isDone = false;
       let isManualOverride = false;
 
+      let resolvedPdfUrl = pdfInfo?.pdfUrl || null;
+      if (emp.pt === 'GPS' && pdfInfo?.pdfUrlGps) {
+        resolvedPdfUrl = pdfInfo.pdfUrlGps;
+      } else if (emp.pt === 'TBP' && pdfInfo?.pdfUrlTbp) {
+        resolvedPdfUrl = pdfInfo.pdfUrlTbp;
+      }
+
       let checkDetails = {
         pdfDone: hasPdf,
-        pdfUrl: pdfInfo?.pdfUrl || null,
+        pdfUrl: resolvedPdfUrl,
+        pdfUrlTbp: pdfInfo?.pdfUrlTbp || null,
+        pdfUrlGps: pdfInfo?.pdfUrlGps || null,
         pdfTitle: pdfInfo?.pdfTitle || null,
         pdfTimestamp: pdfInfo?.timestamp || null,
         ssDone: hasSs,
@@ -1203,7 +1282,9 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         isCuti: false,
         checkDetails,
         completedAt: ssInfo?.timestamp || pdfInfo?.timestamp || null,
-        pdfUrl: pdfInfo?.pdfUrl || null,
+        pdfUrl: resolvedPdfUrl,
+        pdfUrlTbp: pdfInfo?.pdfUrlTbp || null,
+        pdfUrlGps: pdfInfo?.pdfUrlGps || null,
         pdfTitle: pdfInfo?.pdfTitle || null,
         ssUrl: ssInfo?.imageUrl || null,
         week: isDone ? (pdfInfo?.week || selectedWeek) : selectedWeek
@@ -1258,8 +1339,9 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
 router.get('/api/kta-reports', async (req, res) => {
   try {
     const rawWeek = (req.query.week as string) || '';
-    if (rawWeek && rawWeek !== 'ALL') {
-      const reports = await db.select().from(ktaReports).where(eq(ktaReports.week, rawWeek)).orderBy(desc(ktaReports.createdAt));
+    const normWeek = normalizeWeekQuery(rawWeek);
+    if (normWeek && normWeek !== 'ALL') {
+      const reports = await db.select().from(ktaReports).where(eq(ktaReports.week, normWeek)).orderBy(desc(ktaReports.createdAt));
       return res.json(reports);
     }
     const reports = await db.select().from(ktaReports).orderBy(desc(ktaReports.createdAt));
@@ -1276,7 +1358,7 @@ router.post('/api/kta-reports', async (req, res) => {
       return res.status(400).json({ error: 'NIK, Nama, dan Bukti Screenshot formulir wajib dilampirkan!' });
     }
 
-    const reportWeek = week || getISOWeekTag(date ? new Date(date) : new Date());
+    const reportWeek = normalizeWeekQuery(week || getISOWeekTag(date ? new Date(date) : new Date()));
     const cleanType = (reportType || 'KTA').toUpperCase() === 'TTA' ? 'TTA' : 'KTA';
     const reportDate = date || new Date().toISOString().split('T')[0];
     const cleanNik = String(nik).trim();
@@ -1284,7 +1366,7 @@ router.post('/api/kta-reports', async (req, res) => {
     const cleanImg = String(imageUrl).trim();
 
     // Idempotency / Deduplication check:
-    // Prevent duplicate entries if the exact same submission was already recorded
+    // Only flag as accidental duplicate if submitted within the last 5 seconds with identical image AND identical description (e.g. rapid double-click)
     const existingReports = await db.select().from(ktaReports).where(
       and(
         eq(ktaReports.nik, cleanNik),
@@ -1293,13 +1375,15 @@ router.post('/api/kta-reports', async (req, res) => {
       )
     );
 
-    const duplicate = existingReports.find(r => 
-      (cleanDesc && r.description && r.description.trim().toLowerCase() === cleanDesc.toLowerCase()) ||
-      (r.imageUrl && r.imageUrl.trim() === cleanImg)
-    );
+    const duplicate = existingReports.find(r => {
+      const isSameImg = cleanImg && r.imageUrl && r.imageUrl.trim() === cleanImg;
+      const isSameDesc = cleanDesc && r.description && r.description.trim().toLowerCase() === cleanDesc.toLowerCase();
+      const timeDiff = r.createdAt ? (Date.now() - new Date(r.createdAt).getTime()) : Infinity;
+      return isSameImg && isSameDesc && timeDiff < 5000;
+    });
 
     if (duplicate) {
-      console.log(`[Deduplication] Prevented duplicate KTA report for NIK ${cleanNik} (${reportWeek}): id ${duplicate.id}`);
+      console.log(`[Deduplication] Prevented rapid duplicate KTA report for NIK ${cleanNik} (${reportWeek}): id ${duplicate.id}`);
       return res.status(200).json(duplicate);
     }
 
@@ -1338,21 +1422,22 @@ router.post('/api/kta-reports', async (req, res) => {
 
     invalidateRekapKtaCache();
 
-    // Kirim Push Notification & In-App Notification untuk Laporan KTA/TTA
+    // Masukkan ke List Notifikasi untuk Laporan KTA/TTA (tetap masuk di list notifikasi, tidak di-push ke all)
     try {
       const notifTitle = `Laporan ${cleanType} Baru (${created.name})`;
       const notifMsg = `${created.name} melaporkan ${cleanType === 'TTA' ? 'Tindakan Tidak Aman' : 'Kondisi Tidak Aman'}${created.location && created.location !== '-' ? ' di ' + created.location : ''}`;
       const _n = await db.insert(notifications).values({
         userId: null,
-        role: 'Safety',
+        role: null,
         title: notifTitle,
         message: notifMsg,
         type: 'warning',
         link: '/bulletin'
       }).returning();
-      sendWebPush(_n);
-    } catch (pushErr) {
-      console.error("Gagal mengirim push notifikasi KTA/TTA:", pushErr);
+      // Tidak di-push ke all (skipWebPush: true), hanya emit real-time socket untuk in-app
+      sendWebPush(_n, { skipWebPush: true });
+    } catch (notifErr) {
+      console.error("Gagal menyimpan notifikasi KTA/TTA:", notifErr);
     }
 
     res.status(201).json(created);
@@ -1390,7 +1475,7 @@ router.post('/api/inspection-proofs', async (req, res) => {
       return res.status(400).json({ error: 'NIK, Nama, dan Bukti Screenshot Form General Inspeksi wajib dilampirkan!' });
     }
 
-    const reportWeek = week || getISOWeekTag(date ? new Date(date) : new Date());
+    const reportWeek = normalizeWeekQuery(week || getISOWeekTag(date ? new Date(date) : new Date()));
     const reportDate = date || new Date().toISOString().split('T')[0];
     const cleanNik = String(nik).trim();
     const cleanDesc = description ? String(description).trim() : 'Bukti Screenshot Form General Inspeksi';
@@ -1405,8 +1490,8 @@ router.post('/api/inspection-proofs', async (req, res) => {
     );
 
     const duplicateProof = existingProofs.find(p => 
-      (p.imageUrl && p.imageUrl.trim() === cleanImg) ||
-      (cleanDesc && p.description && p.description.trim().toLowerCase() === cleanDesc.toLowerCase())
+      (cleanDesc && p.description && p.description.trim().toLowerCase() === cleanDesc.toLowerCase()) ||
+      (!cleanDesc && p.imageUrl && p.imageUrl.trim() === cleanImg)
     );
 
     if (duplicateProof) {
@@ -1456,7 +1541,8 @@ router.post('/api/inspection-proofs', async (req, res) => {
 
 router.get('/api/inspection-proofs', async (req, res) => {
   try {
-    const selectedWeek = (req.query.week as string) || getISOWeekTag();
+    const rawWeek = (req.query.week as string) || '';
+    const selectedWeek = rawWeek ? normalizeWeekQuery(rawWeek) : getISOWeekTag();
     const proofs = selectedWeek === 'ALL'
       ? await db.select().from(inspectionProofs).orderBy(desc(inspectionProofs.createdAt))
       : await db.select().from(inspectionProofs).where(eq(inspectionProofs.week, selectedWeek)).orderBy(desc(inspectionProofs.createdAt));
@@ -1502,7 +1588,8 @@ export function invalidateRekapKtaCache() {
 // --- REKAPITULASI KTA / TTA MINGGUAN ---
 router.get('/api/rekap-kta', async (req, res) => {
   try {
-    const selectedWeek = (req.query.week as string) || getISOWeekTag();
+    const rawWeek = (req.query.week as string) || '';
+    const selectedWeek = rawWeek ? normalizeWeekQuery(rawWeek) : getISOWeekTag();
     const forceRefresh = req.query.refresh === 'true';
 
     const cached = rekapKtaCache.get(selectedWeek);
@@ -1648,32 +1735,76 @@ router.get('/api/rekap-kta', async (req, res) => {
       } else if (obligation.type === '1_KTA_AND_1_TTA') {
         const hasKta = ktaList.length >= 1;
         const hasTta = ttaList.length >= 1;
-        isDone = hasKta && hasTta;
-        const count = (hasKta ? 1 : 0) + (hasTta ? 1 : 0);
-        checkDetails = {
-          check1Label: 'KTA',
-          check1Done: hasKta,
-          check1Proof: ktaList[0]?.imageUrl || null,
-          check1Timestamp: ktaList[0]?.timestamp || null,
-          check2Label: 'TTA',
-          check2Done: hasTta,
-          check2Proof: ttaList[0]?.imageUrl || null,
-          check2Timestamp: ttaList[0]?.timestamp || null,
-          summaryProgress: `${count}/2`
-        };
+        const totalReports = reports.length;
+        // Fulfilled if user has 1 KTA & 1 TTA, OR has >= 2 TTA, OR >= 2 KTA, OR total >= 2 reports
+        isDone = (hasKta && hasTta) || totalReports >= 2;
+        
+        if (hasKta && hasTta) {
+          checkDetails = {
+            check1Label: 'KTA',
+            check1Done: true,
+            check1Proof: ktaList[0]?.imageUrl || null,
+            check1Timestamp: ktaList[0]?.timestamp || null,
+            check2Label: 'TTA',
+            check2Done: true,
+            check2Proof: ttaList[0]?.imageUrl || null,
+            check2Timestamp: ttaList[0]?.timestamp || null,
+            summaryProgress: '2/2'
+          };
+        } else if (ttaList.length >= 2) {
+          checkDetails = {
+            check1Label: 'TTA 1',
+            check1Done: true,
+            check1Proof: ttaList[0]?.imageUrl || null,
+            check1Timestamp: ttaList[0]?.timestamp || null,
+            check2Label: 'TTA 2',
+            check2Done: true,
+            check2Proof: ttaList[1]?.imageUrl || null,
+            check2Timestamp: ttaList[1]?.timestamp || null,
+            summaryProgress: '2/2'
+          };
+        } else if (ktaList.length >= 2) {
+          checkDetails = {
+            check1Label: 'KTA 1',
+            check1Done: true,
+            check1Proof: ktaList[0]?.imageUrl || null,
+            check1Timestamp: ktaList[0]?.timestamp || null,
+            check2Label: 'KTA 2',
+            check2Done: true,
+            check2Proof: ktaList[1]?.imageUrl || null,
+            check2Timestamp: ktaList[1]?.timestamp || null,
+            summaryProgress: '2/2'
+          };
+        } else {
+          const count = (hasKta ? 1 : 0) + (hasTta ? 1 : 0);
+          checkDetails = {
+            check1Label: 'KTA',
+            check1Done: hasKta,
+            check1Proof: ktaList[0]?.imageUrl || null,
+            check1Timestamp: ktaList[0]?.timestamp || null,
+            check2Label: 'TTA',
+            check2Done: hasTta,
+            check2Proof: ttaList[0]?.imageUrl || null,
+            check2Timestamp: ttaList[0]?.timestamp || null,
+            summaryProgress: `${count}/2`
+          };
+        }
       } else if (obligation.type === '2_TTA') {
         const count = ttaList.length;
-        isDone = count >= 2;
+        const total = reports.length;
+        isDone = count >= 2 || total >= 2;
+        const firstReport = ttaList[0] || reports[0];
+        const secondReport = ttaList[1] || reports[1];
         checkDetails = {
-          check1Label: 'TTA 1',
-          check1Done: count >= 1,
-          check1Proof: ttaList[0]?.imageUrl || null,
-          check1Timestamp: ttaList[0]?.timestamp || null,
-          check2Label: 'TTA 2',
-          check2Done: count >= 2,
-          check2Proof: ttaList[1]?.imageUrl || null,
-          check2Timestamp: ttaList[1]?.timestamp || null,
-          summaryProgress: `${Math.min(count, 2)}/2`
+          check1Label: firstReport ? `${firstReport.reportType || 'TTA'} 1` : 'TTA 1',
+          check1Done: Boolean(firstReport),
+          check1Proof: firstReport?.imageUrl || null,
+          check1Timestamp: firstReport?.timestamp || null,
+          check2Label: secondReport ? `${secondReport.reportType || 'TTA'} 2` : 'TTA 2',
+          check2Done: Boolean(secondReport),
+          check2Proof: secondReport?.imageUrl || null,
+          check2Timestamp: secondReport?.timestamp || null,
+          summaryProgress: `${Math.min(total, 2)}/2`
         };
       }
 
@@ -2166,25 +2297,39 @@ router.get("/api/gallery", async (req, res) => {
 
 router.post("/api/pdf/generate", async (req, res) => {
     try {
-      const { tglMulai, tglAkhir, tipeLaporan } = req.body;
+      const { tglMulai, tglAkhir, tipeLaporan, periodeLabel, targetLokasi } = req.body;
+      const cleanTipe = (tipeLaporan || '').toUpperCase().trim();
       let data = await db.select().from(pemantauan);
       
       // Filter by date
       if (tglMulai && tglAkhir) {
-        const start = new Date(tglMulai);
-        const end = new Date(tglAkhir);
-        end.setHours(23, 59, 59, 999);
+        const cleanStart = tglMulai.trim();
+        const cleanEnd = tglAkhir.trim();
         data = data.filter(d => {
-          const dDate = new Date(d.tanggal || (d as any).date);
+          const tgl = (d.tanggal || '').trim();
+          if (!tgl) return false;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(tgl) && /^\d{4}-\d{2}-\d{2}$/.test(cleanStart) && /^\d{4}-\d{2}-\d{2}$/.test(cleanEnd)) {
+            return tgl >= cleanStart && tgl <= cleanEnd;
+          }
+          const dDate = new Date(tgl);
+          const start = new Date(cleanStart);
+          const end = new Date(cleanEnd);
+          end.setHours(23, 59, 59, 999);
           return dDate >= start && dDate <= end;
         });
       }
       
-      // Filter by type
-      if (tipeLaporan === 'SUHU') {
-        data = data.filter(d => d.kategori === 'Suhu & Kelembapan');
-      } else if (tipeLaporan === 'GAS') {
-        data = data.filter(d => d.kategori === 'Gas' || d.kategori === 'Gas Medis');
+      // Filter by type (case-insensitive & matches 'GAS', 'SUHU', etc.)
+      if (cleanTipe === 'SUHU') {
+        data = data.filter(d => {
+          const k = (d.kategori || '').toUpperCase();
+          return k === 'SUHU' || k.includes('SUHU') || k.includes('KELEMBAPAN');
+        });
+      } else if (cleanTipe === 'GAS') {
+        data = data.filter(d => {
+          const k = (d.kategori || '').toUpperCase();
+          return k === 'GAS' || k.includes('GAS');
+        });
       }
 
       if (data.length === 0) {
@@ -2192,109 +2337,207 @@ router.post("/api/pdf/generate", async (req, res) => {
       }
 
       // Group by location
-      const dataPerLokasi = {};
+      const dataPerLokasi: Record<string, any[]> = {};
       data.forEach(row => {
-        const loc = (row as any).lokasi || '-';
+        const loc = row.lokasiArea || (row as any).lokasi || '-';
         if (!dataPerLokasi[loc]) dataPerLokasi[loc] = [];
         dataPerLokasi[loc].push(row);
       });
 
+      // Filter by target location if specified (e.g. single instrument like Epsilon C or specific room)
+      let lokasiList = Object.keys(dataPerLokasi);
+      if (targetLokasi && typeof targetLokasi === 'string' && targetLokasi.trim() && targetLokasi.toUpperCase() !== 'ALL') {
+        const cleanTarget = targetLokasi.trim().toLowerCase();
+        lokasiList = lokasiList.filter(loc => {
+          const l = loc.toLowerCase();
+          return l === cleanTarget || l.includes(cleanTarget) || cleanTarget.includes(l);
+        });
+        if (lokasiList.length === 0) {
+          return res.status(404).json({
+            status: "error",
+            message: `Tidak ada data ${tipeLaporan} untuk lokasi "${targetLokasi}" pada rentang waktu tersebut.`
+          });
+        }
+      }
+
       // Fetch settings from DB for Template IDs
-      const settingsObj = {};
+      const settingsObj: Record<string, string> = {};
       const allSettings = await db.select().from(appSettings);
       allSettings.forEach(s => {
         settingsObj[s.settingKey] = s.settingValue || '';
       });
 
       const TEMPLATE_SUHU_ID = settingsObj['INSPECTION_SUHU_TEMPLATE_DOC_ID'] || '1NEmvv2ZzVICoU_3TZWsdfIQNqc2pq6gLZnJHNFLbezk';
-      const TEMPLATE_GAS_ID = settingsObj['INSPECTION_GAS_TEMPLATE_DOC_ID'] || '1EzTAqn_8Xm0zL3Eo9kqMrbWT-GAGDVuwAVXP8kiUY44';
-      const FOLDER_ID = settingsObj['INSPECTION_PDF_DRIVE_FOLDER_ID'] || process.env.GOOGLE_DRIVE_FOLDER_ID || '1hRG-NQ5GWCkzHCSjwJw7kIaDcS7l3_ij';
+      let TEMPLATE_GAS_ID = settingsObj['INSPECTION_GAS_TEMPLATE_DOC_ID'] || '1uVouTQjvR-izdhffN9kAe-axvXDK6TRuGeJZjZzM3b4';
+      if (!TEMPLATE_GAS_ID || TEMPLATE_GAS_ID === '1EzTAqn_8Xm0zL3Eo9kqMrbWT-GAGDVuwAVXP8kiUY44') {
+        TEMPLATE_GAS_ID = '1uVouTQjvR-izdhffN9kAe-axvXDK6TRuGeJZjZzM3b4';
+      }
+      const FOLDER_ID = settingsObj['INSPECTION_PDF_DRIVE_FOLDER_ID'] || process.env.GOOGLE_DRIVE_FOLDER_ID || '1mit_4h0qI80mLOa-uE8TBGo6RY-_-PKW';
 
-      const pdfLinks = [];
-      const parts = tglMulai.split("-");
+      const pdfLinks: Array<{ name: string; nama: string; url: string }> = [];
+      const parts = (tglMulai || '').split("-");
       const namaBulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
       const bulanTeks = parts.length === 3 ? (namaBulan[parseInt(parts[1], 10) - 1] + " " + parts[0]) : tglMulai;
       const periodeTeks = tglMulai + " s.d " + tglAkhir;
 
-      for (const lokasi in dataPerLokasi) {
-        const rows = dataPerLokasi[lokasi];
-        const templateId = (tipeLaporan === "SUHU") ? TEMPLATE_SUHU_ID : TEMPLATE_GAS_ID;
-        
-        let instr = lokasi;
-        let gasType = "-";
-        
-        if (tipeLaporan === "GAS") {
-           if (lokasi.includes("Zetium A")) { instr = 'Zetium "Panalytical" (A)'; gasType = "Argon Mixture Methane 10% P10"; }
-           else if (lokasi.includes("Zetium B")) { instr = 'Zetium "Panalytical" (B)'; gasType = "Argon Mixture Methane 10% P10"; }
-           else if (lokasi.includes("Epsilon C")) { instr = 'Epsilon "Panalytical" (C)'; gasType = "Helium"; }
-           else { instr = lokasi.replace("Tabung Gas", "").trim(); }
+      const formatDateIndo = (tglStr: string) => {
+        if (!tglStr) return "-";
+        const m = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
+        const p = tglStr.split("-");
+        if (p.length === 3) {
+          const y = p[0].length === 4 ? p[0].substring(2) : p[0];
+          const monIdx = parseInt(p[1], 10) - 1;
+          return `${p[2]}-${m[monIdx] || p[1]}-${y}`;
         }
+        const dt = new Date(tglStr);
+        if (!isNaN(dt.getTime())) {
+          return `${dt.getDate()}-${m[dt.getMonth()]}-${dt.getFullYear().toString().substring(2)}`;
+        }
+        return tglStr;
+      };
 
-        // We join the values with newlines so they look like a table column
-        const replacements = {};
-        
-        if (tipeLaporan === "SUHU") {
-           replacements['<<Ruangan>>'] = lokasi;
-           replacements['<<Periode>>'] = periodeTeks;
-           
-           replacements['<<Tanggal>>'] = rows.map(d => {
-             const dt = new Date(d.tanggal || (d as any).date);
-             const m = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
-             return dt.getDate() + "-" + m[dt.getMonth()] + "-" + dt.getFullYear().toString().substring(2);
-           }).join("");
-           
-           replacements['<<Shift>>'] = rows.map(d => d.shift || "-").join("");
-           replacements['<<Petugas>>'] = rows.map(d => d.inspectorName || "-").join("");
-           
-           replacements['<<Jam>>'] = rows.map(d => {
-             const dt = new Date(d.tanggal || (d as any).date);
-             return dt.getHours().toString().padStart(2, '0') + ":" + dt.getMinutes().toString().padStart(2, '0');
-           }).join("");
-           
-           replacements['<<Suhu>>'] = rows.map(d => d.suhu || "-").join("");
-           replacements['<<Kelembapan>>'] = rows.map(d => d.kelembapan ? (d.kelembapan + "") : "-").join("");
-           replacements['<<TTD>>'] = rows.map(d => "").join("");
-           
-        } else {
-           replacements['<<Instrument>>'] = instr;
-           replacements['<<TipeGas>>'] = gasType;
-           replacements['<<Bulan>>'] = bulanTeks;
-           
-           replacements['<<No>>'] = rows.map((_, i) => (i+1).toString()).join("");
-           
-           replacements['<<Date>>'] = rows.map(d => {
-             const dt = new Date(d.tanggal || (d as any).date);
-             const m = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
-             const dateStr = dt.getDate() + "-" + m[dt.getMonth()] + "-" + dt.getFullYear().toString().substring(2);
-             const timeStr = dt.getHours().toString().padStart(2, '0') + ":" + dt.getMinutes().toString().padStart(2, '0');
-             return dateStr + "" + timeStr;
-           }).join("");
-           
-           replacements['<<Flow>>'] = rows.map(d => d.flow || "-").join("");
-           replacements['<<Pressure>>'] = rows.map(d => d.tekananGas || "-").join("");
-           replacements['<<Shift>>'] = rows.map(d => d.shift || "-").join("");
-           replacements['<<PIC>>'] = rows.map(d => d.inspectorName || "-").join("");
-           replacements['<<Remark>>'] = rows.map(d => d.notes || "-").join("");
-           replacements['<<TTD>>'] = rows.map(d => "").join("");
-           
-           replacements['<<Y>>'] = rows.map(d => (d.kebocoran === "Y" || d.kebocoran === "Ya") ? "V" : "-").join("");
-           replacements['<<N>>'] = rows.map(d => (d.kebocoran === "N" || d.kebocoran === "Tidak") ? "V" : "-").join("");
+      const formatJamPadded = (j: string) => {
+        if (!j) return '';
+        const match = j.trim().match(/^(\d{1,2}):(\d{1,2})/);
+        if (match) {
+          return `${match[1].padStart(2, '0')}:${match[2].padStart(2, '0')}`;
         }
-        
-        const safeName = lokasi.replace(/[^a-zA-Z0-9_]/g, '_'); 
-        const targetName = "Laporan_Pemantauan_" + tipeLaporan + "_" + safeName;
-        
-        // Use our google-services function
-        const pdfRes = await generatePdfFromTemplate(
-           templateId,
-           FOLDER_ID,
-           replacements,
-           targetName
-        );
-        
-        if (pdfRes.success) {
-           pdfLinks.push({ name: lokasi, url: pdfRes.pdfUrl });
+        return j.trim();
+      };
+
+      const results = await Promise.allSettled(
+        lokasiList.map(async (lokasi) => {
+          const rows = dataPerLokasi[lokasi];
+          // Sort chronologically by date, shift, padded time, and id
+          const parseRowSortKey = (r: any) => {
+            const tgl = (r.tanggal || '').trim();
+            const shiftStr = String(r.shift || '').toLowerCase();
+            let sPriority = 2;
+            if (shiftStr.includes('pagi') || shiftStr.includes('ds') || shiftStr === '1') sPriority = 1;
+            else if (shiftStr.includes('siang') || shiftStr === '2') sPriority = 2;
+            else if (shiftStr.includes('malam') || shiftStr.includes('ns') || shiftStr === '3') sPriority = 3;
+
+            let jamPadded = '12:00';
+            if (r.jam && typeof r.jam === 'string') {
+              const m = r.jam.trim().match(/^(\d{1,2}):(\d{1,2})/);
+              if (m) {
+                jamPadded = `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}`;
+              }
+            } else if (sPriority === 1) {
+              jamPadded = '07:00';
+            } else if (sPriority === 3) {
+              jamPadded = '19:00';
+            }
+
+            return `${tgl}__${sPriority}__${jamPadded}__${String(r.id || '').padStart(8, '0')}`;
+          };
+
+          rows.sort((a, b) => parseRowSortKey(a).localeCompare(parseRowSortKey(b)));
+
+          const templateId = (cleanTipe === "SUHU") ? TEMPLATE_SUHU_ID : TEMPLATE_GAS_ID;
+          
+          let instr = lokasi;
+          let gasType = "-";
+          
+          if (cleanTipe === "GAS") {
+             if (lokasi.includes("Zetium A")) { instr = 'Zetium "Panalytical" (A)'; gasType = "Argon Mixture Methane 10% P10"; }
+             else if (lokasi.includes("Zetium B")) { instr = 'Zetium "Panalytical" (B)'; gasType = "Argon Mixture Methane 10% P10"; }
+             else if (lokasi.includes("Epsilon C")) { instr = 'Epsilon "Panalytical" (C)'; gasType = "Helium"; }
+             else { instr = lokasi.replace("Tabung Gas", "").trim(); }
+          }
+
+          const headerReplacements: Record<string, string> = {};
+          let formattedRows: any[] = [];
+          
+          // Determine header period text
+          let displayHeaderPeriod = bulanTeks;
+          if (periodeLabel && typeof periodeLabel === 'string' && periodeLabel.trim()) {
+            displayHeaderPeriod = periodeLabel.replace(/_/g, ' ');
+          }
+
+          if (cleanTipe === "SUHU") {
+             headerReplacements['<<Ruangan>>'] = lokasi;
+             headerReplacements['<<Periode>>'] = displayHeaderPeriod || periodeTeks;
+
+             formattedRows = rows.map(d => ({
+               tgl: formatDateIndo(d.tanggal),
+               shift: d.shift || "-",
+               petugas: d.inspektorPetugas || (d as any).inspectorName || "-",
+               jam: formatJamPadded(d.jam || ""),
+               suhu: d.suhuCelcius || (d as any).suhu || "-",
+               kel: d.kelembapanPersen || (d as any).kelembapan || "-",
+               ttd: (d.ttd || d.foto) ? "✓ TTD" : "-",
+               sigUrl: d.ttd || d.foto || ""
+             }));
+          } else {
+             headerReplacements['<<Instrument>>'] = instr;
+             headerReplacements['<<TipeGas>>'] = gasType;
+             headerReplacements['<<Bulan>>'] = displayHeaderPeriod;
+             headerReplacements['<<Month>>'] = displayHeaderPeriod;
+             headerReplacements['<<Periode>>'] = displayHeaderPeriod;
+
+             formattedRows = rows.map(d => {
+               const leak = (d.kebocoranYn || (d as any).kebocoran || '').toUpperCase();
+               return {
+                 tgl: formatDateIndo(d.tanggal),
+                 jam: formatJamPadded(d.jam || ""),
+                 flow: d.flowGas || (d as any).flow || "-",
+                 pressure: d.tekananGasPsi || (d as any).tekananGas || "-",
+                 shift: d.shift || "-",
+                 pic: d.inspektorPetugas || (d as any).inspectorName || "-",
+                 remark: d.catatanRemark || (d as any).notes || "-",
+                 y: (leak === "Y" || leak === "YA") ? "V" : "-",
+                 n: (leak === "N" || leak === "TIDAK") ? "V" : "-",
+                 ttd: (d.ttd || d.foto) ? "✓ TTD" : "-",
+                 sigUrl: d.ttd || d.foto || ""
+               };
+             });
+          }
+          
+          const safeName = lokasi.replace(/[^a-zA-Z0-9_]/g, '_').replace(/__+/g, '_'); 
+
+          // Generate clean period suffix for PDF filename
+          let periodSuffix = '';
+          if (periodeLabel && typeof periodeLabel === 'string' && periodeLabel.trim()) {
+            periodSuffix = periodeLabel.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+          } else if (bulanTeks) {
+            periodSuffix = bulanTeks.replace(/[^a-zA-Z0-9_-]/g, '_');
+          } else if (tglMulai && tglAkhir) {
+            periodSuffix = `${tglMulai}_sd_${tglAkhir}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+          }
+
+          const targetName = `Laporan_Pemantauan_${cleanTipe}_${safeName}${periodSuffix ? '_' + periodSuffix : ''}`;
+          const displayLabel = periodSuffix ? `${lokasi} (${periodSuffix.replace(/_/g, ' ')})` : lokasi;
+          
+          const pdfRes = await generateMonitoringPdfWithDynamicTable({
+             templateDocId: templateId,
+             folderId: FOLDER_ID,
+             outputFileName: targetName,
+             headerReplacements,
+             tipe: cleanTipe as 'SUHU' | 'GAS',
+             tableRows: formattedRows
+          });
+          
+          if (pdfRes.success) {
+             return { name: displayLabel, nama: displayLabel, url: pdfRes.pdfUrl };
+          }
+          return null;
+        })
+      );
+
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled' && res.value) {
+          pdfLinks.push(res.value);
+        } else if (res.status === 'rejected') {
+          console.error(`Gagal membuat PDF untuk ${lokasiList[idx]}:`, res.reason?.message || res.reason);
         }
+      });
+
+      if (pdfLinks.length === 0) {
+        return res.status(500).json({
+          status: "error",
+          message: "Gagal membuat PDF ke Google Drive. Pastikan kredensial Google Drive aktif dan ID Template valid."
+        });
       }
 
       res.json({
@@ -2303,7 +2546,7 @@ router.post("/api/pdf/generate", async (req, res) => {
         links: pdfLinks
       });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating PDF:', error);
       res.status(500).json({ status: "error", message: error.message });
     }

@@ -1,19 +1,50 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  ClipboardCheck, ClipboardList, Camera, X, Check, 
+  ClipboardCheck, ClipboardList, Camera, X, Check, Copy,
   Upload, ArrowRight, Loader2, Trash2, Calendar,
   ShieldAlert, CheckCircle2, AlertTriangle, ChevronLeft, ExternalLink, MapPin,
   Sparkles, FileText, Clock, AlertCircle, Eye, Download, ZoomIn, Image as ImageIcon,
-  RefreshCw
+  RefreshCw, Plus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { compressImage } from '../features/inspections/hooks/useInspection';
 import { triggerExpGain } from '../lib/gamificationEvents';
 import { isPicTemuanRole, getOpenFindingsForSupervisor } from '../utils/inspection-pic-matcher';
-import { getISOWeekKey } from '../utils/iso-week';
+import { getISOWeekKey, getISOWeekTag } from '../utils/iso-week';
+import { GENERAL_INSPECTION_FORM_URL } from './InspectionCompletionModal';
+import { getKtaObligation } from './GroupReportScreen';
 
 const SAFETY_KTA_FORM_URL = 'https://docs.google.com/forms/d/1YMympG3aA-8l978aAlRJFSoi-SVQAKiS7KmJjNRfuBI/viewform?edit_requested=true';
+
+// Helper to extract fileId from Google Drive link if available
+export const extractDriveFileId = (rawUrl?: string | null) => {
+  if (!rawUrl) return null;
+  const match = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+};
+
+// Return a mobile-friendly view URL that avoids Google Drive virus scan block / login loops on smartphones
+export const getMobileDriveViewUrl = (rawUrl?: string | null) => {
+  if (!rawUrl || rawUrl === '#' || rawUrl === '-') return null;
+  const fileId = extractDriveFileId(rawUrl);
+  if (fileId) {
+    return `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk`;
+  }
+  return rawUrl;
+};
+
+export const getDrivePreviewUrl = (rawUrl?: string | null) => {
+  if (!rawUrl || rawUrl === '#' || rawUrl === '-') return null;
+  const fileId = extractDriveFileId(rawUrl);
+  if (fileId) {
+    return `https://drive.google.com/file/d/${fileId}/preview`;
+  }
+  if (rawUrl.startsWith('http')) {
+    return `https://docs.google.com/viewer?url=${encodeURIComponent(rawUrl)}&embedded=true`;
+  }
+  return rawUrl;
+};
 
 export function formatProofImageUrl(url?: string | null): string {
   if (!url || url === '-' || url === '#' || url === 'null') return '';
@@ -40,6 +71,7 @@ interface SimplifiedInspectionModalProps {
   userJabatan?: string | null;
   schedule?: any | null;
   defaultTab?: 'weekly' | 'kta_tta' | 'findings' | 'p2h';
+  initialOpenForm?: boolean;
   onNav: (tab: any) => void;
   onSuccess?: () => void;
 }
@@ -53,11 +85,15 @@ export function SimplifiedInspectionModal({
   userJabatan,
   schedule,
   defaultTab = 'weekly',
+  initialOpenForm = false,
   onNav,
   onSuccess
 }: SimplifiedInspectionModalProps) {
-  const currentJabatan = userJabatan || localStorage.getItem('p2h_inspector_jabatan') || '';
+  const currentJabatan = userJabatan || localStorage.getItem('p2h_inspector_jabatan') || localStorage.getItem('user_role') || localStorage.getItem('user_jabatan') || '';
   const isPic = isPicTemuanRole(currentJabatan);
+  const obligation = useMemo(() => {
+    return getKtaObligation(inspectorNik, currentJabatan, userSection);
+  }, [inspectorNik, currentJabatan, userSection]);
 
   const [activeTab, setActiveTab] = useState<'weekly' | 'kta_tta' | 'findings' | 'p2h'>(defaultTab);
   
@@ -77,8 +113,21 @@ export function SimplifiedInspectionModal({
   const [submittingWeekly, setSubmittingWeekly] = useState(false);
   const weeklyFileInputRef = useRef<HTMLInputElement>(null);
 
-  // KTA/TTA upload state
-  const [selectedKtaType, setSelectedKtaType] = useState<'KTA' | 'TTA' | 'BOTH'>('BOTH');
+  // KTA/TTA upload state (supports 2_TTA for QA/Maintenance/Admin)
+  type KtaOptionType = 'KTA' | 'TTA' | 'BOTH' | '2_TTA';
+  const [selectedKtaType, setSelectedKtaType] = useState<KtaOptionType>('BOTH');
+
+  // Auto-sync default choice based on personil's obligation
+  useEffect(() => {
+    if (obligation.type === '2_TTA') {
+      setSelectedKtaType('2_TTA');
+    } else if (obligation.type === '1_KTA_OR_TTA') {
+      setSelectedKtaType('TTA');
+    } else {
+      setSelectedKtaType('BOTH');
+    }
+  }, [obligation.type, isOpen]);
+
   const [ktaDescription, setKtaDescription] = useState('');
   const [ktaImagePreview, setKtaImagePreview] = useState<string | null>(null);
   const [ktaImageFile, setKtaImageFile] = useState<File | null>(null);
@@ -95,7 +144,27 @@ export function SimplifiedInspectionModal({
   const [submittingClose, setSubmittingClose] = useState(false);
   const closingFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch submitted proofs for this user
+  // Latest inspection data (for downloading PDF report)
+  const [latestInspection, setLatestInspection] = useState<any | null>(null);
+  const [copiedPdf, setCopiedPdf] = useState(false);
+  const [copiedGeneralUrl, setCopiedGeneralUrl] = useState(false);
+
+  const handleCopyPdf = (url: string) => {
+    if (!url) return;
+    navigator.clipboard.writeText(url);
+    setCopiedPdf(true);
+    toast.success('Link PDF laporan berhasil disalin! Siap ditempel di formulir Safety.');
+    setTimeout(() => setCopiedPdf(false), 2500);
+  };
+
+  const handleCopyGeneralSubmitUrl = () => {
+    navigator.clipboard.writeText(GENERAL_INSPECTION_FORM_URL);
+    setCopiedGeneralUrl(true);
+    toast.success('Tautan Form General Submit disalin!');
+    setTimeout(() => setCopiedGeneralUrl(false), 2500);
+  };
+
+  // Fetch submitted proofs and latest inspection for this user
   const fetchUserProofs = async () => {
     if (!inspectorNik && !inspectorName) return;
     setLoadingProofs(true);
@@ -116,16 +185,18 @@ export function SimplifiedInspectionModal({
         return false;
       };
 
-      const [wRes, kRes] = await Promise.allSettled([
-        fetch('/api/inspection-proofs?week=ALL'),
-        fetch('/api/kta-reports?week=ALL')
+      const targetWeek = schedule?.week || getISOWeekTag();
+      const [wRes, kRes, inspRes] = await Promise.allSettled([
+        fetch(`/api/inspection-proofs?week=${targetWeek}`),
+        fetch(`/api/kta-reports?week=${targetWeek}`),
+        fetch(`/api/inspections/latest-by-user?nik=${encodeURIComponent(cleanNik)}&name=${encodeURIComponent(cleanName)}`)
       ]);
 
       if (wRes.status === 'fulfilled' && wRes.value.ok) {
         const allW: any[] = await wRes.value.json();
         const myW = Array.isArray(allW) ? allW.filter(isMatch) : [];
-        // Add schedule.ssProofUrl if not in list
-        if (schedule?.ssProofUrl && !myW.some(p => p.imageUrl === schedule.ssProofUrl)) {
+        // Add schedule.ssProofUrl if not in list and confirmed for this week
+        if ((schedule?.hasSsProof || schedule?.isCompleted) && schedule?.ssProofUrl && !myW.some(p => p.imageUrl === schedule.ssProofUrl)) {
           myW.unshift({
             id: 'sched-proof',
             imageUrl: schedule.ssProofUrl,
@@ -141,12 +212,34 @@ export function SimplifiedInspectionModal({
         const myK = Array.isArray(allK) ? allK.filter(isMatch) : [];
         setKtaProofs(myK);
       }
+
+      if (inspRes.status === 'fulfilled' && inspRes.value.ok) {
+        const inspJson = await inspRes.value.json();
+        if (inspJson && inspJson.found && inspJson.inspection) {
+          setLatestInspection(inspJson.inspection);
+        }
+      }
     } catch (e) {
       console.warn('Gagal memuat bukti screenshot:', e);
     } finally {
       setLoadingProofs(false);
     }
   };
+
+  // Listen to open-simplified-inspection custom event
+  useEffect(() => {
+    const handleOpenEvent = (e: any) => {
+      const tab = e?.detail?.tab;
+      const openForm = Boolean(e?.detail?.openForm);
+      if (tab) setActiveTab(tab);
+      if (openForm) {
+        if (tab === 'kta_tta') setShowUploadKtaForm(true);
+        if (tab === 'weekly') setShowUploadWeeklyForm(true);
+      }
+    };
+    window.addEventListener('open-simplified-inspection', handleOpenEvent);
+    return () => window.removeEventListener('open-simplified-inspection', handleOpenEvent);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -155,9 +248,13 @@ export function SimplifiedInspectionModal({
       } else if (defaultTab) {
         setActiveTab(defaultTab);
       }
+      if (initialOpenForm) {
+        if (defaultTab === 'kta_tta') setShowUploadKtaForm(true);
+        if (defaultTab === 'weekly') setShowUploadWeeklyForm(true);
+      }
       fetchUserProofs();
     }
-  }, [isOpen, defaultTab, isPic, inspectorNik, inspectorName, schedule]);
+  }, [isOpen, defaultTab, isPic, inspectorNik, inspectorName, schedule, initialOpenForm]);
 
   // Fetch tickets for PIC findings
   const fetchFindings = async () => {
@@ -182,6 +279,66 @@ export function SimplifiedInspectionModal({
       fetchFindings();
     }
   }, [isOpen, isPic, currentJabatan]);
+
+  const [isDeletingWeekly, setIsDeletingWeekly] = useState(false);
+
+  const handleDeleteWeeklyProof = async () => {
+    const activeWeek = getISOWeekKey(new Date());
+    if (!window.confirm(`Hapus submission & bukti screenshot inspeksi periode ${activeWeek}?\n\nLaporan yang keliru akan dibersihkan dari sistem agar tidak ada data ganda.`)) return;
+
+    setIsDeletingWeekly(true);
+    try {
+      if (latestWeeklyProof?.id && typeof latestWeeklyProof.id === 'number') {
+        await fetch(`/api/inspection-proofs/${latestWeeklyProof.id}`, { method: 'DELETE' });
+      }
+
+      if (latestInspection?.id) {
+        await fetch(`/api/inspections/${latestInspection.id}?deleteProof=true`, { method: 'DELETE' });
+      }
+
+      const cleanNik = (inspectorNik || '').trim();
+      const cleanName = (inspectorName || '').trim();
+      await fetch(`/api/inspections-reset-submission?nik=${encodeURIComponent(cleanNik)}&name=${encodeURIComponent(cleanName)}&week=${encodeURIComponent(activeWeek)}`, {
+        method: 'DELETE'
+      });
+
+      try {
+        localStorage.removeItem(`p2h_cached_my_schedule_${activeWeek}`);
+        localStorage.removeItem('p2h_cached_my_schedule');
+        localStorage.removeItem('p2h_cached_all_schedules');
+        localStorage.removeItem('p2h_cached_has_ss_proof');
+        localStorage.removeItem('p2h_cached_ss_proof_url');
+        localStorage.removeItem(`p2h_cached_has_ss_proof_${activeWeek}`);
+        localStorage.removeItem(`p2h_cached_ss_proof_url_${activeWeek}`);
+      } catch {}
+
+      setWeeklyProofs([]);
+      setLatestInspection(null);
+      toast.success('Bukti dan laporan inspeksi berhasil dihapus.');
+      fetchUserProofs();
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      toast.error('Gagal menghapus: ' + err.message);
+    } finally {
+      setIsDeletingWeekly(false);
+    }
+  };
+
+  const handleDeleteKtaProof = async (id: number | string) => {
+    if (!window.confirm('Hapus laporan KTA/TTA ini?')) return;
+    try {
+      const res = await fetch(`/api/kta-reports/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Laporan KTA/TTA berhasil dihapus.');
+        fetchUserProofs();
+        if (onSuccess) onSuccess();
+      } else {
+        toast.error('Gagal menghapus laporan KTA/TTA');
+      }
+    } catch (e: any) {
+      toast.error('Error: ' + e.message);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -349,11 +506,13 @@ export function SimplifiedInspectionModal({
       }
 
       const typesToSubmit: ('KTA' | 'TTA')[] = 
+        selectedKtaType === '2_TTA' ? ['TTA', 'TTA'] :
         selectedKtaType === 'BOTH' ? ['KTA', 'TTA'] : [selectedKtaType];
 
       const todayStr = new Date().toISOString().split('T')[0];
 
-      for (const t of typesToSubmit) {
+      for (let i = 0; i < typesToSubmit.length; i++) {
+        const t = typesToSubmit[i];
         await fetch('/api/kta-reports', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -364,17 +523,25 @@ export function SimplifiedInspectionModal({
             reportType: t,
             date: todayStr,
             imageUrl: uploadedUrl,
-            description: ktaDescription.trim() || `Laporan bukti formulir ${t} disederhanakan`,
+            description: ktaDescription.trim() 
+              ? (typesToSubmit.length > 1 ? `${ktaDescription.trim()} (Laporan ${i + 1}/${typesToSubmit.length})` : ktaDescription.trim())
+              : (typesToSubmit.length > 1 ? `Laporan bukti formulir ${t} #${i + 1} disederhanakan` : `Laporan bukti formulir ${t} disederhanakan`),
             location: '-'
           })
         });
       }
 
-      const expGain = selectedKtaType === 'BOTH' ? 60 : 35;
-      toast.success('✅ Bukti laporan KTA/TTA berhasil dikirim ke Safety!', { id: 'upload-kta', duration: 4000 });
+      const expGain = (selectedKtaType === 'BOTH' || selectedKtaType === '2_TTA') ? 60 : 35;
+      toast.success(
+        selectedKtaType === '2_TTA'
+          ? '✅ 2 Bukti laporan TTA berhasil dikirim ke Safety (Target Mingguan Terpenuhi)!'
+          : '✅ Bukti laporan KTA/TTA berhasil dikirim ke Safety!',
+        { id: 'upload-kta', duration: 4000 }
+      );
       triggerExpGain(expGain, 'Laporan KTA/TTA Terkirim!', 'Kontribusi K3L Harita Nickel');
       window.dispatchEvent(new Event('gamification_updated'));
       window.dispatchEvent(new CustomEvent('refresh-group-reports'));
+      window.dispatchEvent(new CustomEvent('refresh-action-center'));
 
       setKtaImagePreview(null);
       setKtaImageFile(null);
@@ -463,7 +630,17 @@ export function SimplifiedInspectionModal({
   };
 
   const isAnySubmitting = submittingWeekly || submittingKta || submittingClose;
-  const latestWeeklyProof = weeklyProofs[0] || null;
+  const latestWeeklyProof = weeklyProofs[0] || ((schedule?.ssProofUrl || schedule?.hasSsProof) ? {
+    id: 'sched-proof',
+    imageUrl: schedule.ssProofUrl,
+    date: schedule.date || 'Minggu Ini',
+    name: schedule.name || inspectorName,
+    description: `Bukti SS Formulir Inspeksi ${schedule?.area || ''}`
+  } : null);
+  const effectivePdfUrl = 
+    (schedule?.completedPdfUrl && schedule.completedPdfUrl !== '#' && schedule.completedPdfUrl !== '-') 
+      ? schedule.completedPdfUrl 
+      : (latestInspection?.pdfUrl || schedule?.pdfUrl || null);
 
   return (
     <AnimatePresence>
@@ -675,6 +852,137 @@ export function SimplifiedInspectionModal({
                   </div>
                 </div>
 
+                {/* ── DOKUMEN PDF LAPORAN INSPEKSI (MOBILE-FRIENDLY DOWNLOAD & PREVIEW) ── */}
+                {(effectivePdfUrl || schedule?.isCompleted || latestInspection) && (
+                  <div className="p-3.5 rounded-2xl bg-teal-500/10 border-2 border-teal-500/30 space-y-2.5 shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                          <FileText className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-xs text-[var(--text-main)] block">
+                            Dokumen Laporan PDF Resmi
+                          </span>
+                          <span className="text-[10px] text-[var(--text-muted)]">
+                            {latestInspection?.type || schedule?.formInfo?.formTitle || schedule?.formName || 'Laporan Hasil Inspeksi'}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-full bg-teal-600 text-white shadow-2xs">
+                        PDF Siap
+                      </span>
+                    </div>
+
+                    {effectivePdfUrl && effectivePdfUrl !== '#' && effectivePdfUrl !== '-' ? (
+                      <div className="space-y-2 pt-1">
+                        <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                          Dokumen PDF resmi hasil inspeksi siap diunduh ke HP Anda untuk dilampirkan ke formulir General Submit Safety K3.
+                        </p>
+                        
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <a
+                            href={getMobileDriveViewUrl(effectivePdfUrl) || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 min-w-[130px] py-2.5 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer text-center"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Buka / Unduh PDF</span>
+                          </a>
+
+                          <a
+                            href={getDrivePreviewUrl(effectivePdfUrl) || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="py-2.5 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--card-bg)] text-[var(--text-main)] hover:bg-black/5 font-semibold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                            title="Buka Pratinjau PDF"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-teal-600" />
+                            <span>Preview</span>
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPdf(getMobileDriveViewUrl(effectivePdfUrl) || effectivePdfUrl)}
+                            className="py-2.5 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--card-bg)] text-[var(--text-main)] hover:bg-black/5 font-semibold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                            title="Salin Link Google Drive PDF"
+                          >
+                            {copiedPdf ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedPdf ? 'Tersalin' : 'Salin Link'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                        <Clock className="w-4 h-4 shrink-0 animate-pulse text-amber-600" />
+                        <span>PDF sedang dalam proses pembuatan oleh server. Ketuk tombol Segarkan di pojok kanan atas setelah beberapa saat.</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── KARTU PANDUAN & AKSES GENERAL SUBMIT SAFETY (WAJIB K3) ── */}
+                <div className="p-3.5 rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/15 via-amber-500/5 to-orange-500/15 space-y-2.5 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <ShieldAlert className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="font-bold text-xs text-[var(--text-main)] block">
+                          Formulir General Submit Safety
+                        </span>
+                        <span className="text-[10px] text-[var(--text-muted)]">
+                          Google Form Resmi Departemen K3 Harita
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500 text-white shadow-2xs">
+                      Wajib K3
+                    </span>
+                  </div>
+
+                  {/* Panduan 3 Langkah untuk Mobile User */}
+                  <div className="p-2.5 rounded-xl bg-[var(--card-bg)]/80 border border-amber-500/20 space-y-1.5 text-[11px] text-[var(--text-main)]">
+                    <div className="flex items-start gap-1.5">
+                      <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                      <span><strong>Unduh / Salin Dokumen PDF</strong> laporan inspeksi di atas ke HP Anda.</span>
+                    </div>
+                    <div className="flex items-start gap-1.5">
+                      <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                      <span>Buka <strong>Form General Submit Safety</strong> di bawah, isi data inspeksi & lampirkan file/link PDF.</span>
+                    </div>
+                    <div className="flex items-start gap-1.5">
+                      <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                      <span>Ambil screenshot konfirmasi kirim ("Tanggapan telah direkam"), lalu <strong>unggah buktinya di bawah</strong> (+50 EXP).</span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons for General Submit */}
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <a
+                      href={GENERAL_INSPECTION_FORM_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer text-center"
+                    >
+                      <span>Buka Form General Submit K3</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyGeneralSubmitUrl}
+                      className="py-2.5 px-3 rounded-xl border border-amber-500/30 bg-[var(--card-bg)] text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 font-semibold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      title="Salin tautan formulir Google Forms Safety"
+                    >
+                      {copiedGeneralUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedGeneralUrl ? 'Tersalin' : 'Salin Link'}</span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* ── JIKA SUDAH ADA BUKTI SCREENSHOT INSPEKSI: TAMPILKAN THUMBNAIL & TOMBOL LIHAT BUKTI ── */}
                 {latestWeeklyProof && (
                   <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
@@ -739,9 +1047,21 @@ export function SimplifiedInspectionModal({
                       <button
                         type="button"
                         onClick={() => setShowUploadWeeklyForm(prev => !prev)}
-                        className="py-2 px-3 rounded-xl border border-[var(--border-main)] hover:bg-black/5 text-[var(--text-muted)] hover:text-[var(--text-main)] font-semibold text-xs transition-colors cursor-pointer"
+                        className="py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                       >
-                        {showUploadWeeklyForm ? 'Tutup Form' : 'Unggah Ulang'}
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{showUploadWeeklyForm ? 'Tutup Form' : '+ Lapor Tambahan'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleDeleteWeeklyProof}
+                        disabled={isDeletingWeekly}
+                        className="py-2 px-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 font-bold text-xs transition-colors cursor-pointer flex items-center gap-1"
+                        title="Hapus submission jika salah isi form agar rekap tidak duplikat"
+                      >
+                        {isDeletingWeekly ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        <span>Hapus</span>
                       </button>
                     </div>
                   </div>
@@ -778,8 +1098,23 @@ export function SimplifiedInspectionModal({
                       </span>
                     </div>
                     <p className="text-[10.5px] text-[var(--text-muted)] leading-relaxed">
-                      Jika Anda mengisi form inspeksi via tautan terpisah / lembar tanggapan, unggah tangkapan layar bukti kirim di bawah ini:
+                      Unggah tangkapan layar (screenshot) bukti konfirmasi formulir Safety (&quot;Tanggapan telah direkam&quot;) di bawah ini untuk verifikasi &amp; klaim status <strong>SUDAH</strong>:
                     </p>
+
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[10.5px]">
+                      <span className="text-amber-800 dark:text-amber-200 font-medium">
+                        Belum mengisi formulir Safety?
+                      </span>
+                      <a
+                        href={GENERAL_INSPECTION_FORM_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 shrink-0"
+                      >
+                        <span>Buka General Submit</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
 
                     <form onSubmit={handleSubmitWeeklySs} className="space-y-3">
                       {weeklyImagePreview ? (
@@ -835,7 +1170,7 @@ export function SimplifiedInspectionModal({
                       <button
                         type="submit"
                         disabled={submittingWeekly || (!weeklyImagePreview && !weeklyImageFile)}
-                        className="w-full py-2.5 rounded-2xl bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 active:scale-95 transition-all cursor-pointer"
+                        className="w-full py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 active:scale-95 transition-all cursor-pointer"
                       >
                         {submittingWeekly ? (
                           <>
@@ -861,17 +1196,23 @@ export function SimplifiedInspectionModal({
                 {/* ── JIKA SUDAH ADA BUKTI KTA/TTA: TAMPILKAN DAFTAR THUMBNAIL & TOMBOL LIHAT BUKTI ── */}
                 {ktaProofs.length > 0 && (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-[var(--text-main)] flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        <span>Bukti Laporan KTA/TTA Terkirim ({ktaProofs.length})</span>
-                      </span>
+                    <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/5 border border-amber-500/25">
+                      <div className="min-w-0 pr-2">
+                        <span className="font-bold text-xs text-[var(--text-main)] flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>Bukti Laporan Terkirim ({ktaProofs.length})</span>
+                        </span>
+                        <span className="text-[10.5px] text-[var(--text-muted)] block truncate">
+                          Target terpenuhi. Anda dapat mengirim laporan tambahan.
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setShowUploadKtaForm(prev => !prev)}
-                        className="text-[11px] font-bold text-amber-600 hover:underline cursor-pointer"
+                        className="py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
                       >
-                        {showUploadKtaForm ? '✕ Tutup Form' : '+ Lapor Lagi'}
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{showUploadKtaForm ? 'Tutup Form' : '+ Lapor Tambahan'}</span>
                       </button>
                     </div>
 
@@ -886,9 +1227,21 @@ export function SimplifiedInspectionModal({
                             }`}>
                               {report.reportType || 'KTA'}
                             </span>
-                            <span className="text-[10px] text-[var(--text-muted)]">
-                              {report.date || 'Minggu Ini'}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-[var(--text-muted)]">
+                                {report.date || 'Minggu Ini'}
+                              </span>
+                              {report.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteKtaProof(report.id)}
+                                  className="p-1 rounded-md text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                  title="Hapus laporan KTA ini"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
 
                           {/* Thumbnail Screenshot */}
@@ -972,44 +1325,129 @@ export function SimplifiedInspectionModal({
 
                     {/* Jenis Laporan */}
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold text-[var(--text-main)] block">
-                        Jenis Laporan yang Diisi:
-                      </label>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedKtaType('KTA')}
-                          className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
-                            selectedKtaType === 'KTA'
-                              ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
-                              : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
-                          }`}
-                        >
-                          KTA Saja
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedKtaType('TTA')}
-                          className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
-                            selectedKtaType === 'TTA'
-                              ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
-                              : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
-                          }`}
-                        >
-                          TTA Saja
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedKtaType('BOTH')}
-                          className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
-                            selectedKtaType === 'BOTH'
-                              ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
-                              : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
-                          }`}
-                        >
-                          Keduanya (+60 EXP)
-                        </button>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-[var(--text-main)] block">
+                          Jenis Laporan yang Diisi:
+                        </label>
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                          Target Anda: {obligation.label}
+                        </span>
                       </div>
+
+                      {obligation.type === '2_TTA' ? (
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('2_TTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === '2_TTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">2 TTA Sekaligus</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === '2_TTA' ? 'text-amber-100' : 'text-emerald-500'}`}>+60 EXP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('TTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'TTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">1 TTA Saja</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'TTA' ? 'text-amber-100' : 'text-[var(--text-muted)]'}`}>+35 EXP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('KTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'KTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">KTA Saja</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'KTA' ? 'text-amber-100' : 'text-[var(--text-muted)]'}`}>+35 EXP</span>
+                          </button>
+                        </div>
+                      ) : obligation.type === '1_KTA_OR_TTA' ? (
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('TTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'TTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">TTA Saja</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'TTA' ? 'text-amber-100' : 'text-[var(--text-muted)]'}`}>+35 EXP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('KTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'KTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">KTA Saja</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'KTA' ? 'text-amber-100' : 'text-[var(--text-muted)]'}`}>+35 EXP</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('BOTH')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'BOTH'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">Keduanya</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'BOTH' ? 'text-amber-100' : 'text-emerald-500'}`}>+60 EXP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('KTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'KTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">KTA Saja</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'KTA' ? 'text-amber-100' : 'text-[var(--text-muted)]'}`}>+35 EXP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKtaType('TTA')}
+                            className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              selectedKtaType === 'TTA'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-amber-400'
+                            }`}
+                          >
+                            <span className="leading-tight">TTA Saja</span>
+                            <span className={`text-[9px] font-semibold ${selectedKtaType === 'TTA' ? 'text-amber-100' : 'text-[var(--text-muted)]'}`}>+35 EXP</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Helper description */}
+                      <p className="text-[10px] text-[var(--text-muted)] bg-[var(--card-bg)] px-2.5 py-1.5 rounded-lg border border-[var(--border-main)]">
+                        {selectedKtaType === '2_TTA' && '💡 Mengirim 2 bukti laporan TTA sekaligus untuk memenuhi kewajiban mingguan Anda.'}
+                        {selectedKtaType === 'BOTH' && '💡 Mengirim 1 KTA + 1 TTA sekaligus untuk memenuhi kewajiban mingguan Anda.'}
+                        {selectedKtaType === 'TTA' && (obligation.type === '2_TTA' ? '💡 Mengirim 1 laporan TTA (tersisa 1 TTA lagi untuk memenuhi target).' : '💡 Mengirim 1 laporan TTA.')}
+                        {selectedKtaType === 'KTA' && '💡 Mengirim 1 laporan Kondisi Tidak Aman (KTA).'}
+                      </p>
                     </div>
 
                     {/* Catatan Singkat (Opsional) */}
@@ -1095,7 +1533,12 @@ export function SimplifiedInspectionModal({
                       ) : (
                         <>
                           <Check className="w-4 h-4" />
-                          <span>Kirim Bukti Laporan KTA/TTA</span>
+                          <span>
+                            {selectedKtaType === '2_TTA' ? 'Kirim Bukti 2 Laporan TTA (+60 EXP)' :
+                             selectedKtaType === 'BOTH' ? 'Kirim Bukti KTA & TTA (+60 EXP)' :
+                             selectedKtaType === 'TTA' ? 'Kirim Bukti Laporan TTA (+35 EXP)' :
+                             'Kirim Bukti Laporan KTA (+35 EXP)'}
+                          </span>
                         </>
                       )}
                     </button>
@@ -1123,7 +1566,7 @@ export function SimplifiedInspectionModal({
                         <ChevronLeft className="w-4 h-4" />
                         <span>Kembali ke Daftar</span>
                       </button>
-                      <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[var(--text-main)]">
+                      <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                         {closingTicket.ticketId}
                       </span>
                     </div>

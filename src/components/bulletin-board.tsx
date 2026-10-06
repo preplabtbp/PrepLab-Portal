@@ -58,6 +58,28 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { AgendaDashboard } from "./agenda-dashboard";
 
+export const extractTextFromReactNode = (node: any): string => {
+  if (!node) return "";
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractTextFromReactNode).join(" ");
+  if (node.props && node.props.children) {
+    return extractTextFromReactNode(node.props.children);
+  }
+  return "";
+};
+
+export const cleanLegacyMenuInfo = (text?: string | null): string => {
+  if (!text) return "";
+  return text
+    .replace(/<details[\s\S]*?<summary>[\s\S]*?Menu Info[\s\S]*?<\/summary>[\s\S]*?<\/details>/gi, "")
+    .replace(/<summary>[\s\S]*?Menu Info[\s\S]*?<\/summary>/gi, "")
+    .replace(/(?:^|\n)\s*>\s*[*_"\s]*Menu Info[^\n]*[*_"\s]*(?=\n|$)/gi, "")
+    .replace(/(?:^|\n)\s*[*_"\s]*Menu Info[^\n]*[*_"\s]*(?=\n|$)/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+};
+
 export function BulletinBoard({
   inspectorName,
   inspectorNik,
@@ -163,6 +185,11 @@ export function BulletinBoard({
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editCategory, setEditCategory] = useState<string>("");
+  const [editBeforeTable, setEditBeforeTable] = useState("");
+  const [editAfterTable, setEditAfterTable] = useState("");
+  const [editTableRaw, setEditTableRaw] = useState<string | null>(null);
+  const [editTableHeaders, setEditTableHeaders] = useState<string[]>([]);
+  const [editTableRowCount, setEditTableRowCount] = useState<number>(0);
 
   useEffect(() => {
     fetchPosts();
@@ -341,6 +368,9 @@ export function BulletinBoard({
       "INVENTORY",
       "GENERAL ISSUE",
       "MANAJEMEN MUTU",
+      "INFORMATION",
+      "PROSEDUR",
+      "SOP",
     ];
     if (sectionHubTitles.some((t) => titleUpper === t || titleUpper.replace(/^[#\s\-*]+/, "") === t)) {
       return true;
@@ -481,7 +511,11 @@ export function BulletinBoard({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement)?.isContentEditable ||
+        (e.target as HTMLElement)?.closest('[contenteditable="true"]') ||
+        (e.target as HTMLElement)?.closest('[data-notion-inline-editor]') ||
+        Boolean(document.querySelector('[data-notion-inline-editor]'))
       ) {
         return;
       }
@@ -501,6 +535,12 @@ export function BulletinBoard({
     setEditTitle("Untitled Document");
     setEditContent("");
     setEditCategory("PAGE");
+    setEditBeforeTable("");
+    setEditAfterTable("");
+    setEditTableRaw(null);
+    setEditTableHeaders([]);
+    setEditTableRowCount(0);
+    setEditorMode('wysiwyg');
     setIsEditing(true);
   };
 
@@ -511,6 +551,15 @@ export function BulletinBoard({
     }
     toast.loading("Menyimpan dokumen...", { id: "save-post" });
 
+    let finalContent = editContent;
+    if (editorMode === 'wysiwyg' && editTableRaw !== null) {
+      const cleanBefore = cleanLegacyMenuInfo(editBeforeTable).trim();
+      const cleanAfter = cleanLegacyMenuInfo(editAfterTable).trim();
+      finalContent = [cleanBefore, editTableRaw, cleanAfter].filter(Boolean).join('\n\n');
+    } else {
+      finalContent = cleanLegacyMenuInfo(editContent).trim();
+    }
+
     try {
       if (selectedPost) {
         // Update
@@ -519,10 +568,11 @@ export function BulletinBoard({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             title: editTitle,
-            content: editContent,
+            content: finalContent,
             category: editCategory,
           }),
         });
+        setSelectedPost((prev: any) => prev ? { ...prev, title: editTitle, content: finalContent, category: editCategory } : null);
       } else {
         // Create
         await fetch("/api/bulletin", {
@@ -532,7 +582,7 @@ export function BulletinBoard({
             department: "Prep & Lab",
             category: editCategory,
             title: editTitle,
-            content: editContent,
+            content: finalContent,
             pt: pt || "TBP",
             authorNik: inspectorNik,
             authorName: inspectorName,
@@ -565,7 +615,7 @@ export function BulletinBoard({
   const handleInitializeTableForPost = async () => {
     if (!selectedPost) return;
     toast.loading("Membuat tabel topik...", { id: "init-table" });
-    const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Target Selesai', 'Aktual selesai', 'Group', 'Created Time'];
+    const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Tanggal Selesai', 'Group', 'Created Time'];
     const headerLine = `| ${defaultHeaders.join(' | ')} |`;
     const separatorLine = `| ${defaultHeaders.map(() => '---').join(' | ')} |`;
     const tableMd = `${headerLine}\n${separatorLine}`;
@@ -648,51 +698,112 @@ export function BulletinBoard({
     rows: TableRowData[];
     beforeText: string;
     afterText: string;
+    rawTable: string;
   } | null => {
     if (!content || !content.includes("|")) return null;
     const lines = content.split("\n");
-    let startIdx = -1;
-    let endIdx = -1;
+    let headerIdx = -1;
+    let separatorIdx = -1;
+
+    // 1. Locate header line and separator line
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (line.startsWith("|") && line.endsWith("|")) {
-        if (startIdx === -1) startIdx = i;
-        endIdx = i;
-      } else if (startIdx !== -1) {
-        break;
-      }
-    }
-    if (startIdx !== -1 && endIdx - startIdx >= 1) {
-      const headerLine = lines[startIdx];
-      const headers = headerLine
-        .split("|")
-        .map((h) => h.trim())
-        .filter((h, idx, arr) => idx > 0 && idx < arr.length - 1);
-
-      const rows: TableRowData[] = [];
-      for (let i = startIdx + 2; i <= endIdx; i++) {
-        const rowLine = lines[i].trim();
-        if (!rowLine.startsWith("|")) continue;
-        const cells = rowLine
-          .split("|")
-          .map((c) => c.trim())
-          .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
-
-        if (cells.length > 0) {
-          const rowObj: TableRowData = {};
-          headers.forEach((h, idx) => {
-            rowObj[h] = cells[idx] || "";
-          });
-          rows.push(rowObj);
+        if (headerIdx === -1) {
+          headerIdx = i;
+        } else if (separatorIdx === -1 && line.includes("---")) {
+          separatorIdx = i;
+          break;
         }
       }
-
-      const beforeText = lines.slice(0, startIdx).join("\n");
-      const afterText = lines.slice(endIdx + 1).join("\n");
-
-      return { headers, rows, beforeText, afterText };
     }
-    return null;
+
+    if (headerIdx === -1 || separatorIdx === -1) return null;
+
+    const headerLine = lines[headerIdx];
+    const headers = headerLine
+      .split("|")
+      .map((h) => h.trim())
+      .filter((h, idx, arr) => idx > 0 && idx < arr.length - 1);
+
+    if (headers.length === 0) return null;
+
+    // 2. Parse table rows (handling multiline cell continuations and empty lines)
+    const rawRowLines: string[] = [];
+    let currentRow = "";
+    let lastTableLineIdx = separatorIdx;
+
+    for (let i = separatorIdx + 1; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // If empty line
+      if (!trimmed) {
+        if (currentRow && currentRow.trim().endsWith("|")) {
+          rawRowLines.push(currentRow.trim());
+          currentRow = "";
+        }
+        continue;
+      }
+
+      // Check if table has terminated by hitting another markdown section (heading or blockquote)
+      if (
+        !trimmed.startsWith("|") &&
+        (trimmed.startsWith("#") || trimmed.startsWith("> ") || trimmed.startsWith("```"))
+      ) {
+        if (currentRow) {
+          rawRowLines.push(currentRow.trim());
+          currentRow = "";
+        }
+        break;
+      }
+
+      if (trimmed.startsWith("|")) {
+        if (currentRow) {
+          rawRowLines.push(currentRow.trim());
+        }
+        currentRow = trimmed;
+        lastTableLineIdx = i;
+      } else {
+        // Line continuation of multiline cell (e.g. subtask checklist or bullet point)
+        if (currentRow) {
+          currentRow += "<br/>" + trimmed;
+          lastTableLineIdx = i;
+        }
+      }
+    }
+
+    if (currentRow) {
+      rawRowLines.push(currentRow.trim());
+    }
+
+    // Convert raw row strings to TableRowData objects
+    const rows: TableRowData[] = [];
+    for (const rowLine of rawRowLines) {
+      if (!rowLine.startsWith("|")) continue;
+      const cells = rowLine
+        .split("|")
+        .map((c) => c.trim())
+        .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+
+      if (cells.length > 0) {
+        const rowObj: TableRowData = {};
+        headers.forEach((h, idx) => {
+          rowObj[h] = cells[idx] || "";
+        });
+        rows.push(rowObj);
+      }
+    }
+
+    const beforeText = lines.slice(0, headerIdx).join("\n");
+    const afterText = lines.slice(lastTableLineIdx + 1).join("\n");
+    const rawTable = [
+      headerLine,
+      lines[separatorIdx],
+      ...rawRowLines
+    ].join("\n");
+
+    return { headers, rows, beforeText, afterText, rawTable };
   }, []);
 
   const parsedTableData = useMemo(() => {
@@ -925,9 +1036,9 @@ ${aiMeetingNotes
           : 'h-[calc(100vh-80px)] rounded-xl border'
       }`}
       style={{
-        backgroundColor: 'var(--card-bg, #191919)',
-        borderColor: 'var(--border-main, #2d2d2d)',
-        color: 'var(--text-main, #e2e8f0)'
+        backgroundColor: 'var(--card-bg, #ffffff)',
+        borderColor: 'var(--border-main, #e2e8f0)',
+        color: 'var(--text-main, #1e293b)'
       }}
     >
       {/* Notion Sidebar */}
@@ -939,17 +1050,17 @@ ${aiMeetingNotes
             exit={{ width: 0, opacity: 0 }}
             className="flex-shrink-0 border-r overflow-y-auto flex flex-col font-sans select-none transition-colors"
             style={{
-              backgroundColor: 'var(--card-bg, #191919)',
-              borderColor: 'var(--border-main, #262626)',
-              color: 'var(--text-main, #e2e8f0)'
+              backgroundColor: 'var(--card-bg, #fbfbfa)',
+              borderColor: 'var(--border-main, #ececeb)',
+              color: 'var(--text-main, #1e293b)'
             }}
           >
             {/* Header: Preparation & Lab Notion */}
             <div 
               className="px-3 py-3 flex items-center justify-between cursor-pointer transition-colors border-b"
               style={{
-                borderColor: 'var(--border-main, #242424)',
-                color: 'var(--text-main, #f1f5f9)'
+                borderColor: 'var(--border-main, #ececeb)',
+                color: 'var(--text-main, #0f172a)'
               }}
             >
               <div
@@ -957,15 +1068,15 @@ ${aiMeetingNotes
                 className="flex items-center gap-2 min-w-0 flex-1"
                 title="Buka Beranda Workspace"
               >
-                <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0 shadow-inner">
+                <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-500 font-bold text-xs flex-shrink-0 shadow-inner">
                   ☢
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="font-bold text-xs truncate tracking-tight" style={{ color: 'var(--text-main, #f1f5f9)' }}>
+                  <span className="font-bold text-xs truncate tracking-tight text-slate-900">
                     Prep & Lab Bulletin
                   </span>
                   {isDev && (
-                    <span className="text-xs font-mono text-teal-400 font-semibold tracking-wider">
+                    <span className="text-xs font-mono text-teal-600 font-semibold tracking-wider">
                       ★ ALL ACCESS
                     </span>
                   )}
@@ -986,20 +1097,20 @@ ${aiMeetingNotes
 
             {/* SuperAdmin & Developer Universe Filter Selector vs Static Non-Dev Indicator */}
             {isDev ? (
-              <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-main, #242424)' }}>
+              <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-main, #ececeb)' }}>
                 <div className="flex items-center justify-between mb-2 gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                  <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap text-slate-500">
                     Workspace Universe
                   </span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 font-bold border border-teal-500/20 whitespace-nowrap shrink-0">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 font-bold border border-teal-200 whitespace-nowrap shrink-0">
                     {posts.length} Dokumen
                   </span>
                 </div>
                 <div 
                   className="grid grid-cols-3 gap-1 p-1 rounded-xl border"
                   style={{
-                    backgroundColor: 'var(--input-bg, rgba(0,0,0,0.2))',
-                    borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))'
+                    backgroundColor: 'var(--input-bg, #f1f1ef)',
+                    borderColor: 'var(--border-main, #e2e8f0)'
                   }}
                 >
                   {(['ALL', 'TBP', 'GTS'] as const).map((ptKey) => {
@@ -1025,18 +1136,14 @@ ${aiMeetingNotes
                           }
                         }}
                         className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all cursor-pointer overflow-hidden ${
-                          isActive ? 'shadow-xs scale-[1.02]' : 'hover:opacity-80 opacity-70'
+                          isActive ? 'shadow-2xs bg-white text-slate-900 border border-slate-200 font-bold' : 'hover:bg-slate-200/50 text-slate-600'
                         }`}
-                        style={{
-                          backgroundColor: isActive ? 'var(--primary, #2A9D8F)' : 'transparent',
-                          color: isActive ? '#ffffff' : 'var(--text-main, #cbd5e1)'
-                        }}
                         title={`Tampilkan buletin ${ptKey}`}
                       >
                         <span className="text-xs font-bold leading-tight truncate max-w-full">
                           {ptKey === 'ALL' ? 'Semua' : ptKey}
                         </span>
-                        <span className={`text-[10px] font-mono leading-tight mt-0.5 whitespace-nowrap ${isActive ? 'text-white/95 font-bold' : 'opacity-70'}`}>
+                        <span className={`text-[10px] font-mono leading-tight mt-0.5 whitespace-nowrap ${isActive ? 'text-teal-700 font-bold' : 'opacity-70'}`}>
                           {count}
                         </span>
                       </button>
@@ -1045,11 +1152,11 @@ ${aiMeetingNotes
                 </div>
               </div>
             ) : (
-              <div className="px-3 py-2 border-b flex items-center justify-between gap-2" style={{ borderColor: 'var(--border-main, #242424)' }}>
-                <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+              <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-main, #ececeb)' }}>
+                <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap text-slate-500">
                   Workspace Universe
                 </span>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 whitespace-nowrap shrink-0">
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200 whitespace-nowrap shrink-0">
                   {userUniverse === 'GTS' ? 'PT GTS' : 'PT TBP / GPS'}
                 </span>
               </div>
@@ -1059,8 +1166,8 @@ ${aiMeetingNotes
             <div 
               className="px-3 py-2.5 flex items-center justify-between gap-1 border-b"
               style={{
-                borderColor: 'var(--border-main, #242424)',
-                color: 'var(--text-muted, #94a3b8)'
+                borderColor: 'var(--border-main, #ececeb)',
+                color: 'var(--text-muted, #64748b)'
               }}
             >
               {/* Home Pill */}
@@ -1068,8 +1175,8 @@ ${aiMeetingNotes
                 onClick={() => navigateToPost(null)}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer"
                 style={{
-                  backgroundColor: (!selectedPost && !isEditing) ? 'var(--primary, #2A9D8F)' : 'var(--input-bg, #222222)',
-                  color: (!selectedPost && !isEditing) ? '#ffffff' : 'var(--text-main, #cbd5e1)'
+                  backgroundColor: (!selectedPost && !isEditing) ? '#2A9D8F' : '#f1f1ef',
+                  color: (!selectedPost && !isEditing) ? '#ffffff' : '#334155'
                 }}
                 title="Beranda Dashboard"
               >
@@ -1261,17 +1368,17 @@ ${aiMeetingNotes
       <div 
         className="flex-1 flex flex-col h-full relative overflow-y-auto transition-colors"
         style={{
-          backgroundColor: 'var(--bg-main, #1b1b1b)',
-          color: 'var(--text-main, #e2e8f0)'
+          backgroundColor: 'var(--bg-main, #ffffff)',
+          color: 'var(--text-main, #1e293b)'
         }}
       >
         {/* Topbar with Hierarchical Navigation */}
         <div 
           className="h-12 border-b flex items-center px-4 justify-between sticky top-0 backdrop-blur-md z-10 transition-colors"
           style={{
-            backgroundColor: 'var(--card-bg, #1b1b1b)',
-            borderColor: 'var(--border-main, #334155)',
-            color: 'var(--text-main, #e2e8f0)'
+            backgroundColor: 'var(--card-bg, #ffffff)',
+            borderColor: 'var(--border-main, #e2e8f0)',
+            color: 'var(--text-main, #1e293b)'
           }}
         >
           <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
@@ -1403,9 +1510,26 @@ ${aiMeetingNotes
               <>
                 <button
                   onClick={() => {
+                    const rawContent = cleanLegacyMenuInfo(getRenderableContent(selectedPost));
                     setEditTitle(selectedPost.title || "");
-                    setEditContent(getRenderableContent(selectedPost));
                     setEditCategory(selectedPost.category || "");
+                    setEditContent(rawContent);
+
+                    const tbl = extractMarkdownTable(rawContent);
+                    if (tbl) {
+                      setEditBeforeTable(cleanLegacyMenuInfo(tbl.beforeText).trim());
+                      setEditAfterTable(cleanLegacyMenuInfo(tbl.afterText).trim());
+                      setEditTableRaw(tbl.rawTable);
+                      setEditTableHeaders(tbl.headers);
+                      setEditTableRowCount(tbl.rows.length);
+                    } else {
+                      setEditBeforeTable(cleanLegacyMenuInfo(rawContent).trim());
+                      setEditAfterTable("");
+                      setEditTableRaw(null);
+                      setEditTableHeaders([]);
+                      setEditTableRowCount(0);
+                    }
+                    setEditorMode('wysiwyg');
                     setIsEditing(true);
                   }}
                   className="p-1.5 text-slate-400 hover:text-blue-400 rounded-md hover:bg-slate-800 transition-colors"
@@ -1446,7 +1570,7 @@ ${aiMeetingNotes
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 p-4 md:p-6 lg:p-8 w-full pb-32">
+        <div className={`flex-1 w-full pb-32 ${isSectionHubPost(selectedPost) ? 'p-2 sm:p-4 md:p-6' : 'p-4 md:p-6 lg:p-8'}`}>
           {!selectedPost && !isEditing ? (
             <TbpDashboard
               posts={selectedPtFilter !== "ALL" ? posts.filter((p) => {
@@ -1504,7 +1628,25 @@ ${aiMeetingNotes
                 >
                   <button
                     type="button"
-                    onClick={() => setEditorMode('wysiwyg')}
+                    onClick={() => {
+                      if (editorMode !== 'wysiwyg') {
+                        const tbl = extractMarkdownTable(editContent);
+                        if (tbl) {
+                          setEditBeforeTable(cleanLegacyMenuInfo(tbl.beforeText).trim());
+                          setEditAfterTable(cleanLegacyMenuInfo(tbl.afterText).trim());
+                          setEditTableRaw(tbl.rawTable);
+                          setEditTableHeaders(tbl.headers);
+                          setEditTableRowCount(tbl.rows.length);
+                        } else {
+                          setEditBeforeTable(cleanLegacyMenuInfo(editContent).trim());
+                          setEditAfterTable("");
+                          setEditTableRaw(null);
+                          setEditTableHeaders([]);
+                          setEditTableRowCount(0);
+                        }
+                        setEditorMode('wysiwyg');
+                      }
+                    }}
                     className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                       editorMode === 'wysiwyg'
                         ? 'bg-teal-600 text-white shadow-xs'
@@ -1515,7 +1657,17 @@ ${aiMeetingNotes
                   </button>
                   <button
                     type="button"
-                    onClick={() => setEditorMode('raw')}
+                    onClick={() => {
+                      if (editorMode !== 'raw') {
+                        if (editTableRaw !== null) {
+                          const cleanBefore = cleanLegacyMenuInfo(editBeforeTable).trim();
+                          const cleanAfter = cleanLegacyMenuInfo(editAfterTable).trim();
+                          const full = [cleanBefore, editTableRaw, cleanAfter].filter(Boolean).join('\n\n');
+                          setEditContent(full);
+                        }
+                        setEditorMode('raw');
+                      }
+                    }}
                     className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                       editorMode === 'raw'
                         ? 'bg-teal-600 text-white shadow-xs'
@@ -1528,22 +1680,132 @@ ${aiMeetingNotes
               </div>
 
               {editorMode === 'wysiwyg' ? (
-                <div 
-                  className="rounded-2xl border p-4 shadow-sm"
-                  style={{
-                    backgroundColor: 'var(--card-bg, #1e1e1e)',
-                    borderColor: 'var(--border-main, #334155)'
-                  }}
-                >
-                  <EnterpriseWysiwygEditor
-                    value={editContent}
-                    onChange={setEditContent}
-                    placeholder="Tulis dokumen dalam format visual (teks, heading, checklist subtask, dll)..."
-                    allowModeSwitch={true}
-                    defaultMode="text"
-                    rows={20}
-                  />
-                </div>
+                editTableRaw !== null ? (
+                  /* Specialized Visual View for Pages with Connected Database Table */
+                  <div className="space-y-6">
+                    {/* Intro Text Editor */}
+                    <div 
+                      className="rounded-2xl border p-4 shadow-sm"
+                      style={{
+                        backgroundColor: 'var(--card-bg, #1e1e1e)',
+                        borderColor: 'var(--border-main, #334155)'
+                      }}
+                    >
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                        <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--text-main, #f8fafc)' }}>
+                          <FileText className="w-4 h-4 text-teal-400" />
+                          <span>Keterangan & Pengantar Halaman (Sebelum Tabel)</span>
+                        </span>
+                        <span className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                          Visual WYSIWYG
+                        </span>
+                      </div>
+                      <EnterpriseWysiwygEditor
+                        value={editBeforeTable}
+                        onChange={setEditBeforeTable}
+                        placeholder="Tuliskan catatan, petunjuk, atau pengantar sebelum tabel topik..."
+                        allowModeSwitch={true}
+                        defaultMode="text"
+                        rows={6}
+                      />
+                    </div>
+
+                    {/* Connected Database Table Card (No messy raw pipes!) */}
+                    <div 
+                      className="rounded-2xl border p-5 shadow-md relative overflow-hidden transition-all"
+                      style={{
+                        backgroundColor: 'var(--card-bg, #1e293b)',
+                        borderColor: 'var(--primary, #0d9488)'
+                      }}
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-700/60">
+                        <div className="flex items-center gap-3">
+                          <div className="p-3 rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-400">
+                            <Table className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-extrabold text-base" style={{ color: 'var(--text-main, #f8fafc)' }}>
+                                Tabel Database Topik Terhubung
+                              </h3>
+                              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/40">
+                                {editTableRowCount} Baris Kegiatan
+                              </span>
+                            </div>
+                            <p className="text-xs mt-1 text-slate-400">
+                              Kolom: {editTableHeaders.join(' • ')}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleSavePost}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-500 transition-all shadow-md cursor-pointer self-start md:self-auto shrink-0"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>Simpan & Buka Tabel Interaktif</span>
+                        </button>
+                      </div>
+
+                      <div className="pt-4 flex items-start gap-3 text-xs text-slate-300 bg-slate-900/50 p-3.5 rounded-xl border border-slate-800/80 mt-2">
+                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="leading-relaxed">
+                          <p className="font-semibold text-slate-200">
+                            Format tabel sudah otomatis terintegrasi dan aman!
+                          </p>
+                          <p className="text-slate-400 mt-0.5">
+                            Semua baris kegiatan, PIC, status, target tanggal, dan checklist subtask dikelola langsung secara interaktif melalui tabel utama di halaman (lengkap dengan fitur tambah baris, sorting, pencarian, dan subtask manager). Anda tidak perlu lagi mengedit atau melihat ribuan baris kode pipa (<code className="px-1 py-0.5 bg-slate-800 rounded text-teal-300 font-mono">|</code>) yang membingungkan.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Optional Outro Notes Editor */}
+                    {(editAfterTable.trim() || false) && (
+                      <div 
+                        className="rounded-2xl border p-4 shadow-sm"
+                        style={{
+                          backgroundColor: 'var(--card-bg, #1e1e1e)',
+                          borderColor: 'var(--border-main, #334155)'
+                        }}
+                      >
+                        <div className="flex items-center justify-between pb-2 mb-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                          <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--text-main, #f8fafc)' }}>
+                            <FileText className="w-4 h-4 text-teal-400" />
+                            <span>Catatan Penutup (Setelah Tabel)</span>
+                          </span>
+                        </div>
+                        <EnterpriseWysiwygEditor
+                          value={editAfterTable}
+                          onChange={setEditAfterTable}
+                          placeholder="Tuliskan catatan tambahan setelah tabel (opsional)..."
+                          allowModeSwitch={true}
+                          defaultMode="text"
+                          rows={4}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Standard WYSIWYG for Normal Non-Table Pages */
+                  <div 
+                    className="rounded-2xl border p-4 shadow-sm"
+                    style={{
+                      backgroundColor: 'var(--card-bg, #1e1e1e)',
+                      borderColor: 'var(--border-main, #334155)'
+                    }}
+                  >
+                    <EnterpriseWysiwygEditor
+                      value={editContent}
+                      onChange={setEditContent}
+                      placeholder="Tulis dokumen dalam format visual (teks, heading, checklist subtask, dll)..."
+                      allowModeSwitch={true}
+                      defaultMode="text"
+                      rows={20}
+                    />
+                  </div>
+                )
               ) : (
                 <textarea
                   value={editContent}
@@ -1561,22 +1823,17 @@ ${aiMeetingNotes
           ) : isSectionHubPost(selectedPost) ? (
             <div className="space-y-6 w-full max-w-none animate-in fade-in duration-200">
               {/* View Mode Contextual Header Bar */}
-              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
                 <button
                   onClick={goBack}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-xs border group cursor-pointer hover:opacity-80"
-                  style={{
-                    backgroundColor: 'var(--card-bg, #242424)',
-                    borderColor: 'var(--border-main, #334155)',
-                    color: 'var(--text-main, #cbd5e1)'
-                  }}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs transition-all group cursor-pointer"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5 text-teal-400 group-hover:-translate-x-0.5 transition-transform" />
-                  <span>Kembali ke <strong className="text-teal-400 font-semibold">{immediateParentTitle}</strong></span>
+                  <ArrowLeft className="w-3.5 h-3.5 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
+                  <span>Kembali ke <strong className="text-slate-900 font-bold">{immediateParentTitle}</strong></span>
                 </button>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-teal-950/60 text-teal-300 border border-teal-700/50 font-mono">
+                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200 font-mono font-medium">
                     SECTION HOMEPAGE
                   </span>
                 </div>
@@ -1588,37 +1845,29 @@ ${aiMeetingNotes
                 activePt={selectedPtFilter !== 'ALL' ? selectedPtFilter : (selectedPost.pt || 'TBP')}
                 onSelectPost={(p) => navigateToPost(p)}
                 onGoHome={() => navigateToPost(null)}
+                agendaEvents={agendaEventsList}
+                onOpenCalendar={() => navigate('/agenda')}
               />
             </div>
           ) : parsedTableData ? (
             <div className="space-y-6 w-full max-w-none animate-in fade-in duration-200">
               {/* View Mode Contextual Header Bar */}
-              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
                 <button
                   onClick={goBack}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-xs border group cursor-pointer hover:opacity-80"
-                  style={{
-                    backgroundColor: 'var(--card-bg, #242424)',
-                    borderColor: 'var(--border-main, #334155)',
-                    color: 'var(--text-main, #cbd5e1)'
-                  }}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs transition-all group cursor-pointer"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5 text-teal-400 group-hover:-translate-x-0.5 transition-transform" />
-                  <span>Kembali ke <strong className="text-teal-400 font-semibold">{immediateParentTitle}</strong></span>
+                  <ArrowLeft className="w-3.5 h-3.5 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
+                  <span>Kembali ke <strong className="text-slate-900 font-bold">{immediateParentTitle}</strong></span>
                 </button>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-500 dark:text-blue-400 border border-blue-500/30 font-mono flex items-center gap-1.5 font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono flex items-center gap-1.5 font-bold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
                     DATABASE TABLE
                   </span>
                   <span 
-                    className="text-[11px] px-2.5 py-1 rounded-full font-mono border"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #1e293b)',
-                      color: 'var(--text-muted, #94a3b8)',
-                      borderColor: 'var(--border-main, #334155)'
-                    }}
+                    className="text-[11px] px-2.5 py-1 rounded-full font-mono border bg-slate-50 text-slate-600 border-slate-200"
                   >
                     {selectedPost.category || "PAGE"}
                   </span>
@@ -1628,8 +1877,7 @@ ${aiMeetingNotes
               {/* Cover Image */}
               {selectedPost.coverImage && (
                 <div 
-                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border shadow-md"
-                  style={{ borderColor: 'var(--border-main, #334155)' }}
+                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border border-slate-200/80 shadow-xs"
                 >
                   <img
                     src={selectedPost.coverImage}
@@ -1642,8 +1890,7 @@ ${aiMeetingNotes
               {/* Title & Metadata */}
               <div>
                 <h1 
-                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3"
-                  style={{ color: 'var(--text-main, #f8fafc)' }}
+                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3 text-slate-900"
                 >
                   {getPostTitle(selectedPost)}
                 </h1>
@@ -1678,7 +1925,7 @@ ${aiMeetingNotes
                   <ReactMarkdown 
                     components={{
                       h1: ({ node, children }: any) => {
-                        const text = String(children).trim();
+                        const text = extractTextFromReactNode(children).trim();
                         const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
                         const targetPost = posts.find(
                           (p) =>
@@ -1689,7 +1936,7 @@ ${aiMeetingNotes
                                 (p.title.toLowerCase().includes(clean) ||
                                   clean.includes(p.title.toLowerCase().trim()))))
                         );
-                        if (targetPost && text.length > 3) {
+                        if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
                           return (
                             <div
                               onClick={() => navigateToPost(targetPost)}
@@ -1720,7 +1967,7 @@ ${aiMeetingNotes
                         return <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>;
                       },
                       h2: ({ node, children }: any) => {
-                        const text = String(children).trim();
+                        const text = extractTextFromReactNode(children).trim();
                         const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
                         const targetPost = posts.find(
                           (p) =>
@@ -1731,7 +1978,7 @@ ${aiMeetingNotes
                                 (p.title.toLowerCase().includes(clean) ||
                                   clean.includes(p.title.toLowerCase().trim()))))
                         );
-                        if (targetPost && text.length > 3) {
+                        if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
                           return (
                             <div
                               onClick={() => navigateToPost(targetPost)}
@@ -1762,7 +2009,7 @@ ${aiMeetingNotes
                         return <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>;
                       },
                       h3: ({ node, children }: any) => {
-                        const text = String(children).trim();
+                        const text = extractTextFromReactNode(children).trim();
                         const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
                         const targetPost = posts.find(
                           (p) =>
@@ -1773,7 +2020,7 @@ ${aiMeetingNotes
                                 (p.title.toLowerCase().includes(clean) ||
                                   clean.includes(p.title.toLowerCase().trim()))))
                         );
-                        if (targetPost && text.length > 3) {
+                        if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
                           return (
                             <div
                               onClick={() => navigateToPost(targetPost)}
@@ -1799,11 +2046,11 @@ ${aiMeetingNotes
                         return <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>;
                       },
                       blockquote: ({ node, children }: any) => {
-                        const text = String(children)
-                          .replace(/\"/g, "")
+                        const text = extractTextFromReactNode(children)
+                          .replace(/["*_]/g, "")
                           .trim()
                           .toLowerCase();
-                        if (text.includes("menu info")) return null;
+                        if (text.includes("menu info") || !text) return null;
                         return (
                           <blockquote 
                             className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
@@ -1818,12 +2065,11 @@ ${aiMeetingNotes
                         );
                       },
                       p: ({ node, children }: any) => {
-                        if (
-                          typeof children === "string" &&
-                          children.replace(/\"/g, "").trim().toLowerCase() ===
-                            "menu info laboratorium"
-                        )
-                          return null;
+                        const text = extractTextFromReactNode(children)
+                          .replace(/["*_]/g, "")
+                          .trim()
+                          .toLowerCase();
+                        if (text.includes("menu info")) return null;
                         return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
                       },
                       a: ({ href, children }: any) => {
@@ -1919,19 +2165,33 @@ ${aiMeetingNotes
                       h1: ({ node, children }: any) => <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>,
                       h2: ({ node, children }: any) => <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>,
                       h3: ({ node, children }: any) => <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>,
-                      blockquote: ({ node, children }: any) => (
-                        <blockquote 
-                          className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
-                          style={{
-                            backgroundColor: 'var(--input-bg, #222)',
-                            color: 'var(--text-main, #cbd5e1)',
-                            borderColor: 'var(--primary, #2A9D8F)'
-                          }}
-                        >
-                          {children}
-                        </blockquote>
-                      ),
-                      p: ({ node, children }: any) => <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>,
+                      blockquote: ({ node, children }: any) => {
+                        const text = extractTextFromReactNode(children)
+                          .replace(/["*_]/g, "")
+                          .trim()
+                          .toLowerCase();
+                        if (text.includes("menu info") || !text) return null;
+                        return (
+                          <blockquote 
+                            className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
+                            style={{
+                              backgroundColor: 'var(--input-bg, #222)',
+                              color: 'var(--text-main, #cbd5e1)',
+                              borderColor: 'var(--primary, #2A9D8F)'
+                            }}
+                          >
+                            {children}
+                          </blockquote>
+                        );
+                      },
+                      p: ({ node, children }: any) => {
+                        const text = extractTextFromReactNode(children)
+                          .replace(/["*_]/g, "")
+                          .trim()
+                          .toLowerCase();
+                        if (text.includes("menu info")) return null;
+                        return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
+                      },
                       a: ({ href, children }: any) => (
                         <a
                           href={href}
@@ -1953,36 +2213,26 @@ ${aiMeetingNotes
           ) : (
             <div className="space-y-6 w-full max-w-none">
               {/* View Mode Contextual Header Bar */}
-              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
                 <button
                   onClick={goBack}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-xs border group cursor-pointer hover:opacity-80"
-                  style={{
-                    backgroundColor: 'var(--card-bg, #242424)',
-                    borderColor: 'var(--border-main, #334155)',
-                    color: 'var(--text-main, #cbd5e1)'
-                  }}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs transition-all group cursor-pointer"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5 text-teal-400 group-hover:-translate-x-0.5 transition-transform" />
-                  <span>Kembali ke <strong className="text-teal-400 font-semibold">{immediateParentTitle}</strong></span>
+                  <ArrowLeft className="w-3.5 h-3.5 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
+                  <span>Kembali ke <strong className="text-slate-900 font-bold">{immediateParentTitle}</strong></span>
                 </button>
 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleInitializeTableForPost}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white shadow-xs transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white shadow-2xs transition-all cursor-pointer"
                     title="Buat tabel database topik/kegiatan di halaman ini"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>+ Buat Tabel Topik</span>
                   </button>
                   <span 
-                    className="text-[11px] px-2.5 py-1 rounded-full font-mono border"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #1e293b)',
-                      color: 'var(--text-muted, #94a3b8)',
-                      borderColor: 'var(--border-main, #334155)'
-                    }}
+                    className="text-[11px] px-2.5 py-1 rounded-full font-mono border bg-slate-50 text-slate-600 border-slate-200"
                   >
                     {selectedPost.category || "PAGE"}
                   </span>
@@ -1992,8 +2242,7 @@ ${aiMeetingNotes
               {/* Cover Image */}
               {selectedPost.coverImage && (
                 <div 
-                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border shadow-md"
-                  style={{ borderColor: 'var(--border-main, #334155)' }}
+                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border border-slate-200/80 shadow-xs"
                 >
                   <img
                     src={selectedPost.coverImage}
@@ -2006,8 +2255,7 @@ ${aiMeetingNotes
               {/* Title & Metadata */}
               <div>
                 <h1 
-                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3"
-                  style={{ color: 'var(--text-main, #f8fafc)' }}
+                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3 text-slate-900"
                 >
                   {getPostTitle(selectedPost)}
                 </h1>
@@ -2041,7 +2289,7 @@ ${aiMeetingNotes
                 <ReactMarkdown
                   components={{
                     h1: ({ node, children }) => {
-                      const text = String(children).trim();
+                      const text = extractTextFromReactNode(children).trim();
                       const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
                       const targetPost = posts.find(
                         (p) =>
@@ -2052,7 +2300,7 @@ ${aiMeetingNotes
                               (p.title.toLowerCase().includes(clean) ||
                                 clean.includes(p.title.toLowerCase().trim()))))
                       );
-                      if (targetPost && text.length > 3) {
+                      if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
                         return (
                           <div
                             onClick={() => navigateToPost(targetPost)}
@@ -2083,7 +2331,7 @@ ${aiMeetingNotes
                       return <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>;
                     },
                     h2: ({ node, children }) => {
-                      const text = String(children).trim();
+                      const text = extractTextFromReactNode(children).trim();
                       const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
                       const targetPost = posts.find(
                         (p) =>
@@ -2094,7 +2342,7 @@ ${aiMeetingNotes
                               (p.title.toLowerCase().includes(clean) ||
                                 clean.includes(p.title.toLowerCase().trim()))))
                       );
-                      if (targetPost && text.length > 3) {
+                      if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
                         return (
                           <div
                             onClick={() => navigateToPost(targetPost)}
@@ -2125,7 +2373,7 @@ ${aiMeetingNotes
                       return <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>;
                     },
                     h3: ({ node, children }) => {
-                      const text = String(children).trim();
+                      const text = extractTextFromReactNode(children).trim();
                       const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
                       const targetPost = posts.find(
                         (p) =>
@@ -2136,7 +2384,7 @@ ${aiMeetingNotes
                               (p.title.toLowerCase().includes(clean) ||
                                 clean.includes(p.title.toLowerCase().trim()))))
                       );
-                      if (targetPost && text.length > 3) {
+                      if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
                         return (
                           <div
                             onClick={() => navigateToPost(targetPost)}
@@ -2162,32 +2410,26 @@ ${aiMeetingNotes
                       return <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>;
                     },
                     blockquote: ({ node, children }) => {
-                      const text = String(children)
-                        .replace(/\"/g, "")
+                      const text = extractTextFromReactNode(children)
+                        .replace(/["*_]/g, "")
                         .trim()
                         .toLowerCase();
-                        if (text.includes("menu info")) return null;
+                      if (text.includes("menu info") || !text) return null;
                       return (
                         <blockquote 
-                          className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
-                          style={{
-                            backgroundColor: 'var(--input-bg, #222)',
-                            color: 'var(--text-main, #cbd5e1)',
-                            borderColor: 'var(--primary, #2A9D8F)'
-                          }}
+                          className="border-l-4 border-sky-400 bg-[#f0f6fd] px-4 py-2.5 my-3 rounded-r-xl italic text-slate-800 shadow-2xs"
                         >
                           {children}
                         </blockquote>
                       );
                     },
                     p: ({ node, children }) => {
-                      if (
-                        typeof children === "string" &&
-                        children.replace(/\"/g, "").trim().toLowerCase() ===
-                          "menu info laboratorium"
-                      )
-                        return null;
-                      return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
+                      const text = extractTextFromReactNode(children)
+                        .replace(/["*_]/g, "")
+                        .trim()
+                        .toLowerCase();
+                      if (text.includes("menu info")) return null;
+                      return <p className="mb-3 leading-relaxed text-slate-700">{children}</p>;
                     },
                     a: ({ href, children }) => {
                       const url = href || "";
@@ -2205,21 +2447,12 @@ ${aiMeetingNotes
                             href={url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-3 py-1.5 my-1.5 rounded-lg border text-xs font-medium transition-all shadow-xs group no-underline hover:border-teal-500"
-                            style={{
-                              backgroundColor: 'var(--card-bg, #282828)',
-                              borderColor: 'var(--border-main, #334155)',
-                              color: 'var(--primary, #2A9D8F)'
-                            }}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 my-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-medium transition-all shadow-2xs group no-underline hover:border-sky-300"
                           >
-                            <FileText className="w-4 h-4 text-teal-400 group-hover:scale-110 transition-transform" />
-                            <span className="font-semibold" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</span>
+                            <FileText className="w-4 h-4 text-sky-600 group-hover:scale-110 transition-transform" />
+                            <span className="font-semibold text-slate-800">{children}</span>
                             <span 
-                              className="text-[10px] px-1.5 py-0.5 rounded ml-1"
-                              style={{
-                                backgroundColor: 'var(--input-bg, #181818)',
-                                color: 'var(--text-muted, #94a3b8)'
-                              }}
+                              className="text-[10px] px-1.5 py-0.5 rounded ml-1 bg-slate-100 text-slate-500 font-mono"
                             >
                               {isDrive ? "Google Drive" : "Unduh File"}
                             </span>
@@ -2645,14 +2878,14 @@ ${aiMeetingNotes
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm" style={{ color: 'var(--text-main, #f8fafc)' }}>
-                      Pusat Notifikasi &amp; Changelog Buletin
+                      Pusat Notifikasi &amp; Changelog Labnote
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-teal-500/15 text-teal-400 border border-teal-500/30">
-                      DEDICATED BULETIN
+                      DEDICATED LABNOTE
                     </span>
                   </div>
                   <p className="text-[10px] opacity-70" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Pemberitahuan, komentar, &amp; pembaruan artikel khusus portal Buletin
+                    Pemberitahuan, komentar, &amp; pembaruan artikel khusus portal Labnote
                   </p>
                 </div>
               </div>
@@ -2702,7 +2935,7 @@ ${aiMeetingNotes
               {bulletinNotifTab === 'notifications' ? (
                 notificationsList.length === 0 ? (
                   <div className="py-8 text-center text-xs space-y-1" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    <p className="font-semibold">Belum ada notifikasi diskusi buletin</p>
+                    <p className="font-semibold">Belum ada notifikasi diskusi Labnote</p>
                     <p className="text-[11px] opacity-75">Komentar atau postingan yang menyebut seksi Anda akan muncul di sini.</p>
                   </div>
                 ) : (
@@ -2741,7 +2974,7 @@ ${aiMeetingNotes
                       <div className="font-semibold flex items-center justify-between" style={{ color: 'var(--text-main, #f8fafc)' }}>
                         <span className="flex items-center gap-1.5 truncate">
                           {!n.isRead && <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />}
-                          <span className="truncate">{n.title || "Pembaruan Buletin"}</span>
+                          <span className="truncate">{n.title || "Pembaruan Labnote"}</span>
                         </span>
                         <span className="text-[10px] font-mono shrink-0" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                           {n.createdAt ? new Date(n.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ""}
@@ -2754,10 +2987,10 @@ ${aiMeetingNotes
                   ))
                 )
               ) : (
-                /* Tab Changelog Buletin */
+                /* Tab Changelog Labnote */
                 <div className="space-y-2">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1">
-                    Artikel &amp; Topik Buletin Terbaru
+                    Artikel &amp; Topik Labnote Terbaru
                   </div>
                   {posts.slice(0, 15).map((p) => (
                     <div

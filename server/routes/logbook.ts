@@ -18,7 +18,7 @@ const formatDateStr = (date: Date): string => {
 };
 
 // Helper to parse markdown table from bulletin content
-function parseMarkdownTableRows(content: string) {
+export function parseMarkdownTableRows(content: string) {
   if (!content || !content.includes("|")) return null;
   const lines = content.split("\n");
   let startIdx = -1;
@@ -168,16 +168,25 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
 
     // Helper: Resolve effective cadence for routine tasks
     const resolveRoutineCadence = (t: any): string => {
-      let act = (t.activityType || 'Daily').trim();
-      if (act.toLowerCase() === 'routine' || !act) {
+      let act = (t.activityType || '').trim();
+      const actLower = act.toLowerCase();
+      if (actLower.includes('monthly') || actLower.includes('bulanan')) return 'Monthly';
+      if (actLower.includes('weekly') || actLower.includes('mingguan')) return 'Weekly';
+      if (actLower.includes('daily') || actLower.includes('harian')) return 'Daily';
+      if (actLower.includes('quarterly') || actLower.includes('triwulan')) return 'Quarterly';
+      if (actLower.includes('biannual') || actLower.includes('semester')) return 'Biannual';
+      if (actLower.includes('yearly') || actLower.includes('annual') || actLower.includes('tahunan')) return 'Yearly';
+      if (actLower.includes('non')) return 'Non Routine';
+
+      if (actLower === 'routine' || !act) {
         const bTitle = (t.bulletinTopicTitle || '').toLowerCase();
         const tTitle = (t.title || '').toLowerCase();
         const combined = `${bTitle} ${tTitle}`;
+        if (combined.includes('monthly') || combined.includes('bulanan')) return 'Monthly';
         if (combined.includes('weekly') || combined.includes('mingguan')) return 'Weekly';
         if (combined.includes('quarterly') || combined.includes('triwulan')) return 'Quarterly';
         if (combined.includes('biannual') || combined.includes('semester')) return 'Biannual';
         if (combined.includes('yearly') || combined.includes('annual') || combined.includes('tahunan')) return 'Yearly';
-        if (combined.includes('monthly') || combined.includes('bulanan')) return 'Monthly';
         return 'Daily';
       }
       return act;
@@ -202,22 +211,20 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
         return false;
       }
 
+      // If taskDate is set in the future (after targetDate), strictly do not display in planning yet!
+      if (t.taskDate && t.taskDate > targetDate) {
+        return false;
+      }
+
       const cadence = resolveRoutineCadence(t);
       const windowDays = getRoutineWindowDays(cadence);
 
-      // Daily Routine appears continuous every day
+      // Daily Routine appears continuous every day once taskDate is reached
       if (windowDays >= 99999) return true;
 
-      // For Weekly (D-3), Monthly (D-7), Quarterly (M-1 / 30d), Biannual (M-2 / 60d), Yearly (M-3 / 90d):
-      const deadlineStr = t.targetDate || t.taskDate;
-      if (!deadlineStr) return true;
-
-      const deadlineTime = new Date(deadlineStr).getTime();
-      const targetTime = new Date(targetDate).getTime();
-      const diffDays = Math.ceil((deadlineTime - targetTime) / (1000 * 60 * 60 * 24));
-
-      // Eligible when within threshold window or overdue before completion
-      return diffDays <= windowDays;
+      // For Weekly, Monthly, Quarterly, Biannual, Yearly:
+      // Once its start date is reached (taskDate <= targetDate), it stays active until finished or past deadline
+      return true;
     };
 
     // Helper to check if task is planned/scheduled for targetDateStr
@@ -232,8 +239,16 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
     // 1. Today tasks:
     //    - STRICTLY tasks planned/scheduled to be progressed on targetDateStr (today)
     //    - Either originally created for targetDateStr, OR explicitly scheduled/planned for targetDateStr (plannedDate)
+    //    - OR active Routine tasks eligible for targetDateStr (Daily continuous, Weekly, Monthly)
+    //    - STRICT GUARD: If a task is scheduled for a future period (taskDate > today), NEVER show in today's planning!
     const todayTasks = allMatching.filter(t => {
-      return isTaskPlannedForDate(t, targetDateStr);
+      // Future tasks must NOT appear in today's planning
+      if (t.taskDate && t.taskDate > targetDateStr) return false;
+      if (t.plannedDate && t.plannedDate > targetDateStr && !isTaskPlannedForDate(t, targetDateStr)) return false;
+
+      if (isTaskPlannedForDate(t, targetDateStr)) return true;
+      if (isRoutineEligibleForDate(t, targetDateStr) && t.taskDate <= targetDateStr) return true;
+      return false;
     });
 
     // 2. Strict Yesterday tasks (H-1): ONLY tasks that had active progress or were completed ON yesterdayDateStr
@@ -289,10 +304,14 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
       return false;
     });
 
-    // 3. Carry Over tasks: All past unfinished tasks (Open, In Progress, Pending) before targetDateStr
-    // NOTE: Tasks scheduled in today's planning REMAIN visible in carry-over/backlog as their origin record!
+    // 3. Carry Over / Backlog tasks: All active unfinished tasks before targetDateStr, PLUS all active routine backlogs (Monthly, Weekly, etc)
     const carryOverTasks = allMatching.filter(t => {
-      if (t.taskDate < targetDateStr && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed') return true;
+      const isUnfinished = t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed' && t.status !== 'Canceled' && t.status !== 'Cancelled';
+      if (!isUnfinished) return false;
+      // All past unfinished tasks
+      if (t.taskDate < targetDateStr) return true;
+      // Active routine backlogs that belong to current backlog
+      if (isRoutineTask(t)) return true;
       return false;
     });
 
@@ -420,6 +439,7 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
       priority,
       activityType,
       taskDate: assignedDate,
+      plannedDate: req.body.plannedDate || assignedDate,
       targetDate: targetDate || '-',
       targetTime: finalTargetTime,
       status: initialStatus,
@@ -481,7 +501,7 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
           const post = postArr[0];
           let parsed = parseMarkdownTableRows(post.content);
           if (!parsed || parsed.headers.length === 0) {
-            const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Target Selesai', 'Aktual selesai', 'Group', 'Created Time'];
+            const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Tanggal Selesai', 'Group', 'Created Time'];
             parsed = {
               headers: defaultHeaders,
               rows: [],
@@ -525,7 +545,7 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
                   newRow[h] = assignedDate;
                 } else if (hl.includes('group')) {
                   newRow[h] = section || '-';
-                } else if (hl.includes('aktual')) {
+                } else if (hl.includes('tanggal selesai') || hl.includes('completed') || hl.includes('aktual') || hl.includes('waktu selesai') || hl === 'selesai') {
                   newRow[h] = '-';
                 } else {
                   newRow[h] = '-';
@@ -660,7 +680,39 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
       updatePayload.status && 
       (updatePayload.status === 'Resolved' || updatePayload.status === 'Done' || updatePayload.status === 'Closed')
     ) {
-      if (!currentTask.actualCompletedDate) updatePayload.actualCompletedDate = new Date();
+      // Determine completion date accurately:
+      let resolvedDate: Date | null = null;
+      if (req.body.actualCompletedDate) {
+        const dStr = String(req.body.actualCompletedDate);
+        resolvedDate = new Date(dStr.includes('T') ? dStr : `${dStr}T12:00:00`);
+      } else if (subtaskTotal > 0 && subtaskCompleted === subtaskTotal) {
+        // Find latest checkedDate from subtasks
+        const dateMatches = (targetDesc || '').match(/<!--\s*checkedDate:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\s*-->/gi);
+        if (dateMatches && dateMatches.length > 0) {
+          const rawDates = dateMatches.map((m: string) => {
+            const inner = m.match(/[0-9]{4}-[0-9]{2}-[0-9]{2}/);
+            return inner ? inner[0] : '';
+          }).filter(Boolean).sort();
+          if (rawDates.length > 0) {
+            resolvedDate = new Date(`${rawDates[rawDates.length - 1]}T12:00:00`);
+          }
+        }
+      }
+
+      if (!resolvedDate && (req.body.selectedDate || req.body.actionDate)) {
+        const dStr = String(req.body.selectedDate || req.body.actionDate);
+        resolvedDate = new Date(dStr.includes('T') ? dStr : `${dStr}T12:00:00`);
+      }
+
+      if (!resolvedDate && currentTask.actualCompletedDate) {
+        resolvedDate = new Date(currentTask.actualCompletedDate);
+      }
+
+      if (!resolvedDate || isNaN(resolvedDate.getTime())) {
+        resolvedDate = new Date();
+      }
+
+      updatePayload.actualCompletedDate = resolvedDate;
       updatePayload.isPending = false;
     } else if (updatePayload.status && (updatePayload.status === 'Open' || updatePayload.status === 'In Progress' || updatePayload.status === 'On Progress')) {
       updatePayload.actualCompletedDate = null;
@@ -770,7 +822,7 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
           const post = postArr[0];
           let parsed = parseMarkdownTableRows(post.content);
           if (!parsed || parsed.headers.length === 0) {
-            const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Target Selesai', 'Aktual selesai', 'Group', 'Created Time'];
+            const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Tanggal Selesai', 'Group', 'Created Time'];
             parsed = {
               headers: defaultHeaders,
               rows: [],
@@ -814,8 +866,15 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
                 if (kl.includes('target') && updatePayload.targetDate) {
                   targetRow[k] = updatePayload.targetDate;
                 }
-                if (kl.includes('aktual') && (taskResult.status === 'Resolved' || taskResult.status === 'Done')) {
-                  targetRow[k] = formatDateStr(new Date());
+                if (
+                  (kl.includes('tanggal selesai') || kl.includes('completed') || kl.includes('aktual') || kl.includes('waktu selesai') || kl === 'selesai')
+                ) {
+                  if (taskResult.status === 'Resolved' || taskResult.status === 'Done' || taskResult.status === 'Closed') {
+                    const compDate = taskResult.actualCompletedDate ? new Date(taskResult.actualCompletedDate) : new Date();
+                    targetRow[k] = formatDateStr(compDate);
+                  } else if (taskResult.status === 'Open' || taskResult.status === 'On Progress' || taskResult.status === 'In Progress') {
+                    targetRow[k] = '-';
+                  }
                 }
               });
               parsed.rows[targetIdx] = targetRow;
@@ -847,8 +906,10 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
                   newRow[h] = taskResult.taskDate || formatDateStr(new Date());
                 } else if (hl.includes('group')) {
                   newRow[h] = taskResult.section || '-';
-                } else if (hl.includes('aktual')) {
-                  newRow[h] = (taskResult.status === 'Resolved' || taskResult.status === 'Done') ? formatDateStr(new Date()) : '-';
+                } else if (hl.includes('tanggal selesai') || hl.includes('completed') || hl.includes('aktual') || hl.includes('waktu selesai') || hl === 'selesai') {
+                  const isDone = taskResult.status === 'Resolved' || taskResult.status === 'Done' || taskResult.status === 'Closed';
+                  const compDate = taskResult.actualCompletedDate ? new Date(taskResult.actualCompletedDate) : new Date();
+                  newRow[h] = isDone ? formatDateStr(compDate) : '-';
                 } else {
                   newRow[h] = '-';
                 }

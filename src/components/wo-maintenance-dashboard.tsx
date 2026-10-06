@@ -27,6 +27,7 @@ import {
   isThisISOWeek, 
   isLastISOWeek, 
   getYearISOWeeksList, 
+  getYearMonthsList,
   getISOWeekRange,
   formatISOWeekLabel 
 } from '../utils/iso-week';
@@ -78,6 +79,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   const ITEMS_PER_PAGE = 20;
 
   const isoWeeksList = useMemo(() => getYearISOWeeksList(new Date().getFullYear()), []);
+  const monthsList = useMemo(() => getYearMonthsList(new Date().getFullYear()), []);
 
   // Reset pagination to page 1 whenever any filter or search changes
   useEffect(() => {
@@ -186,6 +188,28 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
       filtered = filtered.filter(wo => wo.date && new Date(wo.date) >= start);
+    } else if (period === 'last_month') {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      filtered = filtered.filter(wo => {
+        if (!wo.date) return false;
+        const d = new Date(wo.date);
+        return d >= start && d <= end;
+      });
+    } else if (period.startsWith('month_')) {
+      const parts = period.split('_');
+      const targetYear = parseInt(parts[1], 10);
+      const targetMonth = parseInt(parts[2], 10);
+      if (!isNaN(targetYear) && !isNaN(targetMonth)) {
+        const start = new Date(targetYear, targetMonth - 1, 1);
+        const end = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
+        filtered = filtered.filter(wo => {
+          if (!wo.date) return false;
+          const d = new Date(wo.date);
+          return d >= start && d <= end;
+        });
+      }
     } else if (period === 'last_30_days') {
       const past = new Date();
       past.setDate(past.getDate() - 30);
@@ -929,7 +953,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
               className="text-[10px] sm:text-[11px] font-bold block mb-1 uppercase tracking-wide"
               style={{ color: 'var(--text-main, #0f172a)' }}
             >
-              Rentang Waktu
+              Filter Otomatis / Waktu
             </label>
             <select
               value={filterPeriod}
@@ -941,16 +965,26 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                 borderColor: 'var(--border-main, #CBD5E1)'
               }}
             >
-              <optgroup label="⚡ Filter Cepat & Minggu ISO">
+              <optgroup label="⚡ Filter Cepat">
                 <option value="all" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>📅 Semua Waktu</option>
-                <option value="this_iso_week" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⚡ Minggu ISO Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
-                <option value="last_iso_week" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⏮️ Minggu ISO Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
-                <option value="this_month" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>🗓️ Bulan Ini (Mulai Tgl 1)</option>
                 <option value="last_30_days" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⏱️ 30 Hari Terakhir</option>
                 <option value="this_year" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>📆 Tahun Berjalan ({new Date().getFullYear()})</option>
                 <option value="custom" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>🎯 Kustom Rentang Tanggal...</option>
               </optgroup>
-              <optgroup label="📋 Pilih Spesifik Minggu ISO">
+              <optgroup label="📅 Filter Bulanan">
+                <option value="this_month" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>📅 Bulan Ini</option>
+                <option value="last_month" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⏮️ Bulan Lalu</option>
+                {monthsList.map(m => (
+                  <option key={m.value} value={m.value} style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>
+                    {m.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="⚡ Minggu ISO">
+                <option value="this_iso_week" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⚡ Minggu ISO Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
+                <option value="last_iso_week" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⏮️ Minggu ISO Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
+              </optgroup>
+              <optgroup label="📋 Daftar Spesifik Minggu ISO">
                 {isoWeeksList.map(iw => (
                   <option key={iw.value} value={iw.value} style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>
                     {iw.label}
@@ -2080,16 +2114,16 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
       {/* DETAIL WORK ORDER POPUP MODAL */}
       {selectedWO && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-850 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700 shadow-2xl p-6 space-y-5 animate-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200 shadow-2xl p-6 space-y-5 animate-in zoom-in-95 duration-150 text-slate-800">
             
             {/* Modal Header */}
-            <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="p-1.5 rounded-lg bg-teal-500/10 text-teal-600">
                     <Wrench className="w-5 h-5" />
                   </span>
-                  <h3 className="text-lg font-bold">
+                  <h3 className="text-lg font-bold text-slate-900">
                     Detail Work Order: {selectedWO.woId}
                   </h3>
                 </div>
@@ -2099,7 +2133,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
               </div>
               <button
                 onClick={() => setSelectedWO(null)}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                className="p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer text-slate-500"
               >
                 <X className="w-5 h-5 opacity-70" />
               </button>
@@ -2108,19 +2142,19 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
             {/* Modal Content Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               
-              <div className="space-y-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+              <div className="space-y-1 p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Nama Alat</span>
-                <p className="font-bold text-slate-900 dark:text-white text-sm">{selectedWO.equipmentName || '-'}</p>
+                <p className="font-bold text-slate-900 text-sm">{selectedWO.equipmentName || '-'}</p>
                 <p className="font-mono text-[11px] text-slate-500">Kode: {selectedWO.equipmentCode || '-'}</p>
               </div>
 
-              <div className="space-y-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+              <div className="space-y-1 p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Kategori & Lokasi</span>
-                <p className="font-bold text-slate-900 dark:text-white">{selectedWO.category || '-'}</p>
+                <p className="font-bold text-slate-900">{selectedWO.category || '-'}</p>
                 <p className="text-slate-500">{selectedWO.location || '-'}</p>
               </div>
 
-              <div className="space-y-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+              <div className="space-y-1 p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Durasi Downtime</span>
                 <p className="font-black text-rose-600 text-sm">
                   {formatDowntimeDisplay(selectedWO.downtimeDuration ?? selectedWO.downtime_duration, selectedWO.repairStart, selectedWO.repairEnd, selectedWO.date)}
@@ -2130,7 +2164,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                 </p>
               </div>
 
-              <div className="space-y-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+              <div className="space-y-1 p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Sparepart & PIC Teknisi</span>
                 <p className="font-bold text-amber-600">{selectedWO.sparepartName ? `${selectedWO.sparepartName} (Qty: ${selectedWO.sparepartQty || '1'})` : 'Tidak ada sparepart'}</p>
                 <p className="text-slate-500">Teknisi: {selectedWO.technicianPic || '-'}</p>
@@ -2140,20 +2174,20 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
             {/* Issue Description & Action Taken */}
             <div className="space-y-3">
-              <div className="p-3 rounded-xl border border-rose-100 bg-rose-50/50 dark:bg-rose-950/20 text-xs">
-                <span className="font-bold text-rose-700 dark:text-rose-300 block mb-1">
+              <div className="p-3 rounded-xl border border-rose-100 bg-rose-50/50 text-xs">
+                <span className="font-bold text-rose-700 block mb-1">
                   Deskripsi Kerusakan / Issue:
                 </span>
-                <p className="text-slate-800 dark:text-slate-200 leading-relaxed">
+                <p className="text-slate-800 leading-relaxed">
                   {selectedWO.issueDescription || '-'}
                 </p>
               </div>
 
-              <div className="p-3 rounded-xl border border-emerald-100 bg-emerald-50/50 dark:bg-emerald-950/20 text-xs">
-                <span className="font-bold text-emerald-700 dark:text-emerald-300 block mb-1">
+              <div className="p-3 rounded-xl border border-emerald-100 bg-emerald-50/50 text-xs">
+                <span className="font-bold text-emerald-700 block mb-1">
                   Tindakan Perbaikan (Action Taken):
                 </span>
-                <p className="text-slate-800 dark:text-slate-200 leading-relaxed">
+                <p className="text-slate-800 leading-relaxed">
                   {selectedWO.actionTaken || 'Belum ada catatan tindakan perbaikan.'}
                 </p>
               </div>
@@ -2161,14 +2195,14 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
 
             {/* Photos & Document Link */}
             <div className="space-y-2">
-              <span className="text-xs font-bold block">Bukti Foto & Dokumen</span>
+              <span className="text-xs font-bold block text-slate-700">Bukti Foto & Dokumen</span>
               <div className="flex flex-wrap items-center gap-3">
                 {selectedWO.photoUrl && (
                   <a 
                     href={selectedWO.photoUrl} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-teal-600 hover:underline border"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-xs font-bold text-teal-600 hover:underline border border-slate-200"
                   >
                     <Eye className="w-3.5 h-3.5" />
                     Foto Kerusakan Awal
@@ -2179,7 +2213,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                     href={selectedWO.closingPhoto} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-emerald-600 hover:underline border"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-xs font-bold text-emerald-600 hover:underline border border-slate-200"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     Foto Selesai Perbaikan
@@ -2190,7 +2224,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                     href={selectedWO.pdfUrl} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-blue-600 hover:underline border"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-xs font-bold text-blue-600 hover:underline border border-slate-200"
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
                     Dokumen PDF Resmi
@@ -2200,13 +2234,13 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
               {canDeleteWO(selectedWO) ? (
                 <button
                   type="button"
                   onClick={() => handleDeleteWO(selectedWO.woId)}
                   disabled={isDeletingWO}
-                  className="px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-200 dark:border-rose-900/50 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                  className="px-3 py-1.5 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white border border-rose-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
                   title="Hapus Work Order secara permanen"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

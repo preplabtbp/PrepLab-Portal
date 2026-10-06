@@ -518,12 +518,151 @@ router.delete("/api/bulletin/comments/:commentId", async (req, res) => {
     }
   });
 
+async function syncBulletinToLogbook(post: any) {
+  try {
+    if (!post || !post.id || !post.content || typeof post.content !== 'string') return;
+    const { parseMarkdownTableRows } = await import("./logbook.js");
+    const parsed = parseMarkdownTableRows(post.content);
+    if (!parsed || !parsed.rows || parsed.rows.length === 0) return;
+
+    // Detect default cadence from bulletin post title
+    const postTitle = (post.title || '').toLowerCase();
+    let defaultCadence = 'Daily';
+    if (postTitle.includes('monthly') || postTitle.includes('bulanan')) defaultCadence = 'Monthly';
+    else if (postTitle.includes('weekly') || postTitle.includes('mingguan')) defaultCadence = 'Weekly';
+    else if (postTitle.includes('quarterly') || postTitle.includes('triwulan')) defaultCadence = 'Quarterly';
+    else if (postTitle.includes('biannual') || postTitle.includes('semester')) defaultCadence = 'Biannual';
+    else if (postTitle.includes('yearly') || postTitle.includes('annual') || postTitle.includes('tahunan')) defaultCadence = 'Yearly';
+
+    // Calculate default targetDate based on cadence
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    let defaultTargetDate = todayStr;
+    if (defaultCadence === 'Monthly') {
+      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      defaultTargetDate = `${lastDayOfMonth.getFullYear()}-${String(lastDayOfMonth.getMonth() + 1).padStart(2, '0')}-${String(lastDayOfMonth.getDate()).padStart(2, '0')}`;
+    } else if (defaultCadence === 'Weekly') {
+      const day = now.getDay() || 7;
+      const sunday = new Date(now);
+      sunday.setDate(now.getDate() + (7 - day));
+      defaultTargetDate = `${sunday.getFullYear()}-${String(sunday.getMonth() + 1).padStart(2, '0')}-${String(sunday.getDate()).padStart(2, '0')}`;
+    }
+
+    // Find all existing logbook tasks connected to this bulletin post
+    const linkedTasks = await db
+      .select()
+      .from(logbookTasks)
+      .where(eq(logbookTasks.bulletinPostId, post.id));
+
+    for (const r of parsed.rows) {
+      let rTitle = '';
+      let rowDesc = '';
+      let rowStatus = 'Open';
+      let rowPriority = 'Normal';
+      let rowPic = '';
+      let rowActivity = '';
+      let rowPeriod = '';
+
+      Object.keys(r).forEach(k => {
+        const kl = k.toLowerCase().trim();
+        if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') {
+          rTitle = (r[k] || '').trim();
+        } else if (kl.includes('keterangan') || kl.includes('catatan') || kl.includes('deskripsi')) {
+          rowDesc = r[k] || '';
+        } else if (kl.includes('status')) {
+          rowStatus = r[k] || 'Open';
+        } else if (kl.includes('priority') || kl.includes('prioritas')) {
+          rowPriority = r[k] || 'Normal';
+        } else if (kl === 'pic' || kl.includes('assignee')) {
+          rowPic = (r[k] || '').trim();
+        } else if (kl.includes('activity') || kl.includes('aktivitas')) {
+          rowActivity = (r[k] || '').trim();
+        } else if (kl.includes('period') || kl.includes('periode')) {
+          rowPeriod = (r[k] || '').trim();
+        }
+      });
+
+      if (!rTitle || rTitle === '-' || rTitle.length < 2) continue;
+
+      // Determine effective cadence
+      let effectiveCadence = defaultCadence;
+      const combinedAct = `${rowActivity} ${rowPeriod}`.toLowerCase();
+      if (combinedAct.includes('monthly') || combinedAct.includes('bulanan')) effectiveCadence = 'Monthly';
+      else if (combinedAct.includes('weekly') || combinedAct.includes('mingguan')) effectiveCadence = 'Weekly';
+      else if (combinedAct.includes('daily') || combinedAct.includes('harian')) effectiveCadence = 'Daily';
+      else if (combinedAct.includes('quarterly') || combinedAct.includes('triwulan')) effectiveCadence = 'Quarterly';
+      else if (combinedAct.includes('biannual') || combinedAct.includes('semester')) effectiveCadence = 'Biannual';
+      else if (combinedAct.includes('yearly') || combinedAct.includes('tahunan')) effectiveCadence = 'Yearly';
+      else if (combinedAct.includes('non')) effectiveCadence = 'Non Routine';
+
+      const existingTask = linkedTasks.find(t => {
+        const taskTopic = (t.bulletinTopicTitle || t.title || '').toLowerCase().trim();
+        const cleanR = rTitle.toLowerCase().trim();
+        return taskTopic === cleanR || (taskTopic.length >= 4 && cleanR.length >= 4 && (taskTopic.startsWith(cleanR) || cleanR.startsWith(taskTopic)));
+      });
+
+      if (existingTask) {
+        // Update existing task
+        const updatePayload: any = {};
+        if (rowDesc && rowDesc !== '-' && rowDesc !== existingTask.description) {
+          updatePayload.description = rowDesc;
+        }
+        if (rowStatus && rowStatus !== existingTask.status) {
+          updatePayload.status = rowStatus;
+        }
+        if (rowPriority && rowPriority !== existingTask.priority) {
+          updatePayload.priority = rowPriority;
+        }
+        if (effectiveCadence && existingTask.activityType !== effectiveCadence && existingTask.activityType === 'Routine') {
+          updatePayload.activityType = effectiveCadence;
+        }
+        if (Object.keys(updatePayload).length > 0) {
+          await db
+            .update(logbookTasks)
+            .set(updatePayload)
+            .where(eq(logbookTasks.id, existingTask.id));
+          console.log(`[Sync Buletin -> Logbook] Updated task #${existingTask.id} (${existingTask.title}) from bulletin #${post.id}`);
+        }
+      } else {
+        // Auto-create new logbook task for newly added bulletin row
+        try {
+          const inserted = await db.insert(logbookTasks).values({
+            title: rTitle,
+            description: rowDesc || '',
+            section: post.department || 'General',
+            assigneeNik: rowPic || 'ALL',
+            assigneeName: rowPic || 'Personil',
+            assignedByNik: post.authorNik || 'SYSTEM',
+            assignedByName: post.authorName || 'Buletin',
+            priority: rowPriority || 'Normal',
+            activityType: effectiveCadence,
+            status: rowStatus || 'Open',
+            progressPercent: 0,
+            taskDate: todayStr,
+            targetDate: defaultTargetDate,
+            targetTime: '23:59',
+            pt: post.pt || 'TBP',
+            bulletinPostId: post.id,
+            bulletinTopicTitle: rTitle
+          }).returning();
+          console.log(`[Sync Buletin -> Logbook] Auto-created new task #${inserted[0]?.id} (${rTitle}) from bulletin #${post.id}`);
+        } catch (insertErr) {
+          console.warn(`[Sync Buletin -> Logbook] Failed to insert new task for "${rTitle}":`, insertErr);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[Sync Buletin -> Logbook] Failed to sync:", err);
+  }
+}
+
 router.put("/api/bulletin/:id", async (req, res) => {
     try {
       const result = await db.update(bulletinPosts).set(req.body).where(eq(bulletinPosts.id, parseInt(req.params.id))).returning();
       const post = result[0];
       if (post) {
         await syncBulletinToAgenda(post);
+        await syncBulletinToLogbook(post);
       }
       res.json({ status: "success", data: post });
     } catch (error) {

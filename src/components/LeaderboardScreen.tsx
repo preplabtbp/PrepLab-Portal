@@ -88,7 +88,7 @@ export const DISCIPLINE_OPTIONS = [
   { code: 'BRANCH_WO_CREATE', label: 'Pembuat Work Order', icon: '📋', unit: 'Tiket WO' },
   { code: 'BRANCH_WO_RESOLVE', label: 'Penyelesai WO / Teknisi', icon: '⚙️', unit: 'WO Selesai' },
   { code: 'BRANCH_P5M_SPEAKER', label: 'Pemateri Briefing P5M', icon: '🎙️', unit: 'Sesi P5M' },
-  { code: 'BRANCH_BULLETIN', label: 'Diskusi Papan Buletin', icon: '📰', unit: 'Komentar' },
+  { code: 'BRANCH_BULLETIN', label: 'Diskusi Papan Labnote', icon: '📰', unit: 'Komentar' },
   { code: 'BRANCH_FEEDBACK', label: 'Ide Inovasi & Saran', icon: '💡', unit: 'Ide/Saran' },
   { code: 'BRANCH_QUOTES', label: 'Quotes Motivasi', icon: '💬', unit: 'Quotes' },
   { code: 'BRANCH_QUIZ', label: 'Kuis SOP Sempurna (100%)', icon: '🎓', unit: 'Kuis 100%' },

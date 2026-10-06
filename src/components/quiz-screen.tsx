@@ -573,7 +573,7 @@ export function QuizScreen({
                     {/* Header: Question Number & Status */}
                     <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="w-8 h-8 rounded-xl bg-slate-900 text-white font-black text-xs flex items-center justify-center shadow-xs">
+                        <span className="w-8 h-8 rounded-xl bg-teal-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
                           {idx + 1}
                         </span>
                         <span className="text-[11px] font-bold uppercase tracking-wider text-blue-800 bg-blue-100 px-2.5 py-1 rounded-md border border-blue-200">
@@ -759,7 +759,7 @@ export function QuizScreen({
         {/* Question Header Card */}
         <div className="flex items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="bg-slate-900 text-white font-extrabold text-xs px-3 py-1 rounded-lg shadow-xs">
+            <span className="bg-teal-600 text-white font-extrabold text-xs px-3 py-1 rounded-lg shadow-xs">
               Soal {currentIndex + 1} / {questions.length}
             </span>
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 truncate max-w-[180px] sm:max-w-xs">

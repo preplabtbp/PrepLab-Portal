@@ -16,6 +16,29 @@ import {
 } from "../utils.js";
 import webpush from 'web-push';
 import path from "path";
+import sharp from 'sharp';
+
+export async function compressSignatureBase64(dataUri?: string | null, maxDimension = 360, maxBytes = 35000): Promise<string> {
+  if (!dataUri || typeof dataUri !== 'string') return '';
+  if (!dataUri.startsWith('data:image')) return dataUri;
+
+  const parts = dataUri.split(',');
+  if (parts.length < 2) return dataUri;
+  if (dataUri.length <= maxBytes) return dataUri;
+
+  try {
+    const buffer = Buffer.from(parts[1], 'base64');
+    const resizedBuffer = await sharp(buffer)
+      .resize({ width: maxDimension, height: Math.round(maxDimension / 2), fit: 'inside' })
+      .png({ quality: 80, compressionLevel: 9 })
+      .toBuffer();
+    
+    return `data:image/png;base64,${resizedBuffer.toString('base64')}`;
+  } catch (err: any) {
+    console.warn('[compressSignatureBase64] Compression failed, returning original:', err?.message);
+    return dataUri;
+  }
+}
 
 export const router = Router();
 
@@ -60,9 +83,9 @@ router.post("/api/inspections/universal", async (req, res) => {
       
       const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
       
-      let finalTtd1 = ttd1;
-      let finalTtd2 = ttd2;
-      let finalTtd3 = ttd3;
+      let finalTtd1 = await compressSignatureBase64(ttd1);
+      let finalTtd2 = await compressSignatureBase64(ttd2);
+      let finalTtd3 = await compressSignatureBase64(ttd3);
       let finalFotoProses = fotoProses;
       let finalFotoTemuanArray = fotoTemuanArray;
 
@@ -76,7 +99,7 @@ router.post("/api/inspections/universal", async (req, res) => {
                       ...finalData,
                       devOptions: { isDev: true, db: true, pdf: true, verboseLog: true }
                   },
-                  ttd1, ttd2, ttd3, fotoTemuanArray, fotoProses
+                  ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3, fotoTemuanArray, fotoProses
               };
 
               const gasRes = await fetch(gasUrl, {
@@ -322,10 +345,17 @@ router.post("/api/inspections/universal", async (req, res) => {
                   });
               });
           } else if (finalData.tipe === "P3K" && Array.isArray(finalData.payload)) {
-              const p3kFindings = finalData.payload.filter((item: any) => 
-                  item.ketersediaan === 'Kosong' || 
-                  (item.keterangan && item.keterangan !== '-' && item.keterangan.trim() !== '')
-              );
+              const p3kFindings = finalData.payload.filter((item: any) => {
+                  const ketLower = (item.keterangan || '').toLowerCase();
+                  const itemLower = (item.item || '').toLowerCase();
+
+                  // Item yang memang tidak disediakan dari tim safety (Gunting, Lampu senter, Pinset, Silet) bukan temuan
+                  if (ketLower.includes('tidak disediakan') || ketLower.includes('tidak tersedia dari safety')) return false;
+                  if (['gunting', 'lampu senter', 'pinset', 'silet'].includes(itemLower) && item.ketersediaan === 'Kosong') return false;
+
+                  return item.ketersediaan === 'Kosong' || 
+                         (item.keterangan && item.keterangan !== '-' && item.keterangan.trim() !== '');
+              });
               
               if (p3kFindings.length > 0) {
                   const itemsList = p3kFindings.map((item: any) => {
@@ -407,15 +437,16 @@ router.post("/api/inspections/universal", async (req, res) => {
                       const notifMsg = `${inspectorNameClean} mencatat ${ticketValues.length} temuan di ${finalData.lokasiUmum || 'Area Kerja'}`;
                       const _n = await db.insert(notifications).values({
                           userId: null,
-                          role: 'Safety',
+                          role: null,
                           title: notifTitle,
                           message: notifMsg,
                           type: 'warning',
                           link: '/ticket'
                       }).returning();
-                      sendWebPush(_n);
-                  } catch (pushErr) {
-                      console.error("Gagal mengirim push notifikasi temuan inspeksi universal:", pushErr);
+                      // Tetap masuk di list notifikasi, tapi tidak di-push ke all (skipWebPush: true)
+                      sendWebPush(_n, { skipWebPush: true });
+                  } catch (notifErr) {
+                      console.error("Gagal menyimpan notifikasi temuan inspeksi universal:", notifErr);
                   }
               }
           } catch(e) {
@@ -529,6 +560,10 @@ export async function generateGasPdfForInspection(inspRecord: any) {
     } catch(e) {}
   }
 
+  ttd1 = await compressSignatureBase64(ttd1);
+  ttd2 = await compressSignatureBase64(ttd2);
+  ttd3 = await compressSignatureBase64(ttd3);
+
   let fotoProses = '', fotoTemuanArray: any[] = [];
   if (inspRecord.photoUrl) {
     try {
@@ -540,11 +575,15 @@ export async function generateGasPdfForInspection(inspRecord: any) {
 
   const isApd = Array.isArray(parsedDataF) || (inspRecord.type && inspRecord.type.includes('APD'));
 
+  const cleanDataF = Array.isArray(parsedDataF) ? parsedDataF.map((row: any[]) => {
+    return Array.isArray(row) ? row.map((cell: any) => (typeof cell === 'string' && cell.length > 30000 ? '-' : cell)) : row;
+  }) : parsedDataF;
+
   let payloadToGas: any = {};
   if (isApd) {
     payloadToGas = {
       action: "submitInspeksi",
-      dataF: parsedDataF,
+      dataF: cleanDataF,
       devOptions: { isDev: true, db: true, pdf: true, verboseLog: true },
       ttd1, ttd2, ttd3, fotoProses
     };
@@ -639,9 +678,9 @@ router.post("/api/inspections", async (req, res) => {
       
       const gasUrl = settingsObj['GAS_WEB_APP_URL'] || process.env.GAS_WEB_APP_URL;
       
-      let finalTtd1 = ttd1;
-      let finalTtd2 = ttd2;
-      let finalTtd3 = ttd3;
+      let finalTtd1 = await compressSignatureBase64(ttd1);
+      let finalTtd2 = await compressSignatureBase64(ttd2);
+      let finalTtd3 = await compressSignatureBase64(ttd3);
       let finalFotoProses = fotoProses;
       let finalFotoTemuanArray = req.body.fotoTemuanArray;
 
@@ -657,7 +696,7 @@ router.post("/api/inspections", async (req, res) => {
                   action: "submitInspeksi",
                   dataF: cleanDataF,
                   devOptions: { isDev: true, db: true, pdf: true, verboseLog: true },
-                  ttd1, ttd2, ttd3, fotoProses
+                  ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3, fotoProses
               };
               
               const gasRes = await fetch(gasUrl, {
@@ -877,22 +916,23 @@ router.post("/api/inspections", async (req, res) => {
                       await db.insert(tickets).values([singleTicket]);
                       console.log(`Inserted 1 consolidated APD temuan ticket (${singleTicket.ticketId}) into tickets table.`);
 
-                      // Kirim Push Notification & In-App Notification untuk Temuan APD Baru
+                      // Masukkan ke List Notifikasi untuk Temuan APD Baru (tidak di-push ke all)
                       try {
                           const inspectorNameClean = (insp || 'Inspektor').split('-')[0].split('(')[0].trim();
                           const notifTitle = 'Temuan Kepatuhan APD Baru';
                           const notifMsg = `${inspectorNameClean} mencatat ketidakpatuhan APD di area ${area || 'Area Kerja'}`;
                           const _n = await db.insert(notifications).values({
                               userId: null,
-                              role: 'Safety',
+                              role: null,
                               title: notifTitle,
                               message: notifMsg,
                               type: 'warning',
                               link: '/ticket'
                           }).returning();
-                          sendWebPush(_n);
-                      } catch (pushErr) {
-                          console.error("Gagal mengirim push notifikasi temuan APD:", pushErr);
+                          // Tetap masuk di list notifikasi, tapi tidak di-push ke all (skipWebPush: true)
+                          sendWebPush(_n, { skipWebPush: true });
+                      } catch (notifErr) {
+                          console.error("Gagal menyimpan notifikasi temuan APD:", notifErr);
                       }
                   }
               } catch(e) {
@@ -1065,6 +1105,70 @@ router.get("/api/inspections/:id/pdf", async (req, res) => {
   }
 });
 
+router.get("/api/inspections/latest-by-user", async (req, res) => {
+  try {
+    const nik = typeof req.query.nik === 'string' ? req.query.nik.trim().toLowerCase() : '';
+    const name = typeof req.query.name === 'string' ? req.query.name.trim().toLowerCase() : '';
+    if (!nik && !name) {
+      return res.status(400).json({ error: "Parameter nik atau name wajib disertakan" });
+    }
+
+    const recentList = await db.select().from(inspections).orderBy(desc(inspections.date)).limit(100);
+    const matched = recentList.find(insp => {
+      const dataF = (insp.dataF && typeof insp.dataF === 'object') ? (insp.dataF as any) : {};
+      const insp1 = (dataF.insp1 || '').toLowerCase();
+      const insp2 = (dataF.insp2 || '').toLowerCase();
+      const insp3 = (dataF.insp3 || '').toLowerCase();
+      const mainInspector = (insp.inspectorName || '').toLowerCase();
+
+      if (nik && (insp1.includes(nik) || insp2.includes(nik) || insp3.includes(nik) || mainInspector.includes(nik))) {
+        return true;
+      }
+      if (name) {
+        if (mainInspector.includes(name) || name.includes(mainInspector)) return true;
+        if (insp1.includes(name) || insp2.includes(name) || insp3.includes(name)) return true;
+        const nameParts = name.split(/\s+/).filter(Boolean);
+        if (nameParts.length >= 2 && nameParts.every(p => mainInspector.includes(p) || insp1.includes(p))) return true;
+      }
+      return false;
+    });
+
+    if (!matched) {
+      return res.json({ found: false, inspection: null });
+    }
+
+    let displayPdf = matched.pdfUrl;
+    let gpsPdf = null;
+    if (displayPdf && typeof displayPdf === 'string' && displayPdf.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(displayPdf);
+        displayPdf = parsed.tbp || parsed.pdfUrl || (Object.values(parsed)[0] as string) || null;
+        gpsPdf = parsed.gps || null;
+      } catch (e) {}
+    }
+
+    if (!displayPdf || displayPdf === '#' || displayPdf === '-') {
+      displayPdf = `/api/inspections/${matched.id}/pdf`;
+    }
+
+    return res.json({
+      found: true,
+      inspection: {
+        id: matched.id,
+        date: matched.date,
+        type: matched.type,
+        location: matched.location,
+        inspectorName: matched.inspectorName,
+        pdfUrl: displayPdf,
+        linkPdf2: gpsPdf
+      }
+    });
+  } catch (err: any) {
+    console.error("Error fetching latest inspection by user:", err);
+    return res.status(500).json({ error: err.message || "Gagal memuat inspeksi terbaru" });
+  }
+});
+
 router.post("/api/admin/inspections/:id/regenerate-pdf", async (req, res) => {
     try {
         const id = parseInt(req.params.id);
@@ -1163,6 +1267,120 @@ router.post("/api/admin/inspections/:id/regenerate-pdf", async (req, res) => {
         console.error("Regenerate PDF Error:", error);
         res.status(500).json({ error: "Failed to regenerate PDF: " + (error.message || String(error)) });
     }
+});
+
+// ── DELETE INSPECTION BY ID ──────────────────────────────────────────
+router.delete("/api/inspections/:id", async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const id = parseInt(rawId, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: "ID inspeksi tidak valid" });
+    }
+
+    const existing = await db.select().from(inspections).where(eq(inspections.id, id)).limit(1);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: "Laporan inspeksi tidak ditemukan" });
+    }
+
+    const inspRecord = existing[0];
+    const inspDate = inspRecord.date ? new Date(inspRecord.date) : new Date();
+    const weekTag = getISOWeekTagForSchedule(inspDate);
+
+    // 1. Delete inspection from DB
+    await db.delete(inspections).where(eq(inspections.id, id));
+
+    // 2. Also clean related inspection_proofs for this week & inspector to ensure clean rekap
+    let inspName = (inspRecord.inspectorName || '').toLowerCase().trim();
+    let dataFObj: any = {};
+    if (inspRecord.dataF && typeof inspRecord.dataF === 'string') {
+      try { dataFObj = JSON.parse(inspRecord.dataF); } catch (e) {}
+    }
+    const insp1 = (dataFObj.insp1 || inspName).toLowerCase().trim();
+
+    const proofs = await db.select().from(inspectionProofs).where(eq(inspectionProofs.week, weekTag));
+    for (const p of proofs) {
+      const pName = (p.name || '').toLowerCase().trim();
+      if (pName && (insp1.includes(pName) || pName.includes(insp1))) {
+        await db.delete(inspectionProofs).where(eq(inspectionProofs.id, p.id));
+      }
+    }
+
+    // 3. Invalidate caches so schedule status is immediately reset
+    invalidateScheduleCache();
+
+    res.json({
+      success: true,
+      message: "Laporan inspeksi berhasil dihapus dari sistem.",
+      deletedId: id
+    });
+  } catch (error: any) {
+    console.error("Error deleting inspection:", error);
+    res.status(500).json({ error: "Gagal menghapus inspeksi: " + error.message });
+  }
+});
+
+// ── RESET/DELETE USER INSPECTION SUBMISSION FOR THE WEEK ─────────────
+router.delete("/api/inspections-reset-submission", async (req, res) => {
+  try {
+    const nik = typeof req.query.nik === 'string' ? req.query.nik.trim().toLowerCase() : '';
+    const name = typeof req.query.name === 'string' ? req.query.name.trim().toLowerCase() : '';
+    const week = typeof req.query.week === 'string' ? req.query.week.trim().toUpperCase() : getISOWeekTagForSchedule(new Date());
+
+    if (!nik && !name) {
+      return res.status(400).json({ error: "Parameter nik atau name wajib diisi" });
+    }
+
+    // Find and delete matching inspections for this week
+    const recent = await db.select().from(inspections).orderBy(desc(inspections.date)).limit(100);
+    const toDeleteIds: number[] = [];
+
+    for (const insp of recent) {
+      if (!insp.date) continue;
+      if (insp.type === 'Harian') continue;
+      const inspWeek = getISOWeekTagForSchedule(new Date(insp.date));
+      if (inspWeek !== week) continue;
+
+      let dataFObj: any = {};
+      if (insp.dataF && typeof insp.dataF === 'string') {
+        try { dataFObj = JSON.parse(insp.dataF); } catch (e) {}
+      }
+      const insp1 = (dataFObj.insp1 || insp.inspectorName || '').toLowerCase().trim();
+      const insp2 = (dataFObj.insp2 || '').toLowerCase().trim();
+      const insp3 = (dataFObj.insp3 || '').toLowerCase().trim();
+
+      const match = (nik && (insp1.includes(nik) || insp2.includes(nik) || insp3.includes(nik))) ||
+                    (name && (insp1.includes(name) || name.includes(insp1) || insp2.includes(name) || insp3.includes(name)));
+      if (match) {
+        toDeleteIds.push(insp.id);
+      }
+    }
+
+    for (const id of toDeleteIds) {
+      await db.delete(inspections).where(eq(inspections.id, id));
+    }
+
+    // Delete proof from inspection_proofs as well
+    const proofs = await db.select().from(inspectionProofs).where(eq(inspectionProofs.week, week));
+    for (const p of proofs) {
+      const pNik = (p.nik || '').toLowerCase().trim();
+      const pName = (p.name || '').toLowerCase().trim();
+      if ((nik && pNik === nik) || (name && (pName.includes(name) || name.includes(pName)))) {
+        await db.delete(inspectionProofs).where(eq(inspectionProofs.id, p.id));
+      }
+    }
+
+    invalidateScheduleCache();
+
+    res.json({
+      success: true,
+      message: `Berhasil mereset submission inspeksi periode ${week}.`,
+      deletedCount: toDeleteIds.length
+    });
+  } catch (error: any) {
+    console.error("Error resetting inspection submission:", error);
+    res.status(500).json({ error: "Gagal mereset submission: " + error.message });
+  }
 });
 
 router.post("/api/inspections/bulk-harian", async (req, res) => {
@@ -1307,7 +1525,9 @@ router.post("/api/pemantauan/migrate", async (req, res) => {
 
 router.get("/api/pemantauan", async (req, res) => {
     try {
-      const data = await db.select().from(pemantauan).orderBy(sql`tanggal ASC, jam ASC, id ASC`);
+      const data = await db.select().from(pemantauan).orderBy(
+        sql`tanggal ASC, CASE WHEN LOWER(shift) LIKE '%pagi%' OR LOWER(shift) LIKE '%ds%' OR LOWER(shift) = '1' THEN 1 WHEN LOWER(shift) LIKE '%siang%' OR LOWER(shift) = '2' THEN 2 WHEN LOWER(shift) LIKE '%malam%' OR LOWER(shift) LIKE '%ns%' OR LOWER(shift) = '3' THEN 3 ELSE 4 END ASC, LPAD(TRIM(jam), 5, '0') ASC, id ASC`
+      );
       res.json(data);
     } catch (error) {
       console.error("Error fetching pemantauan:", error);
@@ -1322,14 +1542,52 @@ router.post("/api/pemantauan", async (req, res) => {
       const yyyy = ts.getFullYear();
       const mm = String(ts.getMonth() + 1).padStart(2, '0');
       const dd = String(ts.getDate()).padStart(2, '0');
-      const tanggalStr = `${yyyy}-${mm}-${dd}`;
-      const jamStr = `${ts.getHours()}:${String(ts.getMinutes()).padStart(2, '0')}`;
+      const currentHour = ts.getHours();
+      const currentMinute = String(ts.getMinutes()).padStart(2, '0');
+
+      let jamStr = payload.jam || `${currentHour}:${currentMinute}`;
+      let tanggalStr = payload.tanggal;
+
+      if (!tanggalStr) {
+        // Live submission (e.g. dari pemantauan-screen.tsx)
+        // CUT-OFF JAM 06:00 PAGI:
+        // Jika inspeksi dilakukan antara pukul 00:00 - 05:59 (dini hari) untuk Shift Malam (atau bukan Pagi),
+        // otomatis masih masuk ke hari operasional sebelumnya (H-1).
+        const shiftStr = String(payload.shift || '').toLowerCase();
+        const isNight = shiftStr.includes('malam') || shiftStr.includes('ns') || !shiftStr.includes('pagi');
+        if (currentHour < 6 && isNight) {
+          const yesterday = new Date(ts.getTime() - 24 * 60 * 60 * 1000);
+          const y = yesterday.getFullYear();
+          const m = String(yesterday.getMonth() + 1).padStart(2, '0');
+          const d = String(yesterday.getDate()).padStart(2, '0');
+          tanggalStr = `${y}-${m}-${d}`;
+        } else {
+          tanggalStr = `${yyyy}-${mm}-${dd}`;
+        }
+      } else if (!payload.isOperationalDate) {
+        // Jika tanggal kalender dikirim tapi jam dini hari (< 06:00) pada Shift Malam
+        const shiftStr = String(payload.shift || '').toLowerCase();
+        const isNight = shiftStr.includes('malam') || shiftStr.includes('ns') || !shiftStr.includes('pagi');
+        let hr: number | null = null;
+        if (jamStr) {
+          const m = jamStr.match(/^(\d{1,2}):/);
+          if (m) hr = parseInt(m[1], 10);
+        }
+        if (hr !== null && hr < 6 && isNight) {
+          const [y, m, d] = tanggalStr.split('-').map(Number);
+          const yesterday = new Date(y, m - 1, d - 1, 12, 0, 0);
+          const py = yesterday.getFullYear();
+          const pm = String(yesterday.getMonth() + 1).padStart(2, '0');
+          const pd = String(yesterday.getDate()).padStart(2, '0');
+          tanggalStr = `${py}-${pm}-${pd}`;
+        }
+      }
+
       const randBase = Math.floor(Math.random() * 90000) + 10000;
 
-      // VALIDASI: cek apakah suhu sudah diinput hari ini
+      // VALIDASI: cek apakah suhu sudah diinput pada tanggal ini
       const hasSuhu = payload.items.some((i: any) => i.kategori === 'SUHU');
       if (hasSuhu) {
-        const { and, eq } = require("drizzle-orm");
         const existingSuhu = await db.select().from(pemantauan).where(
           and(
             eq(pemantauan.kategori, 'SUHU'),
@@ -1338,27 +1596,74 @@ router.post("/api/pemantauan", async (req, res) => {
         ).limit(1);
         
         if (existingSuhu.length > 0) {
-          const personil = existingSuhu[0].inspektorPetugas || 'seseorang';
-          return res.status(400).json({ error: `Pemantauan suhu sudah dilakukan oleh "${personil}" hari ini` });
+          if (payload.forceOverwrite) {
+            await db.delete(pemantauan).where(
+              and(
+                eq(pemantauan.kategori, 'SUHU'),
+                eq(pemantauan.tanggal, tanggalStr)
+              )
+            );
+          } else {
+            const personil = existingSuhu[0].inspektorPetugas || 'seseorang';
+            return res.status(400).json({ error: `Pemantauan suhu sudah pernah dilakukan oleh "${personil}" pada tanggal ${tanggalStr}. Gunakan opsi timpa jika ingin mengganti data.` });
+          }
         }
       }
 
-      const rowsToInsert = payload.items.map((item: any, idx: number) => ({
-        inspektorPetugas: payload.inspektor,
-        shift: payload.shift,
-        catatanRemark: payload.catatan,
-        foto: payload.foto,
-        lokasiArea: item.lokasi,
-        kategori: item.kategori,
-        suhuCelcius: item.suhu,
-        kelembapanPersen: item.kelembapan,
-        flowGas: item.flow,
-        tekananGasPsi: item.tekananGas,
-        kebocoranYn: item.kebocoran,
-        tanggal: tanggalStr,
-        jam: jamStr,
-        idPemantauan: `PMT-${randBase}-${idx + 1}`
-      }));
+      // Jika forceOverwrite untuk GAS pada tanggal dan shift tersebut
+      const hasGas = payload.items.some((i: any) => i.kategori === 'GAS');
+      if (hasGas && payload.forceOverwrite) {
+        const delConditions = [
+          eq(pemantauan.kategori, 'GAS'),
+          eq(pemantauan.tanggal, tanggalStr)
+        ];
+        if (payload.shift) {
+          delConditions.push(eq(pemantauan.shift, payload.shift));
+        }
+        await db.delete(pemantauan).where(and(...delConditions));
+      }
+
+      const DEFAULT_LIMITS: Record<string, { sLow?: string; sUp?: string; kLow?: string; kUp?: string }> = {
+        'Balance Room': { sLow: '10', sUp: '30', kLow: '15', kUp: '80' },
+        'R. Timbang': { sLow: '10', sUp: '30', kLow: '15', kUp: '80' },
+        'XRF Room': { sLow: '5', sUp: '35', kLow: '20', kUp: '80' },
+        'R. XRF': { sLow: '5', sUp: '35', kLow: '20', kUp: '80' },
+        'Chiller Room': { sLow: '10', sUp: '42' },
+        'R. Chiller': { sLow: '10', sUp: '42' },
+        'Chemical Room': { sUp: '25' },
+        'R. Chemical': { sUp: '25' },
+        'Fusion Room': { sLow: '5', sUp: '40' },
+        'R. Fusion': { sLow: '5', sUp: '40' },
+      };
+
+      const rowsToInsert = payload.items.map((item: any, idx: number) => {
+        const std = DEFAULT_LIMITS[item.lokasi] || {};
+        const isGas = item.kategori === 'GAS';
+        const isHelium = (item.lokasi || '').includes('Helium');
+        const resolvedCatatan = item.catatan || item.keterangan || (isGas ? (isHelium ? payload.catatan : '-') : payload.catatan) || '-';
+
+        return {
+          inspektorPetugas: payload.inspektor,
+          shift: payload.shift,
+          catatanRemark: resolvedCatatan,
+          foto: payload.foto || payload.sigUrl || payload.ttd || null,
+          ttd: payload.ttd || payload.sigUrl || payload.foto || null,
+          lokasiArea: item.lokasi,
+          kategori: item.kategori,
+          suhuCelcius: item.suhu,
+          kelembapanPersen: item.kelembapan,
+          flowGas: item.flow,
+          tekananGasPsi: item.tekananGas,
+          kebocoranYn: item.kebocoran,
+          suhuUpper: item.suhuUpper ?? std.sUp ?? null,
+          suhuLower: item.suhuLower ?? std.sLow ?? null,
+          kelembapanUpper: item.kelembapanUpper ?? std.kUp ?? null,
+          kelembapanLower: item.kelembapanLower ?? std.kLow ?? null,
+          tanggal: tanggalStr,
+          jam: jamStr,
+          idPemantauan: `PMT-${randBase}-${idx + 1}`
+        };
+      });
       if (rowsToInsert.length > 0) {
         await db.insert(pemantauan).values(rowsToInsert);
       }
@@ -1366,6 +1671,92 @@ router.post("/api/pemantauan", async (req, res) => {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to save pemantauan" });
+    }
+  });
+
+router.post("/api/pemantauan/update-signature", async (req, res) => {
+    try {
+      const { ids, tanggal, inspektor, sigUrl, updateAllForInspector } = req.body;
+      if (!sigUrl) {
+        return res.status(400).json({ error: "Signature URL (sigUrl) is required" });
+      }
+
+      if (Array.isArray(ids) && ids.length > 0) {
+        await db.update(pemantauan)
+          .set({ ttd: sigUrl, foto: sigUrl })
+          .where(inArray(pemantauan.id, ids));
+      } else if (updateAllForInspector && inspektor) {
+        await db.update(pemantauan)
+          .set({ ttd: sigUrl, foto: sigUrl })
+          .where(
+            and(
+              eq(pemantauan.inspektorPetugas, inspektor),
+              or(isNull(pemantauan.ttd), eq(pemantauan.ttd, ''))
+            )
+          );
+      } else if (tanggal) {
+        const conditions: any[] = [eq(pemantauan.tanggal, tanggal)];
+        if (inspektor) conditions.push(eq(pemantauan.inspektorPetugas, inspektor));
+        await db.update(pemantauan)
+          .set({ ttd: sigUrl, foto: sigUrl })
+          .where(and(...conditions));
+      } else {
+        return res.status(400).json({ error: "Target tanggal, inspektor, or ids required" });
+      }
+
+      res.json({ success: true, message: "Tanda tangan berhasil diperbarui!" });
+    } catch (error) {
+      console.error("Error updating signature:", error);
+      res.status(500).json({ error: "Failed to update signature" });
+    }
+  });
+
+router.put("/api/pemantauan/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid record ID" });
+
+      const {
+        tanggal, jam, shift, lokasiArea, suhuCelcius, kelembapanPersen,
+        flowGas, tekananGasPsi, kebocoranYn, catatanRemark, inspektorPetugas, kategori
+      } = req.body;
+
+      const updateData: Record<string, any> = {};
+      if (tanggal !== undefined) updateData.tanggal = String(tanggal).trim();
+      if (jam !== undefined) updateData.jam = String(jam).trim();
+      if (shift !== undefined) updateData.shift = String(shift).trim();
+      if (lokasiArea !== undefined) updateData.lokasiArea = String(lokasiArea).trim();
+      if (suhuCelcius !== undefined) updateData.suhuCelcius = suhuCelcius === null ? null : String(suhuCelcius).trim();
+      if (kelembapanPersen !== undefined) updateData.kelembapanPersen = kelembapanPersen === null ? null : String(kelembapanPersen).trim();
+      if (flowGas !== undefined) updateData.flowGas = flowGas === null ? null : String(flowGas).trim();
+      if (tekananGasPsi !== undefined) updateData.tekananGasPsi = tekananGasPsi === null ? null : String(tekananGasPsi).trim();
+      if (kebocoranYn !== undefined) updateData.kebocoranYn = kebocoranYn === null ? null : String(kebocoranYn).trim();
+      if (catatanRemark !== undefined) updateData.catatanRemark = catatanRemark === null ? null : String(catatanRemark).trim();
+      if (inspektorPetugas !== undefined) updateData.inspektorPetugas = String(inspektorPetugas).trim();
+      if (kategori !== undefined) updateData.kategori = String(kategori).trim();
+
+      const updated = await db.update(pemantauan).set(updateData).where(eq(pemantauan.id, id)).returning();
+      if (!updated || updated.length === 0) {
+        return res.status(404).json({ error: "Record tidak ditemukan" });
+      }
+
+      res.json({ success: true, message: "Record pemantauan berhasil diperbarui", data: updated[0] });
+    } catch (error) {
+      console.error("Error updating pemantauan record:", error);
+      res.status(500).json({ error: "Failed to update record pemantauan" });
+    }
+  });
+
+router.delete("/api/pemantauan/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid record ID" });
+
+      await db.delete(pemantauan).where(eq(pemantauan.id, id));
+      res.json({ success: true, message: "Record pemantauan berhasil dihapus" });
+    } catch (error) {
+      console.error("Error deleting pemantauan record:", error);
+      res.status(500).json({ error: "Failed to delete record pemantauan" });
     }
   });
 
@@ -1556,12 +1947,18 @@ export async function fetchInspectionScheduleFromSheet(forceRefresh = false, she
     const col5 = (r[5] || '').trim();
 
     // Check for section markers
-    if (col1.toLowerCase() === 'malam' || col0.toLowerCase().includes('shift a')) {
-      currentShiftGroup = 'Shift A (Malam)';
+    const col1Lower = col1.toLowerCase();
+    const col0Lower = col0.toLowerCase();
+    if (col1Lower === 'malam' || col0Lower === 'malam') {
+      currentShiftGroup = 'Malam';
       continue;
     }
-    if (col1.toLowerCase() === 'siang' || col0.toLowerCase().includes('shift b')) {
-      currentShiftGroup = 'Shift B (Siang)';
+    if (col1Lower === 'siang' || col0Lower === 'siang') {
+      currentShiftGroup = 'Siang';
+      continue;
+    }
+    if (col1Lower === 'nonshift' || col0Lower === 'nonshift') {
+      currentShiftGroup = 'Nonshift';
       continue;
     }
 
@@ -1579,9 +1976,9 @@ export async function fetchInspectionScheduleFromSheet(forceRefresh = false, she
       } else if (!cleanShift) {
         cleanShift = currentShiftGroup;
       } else if (cleanShift === 'A') {
-        cleanShift = 'Shift A (Malam)';
+        cleanShift = currentShiftGroup === 'Malam' ? 'Shift A (Malam)' : (currentShiftGroup === 'Siang' ? 'Shift A (Siang)' : 'Shift A');
       } else if (cleanShift === 'B') {
-        cleanShift = 'Shift B (Siang)';
+        cleanShift = currentShiftGroup === 'Malam' ? 'Shift B (Malam)' : (currentShiftGroup === 'Siang' ? 'Shift B (Siang)' : 'Shift B');
       }
 
       const formInfo = isCuti ? null : mapInspectionToFormInfo(col5);
@@ -1635,17 +2032,23 @@ export async function fetchInspectionScheduleFromSheet(forceRefresh = false, she
   return scheduleList;
 }
 
-function getISOWeekTagForSchedule(d: Date = new Date(), advanceOnWeekend = false): string {
-  const date = new Date(d.getTime());
-  if (advanceOnWeekend && (date.getDay() === 0 || date.getDay() === 6)) {
-    const daysToAdd = date.getDay() === 6 ? 2 : 1;
-    date.setDate(date.getDate() + daysToAdd);
+function getISOWeekTagForSchedule(d: Date = new Date()): string {
+  // Convert strictly to WIT (Eastern Indonesia Time, UTC+9, site Kawasi/Obi)
+  // The inspection period opens on Monday at 00:01 WIT and closes on Sunday at 23:59:59 WIT.
+  // We NEVER advance on Saturday or Sunday.
+  const utc = d.getTime();
+  const witDate = new Date(utc + (9 * 60 * 60 * 1000));
+  
+  const target = new Date(Date.UTC(witDate.getUTCFullYear(), witDate.getUTCMonth(), witDate.getUTCDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = target.getTime();
+  target.setUTCMonth(0, 1);
+  if (target.getUTCDay() !== 4) {
+    target.setUTCMonth(0, 1 + ((4 - target.getUTCDay()) + 7) % 7);
   }
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-  const week1 = new Date(date.getFullYear(), 0, 4);
-  const weekNum = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-  return `W${weekNum}`;
+  const weekNumber = 1 + Math.ceil((firstThursday - target.getTime()) / 604800000);
+  return `W${weekNumber}`;
 }
 
 let cachedAllEmployees: any[] | null = null;
@@ -1665,18 +2068,34 @@ export async function getAllEmployeesCached(force = false): Promise<any[]> {
 
 async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: string): Promise<any[]> {
   try {
-    const currentWeekTag = targetWeekTag || getISOWeekTagForSchedule(new Date(), true);
+    const currentWeekTag = targetWeekTag || getISOWeekTagForSchedule(new Date());
 
     // Execute queries in parallel for high performance over remote SQL
-    const [recentInspections, allEmps, allProofs] = await Promise.all([
+    const nowUtc = new Date();
+    const witDate = new Date(nowUtc.getTime() + (9 * 60 * 60 * 1000));
+    const parts = witDate.toDateString().split(' ');
+    const dayNum = parseInt(parts[2], 10);
+    const todayRosterDate = `${dayNum} ${parts[1]} ${parts[3].substring(2)}`; // e.g. "1 Oct 26"
+
+    const [recentInspections, allEmps, allProofs, todayRosterRows] = await Promise.all([
       db.select().from(inspections).orderBy(desc(inspections.date)).limit(150),
       getAllEmployeesCached(),
-      db.select().from(inspectionProofs).where(eq(inspectionProofs.week, currentWeekTag))
+      db.select().from(inspectionProofs).where(eq(inspectionProofs.week, currentWeekTag)),
+      db.select().from(roster).where(eq(roster.date, todayRosterDate))
     ]);
 
-    // Filter inspections belonging to current ISO week
+    // Build roster lookup by NIK for today to accurately identify Day/Night shift
+    const rosterStatusByNik = new Map<string, string>();
+    todayRosterRows.forEach(r => {
+      if (r.nik && r.status) {
+        rosterStatusByNik.set(r.nik.trim().toUpperCase(), r.status.trim().toUpperCase());
+      }
+    });
+
+    // Filter inspections belonging to current ISO week, strictly excluding daily P2H ('Harian')
     const currentWeekInspections = recentInspections.filter(insp => {
       if (!insp.date) return false;
+      if (insp.type === 'Harian') return false; // P2H daily equipment checklist is separate from weekly inspection
       return getISOWeekTagForSchedule(new Date(insp.date)) === currentWeekTag;
     });
 
@@ -1688,14 +2107,7 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
     });
 
     for (const s of schedules) {
-      if (!s || s.isCuti) {
-        s.isCompleted = false;
-        s.hasSsProof = false;
-        s.ssProofUrl = null;
-        continue;
-      }
-
-      // Attach SS proof info ONLY for this specific individual inspector (each partner must upload their own SS!)
+      // 1. Resolve individual inspector NIK
       const selfName = (s.name || '').trim().toLowerCase();
       let selfNik = (empNameToNik.get(selfName) || '').trim().toLowerCase();
       if (!selfNik) {
@@ -1705,6 +2117,63 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
             break;
           }
         }
+      }
+
+      // 2. Cross-reference ROSTER to determine real Shift Siang / Shift Malam (D=Siang, N=Malam)
+      const rosterCode = selfNik ? rosterStatusByNik.get(selfNik.toUpperCase()) : null;
+      if (rosterCode) {
+        s.rosterStatus = rosterCode;
+        const grp = s.shift?.includes('A') ? 'Shift A' : (s.shift?.includes('B') ? 'Shift B' : '');
+        if (rosterCode === 'D' || rosterCode === 'DS') {
+          s.shift = grp ? `${grp} (Siang)` : 'Shift Siang';
+          s.shiftType = 'siang';
+        } else if (rosterCode === 'N' || rosterCode === 'NS') {
+          s.shift = grp ? `${grp} (Malam)` : 'Shift Malam';
+          s.shiftType = 'malam';
+        } else if (rosterCode === 'OFF') {
+          s.shift = grp ? `${grp} (Off)` : 'Off Shift';
+          s.shiftType = 'off';
+        } else if (rosterCode === 'LS') {
+          s.shift = grp ? `${grp} (Long Shift)` : 'Long Shift';
+          s.shiftType = 'longshift';
+        } else if (rosterCode === 'C' || rosterCode.startsWith('CT') || rosterCode.startsWith('CR') || rosterCode === 'TRV') {
+          s.isCuti = true;
+          s.shift = 'Cuti';
+          s.shiftType = 'cuti';
+        }
+      }
+
+      // Sync partners with their respective roster status as well
+      if (Array.isArray(s.partners)) {
+        s.partners.forEach((p: any) => {
+          const pName = (p.name || '').trim().toLowerCase();
+          let pNik = (empNameToNik.get(pName) || '').trim().toUpperCase();
+          if (!pNik) {
+            for (const [eName, eNik] of empNameToNik.entries()) {
+              if (eName === pName || eName.includes(pName) || pName.includes(eName)) {
+                pNik = eNik.toUpperCase();
+                break;
+              }
+            }
+          }
+          const pRosterCode = pNik ? rosterStatusByNik.get(pNik) : null;
+          if (pRosterCode) {
+            p.rosterStatus = pRosterCode;
+            const pGrp = p.shift?.includes('A') ? 'Shift A' : (p.shift?.includes('B') ? 'Shift B' : '');
+            if (pRosterCode === 'D' || pRosterCode === 'DS') {
+              p.shift = pGrp ? `${pGrp} (Siang)` : 'Shift Siang';
+            } else if (pRosterCode === 'N' || pRosterCode === 'NS') {
+              p.shift = pGrp ? `${pGrp} (Malam)` : 'Shift Malam';
+            }
+          }
+        });
+      }
+
+      if (!s || s.isCuti) {
+        s.isCompleted = false;
+        s.hasSsProof = false;
+        s.ssProofUrl = null;
+        continue;
       }
 
       const pMatch = allProofs.find(p => {
@@ -1723,12 +2192,13 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
       s.hasSsProof = !!pMatch;
       s.ssProofUrl = pMatch?.imageUrl || null;
       s.ssProofDate = pMatch?.date || null;
+      s.ssProofId = pMatch?.id || null;
 
       const personNames = [s.name, ...(s.partners || []).map((p: any) => p.name)].filter(Boolean).map((n: string) => n.trim().toLowerCase());
       const personNiks = personNames.map(pName => empNameToNik.get(pName)).filter(Boolean) as string[];
-      const sInspeksi = (s.inspeksi || '').toLowerCase();
-      const sSubArea = (s.formInfo?.subArea || '').toLowerCase();
-      const sFormTitle = (s.formInfo?.formTitle || '').toLowerCase();
+      const sInspeksi = (s.inspeksi || '').toLowerCase().trim();
+      const sSubArea = (s.formInfo?.subArea || '').toLowerCase().trim();
+      const sFormTitle = (s.formInfo?.formTitle || '').toLowerCase().trim();
 
       let matchedStrict: any = null;
       let matchedAny: any = null;
@@ -1744,11 +2214,10 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
         const insp1 = (dataFObj.insp1 || insp.inspectorName || '').toLowerCase().trim();
         const insp2 = (dataFObj.insp2 || '').toLowerCase().trim();
         const insp3 = (dataFObj.insp3 || '').toLowerCase().trim();
-        const rawDataF = typeof insp.dataF === 'string' ? insp.dataF.toLowerCase() : '';
-        const location = (insp.location || dataFObj.lokasiUmum || '').toLowerCase();
-        const judulForm = (insp.type || dataFObj.judulForm || '').toLowerCase();
+        const location = (insp.location || dataFObj.lokasiUmum || '').toLowerCase().trim();
+        const judulForm = (insp.type || dataFObj.judulForm || '').toLowerCase().trim();
 
-        // 1. Check person match (by name or NIK)
+        // 1. Check person match (by name or NIK against actual inspectors)
         const isPersonMatch = personNames.some(pName => {
           if (!pName || pName.length < 3) return false;
           const checkMatch = (target: string) => {
@@ -1763,27 +2232,32 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
           return false;
         }) || personNiks.some(nik => {
           if (!nik || nik.length < 4) return false;
-          return (insp1 && insp1.includes(nik)) || (insp2 && insp2.includes(nik)) || (insp3 && insp3.includes(nik)) || rawDataF.includes(nik);
+          return (insp1 && insp1.includes(nik)) || (insp2 && insp2.includes(nik)) || (insp3 && insp3.includes(nik));
         });
 
-        // 2. Check area / form match
-        const isAreaMatch =
-          (sSubArea && (location.includes(sSubArea) || sSubArea.includes(location))) ||
-          (sInspeksi && (location.includes(sInspeksi) || sInspeksi.includes(location))) ||
-          (judulForm && sFormTitle && (judulForm.includes(sFormTitle) || sFormTitle.includes(judulForm)));
+        // 2. Check area / form match (guarding against empty string false positives)
+        const isAreaMatch = Boolean(
+          (sSubArea && sSubArea.length >= 3 && location && location.length >= 3 && (location.includes(sSubArea) || sSubArea.includes(location))) ||
+          (sInspeksi && sInspeksi.length >= 3 && location && location.length >= 3 && (location.includes(sInspeksi) || sInspeksi.includes(location))) ||
+          (judulForm && judulForm.length >= 3 && sFormTitle && sFormTitle.length >= 3 && (judulForm.includes(sFormTitle) || sFormTitle.includes(judulForm)))
+        );
 
         if (isPersonMatch) {
-          if (!matchedAny) {
-            matchedAny = { insp, dataFObj };
-          }
-          if (isAreaMatch || !s.inspeksi) {
+          // If schedule specifically assigns an area/form, require area match or form match to prevent false positives
+          if (s.inspeksi && s.inspeksi.trim() !== '' && s.inspeksi !== '-') {
+            if (isAreaMatch) {
+              matchedStrict = { insp, dataFObj };
+              break;
+            }
+          } else {
+            // If no specific area was scheduled, any valid routine inspection by this person counts
             matchedStrict = { insp, dataFObj };
             break;
           }
         }
       }
 
-      const matchedInsp = matchedStrict || matchedAny;
+      const matchedInsp = matchedStrict;
 
       if (matchedInsp) {
         const { insp, dataFObj } = matchedInsp;
@@ -1795,9 +2269,16 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
           } catch (e) {}
         }
 
+        if (!displayPdf || displayPdf === '#' || displayPdf === '-') {
+          if (insp.id) {
+            displayPdf = `/api/inspections/${insp.id}/pdf?pt=tbp`;
+          }
+        }
+
         s.isCompleted = true;
         s.completedAt = insp.date ? new Date(insp.date).toISOString() : new Date().toISOString();
         s.completedPdfUrl = displayPdf || '#';
+        s.completedInspectionId = insp.id;
         s.completedInspector = insp.inspectorName || dataFObj.insp1 || s.name;
         s.completedFormTitle = insp.type || dataFObj.judulForm;
         s.completedLocation = insp.location || dataFObj.lokasiUmum;
@@ -1902,10 +2383,10 @@ router.get("/api/inspection-schedule", async (req, res) => {
       if (targetSheet.toLowerCase().includes('37')) {
         targetWeekTag = 'W37';
       } else if (targetSheet.toLowerCase().includes('currentweek')) {
-        targetWeekTag = getISOWeekTagForSchedule(new Date(), true);
+        targetWeekTag = getISOWeekTagForSchedule(new Date());
       } else {
         const match = targetSheet.match(/\d+/);
-        targetWeekTag = match ? `W${match[0]}` : getISOWeekTagForSchedule(new Date(), true);
+        targetWeekTag = match ? `W${match[0]}` : getISOWeekTagForSchedule(new Date());
       }
     } else if (!targetWeekTag.startsWith('W') && !targetWeekTag.startsWith('w')) {
       targetWeekTag = `W${targetWeekTag.replace(/\D/g, '')}`;

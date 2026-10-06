@@ -50,6 +50,23 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit, autoFil
     return map;
   }, [rosterData]);
 
+  // Auto-detect Waktu Kerja (Pagi / Malam) berdasarkan jadwal roster inspektor hari ini
+  useEffect(() => {
+    if (!waktuKerja && (inspectorNik || inspectorName) && rosterData.length > 0) {
+      const nikKey = (inspectorNik || '').toString().trim().toUpperCase();
+      const nameKey = (inspectorName || '').toString().trim().toLowerCase();
+      const r = rosterMap.get(nikKey) || rosterMap.get(nameKey);
+      if (r && Array.isArray(r.schedule) && r.schedule[0]) {
+        const code = (r.schedule[0].shiftCode || r.schedule[0].status || '').toString().trim().toUpperCase();
+        if (code === 'D' || code === 'DS') {
+          setWaktuKerja('Pagi');
+        } else if (code === 'N' || code === 'NS') {
+          setWaktuKerja('Malam');
+        }
+      }
+    }
+  }, [inspectorNik, inspectorName, rosterData, rosterMap, waktuKerja]);
+
   // Filter personil aktif: personil dengan data roster kosong (e.g. resign) tidak muncul
   const hasActiveRoster = useCallback((emp: any) => {
     if (!rosterData || rosterData.length === 0) {
@@ -324,11 +341,29 @@ export function FormAPD({ formId, inspectorName, inspectorNik, onSubmit, autoFil
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <Card className="border-l-4 border-l-primary">
-        <label className="text-sm font-semibold text-primary block mb-2">Waktu Kerja <span className="text-rose-500">*</span></label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-semibold text-primary block">Waktu Kerja <span className="text-rose-500">*</span></label>
+          {(() => {
+            const nikKey = (inspectorNik || '').toString().trim().toUpperCase();
+            const nameKey = (inspectorName || '').toString().trim().toLowerCase();
+            const r = rosterMap.get(nikKey) || rosterMap.get(nameKey);
+            const code = (r?.schedule?.[0]?.shiftCode || r?.schedule?.[0]?.status || '').toString().trim().toUpperCase();
+            if (code) {
+              const isNight = code === 'N' || code === 'NS';
+              const isDay = code === 'D' || code === 'DS';
+              return (
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isNight ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300' : isDay ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200' : 'bg-slate-100 text-slate-700'}`}>
+                  Roster Anda: {isNight ? 'Shift Malam (N)' : isDay ? 'Shift Siang (D)' : code}
+                </span>
+              );
+            }
+            return null;
+          })()}
+        </div>
         <Select value={waktuKerja} onChange={e => setWaktuKerja(e.target.value)} className="w-full">
           <option value="">-- Pilih Waktu --</option>
-          <option value="Pagi">Pagi</option>
-          <option value="Malam">Malam</option>
+          <option value="Pagi">Pagi (Day Shift)</option>
+          <option value="Malam">Malam (Night Shift)</option>
         </Select>
       </Card>
 

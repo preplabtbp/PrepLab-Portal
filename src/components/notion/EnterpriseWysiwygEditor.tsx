@@ -21,9 +21,19 @@ import {
   FileText,
   CornerDownLeft,
   Info,
-  GripVertical
+  GripVertical,
+  Palette
 } from 'lucide-react';
-import { parseTasklist, toggleTasklistItem, markdownToVisualHtml, visualHtmlToMarkdown, SubtaskNote } from './tasklist-utils';
+import { 
+  parseTasklist, 
+  toggleTasklistItem, 
+  markdownToVisualHtml, 
+  visualHtmlToMarkdown, 
+  SubtaskNote,
+  NOTION_COLORS,
+  formatColorTagsToHtml,
+  applyColorToText
+} from './tasklist-utils';
 
 export interface EnterpriseWysiwygEditorProps {
   value: string;
@@ -107,6 +117,13 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
   // Synchronize visual HTML to markdown
   const syncEditorContent = () => {
     if (!editorRef.current) return;
+    const bqs = editorRef.current.querySelectorAll('blockquote');
+    bqs.forEach(b => {
+      const text = b.textContent?.trim().toLowerCase() || '';
+      if (!text || text.includes('menu info')) {
+        b.remove();
+      }
+    });
     const html = editorRef.current.innerHTML;
     const md = visualHtmlToMarkdown(html);
     lastEmittedValueRef.current = md;
@@ -242,6 +259,17 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
 
   const handleFormatQuote = (e: React.MouseEvent) => {
     e.preventDefault();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const node = sel.anchorNode;
+    const bq = node instanceof HTMLElement ? node.closest('blockquote') : node?.parentElement?.closest('blockquote');
+    if (bq) {
+      const div = document.createElement('div');
+      div.innerHTML = bq.innerHTML;
+      bq.parentNode?.replaceChild(div, bq);
+      syncEditorContent();
+      return;
+    }
     document.execCommand('formatBlock', false, 'blockquote');
     syncEditorContent();
   };
@@ -269,6 +297,54 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
     sel.removeAllRanges();
     sel.addRange(range);
     syncEditorContent();
+  };
+
+  // Notion Colors State & Handler
+  const [showColorMenu, setShowColorMenu] = useState(false);
+  const [activeSubtaskColorIdx, setActiveSubtaskColorIdx] = useState<number | null>(null);
+
+  const handleApplyColor = (colorKey: string, hex: string) => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    const text = range.toString();
+    if (text) {
+      const span = document.createElement('span');
+      if (colorKey === 'default') {
+        span.style.color = 'inherit';
+      } else {
+        span.style.color = hex;
+        span.setAttribute('data-color', colorKey);
+      }
+      span.textContent = text;
+      range.deleteContents();
+      range.insertNode(span);
+      range.setStartAfter(span);
+      range.setEndAfter(span);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      syncEditorContent();
+    } else {
+      if (colorKey === 'default') {
+        document.execCommand('removeFormat', false);
+      } else {
+        document.execCommand('foreColor', false, hex);
+      }
+      syncEditorContent();
+    }
+    setShowColorMenu(false);
+  };
+
+  const handleChangeSubtaskColor = (subtaskId: string, colorKey: string) => {
+    const updated = subtasks.map(s => {
+      if (s.id !== subtaskId) return s;
+      return {
+        ...s,
+        text: applyColorToText(s.text, colorKey)
+      };
+    });
+    setSubtasks(updated);
+    emitChecklistChange(updated, notes);
   };
 
   // Drag and drop state for subtasks reordering
@@ -564,6 +640,39 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
             >
               + OPEN
             </button>
+
+            {/* Notion Text Colors Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setShowColorMenu(!showColorMenu)}
+                className="p-1.5 rounded-md hover:bg-slate-200/90 active:bg-slate-300 transition-colors cursor-pointer text-slate-700 hover:text-indigo-600 flex items-center gap-1"
+                title="Pewarnaan Teks Notion"
+              >
+                <Palette className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold hidden sm:inline">Warna</span>
+              </button>
+              {showColorMenu && (
+                <div 
+                  className="absolute left-0 top-7 z-50 p-2 bg-white rounded-xl shadow-xl border border-slate-200 flex items-center gap-1.5 animate-in fade-in duration-100"
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  {Object.entries(NOTION_COLORS).map(([cKey, cVal]) => (
+                    <button
+                      key={cKey}
+                      type="button"
+                      onClick={() => handleApplyColor(cKey, cVal.hex)}
+                      title={cVal.label}
+                      className="w-5 h-5 rounded-full border border-slate-300 hover:scale-125 transition-transform cursor-pointer flex items-center justify-center"
+                      style={{ backgroundColor: cVal.hex }}
+                    >
+                      {cKey === 'default' && <span className="text-[8px] font-bold text-slate-500">A</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <span 
@@ -644,6 +753,28 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
                 } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                   e.preventDefault();
                   onSave?.(textContent);
+                } else if (e.key === 'Backspace' || e.key === 'Delete') {
+                  const sel = window.getSelection();
+                  if (sel && sel.rangeCount > 0) {
+                    const node = sel.anchorNode;
+                    const bq = node instanceof HTMLElement ? node.closest('blockquote') : node?.parentElement?.closest('blockquote');
+                    if (bq) {
+                      const text = bq.textContent?.trim();
+                      const selText = sel.toString().trim();
+                      if (!text || text === '\n' || text.toLowerCase().includes('menu info') || (selText && selText === text)) {
+                        e.preventDefault();
+                        const div = document.createElement('div');
+                        div.innerHTML = '<br>';
+                        bq.parentNode?.replaceChild(div, bq);
+                        const newRange = document.createRange();
+                        newRange.setStart(div, 0);
+                        newRange.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(newRange);
+                        syncEditorContent();
+                      }
+                    }
+                  }
                 }
               }}
               data-placeholder={placeholder}
@@ -781,6 +912,40 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
                       item.checked ? 'line-through text-slate-500 font-normal border-slate-200' : 'font-bold text-black border-slate-300'
                     }`}
                   />
+
+                  {/* Color Picker for Subtask */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setActiveSubtaskColorIdx(activeSubtaskColorIdx === index ? null : index)}
+                      className="p-1 rounded opacity-0 group-hover/row:opacity-100 hover:text-indigo-600 hover:bg-indigo-50 transition-opacity cursor-pointer shrink-0"
+                      title="Ubah warna teks subtask"
+                    >
+                      <Palette className="w-3.5 h-3.5 text-slate-400" />
+                    </button>
+                    {activeSubtaskColorIdx === index && (
+                      <div 
+                        className="absolute right-0 top-7 z-50 p-2 bg-white rounded-xl shadow-xl border border-slate-200 flex items-center gap-1.5 animate-in fade-in duration-100"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {Object.entries(NOTION_COLORS).map(([cKey, cVal]) => (
+                          <button
+                            key={cKey}
+                            type="button"
+                            onClick={() => {
+                              handleChangeSubtaskColor(item.id, cKey);
+                              setActiveSubtaskColorIdx(null);
+                            }}
+                            title={cVal.label}
+                            className="w-4 h-4 rounded-full border border-slate-300 hover:scale-125 transition-transform cursor-pointer flex items-center justify-center"
+                            style={{ backgroundColor: cVal.hex }}
+                          >
+                            {cKey === 'default' && <span className="text-[7px] font-bold text-slate-500">A</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   <button
                     type="button"

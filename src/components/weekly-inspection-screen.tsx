@@ -1,7 +1,7 @@
 import { toast } from 'sonner';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Button, Input, Select } from './ui';
-import { ClipboardCheck, Server, AlertTriangle, Eye, Wrench, ChevronLeft, Loader2, Users, CheckCircle2, MapPin } from 'lucide-react';
+import { ClipboardCheck, Server, AlertTriangle, Eye, Download, Clock, Wrench, ChevronLeft, Loader2, Users, CheckCircle2, MapPin, Trash2, RefreshCw } from 'lucide-react';
 import { getMasterPertanyaan, submitInspeksiUniversal, submitInspeksi } from '../sheets-api';
 import { FormUmum } from './inspection-forms/FormUmum';
 import { FormP3K } from './inspection-forms/FormP3K';
@@ -84,6 +84,77 @@ export function WeeklyInspectionScreen({
           }
         })
         .catch(console.error);
+    }
+  };
+
+  const [isDeletingSubmission, setIsDeletingSubmission] = useState(false);
+
+  const handleDeleteSubmission = async () => {
+    // Current ISO week in WIT
+    const utc = Date.now();
+    const witDate = new Date(utc + (9 * 60 * 60 * 1000));
+    const target = new Date(Date.UTC(witDate.getUTCFullYear(), witDate.getUTCMonth(), witDate.getUTCDate()));
+    const dayNr = (target.getUTCDay() + 6) % 7;
+    target.setUTCDate(target.getUTCDate() - dayNr + 3);
+    const firstThursday = target.getTime();
+    target.setUTCMonth(0, 1);
+    if (target.getUTCDay() !== 4) target.setUTCMonth(0, 1 + ((4 - target.getUTCDay()) + 7) % 7);
+    const activeWeek = `W${1 + Math.ceil((firstThursday - target.getTime()) / 604800000)}`;
+
+    const confirmMsg =
+      `Hapus data inspeksi periode ${activeWeek}?\n\n` +
+      `• Submission formulir dan dokumen PDF sebelumnya akan dihapus dari database.\n` +
+      `• Bukti screenshot (jika ada) akan dibersihkan agar rekap tidak duplikat.\n` +
+      `• Status kembali menjadi 'Belum Dilakukan' dan Anda dapat mengisi ulang dengan bersih.\n\n` +
+      `Lanjutkan penghapusan?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsDeletingSubmission(true);
+    try {
+      if (userScheduledTask?.completedInspectionId) {
+        await fetch(`/api/inspections/${userScheduledTask.completedInspectionId}?deleteProof=true`, {
+          method: 'DELETE'
+        });
+      }
+
+      if (userScheduledTask?.ssProofId) {
+        await fetch(`/api/inspection-proofs/${userScheduledTask.ssProofId}`, {
+          method: 'DELETE'
+        });
+      }
+
+      const cleanNik = (inspectorNik || '').trim();
+      const cleanName = (inspectorName || userScheduledTask?.name || '').trim();
+      await fetch(`/api/inspections-reset-submission?nik=${encodeURIComponent(cleanNik)}&name=${encodeURIComponent(cleanName)}&week=${encodeURIComponent(activeWeek)}`, {
+        method: 'DELETE'
+      });
+
+      try {
+        localStorage.removeItem(`p2h_cached_my_schedule_${activeWeek}`);
+        localStorage.removeItem('p2h_cached_my_schedule');
+        localStorage.removeItem('p2h_cached_all_schedules');
+        localStorage.removeItem('p2h_cached_has_ss_proof');
+        localStorage.removeItem('p2h_cached_ss_proof_url');
+        localStorage.removeItem(`p2h_cached_has_ss_proof_${activeWeek}`);
+        localStorage.removeItem(`p2h_cached_ss_proof_url_${activeWeek}`);
+      } catch {}
+
+      setUserScheduledTask((prev: any) => prev ? {
+        ...prev,
+        isCompleted: false,
+        completedPdfUrl: undefined,
+        completedInspectionId: undefined,
+        hasSsProof: false,
+        ssProofUrl: null
+      } : null);
+
+      toast.success('Data inspeksi berhasil dihapus. Anda dapat mengisi ulang formulir baru.');
+      refreshSchedule();
+    } catch (err: any) {
+      toast.error('Gagal menghapus inspeksi: ' + (err.message || String(err)));
+    } finally {
+      setIsDeletingSubmission(false);
     }
   };
 
@@ -450,6 +521,16 @@ export function WeeklyInspectionScreen({
         onTriggerAutoFill={handleJsaClickDirect}
       />
 
+      {/* Information Banner: Periode Pelaporan */}
+      <div className="flex items-center justify-between p-3 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-xs text-teal-800 dark:text-teal-200">
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+          <span>
+            <strong>Jendela Periode:</strong> Pelaporan inspeksi rutin mingguan dibuka resmi setiap <strong>Senin pukul 00:01 WIT</strong> s/d <strong>Minggu 23:59 WIT</strong>.
+          </span>
+        </div>
+      </div>
+
       {/* Form & Schedule Card (Auto-determined, no form selection needed) */}
       <Card className="border-t-4 border-t-[var(--primary)] bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-main)] shadow-sm">
         <div className="flex items-center justify-between mb-3">
@@ -537,6 +618,54 @@ export function WeeklyInspectionScreen({
                     {p.name} <span className="text-[10px] text-[var(--text-muted)] font-normal">({p.roleIndex === 1 ? 'Inspektor 1' : `Inspektor ${p.roleIndex}`} • {p.jabatan})</span>{idx < userScheduledTask.partners.length - 1 ? ', ' : ''}
                   </span>
                 ))}
+              </div>
+            )}
+
+            {userScheduledTask.isCompleted && (
+              <div className="pt-2 border-t border-emerald-500/20 flex flex-wrap items-center gap-2">
+                {(userScheduledTask.completedPdfUrl || userScheduledTask.completedInspectionId) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rawUrl = (userScheduledTask.completedPdfUrl && userScheduledTask.completedPdfUrl !== '#')
+                        ? userScheduledTask.completedPdfUrl
+                        : `/api/inspections/${userScheduledTask.completedInspectionId}/pdf?pt=tbp`;
+                      window.open(rawUrl, '_blank');
+                    }}
+                    className="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Lihat Dokumen PDF</span>
+                  </button>
+                )}
+                {userScheduledTask.ssProofUrl && (
+                  <a
+                    href={userScheduledTask.ssProofUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-1.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Lihat Bukti SS</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDeleteSubmission}
+                  disabled={isDeletingSubmission}
+                  className="py-1.5 px-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 font-bold text-xs flex items-center gap-1.5 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer"
+                  title="Hapus / batalkan submission jika salah pengisian agar rekap tidak duplikat"
+                >
+                  {isDeletingSubmission ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  )}
+                  <span>Hapus / Batalkan</span>
+                </button>
+                <span className="text-[10.5px] text-[var(--text-muted)] italic">
+                  Laporan periode ini telah tercatat. Jika ada kekeliruan isi form, klik tombol Hapus di atas untuk mereset.
+                </span>
               </div>
             )}
           </div>

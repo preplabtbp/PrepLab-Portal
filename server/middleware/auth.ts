@@ -26,7 +26,12 @@ export interface AuthUser {
 export function toPublicEmployee(emp: any): any {
   if (!emp) return null;
   const { passwordHash, ...safeEmp } = emp;
-  return safeEmp;
+  const resolvedName = safeEmp.name || safeEmp.nama || '';
+  return {
+    ...safeEmp,
+    name: resolvedName,
+    nama: resolvedName
+  };
 }
 
 // Generate signed JWT Token

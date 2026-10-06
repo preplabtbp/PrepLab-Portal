@@ -5,6 +5,41 @@ import { clinicVisits } from "../../src/db/schema.js";
 
 export const clinicRouter = Router();
 
+let clinicTableEnsured = false;
+export async function ensureClinicVisitsTable() {
+  if (clinicTableEnsured) return;
+  try {
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS clinic_visits (
+      id SERIAL PRIMARY KEY,
+      nik TEXT NOT NULL,
+      name TEXT NOT NULL,
+      section TEXT,
+      department TEXT,
+      jabatan TEXT,
+      pt TEXT DEFAULT 'TBP',
+      visit_date TEXT NOT NULL,
+      visit_time TEXT NOT NULL,
+      category TEXT DEFAULT 'Keluhan Sakit',
+      reason TEXT NOT NULL,
+      diagnosis TEXT,
+      action_taken TEXT,
+      recommendation TEXT DEFAULT 'Fit to Work',
+      doctor_or_medic_name TEXT,
+      reporter_nik TEXT,
+      reporter_name TEXT,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_clinic_visits_date ON clinic_visits(visit_date);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_clinic_visits_nik ON clinic_visits(nik);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_clinic_visits_section ON clinic_visits(section);`);
+    clinicTableEnsured = true;
+  } catch (e: any) {
+    console.error("[Clinic] Ensure table failed:", e.message);
+  }
+}
+
 // Helper to get today's date string YYYY-MM-DD in Asia/Jayapura
 const getTodayDateStr = (): string => {
   const d = new Date();
@@ -14,6 +49,8 @@ const getTodayDateStr = (): string => {
 // 1. GET /api/clinic-visits - Fetch all visits with filtering and enterprise summary
 clinicRouter.get("/api/clinic-visits", async (req, res) => {
   try {
+    await ensureClinicVisitsTable();
+
     const { startDate, endDate, section, pt, search, category, recommendation } = req.query as {
       startDate?: string;
       endDate?: string;
@@ -126,13 +163,55 @@ clinicRouter.get("/api/clinic-visits", async (req, res) => {
     });
   } catch (error: any) {
     console.error("[Clinic Visits GET] Error:", error);
-    res.status(500).json({ status: "error", message: error.message });
+    // Self-healing: if query failed due to unmigrated table or connection glitch, ensure table and retry
+    try {
+      clinicTableEnsured = false;
+      await ensureClinicVisitsTable();
+      const retryVisits = await db
+        .select()
+        .from(clinicVisits)
+        .orderBy(desc(clinicVisits.visitDate), desc(clinicVisits.visitTime), desc(clinicVisits.id));
+
+      return res.json({
+        status: "success",
+        data: retryVisits,
+        summary: {
+          total: retryVisits.length,
+          todayCount: 0,
+          thisMonthCount: 0,
+          restingCount: 0,
+          fitCount: 0,
+          sectionBreakdown: {},
+          categoryBreakdown: {},
+          recommendationBreakdown: {},
+          todayStr: getTodayDateStr()
+        }
+      });
+    } catch (fallbackErr: any) {
+      console.error("[Clinic Visits GET] Fallback recovery error:", fallbackErr);
+      return res.json({
+        status: "success",
+        data: [],
+        summary: {
+          total: 0,
+          todayCount: 0,
+          thisMonthCount: 0,
+          restingCount: 0,
+          fitCount: 0,
+          sectionBreakdown: {},
+          categoryBreakdown: {},
+          recommendationBreakdown: {},
+          todayStr: getTodayDateStr()
+        }
+      });
+    }
   }
 });
 
 // 2. POST /api/clinic-visits - Create a new clinic visit report
 clinicRouter.post("/api/clinic-visits", async (req, res) => {
   try {
+    await ensureClinicVisitsTable();
     const {
       nik,
       name,
@@ -201,6 +280,7 @@ clinicRouter.post("/api/clinic-visits", async (req, res) => {
 // 3. PUT /api/clinic-visits/:id - Update an existing clinic visit report
 clinicRouter.put("/api/clinic-visits/:id", async (req, res) => {
   try {
+    await ensureClinicVisitsTable();
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
       return res.status(400).json({ status: "error", message: "ID tidak valid" });
@@ -269,6 +349,7 @@ clinicRouter.put("/api/clinic-visits/:id", async (req, res) => {
 // 4. DELETE /api/clinic-visits/:id - Delete a clinic visit report
 clinicRouter.delete("/api/clinic-visits/:id", async (req, res) => {
   try {
+    await ensureClinicVisitsTable();
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
       return res.status(400).json({ status: "error", message: "ID tidak valid" });

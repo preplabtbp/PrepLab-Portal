@@ -659,9 +659,9 @@ export function DailyGreetingHero({
         }}
         className="relative overflow-hidden rounded-3xl p-5 sm:p-7 shadow-xl border flex flex-col md:flex-row md:items-center justify-between gap-5 transition-all"
         style={{
-          backgroundColor: 'var(--card-bg, #0F172A)',
-          borderColor: 'var(--border-main, #334155)',
-          color: 'var(--text-main, #F8FAFC)'
+          backgroundColor: 'var(--card-bg, #FFFFFF)',
+          borderColor: 'var(--border-main, #E2E8F0)',
+          color: 'var(--text-main, #1E293B)'
         }}
       >
         {/* Subtle Ambient Background Glows */}

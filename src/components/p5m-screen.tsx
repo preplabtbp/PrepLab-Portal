@@ -14,6 +14,7 @@ import { Card, Button, Input } from './ui';
 import { toast } from 'sonner';
 import { getFlyerInfo } from '../lib/p5m-flyer';
 import { ExcelViewer } from './ExcelViewer';
+import { triggerExpGain } from '../lib/gamificationEvents';
 
 // Helper to clean file names into well-formatted material titles
 export const cleanFilenameToTitle = (filename: string, stripNumbering = true): string => {
@@ -91,6 +92,52 @@ const SUB_KATEGORI_OPTIONS = [
   { value: 'Maintenance', label: 'Teknis Maintenance' }
 ];
 
+export function isTopicForbiddenForSection(title?: string, sec?: string): boolean {
+  if (!title) return false;
+  const t = title.toLowerCase();
+  const s = (sec || '').toLowerCase();
+
+  const isMaintTopic = t.includes('pengelasan') || t.includes('welding') || t.includes('las') ||
+    t.includes('gerinda') || t.includes('cutting plasma') || t.includes('pengerutan kayu') ||
+    t.includes('instalasi listrik') || t.includes('panel listrik') || t.includes('dust collector') ||
+    t.includes('ducting') || t.includes('kompresor') || t.includes('kompressor') ||
+    t.includes('kegagalan rem') || t.includes('alat berat') || t.includes('dashcam') ||
+    t.includes('blind spot') || t.includes('manuver') || t.includes('lubrikasi');
+
+  const isIcTopic = t.includes('inventory control') || t.includes('gudang') ||
+    t.includes('warehouse') || t.includes('sparepart') || t.includes('spare part') ||
+    t.includes('penyimpanan bahan kimia') || /\bic\b/.test(t);
+
+  const isPrepTopic = t.includes('jaw crusher') || t.includes('pulverizer') ||
+    t.includes('cup mill') || t.includes('sample basah') || t.includes('sampel basah') ||
+    t.includes('sample kering') || t.includes('sampel kering') || t.includes('double roll') ||
+    t.includes('sieve shaker') || t.includes('screen test') || t.includes('oven kontainer');
+
+  const isLabTopic = t.includes('xrf') || t.includes('aas') || t.includes('fusion') ||
+    t.includes('fused bead') || t.includes('titrasi') || t.includes('loi') ||
+    t.includes('gravimetri') || t.includes('press powder') || t.includes('neraca') ||
+    t.includes('timbangan digital') || t.includes('chiller') || t.includes('muffle furnace') ||
+    t.includes('platinum ware') || t.includes('fume hood') || t.includes('scrubber');
+
+  if (s.includes('lab')) {
+    // Lab: TIDAK BOLEH dapat materi Maintenance, IC, atau Prep!
+    if (isMaintTopic || isIcTopic || isPrepTopic) return true;
+  } else if (s.includes('prep')) {
+    // Prep: TIDAK BOLEH dapat materi Maintenance, IC, atau Lab!
+    if (isMaintTopic || isIcTopic || isLabTopic) return true;
+  } else if (s.includes('maint')) {
+    // Maintenance: TIDAK BOLEH dapat materi Lab, Prep, atau IC!
+    if (isLabTopic || isPrepTopic || isIcTopic) return true;
+  } else if (s.includes('ic') || s.includes('inventory')) {
+    // IC: TIDAK BOLEH dapat materi Maintenance, Lab, atau Prep!
+    if (isMaintTopic || isLabTopic || isPrepTopic) return true;
+  } else if (s.includes('admin')) {
+    if (isMaintTopic || isIcTopic || isPrepTopic || isLabTopic) return true;
+  }
+
+  return false;
+}
+
 function buildDefaultConfig() {
   const slot = (divisi: string, kelas: string, kategori: string, extra?: any) => ({
     divisi,
@@ -105,16 +152,16 @@ function buildDefaultConfig() {
   cfg['Senin'] = {
     pagi: {
       gabungan: [
-        slot('Preparation', 'SPV', 'Non-Teknis'),
+        slot('Preparation', 'SPV', 'Teknis'),
         slot('Laboratory', 'SPV', 'Teknis'),
-        slot('Administration', 'Admin', 'Teknis')
+        slot('All', 'All', 'Senam', { isSenam: true })
       ]
     },
     malam: {
       gabungan: [
-        slot('Preparation', 'SPV', 'Non-Teknis'),
+        slot('Preparation', 'SPV', 'Teknis'),
         slot('Laboratory', 'SPV', 'Teknis'),
-        slot('All', 'Foreman/Officer', 'Teknis')
+        slot('All', 'All', 'Senam', { isSenam: true })
       ]
     }
   };
@@ -171,16 +218,16 @@ function buildDefaultConfig() {
   cfg['Kamis'] = {
     pagi: {
       gabungan: [
-        slot('All', 'SPV', 'Non-Teknis'),
-        slot('All', 'SPV', 'Teknis'),
-        slot('All', 'All', 'Teknis')
+        slot('Preparation', 'SPV', 'Teknis'),
+        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('All', 'All', 'Senam', { isSenam: true })
       ]
     },
     malam: {
       gabungan: [
-        slot('All', 'SPV', 'Non-Teknis'),
-        slot('All', 'Foreman/Officer', 'Teknis'),
-        slot('All', 'All', 'Teknis')
+        slot('Preparation', 'SPV', 'Teknis'),
+        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('All', 'All', 'Senam', { isSenam: true })
       ]
     }
   };
@@ -189,16 +236,16 @@ function buildDefaultConfig() {
   cfg['Jumat'] = {
     pagi: {
       gabungan: [
-        slot('All', 'SPV', 'Senam'),
-        slot('All', 'SPV', 'Teknis'),
-        slot('All', 'All', 'Teknis')
+        slot('Preparation', 'SPV', 'Teknis'),
+        slot('Laboratory', 'SPV', 'Teknis'),
+        slot('All', 'Foreman/Officer', 'Teknis')
       ]
     },
     malam: {
       gabungan: [
-        slot('All', 'SPV', 'Teknis'),
-        slot('All', 'SPV', 'Teknis'),
-        slot('All', 'All', 'Teknis')
+        slot('All', 'Foreman/Officer', 'Teknis', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
+        slot('Preparation', 'Foreman/Officer', 'Teknis'),
+        slot('Laboratory', 'Foreman/Officer', 'Teknis')
       ]
     }
   };
@@ -233,7 +280,7 @@ function buildDefaultConfig() {
       gabungan: [
         slot('All', 'SPV', 'Teknis'),
         slot('All', 'SPV', 'Teknis'),
-        slot('All', 'All', 'Teknis')
+        slot('All', 'All', 'Senam', { isSenam: true })
       ]
     },
     malam: {
@@ -280,7 +327,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
   // Config State
   const [uiConfig, setUiConfig] = useState<Record<string, any>>(() => {
-    const saved = localStorage.getItem('p5m_ui_config_v4');
+    const saved = localStorage.getItem('p5m_ui_config_v5');
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
@@ -479,6 +526,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       fileUrl?: string;
       isSenam?: boolean;
       isLogbook?: boolean;
+      isCompleted?: boolean;
     }> = [];
 
     DAYS.forEach(day => {
@@ -515,7 +563,8 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               subKategori: slot.subKategori || matchingMateri?.subKategori || 'General',
               fileUrl: resolvedFileUrl,
               isSenam: Boolean(slot.isSenam),
-              isLogbook: Boolean(slot.isLogbook)
+              isLogbook: Boolean(slot.isLogbook),
+              isCompleted: Boolean(slot.isCompleted)
             });
           }
         };
@@ -759,18 +808,70 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         : copy[day][shift][location];
 
       if (targetArray && targetArray[index]) {
+        let materiTitle = '';
+        let kat = 'Teknis';
+        let subKat = 'General';
+        let fUrl: string | null = null;
+        let mId: number | null = null;
+        let isSenam = false;
+        let isLogbook = false;
+
         if (typeof materiItem === 'string') {
-          targetArray[index].materi = materiItem;
-          targetArray[index].isSenam = materiItem.toLowerCase().includes('senam');
-          targetArray[index].isLogbook = materiItem.toLowerCase().includes('logbook');
+          materiTitle = materiItem;
+          isSenam = materiItem.toLowerCase().includes('senam');
+          isLogbook = materiItem.toLowerCase().includes('logbook');
         } else {
-          targetArray[index].materi = materiItem.judul || '';
-          targetArray[index].kategori = materiItem.kategori || 'Teknis';
-          targetArray[index].subKategori = materiItem.subKategori || 'General';
-          targetArray[index].fileUrl = materiItem.fileUrl || null;
-          targetArray[index].materiId = materiItem.id || null;
-          targetArray[index].isSenam = materiItem.kategori === 'Senam' || (materiItem.judul || '').toLowerCase().includes('senam');
-          targetArray[index].isLogbook = (materiItem.judul || '').toLowerCase().includes('logbook');
+          materiTitle = materiItem.judul || '';
+          kat = materiItem.kategori || 'Teknis';
+          subKat = materiItem.subKategori || 'General';
+          fUrl = materiItem.fileUrl || null;
+          mId = materiItem.id || null;
+          isSenam = materiItem.kategori === 'Senam' || (materiItem.judul || '').toLowerCase().includes('senam');
+          isLogbook = (materiItem.judul || '').toLowerCase().includes('logbook');
+        }
+
+        targetArray[index].materi = materiTitle;
+        targetArray[index].kategori = kat;
+        targetArray[index].subKategori = subKat;
+        targetArray[index].fileUrl = fUrl;
+        targetArray[index].materiId = mId;
+        targetArray[index].isSenam = isSenam;
+        targetArray[index].isLogbook = isLogbook;
+
+        // Auto-sync pagi -> malam: Jika pengaturan materi di shift pagi diubah,
+        // di shift malam juga otomatis berubah (Senin & Kamis slot 3 senam juga ikut sync),
+        // dan KECUALI jika shift malam sudah diedit manual
+        if (shift === 'pagi' && copy[day].malam) {
+          const nightTargetArray = copy[day].tipe === 'gabungan'
+            ? copy[day].malam.gabungan
+            : copy[day].malam[location];
+
+          if (nightTargetArray && nightTargetArray[index] && !nightTargetArray[index].isManualEdited) {
+            if (isSenam || kat === 'Senam' || materiTitle.toLowerCase().includes('senam')) {
+              // Jika hari Senin atau Kamis slot 3, sinkronkan Senam ke shift malam
+              if (['Senin', 'Kamis'].includes(day) && index === 2) {
+                nightTargetArray[index].materi = 'Senam';
+                nightTargetArray[index].kategori = 'Senam';
+                nightTargetArray[index].subKategori = 'General';
+                nightTargetArray[index].fileUrl = null;
+                nightTargetArray[index].materiId = null;
+                nightTargetArray[index].isSenam = true;
+                nightTargetArray[index].isLogbook = false;
+              }
+            } else {
+              nightTargetArray[index].materi = materiTitle;
+              nightTargetArray[index].kategori = kat;
+              nightTargetArray[index].subKategori = subKat;
+              nightTargetArray[index].fileUrl = fUrl;
+              nightTargetArray[index].materiId = mId;
+              nightTargetArray[index].isSenam = false;
+              nightTargetArray[index].isLogbook = isLogbook;
+            }
+          }
+        } else if (shift === 'malam') {
+          // Tandai bahwa slot shift malam ini telah diedit secara manual
+          targetArray[index].isManualEdited = true;
+          targetArray[index].isSenam = isSenam;
         }
       }
       return copy;
@@ -790,6 +891,29 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
       if (targetArray && targetArray[index]) {
         targetArray[index][field] = value;
+
+        if (field === 'materi') {
+          if (shift === 'pagi' && copy[day].malam) {
+            const nightTargetArray = copy[day].tipe === 'gabungan'
+              ? copy[day].malam.gabungan
+              : copy[day].malam[location];
+
+            if (nightTargetArray && nightTargetArray[index] && !nightTargetArray[index].isManualEdited) {
+              const valLower = String(value || '').toLowerCase();
+              if (valLower.includes('senam')) {
+                if (['Senin', 'Kamis'].includes(day) && index === 2) {
+                  nightTargetArray[index].materi = value;
+                  nightTargetArray[index].isSenam = true;
+                }
+              } else {
+                nightTargetArray[index].materi = value;
+                nightTargetArray[index].isSenam = false;
+              }
+            }
+          } else if (shift === 'malam') {
+            targetArray[index].isManualEdited = true;
+          }
+        }
       }
       return copy;
     });
@@ -1714,6 +1838,48 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                           <Download className="w-3.5 h-3.5" />
                           <span>Unduh File</span>
                         </a>
+
+                        {/* Tombol Sudah Dilakukan */}
+                        {ass.isCompleted ? (
+                          <div className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            <span>Sudah Dilakukan ✓</span>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const res = await fetch('/api/p5m/schedules/mark-completed', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    scheduleId: activeScheduleId,
+                                    day: ass.day,
+                                    shift: ass.shift,
+                                    zone: ass.location,
+                                    nik: currentNik,
+                                    name: currentName,
+                                    completed: true
+                                  })
+                                });
+                                if (res.ok) {
+                                  toast.success('✅ Materi P5M berhasil ditandai sudah dilakukan! (+60 EXP)');
+                                  triggerExpGain(60, 'Materi P5M Selesai Dibawakan!', 'Briefing Keselamatan Kerja');
+                                  window.dispatchEvent(new Event('gamification_updated'));
+                                  window.dispatchEvent(new CustomEvent('refresh-action-center'));
+                                  fetchScheduleForWeek();
+                                }
+                              } catch {
+                                toast.error('Gagal menandai materi P5M');
+                              }
+                            }}
+                            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>Sudah Dilakukan (+60 EXP)</span>
+                          </Button>
+                        )}
                       </div>
 
                       <span className="text-[11px] text-slate-400 italic text-center sm:text-right">
@@ -1885,20 +2051,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   const dayCfg = uiConfig[day] || { pagi: {}, malam: {} };
 
                   return (
-                    <div key={day} className="bg-slate-900/80 border border-slate-700/80 rounded-xl overflow-hidden shadow-sm">
+                    <div key={day} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
                       <div 
                         onClick={() => {
                           const next = new Set(openDays);
                           next.has(day) ? next.delete(day) : next.add(day);
                           setOpenDays(next);
                         }}
-                        className="flex items-center justify-between p-3 cursor-pointer hover:bg-slate-800/80 transition-colors select-none"
+                        className="flex items-center justify-between p-3 cursor-pointer hover:bg-slate-50 transition-colors select-none"
                       >
                         <div className="flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: DAY_COLORS[day] }} />
-                          <span className="font-bold text-xs text-slate-200">{day}</span>
+                          <span className="font-bold text-xs text-slate-800">{day}</span>
                           <span className={`text-[9px] font-mono uppercase px-1.5 py-0.2 rounded border ${
-                            isG ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                            isG ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'
                           }`}>
                             {isG ? 'Gabungan' : 'Split'}
                           </span>
@@ -1907,7 +2073,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       </div>
 
                       {isOpen && (
-                        <div className="p-3 border-t border-slate-700/60 bg-slate-950/40 space-y-3 text-xs">
+                        <div className="p-3 border-t border-slate-200 bg-slate-50/50 space-y-3 text-xs">
                           {/* Day Shift Slots */}
                           <div>
                             <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold block mb-1.5">
@@ -1918,10 +2084,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 slots={dayCfg.pagi?.gabungan || []} 
                                 allowedSections={DIVISI_OPTIONS}
                                 onChange={(newSlots) => {
-                                  setUiConfig(prev => ({
-                                    ...prev,
-                                    [day]: { ...prev[day], pagi: { ...prev[day].pagi, gabungan: newSlots } }
-                                  }));
+                                  setUiConfig(prev => {
+                                    const curDay = prev[day] || {};
+                                    const isManual = curDay.isManualNight;
+                                    return {
+                                      ...prev,
+                                      [day]: {
+                                        ...curDay,
+                                        pagi: { ...curDay.pagi, gabungan: newSlots },
+                                        malam: (!isManual && day !== 'Minggu')
+                                          ? { ...curDay.malam, gabungan: JSON.parse(JSON.stringify(newSlots)) }
+                                          : curDay.malam
+                                      }
+                                    };
+                                  });
                                 }}
                               />
                             ) : (
@@ -1932,10 +2108,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                     slots={dayCfg.pagi?.preparasi || []} 
                                     allowedSections={PREPARATION_GROUP_OPTIONS}
                                     onChange={(newSlots) => {
-                                      setUiConfig(prev => ({
-                                        ...prev,
-                                        [day]: { ...prev[day], pagi: { ...prev[day].pagi, preparasi: newSlots } }
-                                      }));
+                                      setUiConfig(prev => {
+                                        const curDay = prev[day] || {};
+                                        const isManual = curDay.isManualNight;
+                                        return {
+                                          ...prev,
+                                          [day]: {
+                                            ...curDay,
+                                            pagi: { ...curDay.pagi, preparasi: newSlots },
+                                            malam: (!isManual && day !== 'Minggu')
+                                              ? { ...curDay.malam, preparasi: JSON.parse(JSON.stringify(newSlots)) }
+                                              : curDay.malam
+                                          }
+                                        };
+                                      });
                                     }}
                                   />
                                 </div>
@@ -1945,10 +2131,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                     slots={dayCfg.pagi?.laboratorium || []} 
                                     allowedSections={LABORATORY_GROUP_OPTIONS}
                                     onChange={(newSlots) => {
-                                      setUiConfig(prev => ({
-                                        ...prev,
-                                        [day]: { ...prev[day], pagi: { ...prev[day].pagi, laboratorium: newSlots } }
-                                      }));
+                                      setUiConfig(prev => {
+                                        const curDay = prev[day] || {};
+                                        const isManual = curDay.isManualNight;
+                                        return {
+                                          ...prev,
+                                          [day]: {
+                                            ...curDay,
+                                            pagi: { ...curDay.pagi, laboratorium: newSlots },
+                                            malam: (!isManual && day !== 'Minggu')
+                                              ? { ...curDay.malam, laboratorium: JSON.parse(JSON.stringify(newSlots)) }
+                                              : curDay.malam
+                                          }
+                                        };
+                                      });
                                     }}
                                   />
                                 </div>
@@ -1959,9 +2155,42 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                           {/* Night Shift Slots (except Sunday) */}
                           {day !== 'Minggu' && (
                             <div>
-                              <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400 font-bold block mb-1.5">
-                                🌙 Night Shift (Malam)
-                              </span>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400 font-bold">
+                                  🌙 Night Shift (Malam)
+                                </span>
+                                {dayCfg.isManualNight ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 font-bold" title="Slot malam telah dikustom manual">
+                                      ✏️ Kustom Manual
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setUiConfig(prev => {
+                                          const curDay = prev[day] || {};
+                                          return {
+                                            ...prev,
+                                            [day]: {
+                                              ...curDay,
+                                              isManualNight: false,
+                                              malam: JSON.parse(JSON.stringify(curDay.pagi || {}))
+                                            }
+                                          };
+                                        });
+                                        toast.info(`Slot malam ${day} disinkronkan kembali mengikuti shift pagi`);
+                                      }}
+                                      className="text-[9px] text-blue-600 hover:text-blue-800 underline font-semibold flex items-center gap-0.5"
+                                    >
+                                      <RotateCcw className="w-2.5 h-2.5" /> Sinkron Pagi
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold flex items-center gap-1" title="Konfigurasi slot malam otomatis mengikuti slot shift pagi">
+                                    🔗 Otomatis sama dgn Pagi
+                                  </span>
+                                )}
+                              </div>
                               {isG ? (
                                 <SlotListEditor 
                                   slots={dayCfg.malam?.gabungan || []} 
@@ -1969,7 +2198,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                   onChange={(newSlots) => {
                                     setUiConfig(prev => ({
                                       ...prev,
-                                      [day]: { ...prev[day], malam: { ...prev[day].malam, gabungan: newSlots } }
+                                      [day]: {
+                                        ...prev[day],
+                                        isManualNight: true,
+                                        malam: { ...prev[day]?.malam, gabungan: newSlots }
+                                      }
                                     }));
                                   }}
                                 />
@@ -1983,7 +2216,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                       onChange={(newSlots) => {
                                         setUiConfig(prev => ({
                                           ...prev,
-                                          [day]: { ...prev[day], malam: { ...prev[day].malam, preparasi: newSlots } }
+                                          [day]: {
+                                            ...prev[day],
+                                            isManualNight: true,
+                                            malam: { ...prev[day]?.malam, preparasi: newSlots }
+                                          }
                                         }));
                                       }}
                                     />
@@ -1996,7 +2233,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                       onChange={(newSlots) => {
                                         setUiConfig(prev => ({
                                           ...prev,
-                                          [day]: { ...prev[day], malam: { ...prev[day].malam, laboratorium: newSlots } }
+                                          [day]: {
+                                            ...prev[day],
+                                            isManualNight: true,
+                                            malam: { ...prev[day]?.malam, laboratorium: newSlots }
+                                          }
                                         }));
                                       }}
                                     />
@@ -3672,17 +3913,17 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         const hasValidUrl = Boolean(previewImage.url && previewImage.url.trim() && previewImage.url !== '#' && previewImage.url !== 'undefined');
 
         return (
-          <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
-            <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-5xl h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
+            <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-5xl h-[88vh] flex flex-col shadow-2xl overflow-hidden">
               {/* Header */}
-              <div className="bg-slate-900 border-b border-slate-800 p-3 sm:p-4 flex items-center justify-between gap-3 shrink-0">
+              <div className="bg-slate-50 border-b border-slate-200 p-3 sm:p-4 flex items-center justify-between gap-3 shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-xs ${
                     info.isExcel 
-                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       : info.isPdf 
-                      ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30'
-                      : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                      ? 'bg-orange-50 text-orange-700 border border-orange-200'
+                      : 'bg-blue-50 text-blue-700 border border-blue-200'
                   }`}>
                     {info.isExcel ? (
                       <FileSpreadsheet className="w-5 h-5" />
@@ -3693,10 +3934,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     )}
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-bold text-sm sm:text-base text-white truncate">
+                    <h3 className="font-bold text-sm sm:text-base text-slate-800 truncate">
                       {previewImage.title}
                     </h3>
-                    <p className="text-[11px] text-slate-400 font-mono truncate">
+                    <p className="text-[11px] text-slate-500 font-mono truncate">
                       {info.isExcel 
                         ? '📊 Dokumen Spreadsheet Excel (.xlsx / .xls)' 
                         : info.isPdf 
@@ -3710,7 +3951,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   {hasValidUrl && info.isPdf && (
                     <button
                       onClick={() => setPdfViewerMode(prev => prev === 'drive' ? 'stream' : 'drive')}
-                      className="px-2.5 py-1.5 bg-indigo-900/60 hover:bg-indigo-800/80 text-indigo-200 rounded-xl text-xs flex items-center gap-1.5 border border-indigo-700/60 font-semibold transition-colors"
+                      className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs flex items-center gap-1.5 border border-indigo-200 font-semibold transition-colors"
                       title="Ganti Mode Viewer (Server Stream / Google Drive)"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
@@ -3724,7 +3965,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       href={info.viewUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 font-semibold transition-colors cursor-pointer"
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs flex items-center gap-1.5 border border-slate-200 font-semibold transition-colors cursor-pointer"
                       title="Buka Stream di Tab Baru"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -3736,7 +3977,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       href={info.driveViewUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs flex items-center gap-1.5 border border-slate-200 transition-colors cursor-pointer"
                       title="Buka Dokumen Asli di Google Drive"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -3746,7 +3987,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   {hasValidUrl && (
                     <a
                       href={info.downloadUrl}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs flex items-center gap-1.5 font-bold shadow-md shadow-emerald-950 transition-colors cursor-pointer"
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs flex items-center gap-1.5 font-bold shadow-xs transition-colors cursor-pointer"
                       title="Unduh File"
                     >
                       <Download className="w-3.5 h-3.5" />
@@ -3755,7 +3996,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   )}
                   <button 
                     onClick={() => setPreviewImage(null)} 
-                    className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 flex items-center justify-center transition-colors font-bold cursor-pointer"
+                    className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-500 flex items-center justify-center transition-colors font-bold cursor-pointer border border-slate-200"
                     title="Tutup Pratinjau"
                   >
                     <X className="w-4 h-4" />
@@ -3764,7 +4005,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               </div>
 
               {/* Viewer Body */}
-              <div className="flex-1 bg-slate-950 relative min-h-0 w-full flex flex-col items-center justify-center p-2">
+              <div className="flex-1 bg-slate-100 relative min-h-0 w-full flex flex-col items-center justify-center p-2">
                 {hasValidUrl ? (
                   info.isExcel ? (
                     <ExcelViewer 
@@ -3776,7 +4017,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     <iframe 
                       src={pdfViewerMode === 'drive' ? (info.drivePreviewUrl || info.embedUrl) : info.streamUrl} 
                       title={previewImage.title}
-                      className="w-full h-full rounded-2xl border border-slate-800 shadow-inner bg-slate-900"
+                      className="w-full h-full rounded-2xl border border-slate-200 shadow-inner bg-white"
                       allow="autoplay; encrypted-media; fullscreen"
                     />
                   ) : (
@@ -3795,17 +4036,17 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   )
                 ) : (
                   <div className="text-center p-8 max-w-md space-y-3">
-                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-700 border border-amber-200 flex items-center justify-center mx-auto">
                       <FileText className="w-8 h-8" />
                     </div>
-                    <h4 className="text-sm font-bold text-white">Dokumen Belum Dilampirkan</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
+                    <h4 className="text-sm font-bold text-slate-800">Dokumen Belum Dilampirkan</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed">
                       Belum ada tautan PDF, Excel, atau Flyer Google Drive untuk materi <b>"{previewImage.title}"</b>. Silakan perbarui materi pada menu <b>Bank Materi</b> atau hubungi tim QA.
                     </p>
                     <div className="pt-2">
                       <Button
                         onClick={() => setPreviewImage(null)}
-                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-4 rounded-xl shadow-md"
+                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs h-8 px-4 rounded-xl shadow-xs"
                       >
                         Tutup
                       </Button>
@@ -3815,7 +4056,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               </div>
 
               {/* Footer */}
-              <div className="bg-slate-900 border-t border-slate-800 px-4 py-2.5 flex items-center justify-between text-xs text-slate-400 shrink-0">
+              <div className="bg-slate-50 border-t border-slate-200 px-4 py-2.5 flex items-center justify-between text-xs text-slate-600 shrink-0">
                 <span className="font-mono text-[11px]">
                   {hasValidUrl 
                     ? (info.isExcel
@@ -3825,7 +4066,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </span>
                 <Button
                   onClick={() => setPreviewImage(null)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs h-7 px-3 rounded-lg"
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs h-7 px-3 rounded-lg"
                 >
                   Tutup
                 </Button>
@@ -3876,7 +4117,28 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
   const [mKatFilter, setMKatFilter] = useState('All');
   const [isCustomText, setIsCustomText] = useState(false);
 
+  // ESC key listener to cancel/close manual edit modals immediately
+  useEffect(() => {
+    if (!selectNameOpen && !selectMateriOpen && !isCustomText) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectNameOpen(false);
+        setSelectMateriOpen(false);
+        setIsCustomText(false);
+        setNameSearch('');
+        setMSearch('');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [selectNameOpen, selectMateriOpen, isCustomText]);
+
   const isSpecial = slot.isSenam || slot.isLogbook || slot.materi?.toLowerCase().includes('senam') || slot.materi?.toLowerCase().includes('logbook');
+
+  // Senam slot detection (Pagi atau Malam)
+  const isSenamSlot = Boolean(slot.isSenam || slot.kategori === 'Senam' || (slot.materi || '').toLowerCase().includes('senam'));
 
   // Candidate grouping for this specific day & shift
   const { eligibleCandidates, otherCandidates } = useMemo(() => {
@@ -3897,29 +4159,166 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       }
     });
 
+    // Khusus slot Senam, prioritaskan personil yang belum pernah senam (0x) paling atas
+    if (isSenamSlot) {
+      el.sort((a, b) => (a.senamCount || 0) - (b.senamCount || 0));
+    }
+
     return { eligibleCandidates: el, otherCandidates: ot };
-  }, [karyawanPool, day, shift, nameSearch]);
+  }, [karyawanPool, day, shift, nameSearch, isSenamSlot]);
+
+  const isGabungan = zone === 'gabungan' || HARI_GABUNGAN.has(day);
+
+  // Cari data karyawan presenter jika ada
+  const matchedPerson = useMemo(() => {
+    if (!slot.nik && !slot.nama) return null;
+    return karyawanPool.find(k => (slot.nik && k.nik === slot.nik) || (slot.nama && k.nama === slot.nama));
+  }, [karyawanPool, slot.nik, slot.nama]);
+
+  const personDivisi = useMemo(() => {
+    const raw = (
+      matchedPerson?.divisi || 
+      matchedPerson?.departemen || 
+      (slot.divisi && slot.divisi !== 'All' ? slot.divisi : (zone === 'prep' ? 'Preparation' : zone === 'lab' ? 'Laboratory' : 'All'))
+    ).toLowerCase();
+    return raw;
+  }, [matchedPerson, slot.divisi, zone]);
+
+  // Tab filter kategori yang relevan untuk sesi & section ini (mencegah tab cross-division)
+  const availableTabs = useMemo(() => {
+    if (isGabungan) {
+      return [
+        { key: 'All', label: 'Semua' },
+        { key: 'General', label: 'Teknis General' },
+        { key: 'Non-Teknis', label: 'Non-Teknis' },
+        { key: 'SOP / IK', label: 'SOP & IK' }
+      ];
+    }
+    if (personDivisi.includes('lab')) {
+      return [
+        { key: 'All', label: 'Semua' },
+        { key: 'Laboratory', label: 'Teknis Lab' },
+        { key: 'General', label: 'Teknis General' },
+        { key: 'Non-Teknis', label: 'Non-Teknis' },
+        { key: 'SOP / IK', label: 'SOP & IK' }
+      ];
+    }
+    if (personDivisi.includes('prep')) {
+      return [
+        { key: 'All', label: 'Semua' },
+        { key: 'Preparation', label: 'Teknis Prep' },
+        { key: 'General', label: 'Teknis General' },
+        { key: 'Non-Teknis', label: 'Non-Teknis' },
+        { key: 'SOP / IK', label: 'SOP & IK' }
+      ];
+    }
+    if (personDivisi.includes('maint')) {
+      return [
+        { key: 'All', label: 'Semua' },
+        { key: 'Maintenance', label: 'Teknis Maint' },
+        { key: 'General', label: 'Teknis General' },
+        { key: 'Non-Teknis', label: 'Non-Teknis' },
+        { key: 'SOP / IK', label: 'SOP & IK' }
+      ];
+    }
+    if (personDivisi.includes('ic') || personDivisi.includes('inventory')) {
+      return [
+        { key: 'All', label: 'Semua' },
+        { key: 'IC', label: 'Teknis IC' },
+        { key: 'General', label: 'Teknis General' },
+        { key: 'Non-Teknis', label: 'Non-Teknis' },
+        { key: 'SOP / IK', label: 'SOP & IK' }
+      ];
+    }
+    return [
+      { key: 'All', label: 'Semua' },
+      { key: 'General', label: 'General' },
+      { key: 'Non-Teknis', label: 'Non-Teknis' },
+      { key: 'SOP / IK', label: 'SOP & IK' }
+    ];
+  }, [isGabungan, personDivisi]);
 
   // Filtered materi list
   const filteredMateriList = useMemo(() => {
     return materiList.filter(m => {
-      const matchSearch = !mSearch || m.judul?.toLowerCase().includes(mSearch.toLowerCase());
+      const judul = m.judul || '';
+      const matchSearch = !mSearch || judul.toLowerCase().includes(mSearch.toLowerCase());
       if (!matchSearch) return false;
+
+      // 1. ATURAN HARI GABUNGAN:
+      // "ketika materi teknis dipilih di briefing gabungan maka akan otomatis yang terpilih harus teknis general"
+      if (isGabungan) {
+        if (m.kategori === 'Senam') {
+          if (mKatFilter !== 'All' && mKatFilter !== 'Senam') return false;
+          return true;
+        }
+        if (m.kategori === 'Non-Teknis') {
+          if (mKatFilter !== 'All' && mKatFilter !== 'Non-Teknis') return false;
+          return true;
+        }
+
+        // Untuk materi Teknis / SOP: HANYA izinkan General universal
+        const isGeneral = (m.subKategori === 'General' || !m.subKategori) && (m.divisi === 'All' || !m.divisi || m.divisi === 'General');
+        if (!isGeneral) return false;
+
+        // Blokir topik spesifik section agar tidak bocor ke briefing gabungan
+        if (isTopicForbiddenForSection(judul, 'lab') || isTopicForbiddenForSection(judul, 'prep')) return false;
+
+        if (mKatFilter === 'Non-Teknis') return false;
+        if (mKatFilter === 'Senam') return false;
+        if (mKatFilter === 'SOP / IK') {
+          const j = judul.toLowerCase();
+          return /\b(sop|ik)\b|instruksi kerja/i.test(j) || j.startsWith('sop') || j.startsWith('ik ');
+        }
+        return true;
+      }
+
+      // 2. ATURAN SESI SPLIT:
+      // "jangan biarkan juga ada pemilihan materi yang cross division contoh personil lab mendapatkan materi pengelasan yang khusus maintenance atau mendapatkan JSA inventory control dimana itu khusus section inventory"
+      if (isTopicForbiddenForSection(judul, personDivisi)) return false;
+
+      // Filter sub-kategori/divisi materi agar tidak cross-division
+      const sub = (m.subKategori || '').toLowerCase();
+      const mDiv = (m.divisi || '').toLowerCase();
+
+      if (personDivisi.includes('lab')) {
+        if (sub === 'preparation' || sub === 'maintenance' || sub === 'ic' ||
+            mDiv === 'preparation' || mDiv === 'maintenance' || mDiv === 'ic') {
+          return false;
+        }
+      } else if (personDivisi.includes('prep')) {
+        if (sub === 'laboratory' || sub === 'maintenance' || sub === 'ic' ||
+            mDiv === 'laboratory' || mDiv === 'maintenance' || mDiv === 'ic') {
+          return false;
+        }
+      } else if (personDivisi.includes('maint')) {
+        if (sub === 'laboratory' || sub === 'preparation' || sub === 'ic' ||
+            mDiv === 'laboratory' || mDiv === 'preparation' || mDiv === 'ic') {
+          return false;
+        }
+      } else if (personDivisi.includes('ic') || personDivisi.includes('inventory')) {
+        if (sub === 'laboratory' || sub === 'preparation' || sub === 'maintenance' ||
+            mDiv === 'laboratory' || mDiv === 'preparation' || mDiv === 'maintenance') {
+          return false;
+        }
+      }
 
       if (mKatFilter === 'All') return true;
       if (mKatFilter === 'SOP / IK') {
-        const j = (m.judul || '').toLowerCase();
+        const j = judul.toLowerCase();
         return /\b(sop|ik)\b|instruksi kerja/i.test(j) || j.startsWith('sop') || j.startsWith('ik ') || j.includes('sop') || j.includes('ik -');
       }
       if (mKatFilter === 'Senam') return m.kategori === 'Senam';
       if (mKatFilter === 'Non-Teknis') return m.kategori === 'Non-Teknis';
       if (mKatFilter === 'General') return m.subKategori === 'General';
-      if (mKatFilter === 'Preparation') return m.subKategori === 'Preparation' || m.divisi === 'Preparation' || (m.judul || '').toLowerCase().includes('prep');
-      if (mKatFilter === 'Laboratory') return m.subKategori === 'Laboratory' || m.divisi === 'Laboratory' || (m.judul || '').toLowerCase().includes('lab');
+      if (mKatFilter === 'Preparation') return m.subKategori === 'Preparation' || m.divisi === 'Preparation';
+      if (mKatFilter === 'Laboratory') return m.subKategori === 'Laboratory' || m.divisi === 'Laboratory';
+      if (mKatFilter === 'Maintenance') return m.subKategori === 'Maintenance' || m.divisi === 'Maintenance';
+      if (mKatFilter === 'IC') return m.subKategori === 'IC' || m.divisi === 'IC';
 
       return m.kategori === mKatFilter || m.subKategori === mKatFilter;
     });
-  }, [materiList, mSearch, mKatFilter]);
+  }, [materiList, mSearch, mKatFilter, isGabungan, personDivisi]);
 
   const isEmptySDM = !slot.nama || slot.nama.includes('KOSONG');
 
@@ -3948,10 +4347,13 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       {/* Backdrop for click outside */}
       {(selectNameOpen || selectMateriOpen) && (
         <div 
-          className="fixed inset-0 z-40 bg-transparent cursor-default" 
-          onClick={() => {
+          className="fixed inset-0 z-40 bg-slate-900/10 backdrop-blur-[0.5px] cursor-pointer" 
+          onClick={(e) => {
+            e.stopPropagation();
             setSelectNameOpen(false);
             setSelectMateriOpen(false);
+            setNameSearch('');
+            setMSearch('');
           }} 
         />
       )}
@@ -3973,18 +4375,43 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
             </button>
 
             {selectNameOpen && (
-              <div className={`absolute z-50 ${popupPlacementClass} w-64 bg-slate-900 border border-slate-700 text-white rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 duration-100`}>
+              <div className={`absolute z-50 ${popupPlacementClass} w-64 bg-white border border-slate-200 text-slate-800 rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 duration-100`}>
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+                  <div className="flex items-center gap-1 font-bold text-[11px] text-slate-800">
+                    <Users className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Pilih Personil</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectNameOpen(false);
+                      setNameSearch('');
+                    }}
+                    className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors flex items-center gap-0.5 cursor-pointer"
+                    title="Batal / Tutup (Esc)"
+                  >
+                    <X className="w-3 h-3" />
+                    <span>Batal (Esc)</span>
+                  </button>
+                </div>
+
                 <input
                   type="text"
-                  placeholder="Cari personil / NIK..."
+                  placeholder="Cari personil / NIK... (Esc utk batal)"
                   value={nameSearch}
                   onChange={e => setNameSearch(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white outline-none focus:border-amber-500 mb-1"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-[11px] text-slate-800 outline-none focus:border-amber-500 mb-1"
                   autoFocus
                 />
 
-                <div className="text-[10px] font-bold font-mono text-emerald-400 px-1 py-0.5 border-b border-slate-800 flex items-center justify-between">
-                  <span>Shift Sesuai ({eligibleCandidates.length})</span>
+                <div className="text-[10px] font-bold font-mono text-emerald-700 px-1 py-0.5 border-b border-slate-100 flex items-center justify-between">
+                  <span>{isSenamSlot ? `Kandidat Senam ${shift === 'malam' ? 'Malam' : 'Pagi'}` : 'Shift Sesuai'} ({eligibleCandidates.length})</span>
+                  {isSenamSlot && (
+                    <span className="text-[9px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded font-bold">
+                      Prioritas 0×
+                    </span>
+                  )}
                 </div>
                 {eligibleCandidates.map(c => (
                   <button
@@ -3995,18 +4422,31 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                       setSelectNameOpen(false);
                       setNameSearch('');
                     }}
-                    className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] hover:bg-slate-800 flex items-center justify-between transition-colors ${
-                      slot.nik === c.nik ? 'bg-amber-500/20 text-amber-300 font-bold' : 'text-slate-200'
+                    className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] hover:bg-slate-100 flex items-center justify-between transition-colors ${
+                      slot.nik === c.nik ? 'bg-amber-100 text-amber-900 font-bold' : 'text-slate-700'
                     }`}
                   >
-                    <span className="font-semibold truncate pr-2">{c.nama}</span>
-                    <span className="text-[9px] text-slate-400 font-mono flex-shrink-0">{c.kelas || ''} ({c.pt})</span>
+                    <div className="flex flex-col min-w-0 pr-2">
+                      <span className="font-semibold truncate">{c.nama}</span>
+                      <span className="text-[9px] text-slate-500 font-mono">{c.kelas || ''} • {c.divisi || ''}</span>
+                    </div>
+                    {isSenamSlot ? (
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                        (c.senamCount || 0) === 0
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-amber-100 text-amber-800 border border-amber-300'
+                      }`}>
+                        {(c.senamCount || 0) === 0 ? '0× (Belum)' : `${c.senamCount}×`}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-slate-500 font-mono flex-shrink-0">{c.kelas || ''} ({c.pt})</span>
+                    )}
                   </button>
                 ))}
 
                 {otherCandidates.length > 0 && (
                   <>
-                    <div className="text-[10px] font-bold font-mono text-slate-500 px-1 pt-1.5 border-t border-slate-800">
+                    <div className="text-[10px] font-bold font-mono text-slate-500 px-1 pt-1.5 border-t border-slate-200">
                       Personil Shift Lain / Off ({otherCandidates.length})
                     </div>
                     {otherCandidates.slice(0, 15).map(c => (
@@ -4018,10 +4458,10 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                           setSelectNameOpen(false);
                           setNameSearch('');
                         }}
-                        className="w-full text-left px-2 py-1 rounded text-[10px] text-slate-400 hover:bg-slate-800 flex items-center justify-between"
+                        className="w-full text-left px-2 py-1 rounded text-[10px] text-slate-600 hover:bg-slate-100 flex items-center justify-between"
                       >
                         <span className="truncate pr-2">{c.nama}</span>
-                        <span className="text-[9px] font-mono text-slate-500 flex-shrink-0">({c.jadwal?.[day] || 'Off'})</span>
+                        <span className="text-[9px] font-mono text-slate-400 flex-shrink-0">({c.jadwal?.[day] || 'Off'})</span>
                       </button>
                     ))}
                   </>
@@ -4038,7 +4478,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
               {slot.nama || '— Tidak Ada SDM —'}
             </span>
             {isDouble && (
-              <span className="px-1.5 py-0.2 bg-slate-900 text-white font-black text-[9px] rounded font-mono shadow-sm shrink-0 mt-0.5">
+              <span className="px-1.5 py-0.2 bg-teal-50 text-teal-800 border border-teal-200 font-black text-[9px] rounded font-mono shadow-xs shrink-0 mt-0.5">
                 2×
               </span>
             )}
@@ -4056,14 +4496,14 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                   type="text"
                   value={slot.materi || ''}
                   onChange={e => onSelectMateri(e.target.value)}
-                  placeholder="Ketik judul materi..."
+                  placeholder="Ketik judul materi... (Esc utk batal)"
                   className="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] text-slate-800 outline-none focus:border-amber-500 font-medium"
                 />
                 <button
                   type="button"
                   onClick={() => setIsCustomText(false)}
                   className="px-1 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[9px] font-mono border"
-                  title="Pilih dari database materi"
+                  title="Pilih dari database materi (Esc)"
                 >
                   List
                 </button>
@@ -4083,55 +4523,77 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                 </button>
 
                 {selectMateriOpen && (
-                  <div className={`absolute z-50 ${popupPlacementClass} w-72 sm:w-80 bg-slate-900 border border-slate-700 text-white rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 sm:max-h-72 overflow-y-auto animate-in fade-in zoom-in-95 duration-100`}>
+                  <div className={`absolute z-50 ${popupPlacementClass} w-72 sm:w-80 bg-white border border-slate-200 text-slate-800 rounded-xl shadow-2xl p-2 space-y-1.5 max-h-64 sm:max-h-72 overflow-y-auto animate-in fade-in zoom-in-95 duration-100`}>
+                    <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+                      <div className="flex items-center gap-1 font-bold text-[11px] text-slate-800">
+                        <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Pilih Materi Briefing</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectMateriOpen(false);
+                          setMSearch('');
+                        }}
+                        className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors flex items-center gap-0.5 cursor-pointer"
+                        title="Batal / Tutup (Esc)"
+                      >
+                        <X className="w-3 h-3" />
+                        <span>Batal (Esc)</span>
+                      </button>
+                    </div>
+
                     <input
                       type="text"
-                      placeholder="Cari materi briefing..."
+                      placeholder="Cari materi briefing... (Esc utk batal)"
                       value={mSearch}
                       onChange={e => setMSearch(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white outline-none focus:border-amber-500"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-[11px] text-slate-800 outline-none focus:border-amber-500"
                       autoFocus
                     />
 
                     {/* Filter Category Tabs */}
                     <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[9px] font-mono scrollbar-none">
-                      {['All', 'SOP / IK', 'Preparation', 'Laboratory', 'General', 'Non-Teknis'].map(kat => (
+                      {availableTabs.map(tab => (
                         <button
-                          key={kat}
+                          key={tab.key}
                           type="button"
-                          onClick={() => setMKatFilter(kat)}
+                          onClick={() => setMKatFilter(tab.key)}
                           className={`px-1.5 py-0.5 rounded-md flex-shrink-0 transition-colors ${
-                            mKatFilter === kat
+                            mKatFilter === tab.key
                               ? 'bg-amber-500 text-slate-950 font-bold'
-                              : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                              : 'bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200'
                           }`}
                         >
-                          {kat === 'All' ? 'Semua' : kat}
+                          {tab.label}
                         </button>
                       ))}
                     </div>
 
                     {/* Standard Routine Actions */}
-                    <div className="grid grid-cols-2 gap-1 border-b border-slate-800 pb-1.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onSelectMateri({ judul: 'Senam Bersama', kategori: 'Senam', subKategori: 'General' });
-                          setSelectMateriOpen(false);
-                        }}
-                        className="px-2 py-1 bg-purple-950/80 hover:bg-purple-900 border border-purple-700/60 text-purple-300 rounded-lg text-[10px] font-bold text-center"
-                      >
-                        🤸 Senam Bersama
-                      </button>
+                    <div className={`grid ${shift === 'pagi' ? 'grid-cols-2' : 'grid-cols-1'} gap-1 border-b border-slate-100 pb-1.5`}>
+                      {shift === 'pagi' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSelectMateri({ judul: 'Senam Bersama', kategori: 'Senam', subKategori: 'General' });
+                            setSelectMateriOpen(false);
+                          }}
+                          className="px-2 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 rounded-lg text-[10px] font-bold text-center"
+                        >
+                          🤸 Senam Bersama
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
                           onSelectMateri({ judul: 'Logbook & Evaluasi', kategori: 'Teknis', subKategori: 'General' });
                           setSelectMateriOpen(false);
                         }}
-                        className="px-2 py-1 bg-blue-950/80 hover:bg-blue-900 border border-blue-700/60 text-blue-300 rounded-lg text-[10px] font-bold text-center"
+                        className="px-2 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-lg text-[10px] font-bold text-center"
                       >
-                        📋 Logbook
+                        📋 Logbook & Evaluasi
                       </button>
                     </div>
 
@@ -4151,26 +4613,26 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                               setSelectMateriOpen(false);
                               setMSearch('');
                             }}
-                            className={`w-full text-left p-1.5 rounded-lg hover:bg-slate-800 flex flex-col gap-0.5 transition-colors border ${
+                            className={`w-full text-left p-1.5 rounded-lg hover:bg-slate-50 flex flex-col gap-0.5 transition-colors border ${
                               slot.materi === item.judul
-                                ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
-                                : 'border-transparent text-slate-200'
+                                ? 'bg-amber-50 border-amber-300 text-amber-900'
+                                : 'border-transparent text-slate-700'
                             }`}
                           >
                             <span className="font-semibold text-[11px] leading-snug line-clamp-2">
                               {item.judul}
                             </span>
-                            <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-400">
-                              <span className={`px-1 rounded ${item.kategori === 'Teknis' ? 'bg-emerald-950 text-emerald-400' : 'bg-indigo-950 text-indigo-400'}`}>
+                            <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-500">
+                              <span className={`px-1 rounded ${item.kategori === 'Teknis' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'}`}>
                                 {item.kategori}
                               </span>
                               {item.subKategori && item.subKategori !== 'General' && (
-                                <span className="text-slate-400">
+                                <span className="text-slate-500">
                                   • {item.subKategori}
                                 </span>
                               )}
                               {item.fileUrl && (
-                                <span className="text-amber-400 flex items-center gap-0.5 ml-auto">
+                                <span className="text-amber-600 flex items-center gap-0.5 ml-auto font-semibold">
                                   <ImageIcon className="w-2.5 h-2.5" /> Flyer
                                 </span>
                               )}
@@ -4244,6 +4706,16 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
               {slot.isLogbook ? 'Logbook' : 'Senam'}
             </span>
           )}
+          {shift === 'malam' && slot.isManualEdited && (
+            <span className="text-[8px] font-bold font-mono px-1.5 py-0.2 bg-amber-100 text-amber-800 border border-amber-300 rounded" title="Materi diedit manual di shift malam">
+              Manual Malam
+            </span>
+          )}
+          {shift === 'malam' && !slot.isManualEdited && slot.materi && (
+            <span className="text-[8px] font-medium font-mono px-1 py-0.2 text-emerald-700 bg-emerald-50 rounded border border-emerald-200" title="Materi otomatis disinkronkan dari shift pagi">
+              🔗 Sync Pagi
+            </span>
+          )}
         </div>
 
         {slot.fileUrl && (() => {
@@ -4295,14 +4767,14 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
   return (
     <div className="space-y-2">
       {slots.map((sl, i) => (
-        <div key={i} className="bg-slate-900 border border-slate-700/80 rounded-xl p-2.5 space-y-2 shadow-sm">
+        <div key={i} className="bg-white border border-slate-200 rounded-xl p-2.5 space-y-2 shadow-xs">
           {/* Top Bar: Slot label, Category selector & Delete */}
-          <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-1.5">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
             <div className="flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-mono flex items-center justify-center font-bold">
+              <span className="w-5 h-5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-mono flex items-center justify-center font-bold">
                 {i + 1}
               </span>
-              <span className="text-[11px] font-bold text-slate-300">Slot {i + 1}</span>
+              <span className="text-[11px] font-bold text-slate-800">Slot {i + 1}</span>
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -4311,12 +4783,12 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
                 onChange={e => handleUpdate(i, 'kategori', e.target.value)}
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border outline-none cursor-pointer transition-colors ${
                   sl.kategori === 'Senam'
-                    ? 'bg-amber-950/80 text-amber-300 border-amber-700/60'
+                    ? 'bg-amber-50 text-amber-800 border-amber-200'
                     : sl.kategori === 'SOP / IK'
-                    ? 'bg-blue-950/80 text-blue-300 border-blue-700/60'
+                    ? 'bg-blue-50 text-blue-800 border-blue-200'
                     : sl.kategori === 'Non-Teknis'
-                    ? 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60'
-                    : 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
+                    ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                    : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                 }`}
                 title="Pilih Kategori Materi"
               >
@@ -4330,7 +4802,7 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
                 <button
                   type="button"
                   onClick={() => handleRemove(i)}
-                  className="text-slate-500 hover:text-rose-400 p-1 rounded-md hover:bg-slate-800 transition-colors"
+                  className="text-slate-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-colors"
                   title="Hapus slot ini"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -4342,13 +4814,13 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
           {/* Bottom Grid: Section & Level Selector */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[9px] uppercase font-mono font-bold text-slate-400 block mb-1">
+              <label className="text-[9px] uppercase font-mono font-bold text-slate-500 block mb-1">
                 Section
               </label>
               <select
                 value={sl.divisi || 'All'}
                 onChange={e => handleUpdate(i, 'divisi', e.target.value)}
-                className="w-full bg-slate-800 text-amber-300 border border-slate-700 rounded-lg px-2 py-1.5 outline-none text-[11px] font-semibold truncate hover:border-slate-600 focus:border-amber-500"
+                className="w-full bg-slate-50 text-slate-800 border border-slate-300 rounded-lg px-2 py-1.5 outline-none text-[11px] font-semibold truncate hover:border-slate-400 focus:border-amber-500"
                 title="Pilih Target Section"
               >
                 {sectionOptions.map(o => (
@@ -4358,13 +4830,13 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
             </div>
 
             <div>
-              <label className="text-[9px] uppercase font-mono font-bold text-slate-400 block mb-1">
+              <label className="text-[9px] uppercase font-mono font-bold text-slate-500 block mb-1">
                 Level Jabatan
               </label>
               <select
                 value={sl.kelas || 'All'}
                 onChange={e => handleUpdate(i, 'kelas', e.target.value)}
-                className="w-full bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-2 py-1.5 outline-none text-[11px] font-medium truncate hover:border-slate-600 focus:border-amber-500"
+                className="w-full bg-slate-50 text-slate-800 border border-slate-300 rounded-lg px-2 py-1.5 outline-none text-[11px] font-medium truncate hover:border-slate-400 focus:border-amber-500"
                 title="Pilih Target Level Jabatan"
               >
                 {KELAS_OPTIONS.map(o => (
@@ -4379,7 +4851,7 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
       <button
         type="button"
         onClick={handleAdd}
-        className="w-full text-center text-[11px] text-amber-400 hover:text-amber-300 py-1.5 border border-dashed border-slate-700 rounded-xl hover:bg-slate-900 transition-colors flex items-center justify-center gap-1.5 font-bold"
+        className="w-full text-center text-[11px] text-amber-700 hover:text-amber-800 py-1.5 border border-dashed border-amber-300 rounded-xl bg-amber-50/50 hover:bg-amber-100/60 transition-colors flex items-center justify-center gap-1.5 font-bold"
       >
         <Plus className="w-3.5 h-3.5" /> Tambah Slot
       </button>

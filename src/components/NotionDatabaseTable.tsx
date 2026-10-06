@@ -58,12 +58,13 @@ import { Button } from './ui';
 import { toast } from 'sonner';
 import { uploadPhotoToDrive } from '../sheets-api';
 import { ImageModal } from './image-modal';
-import { parseTasklist, toggleTasklistItem } from './notion/tasklist-utils';
+import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, NOTION_COLORS, TasklistProgress } from './notion/tasklist-utils';
 import { NotionTasklistView } from './notion/NotionTasklistView';
 import { NotionDropdownCell } from './notion/NotionDropdownCell';
 import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
+import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
 import {
   normalizeCadence,
   isPeriodicCadence,
@@ -71,6 +72,7 @@ import {
   getDefaultActiveSubPeriod,
   getNextSubPeriod,
   getNextDefaultTargetDate,
+  getNextPeriodSchedule,
   resetAllTasklistItems,
   detectRowSubPeriod,
   getTopicSubPeriods,
@@ -630,6 +632,7 @@ export function NotionDatabaseTable({
     colName: string;
     currentPeriod: string;
     nextPeriod: string;
+    nextStartDate: string;
     nextTargetDate: string;
     resetKeterangan: string;
   }
@@ -669,6 +672,40 @@ export function NotionDatabaseTable({
   const [selectedRow, setSelectedRow] = useState<TableRowData | null>(null);
   const [selectedRowIndices, setSelectedRowIndices] = useState<Set<number>>(new Set());
   const [modalTab, setModalTab] = useState<'details' | 'comments'>('details');
+
+  // Notion Aesthetic Theme Mode (Default to Notion Clean Light per Management Request)
+  const [themeMode, setThemeMode] = useState<'notion-light' | 'dark-studio'>('notion-light');
+  const isNotionLight = themeMode === 'notion-light';
+
+  // Notion Collapsible Groups State
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const toggleGroup = (grp: string) => {
+    setCollapsedGroups(prev => ({ ...prev, [grp]: !prev[grp] }));
+  };
+
+  // Helper to categorize rows into Notion Database Groups (e.g. 'Non Routine Lainnya', 'PTK GTS')
+  const getRowGroup = useCallback((row: TableRowData): string => {
+    const gVal = 
+      getRowVal(row, 'group') ||
+      getRowVal(row, 'Group') ||
+      getRowVal(row, 'kategori') ||
+      getRowVal(row, 'Kategori') ||
+      getRowVal(row, 'category') ||
+      getRowVal(row, 'Category') ||
+      getRowVal(row, 'cadence') ||
+      getRowVal(row, 'Cadence') ||
+      getRowVal(row, 'subseksi') ||
+      getRowVal(row, 'bagian');
+
+    if (gVal && gVal !== '-' && gVal.trim() !== '') return gVal.trim();
+
+    const titleVal = (getRowVal(row, 'Jenis kegiatan') || getRowVal(row, 'task') || getRowVal(row, 'judul') || '').toUpperCase();
+    if (titleVal.includes('PTK GTS') || titleVal.includes('PENGAJUAN PTK')) {
+      return 'PTK GTS';
+    }
+
+    return title || section || 'Non Routine Lainnya';
+  }, [title, section]);
 
   // Clear or prune selection if rows change
   useEffect(() => {
@@ -763,6 +800,7 @@ export function NotionDatabaseTable({
   // Column templates definition
   const POPULAR_COLUMN_TEMPLATES = [
     { name: 'Status', icon: '🏷️', defaultValue: 'Open', desc: 'Dropdown status progress tugas' },
+    { name: 'Completed Time', icon: '✓', defaultValue: '-', desc: 'Tanggal atau waktu penyelesaian tugas' },
     { name: 'Priority', icon: '⚡', defaultValue: 'Normal', desc: 'Tingkat urgensi kegiatan' },
     { name: 'PIC', icon: '👤', defaultValue: '', desc: 'Personil penanggung jawab' },
     { name: 'Activity (routine/non routine)', icon: '🔄', defaultValue: 'Routine', desc: 'Klasifikasi aktivitas rutin/non-rutin' },
@@ -774,49 +812,80 @@ export function NotionDatabaseTable({
     { name: 'Estimasi Biaya', icon: '💰', defaultValue: '-', desc: 'Anggaran atau estimasi biaya (opsional)' },
   ];
 
-  // Helper to establish logical Notion canonical order for database columns
+  // Helper to establish logical Notion canonical order for database columns:
+  // number -> jenis kegiatan -> keterangan -> Created Time -> Completed Time -> Status -> PIC -> Priority -> Aktivitas
   const normalizeAndOrderHeaders = useCallback((inputHeaders: string[]): string[] => {
-    if (!inputHeaders || inputHeaders.length === 0) {
+    // 1. Remove redundant 'Progress' / 'progres' and 'Target Selesai' / 'target' column
+    const filtered = (inputHeaders || []).filter(h => {
+      const l = h.toLowerCase().trim();
+      if (l.includes('progress') || l.includes('progres') || l.includes('capaian')) return false;
+      if (l.includes('target') || l.includes('deadline') || l.includes('jatuh tempo')) return false;
+      return true;
+    }).map(h => {
+      const l = h.toLowerCase().trim();
+      if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai')) {
+        return 'Tanggal Selesai';
+      }
+      return h;
+    });
+
+    if (filtered.length === 0) {
       return [
-        'number',
+        'Number',
         'Jenis kegiatan',
         'Keterangan',
-        'PIC',
+        'Created Time',
+        'Tanggal Selesai',
         'Status',
+        'PIC',
         'Priority',
-        'Activity (routine/non routine)',
-        'period',
-        'Created Time'
+        'Aktivitas'
       ];
     }
 
     // Ensure 'number' exists
-    const hasNumber = inputHeaders.some(h => {
+    const hasNumber = filtered.some(h => {
       const l = h.toLowerCase().trim();
       return l === 'number' || l === 'no' || l === 'no.' || l === '#';
     });
 
-    const headersWithNumber = hasNumber ? inputHeaders : ['number', ...inputHeaders];
+    const headersWithNumber = hasNumber ? filtered : ['Number', ...filtered];
 
-    // Priority ordering weight for clean Notion standard layout
+    // Ensure 'Tanggal Selesai' exists
+    const hasCompleted = headersWithNumber.some(h => {
+      const l = h.toLowerCase().trim();
+      return l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai');
+    });
+
+    const headersWithMeta = hasCompleted ? headersWithNumber : [...headersWithNumber, 'Tanggal Selesai'];
+
+    // Priority ordering weight:
+    // 0: Number
+    // 1: Jenis Kegiatan
+    // 2: Keterangan
+    // 3: Created Time
+    // 4: Tanggal Selesai
+    // 5: Status
+    // 6: PIC
+    // 7: Priority
+    // 8: Aktivitas
     const getColOrder = (colName: string): number => {
       const l = colName.toLowerCase().trim();
       if (l === 'number' || l === 'no' || l === 'no.' || l === '#') return 0;
       if (l.includes('jenis kegiatan') || l === 'task' || l === 'judul' || l === 'name' || l === 'nama') return 1;
-      if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('rincian')) return 2;
-      if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 3;
-      if (l.includes('status')) return 4;
-      if (l.includes('priority') || l.includes('prioritas')) return 5;
-      if (l.includes('activity') || l.includes('aktivitas')) return 6;
-      if (l.includes('target') || l.includes('deadline') || l.includes('jatuh tempo')) return 7;
-      if (l.includes('aktual') || l.includes('selesai') || l.includes('actual')) return 8;
+      if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('rincian') || l.includes('notes')) return 2;
+      if (l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat')) return 3;
+      if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) return 4;
+      if (l.includes('status')) return 5;
+      if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 6;
+      if (l.includes('priority') || l.includes('prioritas')) return 7;
+      if (l.includes('activity') || l.includes('aktivitas')) return 8;
       if (l.includes('period') || l.includes('periode')) return 9;
       if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 10;
-      if (l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat')) return 90;
-      return 20; // other custom columns placed between standard meta and timestamp
+      return 20; // other custom columns
     };
 
-    return [...headersWithNumber].sort((a, b) => getColOrder(a) - getColOrder(b));
+    return [...headersWithMeta].sort((a, b) => getColOrder(a) - getColOrder(b));
   }, []);
 
   // Dynamic Table Headers State (Allows Adding, Deleting, and Reordering Columns)
@@ -830,7 +899,14 @@ export function NotionDatabaseTable({
     }
   }, [headers, normalizeAndOrderHeaders]);
 
-  const displayHeaders = tableHeaders;
+  // Ensure Progress and Target Selesai columns are never rendered in displayHeaders
+  const displayHeaders = useMemo(() => {
+    return tableHeaders.filter(h => {
+      const l = h.toLowerCase().trim();
+      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
+             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo');
+    });
+  }, [tableHeaders]);
 
   const [showAddColumnPopover, setShowAddColumnPopover] = useState(false);
   const [customColumnName, setCustomColumnName] = useState('');
@@ -912,54 +988,57 @@ export function NotionDatabaseTable({
     if (row[colName] !== undefined && row[colName] !== '') return row[colName];
 
     const targetLower = colName.toLowerCase().trim();
+    const cleanTarget = targetLower.replace(/^[^a-z0-9]+/i, '').trim();
     let fallbackVal: string | undefined = undefined;
 
     for (const key of Object.keys(row)) {
       const val = row[key];
       const keyLower = key.toLowerCase().trim();
+      const cleanKey = keyLower.replace(/^[^a-z0-9]+/i, '').trim();
 
-      if (keyLower === targetLower) {
+      if (keyLower === targetLower || (cleanKey && cleanKey === cleanTarget)) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
 
-      if (targetLower === 'number' && (keyLower === 'no' || keyLower === 'no.' || keyLower === '#' || keyLower === 'index')) {
+      if (targetLower === 'number' && (keyLower === 'no' || keyLower === 'no.' || keyLower === '#' || keyLower === 'index' || cleanKey === 'no' || cleanKey === 'number')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if ((targetLower === 'jenis kegiatan' || targetLower === 'judul') && (keyLower.includes('jenis kegiatan') || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
+      if ((targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'name' || targetLower === 'title') && 
+          (cleanKey.includes('jenis kegiatan') || cleanKey === 'task' || cleanKey === 'judul' || cleanKey === 'name' || cleanKey === 'nama' || cleanKey === 'kegiatan' || cleanKey === 'title' || cleanKey === 'materi')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'keterangan' && (keyLower.includes('keterangan') || keyLower.includes('catatan') || keyLower.includes('deskripsi') || keyLower.includes('content') || keyLower.includes('rincian'))) {
+      if (targetLower === 'keterangan' && (cleanKey.includes('keterangan') || cleanKey.includes('catatan') || cleanKey.includes('deskripsi') || cleanKey.includes('content') || cleanKey.includes('rincian'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'pic' && (keyLower === 'pic' || keyLower.includes('assignee') || keyLower.includes('pj') || keyLower === 'personil')) {
+      if (targetLower === 'pic' && (cleanKey === 'pic' || cleanKey.includes('assignee') || cleanKey.includes('pj') || cleanKey === 'personil')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'priority' && (keyLower.includes('prioritas') || keyLower.includes('priority'))) {
+      if (targetLower === 'priority' && (cleanKey.includes('prioritas') || cleanKey.includes('priority'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'status' && keyLower.includes('status')) {
+      if (targetLower === 'status' && cleanKey.includes('status')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'created time' && (keyLower.includes('created') || keyLower.includes('tanggal dibuat') || keyLower.includes('waktu dibuat') || keyLower === 'dibuat')) {
+      if (targetLower === 'created time' && (cleanKey.includes('created') || cleanKey.includes('tanggal dibuat') || cleanKey.includes('waktu dibuat') || cleanKey === 'dibuat')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'kategori' && (keyLower.includes('kategori') || keyLower.includes('category') || keyLower === 'dept')) {
+      if (targetLower === 'kategori' && (cleanKey.includes('kategori') || cleanKey.includes('category') || cleanKey === 'dept')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'activity (routine/non routine)' && (keyLower.includes('activity') || keyLower.includes('aktivitas'))) {
+      if (targetLower === 'activity (routine/non routine)' && (cleanKey.includes('activity') || cleanKey.includes('aktivitas'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'period' && (keyLower === 'period' || keyLower === 'periode')) {
+      if (targetLower === 'period' && (cleanKey === 'period' || cleanKey === 'periode')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
@@ -988,7 +1067,7 @@ export function NotionDatabaseTable({
     fetchComments();
   }, [fetchComments]);
 
-  // Comment counts per topic title (aggregates sub-periods to base topic as well)
+  // Comment counts per topic title and topic ID (aggregates sub-periods to base topic as well)
   const topicCommentCounts = useMemo(() => {
     const map: Record<string, number> = {};
     allComments.forEach((c) => {
@@ -1000,6 +1079,10 @@ export function NotionDatabaseTable({
           map[baseKey] = (map[baseKey] || 0) + 1;
         }
       }
+      if (c.topicId) {
+        const idKey = c.topicId.toLowerCase().trim();
+        map[idKey] = (map[idKey] || 0) + 1;
+      }
     });
     return map;
   }, [allComments]);
@@ -1007,7 +1090,16 @@ export function NotionDatabaseTable({
   // Base topic title from row
   const baseTopicTitle = useMemo(() => {
     if (!selectedRow) return '';
-    return (getRowVal(selectedRow, 'Jenis kegiatan') || '').trim();
+    const cand = getRowVal(selectedRow, 'Jenis kegiatan')
+      || getRowVal(selectedRow, 'Judul')
+      || getRowVal(selectedRow, 'Name')
+      || getRowVal(selectedRow, 'Title')
+      || getRowVal(selectedRow, 'Kegiatan')
+      || getRowVal(selectedRow, 'Materi')
+      || (selectedRow['Name'] || selectedRow['= Name'] || selectedRow['name'] || selectedRow['title'] || selectedRow['Judul'])
+      || Object.values(selectedRow).find(v => typeof v === 'string' && v.trim().length > 0 && !v.startsWith('http') && v !== '-')
+      || '';
+    return (cand || '').trim();
   }, [selectedRow, getRowVal]);
 
   // Current normalized cadence (prioritize page title itself, e.g. "Weekly Manajemen Mutu" -> Weekly)
@@ -1298,22 +1390,29 @@ export function NotionDatabaseTable({
   }, [baseTopicTitle, activeSubPeriod]);
 
   const activeTopicComments = useMemo(() => {
-    if (!selectedTopicTitle) return [];
-    const q = selectedTopicTitle.toLowerCase().trim();
-    return allComments.filter((c) => (c.topicTitle || '').toLowerCase().trim() === q);
-  }, [allComments, selectedTopicTitle]);
+    if (!baseTopicTitle && !selectedRow?.id) return [];
+    const baseQ = baseTopicTitle.toLowerCase().trim();
+    const selQ = selectedTopicTitle ? selectedTopicTitle.toLowerCase().trim() : '';
+    const rowId = (selectedRow?.id || '').toLowerCase().trim();
+
+    return allComments.filter((c) => {
+      const cTopic = (c.topicTitle || '').toLowerCase().trim();
+      const cTopicId = (c.topicId || '').toLowerCase().trim();
+      if (rowId && cTopicId && cTopicId === rowId) return true;
+      if (selQ && cTopic === selQ) return true;
+      if (baseQ && cTopic === baseQ) return true;
+      return false;
+    });
+  }, [allComments, selectedTopicTitle, baseTopicTitle, selectedRow]);
 
   // Notion-style sorted comment stream (chronological oldest to newest)
   const sortedTopicComments = useMemo(() => {
-    if (!selectedTopicTitle) return [];
-    const q = selectedTopicTitle.toLowerCase().trim();
-    const list = allComments.filter((c) => (c.topicTitle || '').toLowerCase().trim() === q);
-    return [...list].sort((a, b) => {
+    return [...activeTopicComments].sort((a, b) => {
       const tA = new Date(a.createdAt || 0).getTime();
       const tB = new Date(b.createdAt || 0).getTime();
       return tA - tB;
     });
-  }, [allComments, selectedTopicTitle]);
+  }, [activeTopicComments]);
 
   // Ekstrak semua lampiran file dari komentar topik untuk Galeri Media
   const galleryItems = useMemo(() => {
@@ -1441,6 +1540,67 @@ export function NotionDatabaseTable({
             }
           }
           targetRow[statusKey] = autoStatus;
+
+          // Auto-sync Tanggal Selesai column
+          let compKey = 'Tanggal Selesai';
+          for (const k of Object.keys(targetRow)) {
+            const kl = k.toLowerCase().trim();
+            if (kl.includes('tanggal selesai') || kl.includes('completed') || kl.includes('aktual selesai') || kl === 'selesai' || kl.includes('waktu selesai')) {
+              compKey = k;
+              break;
+            }
+          }
+
+          if (autoStatus === 'Closed') {
+            const dates = taskProg.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
+            targetRow[compKey] = dates.length > 0 ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10);
+          } else if (autoStatus === 'Open' || autoStatus === 'On Progress') {
+            targetRow[compKey] = '-';
+          }
+        }
+      }
+
+      // Auto-sync Tanggal Selesai when Status column is updated directly
+      if (colLower.includes('status')) {
+        const stUpper = (newValue || '').toUpperCase();
+        let compKey = 'Tanggal Selesai';
+        for (const k of Object.keys(targetRow)) {
+          const kl = k.toLowerCase().trim();
+          if (kl.includes('tanggal selesai') || kl.includes('completed') || kl.includes('aktual selesai') || kl === 'selesai' || kl.includes('waktu selesai')) {
+            compKey = k;
+            break;
+          }
+        }
+
+        if (stUpper.includes('CLOSE') || stUpper.includes('SELESAI') || stUpper.includes('DONE')) {
+          const curVal = targetRow[compKey];
+          if (!curVal || curVal === '-') {
+            targetRow[compKey] = new Date().toISOString().slice(0, 10);
+          }
+
+          // Trigger routine task rollover for routine tasks when closed directly
+          const rowAct = getRowVal(targetRow, 'Activity (routine/non routine)') || getRowVal(targetRow, 'period') || getRowVal(targetRow, 'Frekuensi') || '';
+          const rowCad = normalizeCadence(rowAct) || currentCadence;
+          if (rowCad && rowCad !== 'Non-Routine') {
+            const curPeriod = activeSubPeriod || detectRowSubPeriod(targetRow, rowCad) || getDefaultActiveSubPeriod(rowCad);
+            const targetVal = getRowVal(targetRow, 'Target Selesai') || getRowVal(targetRow, 'Deadline') || getRowVal(targetRow, 'Created Time');
+            const schedule = getNextPeriodSchedule(rowCad, curPeriod, targetVal);
+            const curKeterangan = getRowVal(targetRow, 'Keterangan') || getRowVal(targetRow, 'Description') || '';
+            const resetDesc = resetAllTasklistItems(curKeterangan);
+
+            setRoutineCompletionModal({
+              row: targetRow,
+              rowIndex: targetRowIndex,
+              colName: 'Keterangan',
+              currentPeriod: curPeriod,
+              nextPeriod: schedule.nextPeriod,
+              nextStartDate: schedule.nextStartDate,
+              nextTargetDate: schedule.nextTargetDate,
+              resetKeterangan: resetDesc
+            });
+          }
+        } else if (stUpper.includes('OPEN') || stUpper.includes('PROGRESS')) {
+          targetRow[compKey] = '-';
         }
       }
 
@@ -1482,9 +1642,8 @@ export function NotionDatabaseTable({
       const rowCad = normalizeCadence(rowAct) || currentCadence;
       if (rowCad && rowCad !== 'Non-Routine') {
         const curPeriod = activeSubPeriod || detectRowSubPeriod(row, rowCad) || getDefaultActiveSubPeriod(rowCad);
-        const nextPeriod = getNextSubPeriod(curPeriod, rowCad);
         const targetVal = getRowVal(row, 'Target Selesai') || getRowVal(row, 'Deadline') || getRowVal(row, 'Created Time');
-        const nextTarget = getNextDefaultTargetDate(rowCad, targetVal);
+        const schedule = getNextPeriodSchedule(rowCad, curPeriod, targetVal);
         const resetDesc = resetAllTasklistItems(updatedVal);
 
         setRoutineCompletionModal({
@@ -1492,8 +1651,9 @@ export function NotionDatabaseTable({
           rowIndex: targetRowIndex,
           colName,
           currentPeriod: curPeriod,
-          nextPeriod,
-          nextTargetDate: nextTarget,
+          nextPeriod: schedule.nextPeriod,
+          nextStartDate: schedule.nextStartDate,
+          nextTargetDate: schedule.nextTargetDate,
           resetKeterangan: resetDesc
         });
       }
@@ -1503,7 +1663,7 @@ export function NotionDatabaseTable({
   // Handler saat user konfirmasi untuk membuat kembali task routine untuk periode selanjutnya
   const handleConfirmNextPeriod = async () => {
     if (!routineCompletionModal) return;
-    const { row, rowIndex, colName, nextPeriod, nextTargetDate, resetKeterangan } = routineCompletionModal;
+    const { row, rowIndex, colName, nextPeriod, nextStartDate, nextTargetDate, resetKeterangan } = routineCompletionModal;
     const baseTopic = (getRowVal(row, 'Jenis kegiatan') || '').trim();
 
     // 1. Tambah periode selanjutnya ke customPeriodsMap
@@ -1612,7 +1772,8 @@ export function NotionDatabaseTable({
               assignedByName: matched.assignedByName || currentAuthorName,
               priority: matched.priority || 'Normal',
               activityType: matched.activityType || currentCadence || 'Yearly',
-              taskDate: new Date().toISOString().split('T')[0],
+              taskDate: nextStartDate || nextTargetDate,
+              plannedDate: nextStartDate || nextTargetDate,
               targetDate: nextTargetDate,
               targetTime: matched.targetTime || '23:59',
               status: 'Open',
@@ -1651,7 +1812,7 @@ export function NotionDatabaseTable({
         setDirtyRowIndices(new Set());
         setShowSaveConfirmModal(false);
         onRowsChange?.(localRows);
-        toast.success('Perubahan tabel berhasil disimpan ke dokumen Buletin!');
+        toast.success('Perubahan tabel berhasil disimpan ke dokumen Labnote!');
       } else {
         toast.error('Gagal menyimpan perubahan ke server');
       }
@@ -1668,6 +1829,11 @@ export function NotionDatabaseTable({
     const now = new Date();
     const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
+    const inheritedCadence = currentCadence || normalizeCadence(title) || 'Monthly';
+    const inheritedPeriod = (inheritedCadence && inheritedCadence !== 'Non-Routine')
+      ? inheritedCadence
+      : 'Monthly';
+
     setRowFormData({
       number: nextNum,
       'Jenis kegiatan': '',
@@ -1678,8 +1844,8 @@ export function NotionDatabaseTable({
       Status: 'Open',
       'Created Time': createdStr,
       Kategori: section || 'Laboratorium',
-      'Activity (routine/non routine)': 'Routine',
-      period: 'Weekly'
+      'Activity (routine/non routine)': inheritedCadence,
+      period: inheritedPeriod
     });
     setEditingRowIndex(null);
     setShowRowModal(true);
@@ -1873,6 +2039,20 @@ export function NotionDatabaseTable({
 
     return result;
   }, [localRows, searchQuery, statusFilter, priorityFilter, sortColumn, sortDirection, getRowVal]);
+
+  // Grouped rows for Notion Database Sections (e.g. 'Non Routine Lainnya (22)', 'PTK GTS (2)')
+  const groupedRowsData = useMemo(() => {
+    const map = new Map<string, TableRowData[]>();
+    filteredRows.forEach(row => {
+      const grp = getRowGroup(row);
+      if (!map.has(grp)) map.set(grp, []);
+      map.get(grp)!.push(row);
+    });
+    return Array.from(map.entries()).map(([groupName, groupRows]) => ({
+      groupName,
+      groupRows
+    }));
+  }, [filteredRows, getRowGroup]);
 
   // Statistics calculation
   const stats = useMemo(() => {
@@ -2421,6 +2601,78 @@ export function NotionDatabaseTable({
     );
   };
 
+  // Helper to calculate duration for closed/completed tasks in Notion Table
+  const getRowDurationInfo = (row: TableRowData, taskProgress?: TasklistProgress) => {
+    const createdStr = getRowVal(row, 'Created Time') || getRowVal(row, 'Tanggal Dibuat') || getRowVal(row, 'Waktu Dibuat') || getRowVal(row, 'Created') || getRowVal(row, 'Tanggal') || '';
+    let completedStr = getRowVal(row, 'Tanggal Selesai') || getRowVal(row, 'Completed Time') || getRowVal(row, 'Aktual Selesai') || getRowVal(row, 'Waktu Selesai') || getRowVal(row, 'Selesai') || getRowVal(row, 'Completed') || '';
+
+    // If completedStr not in column, check if tasklist items have checkedDate
+    if ((!completedStr || completedStr === '-') && taskProgress?.items && taskProgress.items.length > 0) {
+      const dates = taskProgress.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
+      if (dates.length > 0) {
+        completedStr = dates[dates.length - 1];
+      }
+    }
+
+    const parseDateVal = (s: string): Date | null => {
+      if (!s || s === '-') return null;
+      const clean = s.trim();
+      const d = new Date(clean);
+      if (!isNaN(d.getTime())) return d;
+      // Handle DD/MM/YYYY or DD-MM-YYYY
+      const m = clean.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      if (m) {
+        return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+      }
+      return null;
+    };
+
+    const dStart = parseDateVal(createdStr);
+    const dEnd = parseDateVal(completedStr) || new Date();
+
+    if (dStart && dEnd) {
+      const diffMs = dEnd.getTime() - dStart.getTime();
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 0) {
+        if (diffHours > 1) {
+          return {
+            label: `Tuntas ${diffHours} jam`,
+            short: `${diffHours} jam`,
+            detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
+          };
+        }
+        return {
+          label: 'Selesai di hari yg sama',
+          short: '1 hari',
+          detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
+        };
+      }
+
+      const totalDays = diffDays + 1;
+      return {
+        label: `Tuntas dlm ${totalDays} hari`,
+        short: `${totalDays} hari`,
+        detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
+      };
+    }
+
+    if (completedStr) {
+      return {
+        label: `Selesai ${completedStr}`,
+        short: completedStr,
+        detail: `Waktu selesai: ${completedStr}`
+      };
+    }
+
+    return {
+      label: 'Tuntas (Closed)',
+      short: 'Tuntas',
+      detail: 'Tugas telah selesai'
+    };
+  };
+
   // Helper for Priority Badge
   const renderPriorityBadge = (pStr: string) => {
     const p = (pStr || '').toUpperCase().trim();
@@ -2476,30 +2728,47 @@ export function NotionDatabaseTable({
     return <span className="text-xs" style={{ color: 'var(--text-main, #cbd5e1)' }}>{pStr}</span>;
   };
 
+  // Helper for Notion Canonical Column Icons
+  const getNotionColumnIcon = (colHeader: string) => {
+    const colLower = colHeader.toLowerCase();
+    if (colLower === 'number' || colLower === 'no' || colLower === '#') return <span className="font-mono text-slate-400 font-bold mr-1">#</span>;
+    if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') return <span className="text-slate-400 mr-1 text-xs">≡</span>;
+    if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
+    if (colLower.includes('created') || colLower.includes('tanggal dibuat') || colLower.includes('waktu dibuat')) return <span className="text-slate-400 mr-1 text-xs">📅</span>;
+    if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai')) return <span className="text-emerald-500 mr-1 text-xs">✓</span>;
+    if (colLower.includes('status')) return <span className="text-slate-400 mr-1 text-xs">⭕</span>;
+    if (colLower.includes('pic') || colLower.includes('assignee')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
+    if (colLower.includes('priority') || colLower.includes('prioritas')) return <span className="text-slate-400 mr-1 text-xs">↓</span>;
+    if (colLower.includes('activity') || colLower.includes('aktivitas')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
+    return <span className="text-slate-400 mr-1 text-xs">≡</span>;
+  };
+
+  // Helper for PIC Avatar Badge
   // Helper for PIC Avatar Badge
   const renderPicBadge = (picStr: string) => {
-    if (!picStr || picStr === '-') return <span className="font-mono text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>;
+    if (!picStr || picStr === '-') return <span className="font-mono text-xs text-slate-400">-</span>;
     const initial = picStr.charAt(0).toUpperCase();
     return (
       <div 
-        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs font-medium"
-        style={{
-          backgroundColor: 'var(--input-bg, #1e293b)',
-          borderColor: 'var(--border-main, #334155)',
-          color: 'var(--text-main, #cbd5e1)'
-        }}
+        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs ${
+          isNotionLight
+            ? 'bg-slate-50 border-slate-300 text-slate-950 font-bold shadow-2xs'
+            : 'bg-[#1e293b] border-slate-700 text-slate-200 font-semibold'
+        }`}
       >
-        <span className="w-4 h-4 rounded-full bg-teal-800 text-teal-200 text-[10px] font-bold flex items-center justify-center">
+        <span className={`w-4 h-4 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 ${
+          isNotionLight ? 'bg-slate-200 text-slate-900' : 'bg-teal-800 text-teal-200'
+        }`}>
           {initial}
         </span>
-        <span className="truncate max-w-[110px]">{picStr}</span>
+        <span className="truncate max-w-[120px]">{picStr}</span>
       </div>
     );
   };
 
-  // Helper to format multiline notes
+  // Helper to format multiline notes with text color support
   const renderFormattedNotes = (text: string) => {
-    if (!text || text === '-' || text === '•') return <span className="font-mono text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>;
+    if (!text || text === '-' || text === '•') return <span className="font-mono text-xs text-slate-400">-</span>;
     // Normalize <br/>, <br>, <br /> to newlines
     const normalized = text.replace(/<br\s*\/?>/gi, '\n');
     const cleanText = normalized.trim();
@@ -2511,11 +2780,14 @@ export function NotionDatabaseTable({
         .filter((i) => i.length > 0);
 
       return (
-        <ul className="space-y-1.5 my-1">
+        <ul className="space-y-1 my-0.5">
           {items.map((item, idx) => (
-            <li key={idx} className="flex items-start gap-1.5 text-xs sm:text-sm leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>
-              <span className="text-teal-400 font-bold leading-none mt-1">•</span>
-              <span className="flex-1 whitespace-pre-wrap">{item}</span>
+            <li key={idx} className="flex items-start gap-1.5 text-xs sm:text-[13px] leading-relaxed">
+              <span className={`font-bold leading-none mt-1 shrink-0 ${isNotionLight ? 'text-slate-800' : 'text-slate-400'}`}>•</span>
+              <span 
+                className={`flex-1 whitespace-pre-wrap font-medium ${isNotionLight ? 'text-slate-950' : 'text-slate-100'}`} 
+                dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(item) }}
+              />
             </li>
           ))}
         </ul>
@@ -2526,14 +2798,17 @@ export function NotionDatabaseTable({
     const lines = cleanText.split('\n').map(l => l.trim()).filter(Boolean);
     if (lines.length > 1) {
       return (
-        <div className="space-y-1.5 my-1">
+        <div className="space-y-1 my-0.5">
           {lines.map((line, idx) => {
             const isBullet = line.startsWith('- ') || line.startsWith('* ');
             const content = isBullet ? line.substring(2) : line;
             return (
-              <div key={idx} className="flex items-start gap-1.5 text-xs sm:text-sm leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>
-                {isBullet && <span className="text-teal-400 font-bold leading-none mt-1">•</span>}
-                <span className="flex-1 whitespace-pre-wrap">{content}</span>
+              <div key={idx} className="flex items-start gap-1.5 text-xs sm:text-[13px] leading-relaxed">
+                {isBullet && <span className={`font-bold leading-none mt-1 shrink-0 ${isNotionLight ? 'text-slate-800' : 'text-slate-400'}`}>•</span>}
+                <span 
+                  className={`flex-1 whitespace-pre-wrap font-medium ${isNotionLight ? 'text-slate-950' : 'text-slate-100'}`} 
+                  dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(content) }}
+                />
               </div>
             );
           })}
@@ -2541,7 +2816,12 @@ export function NotionDatabaseTable({
       );
     }
 
-    return <p className="text-xs sm:text-sm leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-main, #cbd5e1)' }}>{cleanText}</p>;
+    return (
+      <p 
+        className={`text-xs sm:text-[13px] leading-relaxed whitespace-pre-line font-medium ${isNotionLight ? 'text-slate-950' : 'text-slate-100'}`} 
+        dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(cleanText) }}
+      />
+    );
   };
 
   // Export to CSV
@@ -2572,47 +2852,93 @@ export function NotionDatabaseTable({
 
   return (
     <div 
-      className="w-full rounded-2xl shadow-xl overflow-hidden my-4 border transition-colors"
-      style={{
-        backgroundColor: 'var(--card-bg, #181818)',
-        borderColor: 'var(--border-main, #334155)',
-        color: 'var(--text-main, #cbd5e1)'
-      }}
+      className={`w-full rounded-2xl overflow-hidden my-4 border transition-all ${
+        isNotionLight 
+          ? 'bg-white border-slate-200 text-slate-900 shadow-xs' 
+          : 'bg-[#181818] border-slate-700 text-slate-200 shadow-xl'
+      }`}
     >
+      {/* 1. NOTION BREADCRUMBS & TOP BAR (Matching Notion Screenshot) */}
+      <div 
+        className={`px-4 py-2.5 border-b flex items-center justify-between text-xs transition-colors select-none ${
+          isNotionLight 
+            ? 'bg-white border-slate-200/90 text-slate-800' 
+            : 'bg-[#1e1e1e] border-slate-800 text-slate-300'
+        }`}
+      >
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <span className="text-amber-500 font-bold">⚡</span>
+          <span className={`font-semibold ${isNotionLight ? 'text-slate-800' : 'text-slate-200'}`}>{pt || 'PT. TBP & GPS'}</span>
+          <span className="text-slate-400">/</span>
+          <span className="text-slate-500">🗄️</span>
+          <span className={`font-semibold ${isNotionLight ? 'text-slate-800' : 'text-slate-200'}`}>{section || 'ADMINISTRASI'}</span>
+          <span className="text-slate-400">/</span>
+          <span className={`font-bold ${isNotionLight ? 'text-slate-900' : 'text-white'}`}>{title || 'Non Routine'}</span>
+        </div>
+        <div className="flex items-center gap-2.5 text-[11px] text-slate-400 shrink-0">
+          <span className="hidden sm:inline">Edited today</span>
+          <div className="flex items-center -space-x-1.5 overflow-hidden">
+            <div className="inline-block h-5 w-5 rounded-full ring-2 ring-white bg-teal-600 text-white text-[9px] font-bold flex items-center justify-center">M</div>
+            <div className="inline-block h-5 w-5 rounded-full ring-2 ring-white bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center">A</div>
+            <div className="inline-block h-5 w-5 rounded-full ring-2 ring-white bg-slate-400 text-white text-[9px] font-bold flex items-center justify-center">+24</div>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => toast.info('Tautan dokumen tersalin ke clipboard')}
+            className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${
+              isNotionLight 
+                ? 'border-slate-300 bg-white hover:bg-slate-100 text-slate-700' 
+                : 'border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300'
+            }`}
+          >
+            Share
+          </button>
+        </div>
+      </div>
+
       {/* Top Header Bar */}
       <div 
-        className="p-4 border-b flex flex-wrap items-center justify-between gap-3"
-        style={{
-          backgroundColor: 'var(--card-bg, #202020)',
-          borderColor: 'var(--border-main, #2d2d2d)'
-        }}
+        className={`p-3.5 sm:p-4 border-b flex flex-wrap items-center justify-between gap-3 ${
+          isNotionLight ? 'bg-[#fafafa] border-slate-200' : 'bg-[#202020] border-[#2d2d2d]'
+        }`}
       >
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-teal-500/15 border border-teal-500/40 text-teal-400 shadow-sm">
+          <div className={`p-2 rounded-xl shadow-xs ${isNotionLight ? 'bg-slate-100 border border-slate-300 text-slate-800' : 'bg-teal-500/15 border border-teal-500/40 text-teal-400'}`}>
             <ClipboardList className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-bold text-sm md:text-base flex items-center gap-2" style={{ color: 'var(--text-main, #f8fafc)' }}>
+            <h3 className={`font-bold text-sm md:text-base flex items-center gap-2 ${isNotionLight ? 'text-slate-900' : 'text-slate-100'}`}>
               <span>{title || 'Database Table'}</span>
               <span 
-                className="text-[10px] px-2 py-0.5 rounded-full font-mono border"
-                style={{
-                  backgroundColor: 'var(--input-bg, #1e293b)',
-                  color: 'var(--text-muted, #94a3b8)',
-                  borderColor: 'var(--border-main, #334155)'
-                }}
+                className={`text-[10px] px-2 py-0.5 rounded-full font-mono border font-bold ${
+                  isNotionLight ? 'bg-slate-200 border-slate-300 text-slate-700' : 'bg-slate-800 border-slate-700 text-slate-300'
+                }`}
               >
                 {filteredRows.length} baris
               </span>
             </h3>
-            <p className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-              Urutan kolom sinkron Notion: Number • Jenis kegiatan • Keterangan • PIC • Priority • Status • Created Time • Kategori • Activity • Period
+            <p className={`text-[11px] ${isNotionLight ? 'text-slate-500 font-medium' : 'text-slate-400'}`}>
+              Urutan kolom sinkron Notion: Number • Jenis kegiatan • Keterangan • Progress • Status • Created Time • PIC • Prioritas
             </p>
           </div>
         </div>
 
         {/* View Switcher, Add Row Button, Zoom & Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Theme Switcher Toggle (Notion Clean vs Dark Studio) */}
+          <button
+            type="button"
+            onClick={() => setThemeMode(isNotionLight ? 'dark-studio' : 'notion-light')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs ${
+              isNotionLight
+                ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-800'
+                : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200'
+            }`}
+            title="Beralih tema tampilan (Notion Minimalis Putih vs Dark Studio)"
+          >
+            {isNotionLight ? <span>⚪ Notion Mode</span> : <span>⚫ Dark Mode</span>}
+          </button>
+
           {/* Direct Save Button in Header */}
           {dirtyRowIndices.size > 0 && (
             <button
@@ -2637,37 +2963,35 @@ export function NotionDatabaseTable({
           {/* Fit Page Mode Toggle */}
           <button
             onClick={() => setFitPageMode(!fitPageMode)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-xs"
-            style={{
-              backgroundColor: fitPageMode ? 'rgba(42, 157, 143, 0.2)' : 'var(--input-bg, #242424)',
-              borderColor: fitPageMode ? 'var(--primary, #2A9D8F)' : 'var(--border-main, #334155)',
-              color: fitPageMode ? 'var(--primary, #2A9D8F)' : 'var(--text-main, #cbd5e1)'
-            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-xs ${
+              fitPageMode
+                ? 'bg-teal-50 border-teal-500 text-teal-800'
+                : isNotionLight
+                ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                : 'bg-[#242424] border-slate-700 text-slate-300'
+            }`}
             title={fitPageMode ? "Matikan Fit Screen (Mode Scroll Lebar)" : "Aktifkan Fit Screen (Semua Kolom Muat 1 Layar Tanpa Horizontal Scroll)"}
           >
-            {fitPageMode ? <Minimize2 className="w-3.5 h-3.5 text-teal-400" /> : <Maximize2 className="w-3.5 h-3.5 opacity-70" />}
+            {fitPageMode ? <Minimize2 className="w-3.5 h-3.5 text-teal-600" /> : <Maximize2 className="w-3.5 h-3.5 opacity-70" />}
             <span className="hidden sm:inline">{fitPageMode ? "Fit Screen: ON" : "Fit Screen"}</span>
           </button>
 
           {/* Zoom Out / In Controls */}
           <div 
-            className="flex items-center p-0.5 rounded-xl border text-xs"
-            style={{
-              backgroundColor: 'var(--input-bg, #151515)',
-              borderColor: 'var(--border-main, #334155)'
-            }}
+            className={`flex items-center p-0.5 rounded-xl border text-xs ${
+              isNotionLight ? 'bg-white border-slate-300 text-slate-700' : 'bg-[#151515] border-slate-700 text-slate-300'
+            }`}
           >
             <button
               onClick={() => setZoomPercent((prev) => Math.max(70, prev - 10))}
               className="p-1 px-1.5 opacity-70 hover:opacity-100 rounded-lg transition-opacity cursor-pointer"
-              style={{ color: 'var(--text-main, #cbd5e1)' }}
               title="Zoom Out (Perkecil Tampilan)"
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
             <span 
               onClick={() => setZoomPercent(100)}
-              className="px-1.5 font-mono text-[11px] text-teal-400 font-bold min-w-[38px] text-center cursor-pointer hover:underline"
+              className="px-1.5 font-mono text-[11px] text-teal-600 dark:text-teal-400 font-bold min-w-[38px] text-center cursor-pointer hover:underline"
               title="Klik untuk Reset ke 100%"
             >
               {zoomPercent}%
@@ -2675,7 +2999,6 @@ export function NotionDatabaseTable({
             <button
               onClick={() => setZoomPercent((prev) => Math.min(130, prev + 10))}
               className="p-1 px-1.5 opacity-70 hover:opacity-100 rounded-lg transition-opacity cursor-pointer"
-              style={{ color: 'var(--text-main, #cbd5e1)' }}
               title="Zoom In (Perbesar Tampilan)"
             >
               <ZoomIn className="w-3.5 h-3.5" />
@@ -2683,20 +3006,21 @@ export function NotionDatabaseTable({
           </div>
 
           <div 
-            className="flex items-center p-1 rounded-xl border"
-            style={{
-              backgroundColor: 'var(--input-bg, #151515)',
-              borderColor: 'var(--border-main, #334155)'
-            }}
+            className={`flex items-center p-0.5 rounded-xl border transition-colors ${
+              isNotionLight ? 'bg-slate-100 border-slate-300' : 'bg-[#151515] border-[#334155]'
+            }`}
           >
             <button
               onClick={() => setViewMode('table')}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer"
-              style={{
-                backgroundColor: viewMode === 'table' ? 'var(--card-bg, #282828)' : 'transparent',
-                color: viewMode === 'table' ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
-                boxShadow: viewMode === 'table' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
-              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                viewMode === 'table'
+                  ? isNotionLight
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'bg-[#282828] text-teal-400 shadow-xs'
+                  : isNotionLight
+                  ? 'text-slate-500 hover:text-slate-800'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
               title="Table View"
             >
               <TableIcon className="w-3.5 h-3.5" />
@@ -2704,12 +3028,15 @@ export function NotionDatabaseTable({
             </button>
             <button
               onClick={() => setViewMode('board')}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer"
-              style={{
-                backgroundColor: viewMode === 'board' ? 'var(--card-bg, #282828)' : 'transparent',
-                color: viewMode === 'board' ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
-                boxShadow: viewMode === 'board' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
-              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                viewMode === 'board'
+                  ? isNotionLight
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'bg-[#282828] text-teal-400 shadow-xs'
+                  : isNotionLight
+                  ? 'text-slate-500 hover:text-slate-800'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
               title="Kanban Board View"
             >
               <Kanban className="w-3.5 h-3.5" />
@@ -2717,12 +3044,15 @@ export function NotionDatabaseTable({
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer"
-              style={{
-                backgroundColor: viewMode === 'list' ? 'var(--card-bg, #282828)' : 'transparent',
-                color: viewMode === 'list' ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
-                boxShadow: viewMode === 'list' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
-              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                viewMode === 'list'
+                  ? isNotionLight
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'bg-[#282828] text-teal-400 shadow-xs'
+                  : isNotionLight
+                  ? 'text-slate-500 hover:text-slate-800'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
               title="List / Card View"
             >
               <LayoutList className="w-3.5 h-3.5" />
@@ -2732,12 +3062,11 @@ export function NotionDatabaseTable({
 
           <button
             onClick={handleExportCsv}
-            className="p-1.5 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer hover:opacity-80"
-            style={{
-              backgroundColor: 'var(--input-bg, #282828)',
-              borderColor: 'var(--border-main, #334155)',
-              color: 'var(--text-main, #cbd5e1)'
-            }}
+            className={`p-1.5 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer ${
+              isNotionLight
+                ? 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
+                : 'bg-[#282828] hover:bg-[#333333] border-[#334155] text-slate-200'
+            }`}
             title="Download CSV"
           >
             <Download className="w-3.5 h-3.5" />
@@ -2748,31 +3077,28 @@ export function NotionDatabaseTable({
 
       {/* Filter & Search Bar */}
       <div 
-        className="p-3 border-b flex flex-wrap items-center justify-between gap-3 text-xs"
-        style={{
-          backgroundColor: 'var(--input-bg, #1e1e1e)',
-          borderColor: 'var(--border-main, #2d2d2d)'
-        }}
+        className={`p-3 border-b flex flex-wrap items-center justify-between gap-3 text-xs transition-colors ${
+          isNotionLight ? 'bg-white border-slate-200' : 'bg-[#1e1e1e] border-[#2d2d2d]'
+        }`}
       >
         {/* Search Input */}
         <div 
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl border w-full sm:w-72"
-          style={{
-            backgroundColor: 'var(--card-bg, #161616)',
-            borderColor: 'var(--border-main, #334155)'
-          }}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border w-full sm:w-72 transition-colors ${
+            isNotionLight ? 'bg-[#fbfbfa] border-slate-200 text-slate-800' : 'bg-[#161616] border-[#334155] text-slate-200'
+          }`}
         >
-          <Search className="w-3.5 h-3.5 opacity-60" style={{ color: 'var(--text-muted, #94a3b8)' }} />
+          <Search className="w-3.5 h-3.5 opacity-60 text-slate-400" />
           <input
             type="text"
             placeholder="Cari kegiatan, PIC, keterangan..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-transparent border-none outline-none text-xs w-full"
-            style={{ color: 'var(--text-main, #e2e8f0)' }}
+            className={`bg-transparent border-none outline-none text-xs w-full ${
+              isNotionLight ? 'text-slate-800 placeholder-slate-400' : 'text-slate-200 placeholder-slate-500'
+            }`}
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="opacity-60 hover:opacity-100" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+            <button onClick={() => setSearchQuery('')} className="opacity-60 hover:opacity-100 text-slate-400">
               <X className="w-3 h-3" />
             </button>
           )}
@@ -2786,7 +3112,11 @@ export function NotionDatabaseTable({
               onClick={handleToggleSelectAll}
               className={`px-3 py-1 rounded-lg font-semibold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 border cursor-pointer ${
                 isAllSelected
-                  ? 'bg-teal-600/20 text-teal-400 border-teal-500/40 shadow-xs'
+                  ? isNotionLight
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                    : 'bg-teal-600/20 text-teal-400 border-teal-500/40 shadow-xs'
+                  : isNotionLight
+                  ? 'bg-white hover:bg-slate-100 text-slate-600 border-slate-300'
                   : 'hover:bg-slate-800 text-slate-300 border-slate-700'
               }`}
               title={isAllSelected ? "Batalkan pilihan semua topik" : "Pilih semua topik di tabel ini"}
@@ -2794,7 +3124,9 @@ export function NotionDatabaseTable({
               <CheckSquare className="w-3.5 h-3.5" />
               <span>{isAllSelected ? 'Batal Pilih Semua' : 'Pilih Semua'}</span>
               {selectedRowIndices.size > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono bg-teal-500/30 text-teal-300">
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                  isNotionLight ? 'bg-slate-200 text-slate-800' : 'bg-teal-500/30 text-teal-300'
+                }`}>
                   {selectedRowIndices.size}
                 </span>
               )}
@@ -2805,10 +3137,10 @@ export function NotionDatabaseTable({
             <button
               type="button"
               onClick={handleDeleteSelectedRows}
-              className="px-3 py-1 rounded-lg font-bold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 border border-red-500/40 bg-red-600/20 hover:bg-red-600/30 text-red-300 cursor-pointer shadow-xs active:scale-95"
+              className="px-3 py-1 rounded-lg font-bold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 border border-red-500/40 bg-red-600/20 hover:bg-red-600/30 text-red-400 dark:text-red-300 cursor-pointer shadow-xs active:scale-95"
               title="Hapus semua topik yang dipilih"
             >
-              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              <Trash2 className="w-3.5 h-3.5 text-red-500" />
               <span>Hapus Terpilih ({selectedRowIndices.size})</span>
             </button>
           )}
@@ -2820,41 +3152,46 @@ export function NotionDatabaseTable({
             { key: 'OPEN', label: 'Open', count: stats.open },
             { key: 'CLOSE', label: 'Closed / Selesai', count: stats.closed },
             { key: 'CANCELED', label: 'Canceled', count: stats.canceled },
-          ].map((st) => (
-            <button
-              key={st.key}
-              onClick={() => setStatusFilter(st.key)}
-              className="px-3 py-1 rounded-lg font-semibold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 border cursor-pointer"
-              style={{
-                backgroundColor: statusFilter === st.key ? 'rgba(42, 157, 143, 0.2)' : 'var(--card-bg, #262626)',
-                borderColor: statusFilter === st.key ? 'var(--primary, #2A9D8F)' : 'var(--border-main, #334155)',
-                color: statusFilter === st.key ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)'
-              }}
-            >
-              <span>{st.label}</span>
-              {st.count !== undefined && st.count > 0 && (
-                <span 
-                  className="text-[10px] px-1.5 py-0.2 rounded-full font-mono"
-                  style={{
-                    backgroundColor: statusFilter === st.key ? 'rgba(42, 157, 143, 0.25)' : 'var(--input-bg, #1e293b)',
-                    color: statusFilter === st.key ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)'
-                  }}
-                >
-                  {st.count}
-                </span>
-              )}
-            </button>
-          ))}
+          ].map((st) => {
+            const isActive = statusFilter === st.key;
+            return (
+              <button
+                key={st.key}
+                onClick={() => setStatusFilter(st.key)}
+                className={`px-3 py-1 rounded-lg font-semibold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 border cursor-pointer ${
+                  isActive
+                    ? isNotionLight
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                      : 'bg-teal-500/20 text-teal-300 border-teal-500'
+                    : isNotionLight
+                    ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                    : 'bg-[#262626] hover:bg-[#333333] text-slate-400 border-slate-700'
+                }`}
+              >
+                <span>{st.label}</span>
+                {st.count !== undefined && st.count > 0 && (
+                  <span 
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                      isActive
+                        ? isNotionLight ? 'bg-slate-700 text-white' : 'bg-teal-500/30 text-teal-200'
+                        : isNotionLight ? 'bg-slate-100 text-slate-600' : 'bg-[#1e293b] text-slate-400'
+                    }`}
+                  >
+                    {st.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
 
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="px-2.5 py-1 rounded-lg border text-[11px] font-semibold outline-none cursor-pointer"
-            style={{
-              backgroundColor: 'var(--card-bg, #262626)',
-              borderColor: 'var(--border-main, #334155)',
-              color: 'var(--text-main, #cbd5e1)'
-            }}
+            className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold outline-none cursor-pointer transition-colors ${
+              isNotionLight
+                ? 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'
+                : 'bg-[#262626] border-[#334155] text-[#cbd5e1]'
+            }`}
           >
             <option value="ALL">Semua Prioritas</option>
             <option value="URGENT">🚨 Urgent / Critical</option>
@@ -2869,14 +3206,13 @@ export function NotionDatabaseTable({
             type="button"
             onClick={handleResetColumnOrder}
             title="Susun ulang kolom ke urutan standar Notion (No, Judul, Keterangan, PIC, Status, dll.)"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all hover:border-teal-500 hover:text-teal-400 cursor-pointer shrink-0"
-            style={{
-              backgroundColor: 'var(--card-bg, #262626)',
-              borderColor: 'var(--border-main, #334155)',
-              color: 'var(--text-muted, #94a3b8)'
-            }}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
+              isNotionLight
+                ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700 hover:border-slate-400'
+                : 'bg-[#262626] hover:bg-[#333333] border-[#334155] text-slate-400 hover:text-teal-400 hover:border-teal-500'
+            }`}
           >
-            <SlidersHorizontal className="w-3 h-3 text-teal-400" />
+            <SlidersHorizontal className="w-3 h-3 text-teal-600 dark:text-teal-400" />
             <span>Rapikan Kolom</span>
           </button>
         </div>
@@ -2896,12 +3232,11 @@ export function NotionDatabaseTable({
             {/* Table Header */}
             <thead>
               <tr 
-                className="border-b select-none"
-                style={{
-                  backgroundColor: 'var(--input-bg, #242424)',
-                  borderColor: 'var(--border-main, #303030)',
-                  color: 'var(--text-muted, #94a3b8)'
-                }}
+                className={`border-b select-none transition-colors ${
+                  isNotionLight
+                    ? 'bg-[#fbfbfa] border-slate-200 text-slate-600'
+                    : 'bg-[#242424] border-[#303030] text-slate-400'
+                }`}
               >
                 {/* Select All Checkbox Column */}
                 <th className={`text-center ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}>
@@ -2913,7 +3248,9 @@ export function NotionDatabaseTable({
                         if (el) el.indeterminate = isSomeSelected;
                       }}
                       onChange={handleToggleSelectAll}
-                      className="w-3.5 h-3.5 rounded text-teal-600 bg-slate-800 border-slate-600 focus:ring-teal-500 focus:ring-1 cursor-pointer accent-teal-600"
+                      className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 ${
+                        isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
+                      }`}
                       title={isAllSelected ? "Batalkan pilihan semua" : "Pilih semua topik"}
                     />
                   </div>
@@ -2921,7 +3258,8 @@ export function NotionDatabaseTable({
                 {displayHeaders.map((colHeader) => {
                   const isSorted = sortColumn === colHeader;
                   const isNum = colHeader.toLowerCase() === 'number' || colHeader.toLowerCase() === 'no';
-                  const isJudul = colHeader.toLowerCase().includes('jenis kegiatan') || colHeader.toLowerCase() === 'task' || colHeader.toLowerCase() === 'judul';
+                  const cleanHeader = colHeader.toLowerCase().replace(/^[^a-z0-9]+/i, '').trim();
+                  const isJudul = cleanHeader.includes('jenis kegiatan') || cleanHeader === 'task' || cleanHeader === 'judul' || cleanHeader === 'name' || cleanHeader === 'title' || cleanHeader === 'nama' || cleanHeader === 'materi';
                   const colLower = colHeader.toLowerCase();
                   const colIdx = displayHeaders.indexOf(colHeader);
 
@@ -2929,14 +3267,15 @@ export function NotionDatabaseTable({
                   let widthClass = 'whitespace-nowrap px-3 py-2.5';
                   if (fitPageMode) {
                     if (isNum) widthClass = 'w-[4%] text-center px-1 py-2';
-                    else if (isJudul) widthClass = 'w-[18%] px-2.5 py-2';
+                    else if (isJudul) widthClass = 'w-[19%] px-2.5 py-2';
                     else if (colLower.includes('keterangan') || colLower.includes('catatan')) widthClass = 'w-[23%] px-2.5 py-2';
-                    else if (colLower === 'pic' || colLower.includes('assignee')) widthClass = 'w-[11%] px-2 py-2';
-                    else if (colLower.includes('priority')) widthClass = 'w-[7%] px-1.5 py-2';
-                    else if (colLower.includes('status')) widthClass = 'w-[9%] px-1.5 py-2';
                     else if (colLower.includes('created')) widthClass = 'w-[9%] px-1.5 py-2';
+                    else if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai') widthClass = 'w-[9%] px-1.5 py-2';
+                    else if (colLower.includes('status')) widthClass = 'w-[9%] px-1.5 py-2';
+                    else if (colLower === 'pic' || colLower.includes('assignee')) widthClass = 'w-[10%] px-2 py-2';
+                    else if (colLower.includes('priority') || colLower.includes('prioritas')) widthClass = 'w-[7%] px-1.5 py-2';
+                    else if (colLower.includes('activity') || colLower.includes('aktivitas')) widthClass = 'w-[8%] px-1.5 py-2';
                     else if (colLower.includes('kategori')) widthClass = 'w-[6%] px-1.5 py-2';
-                    else if (colLower.includes('activity')) widthClass = 'w-[7%] px-1.5 py-2';
                     else if (colLower.includes('period')) widthClass = 'w-[5%] px-1.5 py-2';
                     else widthClass = 'w-[6%] px-1.5 py-2';
                   } else {
@@ -2957,9 +3296,14 @@ export function NotionDatabaseTable({
                           className="flex items-center gap-1 cursor-pointer flex-1 min-w-0"
                           title="Klik untuk mengurutkan kolom"
                         >
-                          <span className="truncate">{colHeader}</span>
+                          {getNotionColumnIcon(colHeader)}
+                          <span className={`truncate font-semibold ${isNotionLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                            {colLower.includes('tanggal selesai') || colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai')
+                              ? 'Tanggal Selesai'
+                              : colHeader}
+                          </span>
                           {isSorted && (
-                            sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400 shrink-0" /> : <ArrowDown className="w-3 h-3 text-teal-400 shrink-0" />
+                            sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" />
                           )}
                         </div>
 
@@ -3141,29 +3485,27 @@ export function NotionDatabaseTable({
                   )}
                 </th>
 
-                <th className={`text-center ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'}`} style={{ color: 'var(--text-muted, #94a3b8)' }}>Aksi</th>
+                <th className={`text-center ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${isNotionLight ? 'text-slate-500 font-semibold' : 'text-slate-400 font-bold'}`}>Aksi</th>
               </tr>
             </thead>
 
             {/* Table Body */}
             <tbody 
-              className="divide-y"
-              style={{
-                backgroundColor: 'var(--card-bg, #1c1c1c)',
-                borderColor: 'var(--border-main, #334155)'
-              }}
+              className={`divide-y transition-colors ${
+                isNotionLight ? 'bg-white divide-slate-100' : 'bg-[#1c1c1c] divide-[#334155]'
+              }`}
             >
               {filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={displayHeaders.length + 3} className="py-12 text-center text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>
                     {localRows.length === 0 ? (
                       <div className="flex flex-col items-center justify-center gap-3 py-6">
-                        <div className="w-12 h-12 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-400">
+                        <div className="w-12 h-12 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 dark:text-teal-400">
                           <Plus className="w-6 h-6" />
                         </div>
                         <div className="text-center">
-                          <p className="font-semibold text-sm" style={{ color: 'var(--text-main, #f8fafc)' }}>Belum Ada Topik / Baris Kegiatan</p>
-                          <p className="text-xs mt-1 max-w-sm mx-auto" style={{ color: 'var(--text-muted, #94a3b8)' }}>Semua topik dalam tabel ini kosong. Klik tombol di bawah untuk menambahkan topik baru ke tabel ini.</p>
+                          <p className={`font-semibold text-sm ${isNotionLight ? 'text-slate-800' : 'text-slate-100'}`}>Belum Ada Topik / Baris Kegiatan</p>
+                          <p className="text-xs mt-1 max-w-sm mx-auto text-slate-500">Semua topik dalam tabel ini kosong. Klik tombol di bawah untuk menambahkan topik baru ke tabel ini.</p>
                         </div>
                         <button
                           type="button"
@@ -3180,393 +3522,559 @@ export function NotionDatabaseTable({
                   </td>
                 </tr>
               ) : (
-                filteredRows.map((row, idx) => {
-                  const actualRowIndex = localRows.indexOf(row) !== -1 ? localRows.indexOf(row) : idx;
-                  const isDirty = dirtyRowIndices.has(actualRowIndex);
-                  const isSelected = selectedRowIndices.has(actualRowIndex);
-                  const topicTitle = getRowVal(row, 'Jenis kegiatan') || `Baris ${idx + 1}`;
-                  const topicKey = topicTitle.toLowerCase().trim();
-                  const cCount = topicCommentCounts[topicKey] || 0;
+                groupedRowsData.map(({ groupName, groupRows }) => {
+                  const isCollapsed = collapsedGroups[groupName];
 
                   return (
-                    <tr
-                      key={idx}
-                      className={`hover:opacity-95 transition-all group ${
-                        isSelected 
-                          ? 'bg-teal-500/10 hover:bg-teal-500/15' 
-                          : isDirty 
-                            ? 'bg-amber-500/5 hover:bg-amber-500/10' 
-                            : ''
-                      }`}
-                      style={{ 
-                        borderBottomColor: isSelected 
-                          ? 'rgba(20, 184, 166, 0.4)' 
-                          : isDirty 
-                            ? 'rgba(245, 158, 11, 0.4)' 
-                            : 'var(--border-main, #334155)' 
-                      }}
-                    >
-                      {/* Checkbox Column */}
-                      <td className={`text-center ${fitPageMode ? 'px-1 py-2' : 'px-2 py-3'}`} onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
-                            className="w-3.5 h-3.5 rounded text-teal-600 bg-slate-800 border-slate-600 focus:ring-teal-500 focus:ring-1 cursor-pointer accent-teal-600"
-                          />
-                        </div>
-                      </td>
-                      {displayHeaders.map((colName) => {
-                        const val = getRowVal(row, colName);
-                        const colLower = colName.toLowerCase();
+                    <React.Fragment key={groupName}>
+                      {/* Notion Group Header Row */}
+                      <tr
+                        onClick={() => toggleGroup(groupName)}
+                        className={`cursor-pointer select-none transition-colors border-y font-medium text-xs ${
+                          isNotionLight
+                            ? 'bg-[#fbfbfa] hover:bg-[#f3f3f1] text-slate-700 border-slate-200/90'
+                            : 'bg-[#202020] hover:bg-[#282828] text-slate-300 border-slate-800'
+                        }`}
+                      >
+                        <td colSpan={displayHeaders.length + 3} className="px-3.5 py-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-slate-400 select-none">
+                                {isCollapsed ? '▶' : '▼'}
+                              </span>
+                              <span className={`font-semibold ${isNotionLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                                {groupName}
+                              </span>
+                              <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                                isNotionLight ? 'bg-slate-200/80 text-slate-700' : 'bg-slate-800 text-slate-300'
+                              }`}>
+                                {groupRows.length}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenAddModal();
+                              }}
+                              className={`p-1 rounded transition-colors ${
+                                isNotionLight ? 'hover:bg-slate-200 text-slate-500' : 'hover:bg-slate-700 text-slate-400'
+                              }`}
+                              title={`Tambah kegiatan baru di ${groupName}`}
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
 
-                        // 1. Number Column
-                        if (colLower === 'number' || colLower === 'no') {
-                          return (
-                            <td key={colName} className={`text-center font-mono ${
-                              fitPageMode ? 'px-1 py-2 text-[10px]' : 'px-3.5 py-3 text-[11px]'
-                            }`} style={{ color: isDirty ? '#f59e0b' : 'var(--text-muted, #64748b)' }}>
-                              <div className="flex items-center justify-center gap-1">
-                                {isDirty && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" title="Ada perubahan belum disimpan" />
-                                )}
-                                <span>{val || idx + 1}</span>
-                              </div>
-                            </td>
-                          );
-                        }
+                      {/* Group Rows (if not collapsed) */}
+                      {!isCollapsed && groupRows.map((row) => {
+                        const actualRowIndex = localRows.indexOf(row) !== -1 ? localRows.indexOf(row) : 0;
+                        const isDirty = dirtyRowIndices.has(actualRowIndex);
+                        const isSelected = selectedRowIndices.has(actualRowIndex);
+                        const topicTitle = (getRowVal(row, 'Jenis kegiatan') || getRowVal(row, 'Name') || getRowVal(row, 'Judul') || row['Name'] || row['= Name'] || `Baris ${actualRowIndex + 1}`).trim();
+                        const topicKey = topicTitle.toLowerCase().trim();
+                        const rowIdKey = (row.id || '').toLowerCase().trim();
+                        const cCount = topicCommentCounts[topicKey] || (rowIdKey ? topicCommentCounts[rowIdKey] : 0) || 0;
 
-                        // 2. Jenis kegiatan Column (Judul)
-                        if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') {
-                          const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
-
-                          return (
-                            <td key={colName} className={`font-semibold transition-colors ${
-                              fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-3'
-                            }`} style={{ color: 'var(--text-main, #f8fafc)' }}>
-                              {isEditingThis ? (
-                                <NotionInlineEditor
-                                  initialValue={val}
-                                  fieldLabel="Judul Kegiatan"
-                                  multiline={false}
-                                  onSave={(newVal) => {
-                                    handleUpdateCellDirect(actualRowIndex, colName, newVal);
-                                    setActiveInlineEditor(null);
-                                  }}
-                                  onCancel={() => setActiveInlineEditor(null)}
-                                />
-                              ) : (
-                                <div className="flex items-center justify-between gap-2 group/cell">
-                                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    <span className={`leading-snug block ${fitPageMode ? 'line-clamp-2 break-words text-[11px]' : ''}`}>
-                                      {val && val !== '-' ? val : <em style={{ color: 'var(--text-muted, #64748b)' }}>Tanpa Judul</em>}
-                                    </span>
-                                    
-                                    {/* Dedicated Comment Button: page discussion opens ONLY here */}
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedRow(row);
-                                        setModalTab('comments');
-                                      }}
-                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer shrink-0 ${
-                                        cCount > 0
-                                          ? 'bg-teal-950/80 border-teal-600/70 text-teal-300 hover:bg-teal-900 shadow-xs'
-                                          : 'bg-slate-800/70 border-slate-700/70 text-slate-400 hover:text-teal-300 hover:border-teal-600/60'
-                                      }`}
-                                      title="Klik untuk membuka ruang diskusi/komentar baris ini"
-                                    >
-                                      <MessageSquare className="w-2.5 h-2.5" />
-                                      <span>{cCount > 0 ? `${cCount} Diskusi` : 'Diskusi'}</span>
-                                    </button>
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: false });
-                                    }}
-                                    title="Edit judul langsung"
-                                    className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-teal-500/15 text-slate-400 hover:text-teal-300 transition-all shrink-0 cursor-pointer"
-                                  >
-                                    <Edit2 className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          );
-                        }
-
-                        // 3. Keterangan Column (dengan Smart Tasklist & Progress)
-                        if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) {
-                          const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
-                          const taskProgress = parseTasklist(val);
-
-                          return (
-                            <td key={colName} className={`${
-                              fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-3 max-w-md'
-                            }`}>
-                              {isEditingThis ? (
-                                <NotionInlineEditor
-                                  initialValue={val}
-                                  fieldLabel="Keterangan & Tasklist"
-                                  multiline={true}
-                                  onSave={(newVal) => {
-                                    handleUpdateCellDirect(actualRowIndex, colName, newVal);
-                                    setActiveInlineEditor(null);
-                                  }}
-                                  onCancel={() => setActiveInlineEditor(null)}
-                                />
-                              ) : taskProgress.hasTasklist ? (
-                                <div 
-                                  className="relative group/cell"
-                                  onDoubleClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
-                                  }}
-                                >
-                                  <div className="flex items-start justify-between gap-1">
-                                    <NotionTasklistView
-                                      progress={taskProgress}
-                                      onToggleTask={(taskIdx) => handleToggleTasklistDirect(actualRowIndex, colName, taskIdx)}
-                                      compact={fitPageMode}
-                                      hideProgressBar={true}
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
-                                      }}
-                                      title="Edit keterangan & tasklist langsung"
-                                      className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"
-                                    >
-                                      <Edit2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div 
-                                  className="relative group/cell flex items-start justify-between gap-1"
-                                  onDoubleClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
-                                  }}
-                                >
-                                  <div className={fitPageMode ? 'line-clamp-2 break-words text-[10.5px] flex-1' : 'flex-1'}>
-                                    {renderFormattedNotes(val)}
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
-                                    }}
-                                    title="Edit keterangan langsung"
-                                    className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"
-                                  >
-                                    <Edit2 className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          );
-                        }
-
-                        // 4. PIC Column
-                        if (colLower === 'pic' || colLower.includes('assignee')) {
-                          return (
-                            <td key={colName} className={`${fitPageMode ? 'px-1.5 py-2 overflow-hidden' : 'px-3.5 py-3 whitespace-nowrap'}`}>
-                              {renderPicBadge(val)}
-                            </td>
-                          );
-                        }
-
-                        // 5. Priority Column (Interactive Dropdown)
-                        if (colLower.includes('priority') || colLower.includes('prioritas')) {
-                          return (
-                            <td key={colName} className={`${fitPageMode ? 'px-1 py-2 overflow-hidden' : 'px-3.5 py-3 whitespace-nowrap'}`}>
-                              <NotionDropdownCell
-                                type="priority"
-                                value={val}
-                                compact={fitPageMode}
-                                onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
-                              />
-                            </td>
-                          );
-                        }
-
-                        // 6. Status Column (Interactive Dropdown & Progress Bar)
-                        if (colLower.includes('status')) {
-                          const ketVal = getRowVal(row, 'Keterangan');
-                          const taskProgress = parseTasklist(ketVal);
-
-                          return (
-                            <td key={colName} className={`${fitPageMode ? 'px-1 py-1.5 overflow-hidden' : 'px-4 py-2.5 whitespace-nowrap'}`}>
-                              <div className="flex flex-col items-start gap-1">
-                                <NotionDropdownCell
-                                  type="status"
-                                  value={val}
-                                  compact={fitPageMode}
-                                  onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
-                                />
-                                {taskProgress.hasTasklist && (
-                                  <div className="w-full min-w-[95px] max-w-[125px] space-y-0.5 pt-0.5">
-                                    <div className="flex items-center justify-between text-[9px] font-mono leading-none">
-                                      <span className={`font-bold ${
-                                        taskProgress.isAllCompleted
-                                          ? 'text-emerald-400'
-                                          : taskProgress.percentage > 0
-                                          ? 'text-amber-400'
-                                          : 'text-blue-400'
-                                      }`}>
-                                        {taskProgress.percentage}%
-                                      </span>
-                                      <span className="text-slate-400">
-                                        {taskProgress.completed}/{taskProgress.total}
-                                      </span>
-                                    </div>
-                                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60">
-                                      <div
-                                        className={`h-full transition-all duration-300 ${
-                                          taskProgress.isAllCompleted
-                                            ? 'bg-emerald-500'
-                                            : taskProgress.percentage < 35
-                                            ? 'bg-amber-500'
-                                            : 'bg-teal-500'
-                                        }`}
-                                        style={{ width: `${taskProgress.percentage}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          );
-                        }
-
-                        // 7. Created Time Column
-                        if (colLower.includes('created')) {
-                          return (
-                            <td key={colName} className={`font-mono ${
-                              fitPageMode ? 'px-1 py-2 text-[10px] truncate' : 'px-3.5 py-3 whitespace-nowrap text-[11px]'
-                            }`} style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                              {val && val !== '-' ? (
-                                <span 
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border"
-                                  style={{
-                                    backgroundColor: 'var(--input-bg, #1e293b)',
-                                    borderColor: 'var(--border-main, #334155)',
-                                    color: 'var(--text-main, #cbd5e1)'
-                                  }}
-                                >
-                                  <Clock className="w-2.5 h-2.5 text-teal-400 shrink-0" />
-                                  <span className="truncate">{val}</span>
-                                </span>
-                              ) : (
-                                <span className="font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>
-                              )}
-                            </td>
-                          );
-                        }
-
-                        // 8. Kategori Column
-                        if (colLower.includes('kategori') || colLower.includes('category')) {
-                          return (
-                            <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
-                              {val && val !== '-' ? (
-                                <span 
-                                  className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] border truncate"
-                                  style={{
-                                    backgroundColor: 'var(--input-bg, #1e293b)',
-                                    borderColor: 'var(--border-main, #334155)',
-                                    color: 'var(--text-main, #cbd5e1)'
-                                  }}
-                                >
-                                  {val}
-                                </span>
-                              ) : (
-                                <span className="font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>
-                              )}
-                            </td>
-                          );
-                        }
-
-                        // 9. Activity (routine/non routine) Column (Interactive Dropdown)
-                        if (colLower.includes('activity') || colLower.includes('aktivitas')) {
-                          return (
-                            <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
-                              <NotionDropdownCell
-                                type="activity"
-                                value={val}
-                                compact={fitPageMode}
-                                onChange={(newVal) => {
-                                  if (newVal === val) return;
-                                  const targetCad = normalizeCadence(newVal);
-                                  const matchingDest = sectionPeriodicalPages.find(p => p.cadence === newVal || (targetCad && p.cadence === targetCad));
-                                  if (matchingDest) {
-                                    openMoveModal(matchingDest.post, row, newVal);
-                                    return;
-                                  }
-                                  handleUpdateCellDirect(actualRowIndex, colName, newVal);
-                                }}
-                              />
-                            </td>
-                          );
-                        }
-
-                        // 10. Period Column (Interactive Dropdown)
-                        if (colLower.includes('period') || colLower.includes('periode')) {
-                          return (
-                            <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
-                              <NotionDropdownCell
-                                type="period"
-                                value={val}
-                                compact={fitPageMode}
-                                onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
-                              />
-                            </td>
-                          );
-                        }
-
-                        // Default custom column
                         return (
-                          <td key={colName} className={`whitespace-nowrap ${
-                            fitPageMode ? 'px-1 py-2 text-[10.5px]' : 'px-3.5 py-3 text-xs'
-                          }`} style={{ color: 'var(--text-main, #cbd5e1)' }}>
-                            {val && val !== '-' ? val : <span className="font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>-</span>}
-                          </td>
+                          <tr
+                            key={actualRowIndex}
+                            className={`transition-all group ${
+                              isSelected 
+                                ? 'bg-teal-500/10 hover:bg-teal-500/15' 
+                                : isDirty 
+                                  ? 'bg-amber-500/5 hover:bg-amber-500/10' 
+                                  : isNotionLight
+                                  ? 'hover:bg-[#fbfbfa] bg-white'
+                                  : 'hover:bg-slate-800/40 bg-transparent'
+                            }`}
+                            style={{ 
+                              borderBottomColor: isSelected 
+                                ? 'rgba(20, 184, 166, 0.4)' 
+                                : isDirty 
+                                  ? 'rgba(245, 158, 11, 0.4)' 
+                                  : isNotionLight
+                                  ? '#f1f5f9'
+                                  : 'var(--border-main, #334155)' 
+                            }}
+                          >
+                            {/* Checkbox Column */}
+                            <td className={`text-center ${fitPageMode ? 'px-1 py-2' : 'px-2 py-3'}`} onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
+                                  className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 ${
+                                    isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
+                                  }`}
+                                />
+                              </div>
+                            </td>
+                            {displayHeaders.map((colName) => {
+                              const val = getRowVal(row, colName);
+                              const colLower = colName.toLowerCase();
+                              const cleanCol = colLower.replace(/^[^a-z0-9]+/i, '').trim();
+
+                              // 1. Number Column
+                              if (colLower === 'number' || colLower === 'no') {
+                                return (
+                                  <td key={colName} className={`text-center font-mono ${
+                                    fitPageMode ? 'px-1 py-2 text-[10px]' : 'px-3.5 py-3 text-[11px]'
+                                  }`} style={{ color: isDirty ? '#f59e0b' : isNotionLight ? '#64748b' : 'var(--text-muted, #64748b)' }}>
+                                    <div className="flex items-center justify-center gap-1">
+                                      {isDirty && (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" title="Ada perubahan belum disimpan" />
+                                      )}
+                                      <span>{val || actualRowIndex + 1}</span>
+                                    </div>
+                                  </td>
+                                );
+                              }
+
+                              // 2. Jenis kegiatan Column (Judul / Name / Materi)
+                              if (cleanCol.includes('jenis kegiatan') || cleanCol === 'task' || cleanCol === 'judul' || cleanCol === 'name' || cleanCol === 'title' || cleanCol === 'nama' || cleanCol === 'materi') {
+                                const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
+
+                                return (
+                                  <td key={colName} className={`font-semibold transition-colors ${
+                                    fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-2.5'
+                                  }`} style={{ color: isNotionLight ? '#1e293b' : 'var(--text-main, #f8fafc)' }}>
+                                    {isEditingThis ? (
+                                      <NotionInlineEditor
+                                        initialValue={val}
+                                        fieldLabel="Judul Kegiatan"
+                                        multiline={false}
+                                        isNotionLight={isNotionLight}
+                                        onSave={(newVal) => {
+                                          handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                          setActiveInlineEditor(null);
+                                        }}
+                                        onCancel={() => setActiveInlineEditor(null)}
+                                      />
+                                    ) : (
+                                      <div className="flex items-center justify-between gap-2 group/cell">
+                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                          <span className="text-slate-400 select-none text-sm shrink-0">📄</span>
+                                          <span className={`leading-snug block font-medium ${
+                                            isNotionLight ? 'text-slate-900 font-semibold' : 'text-slate-100'
+                                          } ${fitPageMode ? 'line-clamp-2 break-words text-[11px]' : 'text-xs'}`}>
+                                            {val && val !== '-' ? val : <em style={{ color: 'var(--text-muted, #64748b)' }}>Tanpa Judul</em>}
+                                          </span>
+                                          
+                                          {cCount > 0 && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedRow(row);
+                                                setModalTab('comments');
+                                              }}
+                                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer shrink-0 ${
+                                                isNotionLight
+                                                  ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
+                                                  : 'bg-teal-950/80 border-teal-600/70 text-teal-300 hover:bg-teal-900 shadow-xs'
+                                              }`}
+                                              title="Klik untuk membuka ruang diskusi/komentar baris ini"
+                                            >
+                                              <MessageSquare className="w-2.5 h-2.5" />
+                                              <span>{cCount}</span>
+                                            </button>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          {/* Notion-style OPEN button on hover */}
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedRow(row);
+                                              setModalTab('details');
+                                            }}
+                                            className={`opacity-0 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[10px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs ${
+                                              isNotionLight
+                                                ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                                                : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
+                                            }`}
+                                            title="Buka dokumen / detail halaman"
+                                          >
+                                            OPEN
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: false });
+                                            }}
+                                            title="Edit judul langsung"
+                                            className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-teal-500/15 text-slate-400 hover:text-teal-400 transition-all cursor-pointer"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </td>
+                                );
+                              }
+
+                              // 3. Keterangan Column (dengan Smart Tasklist & Pewarnaan Teks)
+                              if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) {
+                                const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
+                                const taskProgress = parseTasklist(val);
+
+                                return (
+                                  <td key={colName} className={`${
+                                    fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-2.5 max-w-md'
+                                  }`}>
+                                    {isEditingThis ? (
+                                      <NotionInlineEditor
+                                        initialValue={val}
+                                        fieldLabel="Keterangan & Tasklist"
+                                        multiline={true}
+                                        isNotionLight={isNotionLight}
+                                        onSave={(newVal) => {
+                                          handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                          setActiveInlineEditor(null);
+                                        }}
+                                        onCancel={() => setActiveInlineEditor(null)}
+                                      />
+                                    ) : taskProgress.hasTasklist ? (
+                                      <div 
+                                        className="relative group/cell"
+                                        onDoubleClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
+                                        }}
+                                      >
+                                        <div className="flex items-start justify-between gap-1">
+                                          <NotionTasklistView
+                                            progress={taskProgress}
+                                            onToggleTask={(taskIdx) => handleToggleTasklistDirect(actualRowIndex, colName, taskIdx)}
+                                            compact={fitPageMode}
+                                            hideProgressBar={true}
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
+                                            }}
+                                            title="Edit keterangan & tasklist langsung"
+                                            className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div 
+                                        className="relative group/cell flex items-start justify-between gap-1"
+                                        onDoubleClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
+                                        }}
+                                      >
+                                        <div className={fitPageMode ? 'line-clamp-2 break-words text-[10.5px] flex-1' : 'flex-1'}>
+                                          {renderFormattedNotes(val)}
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
+                                          }}
+                                          title="Edit keterangan langsung"
+                                          className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"
+                                        >
+                                          <Edit2 className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </td>
+                                );
+                              }
+
+                              // 4. Tanggal Selesai Column
+                              if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai') || colLower.includes('tanggal selesai')) {
+                                const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
+
+                                // Auto resolve display date if val is empty or '-' but task is closed
+                                let displayDate = val && val !== '-' ? val : '';
+                                if (!displayDate) {
+                                  const statusStr = (getRowVal(row, 'Status') || '').toUpperCase();
+                                  if (statusStr.includes('CLOSE') || statusStr.includes('SELESAI') || statusStr.includes('DONE')) {
+                                    const ketVal = getRowVal(row, 'Keterangan');
+                                    const taskProg = parseTasklist(ketVal);
+                                    if (taskProg.items.length > 0) {
+                                      const dates = taskProg.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
+                                      if (dates.length > 0) {
+                                        displayDate = dates[dates.length - 1];
+                                      }
+                                    }
+                                  }
+                                }
+
+                                return (
+                                  <td key={colName} className={`font-sans ${
+                                    fitPageMode ? 'px-1 py-2 text-[10px] truncate' : 'px-3.5 py-3 whitespace-nowrap text-[11px]'
+                                  }`} style={{ color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }}>
+                                    {isEditingThis ? (
+                                      <NotionInlineEditor
+                                        initialValue={val}
+                                        fieldLabel="Tanggal Selesai"
+                                        multiline={false}
+                                        isNotionLight={isNotionLight}
+                                        onSave={(newVal) => {
+                                          handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                          setActiveInlineEditor(null);
+                                        }}
+                                        onCancel={() => setActiveInlineEditor(null)}
+                                      />
+                                    ) : displayDate ? (
+                                      <span 
+                                        onClick={() => setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: displayDate, multiline: false })}
+                                        className="inline-flex items-center gap-1 cursor-pointer hover:underline font-mono"
+                                        title="Klik untuk mengubah Tanggal Selesai"
+                                      >
+                                        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                                        <span>{displayDate}</span>
+                                      </span>
+                                    ) : (
+                                      <span 
+                                        onClick={() => {
+                                          const todayStr = new Date().toISOString().slice(0, 10);
+                                          handleUpdateCellDirect(actualRowIndex, colName, todayStr);
+                                        }}
+                                        className="font-mono text-slate-400 hover:text-emerald-500 cursor-pointer text-xs transition-colors"
+                                        title="Klik untuk isi tanggal selesai hari ini"
+                                      >
+                                        -
+                                      </span>
+                                    )}
+                                  </td>
+                                );
+                              }
+
+                              // 5. PIC Column
+                              if (colLower === 'pic' || colLower.includes('assignee')) {
+                                return (
+                                  <td key={colName} className={`${fitPageMode ? 'px-1.5 py-2 overflow-hidden' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                                    {renderPicBadge(val)}
+                                  </td>
+                                );
+                              }
+
+                              // 6. Priority Column (Interactive Dropdown)
+                              if (colLower.includes('priority') || colLower.includes('prioritas')) {
+                                return (
+                                  <td key={colName} className={`${fitPageMode ? 'px-1 py-2 overflow-hidden' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                                    <NotionDropdownCell
+                                      type="priority"
+                                      value={val}
+                                      compact={fitPageMode}
+                                      onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
+                                    />
+                                  </td>
+                                );
+                              }
+
+                              // 7. Status Column (Interactive Dropdown & Progress Bar / Duration when Closed)
+                              if (colLower.includes('status')) {
+                                const ketVal = getRowVal(row, 'Keterangan');
+                                const taskProgress = parseTasklist(ketVal);
+                                const isClosed = (val || '').toUpperCase().includes('CLOSE') || 
+                                                 (val || '').toUpperCase().includes('SELESAI') || 
+                                                 (val || '').toUpperCase().includes('DONE');
+                                const durationInfo = isClosed ? getRowDurationInfo(row, taskProgress) : null;
+
+                                return (
+                                  <td key={colName} className={`${fitPageMode ? 'px-1 py-1.5 overflow-hidden' : 'px-4 py-2.5 whitespace-nowrap'}`}>
+                                    <div className="flex flex-col items-start gap-1">
+                                      <NotionDropdownCell
+                                        type="status"
+                                        value={val}
+                                        compact={fitPageMode}
+                                        onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
+                                      />
+                                      {isClosed ? (
+                                        /* Ketika status closed: progress bar hilang, diganti elemen berapa lama tugas berakhir */
+                                        <div 
+                                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors shadow-2xs select-none ${
+                                            isNotionLight
+                                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300/80 hover:bg-emerald-100'
+                                              : 'bg-emerald-950/70 text-emerald-300 border-emerald-600/50 hover:bg-emerald-900/80'
+                                          }`}
+                                          title={durationInfo?.detail || `Durasi pengerjaan: ${durationInfo?.label}`}
+                                        >
+                                          <Clock className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                          <span className="truncate max-w-[125px]">{durationInfo?.label}</span>
+                                        </div>
+                                      ) : taskProgress.hasTasklist ? (
+                                        /* Ketika status belum closed: progress bar checklist tetap tampil */
+                                        <div className="w-full min-w-[95px] max-w-[125px] space-y-0.5 pt-0.5">
+                                          <div className="flex items-center justify-between text-[9px] font-mono leading-none">
+                                            <span className={`font-bold ${
+                                              taskProgress.isAllCompleted
+                                                ? 'text-emerald-500 dark:text-emerald-400'
+                                                : taskProgress.percentage > 0
+                                                ? 'text-amber-500 dark:text-amber-400'
+                                                : 'text-blue-500 dark:text-blue-400'
+                                            }`}>
+                                              {taskProgress.percentage}%
+                                            </span>
+                                            <span className="text-slate-400">
+                                              {taskProgress.completed}/{taskProgress.total}
+                                            </span>
+                                          </div>
+                                          <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-300/60 dark:border-slate-700/60">
+                                            <div
+                                              className={`h-full transition-all duration-300 ${
+                                                taskProgress.isAllCompleted
+                                                  ? 'bg-emerald-500'
+                                                  : taskProgress.percentage < 35
+                                                  ? 'bg-amber-500'
+                                                  : 'bg-teal-500'
+                                              }`}
+                                              style={{ width: `${taskProgress.percentage}%` }}
+                                            />
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </td>
+                                );
+                              }
+
+                              // 8. Created Time Column
+                              if (colLower.includes('created')) {
+                                return (
+                                  <td key={colName} className={`font-sans ${
+                                    fitPageMode ? 'px-1 py-2 text-[10px] truncate' : 'px-3.5 py-3 whitespace-nowrap text-[11px]'
+                                  }`} style={{ color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }}>
+                                    {val && val !== '-' ? (
+                                      <span className="inline-flex items-center gap-1">
+                                        <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                        <span>{val}</span>
+                                      </span>
+                                    ) : (
+                                      <span className="font-mono text-slate-400">-</span>
+                                    )}
+                                  </td>
+                                );
+                              }
+
+                              // 9. Kategori Column
+                              if (colLower.includes('kategori') || colLower.includes('category')) {
+                                return (
+                                  <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                                    {val && val !== '-' ? (
+                                      <span 
+                                        className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] border truncate ${
+                                          isNotionLight
+                                            ? 'bg-slate-100 border-slate-200 text-slate-700'
+                                            : 'bg-[#1e293b] border-[#334155] text-[#cbd5e1]'
+                                        }`}
+                                      >
+                                        {val}
+                                      </span>
+                                    ) : (
+                                      <span className="font-mono text-slate-400">-</span>
+                                    )}
+                                  </td>
+                                );
+                              }
+
+                              // 10. Activity Column (Interactive Dropdown)
+                              if (colLower.includes('activity') || colLower.includes('aktivitas')) {
+                                return (
+                                  <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                                    <NotionDropdownCell
+                                      type="activity"
+                                      value={val}
+                                      compact={fitPageMode}
+                                      onChange={(newVal) => {
+                                        if (newVal === val) return;
+                                        handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                      }}
+                                    />
+                                  </td>
+                                );
+                              }
+
+                              // 11. Period Column (Interactive Dropdown)
+                              if (colLower.includes('period') || colLower.includes('periode')) {
+                                return (
+                                  <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                                    <NotionDropdownCell
+                                      type="period"
+                                      value={val}
+                                      compact={fitPageMode}
+                                      onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
+                                    />
+                                  </td>
+                                );
+                              }
+
+                              // Default custom column
+                              return (
+                                <td key={colName} className={`whitespace-nowrap ${
+                                  fitPageMode ? 'px-1 py-2 text-[10.5px]' : 'px-3.5 py-3 text-xs'
+                                }`} style={{ color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }}>
+                                  {val && val !== '-' ? val : <span className="font-mono text-slate-400">-</span>}
+                                </td>
+                              );
+                            })}
+
+                            {/* Spacer cell for Add Column (+) header */}
+                            <td className="w-10 px-1 py-2 text-center" />
+
+                            {/* Row Action Buttons */}
+                            <td className={`text-center whitespace-nowrap ${fitPageMode ? 'px-1 py-2' : 'px-3 py-3'}`}>
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={(e) => handleOpenEditModal(row, actualRowIndex, e)}
+                                  className="p-1.5 rounded-lg hover:text-amber-500 text-slate-400 transition-colors"
+                                  title="Edit Data Kegiatan Ini"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => handleDeleteRow(actualRowIndex, e)}
+                                  className="p-1.5 rounded-lg hover:text-rose-500 text-slate-400 transition-colors"
+                                  title="Hapus Baris Ini"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
                         );
                       })}
 
-                      {/* Spacer cell for Add Column (+) header */}
-                      <td className="w-10 px-1 py-2 text-center" />
-
-                      {/* Row Action Buttons */}
-                      <td className={`text-center whitespace-nowrap ${fitPageMode ? 'px-1 py-2' : 'px-3 py-3'}`}>
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={(e) => handleOpenEditModal(row, localRows.indexOf(row), e)}
-                            className="p-1.5 rounded-lg hover:text-amber-400 transition-colors"
-                            style={{ color: 'var(--text-muted, #94a3b8)' }}
-                            title="Edit Data Kegiatan Ini"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => handleDeleteRow(localRows.indexOf(row), e)}
-                            className="p-1.5 rounded-lg hover:text-rose-400 transition-colors"
-                            style={{ color: 'var(--text-muted, #94a3b8)' }}
-                            title="Hapus Baris Ini"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                      {/* + New page button at bottom of group */}
+                      {!isCollapsed && (
+                        <tr
+                          onClick={() => handleOpenAddModal()}
+                          className={`cursor-pointer transition-colors border-b select-none ${
+                            isNotionLight
+                              ? 'hover:bg-[#f7f7f5] text-slate-500 border-slate-100'
+                              : 'hover:bg-slate-800/40 text-slate-400 border-slate-800/60'
+                          }`}
+                        >
+                          <td colSpan={displayHeaders.length + 3} className="px-3.5 py-2 text-xs">
+                            <div className="flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity">
+                              <Plus className="w-3.5 h-3.5" />
+                              <span className="font-medium text-[11px]">New page</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })
               )}
@@ -3575,17 +4083,16 @@ export function NotionDatabaseTable({
 
           {/* Bottom Table Add Row Shortcut & Select All */}
           <div 
-            className="p-3 border-t flex items-center justify-between"
-            style={{
-              backgroundColor: 'var(--card-bg, #181818)',
-              borderColor: 'var(--border-main, #2d2d2d)'
-            }}
+            className={`p-3 border-t flex items-center justify-between transition-colors ${
+              isNotionLight ? 'bg-[#fafafa] border-slate-200 text-slate-600' : 'bg-[#181818] border-[#2d2d2d] text-slate-400'
+            }`}
           >
             <div className="flex items-center gap-3">
               <button
                 onClick={handleOpenAddModal}
-                className="text-xs font-semibold hover:text-teal-400 flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all cursor-pointer"
-                style={{ color: 'var(--text-muted, #94a3b8)' }}
+                className={`text-xs font-semibold flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all cursor-pointer ${
+                  isNotionLight ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60' : 'text-slate-400 hover:text-teal-400 hover:bg-slate-800'
+                }`}
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>+ Tambah Baris Kegiatan Baru</span>
@@ -3594,8 +4101,9 @@ export function NotionDatabaseTable({
                 <button
                   type="button"
                   onClick={handleToggleSelectAll}
-                  className="text-xs font-medium hover:text-teal-400 flex items-center gap-1 py-1 px-2 rounded-lg transition-all cursor-pointer"
-                  style={{ color: 'var(--text-muted, #94a3b8)' }}
+                  className={`text-xs font-medium flex items-center gap-1 py-1 px-2 rounded-lg transition-all cursor-pointer ${
+                    isNotionLight ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60' : 'text-slate-400 hover:text-teal-400 hover:bg-slate-800'
+                  }`}
                 >
                   <CheckSquare className="w-3.5 h-3.5" />
                   <span>{isAllSelected ? 'Batal Pilih Semua' : 'Pilih Semua'}</span>
@@ -3613,7 +4121,7 @@ export function NotionDatabaseTable({
                   <span>Hapus Terpilih ({selectedRowIndices.size})</span>
                 </button>
               )}
-              <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>
+              <span className={`text-[11px] font-mono ${isNotionLight ? 'text-slate-500' : 'text-slate-400'}`}>
                 Total {localRows.length} baris tercatat {selectedRowIndices.size > 0 && `(${selectedRowIndices.size} dipilih)`}
               </span>
             </div>
@@ -3708,7 +4216,7 @@ export function NotionDatabaseTable({
                     </span>
                   </p>
                   <p className="text-[11px] text-slate-400">
-                    Klik Simpan Perubahan untuk mengupdate isi dokumen buletin secara permanen.
+                    Klik Simpan Perubahan untuk mengupdate isi dokumen Labnote secara permanen.
                   </p>
                 </div>
               </div>
@@ -4361,15 +4869,17 @@ export function NotionDatabaseTable({
                 />
               </div>
 
-              {/* Keterangan & Rincian (Enterprise WYSIWYG Editor) */}
+              {/* Keterangan & Rincian (Shared Subtask Manager - Sinergi Log Book & Buletin) */}
               <div>
-                <EnterpriseWysiwygEditor
+                <SharedSubtaskManager
                   value={rowFormData['Keterangan'] || ''}
                   onChange={(val) => setRowFormData({ ...rowFormData, Keterangan: val })}
-                  label="Keterangan & Rincian Kegiatan"
+                  label="Keterangan & Checklist Subtask"
                   allowModeSwitch={true}
-                  placeholder="Deskripsi langkah, catatan temuan, atau checklist subtask..."
-                  rows={3}
+                  defaultMode="checklist"
+                  currentUser={{ nik: currentAuthorNik || '', name: currentAuthorName || rowFormData['PIC'] || 'PIC' }}
+                  selectedDate={new Date().toISOString().split('T')[0]}
+                  placeholder="Ketik butir subtask baru lalu tekan Enter..."
                 />
               </div>
 
@@ -5065,115 +5575,29 @@ export function NotionDatabaseTable({
                         </div>
                       )}
 
-                      {/* Rincian & Keterangan Card */}
+                      {/* Rincian & Keterangan Subtask Manager (Sinergi Penuh dengan Log Book) */}
                       {(() => {
                         const selKetVal = getRowVal(selectedRow, 'Keterangan');
-                        const selTaskProg = parseTasklist(selKetVal);
                         const actualIdx = localRows.indexOf(selectedRow) !== -1 
                           ? localRows.indexOf(selectedRow)
                           : localRows.findIndex(r => getRowVal(r, 'Jenis kegiatan') === getRowVal(selectedRow, 'Jenis kegiatan'));
 
                         return (
-                          <div 
-                            className="p-4 sm:p-5 rounded-2xl border shadow-sm space-y-3"
-                            style={{
-                              backgroundColor: 'var(--card-bg, #171717)',
-                              borderColor: 'var(--border-main, #334155)'
+                          <SharedSubtaskManager
+                            value={selKetVal}
+                            onChange={(newVal) => {
+                              if (actualIdx !== -1) {
+                                handleUpdateCellDirect(actualIdx, 'Keterangan', newVal);
+                              }
                             }}
-                          >
-                            <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
-                              <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
-                                <FileText className="w-4 h-4" />
-                                <span>Rincian & Keterangan Kegiatan</span>
-                              </h4>
-                              {selTaskProg.hasTasklist && (
-                                <span className={`text-[11px] font-mono px-2 py-0.5 rounded-full font-semibold border ${
-                                  selTaskProg.isAllCompleted
-                                    ? 'border-emerald-500/40 text-emerald-400 bg-emerald-950/40'
-                                    : selTaskProg.percentage > 0
-                                    ? 'border-amber-500/40 text-amber-400 bg-amber-950/40'
-                                    : 'border-blue-500/40 text-blue-400 bg-blue-950/40'
-                                }`}>
-                                  {selTaskProg.completed}/{selTaskProg.total} ({selTaskProg.percentage}%)
-                                </span>
-                              )}
-                            </div>
-
-                            {selTaskProg.hasTasklist ? (
-                              <div className="space-y-3 pt-1">
-                                {/* Subtask Progress Bar */}
-                                <div className="space-y-1">
-                                  <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-                                    <span>Progres Subtask</span>
-                                    <span className={`font-bold ${
-                                      selTaskProg.isAllCompleted
-                                        ? 'text-emerald-400'
-                                        : selTaskProg.percentage > 0
-                                        ? 'text-amber-400'
-                                        : 'text-blue-400'
-                                    }`}>
-                                      {selTaskProg.isAllCompleted
-                                        ? '100% Selesai (Closed)'
-                                        : selTaskProg.percentage > 0
-                                        ? `${selTaskProg.percentage}% (On Progress)`
-                                        : '0% (Open)'}
-                                    </span>
-                                  </div>
-                                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60">
-                                    <div
-                                      className={`h-full transition-all duration-300 ${
-                                        selTaskProg.isAllCompleted
-                                          ? 'bg-emerald-500'
-                                          : selTaskProg.percentage < 35
-                                          ? 'bg-amber-500'
-                                          : 'bg-teal-500'
-                                      }`}
-                                      style={{ width: `${selTaskProg.percentage}%` }}
-                                    />
-                                  </div>
-                                </div>
-
-                                {/* Task Checklist Items */}
-                                <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                                  {selTaskProg.items.map((item) => (
-                                    <div
-                                      key={item.index}
-                                      onClick={() => {
-                                        if (actualIdx !== -1) {
-                                          handleToggleTasklistDirect(actualIdx, 'Keterangan', item.index);
-                                        }
-                                      }}
-                                      className="flex items-start gap-2.5 text-xs sm:text-sm select-none p-2 rounded-xl hover:bg-slate-800/60 cursor-pointer transition-colors border border-transparent hover:border-slate-700/50"
-                                    >
-                                      <button
-                                        type="button"
-                                        className="mt-0.5 shrink-0 focus:outline-none cursor-pointer"
-                                      >
-                                        {item.checked ? (
-                                          <CheckSquare className="w-4 h-4 text-teal-400" />
-                                        ) : (
-                                          <Square className="w-4 h-4 text-slate-400" />
-                                        )}
-                                      </button>
-                                      <span
-                                        className={`leading-relaxed flex-1 break-words ${
-                                          item.checked
-                                            ? 'line-through text-slate-500 font-normal'
-                                            : 'text-slate-200 font-medium'
-                                        }`}
-                                      >
-                                        {item.text}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="leading-relaxed text-xs sm:text-sm font-sans pt-1" style={{ color: 'var(--text-main, #e2e8f0)' }}>
-                                {renderFormattedNotes(selKetVal)}
-                              </div>
-                            )}
-                          </div>
+                            label="Rincian & Checklist Subtask Kegiatan"
+                            currentUser={{ nik: currentAuthorNik || '', name: currentAuthorName || getRowVal(selectedRow, 'PIC') || 'PIC' }}
+                            selectedDate={new Date().toISOString().split('T')[0]}
+                            allowModeSwitch={true}
+                            defaultMode="checklist"
+                            showProgressBar={true}
+                            placeholder="Tambah butir subtask langsung di sini lalu tekan Enter..."
+                          />
                         );
                       })()}
 
@@ -6059,6 +6483,7 @@ export function NotionDatabaseTable({
         dirtyRowCount={dirtyRowIndices.size}
         isSaving={isPersistingChanges}
         tableName={title}
+        isNotionLight={isNotionLight}
       />
     </div>
   );

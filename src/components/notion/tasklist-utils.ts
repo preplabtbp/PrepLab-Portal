@@ -421,6 +421,71 @@ export function appendTasklistItem(text: string, taskTitle: string): string {
 }
 
 /**
+ * Removes a specific task checklist item from the text by its index
+ */
+export function removeTasklistItem(text: string, targetIndex: number): string {
+  if (!text) return '';
+  const hasBr = /<br\s*\/?>/i.test(text);
+  const delimiter = hasBr ? '<br/>' : '\n';
+  const normalized = text.replace(/<br\s*\/?>/gi, '\n');
+
+  let currentIndex = 0;
+  const lines = normalized.split('\n');
+  const updatedLines = lines.filter(line => {
+    const match = line.match(/^(\s*[-*•]?\s*\[)([ xX])(\]\s*)(.+)$/);
+    if (match) {
+      if (currentIndex === targetIndex) {
+        currentIndex++;
+        return false;
+      }
+      currentIndex++;
+    }
+    return true;
+  });
+
+  return updatedLines.join(delimiter);
+}
+
+/**
+ * Updates the title of a specific task checklist item in the text by index, preserving existing notes and dates
+ */
+export function updateTasklistItemTitle(text: string, targetIndex: number, newTitle: string): string {
+  if (!text) return '';
+  const sanitized = newTitle.replace(/[\r\n]+/g, ' ').replace(/<!--[\s\S]*?-->/gi, '').trim();
+  if (!sanitized) return text;
+  const hasBr = /<br\s*\/?>/i.test(text);
+  const delimiter = hasBr ? '<br/>' : '\n';
+  const normalized = text.replace(/<br\s*\/?>/gi, '\n');
+
+  let currentIndex = 0;
+  const lines = normalized.split('\n');
+  const updatedLines = lines.map(line => {
+    const match = line.match(/^(\s*[-*•]?\s*\[)([ xX])(\]\s*)(.+)$/);
+    if (match) {
+      if (currentIndex === targetIndex) {
+        const prefix = match[1];
+        const check = match[2];
+        const spaceAfterBracket = match[3];
+        const oldContent = match[4].trim();
+
+        // preserve all comments (checkedDate, notes, etc.)
+        let comments = '';
+        const commentsMatch = oldContent.match(/<!--[\s\S]*?-->/g);
+        if (commentsMatch) {
+          comments = ' ' + commentsMatch.join(' ');
+        }
+        currentIndex++;
+        return `${prefix}${check}${spaceAfterBracket}${sanitized}${comments}`;
+      }
+      currentIndex++;
+    }
+    return line;
+  });
+
+  return updatedLines.join(delimiter);
+}
+
+/**
  * Reorders tasklist items in text given a new array of TaskItems
  */
 export function reorderTasklistItems(originalText: string, newItems: TaskItem[]): string {
@@ -447,9 +512,93 @@ export function reorderTasklistItems(originalText: string, newItems: TaskItem[])
   return `${parsed.cleanText.trim()}${delimiter}${delimiter}${checklistLines.join(delimiter)}`;
 }
 
+// Notion color definitions for rich text highlighting
+export const NOTION_COLORS: Record<string, { label: string; textClass: string; hex: string; bgClass: string; borderClass: string }> = {
+  default: { label: 'Hitam (Default)', textClass: 'text-black', hex: '#111827', bgClass: 'bg-slate-100', borderClass: 'border-slate-300' },
+  blue: { label: 'Biru', textClass: 'text-blue-600', hex: '#2563eb', bgClass: 'bg-blue-50', borderClass: 'border-blue-300' },
+  green: { label: 'Hijau', textClass: 'text-emerald-600', hex: '#16a34a', bgClass: 'bg-emerald-50', borderClass: 'border-emerald-300' },
+  orange: { label: 'Oranye', textClass: 'text-orange-600', hex: '#ea580c', bgClass: 'bg-orange-50', borderClass: 'border-orange-300' },
+  red: { label: 'Merah', textClass: 'text-rose-600', hex: '#e11d48', bgClass: 'bg-rose-50', borderClass: 'border-rose-300' },
+  purple: { label: 'Ungu', textClass: 'text-purple-600', hex: '#9333ea', bgClass: 'bg-purple-50', borderClass: 'border-purple-300' },
+  amber: { label: 'Kuning / Amber', textClass: 'text-amber-600', hex: '#d97706', bgClass: 'bg-amber-50', borderClass: 'border-amber-300' },
+  pink: { label: 'Pink', textClass: 'text-pink-600', hex: '#db2777', bgClass: 'bg-pink-50', borderClass: 'border-pink-300' },
+  gray: { label: 'Abu-abu', textClass: 'text-slate-500', hex: '#64748b', bgClass: 'bg-slate-50', borderClass: 'border-slate-300' }
+};
+
+/**
+ * Replaces Notion color tags like [blue]text[/blue] or [color:blue]text[/color] with styled HTML spans
+ */
+export function formatColorTagsToHtml(text?: string | null): string {
+  if (!text || typeof text !== 'string') return '';
+  let out = text;
+
+  // Generic tag: [color:blue]...[/color] or [color:#hex]...[/color]
+  out = out.replace(/\[color:\s*([#a-zA-Z0-9]+)\]([\s\S]*?)\[\/color\]/gi, (_, colorKey, content) => {
+    const key = colorKey.toLowerCase();
+    const hex = NOTION_COLORS[key]?.hex || colorKey;
+    return `<span style="color: ${hex}; font-weight: 600;">${content}</span>`;
+  });
+
+  // Shorthand tags: [blue]...[/blue], [green]...[/green], [orange]...[/orange], [red]...[/red], etc.
+  for (const [key, conf] of Object.entries(NOTION_COLORS)) {
+    if (key === 'default') continue;
+    const regex = new RegExp(`\\[${key}\\]([\\s\\S]*?)\\[\\/${key}\\]`, 'gi');
+    out = out.replace(regex, `<span style="color: ${conf.hex}; font-weight: 600;">$1</span>`);
+  }
+
+  return out;
+}
+
+/**
+ * Strips all Notion color tags from text
+ */
+export function stripColorTags(text?: string | null): string {
+  if (!text || typeof text !== 'string') return '';
+  let out = text.replace(/\[color:\s*([#a-zA-Z0-9]+)\]([\s\S]*?)\[\/color\]/gi, '$2');
+  for (const key of Object.keys(NOTION_COLORS)) {
+    const regex = new RegExp(`\\[${key}\\]([\\s\\S]*?)\\[\\/${key}\\]`, 'gi');
+    out = out.replace(regex, '$1');
+  }
+  return out;
+}
+
+/**
+ * Detects if a text line has a color tag and returns the color key and clean text
+ */
+export function detectLineColor(line: string): { color: string; cleanText: string } {
+  if (!line) return { color: 'default', cleanText: '' };
+  
+  for (const [key] of Object.entries(NOTION_COLORS)) {
+    if (key === 'default') continue;
+    const regex = new RegExp(`^\\[${key}\\]([\\s\\S]*?)\\[\\/${key}\\]$`, 'i');
+    const match = line.trim().match(regex);
+    if (match) {
+      return { color: key, cleanText: match[1] };
+    }
+  }
+
+  const genericMatch = line.trim().match(/^\[color:\s*([#a-zA-Z0-9]+)\]([\s\S]*?)\[\/color\]$/i);
+  if (genericMatch) {
+    const k = genericMatch[1].toLowerCase();
+    return { color: NOTION_COLORS[k] ? k : 'default', cleanText: genericMatch[2] };
+  }
+
+  return { color: 'default', cleanText: line };
+}
+
+/**
+ * Applies or changes the color of a single subtask text line
+ */
+export function applyColorToText(text: string, colorKey: string): string {
+  const stripped = stripColorTags(text.trim());
+  if (!stripped) return '';
+  if (!colorKey || colorKey === 'default') return stripped;
+  return `[${colorKey}]${stripped}[/${colorKey}]`;
+}
+
 /**
  * Converts markdown text into visual HTML for the WYSIWYG contentEditable editor and rich text viewers.
- * Ensures the user sees bold, italic, lists, and badges visually instead of raw tokens like **bold**.
+ * Ensures the user sees bold, italic, lists, badges, and colored text visually.
  */
 export function markdownToVisualHtml(text?: string | null): string {
   if (!text || typeof text !== 'string') return '';
@@ -459,6 +608,9 @@ export function markdownToVisualHtml(text?: string | null): string {
   // Convert status badges
   html = html.replace(/\*\*\(Done\)\*\*|\[Done\]|\(Done\)/gi, '<span class="badge-done inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 mr-1 select-none">DONE</span>&nbsp;');
   html = html.replace(/\*\*\(OPEN\)\*\*|\[OPEN\]|\(OPEN\)/gi, '<span class="badge-open inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 mr-1 select-none">OPEN</span>&nbsp;');
+
+  // Convert Color tags like [blue]...[/blue], [green]...[/green], [orange]...[/orange], etc.
+  html = formatColorTagsToHtml(html);
 
   // Convert Bold **text** and __text__
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -501,8 +653,12 @@ export function markdownToVisualHtml(text?: string | null): string {
       if (inUl) { processedLines.push('</ul>'); inUl = false; }
       if (inOl) { processedLines.push('</ol>'); inOl = false; }
 
-      if (trimmed.startsWith('> ')) {
-        processedLines.push(`<blockquote class="border-l-4 border-teal-500 pl-3 italic text-slate-600 my-1">${trimmed.substring(2)}</blockquote>`);
+      if (trimmed.startsWith('> ') || trimmed === '>') {
+        const bqContent = trimmed.substring(1).replace(/^[>\s]+/, '').trim();
+        if (!bqContent || bqContent.toLowerCase().includes('menu info')) {
+          continue;
+        }
+        processedLines.push(`<blockquote class="border-l-4 border-teal-500 pl-3 italic text-slate-600 my-1">${bqContent}</blockquote>`);
       } else if (trimmed) {
         processedLines.push(`<div>${trimmed}</div>`);
       } else {
@@ -532,6 +688,7 @@ export function visualHtmlToMarkdown(html?: string | null): string {
       .replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*')
       .replace(/<s[^>]*>(.*?)<\/s>/gi, '~~$1~~')
       .replace(/<del[^>]*>(.*?)<\/del>/gi, '~~$1~~')
+      .replace(/<span\s+style="color:\s*([^";]+)[^"]*">(.*?)<\/span>/gi, '[$1]$2[/$1]')
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<\/div>/gi, '\n')
       .replace(/<[^>]+>/g, '')
@@ -581,8 +738,48 @@ export function visualHtmlToMarkdown(html?: string | null): string {
         return inner.trim() ? `~~${inner.trim()}~~` : '';
       case 'code':
         return inner.trim() ? `\`${inner.trim()}\`` : '';
-      case 'blockquote':
-        return inner.trim() ? `> ${inner.trim()}\n` : '';
+      case 'span':
+      case 'font': {
+        const dataColor = el.getAttribute('data-color');
+        if (dataColor && NOTION_COLORS[dataColor] && dataColor !== 'default') {
+          return `[${dataColor}]${inner}[/${dataColor}]`;
+        }
+
+        const style = el.getAttribute('style') || '';
+        const colorAttr = el.getAttribute('color') || '';
+        const colorMatch = style.match(/color:\s*([^;]+)/i);
+        const colorVal = colorMatch ? colorMatch[1].trim() : (colorAttr ? colorAttr.trim() : '');
+        if (colorVal) {
+          const c = colorVal.toLowerCase();
+          let foundKey = Object.keys(NOTION_COLORS).find(k => 
+            NOTION_COLORS[k].hex.toLowerCase() === c || 
+            k.toLowerCase() === c
+          );
+          if (!foundKey && c.startsWith('rgb')) {
+            const rgbMatch = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (rgbMatch) {
+              const r = parseInt(rgbMatch[1], 10);
+              const g = parseInt(rgbMatch[2], 10);
+              const b = parseInt(rgbMatch[3], 10);
+              const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`.toLowerCase();
+              foundKey = Object.keys(NOTION_COLORS).find(k => 
+                NOTION_COLORS[k].hex.toLowerCase() === hex
+              );
+            }
+          }
+          if (foundKey && foundKey !== 'default') {
+            return `[${foundKey}]${inner}[/${foundKey}]`;
+          }
+        }
+        return inner;
+      }
+      case 'blockquote': {
+        const cleanInner = inner.trim();
+        if (!cleanInner || cleanInner.toLowerCase().includes('menu info')) {
+          return '';
+        }
+        return `> ${cleanInner}\n`;
+      }
       case 'li':
         return `• ${inner.trim()}\n`;
       case 'ul':
@@ -601,4 +798,5 @@ export function visualHtmlToMarkdown(html?: string | null): string {
   const result = traverse(container);
   return result.replace(/\n{3,}/g, '\n\n').trim();
 }
+
 

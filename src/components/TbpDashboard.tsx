@@ -57,6 +57,7 @@ import {
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { ImageModal } from './image-modal';
+import { BulletinModulesAccordion } from './BulletinModulesAccordion';
 
 const WeatherIcon = ({ code, className }: { code: number, className?: string }) => {
   if (code < 3) return <Sun className={`text-amber-400 ${className}`} />;
@@ -618,7 +619,13 @@ export function TbpDashboard({
       if (searchStr === 'inventory' || searchStr === 'warehouse') {
         post = posts.find(p => {
           const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
-          return clean === 'warehouse' || clean === 'information warehouse' || clean === 'warehouse / inventory control' || clean.includes('warehouse') || clean.includes('inventory');
+          return clean === 'inventory' || clean === 'warehouse / inventory control' || clean === 'warehouse';
+        }) || posts.find(p => {
+          const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+          return clean.includes('inventory') && !clean.includes('daily') && !clean.includes('weekly') && !clean.includes('monthly') && !clean.includes('non routine');
+        }) || posts.find(p => {
+          const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+          return clean.includes('warehouse') || clean.includes('inventory');
         });
       } else if (searchStr === 'general issue' || searchStr === 'general issues') {
         post = posts.find(p => {
@@ -1289,6 +1296,11 @@ export function TbpDashboard({
                   );
                 })}
               </div>
+            </div>
+
+            {/* INTEGRATED MODULES ACCORDION */}
+            <div className="pt-1">
+              <BulletinModulesAccordion />
             </div>
           </div>
 

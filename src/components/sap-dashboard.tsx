@@ -678,9 +678,9 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
         {/* Personal Inspection Reminder Banner if user hasn't inspected this week */}
         {userInspectionItem && userInspectionItem.status === 'BELUM' && !userInspectionItem.isCuti && (
           <div className="bg-gradient-to-r from-rose-500 via-amber-500 to-rose-600 p-0.5 rounded-3xl shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
-            <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 sm:p-5 rounded-[22px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="bg-white/95 backdrop-blur-md p-4 sm:p-5 rounded-[22px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center shrink-0">
                   <ShieldAlert className="w-6 h-6 text-rose-600 animate-bounce" />
                 </div>
                 <div>
@@ -692,7 +692,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                       Status: Belum Inspeksi
                     </span>
                   </div>
-                  <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-0.5">
+                  <h4 className="text-sm sm:text-base font-bold text-slate-900 mt-0.5">
                     Halo {inspectorName || 'Rekan K3'}, Anda belum melaksanakan inspeksi program K3 minggu ini!
                   </h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -1145,7 +1145,7 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
                   onClick={() => setStatusTab('ALL')}
                   className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
                     statusTab === 'ALL'
-                      ? 'bg-slate-900 text-white shadow-xs'
+                      ? 'bg-teal-600 text-white shadow-xs'
                       : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                   }`}
                 >

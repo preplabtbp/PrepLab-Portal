@@ -43,6 +43,9 @@ interface InspectionCompletionModalProps {
 export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionCompletionModalProps) {
   const [targetNumber, setTargetNumber] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copiedPdf1, setCopiedPdf1] = useState(false);
+  const [copiedPdf2, setCopiedPdf2] = useState(false);
+  const [copiedGeneralUrl, setCopiedGeneralUrl] = useState(false);
   const alertedRef = React.useRef<string | null>(null);
 
   useEffect(() => {
@@ -97,11 +100,12 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
     return match ? match[1] : null;
   };
 
-  const getDirectDownloadUrl = (rawUrl?: string | null) => {
+  // Return a mobile-friendly view URL that avoids Google Drive virus scan block / login loops on smartphones
+  const getMobileViewUrl = (rawUrl?: string | null) => {
     if (!rawUrl || rawUrl === '#' || rawUrl === '-') return null;
     const fileId = extractDriveFileId(rawUrl);
     if (fileId) {
-      return `https://drive.google.com/uc?export=download&id=${fileId}`;
+      return `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk`;
     }
     return rawUrl;
   };
@@ -118,11 +122,33 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
     return rawUrl;
   };
 
-  const downloadUrl1 = getDirectDownloadUrl(pdfUrl);
+  const mobileViewUrl1 = getMobileViewUrl(pdfUrl);
   const previewUrl1 = getPreviewUrl(pdfUrl);
+  const fallbackPdfUrl = data.id ? `/api/inspections/${data.id}/pdf?pt=tbp` : null;
+  const downloadUrl1 = mobileViewUrl1 || fallbackPdfUrl;
 
-  const downloadUrl2 = getDirectDownloadUrl(linkPdf2);
+  const mobileViewUrl2 = getMobileViewUrl(linkPdf2);
   const previewUrl2 = getPreviewUrl(linkPdf2);
+
+  const handleCopyGeneralUrl = () => {
+    navigator.clipboard.writeText(GENERAL_INSPECTION_FORM_URL);
+    setCopiedGeneralUrl(true);
+    toast.success('Tautan Form General Submit disalin!');
+    setTimeout(() => setCopiedGeneralUrl(false), 2500);
+  };
+
+  const handleCopyPdfLink = (url: string, index: number) => {
+    if (!url) return;
+    navigator.clipboard.writeText(url);
+    if (index === 1) {
+      setCopiedPdf1(true);
+      setTimeout(() => setCopiedPdf1(false), 2500);
+    } else {
+      setCopiedPdf2(true);
+      setTimeout(() => setCopiedPdf2(false), 2500);
+    }
+    toast.success('Link PDF laporan berhasil disalin! Siap ditempel di Google Form Safety.');
+  };
 
   const handleCopyWaText = () => {
     if (!waMessageText) return;
@@ -198,7 +224,7 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
         {/* Modal Scrollable Content */}
         <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
 
-          {/* SECTION 1: Safety General Submit Action (Prominent CTA) */}
+          {/* SECTION 1: Safety General Submit Action (Prominent CTA + 3 Steps) */}
           <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-orange-500/10 p-4 sm:p-4.5 transition-all shadow-xs">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-600 mt-0.5">
@@ -207,25 +233,51 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <h3 className="text-sm font-bold text-[var(--text-main,#0f172a)]">
-                    Form General Inspeksi Safety
+                    Kirim ke General Submit Safety
                   </h3>
                   <span className="px-2 py-0.5 rounded-md bg-amber-500 text-white text-[10px] font-extrabold uppercase tracking-wider">
-                    Wajib K3
+                    Wajib K3 Harita
                   </span>
                 </div>
-                <p className="text-xs text-[var(--text-muted,#475569)] leading-relaxed mb-3">
-                  Silakan buka formulir general inspeksi milik Safety dan kirimkan tangkapan layar (screenshot) sebagai bukti rekap mingguan.
-                </p>
+                
+                {/* 3 Steps Guidance for Mobile Users */}
+                <div className="my-2.5 p-2.5 rounded-xl bg-[var(--card-bg,#ffffff)]/80 border border-amber-500/20 space-y-2 text-[11px] text-[var(--text-main,#0f172a)]">
+                  <div className="flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                    <span><strong>Buka / Simpan Dokumen PDF</strong> di bawah ini (bisa dibuka langsung di HP atau salin tautan filenya).</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                    <span>Buka <strong>Form General Submit Safety</strong> di bawah, lalu isi data area/nama dan unggah PDF atau lampirkan link laporan.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                    <span>Ambil <strong>Screenshot</strong> bukti kirim ("Tanggapan Anda telah direkam"), lalu unggah di portal untuk klaim <strong>+50 EXP</strong> & verifikasi status mingguan.</span>
+                  </div>
+                </div>
 
-                <a
-                  href={GENERAL_INSPECTION_FORM_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md shadow-amber-500/25 transition-all transform active:scale-98 cursor-pointer text-center"
-                >
-                  <span>Buka Halaman General Submit Milik Safety</span>
-                  <ExternalLink className="w-4 h-4" />
-                </a>
+                <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                  <a
+                    href={GENERAL_INSPECTION_FORM_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md shadow-amber-500/25 transition-all transform active:scale-98 cursor-pointer text-center"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Submit General Inspection</span>
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyGeneralUrl}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-amber-500/30 bg-[var(--card-bg,#ffffff)] text-amber-700 hover:bg-amber-50 font-semibold text-xs transition-colors cursor-pointer"
+                    title="Salin tautan formulir Google Forms"
+                  >
+                    {copiedGeneralUrl ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedGeneralUrl ? 'Tersalin' : 'Salin Link'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -239,10 +291,10 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
                 </div>
                 <div>
                   <h3 className="text-xs font-bold text-[var(--text-main,#0f172a)]">
-                    Dokumen Laporan Hasil Inspeksi
+                    Dokumen Laporan Hasil Inspeksi (PDF)
                   </h3>
                   <p className="text-[11px] text-[var(--text-muted,#64748b)]">
-                    File PDF resmi hasil inspeksi siap diunduh atau dipratinjau.
+                    File resmi hasil inspeksi siap diunduh, dipratinjau, atau disalin link-nya.
                   </p>
                 </div>
               </div>
@@ -259,7 +311,7 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
                     className="flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm transition-all transform active:scale-98 cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
-                    <span>Download PDF {linkPdf2 ? '(TBP)' : 'Laporan'}</span>
+                    <span>Download PDF Laporan {linkPdf2 ? '(TBP)' : ''}</span>
                   </a>
 
                   {previewUrl1 && (
@@ -268,12 +320,22 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-[var(--border-main,#cbd5e1)] bg-[var(--card-bg,#ffffff)] text-[var(--text-main,#334155)] hover:bg-slate-100 font-semibold text-xs transition-colors cursor-pointer"
-                      title="Buka Viewer PDF"
+                      title="Buka Pratinjau PDF"
                     >
                       <Eye className="w-4 h-4 text-teal-600" />
                       <span>Preview</span>
                     </a>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => handleCopyPdfLink(downloadUrl1, 1)}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-[var(--border-main,#cbd5e1)] bg-[var(--card-bg,#ffffff)] text-[var(--text-main,#334155)] hover:bg-slate-100 font-semibold text-xs transition-colors cursor-pointer"
+                    title="Salin Link Dokumen PDF"
+                  >
+                    {copiedPdf1 ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedPdf1 ? 'Tersalin' : 'Salin Link'}</span>
+                  </button>
                 </>
               ) : (
                 <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 flex items-center gap-2">
@@ -284,16 +346,16 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
             </div>
 
             {/* Secondary Document (e.g. GPS PDF) */}
-            {linkPdf2 && downloadUrl2 && (
+            {linkPdf2 && mobileViewUrl2 && (
               <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-[var(--border-main,#e2e8f0)]">
                 <a
-                  href={downloadUrl2}
+                  href={mobileViewUrl2}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-sm transition-all transform active:scale-98 cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Download PDF (GPS)</span>
+                  <span>Buka / Unduh PDF (GPS)</span>
                 </a>
 
                 {previewUrl2 && (
@@ -302,12 +364,22 @@ export function InspectionCompletionModal({ isOpen, onClose, data }: InspectionC
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-[var(--border-main,#cbd5e1)] bg-[var(--card-bg,#ffffff)] text-[var(--text-main,#334155)] hover:bg-slate-100 font-semibold text-xs transition-colors cursor-pointer"
-                    title="Buka Viewer PDF GPS"
+                    title="Buka Pratinjau PDF GPS"
                   >
                     <Eye className="w-4 h-4 text-sky-600" />
                     <span>Preview</span>
                   </a>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => handleCopyPdfLink(mobileViewUrl2 || linkPdf2 || '', 2)}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-[var(--border-main,#cbd5e1)] bg-[var(--card-bg,#ffffff)] text-[var(--text-main,#334155)] hover:bg-slate-100 font-semibold text-xs transition-colors cursor-pointer"
+                  title="Salin Link Google Drive PDF GPS"
+                >
+                  {copiedPdf2 ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                  <span>{copiedPdf2 ? 'Tersalin' : 'Salin Link'}</span>
+                </button>
               </div>
             )}
           </div>

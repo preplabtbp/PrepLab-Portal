@@ -41,7 +41,17 @@ import {
   Bookmark,
   Save,
   Lock,
-  MessageSquare
+  MessageSquare,
+  Table as TableIcon,
+  Kanban,
+  LayoutList,
+  ZoomIn,
+  ZoomOut,
+  ArrowUp,
+  ArrowDown,
+  ExternalLink,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui';
@@ -57,9 +67,11 @@ import {
 } from './notion/tasklist-utils';
 import { NotionDropdownCell, DropdownOption } from './notion/NotionDropdownCell';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
+import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
 import {
   getNextSubPeriod,
   getNextDefaultTargetDate,
+  getNextPeriodSchedule,
   resetAllTasklistItems,
   normalizeCadence
 } from './notion/period-utils';
@@ -335,18 +347,14 @@ function SearchableMultiPicSelect({
       {/* Selected PIC Badges Box + Input Field */}
       <div 
         onClick={() => { setIsOpen(true); inputRef.current?.focus(); }}
-        className="min-h-10 w-full p-1.5 rounded-xl border flex flex-wrap items-center gap-1.5 cursor-text transition-all focus-within:border-teal-500"
-        style={{
-          backgroundColor: 'var(--input-bg, #f8fafc)',
-          borderColor: safeNiks.length === 0 && required ? 'var(--border-main, #cbd5e1)' : 'var(--border-main, #cbd5e1)'
-        }}
+        className="min-h-10 w-full p-1.5 rounded-xl border-2 flex flex-wrap items-center gap-1.5 cursor-text transition-all bg-white border-slate-400 focus-within:border-teal-500 shadow-2xs"
       >
         {safeNiks.map((nik, idx) => (
           <span 
             key={nik}
-            className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg bg-teal-500/15 border border-teal-500/30 text-teal-800 dark:text-teal-200 text-xs font-bold animate-in fade-in zoom-in-95 duration-100"
+            className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg bg-teal-100 border border-teal-300 text-teal-950 text-xs font-black animate-in fade-in zoom-in-95 duration-100 shadow-2xs"
           >
-            <div className="w-4 h-4 rounded-full bg-teal-600 text-white flex items-center justify-center text-[9px] font-black">
+            <div className="w-4 h-4 rounded-full bg-teal-700 text-white flex items-center justify-center text-[9px] font-black">
               {((safeNames[idx] || nik || 'P')).charAt(0).toUpperCase()}
             </div>
             <span className="truncate max-w-[130px]">{safeNames[idx] || nik}</span>
@@ -356,7 +364,7 @@ function SearchableMultiPicSelect({
                 e.stopPropagation();
                 removePic(nik);
               }}
-              className="p-0.5 rounded hover:bg-teal-500/30 text-teal-700 dark:text-teal-300 transition-colors"
+              className="p-0.5 rounded hover:bg-teal-200 text-teal-800 transition-colors"
               title="Hapus PIC"
             >
               <X className="w-3 h-3" />
@@ -365,7 +373,7 @@ function SearchableMultiPicSelect({
         ))}
 
         <div className="flex-1 min-w-[140px] flex items-center gap-1.5 px-1.5">
-          <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" />
           <input
             ref={inputRef}
             type="text"
@@ -376,7 +384,7 @@ function SearchableMultiPicSelect({
             }}
             onFocus={() => setIsOpen(true)}
             placeholder={safeNiks.length === 0 ? "Ketik nama / NIK untuk menambah PIC..." : "Tambah PIC lain..."}
-            className="w-full bg-transparent outline-none text-xs font-medium placeholder:text-slate-400 py-1"
+            className="w-full bg-transparent outline-none text-xs font-bold text-black placeholder:text-slate-500 py-1"
           />
         </div>
       </div>
@@ -384,14 +392,10 @@ function SearchableMultiPicSelect({
       {/* Autocomplete Dropdown */}
       {isOpen && (
         <div 
-          className="absolute left-0 right-0 top-full mt-1.5 rounded-xl border shadow-2xl z-50 max-h-56 overflow-y-auto divide-y animate-in fade-in zoom-in-95 duration-150"
-          style={{
-            backgroundColor: 'var(--card-bg, #ffffff)',
-            borderColor: 'var(--border-main, #cbd5e1)'
-          }}
+          className="absolute left-0 right-0 top-full mt-1.5 rounded-xl border-2 shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-200 animate-in fade-in zoom-in-95 duration-150 bg-white border-slate-300"
         >
           {filteredEmployees.length === 0 ? (
-            <div className="p-3 text-center text-xs text-slate-400 italic">
+            <div className="p-3 text-center text-xs text-slate-600 font-bold italic">
               Tidak ditemukan karyawan dengan kata kunci "{searchTerm}"
             </div>
           ) : (
@@ -407,29 +411,29 @@ function SearchableMultiPicSelect({
                       addPic(emp);
                     }
                   }}
-                  className={`p-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors hover:bg-teal-500/10 ${
-                    isSelected ? 'bg-teal-500/15' : ''
+                  className={`p-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors hover:bg-teal-50 ${
+                    isSelected ? 'bg-teal-100/60' : ''
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate flex items-center gap-1.5">
+                    <div className="font-black text-xs text-black truncate flex items-center gap-1.5">
                       <span>{emp.name}</span>
                       {isSelected && (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-bold bg-teal-600 text-white">
+                        <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-black bg-teal-700 text-white">
                           Dipilih
                         </span>
                       )}
                     </div>
-                    <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                    <div className="text-[10px] font-bold text-slate-600 flex items-center gap-1.5 mt-0.5">
                       <span className="font-mono">NIK: {emp.nik}</span>
                       <span>•</span>
                       <span className="truncate">{emp.section || emp.department || emp.jabatan || 'Personil'}</span>
                     </div>
                   </div>
                   {isSelected ? (
-                    <Check className="w-4 h-4 text-teal-600 shrink-0" />
+                    <Check className="w-4 h-4 text-teal-700 shrink-0" />
                   ) : (
-                    <Plus className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Plus className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                   )}
                 </div>
               );
@@ -497,21 +501,17 @@ function SearchableSinglePicSelect({
       {valueNik && !isOpen ? (
         <div 
           onClick={() => { setIsOpen(true); setSearchTerm(''); }}
-          className="w-full flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer hover:border-amber-500/80 group"
-          style={{
-            backgroundColor: 'var(--input-bg, #f8fafc)',
-            borderColor: 'var(--border-main, #cbd5e1)'
-          }}
+          className="w-full flex items-center justify-between p-2.5 rounded-xl border-2 transition-all cursor-pointer hover:border-amber-500/80 group bg-white border-slate-400 shadow-2xs"
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold flex items-center justify-center text-xs shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-950 font-black flex items-center justify-center text-xs shrink-0 border border-amber-300">
               {(valueName || 'P').charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <div className="font-bold text-xs truncate text-slate-900 dark:text-slate-100 group-hover:text-amber-600 transition-colors">
+              <div className="font-black text-xs truncate text-black group-hover:text-amber-700 transition-colors">
                 {valueName}
               </div>
-              <div className="text-[10px] text-slate-500 font-mono">
+              <div className="text-[10px] text-slate-600 font-mono font-bold">
                 NIK: {valueNik}
               </div>
             </div>
@@ -524,7 +524,7 @@ function SearchableSinglePicSelect({
               setSearchTerm('');
               setIsOpen(true);
             }}
-            className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 transition-colors"
+            className="p-1 rounded-md hover:bg-slate-200 text-slate-500 hover:text-black transition-colors"
             title="Ganti PIC"
           >
             <X className="w-3.5 h-3.5" />
@@ -533,7 +533,7 @@ function SearchableSinglePicSelect({
       ) : (
         <div className="relative">
           <div className="relative flex items-center">
-            <Search className="w-3.5 h-3.5 absolute left-3 text-slate-400 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 absolute left-3 text-slate-500 pointer-events-none" />
             <input
               type="text"
               autoFocus={isOpen}
@@ -544,17 +544,13 @@ function SearchableSinglePicSelect({
               }}
               onFocus={() => setIsOpen(true)}
               placeholder={placeholder}
-              className="w-full pl-8 pr-8 py-2 rounded-xl border outline-none text-xs font-medium focus:border-amber-500 transition-all"
-              style={{
-                backgroundColor: 'var(--input-bg, #f8fafc)',
-                borderColor: 'var(--border-main, #cbd5e1)'
-              }}
+              className="w-full pl-8 pr-8 py-2 rounded-xl border-2 outline-none text-xs font-bold text-black focus:border-amber-500 transition-all bg-white border-slate-400 placeholder:text-slate-500 shadow-2xs"
             />
             {searchTerm && (
               <button
                 type="button"
                 onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 p-0.5 rounded text-slate-400 hover:text-slate-600"
+                className="absolute right-2.5 p-0.5 rounded text-slate-500 hover:text-black"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -563,14 +559,10 @@ function SearchableSinglePicSelect({
 
           {isOpen && (
             <div 
-              className="absolute left-0 right-0 top-full mt-1.5 rounded-xl border shadow-xl z-50 max-h-56 overflow-y-auto divide-y animate-in fade-in zoom-in-95 duration-150"
-              style={{
-                backgroundColor: 'var(--card-bg, #ffffff)',
-                borderColor: 'var(--border-main, #cbd5e1)'
-              }}
+              className="absolute left-0 right-0 top-full mt-1.5 rounded-xl border-2 shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-200 animate-in fade-in zoom-in-95 duration-150 bg-white border-slate-300"
             >
               {filteredEmployees.length === 0 ? (
-                <div className="p-3 text-center text-xs text-slate-400 italic">
+                <div className="p-3 text-center text-xs text-slate-600 font-bold italic">
                   Tidak ditemukan karyawan dengan kata kunci "{searchTerm}"
                 </div>
               ) : (
@@ -584,22 +576,22 @@ function SearchableSinglePicSelect({
                         setIsOpen(false);
                         setSearchTerm('');
                       }}
-                      className={`p-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors hover:bg-amber-500/10 ${
-                        isSelected ? 'bg-amber-500/15' : ''
+                      className={`p-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors hover:bg-amber-50 ${
+                        isSelected ? 'bg-amber-100/60' : ''
                       }`}
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate">
+                        <div className="font-black text-xs text-black truncate">
                           {emp.name}
                         </div>
-                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                        <div className="text-[10px] text-slate-600 font-bold flex items-center gap-1.5 mt-0.5">
                           <span className="font-mono">NIK: {emp.nik}</span>
                           <span>•</span>
                           <span className="truncate">{emp.section || emp.department || emp.jabatan || 'Personil'}</span>
                         </div>
                       </div>
                       {isSelected && (
-                        <Check className="w-4 h-4 text-amber-600 shrink-0" />
+                        <Check className="w-4 h-4 text-amber-700 shrink-0" />
                       )}
                     </div>
                   );
@@ -658,28 +650,24 @@ function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect
   return (
     <div ref={wrapperRef} className="relative space-y-1">
       <label className="text-xs font-bold block flex items-center justify-between">
-        <span>Hubungkan ke Tabel Buletin (Opsional)</span>
+        <span>Hubungkan ke Tabel Labnote (Opsional)</span>
         <span className="text-[10px] text-teal-600 dark:text-teal-400 font-normal">Sinkronisasi 2 arah</span>
       </label>
 
       {selectedPost && !isOpen ? (
         <div 
           onClick={() => { setIsOpen(true); setSearchTerm(''); }}
-          className="w-full flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer hover:border-teal-500/80 group"
-          style={{
-            backgroundColor: 'var(--input-bg, #f8fafc)',
-            borderColor: 'var(--border-main, #cbd5e1)'
-          }}
+          className="w-full flex items-center justify-between p-2.5 rounded-xl border-2 transition-all cursor-pointer hover:border-teal-500/80 group bg-white border-slate-400 shadow-2xs"
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold bg-teal-500/15 text-teal-700 dark:text-teal-300 shrink-0">
+            <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-black bg-teal-100 text-teal-950 border border-teal-300 shrink-0">
               #{selectedPost.id}
             </span>
             <div className="min-w-0">
-              <div className="font-bold text-xs truncate text-slate-900 dark:text-slate-100 group-hover:text-teal-600 transition-colors">
+              <div className="font-black text-xs truncate text-black group-hover:text-teal-700 transition-colors">
                 {selectedPost.title || selectedPost.category}
               </div>
-              <div className="text-[10px] text-slate-500 truncate">
+              <div className="text-[10px] text-slate-600 font-bold truncate">
                 {selectedPost.department || 'General'} • Universe {selectedPost.pt || 'TBP'}
               </div>
             </div>
@@ -690,8 +678,8 @@ function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect
               e.stopPropagation();
               onSelect('');
             }}
-            className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 transition-colors"
-            title="Lepas tautan buletin"
+            className="p-1 rounded-md hover:bg-slate-200 text-slate-500 hover:text-black transition-colors"
+            title="Lepas tautan Labnote"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -699,7 +687,7 @@ function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect
       ) : (
         <div className="relative">
           <div className="relative flex items-center">
-            <Search className="w-3.5 h-3.5 absolute left-3 text-slate-400 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 absolute left-3 text-slate-500 pointer-events-none" />
             <input
               type="text"
               autoFocus={isOpen}
@@ -709,18 +697,14 @@ function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect
                 if (!isOpen) setIsOpen(true);
               }}
               onFocus={() => setIsOpen(true)}
-              placeholder="Ketik judul buletin untuk mencari & menautkan..."
-              className="w-full pl-8 pr-8 py-2 rounded-xl border outline-none text-xs font-medium focus:border-teal-500 transition-all"
-              style={{
-                backgroundColor: 'var(--input-bg, #f8fafc)',
-                borderColor: 'var(--border-main, #cbd5e1)'
-              }}
+              placeholder="Ketik judul Labnote untuk mencari & menautkan..."
+              className="w-full pl-8 pr-8 py-2 rounded-xl border-2 outline-none text-xs font-bold text-black focus:border-teal-500 transition-all bg-white border-slate-400 placeholder:text-slate-500 shadow-2xs"
             />
             {searchTerm && (
               <button
                 type="button"
                 onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 p-0.5 rounded text-slate-400 hover:text-slate-600"
+                className="absolute right-2.5 p-0.5 rounded text-slate-500 hover:text-black"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -729,21 +713,17 @@ function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect
 
           {isOpen && (
             <div 
-              className="absolute left-0 right-0 top-full mt-1.5 rounded-xl border shadow-xl z-50 max-h-56 overflow-y-auto divide-y animate-in fade-in zoom-in-95 duration-150"
-              style={{
-                backgroundColor: 'var(--card-bg, #ffffff)',
-                borderColor: 'var(--border-main, #cbd5e1)'
-              }}
+              className="absolute left-0 right-0 top-full mt-1.5 rounded-xl border-2 shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-200 animate-in fade-in zoom-in-95 duration-150 bg-white border-slate-300"
             >
               <div
                 onClick={() => {
                   onSelect('');
                   setIsOpen(false);
                 }}
-                className="p-2.5 flex items-center justify-between text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                className="p-2.5 flex items-center justify-between text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
-                <span>-- Simpan di Log Book Saja (Tanpa Buletin) --</span>
-                {!selectedId && <Check className="w-4 h-4 text-teal-600 shrink-0" />}
+                <span>-- Simpan di Log Book Saja (Tanpa Labnote) --</span>
+                {!selectedId && <Check className="w-4 h-4 text-teal-700 shrink-0" />}
               </div>
 
               {filteredBulletins.map(b => {
@@ -756,25 +736,25 @@ function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect
                       setIsOpen(false);
                       setSearchTerm('');
                     }}
-                    className={`p-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors hover:bg-teal-500/10 ${
-                      isSelected ? 'bg-teal-500/15' : ''
+                    className={`p-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors hover:bg-teal-50 ${
+                      isSelected ? 'bg-teal-100/60' : ''
                     }`}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-slate-500/10 text-slate-600 dark:text-slate-300">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-slate-200 text-slate-800">
                           #{b.id}
                         </span>
-                        <span className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate">
+                        <span className="font-black text-xs text-black truncate">
                           {b.title || b.category}
                         </span>
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
+                      <div className="text-[10px] text-slate-600 font-bold mt-0.5">
                         {b.department || 'General'} • Universe {b.pt || 'TBP'}
                       </div>
                     </div>
                     {isSelected && (
-                      <Check className="w-4 h-4 text-teal-600 shrink-0" />
+                      <Check className="w-4 h-4 text-teal-700 shrink-0" />
                     )}
                   </div>
                 );
@@ -783,8 +763,8 @@ function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect
           )}
         </div>
       )}
-      <p className="text-[10px]" style={{ color: 'var(--text-muted, #64748b)' }}>
-        Jika ditautkan, update progress subtask & status akan otomatis tersinkronisasi ke tabel dokumen buletin tersebut.
+      <p className="text-[10px] font-bold text-slate-600">
+        Jika ditautkan, update progress subtask & status akan otomatis tersinkronisasi ke tabel dokumen Labnote tersebut.
       </p>
     </div>
   );
@@ -865,7 +845,10 @@ export function LogbookScreen({
   }, [userProfile]);
 
   const [selectedDate, setSelectedDate] = useState<string>(getTodayStr());
-  const [selectedSection, setSelectedSection] = useState<string>(userSection);
+  const [selectedSection, setSelectedSection] = useState<string>(() => {
+    if (isMeetingRoom || userSection === 'ALL') return 'Semua Seksi';
+    return userSection;
+  });
   const [selectedPt, setSelectedPt] = useState<string>(userPt === 'GTS' ? 'GTS' : 'TBP');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [picFilter, setPicFilter] = useState<string>('ALL');
@@ -888,64 +871,67 @@ export function LogbookScreen({
         isRoutine: false,
         cadence: 'Non Routine',
         label: '⚡ Non Routine',
-        color: 'bg-slate-100 text-slate-700 border-slate-300',
+        color: 'bg-slate-100 text-slate-800 border-slate-200 font-medium',
         windowDesc: 'Harian (Ad-hoc)',
         dDayText: null
       };
     }
 
     let cadence = task.activityType || 'Daily';
-    if (cadence.toLowerCase() === 'routine' || !cadence) {
+    const cActLower = (task.activityType || '').toLowerCase().trim();
+    if (cActLower.includes('monthly') || cActLower.includes('bulanan')) {
+      cadence = 'Monthly';
+    } else if (cActLower.includes('weekly') || cActLower.includes('mingguan')) {
+      cadence = 'Weekly';
+    } else if (cActLower.includes('daily') || cActLower.includes('harian')) {
+      cadence = 'Daily';
+    } else if (cActLower.includes('quarterly') || cActLower.includes('triwulan')) {
+      cadence = 'Quarterly';
+    } else if (cActLower.includes('biannual') || cActLower.includes('semester')) {
+      cadence = 'Biannual';
+    } else if (cActLower.includes('yearly') || cActLower.includes('annual') || cActLower.includes('tahunan')) {
+      cadence = 'Yearly';
+    } else if (cadence.toLowerCase() === 'routine' || !cadence) {
       const bTitle = (task.bulletinTopicTitle || '').toLowerCase();
       const tTitle = (task.title || '').toLowerCase();
       const combined = `${bTitle} ${tTitle}`;
-      if (combined.includes('weekly') || combined.includes('mingguan')) cadence = 'Weekly';
+      if (combined.includes('monthly') || combined.includes('bulanan')) cadence = 'Monthly';
+      else if (combined.includes('weekly') || combined.includes('mingguan')) cadence = 'Weekly';
       else if (combined.includes('quarterly') || combined.includes('triwulan')) cadence = 'Quarterly';
       else if (combined.includes('biannual') || combined.includes('semester')) cadence = 'Biannual';
       else if (combined.includes('yearly') || combined.includes('annual') || combined.includes('tahunan')) cadence = 'Yearly';
-      else if (combined.includes('monthly') || combined.includes('bulanan')) cadence = 'Monthly';
       else cadence = 'Daily';
     }
 
     const cLower = cadence.toLowerCase();
     let label = '🔁 Routine';
-    let color = 'bg-teal-50 text-teal-800 border-teal-300';
+    let color = 'bg-teal-50 text-teal-900 border-teal-200/80 font-medium';
     let windowDesc = 'Harian';
 
     if (cLower.includes('daily')) {
       label = '🔁 Daily';
-      color = 'bg-teal-50 text-teal-800 border-teal-300';
+      color = 'bg-teal-50 text-teal-900 border-teal-200/80 font-medium';
       windowDesc = 'Muncul Tiap Hari';
     } else if (cLower.includes('weekly')) {
       label = '📅 Weekly';
-      color = 'bg-blue-50 text-blue-800 border-blue-300';
+      color = 'bg-sky-50 text-sky-900 border-sky-200/80 font-medium';
       windowDesc = 'Muncul Mulai D-3';
     } else if (cLower.includes('monthly')) {
       label = '🗓️ Monthly';
-      color = 'bg-indigo-50 text-indigo-800 border-indigo-300';
+      color = 'bg-indigo-50 text-indigo-900 border-indigo-200/80 font-medium';
       windowDesc = 'Muncul Mulai D-7';
     } else if (cLower.includes('quarterly')) {
       label = '📊 Quarterly';
-      color = 'bg-purple-50 text-purple-800 border-purple-300';
+      color = 'bg-purple-50 text-purple-900 border-purple-200/80 font-medium';
       windowDesc = 'Muncul Mulai M-1';
     } else if (cLower.includes('biannual')) {
       label = '⏳ Biannual';
-      color = 'bg-amber-50 text-amber-900 border-amber-300';
+      color = 'bg-amber-50 text-amber-900 border-amber-200/80 font-medium';
       windowDesc = 'Muncul Mulai M-2';
     } else if (cLower.includes('yearly')) {
       label = '🎯 Yearly';
-      color = 'bg-rose-50 text-rose-800 border-rose-300';
+      color = 'bg-rose-50 text-rose-900 border-rose-200/80 font-medium';
       windowDesc = 'Muncul Mulai M-3';
-    }
-
-    // Calculate D-Day if targetDate exists
-    let dDayText: string | null = null;
-    const deadlineStr = task.targetDate || task.taskDate;
-    if (deadlineStr && referenceDateStr) {
-      const diff = Math.ceil((new Date(deadlineStr).getTime() - new Date(referenceDateStr).getTime()) / (1000 * 60 * 60 * 24));
-      if (diff === 0) dDayText = 'Target: Hari Ini!';
-      else if (diff > 0) dDayText = `H-${diff}`;
-      else dDayText = `Lewat ${Math.abs(diff)} hr`;
     }
 
     return {
@@ -953,8 +939,91 @@ export function LogbookScreen({
       cadence,
       label,
       color,
-      windowDesc,
-      dDayText
+      windowDesc
+    };
+  };
+
+  // Helper to calculate start date and elapsed duration of a project/task for management
+  const getTaskDurationInfo = (task: LogbookTask, referenceDateStr?: string) => {
+    const startStr = task.taskDate || (task.createdAt ? task.createdAt.split('T')[0] : getTodayStr());
+    const refStr = referenceDateStr || selectedDate || getTodayStr();
+
+    const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
+    let endStr = refStr;
+    if (isDone) {
+      if (task.actualCompletedDate) {
+        try {
+          const d = new Date(task.actualCompletedDate);
+          if (!isNaN(d.getTime())) {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            endStr = `${year}-${month}-${day}`;
+          }
+        } catch (e) {
+          endStr = refStr;
+        }
+      } else {
+        // Fallback: check subtask checkedDate
+        const parsed = parseTasklist(task.description || '');
+        if (parsed.items.length > 0) {
+          const dates = parsed.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
+          if (dates.length > 0) {
+            endStr = dates[dates.length - 1];
+          }
+        }
+      }
+    }
+
+    const parseCalendarDate = (str: string) => {
+      const parts = str.split('T')[0].split('-');
+      if (parts.length === 3) {
+        return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      }
+      return new Date(str);
+    };
+
+    const startDate = parseCalendarDate(startStr);
+    const endDate = parseCalendarDate(endStr);
+    const diffTime = endDate.getTime() - startDate.getTime();
+    const rawDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    const dayCount = Math.max(1, rawDays + 1);
+
+    let durationLabel = '';
+    let durationShort = '';
+    let badgeClass = 'bg-teal-100 text-teal-950 border-teal-300 font-bold';
+
+    if (isDone) {
+      if (rawDays <= 0) {
+        durationLabel = 'Selesai di Hari yang Sama';
+        durationShort = '1 Hari';
+      } else {
+        durationLabel = `Tuntas dalam ${dayCount} Hari`;
+        durationShort = `${dayCount} Hari`;
+      }
+      badgeClass = 'bg-emerald-50 text-emerald-900 border-emerald-200/80 font-medium';
+    } else {
+      if (rawDays <= 0) {
+        durationLabel = 'Hari ke-1 (Mulai Hari Ini)';
+        durationShort = 'Hari ke-1';
+        badgeClass = 'bg-sky-50 text-sky-900 border-sky-200/80 font-medium';
+      } else {
+        durationLabel = `Berjalan ${dayCount} Hari`;
+        durationShort = `Hari ke-${dayCount}`;
+        badgeClass = dayCount > 14 
+          ? 'bg-amber-50 text-amber-900 border-amber-200/80 font-medium' 
+          : 'bg-slate-100 text-slate-800 border-slate-200 font-medium';
+      }
+    }
+
+    return {
+      startDateStr: startStr,
+      displayStartDate: formatDisplayTargetDate(startStr),
+      dayCount,
+      durationLabel,
+      durationShort,
+      badgeClass,
+      isDone
     };
   };
 
@@ -989,8 +1058,10 @@ export function LogbookScreen({
 
   // Keep selectedSection in sync if userSection resolves after boot
   useEffect(() => {
-    if (userSection) setSelectedSection(userSection);
-  }, [userSection]);
+    if (userSection && !isMeetingRoom && userSection !== 'ALL') {
+      setSelectedSection(userSection);
+    }
+  }, [userSection, isMeetingRoom]);
 
   // Loading & Data states
   const [loading, setLoading] = useState(true);
@@ -1027,6 +1098,7 @@ export function LogbookScreen({
   // Delete confirmation modal state
   const [taskToDelete, setTaskToDelete] = useState<LogbookTask | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDetailedKpi, setShowDetailedKpi] = useState(false);
 
   // Job Pending handover modal state
   const [pendingModalTask, setPendingModalTask] = useState<LogbookTask | null>(null);
@@ -1053,6 +1125,7 @@ export function LogbookScreen({
   const [newTargetDate, setNewTargetDate] = useState(getTodayStr());
   const [newTargetTime, setNewTargetTime] = useState('');
   const [selectedBulletinPostId, setSelectedBulletinPostId] = useState<string>('');
+  const [targetTaskSection, setTargetTaskSection] = useState<string>('Preparation');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // In Assign Modal: Job Pending Options
@@ -1076,6 +1149,11 @@ export function LogbookScreen({
     setNewPendingPicNik('');
     setNewPendingPicName('');
     setNewPendingReason('');
+    setTargetTaskSection(
+      selectedSection && selectedSection !== 'Semua Seksi' && selectedSection !== 'ALL'
+        ? selectedSection
+        : (userSection !== 'ALL' ? userSection : 'Preparation')
+    );
     setShowAssignModal(true);
   };
 
@@ -1236,13 +1314,14 @@ export function LogbookScreen({
     task: LogbookTask;
     currentPeriod: string;
     nextPeriod: string;
+    nextStartDate: string;
     nextTargetDate: string;
     resetDescription: string;
   } | null>(null);
 
   const handleConfirmLogbookNextPeriod = async () => {
     if (!routineCompletionModal) return;
-    const { task, nextPeriod, nextTargetDate, resetDescription } = routineCompletionModal;
+    const { task, nextPeriod, nextStartDate, nextTargetDate, resetDescription } = routineCompletionModal;
     
     try {
       let newBulletinTopicTitle = task.bulletinTopicTitle;
@@ -1266,7 +1345,8 @@ export function LogbookScreen({
           assignedByName: task.assignedByName || inspectorName || 'Atasan / Manajemen',
           priority: task.priority || 'Normal',
           activityType: task.activityType || 'Daily',
-          taskDate: selectedDate || getTodayStr(),
+          taskDate: nextStartDate, // Tanggal mulai periode baru (besok untuk Daily, Senin depan untuk Weekly, tgl 1 untuk Monthly)
+          plannedDate: nextStartDate,
           targetDate: nextTargetDate,
           targetTime: task.targetTime || '23:59',
           status: 'Open',
@@ -1433,7 +1513,7 @@ export function LogbookScreen({
         });
         const json = await res.json();
         if (json.status === 'success') {
-          toast.success('Tugas berhasil diperbarui dan disinkronkan ke Buletin');
+          toast.success('Tugas berhasil diperbarui dan disinkronkan ke Labnote');
           setEditingTask(null);
           fetchTasks();
         } else {
@@ -1615,7 +1695,7 @@ export function LogbookScreen({
 
     try {
       setIsSubmitting(true);
-      toast.loading('Menugaskan arahan kegiatan & menyinkronkan ke Buletin...', { id: 'assign-task' });
+      toast.loading('Menugaskan arahan kegiatan & menyinkronkan ke Labnote...', { id: 'assign-task' });
 
       // Auto compute initial status if subtask mode is used
       const parsedNew = parseTasklist(newTaskDescription);
@@ -1628,13 +1708,17 @@ export function LogbookScreen({
         initPercent = parsedNew.percentage;
       }
 
+      const finalSection = (isSuperAdmin || isMeetingRoom || userSection === 'ALL')
+        ? targetTaskSection
+        : userSection;
+
       const res = await fetch('/api/logbook/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTitle.trim(),
           description: newTaskDescription.trim(),
-          section: userSection,
+          section: finalSection,
           assigneeNik: newAssigneeNiks.join(', '),
           assigneeName: newAssigneeNames.join(', '),
           assignedByNik: inspectorNik || 'SUPERVISOR',
@@ -1700,38 +1784,43 @@ export function LogbookScreen({
       if (isRoutine) {
         const normCad = normalizeCadence(actType) || 'Daily';
         const curPeriod = task.bulletinTopicTitle?.split(' - ')[1] || (normCad === 'Yearly' ? String(new Date().getFullYear()) : task.targetDate || selectedDate);
-        const nextPeriod = getNextSubPeriod(curPeriod, normCad);
-        const nextTargetDate = getNextDefaultTargetDate(normCad, task.targetDate || selectedDate);
+        const schedule = getNextPeriodSchedule(normCad, curPeriod, task.targetDate || selectedDate);
         const resetDesc = resetAllTasklistItems(updatedDesc);
 
         setRoutineCompletionModal({
           task,
           currentPeriod: curPeriod,
-          nextPeriod,
-          nextTargetDate,
+          nextPeriod: schedule.nextPeriod,
+          nextStartDate: schedule.nextStartDate,
+          nextTargetDate: schedule.nextTargetDate,
           resetDescription: resetDesc
         });
       }
     }
+
+    const compDateVal = autoStatus === 'Closed' ? selectedDate : (autoStatus === 'Open' || autoStatus === 'On Progress' ? null : task.actualCompletedDate);
 
     // Optimistic UI Update
     setTodayTasks(prev => prev.map(t => t.id === task.id ? { 
       ...t, 
       description: updatedDesc, 
       progressPercent: progress.percentage,
-      status: autoStatus 
+      status: autoStatus,
+      actualCompletedDate: compDateVal
     } : t));
     setYesterdayTasks(prev => prev.map(t => t.id === task.id ? { 
       ...t, 
       description: updatedDesc, 
       progressPercent: progress.percentage,
-      status: autoStatus 
+      status: autoStatus,
+      actualCompletedDate: compDateVal
     } : t));
     setCarryOverTasks(prev => prev.map(t => t.id === task.id ? { 
       ...t, 
       description: updatedDesc, 
       progressPercent: progress.percentage,
-      status: autoStatus 
+      status: autoStatus,
+      actualCompletedDate: compDateVal
     } : t));
 
     try {
@@ -1742,6 +1831,8 @@ export function LogbookScreen({
           description: updatedDesc,
           progressPercent: progress.percentage,
           status: autoStatus,
+          selectedDate: selectedDate,
+          actualCompletedDate: autoStatus === 'Closed' ? selectedDate : (autoStatus === 'Open' || autoStatus === 'On Progress' ? null : undefined),
           updaterNik: inspectorNik
         })
       });
@@ -1762,10 +1853,20 @@ export function LogbookScreen({
 
   // Update Status Directly
   const handleStatusChange = async (taskId: number, newStatus: string) => {
+    const isClosing = newStatus === 'Closed' || newStatus === 'Done' || newStatus === 'Resolved';
+    const isReopening = newStatus === 'Open' || newStatus === 'On Progress' || newStatus === 'In Progress';
+    const compDateVal = isClosing ? selectedDate : (isReopening ? null : undefined);
+
+    // Find the task immediately for routine detection (works for tasks with or without subtask lists)
+    const targetTask = todayTasks.find(t => String(t.id) === String(taskId)) || 
+      yesterdayTasks.find(t => String(t.id) === String(taskId)) || 
+      carryOverTasks.find(t => String(t.id) === String(taskId)) ||
+      (selectedTaskDetail && String(selectedTaskDetail.id) === String(taskId) ? selectedTaskDetail : null);
+
     // Optimistic Update
-    setTodayTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-    setYesterdayTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-    setCarryOverTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+    setTodayTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
+    setYesterdayTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
+    setCarryOverTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
 
     try {
       const res = await fetch(`/api/logbook/tasks/${taskId}`, {
@@ -1773,12 +1874,34 @@ export function LogbookScreen({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: newStatus,
+          selectedDate: selectedDate,
+          actualCompletedDate: isClosing ? selectedDate : (isReopening ? null : undefined),
           updaterNik: inspectorNik
         })
       });
       const json = await res.json();
       if (json.status === 'success') {
-        toast.success(`Status diubah menjadi [${newStatus}] & tersinkron ke Buletin!`);
+        toast.success(`Status diubah menjadi [${newStatus}] & tersinkron ke Labnote!`);
+
+        // If routine task is being completed (whether it has subtasks or not!), prompt for next period schedule
+        if (isClosing && targetTask) {
+          const rInfo = getTaskRoutineInfo(targetTask, selectedDate);
+          if (rInfo.isRoutine) {
+            const normCad = rInfo.cadence || 'Daily';
+            const curPeriod = targetTask.bulletinTopicTitle?.split(' - ')[1] || (normCad === 'Yearly' ? String(new Date().getFullYear()) : targetTask.targetDate || selectedDate);
+            const schedule = getNextPeriodSchedule(normCad, curPeriod, targetTask.targetDate || selectedDate);
+            const resetDesc = resetAllTasklistItems(targetTask.description || '');
+
+            setRoutineCompletionModal({
+              task: targetTask,
+              currentPeriod: curPeriod,
+              nextPeriod: schedule.nextPeriod,
+              nextStartDate: schedule.nextStartDate,
+              nextTargetDate: schedule.nextTargetDate,
+              resetDescription: resetDesc
+            });
+          }
+        }
       }
     } catch (e) {
       toast.error('Gagal memperbarui status');
@@ -1841,7 +1964,7 @@ export function LogbookScreen({
         setYesterdayTasks(prev => prev.filter(t => t.id !== task.id));
         setCarryOverTasks(prev => prev.filter(t => t.id !== task.id));
         setTaskToDelete(null);
-        toast.success(task.bulletinPostId ? 'Kegiatan berhasil dihapus dan baris buletin tersinkronkan!' : 'Kegiatan berhasil dihapus!', { id: 'delete-task' });
+        toast.success(task.bulletinPostId ? 'Kegiatan berhasil dihapus dan baris Labnote tersinkronkan!' : 'Kegiatan berhasil dihapus!', { id: 'delete-task' });
       } else {
         toast.error(json.message || 'Gagal menghapus kegiatan', { id: 'delete-task' });
       }
@@ -2053,9 +2176,26 @@ export function LogbookScreen({
         text += `${i + 1}. ${statusBadge} ${t.title} - PIC: ${t.assigneeName}${pendingInfo}\n`;
         const parsed = parseTasklist(t.description || '');
         if (parsed.hasTasklist) {
-          parsed.items.forEach(item => {
-            text += `   ${item.checked ? '✅' : '◻️'} ${item.text}\n`;
+          const targetYDate = summaryData?.yesterdayDate || yesterdayDateStr;
+          const yesterdayItems = parsed.items.filter(item => {
+            const isCheckedYesterday = item.checked && (item.checkedDate === targetYDate);
+            const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+              ? item.notes
+              : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+            const hasNoteYesterday = rawNotes.some(n => n.date === targetYDate);
+            return isCheckedYesterday || hasNoteYesterday;
           });
+
+          if (yesterdayItems.length > 0) {
+            yesterdayItems.forEach(item => {
+              const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                ? item.notes
+                : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+              const yesterdayNotes = rawNotes.filter(n => n.date === targetYDate);
+              const noteText = yesterdayNotes.length > 0 ? ` (Catatan: ${yesterdayNotes.map(n => n.text).join('; ')})` : '';
+              text += `   ${item.checked ? '✅' : '◻️'} ${item.text}${noteText}\n`;
+            });
+          }
         }
       });
     }
@@ -2065,8 +2205,9 @@ export function LogbookScreen({
       text += `- Belum ada tugas/planning yang ditugaskan untuk hari ini.\n`;
     } else {
       todayTasks.forEach((t, i) => {
+        const dur = getTaskDurationInfo(t, selectedDate);
         const pendingInfo = t.isPending ? ` [Job Pending: ${t.pendingPicName || ''}]` : '';
-        text += `${i + 1}. [${t.priority}] ${t.title} (PIC: ${t.assigneeName}${pendingInfo}) - Target: ${t.targetDate || 'Hari ini'} [${t.status}]\n`;
+        text += `${i + 1}. [${t.priority}] ${t.title} (PIC: ${t.assigneeName}${pendingInfo}) [Mulai: ${dur.displayStartDate} • ${dur.durationLabel}] [${t.status}]\n`;
         const parsed = parseTasklist(t.description || '');
         if (parsed.hasTasklist) {
           parsed.items.forEach(item => {
@@ -2235,7 +2376,8 @@ export function LogbookScreen({
       report += `- Tidak ada tugas yang diselesaikan kemarin.\n`;
     } else {
       completed.forEach((t, i) => {
-        report += `${i + 1}. [${t.priority}] ${t.title} [100%]\n   - PIC: ${t.assigneeName}\n`;
+        const dur = getTaskDurationInfo(t, summaryData?.yesterdayDate || yesterdayDateStr);
+        report += `${i + 1}. [${t.priority}] ${t.title} [100%]\n   - PIC: ${t.assigneeName}\n   - Waktu Pengerjaan: Mulai ${dur.displayStartDate} • ${dur.durationLabel}\n`;
       });
     }
 
@@ -2244,9 +2386,10 @@ export function LogbookScreen({
       report += `- Nihil (Semua tugas kemarin telah tuntas 100%).\n`;
     } else {
       unfinished.forEach((t, i) => {
+        const dur = getTaskDurationInfo(t, summaryData?.yesterdayDate || yesterdayDateStr);
         const prog = calculateTaskProgress(t);
         const pendingNote = t.isPending ? ` [Job Pending: ${t.pendingPicName || ''} - ${t.pendingReason || ''}]` : '';
-        report += `${i + 1}. [${t.priority}] ${t.title} [Progres: ${prog}% - Status: ${t.status}]${pendingNote}\n   - PIC: ${t.assigneeName}\n   - Target: ${formatDisplayTargetDate(t.targetDate)} (${t.targetTime || '23:59'})\n`;
+        report += `${i + 1}. [${t.priority}] ${t.title} [Progres: ${prog}% - Status: ${t.status}]${pendingNote}\n   - PIC: ${t.assigneeName}\n   - Durasi: Mulai ${dur.displayStartDate} • ${dur.durationLabel}\n`;
       });
     }
 
@@ -2288,8 +2431,116 @@ export function LogbookScreen({
     setExpandedTaskIds(new Set());
   };
 
+  // Notion Database Table System State (Identical aesthetic & ergonomics to NotionDatabaseTable)
+  const [viewMode, setViewMode] = useState<'table' | 'board' | 'list'>('table');
+  const [themeMode, setThemeMode] = useState<'notion-light' | 'dark-studio'>('notion-light');
+  const isNotionLight = themeMode === 'notion-light';
+  const [fitPageMode, setFitPageMode] = useState<boolean>(false);
+  const [zoomPercent, setZoomPercent] = useState<number>(100);
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
+    today: false,
+    yesterday: false
+  });
+  const toggleGroup = (grp: string) => {
+    setCollapsedGroups(prev => ({ ...prev, [grp]: !prev[grp] }));
+  };
+  const [selectedTaskDetail, setSelectedTaskDetail] = useState<LogbookTask | null>(null);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (colKey: string) => {
+    if (sortColumn === colKey) {
+      if (sortDirection === 'asc') setSortDirection('desc');
+      else {
+        setSortColumn(null);
+        setSortDirection('asc');
+      }
+    } else {
+      setSortColumn(colKey);
+      setSortDirection('asc');
+    }
+  };
+
+  const filterByNotionFilters = useCallback((taskList: LogbookTask[]) => {
+    return taskList.filter(t => {
+      if (statusFilter !== 'ALL') {
+        const s = (t.status || '').toUpperCase();
+        const isDone = s === 'CLOSED' || s === 'RESOLVED' || s === 'DONE';
+        const isProg = s === 'IN PROGRESS' || s === 'ON PROGRESS';
+        const isOpen = s === 'OPEN';
+        const isPend = Boolean(t.isPending || s === 'PENDING');
+        const isCanc = s === 'CANCELED';
+
+        if (statusFilter === 'ACTIVE' && (isDone || isCanc)) return false;
+        if (statusFilter === 'ON PROGRESS' && !isProg) return false;
+        if (statusFilter === 'OPEN' && !isOpen) return false;
+        if (statusFilter === 'PENDING' && !isPend) return false;
+        if (statusFilter === 'CLOSE' && !isDone) return false;
+        if (statusFilter === 'CANCELED' && !isCanc) return false;
+      }
+      if (priorityFilter !== 'ALL') {
+        const p = (t.priority || '').toUpperCase();
+        if (priorityFilter === 'URGENT' && p !== 'URGENT' && p !== 'CRITICAL') return false;
+        if (priorityFilter === 'HIGH' && p !== 'HIGH') return false;
+        if (priorityFilter === 'MEDIUM' && p !== 'MEDIUM') return false;
+        if (priorityFilter === 'NORMAL' && p !== 'NORMAL' && p !== 'MEDIUM') return false;
+        if (priorityFilter === 'LOW' && p !== 'LOW') return false;
+      }
+      return true;
+    });
+  }, [statusFilter, priorityFilter]);
+
+  const sortTasks = useCallback((taskList: LogbookTask[]) => {
+    if (!sortColumn) return taskList;
+    return [...taskList].sort((a, b) => {
+      let valA: any = '';
+      let valB: any = '';
+
+      if (sortColumn === 'title') {
+        valA = a.title || '';
+        valB = b.title || '';
+      } else if (sortColumn === 'status') {
+        valA = a.status || '';
+        valB = b.status || '';
+      } else if (sortColumn === 'priority') {
+        const pOrder: Record<string, number> = { Urgent: 4, High: 3, Medium: 2, Normal: 2, Low: 1 };
+        valA = pOrder[a.priority] || 0;
+        valB = pOrder[b.priority] || 0;
+      } else if (sortColumn === 'pic') {
+        valA = a.assigneeName || '';
+        valB = b.assigneeName || '';
+      } else if (sortColumn === 'cadence') {
+        valA = a.activityType || '';
+        valB = b.activityType || '';
+      } else if (sortColumn === 'progress') {
+        valA = calculateTaskProgress(a);
+        valB = calculateTaskProgress(b);
+      } else if (sortColumn === 'date') {
+        valA = a.createdAt || '';
+        valB = b.createdAt || '';
+      }
+
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return sortDirection === 'asc' ? valA - valB : valB - valA;
+      }
+      return sortDirection === 'asc' 
+        ? String(valA).localeCompare(String(valB))
+        : String(valB).localeCompare(String(valA));
+    });
+  }, [sortColumn, sortDirection]);
+
+  const tableTodayTasks = useMemo(() => {
+    return sortTasks(filterByNotionFilters(filteredToday));
+  }, [sortTasks, filterByNotionFilters, filteredToday]);
+
+  const tableYesterdayTasks = useMemo(() => {
+    return sortTasks(filterByNotionFilters(displayedYesterdayTasks));
+  }, [sortTasks, filterByNotionFilters, displayedYesterdayTasks]);
+
   // Enterprise Minimalist Task Row Renderer with Click-to-Expand Details
-  const renderTaskCard = (task: LogbookTask, isYesterday: boolean, isReadOnly: boolean = false) => {
+  const renderTaskCard = (task: LogbookTask, isYesterday: boolean, isReadOnly: boolean = false, currentEvalScope?: 'yesterday' | 'all_carryover') => {
     const parsed = parseTasklist(task.description || '');
     const hasSubtasks = parsed.hasTasklist && parsed.total > 0;
     const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
@@ -2297,9 +2548,33 @@ export function LogbookScreen({
     const isInProgress = task.status === 'In Progress' || task.status === 'On Progress';
     const isExpanded = expandedTaskIds.has(task.id);
     const picList = parsePicList(task.assigneeNik, task.assigneeName);
-    const isOverdue = isTaskOverdue(task.targetDate, task.targetTime, task.status);
+    const durationInfo = getTaskDurationInfo(task, selectedDate);
     const progressPercent = calculateTaskProgress(task);
     const routineInfo = getTaskRoutineInfo(task, selectedDate);
+
+    // Deteksi mode evaluasi:
+    // isYesterdayMode = true jika di bagian "Kemarin" (evalScope === 'yesterday').
+    // isYesterdayMode = false jika di bagian "Semua Backlog" (evalScope === 'all_carryover') atau "Planning Hari Ini".
+    const isYesterdayMode = isYesterday && (currentEvalScope ? currentEvalScope === 'yesterday' : isReadOnly);
+    const targetYDate = summaryData?.yesterdayDate || yesterdayDateStr;
+
+    // Filter Subtask:
+    // - Bagian Kemarin: HANYA subtask yang mengalami perubahan kemarin (baik diceklis kemarin, ATAU memiliki catatan baru kemarin).
+    // - Bagian Semua Backlog: Tampilkan SEMUA subtask (baik yang sudah diceklis maupun yang belum diceklis).
+    const displayedItems = (() => {
+      if (!parsed.hasTasklist || !parsed.items) return [];
+      if (!isYesterdayMode) {
+        return parsed.items;
+      }
+      return parsed.items.filter(item => {
+        const isCheckedYesterday = item.checked && (item.checkedDate === targetYDate);
+        const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+          ? item.notes
+          : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+        const hasNoteYesterday = rawNotes.some(n => n.date === targetYDate);
+        return isCheckedYesterday || hasNoteYesterday;
+      });
+    })();
 
     // Mode Subtask Status Automation:
     // Jika ada subtask: otomatis Open (0 ceklis), On Progress (1..N-1 ceklis), Closed (full ceklis), dengan pilihan khusus Canceled.
@@ -2313,28 +2588,28 @@ export function LogbookScreen({
             {
               value: autoStatus,
               label: `Pulihkan ke [${autoStatus}]`,
-              badgeClass: autoStatus === 'Closed' ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/40' : autoStatus === 'On Progress' ? 'bg-amber-500/15 text-amber-600 border-amber-500/40' : 'bg-blue-500/15 text-blue-500 border-blue-500/40',
-              icon: <RotateCcw className="w-2.5 h-2.5" />
+              badgeClass: autoStatus === 'Closed' ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : autoStatus === 'On Progress' ? 'bg-amber-100 text-amber-950 border-amber-400 font-bold' : 'bg-blue-100 text-blue-950 border-blue-400 font-bold',
+              icon: <RotateCcw className="w-2.5 h-2.5 text-slate-800" />
             },
             {
               value: 'Canceled',
               label: 'Canceled (Batal)',
-              badgeClass: 'bg-rose-500/15 text-rose-600 border-rose-500/40',
-              icon: <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
+              badgeClass: 'bg-rose-100 text-rose-950 border-rose-400 font-bold',
+              icon: <AlertCircle className="w-2.5 h-2.5 text-rose-800" />
             }
           ]
         : [
             {
               value: autoStatus,
               label: `${autoStatus} (Auto Checklist: ${parsed.completed}/${parsed.total})`,
-              badgeClass: autoStatus === 'Closed' ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/40' : autoStatus === 'On Progress' ? 'bg-amber-500/15 text-amber-600 border-amber-500/40' : 'bg-blue-500/15 text-blue-500 border-blue-500/40',
-              icon: autoStatus === 'Closed' ? <CheckCircle2 className="w-2.5 h-2.5" /> : autoStatus === 'On Progress' ? <RotateCcw className="w-2.5 h-2.5" /> : <Clock className="w-2.5 h-2.5" />
+              badgeClass: autoStatus === 'Closed' ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : autoStatus === 'On Progress' ? 'bg-amber-100 text-amber-950 border-amber-400 font-bold' : 'bg-blue-100 text-blue-950 border-blue-400 font-bold',
+              icon: autoStatus === 'Closed' ? <CheckCircle2 className="w-2.5 h-2.5 text-emerald-800" /> : autoStatus === 'On Progress' ? <RotateCcw className="w-2.5 h-2.5 text-amber-800" /> : <Clock className="w-2.5 h-2.5 text-blue-800" />
             },
             {
               value: 'Canceled',
               label: 'Canceled (Batalkan)',
-              badgeClass: 'bg-rose-500/15 text-rose-600 border-rose-500/40',
-              icon: <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
+              badgeClass: 'bg-rose-100 text-rose-950 border-rose-400 font-bold',
+              icon: <AlertCircle className="w-2.5 h-2.5 text-rose-800" />
             }
           ]
       : undefined;
@@ -2380,81 +2655,86 @@ export function LogbookScreen({
         {/* Minimalist Baris Header (Clickable anywhere to expand/collapse) */}
         <div 
           onClick={() => toggleExpand(task.id)}
-          className="p-3 sm:px-4 sm:py-2.5 flex items-center justify-between gap-3 cursor-pointer select-none transition-colors group"
+          className="p-3 sm:px-4 sm:py-2.5 flex items-start sm:items-center justify-between gap-3 cursor-pointer select-none transition-colors group"
         >
-          {/* Left: Drag Grip + Chevron + Priority Badge + Judul Utama Task */}
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            {/* Drag Handle */}
-            <div 
-              className="p-1 text-slate-300 group-hover:text-teal-600 transition-colors shrink-0"
-              title={isYesterday ? "Tarik (Drag) ke Planning & Arahan untuk diprogress hari ini" : "Tarik (Drag) kembali ke Progres & Evaluasi jika tidak jadi diprogress"}
-            >
-              <GripVertical className="w-3.5 h-3.5" />
+          {/* Left: Drag Grip + Chevron + Content (Metadata Badges & Judul Utama) */}
+          <div className="flex items-start gap-2 sm:gap-2.5 min-w-0 flex-1">
+            {/* Drag Handle & Chevron */}
+            <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
+              <div 
+                className="p-1 text-slate-300 group-hover:text-teal-600 transition-colors"
+                title={isYesterday ? "Tarik (Drag) ke Planning & Arahan untuk diprogress hari ini" : "Tarik (Drag) kembali ke Progres & Evaluasi jika tidak jadi diprogress"}
+              >
+                <GripVertical className="w-3.5 h-3.5" />
+              </div>
+
+              {/* Expand indicator icon */}
+              <div className={`p-1 rounded-md text-slate-400 group-hover:text-teal-700 transition-transform duration-200 ${
+                isExpanded ? 'rotate-90 text-teal-700 bg-teal-50' : 'hover:bg-slate-100'
+              }`}>
+                <ChevronRight className="w-4 h-4" />
+              </div>
             </div>
 
-            {/* Expand indicator icon */}
-            <div className={`p-1 rounded-md text-slate-400 group-hover:text-teal-700 transition-transform duration-200 shrink-0 ${
-              isExpanded ? 'rotate-90 text-teal-700 bg-teal-50' : 'hover:bg-slate-100'
-            }`}>
-              <ChevronRight className="w-4 h-4" />
-            </div>
+            {/* Content Container: Baris 1 Badges Metadata + Baris 2 Judul Utama Full Width */}
+            <div className="flex flex-col gap-1 min-w-0 flex-1">
+              {/* Baris 1: Badges Metadata (Priority, Routine, Waktu Mulai & Durasi Pengerjaan, Notices) */}
+              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                {/* Urgency Badge */}
+                <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0 shadow-2xs ${
+                  task.priority === 'Urgent' 
+                    ? 'bg-rose-100 text-rose-950 border border-rose-400 animate-pulse' :
+                  task.priority === 'High' 
+                    ? 'bg-amber-100 text-amber-950 border border-amber-400' :
+                  task.priority === 'Low'
+                    ? 'bg-slate-100 text-slate-900 border border-slate-300' :
+                    'bg-slate-100 text-slate-900 border border-slate-300 font-black'
+                }`}>
+                  {task.priority}
+                </span>
 
-            {/* Urgency Badge */}
-            <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0 shadow-2xs ${
-              task.priority === 'Urgent' 
-                ? 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse' :
-              task.priority === 'High' 
-                ? 'bg-amber-100 text-amber-900 border border-amber-300' :
-              task.priority === 'Low'
-                ? 'bg-slate-100 text-slate-500 border border-slate-200' :
-                'bg-slate-100 text-slate-700 border border-slate-300 font-bold'
-            }`}>
-              {task.priority}
-            </span>
+                {/* Routine Cadence Badge */}
+                <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md border shrink-0 shadow-2xs ${routineInfo.color}`}>
+                  {routineInfo.label}
+                </span>
 
-            {/* Routine Cadence Badge */}
-            <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md border shrink-0 shadow-2xs ${routineInfo.color}`}>
-              {routineInfo.label}
-            </span>
-            {routineInfo.dDayText && !isDone && (
-              <span className="hidden sm:inline-block text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-300 shrink-0">
-                {routineInfo.dDayText}
-              </span>
-            )}
+                {/* Waktu Mulai & Lama Pengerjaan Badge (Pengganti Deadline) */}
+                <span 
+                  className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md border shrink-0 shadow-2xs ${durationInfo.badgeClass}`}
+                  title={`Waktu Mulai: ${durationInfo.displayStartDate} • Lama Pengerjaan: ${durationInfo.durationLabel}`}
+                >
+                  <Clock className="w-3 h-3 opacity-70" />
+                  <span>{durationInfo.durationLabel}</span>
+                  <span className="opacity-70 hidden md:inline">• Mulai {durationInfo.displayStartDate}</span>
+                </span>
 
-            {/* Judul Utama Task */}
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <h3 className={`font-bold leading-snug text-slate-900 tracking-tight text-sm sm:text-base truncate ${
-                isDone ? 'line-through text-slate-400 font-normal' : ''
+                {/* Notice indicators on collapsed row */}
+                {isYesterday && Boolean(todayTasks.some(t => t.id === task.id) || (task.plannedDate && task.plannedDate.split(',').map(d => d.trim()).includes(selectedDate))) && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-teal-100 text-teal-950 border border-teal-300 shrink-0" title="Tugas ini telah dijadwalkan ke Planning Hari Ini">
+                    <Bookmark className="w-2.5 h-2.5 fill-teal-800 text-teal-800" />
+                    <span>Di Planning</span>
+                  </span>
+                )}
+                {task.draftChange && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-200 text-amber-950 border border-amber-400 shrink-0">
+                    Draft Usulan
+                  </span>
+                )}
+              </div>
+
+              {/* Baris 2: Judul Utama Task (Tidak terpotong, full width, word-break natural) */}
+              <h3 className={`font-black leading-snug tracking-tight text-sm sm:text-base break-words ${
+                isDone ? 'line-through text-slate-800 font-bold opacity-80' : 'text-black'
               }`}>
                 {task.title}
               </h3>
-
-              {/* Notice indicators on collapsed row */}
-              {isYesterday && Boolean(todayTasks.some(t => t.id === task.id) || (task.plannedDate && task.plannedDate.split(',').map(d => d.trim()).includes(selectedDate))) && (
-                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200 shrink-0" title="Tugas ini telah dijadwalkan ke Planning Hari Ini">
-                  <Bookmark className="w-2.5 h-2.5 fill-teal-600 text-teal-600" />
-                  <span>Di Planning</span>
-                </span>
-              )}
-              {task.draftChange && (
-                <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 shrink-0">
-                  Draft Usulan
-                </span>
-              )}
-              {isOverdue && !isDone && (
-                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300 shrink-0">
-                  <AlertTriangle className="w-3 h-3 text-rose-600" />
-                  Lewat Batas
-                </span>
-              )}
             </div>
           </div>
 
           {/* Right: Status Dropdown, Copy Button & Mini Progress Bar */}
           <div 
             onClick={(e) => e.stopPropagation()} 
-            className="flex flex-col items-end gap-1 shrink-0"
+            className="flex flex-col items-end gap-1 shrink-0 self-start sm:self-center"
           >
             <div className="flex items-center gap-1.5">
               <button
@@ -2463,7 +2743,7 @@ export function LogbookScreen({
                   e.stopPropagation();
                   handleCopyToNewTask(task);
                 }}
-                className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1 rounded-lg text-slate-500 hover:text-black hover:bg-slate-100 transition-colors cursor-pointer"
                 title="Salin kegiatan ini ke tugas baru"
               >
                 <Copy className="w-3.5 h-3.5" />
@@ -2472,12 +2752,12 @@ export function LogbookScreen({
               {isReadOnly ? (
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black border ${
                   isDone 
-                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                    ? 'bg-emerald-100 text-emerald-950 border-emerald-400' 
                     : isInProgress 
-                    ? 'bg-amber-100 text-amber-900 border-amber-300' 
-                    : 'bg-slate-100 text-slate-700 border-slate-300'
+                    ? 'bg-amber-100 text-amber-950 border-amber-400' 
+                    : 'bg-slate-100 text-slate-900 border-slate-300'
                 }`}>
-                  {isDone ? <CheckCircle2 className="w-3 h-3 text-emerald-600" /> : <Clock className="w-3 h-3 text-amber-600" />}
+                  {isDone ? <CheckCircle2 className="w-3 h-3 text-emerald-700" /> : <Clock className="w-3 h-3 text-amber-700" />}
                   <span>{task.status}</span>
                 </span>
               ) : (
@@ -2490,33 +2770,41 @@ export function LogbookScreen({
               )}
             </div>
 
-            {/* Progress bar kecil di ujung kanan di bagian bawah status */}
-            <div className="flex items-center justify-end gap-1.5 w-24 sm:w-28 mt-0.5">
-              <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
-                <div 
-                  className={`h-full rounded-full transition-all duration-300 ${
-                    isDone 
-                      ? 'bg-emerald-500' 
-                      : isInProgress 
-                      ? 'bg-teal-600' 
-                      : progressPercent > 0 
-                      ? 'bg-sky-500' 
-                      : 'bg-slate-300'
-                  }`}
-                  style={{ width: `${progressPercent}%` }} 
-                />
+            {/* Progress bar kecil di ujung kanan / Lama tugas berakhir jika Closed/Done */}
+            {isDone ? (
+              <div 
+                className="inline-flex items-center justify-end gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs mt-0.5 select-none shrink-0"
+                title={`Mulai: ${durationInfo.displayStartDate || durationInfo.startDateStr} (${durationInfo.durationLabel})`}
+              >
+                <Clock className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                <span>{durationInfo.durationLabel}</span>
               </div>
-              <span className="text-[10px] font-mono font-bold text-slate-600 min-w-[28px] text-right">
-                {progressPercent}%
-              </span>
-            </div>
+            ) : (
+              <div className="flex items-center justify-end gap-1.5 w-24 sm:w-28 mt-0.5">
+                <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      isInProgress 
+                        ? 'bg-teal-600' 
+                        : progressPercent > 0 
+                        ? 'bg-sky-500' 
+                        : 'bg-slate-300'
+                    }`}
+                    style={{ width: `${progressPercent}%` }} 
+                  />
+                </div>
+                <span className="text-[10px] font-mono font-bold text-slate-600 min-w-[28px] text-right">
+                  {progressPercent}%
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Expandable Details (Hanya muncul saat task diklik) */}
         {isExpanded && (
           <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50/50 space-y-4 animate-in fade-in duration-150">
-            {/* Badges Bar (Seksi, Tanggal Target / Asal, Overdue, Buletin) */}
+            {/* Badges Bar (Seksi, Routine Info, Waktu Mulai, Lama Pengerjaan, Labnote) */}
             <div className="flex flex-wrap items-center gap-2">
               <span className={`text-xs px-2.5 py-1 rounded-lg font-mono font-bold shadow-2xs tracking-wide ${sectionBadgeClass}`}>
                 {task.section}
@@ -2527,46 +2815,24 @@ export function LogbookScreen({
                 <span>{routineInfo.label}</span>
                 <span className="opacity-50">•</span>
                 <span>{routineInfo.windowDesc}</span>
-                {routineInfo.dDayText && (
-                  <span className="font-mono font-black text-[11px] bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 rounded shadow-2xs border border-current">
-                    {routineInfo.dDayText}
-                  </span>
-                )}
               </span>
 
               {/* Tanggal Dimulai (Start Date) Badge */}
-              <span className="text-xs px-2.5 py-1 rounded-lg font-bold bg-slate-100 text-slate-800 border border-slate-300 flex items-center gap-1 shadow-2xs" title="Tanggal Dimulai (Start Date)">
+              <span className="text-xs px-2.5 py-1 rounded-lg font-bold bg-slate-100 text-slate-800 border border-slate-300 flex items-center gap-1.5 shadow-2xs" title="Tanggal Dimulai (Start Date)">
                 <Calendar className="w-3.5 h-3.5 text-slate-600" />
-                <span>Mulai: {formatDisplayTargetDate(task.taskDate)}</span>
+                <span>Mulai: {durationInfo.displayStartDate}</span>
               </span>
 
-              {/* Target Selesai (Deadline) Badge */}
-              <span className={`text-xs px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 shadow-2xs ${
-                isOverdue 
-                  ? 'bg-rose-50 text-rose-900 border-rose-300' 
-                  : 'bg-sky-50 text-sky-900 border-sky-200'
-              }`}>
-                <Calendar className={`w-3.5 h-3.5 ${isOverdue ? 'text-rose-600' : 'text-sky-600'}`} />
-                <span>Target: {formatDisplayTargetDate(task.targetDate)}</span>
-                <span className={`font-mono text-[11px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                  isOverdue ? 'bg-rose-200/80 text-rose-950' : 'bg-sky-200/70 text-sky-950'
-                }`}>
-                  <Clock className="w-3 h-3 text-slate-700" />
-                  {task.targetTime && task.targetTime !== '23:59' ? `${task.targetTime} WIB` : '12 Malam (23:59)'}
-                </span>
+              {/* Lama Pengerjaan (Duration) Badge */}
+              <span className={`text-xs px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 shadow-2xs ${durationInfo.badgeClass}`} title="Lama Pengerjaan Task">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Lama Pengerjaan: {durationInfo.durationLabel}</span>
               </span>
-
-              {isOverdue && !isDone && (
-                <span className="text-[10px] sm:text-xs px-2.5 py-1 rounded-lg font-black bg-rose-600 text-white shadow-2xs animate-pulse flex items-center gap-1 uppercase tracking-wider">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Lewat Batas Jam</span>
-                </span>
-              )}
 
               {task.bulletinPostId ? (
                 <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-teal-900 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg shadow-2xs">
                   <FileText className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Buletin #{task.bulletinPostId}</span>
+                  <span>Labnote #{task.bulletinPostId}</span>
                 </span>
               ) : (
                 <button
@@ -2576,10 +2842,10 @@ export function LogbookScreen({
                     openEditModal(task);
                   }}
                   className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-300 border-dashed px-2 py-0.5 rounded-lg shadow-2xs transition-colors cursor-pointer"
-                  title="Klik untuk menghubungkan tugas ini ke dokumen Buletin Harian"
+                  title="Klik untuk menghubungkan tugas ini ke dokumen Labnote Harian"
                 >
                   <FileText className="w-3 h-3 text-teal-600" />
-                  <span>+ Tautkan ke Buletin</span>
+                  <span>+ Tautkan ke Labnote</span>
                 </button>
               )}
             </div>
@@ -2672,205 +2938,242 @@ export function LogbookScreen({
                 <div className="flex items-center justify-between text-xs sm:text-sm font-black text-slate-900 pb-1 border-b border-slate-100">
                   <span className="flex items-center gap-1.5">
                     <CheckSquare className="w-4 h-4 text-teal-600" />
-                    <span>Checklist Subtask ({parsed.completed}/{parsed.total})</span>
+                    <span>
+                      {isYesterdayMode 
+                        ? `Subtask Diperbarui Kemarin (${displayedItems.length})` 
+                        : `Checklist Subtask (${parsed.completed}/${parsed.total})`}
+                    </span>
                   </span>
-                  <span className="text-[11px] font-normal text-slate-500">Geser ikon titik untuk atur posisi</span>
+                  <span className="text-[11px] font-normal text-slate-500">
+                    {isYesterdayMode 
+                      ? 'Hanya subtask & catatan yang diupdate kemarin' 
+                      : !isReadOnly 
+                      ? 'Geser ikon titik untuk atur posisi' 
+                      : 'Menampilkan semua subtask & seluruh riwayat catatan'}
+                  </span>
                 </div>
-                <div className="space-y-1.5 pt-1">
-                  {parsed.items.map((item, idx) => (
-                    <div
-                      key={item.index}
-                      draggable={true}
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('text/plain', String(idx));
-                        setCardDragIdx({ taskId: task.id, itemIdx: idx });
-                      }}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'move';
-                        if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx !== idx) {
-                          setCardDragOverIdx({ taskId: task.id, itemIdx: idx });
-                        }
-                      }}
-                      onDragLeave={() => {
-                        if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === idx) {
-                          setCardDragOverIdx(null);
-                        }
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        handleDropCardSubtask(task, idx);
-                      }}
-                      onDragEnd={() => {
-                        setCardDragIdx(null);
-                        setCardDragOverIdx(null);
-                      }}
-                      className={`flex items-start gap-2 p-2 rounded-xl border transition-all select-none ${
-                        cardDragIdx?.taskId === task.id && cardDragIdx?.itemIdx === idx
-                          ? 'opacity-40 border-2 border-dashed border-teal-500 bg-teal-50/50'
-                          : item.checked
-                          ? 'bg-slate-50 border-slate-200'
-                          : 'bg-white border-slate-300 hover:border-teal-500 hover:shadow-xs'
-                      } ${
-                        cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === idx && cardDragIdx?.itemIdx !== idx
-                          ? 'border-t-2 border-teal-600 bg-teal-50/40'
-                          : ''
-                      }`}
-                    >
-                      {!isReadOnly && (
-                        <div 
-                          className="cursor-grab active:cursor-grabbing p-0.5 text-slate-400 hover:text-teal-600 transition-colors shrink-0 mt-0.5"
-                          title="Geser untuk mengatur urutan subtask (Drag & Drop)"
+
+                {isYesterdayMode && displayedItems.length === 0 ? (
+                  <div className="py-2.5 px-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Nihil perubahan subtask pada hari kemarin ({formatDisplayTargetDate(targetYDate)}).</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Tidak ada subtask yang diceklis atau mendapat catatan baru pada tanggal kemarin. Seluruh {parsed.total} subtask & riwayat lengkap dapat dilihat di tab <strong>Semua Backlog</strong>.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 pt-1">
+                    {displayedItems.map((item, idx) => {
+                      // Subtask note handling
+                      const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                        ? item.notes
+                        : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+
+                      // Filter jika isYesterdayMode: HANYA catatan yang ditulis kemarin yang ditampilkan!
+                      const displayedNotes: SubtaskNote[] = isYesterdayMode
+                        ? rawNotes.filter(n => n.date === targetYDate)
+                        : rawNotes;
+
+                      const notesList: SubtaskNote[] = [...displayedNotes].sort((a, b) => {
+                        const dtA = `${a.date || ''} ${a.time || ''}`;
+                        const dtB = `${b.date || ''} ${b.time || ''}`;
+                        return dtB.localeCompare(dtA);
+                      });
+                      const noteCount = notesList.length;
+
+                      return (
+                        <div
+                          key={item.index}
+                          draggable={!isReadOnly}
+                          onDragStart={(e) => {
+                            if (isReadOnly) return;
+                            e.dataTransfer.setData('text/plain', String(idx));
+                            setCardDragIdx({ taskId: task.id, itemIdx: idx });
+                          }}
+                          onDragOver={(e) => {
+                            if (isReadOnly) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                            if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx !== idx) {
+                              setCardDragOverIdx({ taskId: task.id, itemIdx: idx });
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (isReadOnly) return;
+                            if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === idx) {
+                              setCardDragOverIdx(null);
+                            }
+                          }}
+                          onDrop={(e) => {
+                            if (isReadOnly) return;
+                            e.preventDefault();
+                            handleDropCardSubtask(task, idx);
+                          }}
+                          onDragEnd={() => {
+                            setCardDragIdx(null);
+                            setCardDragOverIdx(null);
+                          }}
+                          className={`flex items-start gap-2 p-2 rounded-xl border transition-all select-none ${
+                            cardDragIdx?.taskId === task.id && cardDragIdx?.itemIdx === idx
+                              ? 'opacity-40 border-2 border-dashed border-teal-500 bg-teal-50/50'
+                              : item.checked
+                              ? 'bg-slate-50 border-slate-200'
+                              : 'bg-white border-slate-300 hover:border-teal-500 hover:shadow-xs'
+                          } ${
+                            cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === idx && cardDragIdx?.itemIdx !== idx
+                              ? 'border-t-2 border-teal-600 bg-teal-50/40'
+                              : ''
+                          }`}
                         >
-                          <GripVertical className="w-4 h-4" />
-                        </div>
-                      )}
-                      <input
-                        type="checkbox"
-                        checked={item.checked}
-                        disabled={isReadOnly}
-                        onChange={() => {
-                          if (isReadOnly) {
-                            toast.warning('🔒 Laporan Kemarin bersifat Read-Only. Untuk menceklis tugas yang terlewat, silakan geser tanggal log book ke kemarin.');
-                            return;
-                          }
-                          handleToggleSubtask(task, item.index);
-                        }}
-                        className={`mt-0.5 w-4 h-4 rounded border-2 border-slate-400 text-teal-600 focus:ring-teal-500 shrink-0 ${
-                          isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-                        }`}
-                      />
-                      <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-1">
-                        <span className={`text-xs sm:text-sm leading-snug break-words ${
-                          item.checked 
-                            ? 'line-through text-slate-400 font-normal' 
-                            : 'font-bold text-slate-900'
-                        }`}>
-                          {item.text}
-                        </span>
-                        {item.checkedDate && (
-                          <span 
-                            className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold border inline-flex items-center gap-0.5 w-fit ${
-                              item.checkedDate === summaryData?.yesterdayDate
-                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                : 'bg-slate-100 text-slate-500 border-slate-200'
-                            }`}
-                            title={`Diceklis pada: ${item.checkedDate}`}
-                          >
-                            {item.checkedDate === summaryData?.yesterdayDate ? '✅ Diceklis Kemarin' : `Diceklis: ${item.checkedDate}`}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Icon (!) Catatan Subtask & Bubble Chat ke Kanan */}
-                      {(() => {
-                        const bubbleKey = `${task.id}-${item.index}`;
-                        const isBubbleOpen = activeNoteBubbleKey === bubbleKey;
-                        const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
-                          ? item.notes
-                          : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
-                        const notesList: SubtaskNote[] = [...rawNotes].sort((a, b) => {
-                          const dtA = `${a.date || ''} ${a.time || ''}`;
-                          const dtB = `${b.date || ''} ${b.time || ''}`;
-                          return dtB.localeCompare(dtA);
-                        });
-                        const noteCount = notesList.length;
-
-                        return (
-                          <div className="relative inline-flex items-center shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isReadOnly) {
-                                  if (noteCount > 0) {
-                                    setActiveNoteBubbleKey(prev => prev === bubbleKey ? null : bubbleKey);
-                                  } else {
-                                    toast.info('Tidak ada catatan pada subtask ini.');
-                                  }
-                                } else {
-                                  openSubtaskNoteModal(task, item.index, item.text, notesList, isReadOnly);
-                                }
-                              }}
-                              title={noteCount > 0 ? `${noteCount} Catatan Subtask (Klik untuk lihat)` : isReadOnly ? 'Tidak ada catatan' : 'Tambah catatan subtask (Icon !)'}
-                              className={`relative p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
-                                noteCount > 0
-                                  ? 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 shadow-2xs'
-                                  : isReadOnly
-                                  ? 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'
-                                  : 'text-slate-400 hover:text-teal-700 hover:bg-teal-50 hover:border hover:border-teal-200'
-                              }`}
+                          {!isReadOnly && (
+                            <div 
+                              className="cursor-grab active:cursor-grabbing p-0.5 text-slate-400 hover:text-teal-600 transition-colors shrink-0 mt-0.5"
+                              title="Geser untuk mengatur urutan subtask (Drag & Drop)"
                             >
-                              <AlertCircle className={`w-3.5 h-3.5 ${noteCount > 0 ? 'text-amber-600' : ''}`} />
-
-                              {/* Angka Badge Menggantikan Dot Merah */}
-                              {noteCount > 0 && (
-                                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-600 text-white font-mono text-[9px] font-black flex items-center justify-center border-2 border-white shadow-xs">
-                                  {noteCount}
-                                </span>
-                              )}
-                            </button>
-
-                            {/* Bubble Chat ke Kanan untuk Modul Kemarin (isReadOnly) */}
-                            {isReadOnly && isBubbleOpen && noteCount > 0 && (
-                              <div
-                                onClick={(e) => e.stopPropagation()}
-                                className="absolute right-0 sm:right-auto sm:left-full sm:ml-3 top-full sm:top-1/2 mt-2 sm:mt-0 sm:-translate-y-1/2 z-[100] w-72 sm:w-80 max-w-[85vw] bg-slate-900 text-slate-100 rounded-2xl p-3.5 shadow-2xl border border-slate-700 animate-in fade-in zoom-in-95 duration-150"
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                          )}
+                          <input
+                            type="checkbox"
+                            checked={item.checked}
+                            disabled={isReadOnly}
+                            onChange={() => {
+                              if (isReadOnly) {
+                                toast.warning('🔒 Laporan Kemarin bersifat Read-Only. Untuk menceklis tugas yang terlewat, silakan geser tanggal log book ke kemarin.');
+                                return;
+                              }
+                              handleToggleSubtask(task, item.index);
+                            }}
+                            className={`mt-0.5 w-4 h-4 rounded border-2 border-slate-400 text-teal-600 focus:ring-teal-500 shrink-0 ${
+                              isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                            }`}
+                          />
+                          <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-1">
+                            <span className={`text-xs sm:text-sm leading-snug break-words ${
+                              item.checked 
+                                ? 'line-through text-slate-800 font-bold opacity-80' 
+                                : 'font-black text-black'
+                            }`}>
+                              {item.text}
+                            </span>
+                            {item.checkedDate && (
+                              <span 
+                                className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-black border inline-flex items-center gap-0.5 w-fit ${
+                                  item.checkedDate === summaryData?.yesterdayDate
+                                    ? 'bg-emerald-100 text-emerald-950 border-emerald-400'
+                                    : 'bg-slate-200 text-slate-900 border-slate-300'
+                                }`}
+                                title={`Diceklis pada: ${item.checkedDate}`}
                               >
-                                {/* Speech Bubble Tail pointing left on desktop, up on mobile */}
-                                <div className="hidden sm:block absolute -left-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-slate-900 border-l border-b border-slate-700 rotate-45 pointer-events-none" />
-                                <div className="sm:hidden absolute -top-1.5 right-3 w-3 h-3 bg-slate-900 border-t border-l border-slate-700 rotate-45 pointer-events-none" />
-
-                                <div className="relative flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
-                                  <div className="flex items-center gap-1.5">
-                                    <MessageSquare className="w-3.5 h-3.5 text-teal-400" />
-                                    <span className="text-[11px] font-black uppercase tracking-wider text-teal-400">
-                                      Catatan Subtask ({noteCount})
-                                    </span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setActiveNoteBubbleKey(null)}
-                                    className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                                    title="Tutup"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-
-                                <div className="relative mb-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-[11px] text-slate-300 font-medium line-clamp-2">
-                                  <span className="text-slate-400 font-normal">Subtask: </span>{item.text}
-                                </div>
-
-                                <div className="relative space-y-2 max-h-56 overflow-y-auto pr-1">
-                                  {notesList.map((nt, nIdx) => (
-                                    <div key={nt.id || nIdx} className="p-2.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs text-slate-100 space-y-1">
-                                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                                        <span className="text-teal-300 font-bold">{nt.author || 'PIC'}</span>
-                                        <span>📅 {nt.date}{nt.time ? ` ⏰ ${nt.time}` : ''}</span>
-                                      </div>
-                                      <div className="whitespace-pre-wrap leading-relaxed font-medium text-slate-200">
-                                        {nt.text}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
+                                {item.checkedDate === summaryData?.yesterdayDate ? '✅ Diceklis Kemarin' : `Diceklis: ${item.checkedDate}`}
+                              </span>
                             )}
                           </div>
-                        );
-                      })()}
-                    </div>
-                  ))}
-                </div>
+
+                          {/* Icon (!) Catatan Subtask & Bubble Chat ke Kanan */}
+                          {(() => {
+                            const bubbleKey = `${task.id}-${item.index}`;
+                            const isBubbleOpen = activeNoteBubbleKey === bubbleKey;
+
+                            return (
+                              <div className="relative inline-flex items-center shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isReadOnly) {
+                                      if (noteCount > 0) {
+                                        setActiveNoteBubbleKey(prev => prev === bubbleKey ? null : bubbleKey);
+                                      } else {
+                                        toast.info(isYesterdayMode ? 'Tidak ada catatan baru yang dibuat kemarin pada subtask ini.' : 'Tidak ada catatan pada subtask ini.');
+                                      }
+                                    } else {
+                                      openSubtaskNoteModal(task, item.index, item.text, displayedNotes, isReadOnly);
+                                    }
+                                  }}
+                                  title={noteCount > 0 ? `${noteCount} Catatan ${isYesterdayMode ? 'Kemarin' : 'Subtask'} (Klik untuk lihat)` : isReadOnly ? 'Tidak ada catatan' : 'Tambah catatan subtask (Icon !)'}
+                                  className={`relative p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                                    noteCount > 0
+                                      ? 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 shadow-2xs'
+                                      : isReadOnly
+                                      ? 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'
+                                      : 'text-slate-400 hover:text-teal-700 hover:bg-teal-50 hover:border hover:border-teal-200'
+                                  }`}
+                                >
+                                  <AlertCircle className={`w-3.5 h-3.5 ${noteCount > 0 ? 'text-amber-600' : ''}`} />
+
+                                  {/* Angka Badge Menggantikan Dot Merah */}
+                                  {noteCount > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-600 text-white font-mono text-[9px] font-black flex items-center justify-center border-2 border-white shadow-xs">
+                                      {noteCount}
+                                    </span>
+                                  )}
+                                </button>
+
+                                {/* Bubble Chat ke Kanan untuk Modul Kemarin (isReadOnly) */}
+                                {isReadOnly && isBubbleOpen && noteCount > 0 && (
+                                  <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="absolute right-0 sm:right-auto sm:left-full sm:ml-3 top-full sm:top-1/2 mt-2 sm:mt-0 sm:-translate-y-1/2 z-[100] w-72 sm:w-80 max-w-[85vw] bg-slate-900 text-slate-100 rounded-2xl p-3.5 shadow-2xl border border-slate-700 animate-in fade-in zoom-in-95 duration-150"
+                                  >
+                                    {/* Speech Bubble Tail pointing left on desktop, up on mobile */}
+                                    <div className="hidden sm:block absolute -left-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-slate-900 border-l border-b border-slate-700 rotate-45 pointer-events-none" />
+                                    <div className="sm:hidden absolute -top-1.5 right-3 w-3 h-3 bg-slate-900 border-t border-l border-slate-700 rotate-45 pointer-events-none" />
+
+                                    <div className="relative flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+                                      <div className="flex items-center gap-1.5">
+                                        <MessageSquare className="w-3.5 h-3.5 text-teal-400" />
+                                        <span className="text-[11px] font-black uppercase tracking-wider text-teal-400">
+                                          {isYesterdayMode ? `Catatan Kemarin (${noteCount})` : `Catatan Subtask (${noteCount})`}
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveNoteBubbleKey(null)}
+                                        className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                                        title="Tutup"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+
+                                    <div className="relative mb-2.5 px-2.5 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-[11px] text-slate-300 font-medium line-clamp-2">
+                                      <span className="text-slate-400 font-normal">Subtask: </span>{item.text}
+                                    </div>
+
+                                    <div className="relative space-y-2 max-h-56 overflow-y-auto pr-1">
+                                      {notesList.map((nt, nIdx) => (
+                                        <div key={nt.id || nIdx} className="p-2.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs text-slate-100 space-y-1">
+                                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                                            <span className="text-teal-300 font-bold">{nt.author || 'PIC'}</span>
+                                            <span>📅 {nt.date}{nt.time ? ` ⏰ ${nt.time}` : ''}</span>
+                                          </div>
+                                          <div className="whitespace-pre-wrap leading-relaxed font-medium text-slate-200">
+                                            {nt.text}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
             {/* Clean description text (if task has checklist and clean text) */}
             {parsed.hasTasklist && parsed.cleanText && (
-              <div className="p-3 rounded-xl bg-white border border-slate-200">
+              <div className="p-3 rounded-xl bg-white border border-slate-300">
                 <div 
-                  className="text-xs sm:text-sm font-medium text-slate-800 whitespace-pre-wrap leading-relaxed"
+                  className="text-xs sm:text-sm font-bold text-black whitespace-pre-wrap leading-relaxed"
                   dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(parsed.cleanText) }}
                 />
               </div>
@@ -2878,9 +3181,9 @@ export function LogbookScreen({
 
             {/* If task has no checklist but has description */}
             {!parsed.hasTasklist && task.description && (
-              <div className="p-3 rounded-xl bg-white border border-slate-200">
+              <div className="p-3 rounded-xl bg-white border border-slate-300">
                 <div 
-                  className="text-xs sm:text-sm font-medium text-slate-800 whitespace-pre-wrap leading-relaxed"
+                  className="text-xs sm:text-sm font-bold text-black whitespace-pre-wrap leading-relaxed"
                   dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(task.description) }}
                 />
               </div>
@@ -2989,7 +3292,7 @@ export function LogbookScreen({
                 </h1>
               </div>
               <p className="text-[11px]" style={{ color: 'var(--text-muted, #64748b)' }}>
-                Carry Over Task, Fokus Kegiatan Hari Ini, Multi-PIC, dan Penugasan Terintegrasi Buletin
+                Carry Over Task, Fokus Kegiatan Hari Ini, Multi-PIC, dan Penugasan Terintegrasi Labnote
               </p>
             </div>
           </div>
@@ -3087,21 +3390,21 @@ export function LogbookScreen({
             </div>
 
             {/* Header Module Mode Switcher: Log Book All Task | Log Book Routine | Log Book Non Routine */}
-            <div className="flex items-center p-1 rounded-2xl border bg-slate-100/90 dark:bg-slate-800/80 shadow-2xs gap-1">
+            <div className="flex items-center p-1 rounded-xl border bg-slate-100/90 dark:bg-slate-800/80 shadow-2xs gap-1 border-slate-200 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => setModuleMode('ALL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                   moduleMode === 'ALL'
-                    ? 'bg-white dark:bg-slate-900 text-teal-800 dark:text-teal-300 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs border border-slate-200/80 dark:border-slate-700'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
                 }`}
                 title="Tampilkan seluruh modul kegiatan (Routine & Non Routine)"
               >
-                <ClipboardCheck className="w-3.5 h-3.5" />
+                <ClipboardCheck className="w-3.5 h-3.5 text-slate-500" />
                 <span>Log Book All Task</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                  moduleMode === 'ALL' ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium ${
+                  moduleMode === 'ALL' ? 'bg-slate-200/80 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
                 }`}>
                   {allTasksCount}
                 </span>
@@ -3110,17 +3413,17 @@ export function LogbookScreen({
               <button
                 type="button"
                 onClick={() => setModuleMode('ROUTINE')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                   moduleMode === 'ROUTINE'
-                    ? 'bg-teal-700 text-white shadow-xs ring-2 ring-teal-400/40'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-teal-700 dark:hover:text-teal-300'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs border border-slate-200/80 dark:border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
                 }`}
                 title="Khusus memantau tugas Routine: Daily, Weekly (D-3), Monthly (D-7), Quarterly (M-1), Biannual (M-2), Yearly (M-3)"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
                 <span>Log Book Routine</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                  moduleMode === 'ROUTINE' ? 'bg-teal-900/60 text-teal-100' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium ${
+                  moduleMode === 'ROUTINE' ? 'bg-slate-200/80 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
                 }`}>
                   {routineCount}
                 </span>
@@ -3129,17 +3432,17 @@ export function LogbookScreen({
               <button
                 type="button"
                 onClick={() => setModuleMode('NON_ROUTINE')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                   moduleMode === 'NON_ROUTINE'
-                    ? 'bg-amber-600 text-white shadow-xs ring-2 ring-amber-400/40'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-amber-700 dark:hover:text-amber-300'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs border border-slate-200/80 dark:border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
                 }`}
                 title="Khusus memantau instruksi operasional non rutin / penugasan harian"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <Sparkles className="w-3.5 h-3.5 text-slate-500" />
                 <span>Log Book Non Routine</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                  moduleMode === 'NON_ROUTINE' ? 'bg-amber-800/60 text-amber-100' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium ${
+                  moduleMode === 'NON_ROUTINE' ? 'bg-slate-200/80 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
                 }`}>
                   {nonRoutineCount}
                 </span>
@@ -3149,7 +3452,7 @@ export function LogbookScreen({
             {/* Section & Universe Filters */}
             <div className="flex flex-wrap items-center gap-2">
               {/* Section Filter / Display */}
-              {isSuperAdmin ? (
+              {(isSuperAdmin || isMeetingRoom || userSection === 'ALL') ? (
                 <select
                   value={selectedSection}
                   onChange={(e) => setSelectedSection(e.target.value)}
@@ -3292,445 +3595,1786 @@ export function LogbookScreen({
       </div>
 
       {/* Main Content Body */}
-      <div className="w-full px-4 sm:px-8 lg:px-10 py-5 sm:py-6 space-y-6 transition-all duration-300">
-        {/* Enterprise KPI Summary Cards */}
+      <div className="w-full px-4 sm:px-8 lg:px-10 py-3 sm:py-4 space-y-4 transition-all duration-300">
+        {/* Compact Notion-Style KPI Summary Bar */}
         {summaryData && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 sm:gap-4">
-            {/* Card 1: Fokus Hari Ini */}
-            <div 
-              onClick={() => setActiveSection('today')}
-              title="Klik untuk menyorot bagian Hari Ini"
-              className={`p-4 rounded-2xl border-2 border-t-4 border-t-sky-700 bg-gradient-to-b from-sky-50/60 to-white shadow-xs transition-all cursor-pointer ${
-                activeSection === 'today' ? 'border-sky-400 ring-2 ring-sky-400/40 shadow-md scale-[1.01]' : 'border-sky-200 hover:border-sky-300'
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-[#fbfbfa] dark:bg-[#1a1a1a] text-xs">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-slate-800 dark:text-slate-200">
+                <div 
+                  className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
+                  onClick={() => setActiveSection('today')}
+                  title="Fokus Pekerjaan Hari Ini"
+                >
+                  <Clock className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="font-semibold text-slate-900 dark:text-white">Fokus Hari Ini:</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{summaryData.totalToday}</span>
+                  <span className="text-[11px] text-slate-500 hidden sm:inline">({summaryData.openToday} Open, {summaryData.inProgressToday} On Progress)</span>
+                </div>
+
+                <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+
+                <div 
+                  className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
+                  onClick={() => setActiveSection('today')}
+                  title="Pekerjaan Selesai Hari Ini"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="font-semibold text-slate-900 dark:text-white">Selesai:</span>
+                  <span className="font-mono font-bold text-emerald-800 dark:text-emerald-400">{summaryData.completedToday}</span>
+                </div>
+
+                <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+
+                <div 
+                  className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
+                  onClick={() => {
+                    setActiveSection('yesterday');
+                    setEvalScope('yesterday');
+                  }}
+                  title="Progres Evaluasi Kemarin (H-1)"
+                >
+                  <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="font-semibold text-slate-900 dark:text-white">Progres Kemarin:</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{summaryData.completedYesterday || 0}/{summaryData.totalYesterday || 0}</span>
+                  <span className="text-[11px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-900 border border-amber-200/80 font-medium">
+                    {summaryData.yesterdayProgressPercent || 0}%
+                  </span>
+                  <span className="text-[11px] text-slate-500 hidden md:inline">({summaryData.totalCarryOver || 0} carry-over)</span>
+                </div>
+
+                <span className="text-slate-300 dark:text-slate-700 hidden md:inline">•</span>
+
+                <div className="flex items-center gap-1.5 hidden md:flex" title="Persentase Target Kegiatan Hari Ini">
+                  <span className="font-semibold text-slate-900 dark:text-white">Target Capaian:</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+                    {summaryData.totalToday > 0 ? Math.round((summaryData.completedToday / summaryData.totalToday) * 100) : 0}%
+                  </span>
+                </div>
+              </div>
+
+              <button 
+                type="button"
+                onClick={() => setShowDetailedKpi(!showDetailedKpi)}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer px-2 py-1 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ml-auto shrink-0"
+              >
+                <span>{showDetailedKpi ? 'Sembunyikan Kartu' : 'Detail Kartu'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showDetailedKpi ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+
+            {/* Expandable Detailed KPI Cards (Clean Notion Styling) */}
+            {showDetailedKpi && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
+                {/* Card 1: Fokus Hari Ini */}
+                <div 
+                  onClick={() => setActiveSection('today')}
+                  className={`p-3.5 rounded-xl border bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer ${
+                    activeSection === 'today' ? 'border-slate-400 dark:border-slate-600 ring-1 ring-slate-300' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                    <span>Fokus Hari Ini</span>
+                    <Clock className="w-3.5 h-3.5 text-slate-500" />
+                  </div>
+                  <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">
+                    {summaryData.totalToday} <span className="text-xs font-normal text-slate-500">kegiatan</span>
+                  </p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                    {summaryData.openToday} Open • {summaryData.inProgressToday} In Progress
+                  </p>
+                </div>
+
+                {/* Card 2: Selesai Hari Ini */}
+                <div 
+                  onClick={() => setActiveSection('today')}
+                  className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer hover:border-slate-300"
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                    <span>Selesai Hari Ini</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  </div>
+                  <p className="text-2xl font-bold mt-1 text-emerald-700 dark:text-emerald-400">
+                    {summaryData.completedToday}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Resolved & Closed
+                  </p>
+                </div>
+
+                {/* Card 3: Progres Kemarin */}
+                <div 
+                  onClick={() => {
+                    setActiveSection('yesterday');
+                    setEvalScope('yesterday');
+                  }}
+                  className={`p-3.5 rounded-xl border bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer ${
+                    activeSection === 'yesterday' ? 'border-slate-400 dark:border-slate-600 ring-1 ring-slate-300' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                    <span>Progres Kemarin (H-1)</span>
+                    <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                      {summaryData.completedYesterday || 0}/{summaryData.totalYesterday || 0}
+                    </p>
+                    <span className="text-[11px] font-medium text-amber-900 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/80">
+                      {summaryData.yesterdayProgressPercent || 0}%
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {summaryData.totalCarryOver || 0} carry-over berjalan
+                  </p>
+                </div>
+
+                {/* Card 4: Target Penyelesaian */}
+                <div 
+                  onClick={() => setActiveSection('today')}
+                  className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer hover:border-slate-300"
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                    <span>Target Penyelesaian</span>
+                    <TrendingUp className="w-3.5 h-3.5 text-slate-500" />
+                  </div>
+                  <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">
+                    {summaryData.totalToday > 0 ? Math.round((summaryData.completedToday / summaryData.totalToday) * 100) : 0}%
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Target Kegiatan Seksi
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* NOTION DATABASE TOOLBAR & CONTROLS (Identical to NotionDatabaseTable)      */}
+        {/* ========================================================================= */}
+        <div 
+          className={`p-3 rounded-2xl border shadow-xs transition-colors flex flex-col gap-3 ${
+            isNotionLight ? 'bg-white border-slate-200' : 'bg-[#1e1e1e] border-[#334155]'
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            {/* Left: View Switcher (Table / Board / Cards) */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'table'
+                    ? isNotionLight
+                      ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
+                      : 'bg-slate-900 text-teal-300 shadow-xs border border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+                title="Tampilan Tabel Database Notion (Grid Ringkas)"
+              >
+                <TableIcon className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <span>Table</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('board')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'board'
+                    ? isNotionLight
+                      ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
+                      : 'bg-slate-900 text-teal-300 shadow-xs border border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+                title="Tampilan Papan Kanban Berdasarkan Status"
+              >
+                <Kanban className="w-3.5 h-3.5 text-amber-500" />
+                <span>Board</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'list'
+                    ? isNotionLight
+                      ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
+                      : 'bg-slate-900 text-teal-300 shadow-xs border border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+                title="Tampilan Kartu Ringkas (2 Kolom)"
+              >
+                <LayoutList className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Cards</span>
+              </button>
+            </div>
+
+            {/* Right: Zoom & View Controls */}
+            <div className="flex items-center gap-2">
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setZoomPercent(prev => Math.max(70, prev - 10))}
+                  className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                  title="Perkecil Tampilan (Zoom Out)"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[11px] font-mono font-bold px-1 min-w-[36px] text-center text-slate-700 dark:text-slate-300">
+                  {zoomPercent}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoomPercent(prev => Math.min(130, prev + 10))}
+                  className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                  title="Perbesar Tampilan (Zoom In)"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Fit Screen Toggle */}
+              <button
+                type="button"
+                onClick={() => setFitPageMode(!fitPageMode)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  fitPageMode
+                    ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                    : isNotionLight
+                    ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                }`}
+                title="Sesuaikan lebar tabel dengan resolusi layar penuh (Fit Page)"
+              >
+                {fitPageMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">{fitPageMode ? 'Reset Lebar' : 'Fit Screen'}</span>
+              </button>
+
+              {/* Notion Theme Mode Toggle */}
+              <button
+                type="button"
+                onClick={() => setThemeMode(isNotionLight ? 'dark-studio' : 'notion-light')}
+                className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                  isNotionLight
+                    ? 'bg-white hover:bg-slate-100 text-amber-600 border-slate-300'
+                    : 'bg-slate-800 hover:bg-slate-700 text-teal-400 border-slate-700'
+                }`}
+                title={isNotionLight ? 'Ganti ke Dark Studio Theme' : 'Ganti ke Notion Clean Light Theme'}
+              >
+                {isNotionLight ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Filter Pills: Status & Priority */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-200 dark:border-slate-800">
+            {[
+              { key: 'ALL', label: 'Semua Status', count: (summaryData?.totalToday || 0) + displayedYesterdayTasks.length },
+              { key: 'ACTIVE', label: 'Sedang Aktif', count: (summaryData?.openToday || 0) + (summaryData?.inProgressToday || 0) + displayedYesterdayTasks.filter(t => t.status !== 'Closed' && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Canceled').length },
+              { key: 'ON PROGRESS', label: 'On Progress', count: (summaryData?.inProgressToday || 0) + displayedYesterdayTasks.filter(t => t.status === 'In Progress' || t.status === 'On Progress').length },
+              { key: 'OPEN', label: 'Open', count: (summaryData?.openToday || 0) + displayedYesterdayTasks.filter(t => t.status === 'Open').length },
+              { key: 'PENDING', label: 'Job Pending', count: (summaryData?.pendingYesterday || 0) + displayedYesterdayTasks.filter(t => t.isPending || t.status === 'Pending').length },
+              { key: 'CLOSE', label: 'Closed / Selesai', count: (summaryData?.completedToday || 0) + displayedYesterdayTasks.filter(t => t.status === 'Closed' || t.status === 'Resolved' || t.status === 'Done').length },
+              { key: 'CANCELED', label: 'Canceled', count: displayedYesterdayTasks.filter(t => (t.status || '').toLowerCase() === 'canceled').length + filteredToday.filter(t => (t.status || '').toLowerCase() === 'canceled').length },
+            ].map((st) => {
+              const isActive = statusFilter === st.key;
+              return (
+                <button
+                  key={st.key}
+                  type="button"
+                  onClick={() => setStatusFilter(st.key)}
+                  className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1.5 border cursor-pointer shrink-0 ${
+                    isActive
+                      ? isNotionLight
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                        : 'bg-teal-500/20 text-teal-300 border-teal-500'
+                      : isNotionLight
+                      ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                      : 'bg-[#262626] hover:bg-[#333333] text-slate-400 border-slate-700'
+                  }`}
+                >
+                  <span>{st.label}</span>
+                  {st.count !== undefined && st.count > 0 && (
+                    <span 
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                        isActive
+                          ? isNotionLight ? 'bg-slate-700 text-white' : 'bg-teal-500/30 text-teal-200'
+                          : isNotionLight ? 'bg-slate-100 text-slate-600' : 'bg-[#1e293b] text-slate-400'
+                      }`}
+                    >
+                      {st.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+
+            {/* Priority Filter */}
+            <select
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
+              className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold outline-none cursor-pointer transition-colors ${
+                isNotionLight
+                  ? 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'
+                  : 'bg-[#262626] border-[#334155] text-[#cbd5e1]'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black tracking-wider uppercase text-slate-700">
-                  Fokus Hari Ini
-                </span>
-                <span className="p-2 rounded-xl bg-sky-100 text-sky-800">
-                  <Clock className="w-4 h-4 stroke-[2.5]" />
-                </span>
+              <option value="ALL">Semua Prioritas</option>
+              <option value="URGENT">🚨 Urgent / Critical</option>
+              <option value="HIGH">🔴 High Priority</option>
+              <option value="MEDIUM">🔵 Medium Priority</option>
+              <option value="NORMAL">🟢 Normal Priority</option>
+              <option value="LOW">⚪ Low Priority</option>
+            </select>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* 1. NOTION DATABASE TABLE VIEW (Default & Parity with NotionDatabaseTable)  */}
+        {/* ========================================================================= */}
+        {viewMode === 'table' && (
+          <div 
+            className={`overflow-x-auto transition-all rounded-2xl border shadow-xs ${
+              isNotionLight ? 'bg-white border-slate-200' : 'bg-[#191919] border-[#334155]'
+            }`}
+            style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
+          >
+            <table className={`w-full text-left border-collapse ${fitPageMode ? 'table-fixed text-[11px]' : 'text-xs'}`}>
+              {/* Sticky Column Headers */}
+              <thead>
+                <tr 
+                  className={`border-b select-none transition-colors ${
+                    isNotionLight
+                      ? 'bg-[#fbfbfa] border-slate-200 text-slate-600'
+                      : 'bg-[#242424] border-[#303030] text-slate-400'
+                  }`}
+                >
+                  <th className={`text-center ${fitPageMode ? 'w-[3%] px-1 py-2.5' : 'w-10 px-2 py-3'}`}>
+                    <GripVertical className="w-3.5 h-3.5 text-slate-400 mx-auto" />
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('date')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[4%] text-center px-1 py-2.5' : 'w-14 text-center px-2 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <span>#</span>
+                      {sortColumn === 'date' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('title')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[28%] px-2.5 py-2.5' : 'min-w-[280px] px-3.5 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Kegiatan / Arahan Tugas</span>
+                      {sortColumn === 'title' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('cadence')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[120px] px-3 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Frekuensi</span>
+                      {sortColumn === 'cadence' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('status')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[12%] px-1.5 py-2.5' : 'min-w-[140px] px-3 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Status</span>
+                      {sortColumn === 'status' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('priority')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[9%] px-1.5 py-2.5' : 'min-w-[110px] px-3 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Prioritas</span>
+                      {sortColumn === 'priority' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('pic')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[13%] px-2 py-2.5' : 'min-w-[150px] px-3 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-slate-400" />
+                      <span>PIC Pelaksana</span>
+                      {sortColumn === 'pic' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th className={`font-bold ${fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[130px] px-3 py-3'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Mulai & Durasi</span>
+                    </div>
+                  </th>
+
+                  <th 
+                    onClick={() => handleSort('progress')}
+                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                      fitPageMode ? 'w-[9%] px-1.5 py-2.5' : 'min-w-[120px] px-3 py-3'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Progress</span>
+                      {sortColumn === 'progress' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                    </div>
+                  </th>
+
+                  <th className={`text-center font-bold ${fitPageMode ? 'w-[8%] px-1 py-2.5' : 'w-24 px-3 py-3'}`}>
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+
+              {/* Table Body with Notion Collapsible Section Groups */}
+              <tbody className={`divide-y transition-colors ${
+                isNotionLight ? 'bg-white divide-slate-100' : 'bg-[#191919] divide-[#292929]'
+              }`}>
+                {/* ------------------------------------------------------------- */}
+                {/* GROUP 1: PLANNING & ARAHAN HARI INI                           */}
+                {/* ------------------------------------------------------------- */}
+                <tr
+                  onClick={() => toggleGroup('today')}
+                  onDragOver={(e) => {
+                    if (dragSourceColumn === 'progress') {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      if (!isDragOverToday) setIsDragOverToday(true);
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      setIsDragOverToday(false);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragOverToday(false);
+                    const data = e.dataTransfer.getData('text/plain');
+                    try {
+                      const parsed = JSON.parse(data);
+                      if (parsed.taskId && parsed.fromColumn === 'progress') {
+                        handleMoveTaskToToday(parsed.taskId);
+                      }
+                    } catch (err) {
+                      if (draggedLogbookTaskId && dragSourceColumn === 'progress') {
+                        handleMoveTaskToToday(draggedLogbookTaskId);
+                      }
+                    }
+                  }}
+                  className={`cursor-pointer select-none transition-colors border-y font-medium text-xs ${
+                    isDragOverToday
+                      ? 'bg-slate-200/60 border-slate-400 ring-1 ring-slate-400'
+                      : isNotionLight
+                      ? 'bg-[#f7f6f5] hover:bg-[#efedea] text-slate-900 border-slate-200'
+                      : 'bg-[#202020] hover:bg-[#282828] text-slate-100 border-slate-800'
+                  }`}
+                >
+                  <td colSpan={10} className="px-3.5 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-500 select-none">
+                          {collapsedGroups.today ? '▶' : '▼'}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-xs tracking-tight text-slate-900 dark:text-slate-100">
+                            📌 1. PLANNING & ARAHAN HARI INI
+                          </span>
+                        </div>
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-medium ${
+                          isNotionLight ? 'bg-slate-200/80 text-slate-800' : 'bg-slate-800 text-slate-200'
+                        }`}>
+                          {tableTodayTasks.length} kegiatan
+                        </span>
+                        {isDragOverToday && (
+                          <span className="text-xs font-semibold text-teal-700 dark:text-teal-300 animate-pulse pl-2">
+                            ← Lepaskan di sini untuk masukkan ke Planning Hari Ini
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={openAssignModal}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-semibold text-xs shadow-2xs transition-all cursor-pointer active:scale-95"
+                          title="Tambah kegiatan baru ke planning hari ini"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>+ Tambah Kegiatan</span>
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+
+                {/* Rows under Group 1 */}
+                {!collapsedGroups.today && (
+                  tableTodayTasks.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-8 text-center text-xs text-slate-500 italic bg-teal-50/10">
+                        Belum ada tugas yang diprogress hari ini. Tarik (drag) dari Backlog atau klik "+ Tambah Kegiatan".
+                      </td>
+                    </tr>
+                  ) : (
+                    tableTodayTasks.map((task, idx) => {
+                      const parsed = parseTasklist(task.description || '');
+                      const hasSubtasks = parsed.hasTasklist && parsed.total > 0;
+                      const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
+                      const isPending = task.isPending || task.status === 'Pending';
+                      const isInProgress = task.status === 'In Progress' || task.status === 'On Progress';
+                      const isExpanded = expandedTaskIds.has(task.id);
+                      const picList = parsePicList(task.assigneeNik, task.assigneeName);
+                      const durationInfo = getTaskDurationInfo(task, selectedDate);
+                      const progressPercent = calculateTaskProgress(task);
+                      const routineInfo = getTaskRoutineInfo(task, selectedDate);
+                      const autoStatus = parsed.completed === 0 ? 'Open' : parsed.completed === parsed.total ? 'Closed' : 'On Progress';
+                      const isCanceled = (task.status || '').toLowerCase() === 'canceled';
+
+                      const statusOptionsOverride: DropdownOption[] | undefined = hasSubtasks
+                        ? isCanceled
+                          ? [
+                              {
+                                value: autoStatus,
+                                label: `Pulihkan ke [${autoStatus}]`,
+                                badgeClass: autoStatus === 'Closed' ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : autoStatus === 'On Progress' ? 'bg-amber-100 text-amber-950 border-amber-400 font-bold' : 'bg-blue-100 text-blue-950 border-blue-400 font-bold',
+                                icon: <RotateCcw className="w-2.5 h-2.5 text-slate-800" />
+                              },
+                              {
+                                value: 'Canceled',
+                                label: 'Canceled (Batal)',
+                                badgeClass: 'bg-rose-100 text-rose-950 border-rose-400 font-bold',
+                                icon: <AlertCircle className="w-2.5 h-2.5 text-rose-800" />
+                              }
+                            ]
+                          : [
+                              {
+                                value: autoStatus,
+                                label: `${autoStatus} (Auto Checklist: ${parsed.completed}/${parsed.total})`,
+                                badgeClass: autoStatus === 'Closed' ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : autoStatus === 'On Progress' ? 'bg-amber-100 text-amber-950 border-amber-400 font-bold' : 'bg-blue-100 text-blue-950 border-blue-400 font-bold',
+                                icon: autoStatus === 'Closed' ? <CheckCircle2 className="w-2.5 h-2.5 text-emerald-800" /> : autoStatus === 'On Progress' ? <RotateCcw className="w-2.5 h-2.5 text-amber-800" /> : <Clock className="w-2.5 h-2.5 text-blue-800" />
+                              },
+                              {
+                                value: 'Canceled',
+                                label: 'Canceled (Batalkan)',
+                                badgeClass: 'bg-rose-100 text-rose-950 border-rose-400 font-bold',
+                                icon: <AlertCircle className="w-2.5 h-2.5 text-rose-800" />
+                              }
+                            ]
+                        : undefined;
+
+                      return (
+                        <React.Fragment key={task.id}>
+                          <tr
+                            draggable={true}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: task.id, fromColumn: 'planning' }));
+                              setDraggedLogbookTaskId(task.id);
+                              setDragSourceColumn('planning');
+                            }}
+                            onDragEnd={() => {
+                              setDraggedLogbookTaskId(null);
+                              setDragSourceColumn(null);
+                              setIsDragOverToday(false);
+                              setIsDragOverYesterday(false);
+                            }}
+                            className={`transition-colors group ${
+                              draggedLogbookTaskId === task.id ? 'opacity-40 bg-teal-50/50' : ''
+                            } ${
+                              isDone 
+                                ? isNotionLight ? 'bg-emerald-50/20 hover:bg-emerald-50/40' : 'bg-emerald-950/10 hover:bg-emerald-950/20'
+                                : isPending
+                                ? isNotionLight ? 'bg-amber-50/30 hover:bg-amber-50/50' : 'bg-amber-950/10 hover:bg-amber-950/20'
+                                : isNotionLight
+                                ? 'bg-white hover:bg-slate-50'
+                                : 'bg-[#191919] hover:bg-[#202020]'
+                            }`}
+                          >
+                            {/* Drag Handle */}
+                            <td className="text-center px-1 py-2 cursor-grab active:cursor-grabbing text-slate-400 hover:text-teal-600">
+                              <GripVertical className="w-3.5 h-3.5 mx-auto" />
+                            </td>
+
+                            {/* No */}
+                            <td className="text-center font-mono text-[11px] px-2 py-2.5 text-slate-500">
+                              {idx + 1}
+                            </td>
+
+                            {/* Kegiatan / Arahan Tugas */}
+                            <td className="px-3.5 py-2.5">
+                              <div className="flex items-start gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleExpand(task.id);
+                                  }}
+                                  className={`p-0.5 rounded transition-transform mt-0.5 cursor-pointer ${
+                                    isExpanded ? 'rotate-90 text-teal-600' : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                  }`}
+                                  title={isExpanded ? 'Tutup subtask checklist' : 'Buka subtask checklist'}
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+
+                                <div className="min-w-0 flex-1">
+                                  <div 
+                                    onClick={() => setSelectedTaskDetail(task)}
+                                    className="font-bold text-xs sm:text-sm cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 hover:underline transition-colors flex items-center gap-1.5 flex-wrap"
+                                    style={{ color: isDone ? '#64748b' : isNotionLight ? '#0f172a' : '#f8fafc' }}
+                                  >
+                                    <span className={isDone ? 'line-through opacity-75' : ''}>{task.title}</span>
+                                    {hasSubtasks && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 font-bold shrink-0">
+                                        ✓ {parsed.completed}/{parsed.total}
+                                      </span>
+                                    )}
+                                    {task.bulletinPostId && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 shrink-0">
+                                        Labnote #{task.bulletinPostId}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Frekuensi / Cadence */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${routineInfo.color}`}>
+                                {routineInfo.label}
+                              </span>
+                            </td>
+
+                            {/* Status */}
+                            <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <NotionDropdownCell
+                                type="status"
+                                value={task.status}
+                                onChange={(newVal) => handleStatusChange(task.id, newVal)}
+                                optionsOverride={statusOptionsOverride}
+                              />
+                            </td>
+
+                            {/* Prioritas */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                                task.priority === 'Urgent'
+                                  ? 'bg-rose-50 text-rose-900 border border-rose-200/80'
+                                  : task.priority === 'High'
+                                  ? 'bg-amber-50 text-amber-900 border border-amber-200/80'
+                                  : task.priority === 'Low'
+                                  ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                                  : 'bg-slate-100 text-slate-800 border border-slate-200'
+                              }`}>
+                                {task.priority}
+                              </span>
+                            </td>
+
+                            {/* PIC Pelaksana */}
+                            <td className="px-3 py-2.5">
+                              <div className="flex flex-wrap gap-1 items-center max-w-[180px]">
+                                {picList.map((p, pIdx) => (
+                                  <span 
+                                    key={pIdx}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
+                                    title={`${p.name} (${p.nik || '-'})`}
+                                  >
+                                    <span className="w-3.5 h-3.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
+                                      {p.name.charAt(0).toUpperCase()}
+                                    </span>
+                                    <span className="truncate max-w-[90px]">{p.name}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+
+                            {/* Mulai & Durasi */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <div className="text-[11px] font-medium" title={`Mulai: ${durationInfo.displayStartDate}`}>
+                                <p className="font-bold text-slate-700 dark:text-slate-300">{durationInfo.durationLabel}</p>
+                                <p className="text-[10px] text-slate-500">Mulai: {durationInfo.displayStartDate}</p>
+                              </div>
+                            </td>
+
+                            {/* Progress */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5 w-24">
+                                <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-300 ${
+                                      isDone ? 'bg-emerald-500' : isInProgress ? 'bg-teal-600' : progressPercent > 0 ? 'bg-sky-500' : 'bg-slate-400'
+                                    }`}
+                                    style={{ width: `${progressPercent}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-400 min-w-[28px] text-right">
+                                  {progressPercent}%
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Aksi */}
+                            <td className="text-center px-2 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveTaskToBacklog(task.id)}
+                                  className="p-1 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors cursor-pointer"
+                                  title="Kembalikan kegiatan ini ke Evaluasi & Backlog Kemarin"
+                                >
+                                  <ArrowLeft className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openJobPendingModal(task)}
+                                  className="p-1 rounded-lg text-slate-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-colors cursor-pointer"
+                                  title="Alihkan PIC / Set Job Pending"
+                                >
+                                  <Clock className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyToNewTask(task)}
+                                  className="p-1 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
+                                  title="Salin tugas ini ke penugasan baru"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal(task)}
+                                  className="p-1 rounded-lg text-slate-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors cursor-pointer"
+                                  title="Edit Rincian Tugas"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setTaskToDelete(task)}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                  title="Hapus Tugas"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Nested Subtask Checklist Dropdown Row */}
+                          {isExpanded && (
+                            <tr className={`${isNotionLight ? 'bg-slate-50/70' : 'bg-black/30'}`}>
+                              <td colSpan={10} className="px-6 py-3 border-b border-slate-200 dark:border-slate-800">
+                                <div className="space-y-2 max-w-4xl">
+                                  <div className="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-700">
+                                    <span className="font-bold text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                      <CheckSquare className="w-3.5 h-3.5 text-teal-600" />
+                                      <span>Rincian Subtask ({parsed.completed}/{parsed.total})</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedTaskDetail(task)}
+                                      className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1"
+                                    >
+                                      <span>Buka Panel Detail Notion</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </button>
+                                  </div>
+
+                                  {parsed.items && parsed.items.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      {parsed.items.map((item, itmIdx) => {
+                                        const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                                          ? item.notes
+                                          : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+                                        const noteCount = rawNotes.length;
+
+                                        return (
+                                          <div
+                                            key={item.index}
+                                            draggable={true}
+                                            onDragStart={(e) => {
+                                              e.dataTransfer.setData('text/plain', String(itmIdx));
+                                              setCardDragIdx({ taskId: task.id, itemIdx: itmIdx });
+                                            }}
+                                            onDragOver={(e) => {
+                                              e.preventDefault();
+                                              e.dataTransfer.dropEffect = 'move';
+                                              if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx !== itmIdx) {
+                                                setCardDragOverIdx({ taskId: task.id, itemIdx: itmIdx });
+                                              }
+                                            }}
+                                            onDragLeave={() => {
+                                              if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === itmIdx) {
+                                                setCardDragOverIdx(null);
+                                              }
+                                            }}
+                                            onDrop={(e) => {
+                                              e.preventDefault();
+                                              handleDropCardSubtask(task, itmIdx);
+                                            }}
+                                            onDragEnd={() => {
+                                              setCardDragIdx(null);
+                                              setCardDragOverIdx(null);
+                                            }}
+                                            className={`flex items-center gap-2 p-1.5 px-2.5 rounded-lg border text-xs transition-all ${
+                                              cardDragIdx?.taskId === task.id && cardDragIdx?.itemIdx === itmIdx
+                                                ? 'opacity-40 border-2 border-dashed border-teal-500 bg-teal-50/50'
+                                                : item.checked
+                                                ? 'bg-slate-100/70 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
+                                                : isNotionLight
+                                                ? 'bg-white border-slate-300 hover:border-teal-500'
+                                                : 'bg-[#202020] border-slate-700 hover:border-teal-500'
+                                            }`}
+                                          >
+                                            <div className="cursor-grab active:cursor-grabbing p-0.5 text-slate-400 hover:text-teal-600">
+                                              <GripVertical className="w-3.5 h-3.5" />
+                                            </div>
+
+                                            <input
+                                              type="checkbox"
+                                              checked={item.checked}
+                                              onChange={() => handleToggleSubtask(task, item.index)}
+                                              className="w-3.5 h-3.5 rounded border-slate-400 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                                            />
+
+                                            <span className={`flex-1 break-words ${item.checked ? 'line-through text-slate-400' : 'font-semibold text-slate-800 dark:text-slate-200'}`}>
+                                              {item.text}
+                                            </span>
+
+                                            {item.checkedDate && (
+                                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                                                {item.checkedDate}
+                                              </span>
+                                            )}
+
+                                            <button
+                                              type="button"
+                                              onClick={() => openSubtaskNoteModal(task, item.index, item.text, rawNotes, false)}
+                                              className={`relative p-1 rounded-md transition-colors cursor-pointer ${
+                                                noteCount > 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                              }`}
+                                              title={noteCount > 0 ? `${noteCount} Catatan Subtask` : 'Tambah Catatan Subtask'}
+                                            >
+                                              <AlertCircle className="w-3.5 h-3.5" />
+                                              {noteCount > 0 && (
+                                                <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-rose-600 text-white font-mono text-[8px] font-black flex items-center justify-center">
+                                                  {noteCount}
+                                                </span>
+                                              )}
+                                            </button>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-slate-500 italic">Tidak ada checklist terdaftar pada tugas ini.</p>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )
+                )}
+
+                {/* ------------------------------------------------------------- */}
+                {/* GROUP 2: EVALUASI & PROGRES KEMARIN / BACKLOG                */}
+                {/* ------------------------------------------------------------- */}
+                <tr
+                  onClick={() => toggleGroup('yesterday')}
+                  onDragOver={(e) => {
+                    if (dragSourceColumn === 'planning') {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      if (!isDragOverYesterday) setIsDragOverYesterday(true);
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      setIsDragOverYesterday(false);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragOverYesterday(false);
+                    const data = e.dataTransfer.getData('text/plain');
+                    try {
+                      const parsed = JSON.parse(data);
+                      if (parsed.taskId && parsed.fromColumn === 'planning') {
+                        handleMoveTaskToBacklog(parsed.taskId);
+                      }
+                    } catch (err) {
+                      if (draggedLogbookTaskId && dragSourceColumn === 'planning') {
+                        handleMoveTaskToBacklog(draggedLogbookTaskId);
+                      }
+                    }
+                  }}
+                  className={`cursor-pointer select-none transition-colors border-y font-medium text-xs ${
+                    isDragOverYesterday
+                      ? 'bg-slate-200/60 border-slate-400 ring-1 ring-slate-400'
+                      : isNotionLight
+                      ? 'bg-[#f7f6f5] hover:bg-[#efedea] text-slate-900 border-slate-200'
+                      : 'bg-[#202020] hover:bg-[#282828] text-slate-100 border-slate-800'
+                  }`}
+                >
+                  <td colSpan={10} className="px-3.5 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-500 select-none">
+                          {collapsedGroups.yesterday ? '▶' : '▼'}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-xs tracking-tight text-slate-900 dark:text-slate-100">
+                            ⏳ 2. EVALUASI & PROGRES KEMARIN / BACKLOG
+                          </span>
+                        </div>
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-medium ${
+                          isNotionLight ? 'bg-slate-200/80 text-slate-800' : 'bg-slate-800 text-slate-200'
+                        }`}>
+                          {tableYesterdayTasks.length} kegiatan
+                        </span>
+                        {isDragOverYesterday && (
+                          <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 animate-pulse pl-2">
+                            ← Lepaskan di sini untuk kembalikan ke Backlog Kemarin
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Scope Switcher & Management Report Copy */}
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center bg-slate-200/60 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-300 dark:border-slate-700">
+                          <button
+                            type="button"
+                            onClick={() => setEvalScope('yesterday')}
+                            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                              evalScope === 'yesterday'
+                                ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                            }`}
+                            title="Tampilkan khusus pekerjaan shift/hari kemarin (H-1)"
+                          >
+                            📅 Kemarin ({yesterdayTasks.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEvalScope('all_carryover')}
+                            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                              evalScope === 'all_carryover'
+                                ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                            }`}
+                            title="Tampilkan seluruh akumulasi carry-over / backlog dari hari-hari sebelumnya"
+                          >
+                            ⏳ Semua Backlog ({carryOverTasks.length})
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleCopyYesterdayManagementReport}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-semibold shadow-2xs transition-all cursor-pointer shrink-0"
+                          title="Salin rekap capaian kemarin untuk dikirim ke WhatsApp Manajemen"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Salin Laporan Manajemen</span>
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+
+                {/* Rows under Group 2 */}
+                {!collapsedGroups.yesterday && (
+                  tableYesterdayTasks.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-8 text-center text-xs text-slate-500 italic bg-amber-50/10">
+                        Nihil tugas dalam kategori ini. Semua pekerjaan kemarin telah selesai atau tidak ada backlog aktif.
+                      </td>
+                    </tr>
+                  ) : (
+                    tableYesterdayTasks.map((task, idx) => {
+                      const parsed = parseTasklist(task.description || '');
+                      const hasSubtasks = parsed.hasTasklist && parsed.total > 0;
+                      const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
+                      const isPending = task.isPending || task.status === 'Pending';
+                      const isInProgress = task.status === 'In Progress' || task.status === 'On Progress';
+                      const isExpanded = expandedTaskIds.has(task.id);
+                      const picList = parsePicList(task.assigneeNik, task.assigneeName);
+                      const durationInfo = getTaskDurationInfo(task, selectedDate);
+                      const progressPercent = calculateTaskProgress(task);
+                      const routineInfo = getTaskRoutineInfo(task, selectedDate);
+
+                      return (
+                        <React.Fragment key={task.id}>
+                          <tr
+                            draggable={true}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: task.id, fromColumn: 'progress' }));
+                              setDraggedLogbookTaskId(task.id);
+                              setDragSourceColumn('progress');
+                            }}
+                            onDragEnd={() => {
+                              setDraggedLogbookTaskId(null);
+                              setDragSourceColumn(null);
+                              setIsDragOverToday(false);
+                              setIsDragOverYesterday(false);
+                            }}
+                            className={`transition-colors group ${
+                              draggedLogbookTaskId === task.id ? 'opacity-40 bg-amber-50/50' : ''
+                            } ${
+                              isDone 
+                                ? isNotionLight ? 'bg-emerald-50/20 hover:bg-emerald-50/40' : 'bg-emerald-950/10 hover:bg-emerald-950/20'
+                                : isPending
+                                ? isNotionLight ? 'bg-amber-50/30 hover:bg-amber-50/50' : 'bg-amber-950/10 hover:bg-amber-950/20'
+                                : isNotionLight
+                                ? 'bg-white hover:bg-slate-50'
+                                : 'bg-[#191919] hover:bg-[#202020]'
+                            }`}
+                          >
+                            {/* Drag Handle */}
+                            <td className="text-center px-1 py-2 cursor-grab active:cursor-grabbing text-slate-400 hover:text-amber-600">
+                              <GripVertical className="w-3.5 h-3.5 mx-auto" />
+                            </td>
+
+                            {/* No */}
+                            <td className="text-center font-mono text-[11px] px-2 py-2.5 text-slate-500">
+                              {idx + 1}
+                            </td>
+
+                            {/* Kegiatan / Arahan Tugas */}
+                            <td className="px-3.5 py-2.5">
+                              <div className="flex items-start gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleExpand(task.id);
+                                  }}
+                                  className={`p-0.5 rounded transition-transform mt-0.5 cursor-pointer ${
+                                    isExpanded ? 'rotate-90 text-amber-600' : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                  }`}
+                                  title={isExpanded ? 'Tutup subtask checklist' : 'Buka subtask checklist'}
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+
+                                <div className="min-w-0 flex-1">
+                                  <div 
+                                    onClick={() => setSelectedTaskDetail(task)}
+                                    className="font-bold text-xs sm:text-sm cursor-pointer hover:text-amber-600 dark:hover:text-amber-400 hover:underline transition-colors flex items-center gap-1.5 flex-wrap"
+                                    style={{ color: isDone ? '#64748b' : isNotionLight ? '#0f172a' : '#f8fafc' }}
+                                  >
+                                    <span className={isDone ? 'line-through opacity-75' : ''}>{task.title}</span>
+                                    {hasSubtasks && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 font-bold shrink-0">
+                                        ✓ {parsed.completed}/{parsed.total}
+                                      </span>
+                                    )}
+                                    {task.bulletinPostId && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 shrink-0">
+                                        Labnote #{task.bulletinPostId}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Frekuensi / Cadence */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${routineInfo.color}`}>
+                                {routineInfo.label}
+                              </span>
+                            </td>
+
+                            {/* Status */}
+                            <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <NotionDropdownCell
+                                type="status"
+                                value={task.status}
+                                onChange={(newVal) => handleStatusChange(task.id, newVal)}
+                              />
+                            </td>
+
+                            {/* Prioritas */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                                task.priority === 'Urgent'
+                                  ? 'bg-rose-50 text-rose-900 border border-rose-200/80'
+                                  : task.priority === 'High'
+                                  ? 'bg-amber-50 text-amber-900 border border-amber-200/80'
+                                  : task.priority === 'Low'
+                                  ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                                  : 'bg-slate-100 text-slate-800 border border-slate-200'
+                              }`}>
+                                {task.priority}
+                              </span>
+                            </td>
+
+                            {/* PIC Pelaksana */}
+                            <td className="px-3 py-2.5">
+                              <div className="flex flex-wrap gap-1 items-center max-w-[180px]">
+                                {picList.map((p, pIdx) => (
+                                  <span 
+                                    key={pIdx}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
+                                    title={`${p.name} (${p.nik || '-'})`}
+                                  >
+                                    <span className="w-3.5 h-3.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
+                                      {p.name.charAt(0).toUpperCase()}
+                                    </span>
+                                    <span className="truncate max-w-[90px]">{p.name}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+
+                            {/* Mulai & Durasi */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <div className="text-[11px] font-medium" title={`Mulai: ${durationInfo.displayStartDate}`}>
+                                <p className="font-bold text-slate-700 dark:text-slate-300">{durationInfo.durationLabel}</p>
+                                <p className="text-[10px] text-slate-500">Mulai: {durationInfo.displayStartDate}</p>
+                              </div>
+                            </td>
+
+                            {/* Progress */}
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5 w-24">
+                                <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-300 ${
+                                      isDone ? 'bg-emerald-500' : isInProgress ? 'bg-amber-500' : progressPercent > 0 ? 'bg-sky-500' : 'bg-slate-400'
+                                    }`}
+                                    style={{ width: `${progressPercent}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-400 min-w-[28px] text-right">
+                                  {progressPercent}%
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Aksi */}
+                            <td className="text-center px-2 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveTaskToToday(task.id)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white transition-all cursor-pointer shadow-2xs"
+                                  title="Jadwalkan kegiatan ini ke Planning Hari Ini"
+                                >
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                  <span>Planning</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyToNewTask(task)}
+                                  className="p-1 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
+                                  title="Salin tugas ini ke penugasan baru"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setTaskToDelete(task)}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                  title="Hapus Tugas"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Nested Subtask Checklist Dropdown Row */}
+                          {isExpanded && (
+                            <tr className={`${isNotionLight ? 'bg-slate-50/70' : 'bg-black/30'}`}>
+                              <td colSpan={10} className="px-6 py-3 border-b border-slate-200 dark:border-slate-800">
+                                <div className="space-y-2 max-w-4xl">
+                                  <div className="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-700">
+                                    <span className="font-bold text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                      <CheckSquare className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>Rincian Subtask ({parsed.completed}/{parsed.total})</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedTaskDetail(task)}
+                                      className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+                                    >
+                                      <span>Buka Panel Detail Notion</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </button>
+                                  </div>
+
+                                  {parsed.items && parsed.items.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      {parsed.items.map((item) => {
+                                        const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                                          ? item.notes
+                                          : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+                                        const noteCount = rawNotes.length;
+
+                                        return (
+                                          <div
+                                            key={item.index}
+                                            className={`flex items-center gap-2 p-1.5 px-2.5 rounded-lg border text-xs ${
+                                              item.checked
+                                                ? 'bg-slate-100/70 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
+                                                : isNotionLight
+                                                ? 'bg-white border-slate-300'
+                                                : 'bg-[#202020] border-slate-700'
+                                            }`}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={item.checked}
+                                              disabled={true}
+                                              className="w-3.5 h-3.5 rounded border-slate-400 text-teal-600 cursor-not-allowed opacity-75"
+                                            />
+
+                                            <span className={`flex-1 break-words ${item.checked ? 'line-through text-slate-400' : 'font-semibold text-slate-800 dark:text-slate-200'}`}>
+                                              {item.text}
+                                            </span>
+
+                                            {item.checkedDate && (
+                                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                                                {item.checkedDate}
+                                              </span>
+                                            )}
+
+                                            {noteCount > 0 && (
+                                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                                {noteCount} Catatan
+                                              </span>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-slate-500 italic">Tidak ada checklist terdaftar pada tugas ini.</p>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* 2. NOTION KANBAN BOARD VIEW (`viewMode === 'board'`)                      */}
+        {/* ========================================================================= */}
+        {viewMode === 'board' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+            {[
+              { statusKey: 'OPEN', label: 'Open', colorClass: 'border-t-sky-500 bg-sky-50/30 dark:bg-sky-950/10' },
+              { statusKey: 'ON PROGRESS', label: 'On Progress', colorClass: 'border-t-amber-500 bg-amber-50/30 dark:bg-amber-950/10' },
+              { statusKey: 'PENDING', label: 'Pending / Job Handover', colorClass: 'border-t-purple-500 bg-purple-50/30 dark:bg-purple-950/10' },
+              { statusKey: 'CLOSED', label: 'Closed / Selesai', colorClass: 'border-t-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/10' },
+            ].map(({ statusKey, label, colorClass }) => {
+              const allBoardTasks = [...filteredToday, ...displayedYesterdayTasks];
+              const colTasks = allBoardTasks.filter(t => {
+                const s = (t.status || '').toUpperCase();
+                if (statusKey === 'OPEN') return s === 'OPEN';
+                if (statusKey === 'ON PROGRESS') return s === 'IN PROGRESS' || s === 'ON PROGRESS';
+                if (statusKey === 'PENDING') return t.isPending || s === 'PENDING';
+                if (statusKey === 'CLOSED') return s === 'CLOSED' || s === 'RESOLVED' || s === 'DONE';
+                return false;
+              });
+
+              return (
+                <div 
+                  key={statusKey}
+                  className={`rounded-2xl border border-t-4 p-3.5 space-y-3 shadow-xs ${colorClass} ${
+                    isNotionLight ? 'bg-white border-slate-200' : 'bg-[#191919] border-[#334155]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+                    <span className="font-bold text-xs tracking-tight text-slate-800 dark:text-slate-200 uppercase">
+                      {label}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                      {colTasks.length}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5 max-h-[70vh] overflow-y-auto pr-1">
+                    {colTasks.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-slate-400 italic">
+                        Tidak ada kegiatan
+                      </div>
+                    ) : (
+                      colTasks.map((task) => {
+                        const parsed = parseTasklist(task.description || '');
+                        const hasSub = parsed.hasTasklist && parsed.total > 0;
+                        const durationInfo = getTaskDurationInfo(task, selectedDate);
+                        const isDone = task.status === 'Resolved' || task.status === 'Done' || task.status === 'Closed';
+
+                        return (
+                          <div
+                            key={task.id}
+                            onClick={() => setSelectedTaskDetail(task)}
+                            className={`p-3 rounded-xl border transition-all cursor-pointer shadow-2xs hover:shadow-md hover:scale-[1.01] space-y-2 ${
+                              isNotionLight ? 'bg-white border-slate-200 hover:border-teal-500' : 'bg-[#222222] border-slate-700 hover:border-teal-500'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span className={`text-[10px] font-black px-1.5 py-0.2 rounded uppercase ${
+                                task.priority === 'Urgent' ? 'bg-rose-100 text-rose-950 border border-rose-300' :
+                                task.priority === 'High' ? 'bg-amber-100 text-amber-950 border border-amber-300' :
+                                'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+                              }`}>
+                                {task.priority}
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-500">
+                                {task.section}
+                              </span>
+                            </div>
+
+                            <p className={`font-bold text-xs leading-snug line-clamp-2 ${isDone ? 'line-through text-slate-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                              {task.title}
+                            </p>
+
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-500">
+                              <span>PIC: {task.assigneeName.split(' ')[0]}</span>
+                              {hasSub && (
+                                <span className="font-mono font-bold text-teal-600 dark:text-teal-400">
+                                  ✓ {parsed.completed}/{parsed.total}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* 3. NOTION CARDS LIST VIEW (`viewMode === 'list'`)                         */}
+        {/* ========================================================================= */}
+        {viewMode === 'list' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            {/* Column Kiri: Progres & Evaluasi Kemarin */}
+            <div className={`rounded-3xl p-5 space-y-4 border ${isNotionLight ? 'bg-white border-slate-200' : 'bg-[#191919] border-[#334155]'}`}>
+              <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+                <h3 className="font-black text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  <span>1. Progres & Evaluasi Kemarin ({displayedYesterdayTasks.length})</span>
+                </h3>
               </div>
-              <p className="text-2xl sm:text-3xl font-black mt-2 text-slate-900">
-                {summaryData.totalToday} <span className="text-xs font-bold text-slate-500">kegiatan</span>
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="inline-block w-2 h-2 rounded-full bg-sky-600" />
-                <p className="text-xs text-sky-900 font-bold">
-                  {summaryData.openToday} Open • {summaryData.inProgressToday} In Progress
-                </p>
+              <div className="space-y-2.5">
+                {displayedYesterdayTasks.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic py-8 text-center">Nihil kegiatan.</p>
+                ) : (
+                  displayedYesterdayTasks.map(task => renderTaskCard(task, true, evalScope === 'yesterday', evalScope))
+                )}
               </div>
             </div>
 
-            {/* Card 2: Selesai Hari Ini */}
-            <div 
-              onClick={() => setActiveSection('today')}
-              title="Klik untuk menyorot bagian Hari Ini"
-              className={`p-4 rounded-2xl border-2 border-t-4 border-t-teal-700 bg-gradient-to-b from-teal-50/60 to-white shadow-xs transition-all cursor-pointer ${
-                activeSection === 'today' ? 'border-teal-400 ring-2 ring-teal-400/40 shadow-md scale-[1.01]' : 'border-teal-200 hover:border-teal-300'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black tracking-wider uppercase text-slate-700">
-                  Selesai Hari Ini
-                </span>
-                <span className="p-2 rounded-xl bg-teal-100 text-teal-800">
-                  <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                </span>
+            {/* Column Kanan: Planning & Arahan Hari Ini */}
+            <div className={`rounded-3xl p-5 space-y-4 border ${isNotionLight ? 'bg-white border-slate-200' : 'bg-[#191919] border-[#334155]'}`}>
+              <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+                <h3 className="font-black text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
+                  <span>2. Planning & Arahan Hari Ini ({filteredToday.length})</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={openAssignModal}
+                  className="px-3 py-1 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tambah</span>
+                </button>
               </div>
-              <p className="text-2xl sm:text-3xl font-black mt-2 text-teal-800">
-                {summaryData.completedToday}
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="inline-block w-2 h-2 rounded-full bg-teal-600" />
-                <p className="text-xs text-teal-900 font-bold">
-                  Resolved & Closed
-                </p>
-              </div>
-            </div>
-
-            {/* Card 3: Progres Kemarin (H-1) & Carry Over */}
-            <div 
-              onClick={() => {
-                setActiveSection('yesterday');
-                setEvalScope('yesterday');
-              }}
-              title="Klik untuk menyorot capaian progres pekerjaan kemarin"
-              className={`p-4 rounded-2xl border-2 border-t-4 border-t-amber-600 bg-gradient-to-b from-amber-50/60 to-white shadow-xs transition-all cursor-pointer ${
-                activeSection === 'yesterday' ? 'border-amber-400 ring-2 ring-amber-400/40 shadow-md scale-[1.01]' : 'border-amber-200 hover:border-amber-300'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black tracking-wider uppercase text-slate-700">
-                  Progres Kemarin (H-1)
-                </span>
-                <span className="p-2 rounded-xl bg-amber-100 text-amber-800">
-                  <TrendingUp className="w-4 h-4 stroke-[2.5]" />
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2 mt-2">
-                <p className="text-2xl sm:text-3xl font-black text-slate-900">
-                  {summaryData?.completedYesterday || 0} / {summaryData?.totalYesterday || 0}
-                </p>
-                <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
-                  {summaryData?.yesterdayProgressPercent || 0}% Selesai
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="inline-block w-2 h-2 rounded-full bg-amber-500" />
-                <p className="text-xs text-amber-900 font-bold">
-                  {summaryData?.totalCarryOver || 0} total carry-over berjalan
-                </p>
-              </div>
-            </div>
-
-            {/* Card 4: Target Penyelesaian */}
-            <div 
-              onClick={() => setActiveSection('today')}
-              title="Klik untuk menyorot target hari ini"
-              className="p-4 rounded-2xl border-2 border-slate-300 border-t-4 border-t-slate-700 bg-gradient-to-b from-slate-100/70 to-white shadow-xs transition-all cursor-pointer hover:border-slate-400"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black tracking-wider uppercase text-slate-700">
-                  Target Penyelesaian
-                </span>
-                <span className="p-2 rounded-xl bg-slate-200 text-slate-800">
-                  <TrendingUp className="w-4 h-4 stroke-[2.5]" />
-                </span>
-              </div>
-              <p className="text-2xl sm:text-3xl font-black mt-2 text-slate-900">
-                {summaryData.totalToday > 0 ? Math.round((summaryData.completedToday / summaryData.totalToday) * 100) : 0}%
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="inline-block w-2 h-2 rounded-full bg-slate-600" />
-                <p className="text-xs text-slate-700 font-bold">
-                  Target Kegiatan Seksi
-                </p>
+              <div className="space-y-2.5">
+                {filteredToday.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic py-8 text-center">Belum ada tugas hari ini.</p>
+                ) : (
+                  filteredToday.map(task => renderTaskCard(task, false, false))
+                )}
               </div>
             </div>
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* TWO-COLUMN DUAL VIEW WITH ENTERPRISE INTERACTIVE SECTION HIGHLIGHT        */}
+        {/* SLIDE-OVER DETAIL DRAWER (Exact Notion Page View Experience)              */}
         {/* ========================================================================= */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          {/* 1. COLUMN KIRI: PROGRES & EVALUASI */}
-          <div 
-            onClick={() => setActiveSection('yesterday')}
-            onDragOver={(e) => {
-              if (dragSourceColumn === 'planning') {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                if (!isDragOverYesterday) setIsDragOverYesterday(true);
-              }
-            }}
-            onDragLeave={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                setIsDragOverYesterday(false);
-              }
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDragOverYesterday(false);
-              const data = e.dataTransfer.getData('text/plain');
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.taskId && parsed.fromColumn === 'planning') {
-                  handleMoveTaskToBacklog(parsed.taskId);
-                }
-              } catch (err) {
-                if (draggedLogbookTaskId && dragSourceColumn === 'planning') {
-                  handleMoveTaskToBacklog(draggedLogbookTaskId);
-                }
-              }
-            }}
-            className={`rounded-3xl p-5 space-y-4 transition-all duration-300 cursor-pointer relative ${
-              isDragOverYesterday
-                ? 'border-2 border-dashed border-amber-500 bg-amber-50/70 shadow-2xl ring-4 ring-amber-400/40'
-                : activeSection === 'yesterday'
-                ? 'border-2 border-amber-500 bg-gradient-to-b from-amber-50/30 via-white to-white shadow-xl ring-4 ring-amber-400/25'
-                : 'border-2 border-slate-200 bg-white shadow-xs opacity-70 hover:opacity-100 hover:border-amber-300'
-            }`}
-          >
-            {/* Drop Indicator Banner */}
-            {isDragOverYesterday && (
-              <div className="p-3.5 rounded-2xl bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 border-2 border-dashed border-slate-950 shadow-lg animate-pulse">
-                <ArrowLeft className="w-4 h-4 stroke-[3]" />
-                <span>Lepaskan di sini untuk membatalkan progress hari ini & mengembalikan ke Progres & Evaluasi / Backlog</span>
-              </div>
-            )}
+        {selectedTaskDetail && (
+          <div className="fixed inset-0 z-50 flex justify-end animate-in fade-in duration-200">
+            {/* Backdrop */}
+            <div 
+              onClick={() => setSelectedTaskDetail(null)}
+              className="absolute inset-0 bg-black/50 backdrop-blur-xs cursor-pointer"
+            />
 
-            {/* Header Kolom 1 */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-slate-100 pb-4 gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="font-black text-base sm:text-lg flex items-center gap-2 text-slate-900">
-                    <span className={`w-3 h-3 rounded-full transition-all ${
-                      activeSection === 'yesterday'
-                        ? 'bg-amber-500 animate-pulse ring-4 ring-amber-500/30'
-                        : 'bg-slate-400'
-                    }`} />
-                    <span>1. Progres & Evaluasi</span>
-                  </h2>
-
-                  {/* Enterprise Active Badge or Focus Indicator */}
-                  {activeSection === 'yesterday' ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500 text-slate-950 shadow-xs ring-2 ring-amber-300 animate-in fade-in">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-pulse" />
-                      Active Focus
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-bold text-slate-400">
-                      Klik untuk fokus
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs font-semibold text-slate-500 mt-1">
-                  Review pencapaian tugas kemarin, progres checklist subtask, kendala, & status carry-over
-                </p>
-              </div>
-
-              {/* Scope Switcher: Kemarin (H-1) vs Semua Carry-Over */}
-              <div 
-                onClick={(e) => e.stopPropagation()} 
-                className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto bg-slate-100 p-1 rounded-xl border border-slate-200"
-              >
-                <button
-                  type="button"
-                  onClick={() => setEvalScope('yesterday')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    evalScope === 'yesterday'
-                      ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Tampilkan khusus pekerjaan shift/hari kemarin (H-1)"
-                >
-                  📅 Kemarin ({yesterdayTasks.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEvalScope('all_carryover')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    evalScope === 'all_carryover'
-                      ? 'bg-slate-800 text-white font-black shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Tampilkan seluruh akumulasi carry-over / backlog dari hari-hari sebelumnya"
-                >
-                  ⏳ Semua Backlog ({carryOverTasks.length})
-                </button>
-              </div>
-            </div>
-
-            {/* Executive Recap Banner for Management */}
+            {/* Drawer Panel */}
             <div 
               onClick={(e) => e.stopPropagation()}
-              className="p-3.5 rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50/50 to-white shadow-2xs space-y-2.5"
+              className={`relative z-10 w-full max-w-2xl h-full shadow-2xl border-l flex flex-col overflow-hidden animate-in slide-in-from-right duration-250 ${
+                isNotionLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#191919] border-[#334155] text-slate-100'
+              }`}
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              {/* Drawer Top Navigation & Actions */}
+              <div className="p-4 border-b flex items-center justify-between border-slate-200 dark:border-slate-800 shrink-0">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                  <span className="p-1.5 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                    <ClipboardCheck className="w-4 h-4" />
+                  </span>
+                  <span>Log Book</span>
+                  <span>/</span>
+                  <span className="text-teal-600 dark:text-teal-400 font-bold">{selectedTaskDetail.section}</span>
+                  <span>/</span>
+                  <span>{selectedTaskDetail.pt}</span>
+                </div>
+
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-amber-500 text-white">
-                    <TrendingUp className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-black text-slate-900">
-                      Rekap Progress Kemarin ({summaryData?.yesterdayDate ? formatDisplayTargetDate(summaryData.yesterdayDate) : 'H-1'})
-                    </h3>
-                    <p className="text-[11px] font-semibold text-amber-900/80">
-                      Laporan transparan saat manajemen menanyakan progres pekerjaan kemarin
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleCopyYesterdayManagementReport}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0"
-                  title="Salin ringkasan progres kemarin dalam format chat resmi untuk WhatsApp Management"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Salin Laporan Manajemen</span>
-                </button>
-              </div>
-
-              {/* Progress Bar & Badges */}
-              <div className="space-y-1.5 pt-1 border-t border-amber-200/60">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-slate-700">Tingkat Capaian Kemarin:</span>
-                  <span className="text-amber-950 font-black font-mono">
-                    {summaryData?.yesterdayProgressPercent || 0}% Tercapai
-                  </span>
-                </div>
-                <div className="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-amber-500 to-emerald-600 transition-all duration-500 rounded-full"
-                    style={{ width: `${Math.min(100, Math.max(0, summaryData?.yesterdayProgressPercent || 0))}%` }}
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold pt-1">
-                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    ✅ {summaryData?.completedYesterday || 0} Selesai
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 border border-blue-300">
-                    🔄 {summaryData?.inProgressYesterday || 0} On Progress
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
-                    ⏳ {summaryData?.pendingYesterday || 0} Carry-Over
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-300 font-mono">
-                    Total {summaryData?.totalYesterday || 0} Kegiatan
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyToNewTask(selectedTaskDetail)}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
+                    title="Salin tugas ini ke penugasan baru"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = selectedTaskDetail;
+                      setSelectedTaskDetail(null);
+                      openEditModal(t);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-teal-600 transition-colors cursor-pointer"
+                    title="Edit Tugas"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTaskDetail(null)}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
-            </div>
 
-            {/* Task List (Evaluasi & Progres Kemarin) */}
-            {displayedYesterdayTasks.length === 0 ? (
-              <div className="py-14 text-center border-2 border-dashed border-amber-200 rounded-2xl bg-amber-50/40 space-y-2">
-                <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
-                <p className="text-sm font-bold text-slate-900">
-                  Tidak ada tugas dalam kategori ini
-                </p>
-                <p className="text-xs text-slate-600 max-w-sm mx-auto">
-                  Belum ada data kegiatan atau progres tugas yang tercatat untuk periode kemarin yang dipilih.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {displayedYesterdayTasks.map((task) => renderTaskCard(task, true, evalScope === 'yesterday'))}
-              </div>
-            )}
-          </div>
-
-          {/* 2. COLUMN KANAN: PLANNING & ARAHAN HARI INI */}
-          <div 
-            onClick={() => setActiveSection('today')}
-            onDragOver={(e) => {
-              if (dragSourceColumn === 'progress') {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                if (!isDragOverToday) setIsDragOverToday(true);
-              }
-            }}
-            onDragLeave={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                setIsDragOverToday(false);
-              }
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDragOverToday(false);
-              const data = e.dataTransfer.getData('text/plain');
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.taskId && parsed.fromColumn === 'progress') {
-                  handleMoveTaskToToday(parsed.taskId);
-                }
-              } catch (err) {
-                if (draggedLogbookTaskId && dragSourceColumn === 'progress') {
-                  handleMoveTaskToToday(draggedLogbookTaskId);
-                }
-              }
-            }}
-            className={`rounded-3xl p-5 space-y-4 transition-all duration-300 cursor-pointer relative ${
-              isDragOverToday
-                ? 'border-2 border-dashed border-teal-500 bg-teal-50/70 shadow-2xl ring-4 ring-teal-400/40'
-                : activeSection === 'today'
-                ? 'border-2 border-teal-500 bg-gradient-to-b from-teal-50/30 via-white to-white shadow-xl ring-4 ring-teal-400/25'
-                : 'border-2 border-slate-200 bg-white shadow-xs opacity-70 hover:opacity-100 hover:border-teal-300'
-            }`}
-          >
-            {/* Drop Indicator Banner */}
-            {isDragOverToday && (
-              <div className="p-3.5 rounded-2xl bg-teal-600 text-white font-black text-xs flex items-center justify-center gap-2 border-2 border-dashed border-teal-200 shadow-lg animate-pulse">
-                <ArrowRight className="w-4 h-4 stroke-[3]" />
-                <span>Lepaskan di sini untuk menambahkan task ini ke Planning & Arahan Hari Ini</span>
-              </div>
-            )}
-
-            {/* Header Kolom 2 */}
-            <div className="flex items-center justify-between border-b-2 border-slate-100 pb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="font-black text-base sm:text-lg flex items-center gap-2 text-slate-900">
-                    <span className={`w-3 h-3 rounded-full transition-all ${
-                      activeSection === 'today'
-                        ? 'bg-teal-600 animate-pulse ring-4 ring-teal-600/30'
-                        : 'bg-slate-400'
-                    }`} />
-                    <span>2. Planning & Arahan Hari Ini</span>
+              {/* Drawer Scrollable Body */}
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+                {/* Title */}
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-black leading-snug tracking-tight text-slate-900 dark:text-slate-100">
+                    {selectedTaskDetail.title}
                   </h2>
+                </div>
 
-                  {/* Enterprise Active Badge or Focus Indicator */}
-                  {activeSection === 'today' ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-teal-700 text-white shadow-xs ring-2 ring-teal-400 animate-in fade-in">
-                      <span className="w-1.5 h-1.5 rounded-full bg-teal-200 animate-pulse" />
-                      Active Focus
+                {/* Notion 2-Column Key-Value Properties Table */}
+                <div className="rounded-2xl border divide-y border-slate-200 dark:border-slate-800 divide-slate-100 dark:divide-slate-800/80 text-xs">
+                  {/* Status */}
+                  <div className="grid grid-cols-3 p-3 items-center">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                      Status
                     </span>
-                  ) : (
-                    <span className="text-[11px] font-bold text-slate-400">
-                      Klik untuk fokus
+                    <div className="col-span-2">
+                      <NotionDropdownCell
+                        type="status"
+                        value={selectedTaskDetail.status}
+                        onChange={(newVal) => {
+                          handleStatusChange(selectedTaskDetail.id, newVal);
+                          setSelectedTaskDetail(prev => prev ? { ...prev, status: newVal } : null);
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Prioritas */}
+                  <div className="grid grid-cols-3 p-3 items-center">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
+                      Prioritas
                     </span>
+                    <div className="col-span-2">
+                      <span className={`text-[11px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider ${
+                        selectedTaskDetail.priority === 'Urgent'
+                          ? 'bg-rose-100 text-rose-950 border border-rose-400'
+                          : selectedTaskDetail.priority === 'High'
+                          ? 'bg-amber-100 text-amber-950 border border-amber-400'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700'
+                      }`}>
+                        {selectedTaskDetail.priority}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* PIC Pelaksana */}
+                  <div className="grid grid-cols-3 p-3 items-center">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-slate-400" />
+                      PIC Pelaksana
+                    </span>
+                    <div className="col-span-2 flex flex-wrap gap-1.5">
+                      {parsePicList(selectedTaskDetail.assigneeNik, selectedTaskDetail.assigneeName).map((p, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20 font-bold text-xs">
+                          <span>{p.name}</span>
+                          {p.nik && <span className="opacity-75 font-mono text-[10px]">({p.nik})</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Frekuensi Cadence */}
+                  <div className="grid grid-cols-3 p-3 items-center">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                      Frekuensi
+                    </span>
+                    <div className="col-span-2">
+                      {(() => {
+                        const rInfo = getTaskRoutineInfo(selectedTaskDetail, selectedDate);
+                        return (
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${rInfo.color}`}>
+                            {rInfo.label} • {rInfo.windowDesc}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Mulai & Durasi */}
+                  <div className="grid grid-cols-3 p-3 items-center">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      Mulai & Durasi
+                    </span>
+                    <div className="col-span-2 text-xs font-semibold">
+                      {(() => {
+                        const dur = getTaskDurationInfo(selectedTaskDetail, selectedDate);
+                        return (
+                          <div className="space-y-0.5">
+                            <p className="font-bold text-slate-800 dark:text-slate-200">{dur.durationLabel}</p>
+                            <p className="text-[11px] text-slate-500">Mulai: {dur.displayStartDate}</p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Dokumen Labnote */}
+                  <div className="grid grid-cols-3 p-3 items-center">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-slate-400" />
+                      Labnote
+                    </span>
+                    <div className="col-span-2">
+                      {selectedTaskDetail.bulletinPostId ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-teal-700 bg-teal-50 dark:bg-teal-950/60 border border-teal-300 dark:border-teal-700 px-2 py-0.5 rounded-lg">
+                          Labnote #{selectedTaskDetail.bulletinPostId}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs italic">Belum terhubung ke dokumen Labnote</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Job Pending Handover */}
+                  {selectedTaskDetail.isPending && (
+                    <div className="grid grid-cols-3 p-3 items-center bg-amber-500/10">
+                      <span className="font-semibold text-amber-700 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        Job Pending
+                      </span>
+                      <div className="col-span-2 text-xs text-amber-900 dark:text-amber-200">
+                        <p className="font-bold">Dialihkan ke: {selectedTaskDetail.pendingPicName || '-'}</p>
+                        {selectedTaskDetail.pendingReason && <p className="text-[11px]">Alasan: {selectedTaskDetail.pendingReason}</p>}
+                      </div>
+                    </div>
                   )}
                 </div>
-                <p className="text-xs font-semibold text-slate-500 mt-1">
-                  Khusus task yang akan diprogress hari ini &middot; Drag dari kolom kiri atau klik + Tambah
-                </p>
+
+                {/* Subtask Checklist Section */}
+                {(() => {
+                  const parsed = parseTasklist(selectedTaskDetail.description || '');
+                  if (!parsed.hasTasklist || !parsed.items) return null;
+
+                  return (
+                    <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2">
+                          <CheckSquare className="w-4 h-4 text-teal-600" />
+                          <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">
+                            Checklist Subtask ({parsed.completed}/{parsed.total})
+                          </h4>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-teal-600 dark:text-teal-400">
+                          {Math.round((parsed.completed / parsed.total) * 100)}% Selesai
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {parsed.items.map((item) => {
+                          const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                            ? item.notes
+                            : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+
+                          return (
+                            <div
+                              key={item.index}
+                              className={`p-2.5 rounded-xl border flex items-center gap-2.5 transition-colors ${
+                                item.checked
+                                  ? 'bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
+                                  : 'bg-white dark:bg-[#222222] border-slate-300 dark:border-slate-700 shadow-2xs'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={item.checked}
+                                onChange={() => handleToggleSubtask(selectedTaskDetail, item.index)}
+                                className="w-4 h-4 rounded border-slate-400 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                              />
+                              <span className={`flex-1 text-xs break-words ${item.checked ? 'line-through text-slate-400' : 'font-semibold text-slate-800 dark:text-slate-200'}`}>
+                                {item.text}
+                              </span>
+                              {item.checkedDate && (
+                                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 shrink-0">
+                                  {item.checkedDate}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => openSubtaskNoteModal(selectedTaskDetail, item.index, item.text, rawNotes, false)}
+                                className={`p-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
+                                  rawNotes.length > 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                }`}
+                                title="Catatan Subtask"
+                              >
+                                <AlertCircle className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Deskripsi & Notulensi Tambahan */}
+                {selectedTaskDetail.description && (
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500">Deskripsi / Notulensi</h4>
+                    <div 
+                      className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#202020] text-xs leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(selectedTaskDetail.description) }}
+                    />
+                  </div>
+                )}
               </div>
 
-              <div 
-                onClick={(e) => e.stopPropagation()} 
-                className="flex items-center gap-2"
-              >
+              {/* Drawer Bottom Actions */}
+              <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 shrink-0 bg-slate-50 dark:bg-slate-900">
                 <button
                   type="button"
-                  onClick={handleCopyMeetingSummary}
-                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-xs cursor-pointer"
-                  title="Salin notulensi meeting ke WhatsApp"
+                  onClick={() => {
+                    const isToday = filteredToday.some(t => t.id === selectedTaskDetail.id);
+                    if (isToday) {
+                      handleMoveTaskToBacklog(selectedTaskDetail.id);
+                    } else {
+                      handleMoveTaskToToday(selectedTaskDetail.id);
+                    }
+                    setSelectedTaskDetail(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
                 >
-                  <Copy className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Salin WA</span>
+                  {filteredToday.some(t => t.id === selectedTaskDetail.id) ? (
+                    <>
+                      <ArrowLeft className="w-4 h-4" />
+                      <span>Kembalikan ke Backlog</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight className="w-4 h-4" />
+                      <span>Jadwalkan ke Planning Hari Ini</span>
+                    </>
+                  )}
                 </button>
 
-                <button
-                  onClick={openAssignModal}
-                  className="px-3.5 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-black text-xs flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
-                  title="Tambah arahan kegiatan baru"
-                >
-                  <Plus className="w-4 h-4 stroke-[3]" />
-                  <span>+ Tambah</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = selectedTaskDetail;
+                      setSelectedTaskDetail(null);
+                      openEditModal(t);
+                    }}
+                    className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = selectedTaskDetail;
+                      setSelectedTaskDetail(null);
+                      setTaskToDelete(t);
+                    }}
+                    className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                    title="Hapus Kegiatan"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
-
-            {/* Today Task List */}
-            {filteredToday.length === 0 ? (
-              <div className="py-14 text-center border-2 border-dashed border-teal-200 rounded-2xl bg-teal-50/40 space-y-3">
-                <Briefcase className="w-8 h-8 text-teal-600 mx-auto" />
-                <p className="text-sm font-bold text-slate-900">
-                  Belum ada task yang diprogress hari ini
-                </p>
-                <p className="text-xs text-slate-600 max-w-sm mx-auto">
-                  Drag tugas dari kolom <span className="font-bold text-amber-700">1. Progres & Evaluasi</span> di sebelah kiri ke sini untuk diprogress hari ini, atau buat tugas baru.
-                </p>
-                <button
-                  type="button"
-                  onClick={openAssignModal}
-                  className="inline-flex items-center gap-1 px-4 py-2 rounded-xl text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white transition-all shadow-xs cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Buat Arahan Kegiatan Baru</span>
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {filteredToday.map((task) => renderTaskCard(task, false, false))}
-              </div>
-            )}
           </div>
-        </div>
+        )}
       </div>
 
       {/* ========================================================================= */}
@@ -3740,30 +5384,25 @@ export function LogbookScreen({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-3xl rounded-3xl border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
-            style={{
-              backgroundColor: 'var(--card-bg, #ffffff)',
-              borderColor: 'var(--border-main, #cbd5e1)',
-              color: 'var(--text-main, #0f172a)'
-            }}
+            className="w-full max-w-3xl rounded-3xl border-2 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 bg-white text-black border-slate-300"
           >
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+            <div className="p-4 sm:p-5 border-b flex items-center justify-between border-slate-200">
               <div className="flex items-center gap-2.5">
-                <span className="p-2 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                <span className="p-2 rounded-xl bg-teal-100 text-teal-900 border border-teal-300">
                   <Briefcase className="w-5 h-5" />
                 </span>
                 <div>
-                  <h3 className="font-bold text-base">Assign Tugas / Arahan Kegiatan Seksi</h3>
-                  <p className="text-[11px]" style={{ color: 'var(--text-muted, #64748b)' }}>
-                    Tugaskan kegiatan ke satu atau lebih PIC & otomatis sinkronkan ke dokumen Buletin
+                  <h3 className="font-black text-base text-black">Assign Tugas / Arahan Kegiatan Seksi</h3>
+                  <p className="text-[11px] font-bold text-slate-700">
+                    Tugaskan kegiatan ke satu atau lebih PIC & otomatis sinkronkan ke dokumen Labnote
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowAssignModal(false)}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-black transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -3772,17 +5411,17 @@ export function LogbookScreen({
             {/* Modal Form */}
             <form onSubmit={handleAssignTaskSubmit} className="p-4 sm:p-5 space-y-4 max-h-[80vh] overflow-y-auto">
               {/* Quick Template Selector Bar */}
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-teal-500/10 via-emerald-500/5 to-transparent border border-teal-500/30 space-y-2">
+              <div className="p-3 rounded-2xl bg-gradient-to-r from-teal-50 via-emerald-50/50 to-white border-2 border-teal-300 space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-teal-800 dark:text-teal-200">
-                    <Bookmark className="w-3.5 h-3.5 text-teal-600" />
+                  <div className="flex items-center gap-1.5 text-xs font-black text-teal-950">
+                    <Bookmark className="w-3.5 h-3.5 text-teal-700" />
                     <span>Template Tugas Siap Pakai:</span>
                   </div>
                   {newTitle.trim() && (
                     <button
                       type="button"
                       onClick={() => setShowSaveTemplateDialog(true)}
-                      className="text-[11px] font-bold text-teal-700 hover:text-teal-900 dark:text-teal-300 dark:hover:text-teal-100 hover:underline cursor-pointer flex items-center gap-1"
+                      className="text-[11px] font-black text-teal-800 hover:text-teal-950 hover:underline cursor-pointer flex items-center gap-1"
                     >
                       <Save className="w-3 h-3" />
                       <span>Simpan Isian sbg Template</span>
@@ -3798,11 +5437,7 @@ export function LogbookScreen({
                       e.target.value = '';
                     }}
                     defaultValue=""
-                    className="flex-1 px-2.5 py-1.5 rounded-xl border text-xs font-medium cursor-pointer outline-none focus:border-teal-500"
-                    style={{
-                      backgroundColor: 'var(--card-bg, #ffffff)',
-                      borderColor: 'var(--border-main, #cbd5e1)'
-                    }}
+                    className="flex-1 px-2.5 py-1.5 rounded-xl border-2 text-xs font-bold cursor-pointer outline-none focus:border-teal-500 bg-white text-black border-slate-400"
                   >
                     <option value="" disabled>-- Pilih Template Tugas Siap Pakai --</option>
                     {taskTemplates.map(t => (
@@ -3815,8 +5450,7 @@ export function LogbookScreen({
                   <button
                     type="button"
                     onClick={() => setShowTemplateModal(true)}
-                    className="px-2.5 py-1.5 rounded-xl border text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                    style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                    className="px-2.5 py-1.5 rounded-xl border-2 text-xs font-bold hover:bg-slate-100 transition-colors cursor-pointer bg-white text-black border-slate-400"
                   >
                     Kelola
                   </button>
@@ -3825,38 +5459,56 @@ export function LogbookScreen({
 
               {/* Judul Kegiatan */}
               <div className="space-y-1">
-                <label className="text-xs font-bold block">Judul Kegiatan / Arahan *</label>
+                <label className="text-xs font-black block text-black">Judul Kegiatan / Arahan *</label>
                 <input
                   type="text"
                   required
                   placeholder="Contoh: Kalibrasi Furnace & Pembuatan Reagen Baru..."
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-medium focus:border-teal-500"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #f8fafc)',
-                    borderColor: 'var(--border-main, #cbd5e1)'
-                  }}
+                  className="w-full px-3 py-2 rounded-xl border-2 outline-none text-xs font-bold focus:border-teal-500 bg-white text-black border-slate-400 placeholder:text-slate-500 shadow-2xs"
                 />
               </div>
 
-              {/* Seksi Pelaksana (Auto-Locked ke Seksi User) */}
-              <div 
-                className="p-3 rounded-2xl border flex items-center justify-between"
-                style={{
-                  backgroundColor: 'var(--input-bg, #f8fafc)',
-                  borderColor: 'var(--border-main, #cbd5e1)'
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
-                  <span className="text-xs font-bold">Seksi Pelaksana:</span>
-                  <span className="text-xs font-extrabold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-2.5 py-0.5 rounded-md border border-teal-500/20">
-                    {userSection}
-                  </span>
+              {/* Seksi Pelaksana */}
+              {(isSuperAdmin || isMeetingRoom || userSection === 'ALL') ? (
+                <div className="space-y-1.5 p-3 rounded-2xl border-2 bg-slate-50 border-teal-300">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-black flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-teal-600 animate-pulse" />
+                      <span>Seksi Pelaksana Tugas *</span>
+                    </label>
+                    <span className="text-[10px] text-teal-800 font-bold bg-teal-100 px-2 py-0.5 rounded-full border border-teal-300">
+                      Pilihan Semua Seksi
+                    </span>
+                  </div>
+                  <select
+                    value={targetTaskSection}
+                    onChange={(e) => setTargetTaskSection(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border-2 text-xs font-bold bg-white text-black border-slate-400 outline-none focus:border-teal-500 cursor-pointer shadow-2xs"
+                  >
+                    <option value="Preparation">Preparation</option>
+                    <option value="Laboratory">Laboratory</option>
+                    <option value="Maintenance">Maintenance</option>
+                    <option value="Quality Assurance">Quality Assurance</option>
+                    <option value="Inventory Control">Inventory Control</option>
+                    <option value="Administration">Administration</option>
+                  </select>
                 </div>
-                <span className="text-[10px] text-slate-500 italic">Otomatis terkunci</span>
-              </div>
+              ) : (
+                <div 
+                  className="p-3 rounded-2xl border-2 flex items-center justify-between bg-slate-50 border-slate-300"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
+                    <span className="text-xs font-black text-black">Seksi Pelaksana:</span>
+                    <span className="text-xs font-black text-teal-950 bg-teal-100 px-2.5 py-0.5 rounded-md border border-teal-300">
+                      {userSection}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-600 font-bold italic">Otomatis terkunci</span>
+                </div>
+              )}
 
               {/* Pilih PIC Bawahan (Multi-PIC Searchable Select) */}
               <SearchableMultiPicSelect
@@ -3867,12 +5519,12 @@ export function LogbookScreen({
                   setNewAssigneeNames(names);
                 }}
                 employees={employeesList}
-                defaultSection={userSection}
+                defaultSection={(isSuperAdmin || isMeetingRoom || userSection === 'ALL') ? targetTaskSection : userSection}
               />
 
               {/* Toggle Opsi PIC Job Pending */}
-              <div className="p-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-3">
-                <label className="flex items-center gap-2 text-xs font-bold text-amber-800 dark:text-amber-200 cursor-pointer select-none">
+              <div className="p-3 rounded-2xl border-2 border-amber-300 bg-amber-50/60 space-y-3">
+                <label className="flex items-center gap-2 text-xs font-black text-amber-950 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={isAssignPending}
@@ -3883,7 +5535,7 @@ export function LogbookScreen({
                 </label>
 
                 {isAssignPending && (
-                  <div className="space-y-3 pt-1 border-t border-amber-500/20">
+                  <div className="space-y-3 pt-1 border-t border-amber-300">
                     <SearchableSinglePicSelect
                       valueNik={newPendingPicNik}
                       valueName={newPendingPicName}
@@ -3896,7 +5548,7 @@ export function LogbookScreen({
                     />
 
                     <div className="space-y-1">
-                      <label className="text-xs font-bold block text-slate-700 dark:text-slate-300">
+                      <label className="text-xs font-black block text-black">
                         Alasan / Kendala Pending *
                       </label>
                       <input
@@ -3905,29 +5557,21 @@ export function LogbookScreen({
                         placeholder="Contoh: Menunggu sampel batch sore, spare part reagen belum tiba..."
                         value={newPendingReason}
                         onChange={(e) => setNewPendingReason(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-medium focus:border-amber-500"
-                        style={{
-                          backgroundColor: 'var(--input-bg, #f8fafc)',
-                          borderColor: 'var(--border-main, #cbd5e1)'
-                        }}
+                        className="w-full px-3 py-2 rounded-xl border-2 outline-none text-xs font-bold focus:border-amber-500 bg-white text-black border-amber-400 shadow-2xs"
                       />
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Klasifikasi Kegiatan, Prioritas, Target Tanggal, & Target Jam Selesai */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+              {/* Klasifikasi Kegiatan, Prioritas, & Target Jam Selesai (Target Tanggal Selesai Dihilangkan) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold block">Klasifikasi</label>
+                  <label className="text-xs font-black block text-black">Klasifikasi</label>
                   <select
                     value={newActivityType}
                     onChange={(e) => setNewActivityType(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-semibold cursor-pointer"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)'
-                    }}
+                    className="w-full px-3 py-2 rounded-xl border-2 outline-none text-xs font-bold cursor-pointer bg-white text-black border-slate-400 focus:border-teal-500 shadow-2xs"
                   >
                     <option value="Daily">🔁 Daily (Muncul Setiap Hari)</option>
                     <option value="Weekly">📅 Weekly (Muncul Mulai D-3)</option>
@@ -3940,15 +5584,11 @@ export function LogbookScreen({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold block">Prioritas</label>
+                  <label className="text-xs font-black block text-black">Prioritas</label>
                   <select
                     value={newPriority}
                     onChange={(e) => setNewPriority(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-semibold cursor-pointer"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)'
-                    }}
+                    className="w-full px-3 py-2 rounded-xl border-2 outline-none text-xs font-bold cursor-pointer bg-white text-black border-slate-400 focus:border-teal-500 shadow-2xs"
                   >
                     {PRIORITY_OPTIONS.map(p => (
                       <option key={p} value={p}>{p}</option>
@@ -3958,72 +5598,51 @@ export function LogbookScreen({
 
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold block text-slate-800 dark:text-slate-200">Tanggal Dimulai</label>
-                    <span className="text-[10px] text-teal-700 dark:text-teal-400 font-bold">Bisa tgl lampau</span>
+                    <label className="text-xs font-black block text-black">Tanggal Dimulai</label>
+                    <span className="text-[10px] text-teal-800 font-black">Bisa tgl lampau</span>
                   </div>
                   <input
                     type="date"
                     value={newTaskDate}
-                    onChange={(e) => setNewTaskDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)',
-                      color: 'var(--text-main, #0f172a)'
+                    onChange={(e) => {
+                      setNewTaskDate(e.target.value);
+                      if (!newTargetDate) setNewTargetDate(e.target.value);
                     }}
+                    className="w-full px-3 py-2 rounded-xl border-2 outline-none text-xs font-bold cursor-pointer focus:border-teal-500 bg-white text-black border-slate-400 shadow-2xs"
                   />
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-[10px] font-bold text-slate-600">
                     Bisa dipilih tanggal lampau jika project sudah on-going.
                   </p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold block">Target Selesai (Deadline)</label>
-                  <input
-                    type="date"
-                    value={newTargetDate}
-                    onChange={(e) => setNewTargetDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)',
-                      color: 'var(--text-main, #0f172a)'
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold block">Target Jam (Opsional)</label>
-                    <span className="text-[10px] text-teal-700 font-bold">Default: 23:59</span>
+                    <label className="text-xs font-black block text-black">Target Jam (Opsional)</label>
+                    <span className="text-[10px] text-teal-800 font-bold">Default: 23:59</span>
                   </div>
                   <input
                     type="time"
                     value={newTargetTime}
                     onChange={(e) => setNewTargetTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500 font-mono"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)',
-                      color: 'var(--text-main, #0f172a)'
-                    }}
+                    className="w-full px-3 py-2 rounded-xl border-2 outline-none text-xs font-bold cursor-pointer focus:border-teal-500 font-mono bg-white text-black border-slate-400 shadow-2xs"
                   />
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-[10px] font-bold text-slate-600">
                     Bila kosong: otomatis 23:59.
                   </p>
                 </div>
               </div>
 
-              {/* Enterprise WYSIWYG Editor */}
+              {/* Shared Subtask Manager (Sinergi Log Book & Buletin) */}
               <div>
-                <EnterpriseWysiwygEditor
+                <SharedSubtaskManager
                   value={newTaskDescription}
                   onChange={setNewTaskDescription}
-                  label="Rincian Tugas & Subtask"
-                  placeholder="Tulis arahan kegiatan... (Beralih ke 'Checklist Subtask' jika ingin membuat poin-poin ceklis)"
+                  label="Rincian Tugas & Checklist Subtask"
+                  placeholder="Ketik butir subtask baru lalu tekan Enter..."
                   allowModeSwitch={true}
-                  defaultMode="text"
-                  rows={4}
+                  defaultMode="checklist"
+                  currentUser={{ nik: inspectorNik, name: inspectorName }}
+                  selectedDate={newTaskDate || selectedDate}
                 />
               </div>
 
@@ -4058,38 +5677,33 @@ export function LogbookScreen({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: KONFIRMASI HAPUS KEGIATAN & SINKRONISASI BULETIN                   */}
+      {/* MODAL: KONFIRMASI HAPUS KEGIATAN & SINKRONISASI LABNOTE                   */}
       {/* ========================================================================= */}
       {taskToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-2xl border shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-100"
-            style={{ 
-              backgroundColor: 'var(--card-bg, #ffffff)', 
-              borderColor: 'var(--border-main, #e2e8f0)',
-              color: 'var(--text-main, #0f172a)'
-            }}
+            className="w-full max-w-md rounded-2xl border-2 border-slate-300 shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-100 bg-white text-black"
           >
             <div className="flex items-center gap-3">
-              <span className="p-2.5 rounded-xl bg-rose-500/10 text-rose-600 shrink-0">
-                <Trash2 className="w-5 h-5" />
+              <span className="p-2.5 rounded-xl bg-rose-100 text-rose-700 shrink-0">
+                <Trash2 className="w-5 h-5 stroke-[2.5]" />
               </span>
               <div>
-                <h3 className="font-bold text-base">Hapus Kegiatan Log Book?</h3>
-                <p className="text-xs text-slate-500">Tindakan ini permanen dan akan menghapus kegiatan dari log book</p>
+                <h3 className="font-black text-base text-black">Hapus Kegiatan Log Book?</h3>
+                <p className="text-xs font-bold text-slate-600">Tindakan ini permanen dan akan menghapus kegiatan dari log book</p>
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 text-xs space-y-1.5">
-              <p className="font-bold text-slate-900 dark:text-slate-100">{taskToDelete.title}</p>
-              <p className="text-slate-500">
-                Seksi: <strong className="text-slate-700 dark:text-slate-300">{taskToDelete.section}</strong> • PIC: <strong className="text-slate-700 dark:text-slate-300">{taskToDelete.assigneeName}</strong>
+            <div className="p-3.5 rounded-xl bg-slate-100 border-2 border-slate-300 text-xs space-y-1.5">
+              <p className="font-black text-black text-sm">{taskToDelete.title}</p>
+              <p className="text-slate-800 font-bold">
+                Seksi: <strong className="text-black font-black">{taskToDelete.section}</strong> • PIC: <strong className="text-black font-black">{taskToDelete.assigneeName}</strong>
               </p>
               {taskToDelete.bulletinPostId && (
-                <div className="pt-1.5 border-t border-slate-200 dark:border-slate-700 text-amber-600 dark:text-amber-400 font-semibold flex items-start gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  <span>Baris kegiatan pada Dokumen Buletin #{taskToDelete.bulletinPostId} juga akan otomatis terhapus secara tersinkronisasi.</span>
+                <div className="pt-2 border-t-2 border-slate-200 text-amber-900 font-black flex items-start gap-1.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" />
+                  <span>Baris kegiatan pada Dokumen Labnote #{taskToDelete.bulletinPostId} juga akan otomatis terhapus secara tersinkronisasi.</span>
                 </div>
               )}
             </div>
@@ -4098,8 +5712,7 @@ export function LogbookScreen({
               <button
                 type="button"
                 onClick={() => setTaskToDelete(null)}
-                className="px-4 py-2 rounded-xl border text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                className="px-4 py-2 rounded-xl border-2 border-slate-300 text-xs font-black text-black hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 Batal
               </button>
@@ -4107,9 +5720,9 @@ export function LogbookScreen({
                 type="button"
                 onClick={() => handleDeleteTask(taskToDelete)}
                 disabled={isDeleting}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>{isDeleting ? 'Menghapus...' : 'Hapus Kegiatan'}</span>
               </button>
             </div>
@@ -4124,34 +5737,29 @@ export function LogbookScreen({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-2xl border shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-100"
-            style={{ 
-              backgroundColor: 'var(--card-bg, #ffffff)', 
-              borderColor: 'var(--border-main, #e2e8f0)',
-              color: 'var(--text-main, #0f172a)'
-            }}
+            className="w-full max-w-md rounded-2xl border-2 border-slate-300 shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-100 bg-white text-black"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2.5">
-                <span className="p-2 rounded-xl bg-amber-500/10 text-amber-600 shrink-0">
-                  <Clock className="w-5 h-5" />
+                <span className="p-2 rounded-xl bg-amber-100 text-amber-800 shrink-0">
+                  <Clock className="w-5 h-5 stroke-[2.5]" />
                 </span>
                 <div>
-                  <h3 className="font-bold text-base">Atur PIC Job Pending</h3>
-                  <p className="text-xs text-slate-500">Tetapkan penerima handover pekerjaan tertunda</p>
+                  <h3 className="font-black text-base text-black">Atur PIC Job Pending</h3>
+                  <p className="text-xs font-bold text-slate-600">Tetapkan penerima handover pekerjaan tertunda</p>
                 </div>
               </div>
               <button 
                 onClick={() => setPendingModalTask(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+                className="p-1 rounded-lg text-slate-500 hover:text-black hover:bg-slate-100 transition-colors cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 text-xs">
-              <p className="font-bold text-slate-900 dark:text-slate-100">{pendingModalTask.title}</p>
-              <p className="text-slate-500 mt-0.5">PIC Saat Ini: {pendingModalTask.assigneeName}</p>
+            <div className="p-3.5 rounded-xl bg-slate-100 border-2 border-slate-300 text-xs">
+              <p className="font-black text-black text-sm">{pendingModalTask.title}</p>
+              <p className="text-slate-700 font-bold mt-1">PIC Saat Ini: <strong className="text-black font-black">{pendingModalTask.assigneeName}</strong></p>
             </div>
 
             <form onSubmit={handleSaveJobPending} className="space-y-3.5">
@@ -4167,22 +5775,18 @@ export function LogbookScreen({
               />
 
               <div className="space-y-1">
-                <label className="text-xs font-bold block">Alasan / Kendala Job Pending *</label>
+                <label className="text-xs font-black block text-black">Alasan / Kendala Job Pending *</label>
                 <textarea
                   required
                   rows={3}
                   placeholder="Contoh: Menunggu sampel batch sore, spare part reagen belum tiba, dialihkan ke shift berikutnya..."
                   value={modalPendingReason}
                   onChange={(e) => setModalPendingReason(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-medium focus:border-amber-500"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #f8fafc)',
-                    borderColor: 'var(--border-main, #cbd5e1)'
-                  }}
+                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-400 bg-white text-black font-bold outline-none text-xs focus:border-amber-500"
                 />
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                 {pendingModalTask.isPending ? (
                   <button
                     type="button"
@@ -4208,7 +5812,7 @@ export function LogbookScreen({
                         toast.error('Gagal mencabut pending');
                       }
                     }}
-                    className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
+                    className="text-xs text-rose-700 hover:underline font-black cursor-pointer"
                   >
                     Lepas Status Pending
                   </button>
@@ -4218,15 +5822,14 @@ export function LogbookScreen({
                   <button
                     type="button"
                     onClick={() => setPendingModalTask(null)}
-                    className="px-3.5 py-1.5 rounded-xl border text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                    style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                    className="px-3.5 py-1.5 rounded-xl border-2 border-slate-300 text-xs font-black text-black hover:bg-slate-100 transition-colors cursor-pointer"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={isSavingPending}
-                    className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50 active:scale-95"
+                    className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50 active:scale-95"
                   >
                     {isSavingPending ? 'Menyimpan...' : 'Simpan Job Pending'}
                   </button>
@@ -4244,33 +5847,28 @@ export function LogbookScreen({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-3xl rounded-3xl border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]"
-            style={{
-              backgroundColor: 'var(--card-bg, #ffffff)',
-              borderColor: 'var(--border-main, #cbd5e1)',
-              color: 'var(--text-main, #0f172a)'
-            }}
+            className="w-full max-w-3xl rounded-3xl border-2 border-slate-300 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh] bg-white text-black"
           >
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+            <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2.5">
-                <span className="p-2 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400">
-                  <Edit3 className="w-5 h-5" />
+                <span className="p-2 rounded-xl bg-teal-100 text-teal-900">
+                  <Edit3 className="w-5 h-5 stroke-[2.5]" />
                 </span>
                 <div>
-                  <h3 className="font-bold text-base flex items-center gap-2">
+                  <h3 className="font-black text-base flex items-center gap-2 text-black">
                     <span>
                       {(editingTask.assignedByNik === inspectorNik || isSupervisor)
                         ? 'Edit & Penyesuaian Tugas'
                         : 'Ajukan Draft Perubahan Tugas'}
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-teal-100 text-teal-800 border border-teal-300">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-black bg-teal-100 text-teal-950 border border-teal-400">
                       {(editingTask.assignedByNik === inspectorNik || isSupervisor) ? 'Pemberi Tugas' : 'Role: PIC'}
                     </span>
                   </h3>
-                  <p className="text-[11px]" style={{ color: 'var(--text-muted, #64748b)' }}>
+                  <p className="text-[11px] font-bold text-slate-700">
                     {(editingTask.assignedByNik === inspectorNik || isSupervisor)
-                      ? 'Perubahan akan langsung diperbarui dan disinkronkan ke dokumen Buletin'
+                      ? 'Perubahan akan langsung diperbarui dan disinkronkan ke dokumen Labnote'
                       : 'Perubahan akan disimpan sebagai draft dan dikirim ke pemberi tugas untuk di-review & approve'}
                   </p>
                 </div>
@@ -4278,21 +5876,21 @@ export function LogbookScreen({
               <button
                 type="button"
                 onClick={() => setEditingTask(null)}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 hover:text-black transition-colors cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleEditSubmit} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
+            <form onSubmit={handleEditSubmit} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 bg-white text-black">
               {/* If PIC: notice banner */}
               {!(editingTask.assignedByNik === inspectorNik || isSupervisor) && (
-                <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 text-sky-950 text-xs flex items-start gap-2.5">
-                  <AlertCircle className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                <div className="p-3 rounded-2xl bg-sky-50 border-2 border-sky-300 text-sky-950 text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-sky-700 shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-bold">Mode Pengajuan PIC (Draft Perubahan):</p>
-                    <p className="text-slate-600 text-[11px]">
+                    <p className="font-black text-black">Mode Pengajuan PIC (Draft Perubahan):</p>
+                    <p className="text-slate-800 text-[11px] font-bold">
                       Sebagai PIC, Anda dapat menyesuaikan rincian, checklist, atau target. Draft penyesuaian akan dikirim untuk direview dan disetujui dengan 1-klik approval.
                     </p>
                   </div>
@@ -4301,17 +5899,13 @@ export function LogbookScreen({
 
               {/* Judul Kegiatan */}
               <div className="space-y-1">
-                <label className="text-xs font-bold block">Judul Kegiatan / Arahan *</label>
+                <label className="text-xs font-black block text-black">Judul Kegiatan / Arahan *</label>
                 <input
                   type="text"
                   required
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-medium focus:border-teal-500"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #f8fafc)',
-                    borderColor: 'var(--border-main, #cbd5e1)'
-                  }}
+                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-400 bg-white text-black font-bold outline-none text-xs focus:border-teal-500"
                 />
               </div>
 
@@ -4328,25 +5922,20 @@ export function LogbookScreen({
                   label="PIC Pelaksana (Dapat Memilih Lebih Dari 1 Personil) *"
                 />
               ) : (
-                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
-                  <span className="font-bold text-slate-700 block">PIC Pelaksana Saat Ini:</span>
-                  <span className="font-extrabold text-teal-800">{editAssigneeName || '-'}</span>
+                <div className="p-3 rounded-2xl bg-slate-100 border-2 border-slate-300 text-xs">
+                  <span className="font-black text-black block">PIC Pelaksana Saat Ini:</span>
+                  <span className="font-black text-teal-900">{editAssigneeName || '-'}</span>
                 </div>
               )}
 
-              {/* Klasifikasi, Prioritas & Target Selesai */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+              {/* Klasifikasi, Prioritas, Tanggal Dimulai & Target Jam (Grid 4 Kolom, Target Tanggal Selesai Dihapus) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold block">Klasifikasi</label>
+                  <label className="text-xs font-black block text-black">Klasifikasi</label>
                   <select
                     value={editActivityType}
                     onChange={(e) => setEditActivityType(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)',
-                      color: 'var(--text-main, #0f172a)'
-                    }}
+                    className="w-full px-3 py-2 rounded-xl border-2 border-slate-400 bg-white text-black outline-none text-xs font-black cursor-pointer focus:border-teal-500"
                   >
                     <option value="Daily">🔁 Daily (Muncul Setiap Hari)</option>
                     <option value="Weekly">📅 Weekly (Muncul Mulai D-3)</option>
@@ -4359,16 +5948,11 @@ export function LogbookScreen({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold block">Prioritas</label>
+                  <label className="text-xs font-black block text-black">Prioritas</label>
                   <select
                     value={editPriority}
                     onChange={(e) => setEditPriority(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)',
-                      color: 'var(--text-main, #0f172a)'
-                    }}
+                    className="w-full px-3 py-2 rounded-xl border-2 border-slate-400 bg-white text-black outline-none text-xs font-black cursor-pointer focus:border-teal-500"
                   >
                     <option value="Low">Low</option>
                     <option value="Normal">Normal</option>
@@ -4380,90 +5964,66 @@ export function LogbookScreen({
 
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold block text-slate-800 dark:text-slate-200">Tanggal Dimulai</label>
-                    <span className="text-[10px] text-teal-700 dark:text-teal-400 font-bold">Bisa tgl lampau</span>
+                    <label className="text-xs font-black block text-black">Tanggal Dimulai</label>
+                    <span className="text-[10px] text-teal-800 font-black">Bisa tgl lampau</span>
                   </div>
                   <input
                     type="date"
                     value={editTaskDate}
                     onChange={(e) => setEditTaskDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)',
-                      color: 'var(--text-main, #0f172a)'
-                    }}
+                    className="w-full px-3 py-2 rounded-xl border-2 border-slate-400 bg-white text-black outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
                   />
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-[10px] text-slate-700 font-bold">
                     Ubah tgl mulai jika project sudah on-going sejak lampau.
                   </p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold block">Target Tanggal Selesai</label>
-                  <input
-                    type="date"
-                    value={editTargetDate}
-                    onChange={(e) => setEditTargetDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)',
-                      color: 'var(--text-main, #0f172a)'
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold block">Target Jam</label>
-                    <span className="text-[10px] text-teal-700 font-bold">Default: 23:59</span>
+                    <label className="text-xs font-black block text-black">Target Jam</label>
+                    <span className="text-[10px] text-teal-800 font-black">Default: 23:59</span>
                   </div>
                   <input
                     type="time"
                     value={editTargetTime}
                     onChange={(e) => setEditTargetTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs font-bold cursor-pointer focus:border-teal-500 font-mono"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #f8fafc)',
-                      borderColor: 'var(--border-main, #cbd5e1)',
-                      color: 'var(--text-main, #0f172a)'
-                    }}
+                    className="w-full px-3 py-2 rounded-xl border-2 border-slate-400 bg-white text-black outline-none text-xs font-bold cursor-pointer focus:border-teal-500 font-mono"
                   />
                 </div>
               </div>
 
-              {/* Enterprise WYSIWYG Editor with Drag & Drop Checklist */}
+              {/* Shared Subtask Manager (Sinergi Log Book & Labnote) */}
               <div>
-                <EnterpriseWysiwygEditor
+                <SharedSubtaskManager
                   value={editDescription}
                   onChange={setEditDescription}
-                  label="Rincian Tugas & Checklist Subtask (Drag & drop untuk urutan)"
+                  label="Rincian Tugas & Checklist Subtask"
                   placeholder="Sesuaikan petunjuk kerja atau urutan checklist..."
                   allowModeSwitch={true}
-                  defaultMode={(editDescription || '').includes('- [') ? 'checklist' : 'text'}
-                  rows={4}
+                  defaultMode={(editDescription || '').includes('- [') ? 'checklist' : 'checklist'}
+                  currentUser={{ nik: inspectorNik, name: inspectorName }}
+                  selectedDate={editTaskDate || editingTask.taskDate}
                 />
               </div>
 
-              {/* Hubungkan / Pindahkan Sinkronisasi ke Buletin */}
+              {/* Hubungkan / Pindahkan Sinkronisasi ke Labnote */}
               <div className="space-y-1">
                 <SearchableBulletinSelect
                   selectedId={editBulletinPostId}
                   bulletinList={bulletinList}
                   onSelect={setEditBulletinPostId}
                 />
-                <p className="text-[10px] text-slate-500">
+                <p className="text-[10px] text-slate-700 font-bold">
                   {editingTask.bulletinPostId 
-                    ? `Saat ini terhubung ke Buletin #${editingTask.bulletinPostId}. Anda dapat memindahkan atau melepaskan tautan sinkronisasi.` 
-                    : 'Tugas ini belum terkoneksi ke Buletin. Pilih dokumen buletin jika ingin menyinkronkan tugas ini.'}
+                    ? `Saat ini terhubung ke Labnote #${editingTask.bulletinPostId}. Anda dapat memindahkan atau melepaskan tautan sinkronisasi.` 
+                    : 'Tugas ini belum terkoneksi ke Labnote. Pilih dokumen Labnote jika ingin menyinkronkan tugas ini.'}
                 </p>
               </div>
 
               {/* If PIC: Required Alasan Perubahan */}
               {!(editingTask.assignedByNik === inspectorNik || isSupervisor) && (
                 <div className="space-y-1">
-                  <label className="text-xs font-bold block text-amber-900">
+                  <label className="text-xs font-black block text-amber-950">
                     Alasan / Keterangan Penyesuaian (Wajib untuk Pemberi Tugas) *
                   </label>
                   <input
@@ -4472,25 +6032,24 @@ export function LogbookScreen({
                     placeholder="Contoh: Perubahan sampel batch, reagen kalibrasi diganti, jadwal diundur 1 jam..."
                     value={editChangeReason}
                     onChange={(e) => setEditChangeReason(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border-2 border-amber-300 outline-none text-xs font-medium focus:border-amber-500 bg-amber-50/50"
+                    className="w-full px-3 py-2 rounded-xl border-2 border-amber-400 outline-none text-xs font-bold focus:border-amber-600 bg-amber-50 text-black"
                   />
                 </div>
               )}
 
               {/* Footer */}
-              <div className="pt-3 border-t flex items-center justify-end gap-2" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setEditingTask(null)}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
-                  style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                  className="px-4 py-2 rounded-xl border-2 border-slate-300 text-xs font-black text-black hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingEdit}
-                  className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50"
                 >
                   {isSubmittingEdit
                     ? 'Menyimpan...'
@@ -4519,28 +6078,23 @@ export function LogbookScreen({
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
             <div 
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-3xl rounded-3xl border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]"
-              style={{
-                backgroundColor: 'var(--card-bg, #ffffff)',
-                borderColor: 'var(--border-main, #cbd5e1)',
-                color: 'var(--text-main, #0f172a)'
-              }}
+              className="w-full max-w-3xl rounded-3xl border-2 border-slate-300 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh] bg-white text-black"
             >
               {/* Header */}
-              <div className="p-4 sm:p-5 border-b flex items-center justify-between bg-amber-50/70" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+              <div className="p-4 sm:p-5 border-b border-amber-200 flex items-center justify-between bg-amber-50">
                 <div className="flex items-center gap-2.5">
                   <span className="p-2 rounded-xl bg-amber-500 text-white">
-                    <CheckCircle2 className="w-5 h-5" />
+                    <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
                   </span>
                   <div>
                     <h3 className="font-black text-base text-amber-950 flex items-center gap-2">
                       <span>Review Pengajuan Draft Perubahan</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-amber-200 text-amber-900 border border-amber-400">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-black bg-amber-200 text-amber-950 border border-amber-400">
                         Persetujuan Atasan
                       </span>
                     </h3>
-                    <p className="text-[11px] text-amber-800">
-                      Diajukan oleh: <strong>{draftObj?.proposedByName || 'PIC'}</strong>
+                    <p className="text-[11px] font-bold text-amber-900">
+                      Diajukan oleh: <strong className="text-black font-black">{draftObj?.proposedByName || 'PIC'}</strong>
                       {draftObj?.proposedAt && ` • ${formatDateDisplay(draftObj.proposedAt)}`}
                     </p>
                   </div>
@@ -4548,59 +6102,59 @@ export function LogbookScreen({
                 <button
                   type="button"
                   onClick={() => setReviewingTask(null)}
-                  className="p-1.5 rounded-lg hover:bg-amber-100 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg hover:bg-amber-100 transition-colors cursor-pointer text-amber-950"
                 >
-                  <X className="w-4 h-4 text-amber-900" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Body Comparison */}
-              <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+              <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-xs bg-white text-black">
                 {/* Alasan Perubahan */}
                 <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 block">
                     Alasan / Keterangan Penyesuaian oleh PIC:
                   </span>
-                  <p className="text-xs sm:text-sm font-bold text-amber-950">
+                  <p className="text-xs sm:text-sm font-black text-amber-950">
                     "{draftObj?.changeReason || 'Tidak ada catatan tambahan'}"
                   </p>
                 </div>
 
                 {/* Perbandingan Data: Saat Ini vs Draft Baru */}
                 <div className="space-y-3">
-                  <h4 className="font-black text-xs uppercase tracking-wider text-slate-500">
+                  <h4 className="font-black text-xs uppercase tracking-wider text-black">
                     Rincian Perbandingan (Sebelum vs Sesudah):
                   </h4>
 
                   {/* Judul Perbandingan */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="p-3 rounded-xl bg-slate-100 border border-slate-200">
-                      <span className="text-[10px] font-bold text-slate-500 block mb-1">Judul Saat Ini:</span>
-                      <p className="font-bold text-slate-800">{reviewingTask.title}</p>
+                    <div className="p-3 rounded-xl bg-slate-100 border-2 border-slate-300">
+                      <span className="text-[10px] font-black text-slate-700 block mb-1">Judul Saat Ini:</span>
+                      <p className="font-black text-black">{reviewingTask.title}</p>
                     </div>
-                    <div className={`p-3 rounded-xl border ${
+                    <div className={`p-3 rounded-xl border-2 ${
                       draftObj?.title !== reviewingTask.title
-                        ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-300/40'
-                        : 'bg-slate-50 border-slate-200'
+                        ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-300/40'
+                        : 'bg-slate-50 border-slate-300'
                     }`}>
-                      <span className="text-[10px] font-bold text-emerald-800 block mb-1">
+                      <span className="text-[10px] font-black text-emerald-900 block mb-1">
                         Judul Diajukan: {draftObj?.title !== reviewingTask.title && '(Berubah)'}
                       </span>
-                      <p className="font-bold text-emerald-950">{draftObj?.title || reviewingTask.title}</p>
+                      <p className="font-black text-emerald-950">{draftObj?.title || reviewingTask.title}</p>
                     </div>
                   </div>
 
                   {/* Prioritas & Target Perbandingan */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="p-3 rounded-xl bg-slate-100 border border-slate-200 space-y-1">
-                      <span className="text-[10px] font-bold text-slate-500 block">Target & Prioritas Saat Ini:</span>
-                      <p className="font-semibold text-slate-800">
+                    <div className="p-3 rounded-xl bg-slate-100 border-2 border-slate-300 space-y-1">
+                      <span className="text-[10px] font-black text-slate-700 block">Target & Prioritas Saat Ini:</span>
+                      <p className="font-black text-black">
                         {reviewingTask.priority} • Target: {reviewingTask.targetDate} ({reviewingTask.targetTime || '23:59'})
                       </p>
                     </div>
-                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 space-y-1">
-                      <span className="text-[10px] font-bold text-emerald-800 block">Target & Prioritas Diajukan:</span>
-                      <p className="font-bold text-emerald-950">
+                    <div className="p-3 rounded-xl bg-emerald-50 border-2 border-emerald-400 space-y-1">
+                      <span className="text-[10px] font-black text-emerald-900 block">Target & Prioritas Diajukan:</span>
+                      <p className="font-black text-emerald-950">
                         {draftObj?.priority || reviewingTask.priority} • Target: {draftObj?.targetDate || reviewingTask.targetDate} ({draftObj?.targetTime || reviewingTask.targetTime || '23:59'})
                       </p>
                     </div>
@@ -4608,19 +6162,19 @@ export function LogbookScreen({
 
                   {/* Keterangan & Checklist Perbandingan */}
                   <div className="space-y-1.5 pt-1">
-                    <span className="text-[10px] font-bold text-slate-500 block">Perubahan Keterangan / Checklist:</span>
+                    <span className="text-[10px] font-black text-black block">Perubahan Keterangan / Checklist:</span>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="p-3 rounded-xl bg-slate-100 border border-slate-200 max-h-[220px] overflow-y-auto">
-                        <span className="text-[10px] font-bold text-slate-500 block mb-1">Versi Saat Ini:</span>
+                      <div className="p-3 rounded-xl bg-slate-100 border-2 border-slate-300 max-h-[220px] overflow-y-auto text-black font-medium">
+                        <span className="text-[10px] font-black text-slate-700 block mb-1">Versi Saat Ini:</span>
                         <div 
-                          className="text-xs leading-relaxed"
+                          className="text-xs leading-relaxed text-black"
                           dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(reviewingTask.description) }}
                         />
                       </div>
-                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 max-h-[220px] overflow-y-auto">
-                        <span className="text-[10px] font-bold text-emerald-800 block mb-1">Versi Draft Diajukan:</span>
+                      <div className="p-3 rounded-xl bg-emerald-50 border-2 border-emerald-400 max-h-[220px] overflow-y-auto text-emerald-950 font-medium">
+                        <span className="text-[10px] font-black text-emerald-900 block mb-1">Versi Draft Diajukan:</span>
                         <div 
-                          className="text-xs leading-relaxed"
+                          className="text-xs leading-relaxed text-emerald-950"
                           dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(draftObj?.description) }}
                         />
                       </div>
@@ -4629,8 +6183,8 @@ export function LogbookScreen({
                 </div>
 
                 {/* Catatan Penolakan (Opsional jika ingin menolak) */}
-                <div className="pt-2 border-t space-y-1" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
-                  <label className="text-[11px] font-bold block text-slate-700">
+                <div className="pt-2 border-t border-slate-200 space-y-1">
+                  <label className="text-[11px] font-black block text-black">
                     Catatan Penolakan (Hanya diisi jika menolak draft):
                   </label>
                   <input
@@ -4638,18 +6192,17 @@ export function LogbookScreen({
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
                     placeholder="Contoh: Tolong pertahankan target jam 15:00 karena ada inspeksi sore..."
-                    className="w-full px-3 py-2 rounded-xl border outline-none text-xs focus:border-rose-400 bg-slate-50"
+                    className="w-full px-3 py-2 rounded-xl border-2 border-slate-400 bg-white text-black font-bold outline-none text-xs focus:border-rose-400"
                   />
                 </div>
               </div>
 
               {/* Footer Actions */}
-              <div className="p-4 sm:p-5 border-t flex flex-wrap items-center justify-between gap-2" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+              <div className="p-4 sm:p-5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 bg-slate-50">
                 <button
                   type="button"
                   onClick={() => setReviewingTask(null)}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
-                  style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                  className="px-4 py-2 rounded-xl border-2 border-slate-300 text-xs font-black text-black hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Tutup
                 </button>
@@ -4659,7 +6212,7 @@ export function LogbookScreen({
                     type="button"
                     disabled={isSubmittingReview}
                     onClick={() => handleReviewDraft('reject')}
-                    className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
+                    className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border-2 border-rose-300 font-black text-xs transition-all cursor-pointer disabled:opacity-50"
                   >
                     {isSubmittingReview ? 'Memproses...' : '❌ Tolak Draft'}
                   </button>
@@ -4669,7 +6222,7 @@ export function LogbookScreen({
                     onClick={() => handleReviewDraft('approve')}
                     className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                   >
-                    <Check className="w-4 h-4" />
+                    <Check className="w-4 h-4 stroke-[2.5]" />
                     <span>{isSubmittingReview ? 'Memproses...' : '✅ Setujui & Terapkan Perubahan'}</span>
                   </button>
                 </div>
@@ -5035,74 +6588,80 @@ export function LogbookScreen({
           onClick={() => setRoutineCompletionModal(null)}
         >
           <div 
-            className="w-full max-w-lg bg-white dark:bg-slate-900 border rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
-            style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+            className="w-full max-w-lg bg-white border-2 border-slate-300 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-black"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b flex items-center justify-between bg-teal-50 dark:bg-teal-950/40" style={{ borderColor: 'var(--border-main, #cbd5e1)' }}>
+            <div className="p-4 sm:p-5 border-b border-teal-200 flex items-center justify-between bg-teal-50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-teal-500/20 border border-teal-500/40 text-teal-600 dark:text-teal-400 flex items-center justify-center shadow-inner">
-                  <CheckCircle2 className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-2xl bg-teal-100 border border-teal-300 text-teal-800 flex items-center justify-center shadow-xs">
+                  <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
                 </div>
                 <div>
-                  <h3 className="font-black text-base sm:text-lg flex items-center gap-2 text-slate-900 dark:text-white">
+                  <h3 className="font-black text-base sm:text-lg flex items-center gap-2 text-black">
                     <span>Routine Task Selesai!</span>
                     <span className="text-sm">🎉</span>
                   </h3>
-                  <p className="text-xs text-teal-600 dark:text-teal-400 font-medium">
+                  <p className="text-xs text-teal-900 font-bold">
                     Semua subtask telah 100% selesai dikerjakan
                   </p>
                 </div>
               </div>
               <button 
                 onClick={() => setRoutineCompletionModal(null)}
-                className="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer"
+                className="p-1.5 rounded-full hover:bg-slate-200 text-slate-600 hover:text-black transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Body */}
-            <div className="p-5 space-y-4 text-xs">
-              <div className="p-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/30 space-y-1.5">
-                <span className="text-[10px] uppercase font-bold text-teal-600 dark:text-teal-400 tracking-wider block">
+            <div className="p-5 space-y-4 text-xs bg-white text-black">
+              <div className="p-3.5 rounded-2xl bg-teal-50 border-2 border-teal-300 space-y-1.5">
+                <span className="text-[10px] uppercase font-black text-teal-900 tracking-wider block">
                   Tugas Rutin Selesai
                 </span>
-                <h4 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+                <h4 className="font-black text-sm sm:text-base text-black">
                   {routineCompletionModal.task.title}
                 </h4>
-                <div className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-teal-200">
-                  <span>Klasifikasi: <strong>{routineCompletionModal.task.activityType || 'Routine'}</strong></span>
+                <div className="flex items-center gap-2 text-[11px] text-slate-800 font-bold">
+                  <span>Klasifikasi: <strong className="text-black font-black">{routineCompletionModal.task.activityType || 'Routine'}</strong></span>
                   <span>•</span>
-                  <span>Target Selesai: <strong>{routineCompletionModal.task.targetDate || selectedDate}</strong></span>
+                  <span>Target Selesai: <strong className="text-black font-black">{routineCompletionModal.task.targetDate || selectedDate}</strong></span>
                 </div>
               </div>
 
-              <div className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+              <div className="text-xs sm:text-sm leading-relaxed text-black font-bold">
                 Apakah Anda ingin membuat kembali task routine ini untuk periode selanjutnya?
               </div>
 
               {/* Next Period Preview Card */}
-              <div className="p-3.5 rounded-2xl border bg-slate-50 dark:bg-slate-800/60 space-y-2" style={{ borderColor: 'var(--border-main, #cbd5e1)' }}>
-                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
+              <div className="p-3.5 rounded-2xl border-2 border-slate-300 bg-slate-100 space-y-2 text-black">
+                <span className="text-[10px] uppercase font-black text-slate-700 tracking-wider block">
                   Rencana Periode Baru
                 </span>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
                   <div>
-                    <span className="text-[10px] text-slate-500 block">Periode / Sub-Topik:</span>
-                    <span className="font-mono font-bold text-teal-600 dark:text-teal-400 text-sm">
+                    <span className="text-[10px] text-slate-600 font-bold block">Periode / Sub-Topik:</span>
+                    <span className="font-mono font-black text-teal-950 text-sm">
                       {routineCompletionModal.nextPeriod}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 block">Target Selesai Default:</span>
-                    <span className="font-mono font-bold text-teal-600 dark:text-teal-300 text-sm">
+                    <span className="text-[10px] text-slate-600 font-bold block">Mulai Masuk Planning:</span>
+                    <span className="font-mono font-black text-emerald-800 text-sm">
+                      {routineCompletionModal.nextStartDate}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-600 font-bold block">Target Selesai Default:</span>
+                    <span className="font-mono font-black text-teal-950 text-sm">
                       {routineCompletionModal.nextTargetDate}
                     </span>
                   </div>
                 </div>
-                <div className="pt-2 border-t text-[11px] text-slate-500 space-y-1" style={{ borderColor: 'var(--border-main, #e2e8f0)' }}>
+                <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-700 font-bold space-y-1">
+                  <div className="text-emerald-700 font-black">✓ Tugas akan otomatis mulai muncul di Planning Kerja pada {routineCompletionModal.nextStartDate} (tidak di hari yang sama dengan penyelesaian)</div>
                   <div>✓ Daftar subtask akan diduplikasi dengan status belum dicentang (0%)</div>
                   <div>✓ Target selesai disesuaikan otomatis untuk periode berikutnya</div>
                   <div>✓ Status awal otomatis menjadi [Open]</div>
@@ -5111,11 +6670,11 @@ export function LogbookScreen({
             </div>
 
             {/* Footer Buttons */}
-            <div className="p-4 border-t flex items-center justify-end gap-2.5 bg-slate-50 dark:bg-slate-900/60" style={{ borderColor: 'var(--border-main, #cbd5e1)' }}>
+            <div className="p-4 border-t border-slate-200 flex items-center justify-end gap-2.5 bg-slate-50">
               <button
                 type="button"
                 onClick={() => setRoutineCompletionModal(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-black border-2 border-slate-300 bg-white hover:bg-slate-100 text-black transition-all cursor-pointer"
               >
                 Tidak, Selesai
               </button>
@@ -5124,7 +6683,7 @@ export function LogbookScreen({
                 onClick={handleConfirmLogbookNextPeriod}
                 className="px-5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-lg shadow-teal-900/30 transition-all cursor-pointer flex items-center gap-2 active:scale-95"
               >
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-4 h-4 stroke-[2.5]" />
                 <span>Ya, Buka Periode {routineCompletionModal.nextPeriod}</span>
               </button>
             </div>

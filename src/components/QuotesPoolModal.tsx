@@ -300,17 +300,17 @@ export default function QuotesPoolModal({
       <div 
         className="w-full max-w-4xl h-[92vh] max-h-[850px] rounded-3xl border shadow-2xl flex flex-col overflow-hidden transition-all"
         style={{
-          backgroundColor: 'var(--card-bg, #0F172A)',
-          borderColor: 'var(--border-main, #334155)',
-          color: 'var(--text-main, #F8FAFC)'
+          backgroundColor: 'var(--card-bg, #FFFFFF)',
+          borderColor: 'var(--border-main, #E2E8F0)',
+          color: 'var(--text-main, #1E293B)'
         }}
       >
         {/* Modal Top Header */}
         <div 
           className="px-5 py-4 border-b flex items-center justify-between select-none shrink-0"
           style={{
-            backgroundColor: 'var(--bg-main, #1E293B)',
-            borderColor: 'var(--border-main, #334155)'
+            backgroundColor: 'var(--bg-main, #F8FAFC)',
+            borderColor: 'var(--border-main, #E2E8F0)'
           }}
         >
           <div className="flex items-center gap-3 min-w-0">
@@ -324,13 +324,13 @@ export default function QuotesPoolModal({
               <Quote className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2 truncate">
+              <h2 className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2 truncate text-slate-900">
                 Pool Quotes & Inspirasi Harian
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/30">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border bg-amber-50 text-amber-800 border-amber-300">
                   {quotesList.length} Quotes
                 </span>
               </h2>
-              <p className="text-xs opacity-75 truncate hidden sm:block">
+              <p className="text-xs opacity-75 truncate hidden sm:block text-slate-600">
                 Kumpulan kata motivasi, skena, dan pesan keselamatan dari dan untuk seluruh personil PrepLab.
               </p>
             </div>
@@ -339,7 +339,7 @@ export default function QuotesPoolModal({
           <button 
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl transition-colors hover:bg-black/20 opacity-70 hover:opacity-100 cursor-pointer"
+            className="p-2 rounded-xl transition-colors hover:bg-slate-100 opacity-70 hover:opacity-100 cursor-pointer text-slate-600"
             title="Tutup Modal"
           >
             <X className="w-5 h-5" />
@@ -350,8 +350,8 @@ export default function QuotesPoolModal({
         <div 
           className="flex border-b px-5 pt-2.5 gap-2 overflow-x-auto text-xs font-semibold select-none shrink-0 no-scrollbar"
           style={{
-            backgroundColor: 'var(--bg-main, #1E293B)',
-            borderColor: 'var(--border-main, #334155)'
+            backgroundColor: 'var(--bg-main, #F8FAFC)',
+            borderColor: 'var(--border-main, #E2E8F0)'
           }}
         >
           {activeDetailQuote && (

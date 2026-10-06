@@ -18,8 +18,6 @@ export function ImageModal({
   driveDownloadUrl,
   onClose,
 }: ImageModalProps) {
-  if (!imageUrl || (isOpen !== undefined && !isOpen)) return null;
-
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [rotation, setRotation] = useState(0);
@@ -306,6 +304,8 @@ export function ImageModal({
       onClose();
     }
   };
+
+  if (!imageUrl || (isOpen !== undefined && !isOpen)) return null;
 
   return (
     <div

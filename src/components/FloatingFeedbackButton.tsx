@@ -22,7 +22,7 @@ interface FloatingFeedbackButtonProps {
 
 const MODULE_OPTIONS = [
   'Umum / Portal',
-  'Buletin & Pengumuman',
+  'Labnote & Pengumuman',
   'Roster & Cuti',
   'Inspeksi Harian (P2H)',
   'P5M Schedule',
@@ -47,15 +47,19 @@ export function FloatingFeedbackButton({
   currentPath = '',
   onNavigate
 }: FloatingFeedbackButtonProps) {
-  // Hide on feedback support page itself to avoid redundancy
-  if (currentPath === '/feedback-support') {
-    return null;
-  }
+  // Hide on feedback support page itself to avoid redundancy, or completely hide for crew roles
+  const jab = (userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+  const role = (userProfile?.role || '').toLowerCase();
+  const isDev = localStorage.getItem('p2h_is_developer') === 'true';
+  const isCrew = isCrewRole || (!isDev && (
+    jab.includes('crew') || jab.includes('operator') || jab.includes('helper') || jab.includes('teknisi') || role.includes('crew')
+  ) && !jab.includes('spv') && !jab.includes('supervisor') && !jab.includes('foreman') && !jab.includes('officer') &&
+    !jab.includes('analyst') && !jab.includes('superintendent') && !jab.includes('manager') && !jab.includes('admin'));
 
   const [isOpen, setIsOpen] = useState(false);
   const [type, setType] = useState<'suggestion' | 'bug' | 'improvement' | 'question'>('suggestion');
   const [module, setModule] = useState(() => {
-    if (currentPath.startsWith('/bulletin')) return 'Buletin & Pengumuman';
+    if (currentPath.startsWith('/bulletin')) return 'Labnote & Pengumuman';
     if (currentPath.startsWith('/inspect') || currentPath.startsWith('/weekly-inspection')) return 'Inspeksi Harian (P2H)';
     if (currentPath.startsWith('/p5m')) return 'P5M Schedule';
     if (currentPath.startsWith('/wo') || currentPath.startsWith('/create-wo')) return 'Work Orders & Downtime';
@@ -165,6 +169,10 @@ export function FloatingFeedbackButton({
       setSubmitting(false);
     }
   };
+
+  if (currentPath === '/feedback-support' || isCrew) {
+    return null;
+  }
 
   return (
     <>

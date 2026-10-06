@@ -15,7 +15,8 @@ import {
   isDateInISOWeek, 
   isThisISOWeek, 
   isLastISOWeek, 
-  getYearISOWeeksList 
+  getYearISOWeeksList,
+  getYearMonthsList
 } from '../utils/iso-week';
 
 export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: string, inspectorNik: string }) {
@@ -29,6 +30,7 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
   const { devOptions, setDevOptions, parsedDevOptions } = useDevOptions(inspectorNik);
 
   const isoWeeksList = useMemo(() => getYearISOWeeksList(new Date().getFullYear()), []);
+  const monthsList = useMemo(() => getYearMonthsList(new Date().getFullYear()), []);
 
   const { woData, ticketData, sparepartsList, employees, loading, loadData } = useWorkOrders();
 
@@ -112,6 +114,24 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
         const now = new Date();
         const start = new Date(now.getFullYear(), now.getMonth(), 1);
         if (!item.date || new Date(item.date) < start) return false;
+      } else if (filterPeriod === 'last_month') {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        if (!item.date) return false;
+        const d = new Date(item.date);
+        if (d < start || d > end) return false;
+      } else if (filterPeriod.startsWith('month_')) {
+        const parts = filterPeriod.split('_');
+        const targetYear = parseInt(parts[1], 10);
+        const targetMonth = parseInt(parts[2], 10);
+        if (!isNaN(targetYear) && !isNaN(targetMonth)) {
+          const start = new Date(targetYear, targetMonth - 1, 1);
+          const end = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
+          if (!item.date) return false;
+          const d = new Date(item.date);
+          if (d < start || d > end) return false;
+        }
       } else if (filterPeriod === 'last_30_days') {
         const past = new Date();
         past.setDate(past.getDate() - 30);
@@ -198,28 +218,38 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
       </div>
 
       {/* FILTER CONTROLS (Minggu ISO, Status, Search) */}
-      <Card className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+      <Card className="p-4 bg-white border border-slate-200 shadow-xs space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Filter Minggu ISO / Rentang Waktu */}
+          {/* Filter Otomatis / Waktu */}
           <div>
-            <label className="text-[11px] font-bold block mb-1 text-slate-700 dark:text-slate-300">
-              Filter Minggu ISO / Waktu
+            <label className="text-[11px] font-bold block mb-1 text-slate-700">
+              Filter Otomatis / Waktu
             </label>
             <select
               value={filterPeriod}
               onChange={e => setFilterPeriod(e.target.value)}
-              className="w-full h-9 text-xs font-semibold px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
+              className="w-full h-9 text-xs font-semibold px-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 outline-none focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
             >
-              <optgroup label="⚡ Filter Cepat & Minggu ISO">
+              <optgroup label="⚡ Filter Cepat">
                 <option value="all">📅 Semua Waktu</option>
-                <option value="this_iso_week">⚡ Minggu ISO Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
-                <option value="last_iso_week">⏮️ Minggu ISO Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
-                <option value="this_month">🗓️ Bulan Ini</option>
                 <option value="last_30_days">⏱️ 30 Hari Terakhir</option>
                 <option value="this_year">📆 Tahun Ini ({new Date().getFullYear()})</option>
                 <option value="custom">🎯 Rentang Tanggal Kustom...</option>
               </optgroup>
-              <optgroup label="📋 Pilih Spesifik Minggu ISO">
+              <optgroup label="📅 Filter Bulanan">
+                <option value="this_month">📅 Bulan Ini</option>
+                <option value="last_month">⏮️ Bulan Lalu</option>
+                {monthsList.map(m => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="⚡ Minggu ISO">
+                <option value="this_iso_week">⚡ Minggu ISO Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
+                <option value="last_iso_week">⏮️ Minggu ISO Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
+              </optgroup>
+              <optgroup label="📋 Daftar Spesifik Minggu ISO">
                 {isoWeeksList.map(iw => (
                   <option key={iw.value} value={iw.value}>
                     {iw.label}
@@ -231,13 +261,13 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
 
           {/* Filter Status */}
           <div>
-            <label className="text-[11px] font-bold block mb-1 text-slate-700 dark:text-slate-300">
+            <label className="text-[11px] font-bold block mb-1 text-slate-700">
               Status WO
             </label>
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="w-full h-9 text-xs font-semibold px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
+              className="w-full h-9 text-xs font-semibold px-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 outline-none focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
             >
               <option value="ALL">Semua Status</option>
               <option value="OPEN">🔴 Open / Menunggu Perbaikan</option>
@@ -248,7 +278,7 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
 
           {/* Search Bar */}
           <div>
-            <label className="text-[11px] font-bold block mb-1 text-slate-700 dark:text-slate-300">
+            <label className="text-[11px] font-bold block mb-1 text-slate-700">
               Pencarian
             </label>
             <div className="relative">
@@ -258,7 +288,7 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
                 placeholder="Cari WO, alat, kendala..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full h-9 text-xs pl-8 pr-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-teal-500/30"
+                className="w-full h-9 text-xs pl-8 pr-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 outline-none focus:ring-2 focus:ring-teal-500/30"
               />
             </div>
           </div>
@@ -266,20 +296,20 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
 
         {/* Custom date range picker if custom selected */}
         {filterPeriod === 'custom' && (
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
             <span className="text-xs font-semibold text-slate-500">Rentang:</span>
             <input
               type="date"
               value={customStartDate}
               onChange={e => setCustomStartDate(e.target.value)}
-              className="text-xs px-2 py-1 rounded-lg border bg-white dark:bg-slate-800"
+              className="text-xs px-2 py-1 rounded-lg border border-slate-300 bg-white text-slate-800"
             />
             <span className="text-xs text-slate-400">-</span>
             <input
               type="date"
               value={customEndDate}
               onChange={e => setCustomEndDate(e.target.value)}
-              className="text-xs px-2 py-1 rounded-lg border bg-white dark:bg-slate-800"
+              className="text-xs px-2 py-1 rounded-lg border border-slate-300 bg-white text-slate-800"
             />
           </div>
         )}

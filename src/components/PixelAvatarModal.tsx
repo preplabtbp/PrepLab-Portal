@@ -383,29 +383,29 @@ export const PixelAvatarModal: React.FC<PixelAvatarModalProps> = ({
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
           className="relative w-full max-w-2xl rounded-3xl overflow-hidden border shadow-2xl flex flex-col max-h-[90vh]"
           style={{
-            backgroundColor: 'var(--card-bg, #0F172A)',
-            borderColor: 'var(--border-main, #334155)',
-            color: 'var(--text-main, #F8FAFC)'
+            backgroundColor: 'var(--card-bg, #FFFFFF)',
+            borderColor: 'var(--border-main, #E2E8F0)',
+            color: 'var(--text-main, #1E293B)'
           }}
         >
           {/* Modal Header */}
-          <div className="px-6 py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border-main, #334155)' }}>
+          <div className="px-6 py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border-main, #E2E8F0)' }}>
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              <div className="p-2.5 rounded-2xl bg-amber-500/20 text-amber-600 border border-amber-500/30">
                 <Sparkles className="w-5 h-5 animate-pulse" />
               </div>
               <div>
-                <h3 className="text-base sm:text-lg font-bold font-display flex items-center gap-2">
+                <h3 className="text-base sm:text-lg font-bold font-display flex items-center gap-2 text-slate-900">
                   Pixel Avatar Studio K3
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">8-BIT CREATOR</span>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300">8-BIT CREATOR</span>
                 </h3>
-                <p className="text-xs opacity-70">Rancang karakter avatar pixel resmi milikmu untuk profil & leaderboard</p>
+                <p className="text-xs text-slate-500">Rancang karakter avatar pixel resmi milikmu untuk profil &amp; leaderboard</p>
               </div>
             </div>
             
             <button
               onClick={onClose}
-              className="p-2 rounded-xl hover:bg-slate-700/50 transition-colors"
+              className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5 opacity-70" />
             </button>
@@ -417,10 +417,10 @@ export const PixelAvatarModal: React.FC<PixelAvatarModalProps> = ({
             {/* Left Column: Canvas Preview */}
             <div className="md:col-span-5 flex flex-col items-center justify-center space-y-4">
               <div className="relative group">
-                <div className="p-3 rounded-3xl bg-slate-900 border-2 border-slate-700/80 shadow-inner flex items-center justify-center">
+                <div className="p-3 rounded-3xl bg-slate-50 border-2 border-slate-200 shadow-inner flex items-center justify-center">
                   <canvas 
                     ref={canvasRef} 
-                    className="w-52 h-52 sm:w-60 sm:h-60 rounded-2xl image-rendering-pixelated shadow-lg border border-slate-800"
+                    className="w-52 h-52 sm:w-60 sm:h-60 rounded-2xl image-rendering-pixelated shadow-md border border-slate-200"
                     style={{ imageRendering: 'pixelated' }}
                   />
                 </div>
@@ -437,10 +437,10 @@ export const PixelAvatarModal: React.FC<PixelAvatarModalProps> = ({
               </div>
 
               <div className="text-center space-y-1">
-                <div className="text-xs font-bold text-slate-300 font-mono truncate max-w-[200px] mx-auto">
+                <div className="text-xs font-bold text-slate-800 font-mono truncate max-w-[200px] mx-auto">
                   {currentName}
                 </div>
-                <div className="text-[10px] text-slate-400 font-mono opacity-75">
+                <div className="text-[10px] text-slate-500 font-mono">
                   NIK: {currentNik || '8-BIT-PIXEL'}
                 </div>
               </div>
@@ -449,7 +449,7 @@ export const PixelAvatarModal: React.FC<PixelAvatarModalProps> = ({
                 <button
                   type="button"
                   onClick={handleDownload}
-                  className="flex-1 py-2 px-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="flex-1 py-2 px-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Unduh PNG</span>
@@ -461,7 +461,7 @@ export const PixelAvatarModal: React.FC<PixelAvatarModalProps> = ({
             <div className="md:col-span-7 flex flex-col space-y-4">
               
               {/* Category Selector Tabs */}
-              <div className="flex flex-wrap gap-1.5 p-1 rounded-2xl bg-slate-900/90 border border-slate-800 shrink-0">
+              <div className="flex flex-wrap gap-1.5 p-1 rounded-2xl bg-slate-100 border border-slate-200 shrink-0">
                 {[
                   { id: 'skin', label: 'Kulit', icon: User },
                   { id: 'hair', label: 'Rambut', icon: Crown },
@@ -478,8 +478,8 @@ export const PixelAvatarModal: React.FC<PixelAvatarModalProps> = ({
                       onClick={() => setActiveTab(tab.id as any)}
                       className={`flex-1 min-w-[70px] py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
                         isActive 
-                          ? 'bg-amber-500 text-slate-950 shadow-sm' 
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                          ? 'bg-amber-500 text-slate-950 shadow-xs' 
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                       }`}
                     >
                       <Icon className="w-3.5 h-3.5" />
@@ -490,12 +490,12 @@ export const PixelAvatarModal: React.FC<PixelAvatarModalProps> = ({
               </div>
 
               {/* Feature Options Panel */}
-              <div className="flex-1 p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80 space-y-4 overflow-y-auto max-h-[300px]">
+              <div className="flex-1 p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 overflow-y-auto max-h-[300px]">
                 
                 {/* 1. SKIN TONE TAB */}
                 {activeTab === 'skin' && (
                   <div className="space-y-3 animate-in fade-in duration-200">
-                    <label className="text-xs font-bold text-slate-300 block">Pilih Warna Kulit Pixel:</label>
+                    <label className="text-xs font-bold text-slate-800 block">Pilih Warna Kulit Pixel:</label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {SKIN_TONES.map(item => (
                         <button
