@@ -206,9 +206,17 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const activeTab = (location.pathname === '/' || location.pathname === '/home') ? 'home' : location.pathname.substring(1);
+  const isAutoHide = activeTab !== 'home';
+  const [isSidebarPeeked, setIsSidebarPeeked] = useState(false);
   const isBulletin = location.pathname.startsWith('/bulletin');
   const [bulletinFocusMode, setBulletinFocusMode] = useState(true);
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
+
+  // Auto-collapse peeked sidebar whenever route changes
+  useEffect(() => {
+    setIsSidebarPeeked(false);
+    setHoveredNav(null);
+  }, [location.pathname]);
 
   // Dynamic background & contrast styling matching currently displayed module
   const activeModuleStyle = useMemo(() => {
@@ -1409,23 +1417,49 @@ export default function App() {
 
   return (
     <div className="flex w-full min-h-[100dvh] h-[100dvh] overflow-hidden transition-colors duration-300" style={{ backgroundColor: activeModuleStyle.bg }}>
+      {/* 0. Left Edge Hover Trigger: Hover near left edge to reveal sidebar on subpages */}
+      {isAutoHide && !isCrewRole && (
+        <div 
+          className="fixed top-0 left-0 w-3.5 h-[100dvh] z-40 cursor-pointer pointer-events-auto select-none"
+          onMouseEnter={() => setIsSidebarPeeked(true)}
+          title="Arahkan kursor ke sini untuk membuka menu sidebar"
+        />
+      )}
+
       {/* 1. Left Sidebar: Full-height past the header, unified navigation rail */}
       {!isCrewRole && (
         <aside 
-          onMouseLeave={() => setHoveredNav(null)}
-          className={`flex-col items-center w-20 lg:w-22 shrink-0 transition-all duration-300 h-[100dvh] z-50 select-none py-3 justify-between overflow-y-auto overflow-x-hidden ${
-            isBulletin && bulletinFocusMode ? 'hidden' : 'hidden md:flex'
+          onMouseEnter={() => {
+            if (isAutoHide) setIsSidebarPeeked(true);
+          }}
+          onMouseLeave={() => {
+            setHoveredNav(null);
+            if (isAutoHide) setIsSidebarPeeked(false);
+          }}
+          className={`flex-col items-center w-20 lg:w-22 shrink-0 select-none py-3 justify-between overflow-y-auto overflow-x-hidden ${
+            isBulletin && bulletinFocusMode && !isSidebarPeeked ? 'hidden' : 'flex'
+          } ${
+            isAutoHide
+              ? `fixed top-0 left-0 h-[100dvh] z-50 transition-transform duration-300 ease-out ${
+                  isSidebarPeeked ? 'translate-x-0 shadow-2xl pointer-events-auto' : '-translate-x-full pointer-events-none'
+                }`
+              : 'relative h-[100dvh] z-50 transition-all duration-300'
           }`}
           style={{
             background: 'linear-gradient(180deg, #1da8b5 0%, #168a96 45%, #106771 100%)',
-            boxShadow: 'inset -1px 0 0 0 rgba(255,255,255,0.18), 4px 0 20px rgba(0,0,0,0.08)'
+            boxShadow: isAutoHide && isSidebarPeeked
+              ? 'inset -1px 0 0 0 rgba(255,255,255,0.22), 8px 0 32px rgba(0,0,0,0.32)'
+              : 'inset -1px 0 0 0 rgba(255,255,255,0.18), 4px 0 20px rgba(0,0,0,0.08)'
           }}
         >
           {/* Top Branding Section with PrepLab & HARITA NICKEL */}
           <div className="flex flex-col items-center justify-center w-full px-1 pt-1 pb-1.5 select-none">
             <div 
               className="w-9 h-9 lg:w-10 lg:h-10 rounded-2xl bg-white/15 p-1.5 flex items-center justify-center border border-white/25 shadow-md mb-1.5 backdrop-blur-xs group cursor-pointer active:scale-95 transition-transform" 
-              onClick={handleLogoClick} 
+              onClick={() => {
+                if (isAutoHide) setIsSidebarPeeked(false);
+                handleLogoClick();
+              }} 
               title="Beranda PrepLab"
             >
               <img 
@@ -1584,7 +1618,10 @@ export default function App() {
 
                   {/* Interactive Button */}
                   <button
-                    onClick={item.onClick}
+                    onClick={() => {
+                      if (isAutoHide) setIsSidebarPeeked(false);
+                      item.onClick();
+                    }}
                     className="relative z-10 w-full py-1.5 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 cursor-pointer group"
                     title={item.title}
                   >
