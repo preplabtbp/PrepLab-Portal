@@ -693,15 +693,15 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         className="w-full max-w-4xl bg-white rounded-3xl border border-slate-300 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] text-slate-900"
       >
         {/* Header Modal */}
-        <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-teal-50 via-amber-50/30 to-white">
+        <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-[#e6f7f9] via-[#fef6e7]/40 to-white">
           <div className="flex items-center gap-3">
-            <span className="p-2.5 rounded-2xl bg-teal-600 text-white shadow-md">
+            <span className="p-2.5 rounded-2xl bg-[#22a7b8] text-white shadow-md">
               <FileSpreadsheet className="w-6 h-6" />
             </span>
             <div>
               <h3 className="font-extrabold text-lg text-slate-900 flex items-center gap-2">
                 <span>Import & Update Database Karyawan</span>
-                <span className="text-[10px] px-2.5 py-0.5 rounded-full font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full font-mono font-bold bg-[#fef6e7] text-[#9a5b02] border border-[#fad79a]">
                   30 Kolom Master
                 </span>
               </h3>
@@ -722,13 +722,13 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50/50">
           {/* Download Template Strip */}
-          <div className="p-4 rounded-2xl bg-teal-50/70 border border-teal-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="p-4 rounded-2xl bg-[#e6f7f9] border border-[#a2e0e8] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
-              <h4 className="text-xs font-bold text-teal-950 flex items-center gap-1.5">
-                <Download className="w-4 h-4 text-teal-600" />
+              <h4 className="text-xs font-bold text-[#135e69] flex items-center gap-1.5">
+                <Download className="w-4 h-4 text-[#22a7b8]" />
                 Template Master Kolom Data Karyawan (30 Kolom Resmi)
               </h4>
-              <p className="text-[11px] text-teal-800/80 mt-0.5">
+              <p className="text-[11px] text-[#18535a] mt-0.5">
                 Gunakan template ini untuk update data karyawan, tanggal efektif tidak bekerja, dan foto profil.
               </p>
             </div>
@@ -736,15 +736,15 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
               <button
                 type="button"
                 onClick={handleDownloadTemplateCsv}
-                className="flex-1 sm:flex-none px-3 py-1.5 rounded-xl bg-white border border-teal-300 hover:bg-teal-100/50 text-teal-900 font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="flex-1 sm:flex-none px-3 py-1.5 rounded-xl bg-white border border-[#a2e0e8] hover:bg-[#e6f7f9] text-[#135e69] font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <FileText className="w-3.5 h-3.5 text-teal-600" />
+                <FileText className="w-3.5 h-3.5 text-[#22a7b8]" />
                 Download CSV
               </button>
               <button
                 type="button"
                 onClick={handleDownloadTemplateExcel}
-                className="flex-1 sm:flex-none px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="flex-1 sm:flex-none px-3 py-1.5 rounded-xl bg-[#22a7b8] hover:bg-[#1b8f9e] text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
                 Download Excel (.xlsx)
@@ -759,8 +759,8 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
             onClick={() => fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded-3xl p-8 text-center transition-all cursor-pointer ${
               file 
-                ? 'border-teal-500 bg-teal-50/30' 
-                : 'border-slate-300 hover:border-teal-400 hover:bg-teal-50/20 bg-white'
+                ? 'border-[#22a7b8] bg-[#e6f7f9]/60' 
+                : 'border-slate-300 hover:border-[#22a7b8] hover:bg-[#e6f7f9]/30 bg-white'
             }`}
           >
             <input
@@ -773,7 +773,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
             
             <div className="flex flex-col items-center justify-center">
               <span className={`p-3.5 rounded-2xl mb-3 shadow-xs ${
-                file ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'
+                file ? 'bg-[#22a7b8] text-white' : 'bg-slate-100 text-slate-500'
               }`}>
                 <UploadCloud className="w-7 h-7" />
               </span>
@@ -799,8 +799,8 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
           </div>
 
           {/* Drive Photo Auto-upload Note */}
-          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-900 text-xs flex items-start gap-2.5">
-            <span className="p-1 rounded-lg bg-amber-200 text-amber-900 shrink-0 mt-0.5">
+          <div className="p-3.5 rounded-2xl bg-[#fef6e7] border border-[#fad79a] text-[#9a5b02] text-xs flex items-start gap-2.5">
+            <span className="p-1 rounded-lg bg-[#fad79a] text-[#9a5b02] shrink-0 mt-0.5">
               <ImageIcon className="w-3.5 h-3.5" />
             </span>
             <div className="leading-relaxed">
@@ -811,7 +811,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
           {/* Parsing Spinner */}
           {isParsing && (
             <div className="p-4 rounded-2xl bg-white border border-slate-200 text-center flex items-center justify-center gap-3">
-              <RefreshCw className="w-5 h-5 text-teal-600 animate-spin" />
+              <RefreshCw className="w-5 h-5 text-[#22a7b8] animate-spin" />
               <span className="text-xs font-semibold text-slate-700">Sedang membaca dan memvalidasi file...</span>
             </div>
           )}
@@ -850,8 +850,8 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                     <p className="text-sm font-extrabold text-emerald-700">{importResult.stats.updated}</p>
                   </div>
                   <div className="p-2 rounded-xl bg-white/80 border border-emerald-200/60 text-center">
-                    <p className="text-[10px] uppercase text-teal-600">Ditambahkan</p>
-                    <p className="text-sm font-extrabold text-teal-700">{importResult.stats.inserted}</p>
+                    <p className="text-[10px] uppercase text-[#22a7b8]">Ditambahkan</p>
+                    <p className="text-sm font-extrabold text-[#135e69]">{importResult.stats.inserted}</p>
                   </div>
                   <div className="p-2 rounded-xl bg-white/80 border border-emerald-200/60 text-center">
                     <p className="text-[10px] uppercase text-rose-600">Gagal / Skip</p>
@@ -867,7 +867,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                  <Eye className="w-4 h-4 text-teal-600" />
+                  <Eye className="w-4 h-4 text-[#22a7b8]" />
                   <span>Preview Data ({parsedRows.length} Baris Terdeteksi)</span>
                 </h4>
                 <div className="flex items-center gap-2 text-[11px] flex-wrap">
@@ -888,7 +888,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                     }).length;
                     return (
                       <span className={`px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-                        fotoCount > 0 || hasFotoHeader ? 'bg-teal-100 text-teal-800 border border-teal-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                        fotoCount > 0 || hasFotoHeader ? 'bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]' : 'bg-slate-100 text-slate-600 border border-slate-200'
                       }`}>
                         <ImageIcon className="w-3 h-3" /> Kolom Foto ({fotoCount} Terdeteksi)
                       </span>
@@ -925,7 +925,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                       return (
                         <tr key={idx} className="hover:bg-slate-50 transition-colors">
                           <td className="p-2.5 text-slate-400 font-mono">{idx + 1}</td>
-                          <td className="p-2.5 font-bold font-mono text-teal-700">{nik}</td>
+                          <td className="p-2.5 font-extrabold font-mono text-[#135e69]">{nik}</td>
                           <td className="p-2.5 font-bold text-slate-900">{name}</td>
                           <td className="p-2.5 text-slate-600">{jabatan}</td>
                           <td className="p-2.5">
@@ -942,10 +942,10 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                                   <img 
                                     src={foto} 
                                     alt="Avatar" 
-                                    className="w-6 h-6 rounded-full object-cover border border-teal-300 shadow-xs shrink-0" 
+                                    className="w-6 h-6 rounded-full object-cover border border-[#a2e0e8] shadow-xs shrink-0" 
                                   />
                                 ) : (
-                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#e6f7f9] text-[#22a7b8] border border-[#a2e0e8]">
                                     Link
                                   </span>
                                 )}
@@ -978,7 +978,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
             {isImporting && importProgress && (
               <div className="space-y-1.5 mr-0 sm:mr-4">
                 <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-teal-700 flex items-center gap-1.5">
+                  <span className="text-[#22a7b8] flex items-center gap-1.5">
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                     {importProgress.message}
                   </span>
@@ -986,7 +986,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                 </div>
                 <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                   <div 
-                    className="bg-teal-600 h-2 rounded-full transition-all duration-300"
+                    className="bg-[#22a7b8] h-2 rounded-full transition-all duration-300"
                     style={{ width: `${importProgress.percent}%` }}
                   />
                 </div>
@@ -1008,7 +1008,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
               type="button"
               disabled={parsedRows.length === 0 || isImporting || isParsing || !hasNikHeader}
               onClick={handleExecuteImport}
-              className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl bg-[#22a7b8] hover:bg-[#1b8f9e] text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-2"
             >
               {isImporting ? (
                 <>

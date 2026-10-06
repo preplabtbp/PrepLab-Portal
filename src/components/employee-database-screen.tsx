@@ -88,7 +88,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     return (
       <div className="flex-1 p-4 w-full max-w-full px-4 md:px-8 w-full h-full bg-transparent flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <div className="animate-spin w-8 h-8 border-4 border-[#22a7b8] border-t-transparent rounded-full mx-auto mb-4"></div>
           <p className="text-slate-500">Memuat database karyawan...</p>
         </div>
       </div>
@@ -120,7 +120,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
           placeholder="Ketik NIK atau Nama..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className={`w-full rounded-2xl shadow-sm border-slate-200 focus:ring-4 focus:ring-teal-500/20 focus:border-teal-500 bg-white
+          className={`w-full rounded-2xl shadow-sm border-slate-200 focus:ring-4 focus:ring-[#22a7b8]/20 focus:border-[#22a7b8] bg-white
             ${isSmall ? 'pl-10 py-2.5 text-sm' : 'pl-12 py-6 text-lg'}`}
         />
         <Search className={`absolute text-slate-400 ${isSmall ? 'left-3 w-5 h-5 top-2.5' : 'left-4 w-6 h-6 top-1/2 -translate-y-1/2'}`} />
@@ -155,7 +155,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       }}
                       className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center transition-colors border-b border-slate-50 last:border-0"
                     >
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 mr-3 overflow-hidden bg-teal-50 text-teal-700 font-bold border border-teal-200">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 mr-3 overflow-hidden bg-[#e6f7f9] text-[#22a7b8] font-bold border border-[#a2e0e8]">
                         {(() => {
                           const av = getSafeAvatarUrl(emp.avatar);
                           return av ? (
@@ -198,7 +198,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
           </Button>
           {!selectedEmployee && (
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-bold text-xs uppercase tracking-wider shadow-xs hidden sm:inline-block">
+              <span className="px-3 py-1 rounded-lg bg-[#f09b13] text-white font-bold text-xs uppercase tracking-wider shadow-xs hidden sm:inline-block">
                 Manpower
               </span>
               <h1 className="text-lg font-bold text-slate-800 hidden sm:block">
@@ -214,9 +214,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               <Button
                 onClick={() => setIsImportModalOpen(true)}
                 size="sm"
-                className="bg-white hover:bg-slate-50 text-teal-800 border border-teal-300 flex items-center gap-1.5 rounded-xl text-xs font-bold px-3 py-1.5 shadow-xs transition-all cursor-pointer"
+                className="bg-white hover:bg-slate-50 text-[#135e69] border border-[#a2e0e8] flex items-center gap-1.5 rounded-xl text-xs font-bold px-3 py-1.5 shadow-xs transition-all cursor-pointer"
               >
-                <UploadCloud className="w-3.5 h-3.5 text-teal-600" />
+                <UploadCloud className="w-3.5 h-3.5 text-[#22a7b8]" />
                 <span>Import CSV / Excel</span>
               </Button>
 
@@ -224,7 +224,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 onClick={handleManualSync}
                 disabled={isSyncing}
                 size="sm"
-                className="bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-1.5 rounded-xl text-xs font-semibold px-3 py-1.5 shadow-sm transition-all cursor-pointer"
+                className="bg-[#22a7b8] hover:bg-[#1b8f9e] text-white flex items-center gap-1.5 rounded-xl text-xs font-semibold px-3 py-1.5 shadow-sm transition-all cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                 {isSyncing ? 'Menyinkronkan...' : 'Sinkron Google Sheets'}
@@ -265,12 +265,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
           /* SEARCH MODE - ENTERPRISE HERO */
           <div className="w-full min-h-full flex flex-col relative overflow-hidden bg-slate-900">
             {/* Enterprise Hero Background */}
-            <div className="absolute inset-0 bg-gradient-to-br from-teal-950 via-slate-900 to-teal-900 z-0">
+            <div className="absolute inset-0 bg-gradient-to-br from-[#0c3e44] via-slate-900 to-[#0e4850] z-0">
               {/* Subtle Grid overlay */}
               <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')] [mask-image:linear-gradient(to_bottom,white,transparent)] z-0"></div>
               {/* Glowing orbs */}
-              <div className="absolute top-0 left-1/4 w-64 h-64 md:w-96 md:h-96 bg-teal-500/20 rounded-full blur-3xl -translate-y-1/2"></div>
-              <div className="absolute bottom-0 right-1/4 w-64 h-64 md:w-96 md:h-96 bg-amber-500/15 rounded-full blur-3xl translate-y-1/2"></div>
+              <div className="absolute top-0 left-1/4 w-64 h-64 md:w-96 md:h-96 bg-[#22a7b8]/20 rounded-full blur-3xl -translate-y-1/2"></div>
+              <div className="absolute bottom-0 right-1/4 w-64 h-64 md:w-96 md:h-96 bg-[#f09b13]/20 rounded-full blur-3xl translate-y-1/2"></div>
             </div>
 
             <div className="relative z-10 max-w-4xl mx-auto w-full pt-10 md:pt-32 px-4 pb-20 flex-1 flex flex-col items-center">
@@ -279,21 +279,21 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 animate={{ opacity: 1, y: 0 }}
                 className="text-center mb-8 w-full"
               >
-                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40 text-xs font-bold uppercase tracking-wider mb-4 shadow-sm backdrop-blur-md">
-                  <Database className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Manpower Intelligence Portal</span>
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#f09b13] text-white text-xs font-extrabold uppercase tracking-wider mb-4 shadow-lg">
+                  <Database className="w-3.5 h-3.5" />
+                  <span>Manpower</span>
                 </div>
-                <h2 className="text-3xl md:text-5xl font-extrabold text-white mb-3 md:mb-4 tracking-tight">
+                <h2 className="text-3xl md:text-5xl font-black text-white mb-3 md:mb-4 tracking-tight">
                   Laboratory Administration
                 </h2>
-                <p className="text-teal-100/90 text-sm md:text-lg max-w-2xl mx-auto font-light leading-relaxed px-2">
-                  Pusat direktori terpadu. Ketik NIK atau nama untuk menelusuri profil karyawan, melacak kehadiran, dan memantau riwayat jabatan secara real-time.
+                <p className="text-[#a2e0e8] text-sm md:text-lg max-w-2xl mx-auto font-light leading-relaxed px-2">
+                  Manpower Attendance & Database Directory. Ketik NIK atau nama untuk menelusuri profil karyawan, melacak kehadiran, dan memantau riwayat jabatan secara real-time.
                 </p>
               </motion.div>
 
               {/* Big Search Bar */}
               <div className="w-full max-w-2xl mb-10 md:mb-12 relative group px-2 md:px-0">
-                <div className="absolute inset-0 bg-teal-500/20 blur-xl rounded-full transition-opacity group-hover:opacity-100 opacity-50"></div>
+                <div className="absolute inset-0 bg-[#22a7b8]/30 blur-xl rounded-full transition-opacity group-hover:opacity-100 opacity-50"></div>
                 {renderSearchBar(false)}
               </div>
 
@@ -305,16 +305,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 w-full max-w-3xl px-2"
               >
                 <div className="bg-white/10 backdrop-blur-md rounded-xl md:rounded-2xl p-4 md:p-5 border border-white/10 text-center hover:bg-white/15 transition-colors">
-                  <div className="text-teal-200 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 md:mb-2">Total Data</div>
+                  <div className="text-[#a2e0e8] text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 md:mb-2">Total Data</div>
                   <div className="text-2xl md:text-3xl font-bold text-white">{employees.length}</div>
                 </div>
                 <div className="bg-white/10 backdrop-blur-md rounded-xl md:rounded-2xl p-4 md:p-5 border border-white/10 text-center hover:bg-white/15 transition-colors">
-                  <div className="text-amber-200 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 md:mb-2">Dept. Aktif</div>
+                  <div className="text-[#fcd99a] text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 md:mb-2">Dept. Aktif</div>
                   <div className="text-2xl md:text-3xl font-bold text-white">{new Set(employees.map(e => e.department).filter(Boolean)).size}</div>
                 </div>
                 <div className="bg-white/10 backdrop-blur-md rounded-xl md:rounded-2xl p-4 md:p-5 border border-white/10 text-center hover:bg-white/15 transition-colors">
-                  <div className="text-teal-200 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 md:mb-2">Status PKWTT</div>
-                  <div className="text-2xl md:text-3xl font-bold text-teal-300">
+                  <div className="text-[#a2e0e8] text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 md:mb-2">Status PKWTT</div>
+                  <div className="text-2xl md:text-3xl font-bold text-[#22a7b8]">
                     {employees.filter(e => e.statusKontrak && e.statusKontrak.toLowerCase().includes('pkwtt')).length}
                   </div>
                 </div>
@@ -334,10 +334,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             className="flex flex-col lg:flex-row min-h-full"
           >
             {/* SIDEBAR (Profile Info) */}
-            <div className="lg:w-80 bg-gradient-to-b from-teal-950 via-teal-900 to-slate-900 text-white shrink-0 shadow-xl z-10 p-6 lg:p-8 flex flex-col items-center lg:items-start text-center lg:text-left relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-32 bg-teal-800/40 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2"></div>
+            <div className="lg:w-80 bg-gradient-to-b from-[#09353a] via-[#0c3e44] to-slate-900 text-white shrink-0 shadow-xl z-10 p-6 lg:p-8 flex flex-col items-center lg:items-start text-center lg:text-left relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-32 bg-[#22a7b8]/20 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2"></div>
               
-              <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-teal-950/60 border-2 border-teal-400/40 overflow-hidden mb-6 flex items-center justify-center shrink-0 shadow-lg relative">
+              <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-[#09353a]/80 border-2 border-[#22a7b8]/40 overflow-hidden mb-6 flex items-center justify-center shrink-0 shadow-lg relative">
                 {(() => {
                   const avatarUrl = getSafeAvatarUrl(selectedEmployee.avatar);
                   return avatarUrl ? (
@@ -350,62 +350,62 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       }}
                     />
                   ) : (
-                    <User className="w-16 h-16 text-teal-300" />
+                    <User className="w-16 h-16 text-[#a2e0e8]" />
                   );
                 })()}
               </div>
 
               <h2 className="text-xl lg:text-2xl font-bold mb-1 leading-tight">{selectedEmployee.name}</h2>
-              <p className="text-amber-300 mb-6 flex items-center justify-center lg:justify-start bg-teal-800/60 border border-teal-700/60 px-3 py-1 rounded-full text-sm font-semibold">
-                <Fingerprint className="w-4 h-4 mr-1.5 text-amber-400" />
+              <p className="text-white mb-6 flex items-center justify-center lg:justify-start bg-[#f09b13] px-3.5 py-1 rounded-full text-xs font-bold shadow-xs">
+                <Fingerprint className="w-3.5 h-3.5 mr-1.5" />
                 NIK: {selectedEmployee.nik}
               </p>
 
-              <div className="w-full space-y-4 text-sm text-teal-50/90">
-                <div className="border-b border-teal-800/60 pb-3">
-                  <p className="text-teal-300/80 text-xs font-semibold mb-1 uppercase tracking-wider">Jabatan Baru</p>
+              <div className="w-full space-y-4 text-sm text-[#e6f7f9]">
+                <div className="border-b border-[#18535a] pb-3">
+                  <p className="text-[#a2e0e8] text-xs font-semibold mb-1 uppercase tracking-wider">Jabatan Baru</p>
                   <p className="font-medium text-white">{selectedEmployee.jabatan || '-'}</p>
                 </div>
                 
-                <div className="border-b border-teal-800/60 pb-3">
-                  <p className="text-teal-300/80 text-xs font-semibold mb-1 uppercase tracking-wider">Perusahaan</p>
+                <div className="border-b border-[#18535a] pb-3">
+                  <p className="text-[#a2e0e8] text-xs font-semibold mb-1 uppercase tracking-wider">Perusahaan</p>
                   <p className="font-medium text-white">{selectedEmployee.pt || '-'}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 border-b border-teal-800/60 pb-3">
+                <div className="grid grid-cols-2 gap-4 border-b border-[#18535a] pb-3">
                   <div>
-                    <p className="text-teal-300/80 text-xs font-semibold mb-1 uppercase tracking-wider">Job Grade</p>
+                    <p className="text-[#a2e0e8] text-xs font-semibold mb-1 uppercase tracking-wider">Job Grade</p>
                     <p className="font-medium text-white">{selectedEmployee.jobGrade || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-teal-300/80 text-xs font-semibold mb-1 uppercase tracking-wider">Golongan</p>
+                    <p className="text-[#a2e0e8] text-xs font-semibold mb-1 uppercase tracking-wider">Golongan</p>
                     <p className="font-medium text-white">{selectedEmployee.gol || '-'}</p>
                   </div>
                 </div>
 
-                <div className="border-b border-teal-800/60 pb-3">
-                  <p className="text-teal-300/80 text-xs font-semibold mb-1 uppercase tracking-wider">Bagian (Section)</p>
+                <div className="border-b border-[#18535a] pb-3">
+                  <p className="text-[#a2e0e8] text-xs font-semibold mb-1 uppercase tracking-wider">Bagian (Section)</p>
                   <p className="font-medium text-white">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 border-b border-teal-800/60 pb-3">
+                <div className="grid grid-cols-2 gap-4 border-b border-[#18535a] pb-3">
                   <div>
-                    <p className="text-teal-300/80 text-xs font-semibold mb-1 uppercase tracking-wider">DOH Awal</p>
+                    <p className="text-[#a2e0e8] text-xs font-semibold mb-1 uppercase tracking-wider">DOH Awal</p>
                     <p className="font-medium text-white">{selectedEmployee.tanggalAwalBergabung || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-teal-300/80 text-xs font-semibold mb-1 uppercase tracking-wider">Tgl Jabatan Baru</p>
+                    <p className="text-[#a2e0e8] text-xs font-semibold mb-1 uppercase tracking-wider">Tgl Jabatan Baru</p>
                     <p className="font-medium text-white">{selectedEmployee.tanggalJabatanBaru || '-'}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-teal-300/80 text-xs font-semibold mb-1 uppercase tracking-wider">Masa Kerja</p>
+                    <p className="text-[#a2e0e8] text-xs font-semibold mb-1 uppercase tracking-wider">Masa Kerja</p>
                     <p className="font-medium text-white">{selectedEmployee.masaKerja || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-teal-300/80 text-xs font-semibold mb-1 uppercase tracking-wider">Masa Kerja Jabatan</p>
+                    <p className="text-[#a2e0e8] text-xs font-semibold mb-1 uppercase tracking-wider">Masa Kerja Jabatan</p>
                     <p className="font-medium text-white">{selectedEmployee.masaKerjaJabatanTerakhir || '-'}</p>
                   </div>
                 </div>
@@ -418,13 +418,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               {/* HEADER W/ SPONSOR */}
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                  <h1 className="text-3xl font-bold text-slate-800">{selectedEmployee.name}</h1>
-                  <p className="text-slate-500 mt-1">{selectedEmployee.jabatan || 'Karyawan'}</p>
+                  <h1 className="text-3xl font-extrabold text-slate-900">{selectedEmployee.name}</h1>
+                  <p className="text-slate-500 mt-1 font-medium">{selectedEmployee.jabatan || 'Karyawan'}</p>
                 </div>
                 
-                <Card className="p-4 bg-white shadow-sm border-l-4 border-l-amber-500 min-w-[200px]">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Sponsor</p>
-                  <p className="font-bold text-slate-800 text-lg">{selectedEmployee.sponsor || '-'}</p>
+                <Card className="p-4 bg-white shadow-sm border-l-4 border-l-[#f09b13] min-w-[200px]">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Sponsor</p>
+                  <p className="font-extrabold text-slate-800 text-lg">{selectedEmployee.sponsor || '-'}</p>
                 </Card>
               </div>
 
@@ -432,38 +432,38 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 {/* STATUS CARDS */}
                 <div className="xl:col-span-1 space-y-6">
                   <h3 className="text-lg font-bold text-slate-800 flex items-center">
-                    <CheckCircle2 className="w-5 h-5 mr-2 text-teal-600" />
+                    <CheckCircle2 className="w-5 h-5 mr-2 text-[#22a7b8]" />
                     Status & Kehadiran
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-gradient-to-br from-teal-600 to-teal-700 rounded-xl p-4 text-white shadow-md">
-                      <p className="text-teal-100 text-xs uppercase tracking-wider mb-1">Status Karyawan</p>
-                      <p className="font-bold">{selectedEmployee.statusKaryawan || '-'}</p>
+                    <div className="bg-[#22a7b8] rounded-xl p-4 text-white shadow-md">
+                      <p className="text-[#e6f7f9] text-xs uppercase font-bold tracking-wider mb-1">Status Karyawan</p>
+                      <p className="font-extrabold text-base">{selectedEmployee.statusKaryawan || '-'}</p>
                     </div>
-                    <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 text-white shadow-md">
-                      <p className="text-amber-100 text-xs uppercase tracking-wider mb-1">Status Kontrak</p>
-                      <p className="font-bold">{selectedEmployee.statusKontrak || '-'}</p>
+                    <div className="bg-[#f09b13] rounded-xl p-4 text-white shadow-md">
+                      <p className="text-[#fef6e7] text-xs uppercase font-bold tracking-wider mb-1">Status Kontrak</p>
+                      <p className="font-extrabold text-base">{selectedEmployee.statusKontrak || '-'}</p>
                     </div>
                     {selectedEmployee.tanggalEfektifTidakBekerja && (
                       <div className="col-span-2 bg-gradient-to-br from-rose-600 to-rose-700 rounded-xl p-4 text-white shadow-md flex justify-between items-center">
                         <div>
-                          <p className="text-rose-100 text-xs uppercase tracking-wider mb-1">Tgl Efektif Tidak Bekerja</p>
+                          <p className="text-rose-100 text-xs uppercase font-bold tracking-wider mb-1">Tgl Efektif Tidak Bekerja</p>
                           <p className="font-bold">{selectedEmployee.tanggalEfektifTidakBekerja}</p>
                         </div>
                         <Calendar className="w-6 h-6 text-rose-200 opacity-60" />
                       </div>
                     )}
-                    <div className="bg-gradient-to-br from-cyan-600 to-teal-600 rounded-xl p-4 text-white shadow-md">
-                      <p className="text-cyan-100 text-xs uppercase tracking-wider mb-1">Sisa Cuti (CT)</p>
-                      <p className="font-bold text-lg">{selectedEmployee.sisaCt || '-'}</p>
+                    <div className="bg-[#1b8f9e] rounded-xl p-4 text-white shadow-md">
+                      <p className="text-[#e6f7f9] text-xs uppercase font-bold tracking-wider mb-1">Sisa Cuti (CT)</p>
+                      <p className="font-extrabold text-lg">{selectedEmployee.sisaCt || '-'}</p>
                     </div>
-                    <div className="bg-gradient-to-br from-teal-700 to-teal-800 rounded-xl p-4 text-white shadow-md">
-                      <p className="text-teal-200 text-xs uppercase tracking-wider mb-1">Jatuh Tempo CT</p>
+                    <div className="bg-[#135e69] rounded-xl p-4 text-white shadow-md">
+                      <p className="text-[#a2e0e8] text-xs uppercase font-bold tracking-wider mb-1">Jatuh Tempo CT</p>
                       <p className="font-bold">{selectedEmployee.jatuhTempoCt || '-'}</p>
                     </div>
                     <div className="col-span-2 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl p-4 text-white shadow-md flex justify-between items-center">
                       <div>
-                        <p className="text-slate-300 text-xs uppercase tracking-wider mb-1">Tanggal Permanen</p>
+                        <p className="text-slate-300 text-xs uppercase font-bold tracking-wider mb-1">Tanggal Permanen</p>
                         <p className="font-bold">{selectedEmployee.tanggalPermanent || '-'}</p>
                       </div>
                       <Calendar className="w-8 h-8 text-slate-500 opacity-50" />
@@ -477,25 +477,25 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     {/* 2026 */}
                     <Card className="p-5 shadow-sm border-slate-200/60">
                       <h4 className="font-bold text-slate-700 mb-4 flex items-center">
-                        <BarChart3 className="w-4 h-4 mr-2 text-teal-600" />
+                        <BarChart3 className="w-4 h-4 mr-2 text-[#22a7b8]" />
                         Rekap Absensi 2026
                       </h4>
                       <div className="grid grid-cols-4 gap-2">
-                        <div className="text-center p-2 rounded-lg bg-teal-50/60 border border-teal-100">
-                          <p className="text-[10px] md:text-xs uppercase font-bold text-teal-700 mb-1">Izin</p>
-                          <p className="font-bold text-slate-800">0</p>
+                        <div className="text-center p-2.5 rounded-lg bg-[#e6f7f9] border border-[#a2e0e8]">
+                          <p className="text-[10px] md:text-xs uppercase font-extrabold text-[#135e69] mb-1">Izin</p>
+                          <p className="font-black text-slate-800">0</p>
                         </div>
-                        <div className="text-center p-2 rounded-lg bg-cyan-50/60 border border-cyan-100">
-                          <p className="text-[10px] md:text-xs uppercase font-bold text-cyan-700 mb-1">I.Khusus</p>
-                          <p className="font-bold text-slate-800">0</p>
+                        <div className="text-center p-2.5 rounded-lg bg-[#e6f7f9] border border-[#a2e0e8]">
+                          <p className="text-[10px] md:text-xs uppercase font-extrabold text-[#22a7b8] mb-1">I.Khusus</p>
+                          <p className="font-black text-slate-800">0</p>
                         </div>
-                        <div className="text-center p-2 rounded-lg bg-amber-50/60 border border-amber-100">
-                          <p className="text-[10px] md:text-xs uppercase font-bold text-amber-700 mb-1">Sakit</p>
-                          <p className="font-bold text-slate-800">0</p>
+                        <div className="text-center p-2.5 rounded-lg bg-[#fef6e7] border border-[#fad79a]">
+                          <p className="text-[10px] md:text-xs uppercase font-extrabold text-[#f09b13] mb-1">Sakit</p>
+                          <p className="font-black text-slate-800">0</p>
                         </div>
-                        <div className="text-center p-2 rounded-lg bg-rose-50 border border-rose-100">
-                          <p className="text-[10px] md:text-xs uppercase font-bold text-rose-500 mb-1">Alpa</p>
-                          <p className="font-bold text-rose-700">0</p>
+                        <div className="text-center p-2.5 rounded-lg bg-rose-50 border border-rose-200">
+                          <p className="text-[10px] md:text-xs uppercase font-extrabold text-rose-600 mb-1">Alpa</p>
+                          <p className="font-black text-rose-700">0</p>
                         </div>
                       </div>
                     </Card>
@@ -506,19 +506,19 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         Rekap Absensi 2025
                       </h4>
                       <div className="grid grid-cols-4 gap-2">
-                        <div className="text-center p-2 rounded-lg bg-slate-50 border border-slate-100">
+                        <div className="text-center p-2.5 rounded-lg bg-slate-50 border border-slate-200">
                           <p className="text-[10px] md:text-xs uppercase font-bold text-slate-500 mb-1">Izin</p>
                           <p className="font-bold text-slate-700">0</p>
                         </div>
-                        <div className="text-center p-2 rounded-lg bg-slate-50 border border-slate-100">
+                        <div className="text-center p-2.5 rounded-lg bg-slate-50 border border-slate-200">
                           <p className="text-[10px] md:text-xs uppercase font-bold text-slate-500 mb-1">I.Khusus</p>
                           <p className="font-bold text-slate-700">0</p>
                         </div>
-                        <div className="text-center p-2 rounded-lg bg-slate-50 border border-slate-100">
+                        <div className="text-center p-2.5 rounded-lg bg-slate-50 border border-slate-200">
                           <p className="text-[10px] md:text-xs uppercase font-bold text-slate-500 mb-1">Sakit</p>
                           <p className="font-bold text-slate-700">0</p>
                         </div>
-                        <div className="text-center p-2 rounded-lg bg-rose-50 border border-rose-100">
+                        <div className="text-center p-2.5 rounded-lg bg-rose-50 border border-rose-100">
                           <p className="text-[10px] md:text-xs uppercase font-bold text-rose-500 mb-1">Alpa</p>
                           <p className="font-bold text-rose-600">0</p>
                         </div>
@@ -532,7 +532,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                 <Card className="p-6 shadow-sm border-slate-200/60">
                   <h3 className="text-lg font-bold text-slate-800 mb-5 flex items-center">
-                    <User className="w-5 h-5 mr-2 text-teal-600" />
+                    <User className="w-5 h-5 mr-2 text-[#22a7b8]" />
                     Data Diri (Umum)
                   </h3>
                   <div className="space-y-4">
@@ -570,7 +570,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 <div className="space-y-6">
                   <Card className="p-6 shadow-sm border-slate-200/60 bg-white h-full flex flex-col">
                     <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
-                      <MapPin className="w-5 h-5 mr-2 text-teal-600" />
+                      <MapPin className="w-5 h-5 mr-2 text-[#22a7b8]" />
                       Alamat KTP & Domisili
                     </h3>
                     <div className="space-y-4 flex-1">
@@ -594,7 +594,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               {/* SECTION: HISTORI ABSENSI & ALASAN */}
               <div className="mb-8">
                 <h3 className="text-lg font-bold text-slate-800 mb-5 flex items-center">
-                  <Calendar className="w-5 h-5 mr-2 text-teal-600" />
+                  <Calendar className="w-5 h-5 mr-2 text-[#22a7b8]" />
                   Tanggal Absensi 2026 & Alasan
                 </h3>
                 
@@ -651,25 +651,25 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               <Card className="p-6 shadow-sm border-slate-200/60 bg-white">
                 <h3 className="text-lg font-bold text-slate-800 mb-6 text-center">Diagram Absensi Karyawan 2026</h3>
                 <div className="h-48 flex items-end justify-center space-x-12 px-8 pb-4 border-b border-slate-200">
-                  {/* Mock Bars matching the reference palette */}
+                  {/* Mock Bars matching the exact reference palette */}
                   <div className="flex flex-col items-center w-16">
-                    <div className="w-full bg-teal-500 rounded-t-sm h-[60%] hover:opacity-80 transition-opacity"></div>
-                    <span className="text-xs font-bold mt-2 text-slate-600">Izin</span>
+                    <div className="w-full bg-[#22a7b8] rounded-t-sm h-[60%] hover:opacity-80 transition-opacity"></div>
+                    <span className="text-xs font-bold mt-2 text-slate-600">%Cuti</span>
                   </div>
                   <div className="flex flex-col items-center w-16">
-                    <div className="w-full bg-cyan-500 rounded-t-sm h-[10%] hover:opacity-80 transition-opacity"></div>
-                    <span className="text-xs font-bold mt-2 text-slate-600">I.Khusus</span>
+                    <div className="w-full bg-[#f09b13] rounded-t-sm h-[80%] hover:opacity-80 transition-opacity"></div>
+                    <span className="text-xs font-bold mt-2 text-slate-600">%Hadir</span>
                   </div>
                   <div className="flex flex-col items-center w-16">
-                    <div className="w-full bg-amber-500 rounded-t-sm h-[30%] hover:opacity-80 transition-opacity"></div>
-                    <span className="text-xs font-bold mt-2 text-slate-600">Sakit</span>
+                    <div className="w-full bg-slate-300 rounded-t-sm h-[10%] hover:opacity-80 transition-opacity"></div>
+                    <span className="text-xs font-bold mt-2 text-slate-600">%Izin</span>
                   </div>
                   <div className="flex flex-col items-center w-16">
                     <div className="w-full bg-rose-500 rounded-t-sm h-[5%] hover:opacity-80 transition-opacity"></div>
-                    <span className="text-xs font-bold mt-2 text-slate-600">Alpa</span>
+                    <span className="text-xs font-bold mt-2 text-slate-600">%Alpha</span>
                   </div>
                 </div>
-                <p className="text-center text-xs text-slate-400 mt-4 italic">* Data ilustrasi visual (sesuai standar warna absensi Laboratory Administration)</p>
+                <p className="text-center text-xs text-slate-400 mt-4 italic">* Diagram Absensi Laboratorium (Palet Cyan #22A7B8 & Ochre #F09B13)</p>
               </Card>
 
             </div>
