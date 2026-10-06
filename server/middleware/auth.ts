@@ -27,10 +27,18 @@ export function toPublicEmployee(emp: any): any {
   if (!emp) return null;
   const { passwordHash, ...safeEmp } = emp;
   const resolvedName = safeEmp.name || safeEmp.nama || '';
+  let avatar = safeEmp.avatar || null;
+  if (avatar && typeof avatar === 'string' && avatar.includes('drive.google.com')) {
+    const idMatch = avatar.match(/\/d\/([a-zA-Z0-9_-]+)/) || avatar.match(/id=([a-zA-Z0-9_-]+)/);
+    if (idMatch && idMatch[1]) {
+      avatar = `/api/employees/photo/${idMatch[1]}`;
+    }
+  }
   return {
     ...safeEmp,
     name: resolvedName,
-    nama: resolvedName
+    nama: resolvedName,
+    avatar
   };
 }
 

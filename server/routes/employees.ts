@@ -13,11 +13,11 @@ async function uploadEmployeePhotoToDrive(nik: string, name: string, base64OrUrl
   const str = String(base64OrUrl).trim();
   if (!str) return '';
 
-  // If already a Google Drive URL, normalize it to direct image view
+  // If already a Google Drive URL, normalize it to direct internal proxy URL
   if (str.includes('drive.google.com')) {
     const idMatch = str.match(/\/d\/([a-zA-Z0-9_-]+)/) || str.match(/id=([a-zA-Z0-9_-]+)/);
     if (idMatch && idMatch[1]) {
-      return `https://drive.google.com/uc?export=view&id=${idMatch[1]}`;
+      return `/api/employees/photo/${idMatch[1]}`;
     }
     return str;
   }
@@ -66,7 +66,7 @@ async function uploadEmployeePhotoToDrive(nik: string, name: string, base64OrUrl
           });
         } catch (permErr) {}
 
-        return `https://drive.google.com/uc?export=view&id=${fileId}`;
+        return `/api/employees/photo/${fileId}`;
       }
     } catch (driveErr: any) {
       console.warn(`Drive upload failed for employee photo ${nik}:`, driveErr.message);
@@ -76,6 +76,43 @@ async function uploadEmployeePhotoToDrive(nik: string, name: string, base64OrUrl
 
   return str;
 }
+
+// Proxy Google Drive photos to prevent Google Drive 403 hotlinking restrictions
+employeesRouter.get("/photo/:fileId", async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    if (!fileId || fileId.length < 5) {
+      return res.status(400).send("Invalid file ID");
+    }
+
+    let mimeType = 'image/jpeg';
+    try {
+      const meta = await drive.files.get({ fileId, fields: 'mimeType, name, size', supportsAllDrives: true });
+      if (meta?.data?.mimeType) mimeType = meta.data.mimeType;
+    } catch {}
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+
+    try {
+      const streamRes = await drive.files.get(
+        { fileId, alt: 'media', supportsAllDrives: true },
+        { responseType: 'stream' }
+      );
+      return streamRes.data.pipe(res);
+    } catch (sdkErr) {
+      const fetchRes = await fetch(`https://drive.google.com/uc?export=download&id=${fileId}`);
+      if (fetchRes.ok) {
+        const arrayBuf = await fetchRes.arrayBuffer();
+        return res.send(Buffer.from(arrayBuf));
+      }
+      return res.status(404).send("Foto tidak ditemukan di Google Drive");
+    }
+  } catch (err: any) {
+    console.error("Error serving employee photo proxy:", err.message);
+    res.status(500).send("Gagal memuat foto karyawan");
+  }
+});
 
 
 employeesRouter.get("/", async (req, res) => {
