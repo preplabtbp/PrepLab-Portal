@@ -28,17 +28,20 @@ export function toPublicEmployee(emp: any): any {
   const { passwordHash, ...safeEmp } = emp;
   const resolvedName = safeEmp.name || safeEmp.nama || '';
   let avatar = safeEmp.avatar || null;
-  if (avatar && typeof avatar === 'string' && avatar.includes('drive.google.com')) {
-    const idMatch = avatar.match(/\/d\/([a-zA-Z0-9_-]+)/) || avatar.match(/id=([a-zA-Z0-9_-]+)/);
-    if (idMatch && idMatch[1]) {
-      avatar = `/api/employees/photo/${idMatch[1]}`;
-    }
+  // Foto dari Google Drive master/excel hanya untuk database karyawan, bukan foto profil akun
+  if (avatar && typeof avatar === 'string' && (avatar.includes('drive.google.com') || avatar.includes('/api/employees/photo/'))) {
+    avatar = null;
+  }
+  let photo = safeEmp.photo || null;
+  if (!photo && emp.avatar && (emp.avatar.includes('drive.google.com') || emp.avatar.includes('/api/employees/photo/'))) {
+    photo = emp.avatar;
   }
   return {
     ...safeEmp,
     name: resolvedName,
     nama: resolvedName,
-    avatar
+    avatar,
+    photo
   };
 }
 

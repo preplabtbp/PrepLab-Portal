@@ -346,9 +346,9 @@ async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; r
 
   // Upsert employees
   for (const emp of uniqueEmps) {
-    // Spreadsheet Google Sheets tidak mengelola foto avatar/profil atau kredensial akun
-    // Selalu kecualikan kolom ini dari update set agar foto profil karyawan tetap aman
-    const { avatar, cover, passwordHash, firstLoginComplete, homeTutorialCompleted, equippedFrame, equippedTitle, ...safeFields } = emp;
+    // Spreadsheet Google Sheets tidak mengelola foto avatar/profil, foto resmi, atau kredensial akun
+    // Selalu kecualikan kolom ini dari update set agar foto profil akun dan foto karyawan tetap aman
+    const { avatar, photo, cover, passwordHash, firstLoginComplete, homeTutorialCompleted, equippedFrame, equippedTitle, ...safeFields } = emp;
     await db.insert(employees)
       .values(emp)
       .onConflictDoUpdate({

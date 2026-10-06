@@ -49,7 +49,8 @@ export const employees = pgTable('employees', {
   email: text('email'),
   username: text('username'),
   passwordHash: text('password_hash'),
-  avatar: text('avatar'),
+  avatar: text('avatar'), // Foto profile akun pengguna
+  photo: text('photo'), // Foto resmi karyawan (dari master database / import excel)
   cover: text('cover'),
   equippedFrame: text('equipped_frame').default('default'),
   equippedTitle: text('equipped_title').default('Frontline Trainee'),

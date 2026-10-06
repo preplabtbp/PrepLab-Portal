@@ -96,11 +96,14 @@ export function ProfilePage({
   });
 
   const [avatar, setAvatar] = useState<string | null>(() => {
-    if (profile?.avatar) return profile.avatar;
-    if (inspectorNik) {
-      return localStorage.getItem(`p2h_inspector_avatar_${inspectorNik}`);
+    let raw = profile?.avatar || null;
+    if (!raw && inspectorNik) {
+      raw = localStorage.getItem(`p2h_inspector_avatar_${inspectorNik}`);
     }
-    return null;
+    if (raw && (raw.includes('drive.google.com') || raw.includes('lh3.googleusercontent.com') || raw.includes('/api/employees/photo/'))) {
+      return null;
+    }
+    return raw;
   });
 
   const [cover, setCover] = useState<string | null>(() => {
@@ -417,16 +420,26 @@ export function ProfilePage({
         .then(data => {
           const emp = data?.employee || data;
           if (emp?.avatar) {
-            setAvatar(emp.avatar);
-            localStorage.setItem(`p2h_inspector_avatar_${inspectorNik}`, emp.avatar);
+            if (emp.avatar.includes('drive.google.com') || emp.avatar.includes('lh3.googleusercontent.com') || emp.avatar.includes('/api/employees/photo/')) {
+              setAvatar(null);
+              localStorage.removeItem(`p2h_inspector_avatar_${inspectorNik}`);
+            } else {
+              setAvatar(emp.avatar);
+              localStorage.setItem(`p2h_inspector_avatar_${inspectorNik}`, emp.avatar);
+            }
           } else if (cachedAvatar && cachedAvatar.trim()) {
-            // Jika foto di backend sempat hilang tapi di cache lokal masih ada, pulihkan ke database!
-            setAvatar(cachedAvatar);
-            fetch('/api/employees/avatar', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ nik: inspectorNik, avatar: cachedAvatar.trim() })
-            }).catch(() => {});
+            if (cachedAvatar.includes('drive.google.com') || cachedAvatar.includes('lh3.googleusercontent.com') || cachedAvatar.includes('/api/employees/photo/')) {
+              localStorage.removeItem(`p2h_inspector_avatar_${inspectorNik}`);
+              setAvatar(null);
+            } else {
+              // Jika foto akun di backend sempat hilang tapi di cache lokal masih ada, pulihkan ke database!
+              setAvatar(cachedAvatar);
+              fetch('/api/employees/avatar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nik: inspectorNik, avatar: cachedAvatar.trim() })
+              }).catch(() => {});
+            }
           }
           if (emp?.cover) {
             setCover(emp.cover);

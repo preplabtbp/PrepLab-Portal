@@ -106,20 +106,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             ctx.drawImage(img, 0, 0, width, height);
             const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
 
-            const res = await fetch('/api/employees/avatar', {
+            const res = await fetch('/api/employees/photo', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ nik: selectedEmployee.nik, avatar: compressedDataUrl })
+              body: JSON.stringify({ nik: selectedEmployee.nik, photo: compressedDataUrl })
             });
             const resData = await res.json();
             if (resData.status === 'success') {
-              setSelectedEmployee((prev: any) => ({ ...prev, avatar: compressedDataUrl }));
-              setEmployees((prev: any[]) => prev.map(emp => emp.nik === selectedEmployee.nik ? { ...emp, avatar: compressedDataUrl } : emp));
-              if (selectedEmployee.nik === inspectorNik) {
-                localStorage.setItem(`p2h_inspector_avatar_${inspectorNik}`, compressedDataUrl);
-                window.dispatchEvent(new Event('profile_updated'));
-              }
-              toast.success(`Foto profil ${selectedEmployee.name || 'karyawan'} berhasil diperbarui!`, { id: 'emp-avatar-upload' });
+              setSelectedEmployee((prev: any) => ({ ...prev, photo: compressedDataUrl }));
+              setEmployees((prev: any[]) => prev.map(emp => emp.nik === selectedEmployee.nik ? { ...emp, photo: compressedDataUrl } : emp));
+              toast.success(`Foto karyawan ${selectedEmployee.name || ''} berhasil diperbarui di database!`, { id: 'emp-avatar-upload' });
             } else {
               throw new Error(resData.message || 'Gagal menyimpan foto ke server');
             }
@@ -220,9 +216,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center transition-colors border-b border-slate-50 last:border-0"
                     >
                       <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 mr-3 overflow-hidden bg-[#e6f7f9] text-[#22a7b8] font-bold border border-[#a2e0e8]">
-                        {emp.avatar ? (
+                        {(emp.photo || emp.avatar) ? (
                           <img 
-                            src={formatAvatarUrl(emp.avatar)} 
+                            src={formatAvatarUrl(emp.photo || emp.avatar)} 
                             alt={emp.name} 
                             className="w-full h-full object-cover" 
                             referrerPolicy="no-referrer"
@@ -408,9 +404,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               
               <div className="flex flex-col items-center lg:items-start mb-6 w-full">
                 <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-white/20 border-2 border-white/40 overflow-hidden flex items-center justify-center shrink-0 shadow-xl relative backdrop-blur-xs ring-4 ring-black/5 group">
-                  {selectedEmployee.avatar ? (
+                  {(selectedEmployee.photo || selectedEmployee.avatar) ? (
                     <img 
-                      src={formatAvatarUrl(selectedEmployee.avatar)} 
+                      src={formatAvatarUrl(selectedEmployee.photo || selectedEmployee.avatar)} 
                       alt={selectedEmployee.name} 
                       className="w-full h-full object-cover" 
                       referrerPolicy="no-referrer"
@@ -441,10 +437,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   onClick={() => photoInputRef.current?.click()}
                   disabled={isUploadingPhoto}
                   className="mt-3 text-xs font-bold px-3.5 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-sm border border-white/30 cursor-pointer backdrop-blur-xs"
-                  title="Perbarui atau unggah foto karyawan"
+                  title="Perbarui atau unggah foto karyawan di database"
                 >
                   <Camera className="w-3.5 h-3.5 text-white" />
-                  <span>{selectedEmployee.avatar ? 'Ganti Foto' : 'Unggah Foto'}</span>
+                  <span>{(selectedEmployee.photo || selectedEmployee.avatar) ? 'Ganti Foto' : 'Unggah Foto'}</span>
                 </button>
               </div>
 

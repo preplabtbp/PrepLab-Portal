@@ -341,7 +341,7 @@ employeesRouter.post("/import", async (req, res) => {
         phoneDarurat: normalized['notelephonedaruratorangterdekat'] || normalized['notelpdarurat'] || normalized['telpdarurat'] || null,
         alamatKtp: normalized['alamatsesuaiktp'] || normalized['alamatktp'] || null,
         alamatDomisili: normalized['alamatdomisili'] || normalized['domisili'] || null,
-        ...(driveAvatarUrl ? { avatar: driveAvatarUrl } : {})
+        ...(driveAvatarUrl ? { photo: driveAvatarUrl } : {})
       };
 
       // Filter out null/empty from update payload if not present in imported file to prevent overwriting existing data
@@ -413,6 +413,38 @@ employeesRouter.post("/avatar", async (req, res) => {
   } catch (error) {
     console.error("Error updating avatar:", error);
     res.status(500).json({ status: "error", message: "Failed to update avatar" });
+  }
+});
+
+employeesRouter.post("/photo", async (req, res) => {
+  try {
+    const { nik, photo, forceClear } = req.body;
+    if (!nik) {
+      return res.status(400).json({ status: "error", message: "NIK required" });
+    }
+
+    // Lindungi foto sebelumnya: jangan pernah hapus foto jika payload kosong kecuali forceClear: true
+    if (!forceClear && (!photo || typeof photo !== 'string' || !photo.trim() || photo === 'null')) {
+      return res.status(400).json({ 
+        status: "error", 
+        message: "Data foto tidak boleh kosong. Foto sebelumnya dipertahankan." 
+      });
+    }
+
+    const finalPhoto = forceClear ? null : photo.trim();
+    const result = await db.update(employees)
+      .set({ photo: finalPhoto })
+      .where(eq(employees.nik, nik))
+      .returning();
+
+    if (result.length === 0) {
+      return res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan" });
+    }
+
+    return res.json({ status: "success", employee: toPublicEmployee(result[0]) || null });
+  } catch (error) {
+    console.error("Error updating photo:", error);
+    res.status(500).json({ status: "error", message: "Failed to update photo" });
   }
 });
 

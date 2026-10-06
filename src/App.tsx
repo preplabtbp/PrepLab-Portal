@@ -273,9 +273,20 @@ export default function App() {
     let raw: string | null = null;
     if (inspectorNik) {
       const savedAvatar = localStorage.getItem(`p2h_inspector_avatar_${inspectorNik}`);
-      if (savedAvatar) raw = savedAvatar;
+      if (savedAvatar) {
+        // Jangan gunakan foto drive dari excel master sebagai foto profil akun
+        if (savedAvatar.includes('drive.google.com') || savedAvatar.includes('lh3.googleusercontent.com') || savedAvatar.includes('/api/employees/photo/')) {
+          localStorage.removeItem(`p2h_inspector_avatar_${inspectorNik}`);
+        } else {
+          raw = savedAvatar;
+        }
+      }
     }
-    if (!raw && userProfile?.avatar) raw = userProfile.avatar;
+    if (!raw && userProfile?.avatar) {
+      if (!userProfile.avatar.includes('drive.google.com') && !userProfile.avatar.includes('lh3.googleusercontent.com') && !userProfile.avatar.includes('/api/employees/photo/')) {
+        raw = userProfile.avatar;
+      }
+    }
     return raw ? formatAvatarUrl(raw) : null;
   }, [inspectorNik, userProfile, syncTick]);
 
@@ -679,11 +690,15 @@ export default function App() {
             // Justru sinkronkan kembali cache lokal ke backend agar foto tersimpan permanen
             const localCached = localStorage.getItem(`p2h_inspector_avatar_${inspectorNik}`);
             if (localCached && localCached.trim()) {
-              fetch('/api/employees/avatar', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nik: inspectorNik, avatar: localCached.trim() })
-              }).catch(() => {});
+              if (localCached.includes('drive.google.com') || localCached.includes('lh3.googleusercontent.com') || localCached.includes('/api/employees/photo/')) {
+                localStorage.removeItem(`p2h_inspector_avatar_${inspectorNik}`);
+              } else {
+                fetch('/api/employees/avatar', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ nik: inspectorNik, avatar: localCached.trim() })
+                }).catch(() => {});
+              }
             }
           }
           window.dispatchEvent(new Event('profile_updated'));
