@@ -1,12 +1,50 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db } from "../../src/db/index.js";
-import { employees } from "../../src/db/schema.js";
+import { employees, developerUsers } from "../../src/db/schema.js";
 import { toPublicEmployee } from "../middleware/auth.js";
 import { drive } from "../../google-services.js";
 import { Readable } from "stream";
 
 export const employeesRouter = Router();
+
+export async function isAuthorizedDatabaseEditor(editorNik?: string): Promise<boolean> {
+  if (!editorNik) return false;
+  const nik = String(editorNik).trim().toUpperCase();
+  if (!nik) return false;
+
+  // Superadmins / Default Developer accounts
+  if (['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'].includes(nik)) return true;
+
+  // Check Developer Users table
+  try {
+    const dev = await db.select().from(developerUsers).where(eq(developerUsers.nik, nik)).limit(1);
+    if (dev.length > 0) return true;
+  } catch (e) {}
+
+  // Check Employees table for Administration section/role
+  try {
+    const emp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+    if (emp.length > 0) {
+      const e = emp[0];
+      const sec = (e.section || '').toLowerCase();
+      const dep = (e.department || '').toLowerCase();
+      const jab = (e.jabatan || '').toLowerCase();
+      if (
+        sec.includes('admin') ||
+        sec.includes('administrasi') ||
+        dep.includes('admin') ||
+        dep.includes('administrasi') ||
+        jab.includes('admin') ||
+        jab.includes('administrasi')
+      ) {
+        return true;
+      }
+    }
+  } catch (e) {}
+
+  return false;
+}
 
 async function uploadEmployeePhotoToDrive(nik: string, name: string, base64OrUrl: string): Promise<string> {
   if (!base64OrUrl) return '';
@@ -274,6 +312,15 @@ function cleanDateVal(v: any): string | null {
 employeesRouter.post("/import", async (req, res) => {
   try {
     const { rows, editorNik } = req.body;
+    const requesterNik = editorNik || req.headers['x-user-nik'] || req.body?.requesterNik;
+    const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
+    if (!isAuth) {
+      return res.status(403).json({ 
+        status: "error", 
+        message: "Akses ditolak: Pengupdate-an database karyawan hanya bisa dilakukan oleh section Administration atau Developer." 
+      });
+    }
+
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ status: "error", message: "Tidak ada data baris yang dikirim untuk diimport." });
     }
@@ -418,7 +465,16 @@ employeesRouter.post("/avatar", async (req, res) => {
 
 employeesRouter.post("/photo", async (req, res) => {
   try {
-    const { nik, photo, forceClear } = req.body;
+    const { nik, photo, forceClear, editorNik } = req.body;
+    const requesterNik = editorNik || req.headers['x-user-nik'] || req.body?.requesterNik;
+    const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
+    if (!isAuth) {
+      return res.status(403).json({ 
+        status: "error", 
+        message: "Akses ditolak: Fitur ganti foto database karyawan hanya bisa dilakukan oleh section Administration atau Developer." 
+      });
+    }
+
     if (!nik) {
       return res.status(400).json({ status: "error", message: "NIK required" });
     }

@@ -17,6 +17,58 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const [developerList, setDeveloperList] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/developers')
+      .then(res => res.json())
+      .then(json => {
+        const list = Array.isArray(json) ? json : (json?.data || []);
+        setDeveloperList(list);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Hanya Section Administration atau Developer yang boleh mengupdate database karyawan
+  const canManageDatabase = useMemo(() => {
+    const cleanNik = (inspectorNik || '').trim().toUpperCase();
+    const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
+    if (HARDCODED_DEVS.includes(cleanNik)) return true;
+    if (developerList.some(d => (d.nik || '').toUpperCase() === cleanNik)) return true;
+
+    try {
+      const savedProfile = localStorage.getItem('p2h_inspector_profile');
+      if (savedProfile) {
+        const p = JSON.parse(savedProfile);
+        const sec = (p.section || '').toLowerCase();
+        const dept = (p.department || '').toLowerCase();
+        const jab = (p.jabatan || '').toLowerCase();
+        if (
+          sec.includes('administrasi') || sec.includes('administration') ||
+          dept.includes('administrasi') || dept.includes('administration') ||
+          jab.includes('admin')
+        ) {
+          return true;
+        }
+      }
+    } catch {}
+
+    const me = employees.find(e => (e.nik || '').toUpperCase() === cleanNik);
+    if (me) {
+      const sec = (me.section || '').toLowerCase();
+      const dept = (me.department || '').toLowerCase();
+      const jab = (me.jabatan || '').toLowerCase();
+      if (
+        sec.includes('administrasi') || sec.includes('administration') ||
+        dept.includes('administrasi') || dept.includes('administration') ||
+        jab.includes('admin')
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [inspectorNik, developerList, employees]);
 
 
   const fetchEmployees = async () => {
@@ -41,6 +93,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   }, [inspectorNik]);
 
   const handleManualSync = async () => {
+    if (!canManageDatabase) {
+      toast.error('Akses ditolak: Hanya Section Administration atau Developer yang dapat menyinkronkan database karyawan.');
+      return;
+    }
     setIsSyncing(true);
     setSyncFeedback(null);
     try {
@@ -67,6 +123,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canManageDatabase) {
+      toast.error('Akses ditolak: Hanya Section Administration atau Developer yang dapat mengubah foto karyawan di database.');
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file || !selectedEmployee) return;
 
@@ -108,8 +168,15 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
             const res = await fetch('/api/employees/photo', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ nik: selectedEmployee.nik, photo: compressedDataUrl })
+              headers: { 
+                'Content-Type': 'application/json',
+                'x-user-nik': inspectorNik
+              },
+              body: JSON.stringify({ 
+                nik: selectedEmployee.nik, 
+                photo: compressedDataUrl,
+                editorNik: inspectorNik
+              })
             });
             const resData = await res.json();
             if (resData.status === 'success') {
@@ -274,7 +341,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         </div>
 
         <div className="flex items-center gap-2">
-          {!selectedEmployee && (
+          {!selectedEmployee && canManageDatabase && (
             <>
               <Button
                 onClick={() => setIsImportModalOpen(true)}
@@ -425,23 +492,27 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   )}
                 </div>
 
-                <input 
-                  type="file" 
-                  ref={photoInputRef} 
-                  accept="image/*" 
-                  className="hidden" 
-                  onChange={handlePhotoUpload} 
-                />
-                <button
-                  type="button"
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={isUploadingPhoto}
-                  className="mt-3 text-xs font-bold px-3.5 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-sm border border-white/30 cursor-pointer backdrop-blur-xs"
-                  title="Perbarui atau unggah foto karyawan di database"
-                >
-                  <Camera className="w-3.5 h-3.5 text-white" />
-                  <span>{selectedEmployee.photo ? 'Ganti Foto' : 'Unggah Foto'}</span>
-                </button>
+                {canManageDatabase && (
+                  <>
+                    <input 
+                      type="file" 
+                      ref={photoInputRef} 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={handlePhotoUpload} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => photoInputRef.current?.click()}
+                      disabled={isUploadingPhoto}
+                      className="mt-3 text-xs font-bold px-3.5 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-sm border border-white/30 cursor-pointer backdrop-blur-xs"
+                      title="Perbarui atau unggah foto karyawan di database (Khusus Administration & Developer)"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-white" />
+                      <span>{selectedEmployee.photo ? 'Ganti Foto' : 'Unggah Foto'}</span>
+                    </button>
+                  </>
+                )}
               </div>
 
               <h2 className="text-xl lg:text-2xl font-black mb-1 leading-tight text-white drop-shadow-xs">{selectedEmployee.name}</h2>
