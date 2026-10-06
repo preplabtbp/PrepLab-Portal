@@ -22,7 +22,7 @@ interface FloatingFeedbackButtonProps {
 
 const MODULE_OPTIONS = [
   'Umum / Portal',
-  'Buletin & Pengumuman',
+  'Labnote & Pengumuman',
   'Roster & Cuti',
   'Inspeksi Harian (P2H)',
   'P5M Schedule',
@@ -59,7 +59,7 @@ export function FloatingFeedbackButton({
   const [isOpen, setIsOpen] = useState(false);
   const [type, setType] = useState<'suggestion' | 'bug' | 'improvement' | 'question'>('suggestion');
   const [module, setModule] = useState(() => {
-    if (currentPath.startsWith('/bulletin')) return 'Buletin & Pengumuman';
+    if (currentPath.startsWith('/bulletin')) return 'Labnote & Pengumuman';
     if (currentPath.startsWith('/inspect') || currentPath.startsWith('/weekly-inspection')) return 'Inspeksi Harian (P2H)';
     if (currentPath.startsWith('/p5m')) return 'P5M Schedule';
     if (currentPath.startsWith('/wo') || currentPath.startsWith('/create-wo')) return 'Work Orders & Downtime';

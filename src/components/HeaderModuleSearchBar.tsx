@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Search, 
   X, 
@@ -47,6 +48,7 @@ export function HeaderModuleSearchBar({
         e.preventDefault();
         if (window.innerWidth < 640) {
           setIsMobileModalOpen(true);
+          setTimeout(() => mobileInputRef.current?.focus(), 120);
         } else {
           desktopInputRef.current?.focus();
           setIsOpen(true);
@@ -55,6 +57,16 @@ export function HeaderModuleSearchBar({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Listen to open-header-module-search from homepage mobile search bar
+  useEffect(() => {
+    const handleOpen = () => {
+      setIsMobileModalOpen(true);
+      setTimeout(() => mobileInputRef.current?.focus(), 120);
+    };
+    window.addEventListener('open-header-module-search', handleOpen);
+    return () => window.removeEventListener('open-header-module-search', handleOpen);
   }, []);
 
   // Save recent searches
@@ -271,56 +283,114 @@ export function HeaderModuleSearchBar({
         </button>
       </div>
 
-      {/* Mobile Search Modal Drawer */}
-      {isMobileModalOpen && (
-        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex flex-col justify-start p-3 sm:hidden animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            {/* Header Input */}
-            <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
-              <Search className="w-4 h-4 text-slate-400 shrink-0" />
-              <input
-                ref={mobileInputRef}
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Cari modul, inspeksi, logbook..."
-                className="w-full text-xs bg-transparent outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-400 font-medium"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileModalOpen(false);
-                  setQuery('');
-                }}
-                className="p-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Results */}
-            <div className="overflow-y-auto p-2 space-y-1 divide-y divide-slate-100 dark:divide-slate-800/60">
-              {filteredModules.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => handleSelectModule(item)}
-                  className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+      {/* Mobile Search Modal Drawer (Portalled to document.body to prevent clipping by header backdrop-blur) */}
+      {typeof document !== 'undefined' && createPortal(
+        isMobileModalOpen ? (
+          <div 
+            onClick={() => {
+              setIsMobileModalOpen(false);
+              setQuery('');
+            }}
+            className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-xs flex flex-col justify-start p-3 pt-6 sm:hidden animate-in fade-in duration-150"
+          >
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[88vh] w-full"
+            >
+              {/* Header Input */}
+              <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2.5 shrink-0">
+                <Search className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+                <input
+                  ref={mobileInputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Cari modul, inspeksi, logbook, labnote..."
+                  className="w-full text-xs bg-transparent outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-400 font-medium"
+                  autoFocus
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery('');
+                      mobileInputRef.current?.focus();
+                    }}
+                    className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileModalOpen(false);
+                    setQuery('');
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={`p-2 rounded-xl border shrink-0 ${item.iconBg} ${item.iconColor}`}>
-                      {item.icon}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{item.title}</p>
-                      <p className="text-[10px] text-slate-400 truncate">{item.desc}</p>
-                    </div>
+                  Tutup
+                </button>
+              </div>
+
+              {/* Quick Suggestion Pills */}
+              <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800/80 flex items-center gap-1.5 overflow-x-auto shrink-0">
+                <span className="text-[10px] font-semibold text-slate-400 shrink-0">Populer:</span>
+                {['P2H', 'Logbook', 'Labnote', 'Inspeksi', 'KTA', 'WO', 'P5M', 'Tutorial'].map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      setQuery(tag);
+                      mobileInputRef.current?.focus();
+                    }}
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-teal-950/40 text-slate-600 dark:text-slate-300 hover:text-teal-600 transition-colors shrink-0"
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+
+              {/* Results List */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 divide-y divide-slate-100 dark:divide-slate-800/60">
+                {filteredModules.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-slate-400 space-y-2 px-4">
+                    <Search className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600" />
+                    <p className="font-semibold text-slate-700 dark:text-slate-200">Modul tidak ditemukan</p>
+                    <p className="text-[11px] text-slate-400">
+                      Tidak ditemukan hasil untuk "{query}". Coba kata kunci lain seperti "P2H", "Logbook", atau "Labnote".
+                    </p>
                   </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-2" />
-                </div>
-              ))}
+                ) : (
+                  filteredModules.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => handleSelectModule(item)}
+                      className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer active:bg-slate-100"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`p-2 rounded-xl border shrink-0 ${item.iconBg} ${item.iconColor}`}>
+                          {item.icon}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{item.title}</p>
+                          <p className="text-[10px] text-slate-400 truncate leading-snug">{item.desc}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
+                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
+                          {item.category}
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        ) : null,
+        document.body
       )}
     </div>
   );

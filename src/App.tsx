@@ -204,7 +204,7 @@ export default function App() {
   
   const navigate = useNavigate();
   const location = useLocation();
-  const activeTab = location.pathname === '/' ? 'home' : location.pathname.substring(1);
+  const activeTab = (location.pathname === '/' || location.pathname === '/home') ? 'home' : location.pathname.substring(1);
   const isBulletin = location.pathname.startsWith('/bulletin');
   const [bulletinFocusMode, setBulletinFocusMode] = useState(true);
 
@@ -715,12 +715,7 @@ export default function App() {
     }
 
     if (tab === 'home' || tab === '' || tab === '/') {
-      if (isSptOrManager) {
-        const universe = userProfile?.pt === 'GTS' ? 'GTS' : 'TBP';
-        navigate(`/bulletin/${universe}`);
-      } else {
-        navigate('/');
-      }
+      navigate('/home');
     }
     else navigate('/' + cleanTab);
   };
@@ -1596,7 +1591,7 @@ export default function App() {
                 <span className="text-[10px] font-semibold leading-none">Home</span>
               </button>
 
-              {/* Buletin */}
+              {/* Labnote */}
               <button
                 onClick={() => {
                   const activeUniv = localStorage.getItem('bulletin_active_universe');
@@ -1610,10 +1605,10 @@ export default function App() {
                     ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold border border-teal-500/30 shadow-xs'
                     : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[var(--text-main)]'
                 }`}
-                title="Buletin K3 & Pengumuman"
+                title="Labnote & Pengumuman"
               >
                 <FileText className="w-5 h-5" />
-                <span className="text-[10px] font-semibold leading-none">Buletin</span>
+                <span className="text-[10px] font-semibold leading-none">Labnote</span>
               </button>
 
               {/* Cloud */}
@@ -1681,6 +1676,12 @@ export default function App() {
       )
     } 
   />
+  <Route 
+    path="/home" 
+    element={
+      <HomeScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} userPt={userProfile?.pt} />
+    } 
+  />
   <Route path="/modules" element={<ModulesScreen onNav={handleNav} inspectorNik={inspectorNik!} inspectorName={inspectorName!} userPt={userProfile?.pt} />} />
   <Route path="/chat" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
   <Route path="/group-reports" element={<GroupReportScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} />} />
@@ -1720,7 +1721,7 @@ export default function App() {
   <Route path="/apd-monitoring" element={<ApdMonitoringScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
   <Route path="/induksi" element={<InduksiScreen />} />
   <Route path="/preplab-cloud" element={<PreplabCloudScreen onBack={() => handleNav('home')} userProfile={userProfile} inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
-  <Route path="/manual" element={<UserManualScreen onBack={() => handleNav('home')} />} />
+  <Route path="/manual" element={<UserManualScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
   <Route path="/employee-database" element={<EmployeeDatabaseScreen inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
   <Route path="/roster-admin" element={<RosterAdminScreen />} />
   <Route path="/settings" element={<SettingsScreen inspectorName={inspectorName} inspectorNik={inspectorNik} onLogoutKaryawan={handleLogoutKaryawan} onOpenThemeModal={() => setShowGlobalThemeModal(true)} onNav={handleNav} />} />
@@ -1868,7 +1869,7 @@ export default function App() {
               />
               <div className="flex justify-between items-center mb-6">
                 <h3 className="font-bold text-lg font-display" style={{ color: 'var(--text-main, #1E293B)' }}>
-                  Pilih Buletin
+                  Pilih Labnote
                 </h3>
                 <button 
                   onClick={() => setShowBulletinMenu(false)} 
@@ -1944,7 +1945,7 @@ export default function App() {
           />
           <NavItem 
             icon={<FileText className="w-5 h-5" />} 
-            label="Buletin" 
+            label="Labnote" 
             active={activeTab.startsWith('bulletin')} 
             onClick={() => { 
               const activeUniv = localStorage.getItem('bulletin_active_universe');

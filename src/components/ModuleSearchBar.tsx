@@ -114,13 +114,13 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
   },
   {
     id: 'bulletin',
-    title: 'Buletin K3 & Pengumuman',
-    desc: 'Pusat informasi K3, pengumuman divisi & buletin berkala',
+    title: 'Labnote & Pengumuman',
+    desc: 'Pusat informasi K3, pengumuman divisi & Labnote berkala',
     category: 'Fasilitas & Penunjang',
     icon: <FileText className="w-5 h-5" />,
     iconBg: 'bg-emerald-500/15 border-emerald-500/25',
     iconColor: 'text-emerald-600 dark:text-emerald-400',
-    tags: ['buletin', 'pengumuman', 'informasi', 'artikel', 'berita', 'k3'],
+    tags: ['labnote', 'buletin', 'pengumuman', 'informasi', 'artikel', 'berita', 'k3'],
     actionType: 'nav',
     target: 'bulletin/TBP'
   },
@@ -291,6 +291,18 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
     tags: ['cloud', 'storage', 'file', 'dokumen', 'drive', 'berkas'],
     actionType: 'nav',
     target: 'preplab-cloud'
+  },
+  {
+    id: 'manual',
+    title: 'Pusat Tutorial & Panduan In-App',
+    desc: 'Simulasi tutorial interaktif langsung di aplikasi & panduan modul',
+    category: 'Fasilitas & Penunjang',
+    icon: <BookOpen className="w-5 h-5" />,
+    iconBg: 'bg-teal-500/15 border-teal-500/25',
+    iconColor: 'text-teal-600 dark:text-teal-400',
+    tags: ['panduan', 'tutorial', 'manual', 'user guide', 'cara pakai', 'bantuan', 'walkthrough'],
+    actionType: 'nav',
+    target: 'manual'
   }
 ];
 
@@ -449,7 +461,7 @@ export function ModuleSearchBar({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => setIsFocused(true)}
-            placeholder="Cari modul atau tugas... (KTA, P2H, Inspeksi, Buletin, Roster, dll)"
+            placeholder="Cari modul atau tugas... (KTA, P2H, Inspeksi, Labnote, Roster, dll)"
             className="w-full bg-transparent text-sm text-[var(--text-main,#0f172a)] placeholder:text-slate-400 focus:outline-hidden"
           />
 

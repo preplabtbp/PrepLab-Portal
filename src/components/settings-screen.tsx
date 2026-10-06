@@ -330,7 +330,7 @@ export function SettingsScreen({
                   })}
                 </div>
                 <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted, #64748B)' }}>
-                  Skala font berlaku instan untuk semua modul, dashboard, tabel data, dan buletin portal.
+                  Skala font berlaku instan untuk semua modul, dashboard, tabel data, dan Labnote portal.
                 </p>
               </div>
 

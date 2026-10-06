@@ -1812,7 +1812,7 @@ export function NotionDatabaseTable({
         setDirtyRowIndices(new Set());
         setShowSaveConfirmModal(false);
         onRowsChange?.(localRows);
-        toast.success('Perubahan tabel berhasil disimpan ke dokumen Buletin!');
+        toast.success('Perubahan tabel berhasil disimpan ke dokumen Labnote!');
       } else {
         toast.error('Gagal menyimpan perubahan ke server');
       }
@@ -4216,7 +4216,7 @@ export function NotionDatabaseTable({
                     </span>
                   </p>
                   <p className="text-[11px] text-slate-400">
-                    Klik Simpan Perubahan untuk mengupdate isi dokumen buletin secara permanen.
+                    Klik Simpan Perubahan untuk mengupdate isi dokumen Labnote secara permanen.
                   </p>
                 </div>
               </div>

@@ -37,7 +37,7 @@ const MODULE_OPTIONS = [
   'P5M Schedule',
   'Work Orders & Downtime',
   'Sistem APD',
-  'Buletin & Pengumuman',
+  'Labnote & Pengumuman',
   'Quotes Motivasi',
   'Database Karyawan',
   'Cloud & Google Drive',

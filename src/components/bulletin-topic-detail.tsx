@@ -247,7 +247,7 @@ export function BulletinTopicDetail({
           
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mb-0.5">
-              <span>Buletin</span>
+              <span>Labnote</span>
               <span>/</span>
               <span className="text-blue-600">{departmentName || 'General'}</span>
               {categoryName && (

@@ -255,11 +255,14 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     const msg = (notif.message || '').toLowerCase();
     return (
       link.includes('/bulletin') ||
+      title.includes('labnote') ||
       title.includes('buletin') ||
       title.includes('artikel') ||
       title.includes('komentar') ||
+      msg.includes('labnote') ||
       msg.includes('buletin') ||
-      msg.includes('artikel buletin')
+      msg.includes('artikel buletin') ||
+      msg.includes('artikel labnote')
     );
   };
 
@@ -468,7 +471,7 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
       },
       {
         id: 'logbook_ops',
-        title: 'Logbook, Buletin & Agenda',
+        title: 'Logbook, Labnote & Agenda',
         badgeText: 'Operasional',
         colorClass: 'text-indigo-600 dark:text-indigo-400',
         bgClass: 'bg-indigo-500/10',

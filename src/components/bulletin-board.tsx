@@ -2878,14 +2878,14 @@ ${aiMeetingNotes
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm" style={{ color: 'var(--text-main, #f8fafc)' }}>
-                      Pusat Notifikasi &amp; Changelog Buletin
+                      Pusat Notifikasi &amp; Changelog Labnote
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-teal-500/15 text-teal-400 border border-teal-500/30">
-                      DEDICATED BULETIN
+                      DEDICATED LABNOTE
                     </span>
                   </div>
                   <p className="text-[10px] opacity-70" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Pemberitahuan, komentar, &amp; pembaruan artikel khusus portal Buletin
+                    Pemberitahuan, komentar, &amp; pembaruan artikel khusus portal Labnote
                   </p>
                 </div>
               </div>
@@ -2935,7 +2935,7 @@ ${aiMeetingNotes
               {bulletinNotifTab === 'notifications' ? (
                 notificationsList.length === 0 ? (
                   <div className="py-8 text-center text-xs space-y-1" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    <p className="font-semibold">Belum ada notifikasi diskusi buletin</p>
+                    <p className="font-semibold">Belum ada notifikasi diskusi Labnote</p>
                     <p className="text-[11px] opacity-75">Komentar atau postingan yang menyebut seksi Anda akan muncul di sini.</p>
                   </div>
                 ) : (
@@ -2974,7 +2974,7 @@ ${aiMeetingNotes
                       <div className="font-semibold flex items-center justify-between" style={{ color: 'var(--text-main, #f8fafc)' }}>
                         <span className="flex items-center gap-1.5 truncate">
                           {!n.isRead && <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />}
-                          <span className="truncate">{n.title || "Pembaruan Buletin"}</span>
+                          <span className="truncate">{n.title || "Pembaruan Labnote"}</span>
                         </span>
                         <span className="text-[10px] font-mono shrink-0" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                           {n.createdAt ? new Date(n.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ""}
@@ -2987,10 +2987,10 @@ ${aiMeetingNotes
                   ))
                 )
               ) : (
-                /* Tab Changelog Buletin */
+                /* Tab Changelog Labnote */
                 <div className="space-y-2">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1">
-                    Artikel &amp; Topik Buletin Terbaru
+                    Artikel &amp; Topik Labnote Terbaru
                   </div>
                   {posts.slice(0, 15).map((p) => (
                     <div

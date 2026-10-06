@@ -345,10 +345,17 @@ router.post("/api/inspections/universal", async (req, res) => {
                   });
               });
           } else if (finalData.tipe === "P3K" && Array.isArray(finalData.payload)) {
-              const p3kFindings = finalData.payload.filter((item: any) => 
-                  item.ketersediaan === 'Kosong' || 
-                  (item.keterangan && item.keterangan !== '-' && item.keterangan.trim() !== '')
-              );
+              const p3kFindings = finalData.payload.filter((item: any) => {
+                  const ketLower = (item.keterangan || '').toLowerCase();
+                  const itemLower = (item.item || '').toLowerCase();
+
+                  // Item yang memang tidak disediakan dari tim safety (Gunting, Lampu senter, Pinset, Silet) bukan temuan
+                  if (ketLower.includes('tidak disediakan') || ketLower.includes('tidak tersedia dari safety')) return false;
+                  if (['gunting', 'lampu senter', 'pinset', 'silet'].includes(itemLower) && item.ketersediaan === 'Kosong') return false;
+
+                  return item.ketersediaan === 'Kosong' || 
+                         (item.keterangan && item.keterangan !== '-' && item.keterangan.trim() !== '');
+              });
               
               if (p3kFindings.length > 0) {
                   const itemsList = p3kFindings.map((item: any) => {

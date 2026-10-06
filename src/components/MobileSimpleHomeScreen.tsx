@@ -5,7 +5,7 @@ import {
   FileText, MessageSquare, Trophy, Sparkles, ChevronRight, 
   CheckCircle2, Clock, AlertTriangle, ArrowRight, Settings2,
   ThermometerSun, Heart, RefreshCw, Smartphone, Eye, ShieldAlert,
-  Wrench, PlusCircle, BarChart3, BookOpen, GraduationCap, Award
+  Wrench, PlusCircle, BarChart3, BookOpen, GraduationCap, Award, Search
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FoodReportModal } from './food-report-modal';
@@ -387,6 +387,26 @@ export function MobileSimpleHomeScreen({
                 </span>
               </div>
             )}
+          </div>
+
+          {/* Quick Search Bar for Mobile View */}
+          <div className="sm:hidden">
+            <button
+              id="home-mobile-search-btn"
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('open-header-module-search'));
+              }}
+              className="w-full flex items-center justify-between p-3 rounded-2xl border bg-white dark:bg-[#1a1a1a] border-slate-200 dark:border-slate-800 text-slate-500 text-xs shadow-xs active:scale-[0.99] transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <Search className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                <span className="font-medium text-slate-500 dark:text-slate-400">Cari modul operasional, logbook...</span>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                Cari
+              </span>
+            </button>
           </div>
         </div>
 

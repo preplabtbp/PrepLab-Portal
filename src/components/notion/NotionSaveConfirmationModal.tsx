@@ -74,7 +74,7 @@ export const NotionSaveConfirmationModal: React.FC<NotionSaveConfirmationModalPr
                 isNotionLight ? 'text-teal-700' : 'text-teal-300'
               }`}>
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Penyimpanan Otomatis ke Dokumen Buletin</span>
+                <span>Penyimpanan Otomatis ke Dokumen Labnote</span>
               </div>
               <p className={`text-[10.5px] leading-relaxed ${
                 isNotionLight ? 'text-slate-600' : 'text-slate-400'

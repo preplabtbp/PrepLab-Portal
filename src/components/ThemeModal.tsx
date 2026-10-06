@@ -1538,7 +1538,7 @@ export default function ThemeModal({
                             style={{ color: editingColors['--text-muted'] }}
                           >
                             <div className="w-3 h-3 rounded border border-current opacity-60" />
-                            <span className="text-[8px]">Buletin</span>
+                            <span className="text-[8px]">Labnote</span>
                           </div>
                           <div 
                             className="flex flex-col items-center gap-0.5 opacity-60"
@@ -1939,7 +1939,7 @@ export default function ThemeModal({
                     style={{ color: editingColors['--text-muted'] }}
                   >
                     <div className="w-3.5 h-3.5 rounded border border-current opacity-60" />
-                    <span className="text-[9px]">Buletin</span>
+                    <span className="text-[9px]">Labnote</span>
                   </div>
                   <div 
                     className="flex flex-col items-center gap-0.5 opacity-60"

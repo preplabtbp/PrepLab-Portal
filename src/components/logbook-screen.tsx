@@ -650,7 +650,7 @@ function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect
   return (
     <div ref={wrapperRef} className="relative space-y-1">
       <label className="text-xs font-bold block flex items-center justify-between">
-        <span>Hubungkan ke Tabel Buletin (Opsional)</span>
+        <span>Hubungkan ke Tabel Labnote (Opsional)</span>
         <span className="text-[10px] text-teal-600 dark:text-teal-400 font-normal">Sinkronisasi 2 arah</span>
       </label>
 
@@ -679,7 +679,7 @@ function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect
               onSelect('');
             }}
             className="p-1 rounded-md hover:bg-slate-200 text-slate-500 hover:text-black transition-colors"
-            title="Lepas tautan buletin"
+            title="Lepas tautan Labnote"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -697,7 +697,7 @@ function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect
                 if (!isOpen) setIsOpen(true);
               }}
               onFocus={() => setIsOpen(true)}
-              placeholder="Ketik judul buletin untuk mencari & menautkan..."
+              placeholder="Ketik judul Labnote untuk mencari & menautkan..."
               className="w-full pl-8 pr-8 py-2 rounded-xl border-2 outline-none text-xs font-bold text-black focus:border-teal-500 transition-all bg-white border-slate-400 placeholder:text-slate-500 shadow-2xs"
             />
             {searchTerm && (
@@ -722,7 +722,7 @@ function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect
                 }}
                 className="p-2.5 flex items-center justify-between text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
-                <span>-- Simpan di Log Book Saja (Tanpa Buletin) --</span>
+                <span>-- Simpan di Log Book Saja (Tanpa Labnote) --</span>
                 {!selectedId && <Check className="w-4 h-4 text-teal-700 shrink-0" />}
               </div>
 
@@ -764,7 +764,7 @@ function SearchableBulletinSelect({ selectedId = '', bulletinList = [], onSelect
         </div>
       )}
       <p className="text-[10px] font-bold text-slate-600">
-        Jika ditautkan, update progress subtask & status akan otomatis tersinkronisasi ke tabel dokumen buletin tersebut.
+        Jika ditautkan, update progress subtask & status akan otomatis tersinkronisasi ke tabel dokumen Labnote tersebut.
       </p>
     </div>
   );
@@ -1513,7 +1513,7 @@ export function LogbookScreen({
         });
         const json = await res.json();
         if (json.status === 'success') {
-          toast.success('Tugas berhasil diperbarui dan disinkronkan ke Buletin');
+          toast.success('Tugas berhasil diperbarui dan disinkronkan ke Labnote');
           setEditingTask(null);
           fetchTasks();
         } else {
@@ -1695,7 +1695,7 @@ export function LogbookScreen({
 
     try {
       setIsSubmitting(true);
-      toast.loading('Menugaskan arahan kegiatan & menyinkronkan ke Buletin...', { id: 'assign-task' });
+      toast.loading('Menugaskan arahan kegiatan & menyinkronkan ke Labnote...', { id: 'assign-task' });
 
       // Auto compute initial status if subtask mode is used
       const parsedNew = parseTasklist(newTaskDescription);
@@ -1881,7 +1881,7 @@ export function LogbookScreen({
       });
       const json = await res.json();
       if (json.status === 'success') {
-        toast.success(`Status diubah menjadi [${newStatus}] & tersinkron ke Buletin!`);
+        toast.success(`Status diubah menjadi [${newStatus}] & tersinkron ke Labnote!`);
 
         // If routine task is being completed (whether it has subtasks or not!), prompt for next period schedule
         if (isClosing && targetTask) {
@@ -1964,7 +1964,7 @@ export function LogbookScreen({
         setYesterdayTasks(prev => prev.filter(t => t.id !== task.id));
         setCarryOverTasks(prev => prev.filter(t => t.id !== task.id));
         setTaskToDelete(null);
-        toast.success(task.bulletinPostId ? 'Kegiatan berhasil dihapus dan baris buletin tersinkronkan!' : 'Kegiatan berhasil dihapus!', { id: 'delete-task' });
+        toast.success(task.bulletinPostId ? 'Kegiatan berhasil dihapus dan baris Labnote tersinkronkan!' : 'Kegiatan berhasil dihapus!', { id: 'delete-task' });
       } else {
         toast.error(json.message || 'Gagal menghapus kegiatan', { id: 'delete-task' });
       }
@@ -2804,7 +2804,7 @@ export function LogbookScreen({
         {/* Expandable Details (Hanya muncul saat task diklik) */}
         {isExpanded && (
           <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50/50 space-y-4 animate-in fade-in duration-150">
-            {/* Badges Bar (Seksi, Routine Info, Waktu Mulai, Lama Pengerjaan, Buletin) */}
+            {/* Badges Bar (Seksi, Routine Info, Waktu Mulai, Lama Pengerjaan, Labnote) */}
             <div className="flex flex-wrap items-center gap-2">
               <span className={`text-xs px-2.5 py-1 rounded-lg font-mono font-bold shadow-2xs tracking-wide ${sectionBadgeClass}`}>
                 {task.section}
@@ -2832,7 +2832,7 @@ export function LogbookScreen({
               {task.bulletinPostId ? (
                 <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-teal-900 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg shadow-2xs">
                   <FileText className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Buletin #{task.bulletinPostId}</span>
+                  <span>Labnote #{task.bulletinPostId}</span>
                 </span>
               ) : (
                 <button
@@ -2842,10 +2842,10 @@ export function LogbookScreen({
                     openEditModal(task);
                   }}
                   className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-300 border-dashed px-2 py-0.5 rounded-lg shadow-2xs transition-colors cursor-pointer"
-                  title="Klik untuk menghubungkan tugas ini ke dokumen Buletin Harian"
+                  title="Klik untuk menghubungkan tugas ini ke dokumen Labnote Harian"
                 >
                   <FileText className="w-3 h-3 text-teal-600" />
-                  <span>+ Tautkan ke Buletin</span>
+                  <span>+ Tautkan ke Labnote</span>
                 </button>
               )}
             </div>
@@ -3292,7 +3292,7 @@ export function LogbookScreen({
                 </h1>
               </div>
               <p className="text-[11px]" style={{ color: 'var(--text-muted, #64748b)' }}>
-                Carry Over Task, Fokus Kegiatan Hari Ini, Multi-PIC, dan Penugasan Terintegrasi Buletin
+                Carry Over Task, Fokus Kegiatan Hari Ini, Multi-PIC, dan Penugasan Terintegrasi Labnote
               </p>
             </div>
           </div>
@@ -4263,7 +4263,7 @@ export function LogbookScreen({
                                     )}
                                     {task.bulletinPostId && (
                                       <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 shrink-0">
-                                        Buletin #{task.bulletinPostId}
+                                        Labnote #{task.bulletinPostId}
                                       </span>
                                     )}
                                   </div>
@@ -4707,7 +4707,7 @@ export function LogbookScreen({
                                     )}
                                     {task.bulletinPostId && (
                                       <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 shrink-0">
-                                        Buletin #{task.bulletinPostId}
+                                        Labnote #{task.bulletinPostId}
                                       </span>
                                     )}
                                   </div>
@@ -5208,19 +5208,19 @@ export function LogbookScreen({
                     </div>
                   </div>
 
-                  {/* Dokumen Buletin */}
+                  {/* Dokumen Labnote */}
                   <div className="grid grid-cols-3 p-3 items-center">
                     <span className="font-semibold text-slate-500 flex items-center gap-1.5">
                       <FileText className="w-3.5 h-3.5 text-slate-400" />
-                      Buletin
+                      Labnote
                     </span>
                     <div className="col-span-2">
                       {selectedTaskDetail.bulletinPostId ? (
                         <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-teal-700 bg-teal-50 dark:bg-teal-950/60 border border-teal-300 dark:border-teal-700 px-2 py-0.5 rounded-lg">
-                          Buletin #{selectedTaskDetail.bulletinPostId}
+                          Labnote #{selectedTaskDetail.bulletinPostId}
                         </span>
                       ) : (
-                        <span className="text-slate-400 text-xs italic">Belum terhubung ke dokumen Buletin</span>
+                        <span className="text-slate-400 text-xs italic">Belum terhubung ke dokumen Labnote</span>
                       )}
                     </div>
                   </div>
@@ -5395,7 +5395,7 @@ export function LogbookScreen({
                 <div>
                   <h3 className="font-black text-base text-black">Assign Tugas / Arahan Kegiatan Seksi</h3>
                   <p className="text-[11px] font-bold text-slate-700">
-                    Tugaskan kegiatan ke satu atau lebih PIC & otomatis sinkronkan ke dokumen Buletin
+                    Tugaskan kegiatan ke satu atau lebih PIC & otomatis sinkronkan ke dokumen Labnote
                   </p>
                 </div>
               </div>
@@ -5677,7 +5677,7 @@ export function LogbookScreen({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: KONFIRMASI HAPUS KEGIATAN & SINKRONISASI BULETIN                   */}
+      {/* MODAL: KONFIRMASI HAPUS KEGIATAN & SINKRONISASI LABNOTE                   */}
       {/* ========================================================================= */}
       {taskToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
@@ -5703,7 +5703,7 @@ export function LogbookScreen({
               {taskToDelete.bulletinPostId && (
                 <div className="pt-2 border-t-2 border-slate-200 text-amber-900 font-black flex items-start gap-1.5">
                   <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" />
-                  <span>Baris kegiatan pada Dokumen Buletin #{taskToDelete.bulletinPostId} juga akan otomatis terhapus secara tersinkronisasi.</span>
+                  <span>Baris kegiatan pada Dokumen Labnote #{taskToDelete.bulletinPostId} juga akan otomatis terhapus secara tersinkronisasi.</span>
                 </div>
               )}
             </div>
@@ -5868,7 +5868,7 @@ export function LogbookScreen({
                   </h3>
                   <p className="text-[11px] font-bold text-slate-700">
                     {(editingTask.assignedByNik === inspectorNik || isSupervisor)
-                      ? 'Perubahan akan langsung diperbarui dan disinkronkan ke dokumen Buletin'
+                      ? 'Perubahan akan langsung diperbarui dan disinkronkan ke dokumen Labnote'
                       : 'Perubahan akan disimpan sebagai draft dan dikirim ke pemberi tugas untuk di-review & approve'}
                   </p>
                 </div>
@@ -5992,7 +5992,7 @@ export function LogbookScreen({
                 </div>
               </div>
 
-              {/* Shared Subtask Manager (Sinergi Log Book & Buletin) */}
+              {/* Shared Subtask Manager (Sinergi Log Book & Labnote) */}
               <div>
                 <SharedSubtaskManager
                   value={editDescription}
@@ -6006,7 +6006,7 @@ export function LogbookScreen({
                 />
               </div>
 
-              {/* Hubungkan / Pindahkan Sinkronisasi ke Buletin */}
+              {/* Hubungkan / Pindahkan Sinkronisasi ke Labnote */}
               <div className="space-y-1">
                 <SearchableBulletinSelect
                   selectedId={editBulletinPostId}
@@ -6015,8 +6015,8 @@ export function LogbookScreen({
                 />
                 <p className="text-[10px] text-slate-700 font-bold">
                   {editingTask.bulletinPostId 
-                    ? `Saat ini terhubung ke Buletin #${editingTask.bulletinPostId}. Anda dapat memindahkan atau melepaskan tautan sinkronisasi.` 
-                    : 'Tugas ini belum terkoneksi ke Buletin. Pilih dokumen buletin jika ingin menyinkronkan tugas ini.'}
+                    ? `Saat ini terhubung ke Labnote #${editingTask.bulletinPostId}. Anda dapat memindahkan atau melepaskan tautan sinkronisasi.` 
+                    : 'Tugas ini belum terkoneksi ke Labnote. Pilih dokumen Labnote jika ingin menyinkronkan tugas ini.'}
                 </p>
               </div>
 
