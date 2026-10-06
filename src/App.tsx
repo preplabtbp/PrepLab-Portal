@@ -105,6 +105,8 @@ const LogbookScreen = lazyWithRetry(() => import('./components/logbook-screen').
 const ClinicScreen = lazyWithRetry(() => import('./components/clinic-screen').then(m => ({ default: m.ClinicScreen })));
 import { ModulesDrawer } from './components/ModulesDrawer';
 import { LabBotWidget } from './components/LabBotWidget';
+import { HeaderModuleSearchBar } from './components/HeaderModuleSearchBar';
+import { DailySplashScreen } from './components/DailySplashScreen';
 
 export default function App() {
 
@@ -1399,6 +1401,12 @@ export default function App() {
               </Suspense>
             )}
           </AnimatePresence>
+
+          {/* Daily Splash Screen (Cross-device synced 1x per day via Server API) */}
+          <DailySplashScreen
+            userName={inspectorName || undefined}
+            userNik={inspectorNik || undefined}
+          />
           
       <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-slate-200/50 to-transparent pointer-events-none"></div>
       
@@ -1483,6 +1491,17 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* Center Header: Module Search Bar */}
+        <HeaderModuleSearchBar
+          onNav={handleNav}
+          onOpenKta={() => {
+            window.dispatchEvent(new CustomEvent('open-simplified-inspection', { detail: { tab: 'kta_tta' } }));
+          }}
+          onOpenP5m={() => {
+            window.dispatchEvent(new CustomEvent('open-simplified-p5m-modal'));
+          }}
+        />
 
         <div className="flex items-center gap-3">
           {isBulletin && !bulletinFocusMode && (

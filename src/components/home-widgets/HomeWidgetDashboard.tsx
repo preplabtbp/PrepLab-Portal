@@ -21,7 +21,7 @@ interface HomeWidgetDashboardProps {
 }
 
 export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({ userNik = 'default' }) => {
-  const storageKey = `preplab_home_widgets_${userNik}`;
+  const storageKey = `preplab_home_widgets_v2_${userNik}`;
 
   const [configs, setConfigs] = useState<WidgetItemConfig[]>(() => {
     try {
@@ -39,6 +39,17 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({ userNi
 
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const [showCatalogModal, setShowCatalogModal] = useState<boolean>(false);
+
+  // Enabled widgets sorted by order
+  const enabledWidgets = configs
+    .filter((c) => c.enabled)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  useEffect(() => {
+    if (enabledWidgets.length === 0 && isEditMode) {
+      setIsEditMode(false);
+    }
+  }, [enabledWidgets.length, isEditMode]);
 
   // Save to localStorage whenever configs change
   const saveConfigs = (newConfigs: WidgetItemConfig[]) => {
@@ -101,10 +112,6 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({ userNi
     }
   };
 
-  // Enabled widgets sorted by order
-  const enabledWidgets = configs
-    .filter((c) => c.enabled)
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
   // Determine span class
   const getColSpanClass = (size: WidgetSize) => {
@@ -161,7 +168,7 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({ userNi
   };
 
   return (
-    <section className="w-full space-y-3.5 pt-2">
+    <section id="home-widgets-container" className="w-full space-y-3.5 pt-2">
       {/* Dashboard Section Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-1">
         <div className="flex items-center gap-2">
@@ -179,30 +186,33 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({ userNi
         {/* Toolbar Controls */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* Edit Mode Toggle */}
-          <button
-            type="button"
-            onClick={() => setIsEditMode(!isEditMode)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-              isEditMode
-                ? 'bg-amber-500 text-white shadow-xs'
-                : 'bg-white dark:bg-slate-800 text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
-            }`}
-          >
-            {isEditMode ? (
-              <>
-                <Check className="w-3.5 h-3.5" />
-                <span>Selesai Atur</span>
-              </>
-            ) : (
-              <>
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                <span>Atur Posisi &amp; Ukuran</span>
-              </>
-            )}
-          </button>
+          {enabledWidgets.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsEditMode(!isEditMode)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                isEditMode
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+              }`}
+            >
+              {isEditMode ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Selesai Atur</span>
+                </>
+              ) : (
+                <>
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>Atur Posisi &amp; Ukuran</span>
+                </>
+              )}
+            </button>
+          )}
 
           {/* Add Widget Button */}
           <button
+            id="home-add-widget-btn"
             type="button"
             onClick={() => setShowCatalogModal(true)}
             className="px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"

@@ -125,22 +125,32 @@ export function DailySplashScreen({
     setQuoteIndex(dayOfYear % (activeQuoteList.length || 1));
   }, [activeQuoteList.length]);
 
-  // Daily check logic: Show once per day unless forceShow
+  // Daily check logic: Show once per day across ANY device (synced via Server API)
   useEffect(() => {
     if (forceShow) {
       setIsVisible(true);
       return;
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const nikKey = userNik || localStorage.getItem('p2h_inspector_nik') || 'general';
-    const storageKey = `preplab_daily_splash_${nikKey}`;
-    const lastShown = localStorage.getItem(storageKey);
+    const nikKey = userNik || localStorage.getItem('p2h_inspector_nik') || '';
+    if (!nikKey) return;
 
-    if (lastShown !== todayStr) {
-      setIsVisible(true);
-      localStorage.setItem(storageKey, todayStr);
-    }
+    fetch(`/api/user/daily-greeting-status?nik=${encodeURIComponent(nikKey)}`)
+      .then(res => res.json())
+      .then(json => {
+        if (json.status === 'success' && json.shouldShow) {
+          setIsVisible(true);
+          // Immediately mark as shown on server so other devices will NOT show it today
+          fetch('/api/user/daily-greeting-mark', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nik: nikKey })
+          }).catch(() => {});
+        }
+      })
+      .catch(err => {
+        console.warn('Daily greeting check error:', err);
+      });
   }, [forceShow, userNik]);
 
   // Global trigger listener

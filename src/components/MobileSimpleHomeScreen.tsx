@@ -18,8 +18,8 @@ import { getDailySkenaQuote, SkenaQuote } from '../utils/skena-quotes';
 import { isPicTemuanRole, getOpenFindingsForSupervisor } from '../utils/inspection-pic-matcher';
 import { ActionCenterBar } from './ActionCenterBar';
 import { SectionLogBookBar } from './SectionLogBookBar';
-import { ModuleSearchBar } from './ModuleSearchBar';
 import { HomeWidgetDashboard } from './home-widgets/HomeWidgetDashboard';
+import { HomeWalkthroughTour } from './HomeWalkthroughTour';
 
 interface MobileSimpleHomeScreenProps {
   inspectorName: string;
@@ -317,90 +317,73 @@ export function MobileSimpleHomeScreen({
         <div className="lg:col-span-5 xl:col-span-5 space-y-4">
           {/* ── TOP HERO PROFILE CARD (CLEAN & ELEGANT) ── */}
           <div 
-        className="relative overflow-hidden rounded-3xl p-4 sm:p-5 border shadow-sm"
-        style={{
-          backgroundColor: 'var(--card-bg, #FFFFFF)',
-          borderColor: 'var(--border-main, #E2E8F0)'
-        }}
-      >
-        <div className="flex items-center gap-3 sm:gap-4">
-          {/* Avatar Profile */}
-          <div 
-            className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-display font-black text-xl shadow-inner border border-teal-500/20 shrink-0 text-white"
+            id="home-profile-card"
+            className="relative overflow-hidden rounded-3xl p-4 sm:p-5 border shadow-sm"
             style={{
-              background: 'linear-gradient(135deg, var(--primary, #0D9488) 0%, #059669 100%)'
+              backgroundColor: 'var(--card-bg, #FFFFFF)',
+              borderColor: 'var(--border-main, #E2E8F0)'
             }}
           >
-            {profile?.avatar ? (
-              <img src={profile.avatar} alt={inspectorName} className="w-full h-full object-cover rounded-2xl" />
-            ) : (
-              <span>{inspectorName ? inspectorName.charAt(0).toUpperCase() : 'P'}</span>
+            <div className="flex items-center gap-3 sm:gap-4">
+              {/* Avatar Profile */}
+              <div 
+                className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-display font-black text-xl shadow-inner border border-teal-500/20 shrink-0 text-white"
+                style={{
+                  background: 'linear-gradient(135deg, var(--primary, #0D9488) 0%, #059669 100%)'
+                }}
+              >
+                {profile?.avatar ? (
+                  <img src={profile.avatar} alt={inspectorName} className="w-full h-full object-cover rounded-2xl" />
+                ) : (
+                  <span>{inspectorName ? inspectorName.charAt(0).toUpperCase() : 'P'}</span>
+                )}
+              </div>
+
+              {/* Name & Role (Elegantly Wrapped Without Cutoffs) */}
+              <div className="min-w-0 flex-1">
+                <span className="text-[11px] sm:text-xs font-bold text-[var(--text-muted)] block leading-none mb-1">
+                  {greetingText},
+                </span>
+                <h2 className="text-base sm:text-lg font-black text-[var(--text-main)] font-display leading-snug break-words">
+                  {effectiveName}
+                </h2>
+                <div className="flex items-center gap-1.5 sm:gap-2 mt-1 flex-wrap">
+                  <span className="text-xs sm:text-sm font-semibold text-[var(--text-muted)]">
+                    {effectiveRole}
+                  </span>
+                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-md bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/25 shrink-0">
+                    {effectiveSection}
+                  </span>
+                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 shrink-0">
+                    ● Onsite
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Daily Motivational Quote Ticker (Adaptive Card Height, No Cutoff) */}
+            {activeCommunityQuote && (
+              <div 
+                onClick={() => {
+                  setQuotesModalTab('details');
+                  setShowQuotesPoolModal(true);
+                }}
+                className="mt-3.5 pt-2.5 border-t border-[var(--border-main)]/60 flex items-start justify-between gap-2.5 text-xs cursor-pointer group hover:bg-amber-500/5 -mx-1 px-1.5 py-1 rounded-xl transition-all"
+                title="Buka Detail & Kumpulan Quotes Komunitas"
+              >
+                <div className="flex items-start gap-2 min-w-0 flex-1">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-[11px] sm:text-xs italic text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors break-words leading-relaxed whitespace-normal">
+                    "{activeCommunityQuote.quote}"
+                  </p>
+                </div>
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold shrink-0 flex items-center gap-0.5 mt-0.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 group-hover:bg-amber-500/20 transition-colors">
+                  <span>Quote</span>
+                  <ChevronRight className="w-3 h-3" />
+                </span>
+              </div>
             )}
           </div>
-
-          {/* Name & Role (Elegantly Wrapped Without Cutoffs) */}
-          <div className="min-w-0 flex-1">
-            <span className="text-[11px] sm:text-xs font-bold text-[var(--text-muted)] block leading-none mb-1">
-              {greetingText},
-            </span>
-            <h2 className="text-base sm:text-lg font-black text-[var(--text-main)] font-display leading-snug break-words">
-              {effectiveName}
-            </h2>
-            <div className="flex items-center gap-1.5 sm:gap-2 mt-1 flex-wrap">
-              <span className="text-xs sm:text-sm font-semibold text-[var(--text-muted)]">
-                {effectiveRole}
-              </span>
-              <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-md bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/25 shrink-0">
-                {effectiveSection}
-              </span>
-              <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 shrink-0">
-                ● Onsite
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Daily Motivational Quote Ticker (Adaptive Card Height, No Cutoff) */}
-        {activeCommunityQuote && (
-          <div 
-            onClick={() => {
-              setQuotesModalTab('details');
-              setShowQuotesPoolModal(true);
-            }}
-            className="mt-3.5 pt-2.5 border-t border-[var(--border-main)]/60 flex items-start justify-between gap-2.5 text-xs cursor-pointer group hover:bg-amber-500/5 -mx-1 px-1.5 py-1 rounded-xl transition-all"
-            title="Buka Detail & Kumpulan Quotes Komunitas"
-          >
-            <div className="flex items-start gap-2 min-w-0 flex-1">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-[11px] sm:text-xs italic text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors break-words leading-relaxed whitespace-normal">
-                "{activeCommunityQuote.quote}"
-              </p>
-            </div>
-            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold shrink-0 flex items-center gap-0.5 mt-0.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 group-hover:bg-amber-500/20 transition-colors">
-              <span>Quote</span>
-              <ChevronRight className="w-3 h-3" />
-            </span>
-          </div>
-        )}
-      </div>
-
-          {/* Module Search Bar (Desktop Position - under Profile) */}
-          {!isCrew && (
-            <div className="hidden lg:block">
-              <ModuleSearchBar
-                inspectorNik={effectiveNik}
-                inspectorName={effectiveName}
-                inspectorRole={effectiveRole}
-                inspectorSection={effectiveSection}
-                onNav={onNav}
-                onOpenKta={() => {
-                  setInspectionDefaultTab('kta_tta');
-                  setShowInspectionModal(true);
-                }}
-                onOpenP5m={() => setShowP5mModal(true)}
-              />
-            </div>
-          )}
         </div>
 
         {/* Right Column (Desktop 7 cols: Action Center & Log Book) */}
@@ -602,24 +585,28 @@ export function MobileSimpleHomeScreen({
       ) : (
         <>
           {/* ── OPERATIONAL ACTION CENTER DIGEST BAR ── */}
-          <ActionCenterBar
-            inspectorNik={effectiveNik}
-            inspectorName={effectiveName}
-            inspectorJabatan={effectiveRole}
-            onNav={onNav}
-            onOpenKta={() => {
-              setInspectionDefaultTab('kta_tta');
-              setShowInspectionModal(true);
-            }}
-            onOpenP5m={() => setShowP5mModal(true)}
-          />
+          <div id="home-action-center-bar">
+            <ActionCenterBar
+              inspectorNik={effectiveNik}
+              inspectorName={effectiveName}
+              inspectorJabatan={effectiveRole}
+              onNav={onNav}
+              onOpenKta={() => {
+                setInspectionDefaultTab('kta_tta');
+                setShowInspectionModal(true);
+              }}
+              onOpenP5m={() => setShowP5mModal(true)}
+            />
+          </div>
 
           {/* ── SECTION LOG BOOK ACCORDION (PIC TASKS & CHECKLIST) ── */}
-          <SectionLogBookBar
-            inspectorNik={effectiveNik}
-            inspectorName={effectiveName}
-            onNav={onNav}
-          />
+          <div id="home-logbook-bar">
+            <SectionLogBookBar
+              inspectorNik={effectiveNik}
+              inspectorName={effectiveName}
+              onNav={onNav}
+            />
+          </div>
 
           {/* ── EXECUTIVE / LEADERSHIP DASHBOARD TRIGGER CARD (SPT UP) ── */}
           {hasLeadershipDashboard && (
@@ -678,24 +665,6 @@ export function MobileSimpleHomeScreen({
       )}
         </div>
       </div>
-
-      {/* ── MODULE SEARCH BAR (MOBILE ONLY POSITION: BELOW TOP CARDS) ── */}
-      {!isCrew && (
-        <div className="block lg:hidden">
-          <ModuleSearchBar
-            inspectorNik={effectiveNik}
-            inspectorName={effectiveName}
-            inspectorRole={effectiveRole}
-            inspectorSection={effectiveSection}
-            onNav={onNav}
-            onOpenKta={() => {
-              setInspectionDefaultTab('kta_tta');
-              setShowInspectionModal(true);
-            }}
-            onOpenP5m={() => setShowP5mModal(true)}
-          />
-        </div>
-      )}
 
       {/* ── CUSTOMIZABLE WIDGET DASHBOARD (FULL WIDTH) ── */}
       <HomeWidgetDashboard userNik={effectiveNik} />
@@ -765,6 +734,14 @@ export function MobileSimpleHomeScreen({
         inspectorName={effectiveName}
         inspectorNik={effectiveNik}
         onNav={onNav}
+      />
+
+      {/* Interactive Onboarding Walkthrough Tour */}
+      <HomeWalkthroughTour
+        userNik={effectiveNik}
+        userName={effectiveName}
+        userRole={effectiveRole}
+        userSection={effectiveSection}
       />
     </motion.div>
   );

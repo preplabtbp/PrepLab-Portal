@@ -74,6 +74,20 @@ export function SectionLogBookBar({
   const [tasks, setTasks] = useState<LogbookTaskItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
+
+  const toggleTaskExpand = (taskId: string | number) => {
+    const sId = String(taskId);
+    setExpandedTaskIds(prev => {
+      const next = new Set(prev);
+      if (next.has(sId)) {
+        next.delete(sId);
+      } else {
+        next.add(sId);
+      }
+      return next;
+    });
+  };
 
   // Fetch PIC tasks
   const fetchPicTasks = useCallback(async (isManualRefresh = false) => {
@@ -414,6 +428,7 @@ export function SectionLogBookBar({
                 {tasks.map(task => {
                   const tasklist = parseTasklist(task.description || '');
                   const isDone = task.status === 'Closed' || task.status === 'Done';
+                  const isTaskExpanded = expandedTaskIds.has(String(task.id));
 
                   return (
                     <div
@@ -442,14 +457,21 @@ export function SectionLogBookBar({
                             </button>
                           )}
 
-                          <div className="min-w-0 flex-1">
-                            <h4 className={`text-xs sm:text-sm font-bold leading-snug break-words ${
+                          <div 
+                            className={`min-w-0 flex-1 ${tasklist.hasTasklist ? 'cursor-pointer select-none group/task' : ''}`}
+                            onClick={() => {
+                              if (tasklist.hasTasklist) {
+                                toggleTaskExpand(task.id);
+                              }
+                            }}
+                          >
+                            <h4 className={`text-xs sm:text-sm font-bold leading-snug break-words transition-colors ${
                               isDone ? 'line-through text-slate-400' : 'text-[var(--text-main,#0f172a)]'
-                            }`}>
+                            } ${tasklist.hasTasklist ? 'group-hover/task:text-teal-600 dark:group-hover/task:text-teal-400' : ''}`}>
                               {task.title}
                             </h4>
 
-                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                               {task.section && (
                                 <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                                   {task.section}
@@ -470,59 +492,102 @@ export function SectionLogBookBar({
                                   {task.targetDate}
                                 </span>
                               )}
+
+                              {/* Subtask Summary Pill Indicator */}
+                              {tasklist.hasTasklist && (
+                                <span className="inline-flex items-center gap-1 text-[9.5px] font-bold px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/25 group-hover/task:bg-teal-500/20 transition-colors">
+                                  <span>{tasklist.completed}/{tasklist.total} Subtask ({tasklist.percentage}%)</span>
+                                  {isTaskExpanded ? (
+                                    <ChevronUp className="w-3 h-3 text-teal-600" />
+                                  ) : (
+                                    <ChevronDown className="w-3 h-3 text-teal-600" />
+                                  )}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
 
-                        {/* Status badge */}
-                        <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
-                          isDone
-                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
-                            : task.status === 'On Progress'
-                              ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/25'
-                              : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25'
-                        }`}>
-                          {task.status || 'Open'}
-                        </span>
+                        {/* Status badge & Chevron toggle */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                            isDone
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
+                              : task.status === 'On Progress'
+                                ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/25'
+                                : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25'
+                          }`}>
+                            {task.status || 'Open'}
+                          </span>
+
+                          {tasklist.hasTasklist && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleTaskExpand(task.id);
+                              }}
+                              className="p-1 rounded-md text-slate-400 hover:text-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                              title={isTaskExpanded ? 'Tutup Checklist Subtask' : 'Buka Checklist Subtask'}
+                            >
+                              {isTaskExpanded ? (
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Subtasks checklist if present */}
-                      {tasklist.hasTasklist && (
-                        <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
-                          <div className="flex items-center justify-between text-[10px] font-bold text-[var(--text-muted,#64748b)] mb-1">
-                            <span>Checklist Subtask ({tasklist.completed}/{tasklist.total})</span>
-                            <span className="text-teal-600 dark:text-teal-400 font-extrabold">{tasklist.percentage}%</span>
-                          </div>
+                      {/* Subtasks checklist: only visible when task is expanded */}
+                      <AnimatePresence initial={false}>
+                        {tasklist.hasTasklist && isTaskExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.18, ease: 'easeOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                              <div className="flex items-center justify-between text-[10px] font-bold text-[var(--text-muted,#64748b)] mb-1">
+                                <span>Checklist Subtask ({tasklist.completed}/{tasklist.total})</span>
+                                <span className="text-teal-600 dark:text-teal-400 font-extrabold">{tasklist.percentage}%</span>
+                              </div>
 
-                          <div className="space-y-1">
-                            {tasklist.items.map((it) => (
-                              <label
-                                key={it.index}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  handleToggleSubtask(task, it.index);
-                                }}
-                                className={`flex items-start gap-2 p-1.5 rounded-lg text-xs cursor-pointer select-none transition-colors ${
-                                  it.checked 
-                                    ? 'bg-slate-50 dark:bg-slate-900/30 text-slate-400' 
-                                    : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-[var(--text-main,#0f172a)]'
-                                }`}
-                              >
-                                <span className="mt-0.5 shrink-0 text-teal-600 dark:text-teal-400">
-                                  {it.checked ? (
-                                    <CheckSquare className="w-3.5 h-3.5 text-emerald-500" />
-                                  ) : (
-                                    <Square className="w-3.5 h-3.5 text-slate-400" />
-                                  )}
-                                </span>
-                                <span className={`text-[11.5px] leading-tight ${it.checked ? 'line-through text-slate-400' : ''}`}>
-                                  {it.text}
-                                </span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                              <div className="space-y-1">
+                                {tasklist.items.map((it) => (
+                                  <label
+                                    key={it.index}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleToggleSubtask(task, it.index);
+                                    }}
+                                    className={`flex items-start gap-2 p-1.5 rounded-lg text-xs cursor-pointer select-none transition-colors ${
+                                      it.checked 
+                                        ? 'bg-slate-50 dark:bg-slate-900/30 text-slate-400' 
+                                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-[var(--text-main,#0f172a)]'
+                                    }`}
+                                  >
+                                    <span className="mt-0.5 shrink-0 text-teal-600 dark:text-teal-400">
+                                      {it.checked ? (
+                                        <CheckSquare className="w-3.5 h-3.5 text-emerald-500" />
+                                      ) : (
+                                        <Square className="w-3.5 h-3.5 text-slate-400" />
+                                      )}
+                                    </span>
+                                    <span className={`text-[11.5px] leading-tight ${it.checked ? 'line-through text-slate-400' : ''}`}>
+                                      {it.text}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   );
                 })}

@@ -42,7 +42,7 @@ export const DEFAULT_WIDGET_CONFIGS: WidgetItemConfig[] = [
   {
     id: 'clock',
     size: '1x',
-    enabled: true,
+    enabled: false,
     order: 0,
     settings: {
       mode: 'digital',
@@ -54,19 +54,19 @@ export const DEFAULT_WIDGET_CONFIGS: WidgetItemConfig[] = [
   {
     id: 'weather',
     size: '1x',
-    enabled: true,
+    enabled: false,
     order: 1
   },
   {
     id: 'calendar',
     size: '2x',
-    enabled: true,
+    enabled: false,
     order: 2
   },
   {
     id: 'notes',
     size: '2x',
-    enabled: true,
+    enabled: false,
     order: 3,
     settings: {
       color: 'amber'
@@ -75,13 +75,13 @@ export const DEFAULT_WIDGET_CONFIGS: WidgetItemConfig[] = [
   {
     id: 'streak',
     size: '1x',
-    enabled: true,
+    enabled: false,
     order: 4
   },
   {
     id: 'trivia_quote',
     size: '1x',
-    enabled: true,
+    enabled: false,
     order: 5
   },
   {

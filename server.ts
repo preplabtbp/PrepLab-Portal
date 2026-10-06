@@ -67,6 +67,7 @@ import { kbbiRouter } from "./server/routes/kbbi.js";
 import { gamificationRouter } from "./server/routes/gamification.js";
 import { logbookRouter } from "./server/routes/logbook.js";
 import { clinicRouter } from "./server/routes/clinic.js";
+import { userPreferencesRouter } from "./server/routes/userPreferences.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
 
 async function initDbSchema() {
@@ -771,7 +772,8 @@ const app = express();
     '/api/kbbi',
     '/api/chat',
     '/api/presence',
-    '/api/pdf'
+    '/api/pdf',
+    '/api/user'
   ];
 
   app.use('/api', (req, res, next) => {
@@ -825,6 +827,7 @@ const app = express();
   app.use("/api/gamification", gamificationRouter);
   app.use(logbookRouter);
   app.use(clinicRouter);
+  app.use("/api/user", userPreferencesRouter);
 
   // --- PRESENCE ROUTES ---
   app.get('/api/presence/online', (req, res) => {
