@@ -216,9 +216,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center transition-colors border-b border-slate-50 last:border-0"
                     >
                       <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 mr-3 overflow-hidden bg-[#e6f7f9] text-[#22a7b8] font-bold border border-[#a2e0e8]">
-                        {(emp.photo || emp.avatar) ? (
+                        {emp.photo ? (
                           <img 
-                            src={formatAvatarUrl(emp.photo || emp.avatar)} 
+                            src={formatAvatarUrl(emp.photo)} 
                             alt={emp.name} 
                             className="w-full h-full object-cover" 
                             referrerPolicy="no-referrer"
@@ -404,9 +404,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               
               <div className="flex flex-col items-center lg:items-start mb-6 w-full">
                 <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-white/20 border-2 border-white/40 overflow-hidden flex items-center justify-center shrink-0 shadow-xl relative backdrop-blur-xs ring-4 ring-black/5 group">
-                  {(selectedEmployee.photo || selectedEmployee.avatar) ? (
+                  {selectedEmployee.photo ? (
                     <img 
-                      src={formatAvatarUrl(selectedEmployee.photo || selectedEmployee.avatar)} 
+                      src={formatAvatarUrl(selectedEmployee.photo)} 
                       alt={selectedEmployee.name} 
                       className="w-full h-full object-cover" 
                       referrerPolicy="no-referrer"
@@ -440,7 +440,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   title="Perbarui atau unggah foto karyawan di database"
                 >
                   <Camera className="w-3.5 h-3.5 text-white" />
-                  <span>{(selectedEmployee.photo || selectedEmployee.avatar) ? 'Ganti Foto' : 'Unggah Foto'}</span>
+                  <span>{selectedEmployee.photo ? 'Ganti Foto' : 'Unggah Foto'}</span>
                 </button>
               </div>
 

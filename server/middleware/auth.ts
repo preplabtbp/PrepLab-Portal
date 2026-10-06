@@ -27,15 +27,16 @@ export function toPublicEmployee(emp: any): any {
   if (!emp) return null;
   const { passwordHash, ...safeEmp } = emp;
   const resolvedName = safeEmp.name || safeEmp.nama || '';
+  
+  // Modul Foto Profil Akun (Avatar) dan Modul Database Karyawan (Photo) 100% terpisah:
   let avatar = safeEmp.avatar || null;
-  // Foto dari Google Drive master/excel hanya untuk database karyawan, bukan foto profil akun
   if (avatar && typeof avatar === 'string' && (avatar.includes('drive.google.com') || avatar.includes('/api/employees/photo/'))) {
     avatar = null;
   }
-  let photo = safeEmp.photo || null;
-  if (!photo && emp.avatar && (emp.avatar.includes('drive.google.com') || emp.avatar.includes('/api/employees/photo/'))) {
-    photo = emp.avatar;
-  }
+
+  // Foto resmi database karyawan murni dari kolom photo
+  const photo = safeEmp.photo || null;
+
   return {
     ...safeEmp,
     name: resolvedName,
