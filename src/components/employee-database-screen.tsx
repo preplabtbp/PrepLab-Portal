@@ -461,12 +461,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       <p className="text-[#e2f9fb] text-xs uppercase font-bold tracking-wider mb-1">Jatuh Tempo CT</p>
                       <p className="font-bold">{selectedEmployee.jatuhTempoCt || '-'}</p>
                     </div>
-                    <div className="col-span-2 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl p-4 text-white shadow-md flex justify-between items-center">
+                    <div className="col-span-2 bg-gradient-to-r from-[#558ED5] to-[#4379be] rounded-xl p-4 text-white shadow-md flex justify-between items-center">
                       <div>
-                        <p className="text-slate-300 text-xs uppercase font-bold tracking-wider mb-1">Tanggal Permanen</p>
-                        <p className="font-bold">{selectedEmployee.tanggalPermanent || '-'}</p>
+                        <p className="text-[#e3eeff] text-xs uppercase font-bold tracking-wider mb-1">Tanggal Permanen</p>
+                        <p className="font-extrabold text-base">{selectedEmployee.tanggalPermanent || '-'}</p>
                       </div>
-                      <Calendar className="w-8 h-8 text-slate-500 opacity-50" />
+                      <Calendar className="w-8 h-8 text-white/50" />
                     </div>
                   </div>
                 </div>
