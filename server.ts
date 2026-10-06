@@ -1445,9 +1445,15 @@ async function syncBulletinToAgenda(post: any) {
     });
   });
 
+  // Ensure critical DB columns exist
+  try {
+    await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS tanggal_efektif_tidak_bekerja text;');
+  } catch (e: any) {
+    console.warn('Auto migration note:', e.message);
+  }
+
   // Mulai pelayan (server) di port 3000
   initRosterCron();
-
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server backend siap berjalan di http://localhost:${PORT}`);
@@ -1455,3 +1461,4 @@ async function syncBulletinToAgenda(post: any) {
 }
 
 startServer();
+

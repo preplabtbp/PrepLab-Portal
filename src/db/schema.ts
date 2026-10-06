@@ -31,6 +31,7 @@ export const employees = pgTable('employees', {
   department: text('department'),
   position: text('position'),
   statusKaryawan: text('status_karyawan'),
+  tanggalEfektifTidakBekerja: text('tanggal_efektif_tidak_bekerja'),
   tanggalJabatanBaru: text('tanggal_jabatan_baru'),
   masaKerja: text('masa_kerja'),
   masaKerjaJabatanTerakhir: text('masa_kerja_jabatan_terakhir'),

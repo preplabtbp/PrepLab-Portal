@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, Users, X, Database, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud } from 'lucide-react';
 import { Card, Input, Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
+import { EmployeeImportModal } from './EmployeeImportModal';
 
 export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik: string, onBack?: () => void }) {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -10,7 +11,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
 
   const fetchEmployees = async () => {
     try {
@@ -182,15 +185,26 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
         <div className="flex items-center gap-2">
           {!selectedEmployee && (
-            <Button
-              onClick={handleManualSync}
-              disabled={isSyncing}
-              size="sm"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 rounded-xl text-xs font-semibold px-3 py-1.5 shadow-sm transition-all"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'Menyinkronkan...' : 'Sinkron Google Sheets'}
-            </Button>
+            <>
+              <Button
+                onClick={() => setIsImportModalOpen(true)}
+                size="sm"
+                className="bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-200 flex items-center gap-1.5 rounded-xl text-xs font-bold px-3 py-1.5 shadow-xs transition-all cursor-pointer"
+              >
+                <UploadCloud className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Import CSV / Excel</span>
+              </Button>
+
+              <Button
+                onClick={handleManualSync}
+                disabled={isSyncing}
+                size="sm"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 rounded-xl text-xs font-semibold px-3 py-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Menyinkronkan...' : 'Sinkron Google Sheets'}
+              </Button>
+            </>
           )}
 
           {/* Small Search Bar (Animated into header) */}
@@ -391,6 +405,15 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       <p className="text-purple-100 text-xs uppercase tracking-wider mb-1">Status Kontrak</p>
                       <p className="font-bold">{selectedEmployee.statusKontrak || '-'}</p>
                     </div>
+                    {selectedEmployee.tanggalEfektifTidakBekerja && (
+                      <div className="col-span-2 bg-gradient-to-br from-rose-600 to-rose-700 rounded-xl p-4 text-white shadow-md flex justify-between items-center">
+                        <div>
+                          <p className="text-rose-100 text-xs uppercase tracking-wider mb-1">Tgl Efektif Tidak Bekerja</p>
+                          <p className="font-bold">{selectedEmployee.tanggalEfektifTidakBekerja}</p>
+                        </div>
+                        <Calendar className="w-6 h-6 text-rose-200 opacity-60" />
+                      </div>
+                    )}
                     <div className="bg-gradient-to-br from-teal-600 to-teal-700 rounded-xl p-4 text-white shadow-md">
                       <p className="text-teal-100 text-xs uppercase tracking-wider mb-1">Sisa Cuti (CT)</p>
                       <p className="font-bold text-lg">{selectedEmployee.sisaCt || '-'}</p>
@@ -614,6 +637,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
           </motion.div>
         )}
       </div>
+
+      {/* Modal Import Data Karyawan (CSV & Excel) */}
+      <EmployeeImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={() => {
+          fetchEmployees();
+        }}
+        inspectorNik={inspectorNik}
+      />
     </div>
   );
 }
+

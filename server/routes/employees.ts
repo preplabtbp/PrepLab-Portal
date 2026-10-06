@@ -3,8 +3,80 @@ import { eq } from "drizzle-orm";
 import { db } from "../../src/db/index.js";
 import { employees } from "../../src/db/schema.js";
 import { toPublicEmployee } from "../middleware/auth.js";
+import { drive } from "../../google-services.js";
+import { Readable } from "stream";
 
 export const employeesRouter = Router();
+
+async function uploadEmployeePhotoToDrive(nik: string, name: string, base64OrUrl: string): Promise<string> {
+  if (!base64OrUrl) return '';
+  const str = String(base64OrUrl).trim();
+  if (!str) return '';
+
+  // If already a Google Drive URL, normalize it to direct image view
+  if (str.includes('drive.google.com')) {
+    const idMatch = str.match(/\/d\/([a-zA-Z0-9_-]+)/) || str.match(/id=([a-zA-Z0-9_-]+)/);
+    if (idMatch && idMatch[1]) {
+      return `https://drive.google.com/uc?export=view&id=${idMatch[1]}`;
+    }
+    return str;
+  }
+
+  // If regular http/https image URL
+  if (str.startsWith('http://') || str.startsWith('https://')) {
+    return str;
+  }
+
+  // If Base64 data (e.g. data:image/jpeg;base64,... or raw base64)
+  if (str.startsWith('data:image') || (str.length > 100 && !str.includes(' '))) {
+    try {
+      const mimeMatch = str.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      const cleanBase64 = str.replace(/^data:.*?;base64,/, '');
+      const buffer = Buffer.from(cleanBase64, 'base64');
+      const stream = new Readable();
+      stream.push(buffer);
+      stream.push(null);
+
+      // Folder Dokumentasi / Foto Karyawan
+      const parentFolderId = process.env.GDRIVE_EMPLOYEES_FOLDER_ID || '1V_qxWLDAwcdV6O8Eg723fqMcZSeRIzoe';
+      const safeName = (name || nik).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `Foto_${nik}_${safeName}.jpg`;
+
+      const response = await drive.files.create({
+        requestBody: {
+          name: filename,
+          parents: [parentFolderId]
+        },
+        media: {
+          mimeType: mimeType,
+          body: stream
+        },
+        fields: 'id, webViewLink',
+        supportsAllDrives: true
+      });
+
+      const fileId = response.data.id;
+      if (fileId) {
+        try {
+          await drive.permissions.create({
+            fileId: fileId,
+            requestBody: { role: 'reader', type: 'anyone' },
+            supportsAllDrives: true
+          });
+        } catch (permErr) {}
+
+        return `https://drive.google.com/uc?export=view&id=${fileId}`;
+      }
+    } catch (driveErr: any) {
+      console.warn(`Drive upload failed for employee photo ${nik}:`, driveErr.message);
+      return str;
+    }
+  }
+
+  return str;
+}
+
 
 employeesRouter.get("/", async (req, res) => {
   try {
@@ -145,6 +217,119 @@ employeesRouter.post("/", async (req, res) => {
   }
 });
 
+employeesRouter.post("/import", async (req, res) => {
+  try {
+    const { rows, editorNik } = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ status: "error", message: "Tidak ada data baris yang dikirim untuk diimport." });
+    }
+
+    let insertedCount = 0;
+    let updatedCount = 0;
+    let errorCount = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const raw = rows[i];
+      if (!raw || typeof raw !== 'object') continue;
+
+      // Normalize row keys
+      const normalized: Record<string, string> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        const cleanK = String(k || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (cleanK) {
+          normalized[cleanK] = v !== undefined && v !== null ? String(v).trim() : '';
+        }
+      }
+
+      const nik = normalized['nik'] || '';
+      if (!nik || nik === '#N/A' || nik.toUpperCase().includes('DEMO')) {
+        continue;
+      }
+
+      const name = normalized['nama'] || normalized['name'] || '';
+      if (!name || name === '#N/A') {
+        continue;
+      }
+
+      const rawFoto = normalized['foto'] || normalized['photo'] || normalized['avatar'] || normalized['fotoprofil'] || normalized['image'] || '';
+      let driveAvatarUrl: string | null = null;
+      if (rawFoto) {
+        driveAvatarUrl = await uploadEmployeePhotoToDrive(nik, name, rawFoto);
+      }
+
+      const empData: Record<string, any> = {
+        name,
+        nik,
+        ktp: normalized['noktp'] || normalized['ktp'] || normalized['nikktp'] || null,
+        pt: normalized['pt'] || normalized['perusahaan'] || null,
+        poh: normalized['poh'] || null,
+        sponsor: normalized['sponsor'] || null,
+        statusKaryawan: normalized['statuskaryawan'] || normalized['status'] || null,
+        tanggalEfektifTidakBekerja: normalized['tanggalefektiftidakbekerja'] || normalized['tgleftidakbekerja'] || normalized['tanggaltidakbekerja'] || normalized['efektiftidakbekerja'] || null,
+        tanggalAwalBergabung: normalized['dohawal'] || normalized['doh'] || normalized['tanggalawalbergabung'] || null,
+        tanggalJabatanBaru: normalized['tanggaljabatanbaru'] || normalized['tgljabatanbaru'] || null,
+        masaKerja: normalized['masakerja'] || null,
+        masaKerjaJabatanTerakhir: normalized['masakerjajabatanterakhir'] || normalized['masakerjajabatan'] || null,
+        department: normalized['departemen'] || normalized['department'] || null,
+        section: normalized['bagian'] || normalized['section'] || null,
+        jobGrade: normalized['jobgrade'] || null,
+        gol: normalized['gol'] || normalized['golongan'] || null,
+        jabatan: normalized['jabatanbaru'] || normalized['jabatan'] || null,
+        statusKontrak: normalized['statuskontrak'] || null,
+        tanggalPermanent: normalized['tanggalpermanent'] || normalized['tanggalpermanen'] || null,
+        tempatLahir: normalized['tempatlahir'] || null,
+        tanggalLahir: normalized['tanggallahir'] || null,
+        phone: normalized['nomortelppribadi'] || normalized['notelp'] || normalized['nomortelp'] || normalized['phone'] || null,
+        keluargaKandung: normalized['keluargakandungyangbisadihubungi'] || normalized['keluargakandung'] || normalized['kelkandung'] || null,
+        phoneKeluarga: normalized['notelephonekeluargakandung'] || normalized['notelpkeluarga'] || normalized['telpkel'] || normalized['telpkeluarga'] || null,
+        orangTerdekat: normalized['orangterdekatyangbisadihubungi'] || normalized['orangterdekat'] || normalized['orgterdekat'] || null,
+        phoneDarurat: normalized['notelephonedaruratorangterdekat'] || normalized['notelpdarurat'] || normalized['telpdarurat'] || null,
+        alamatKtp: normalized['alamatsesuaiktp'] || normalized['alamatktp'] || null,
+        alamatDomisili: normalized['alamatdomisili'] || normalized['domisili'] || null,
+        ...(driveAvatarUrl ? { avatar: driveAvatarUrl } : {})
+      };
+
+      // Filter out null/empty from update payload if not present in imported file to prevent overwriting existing data
+      const cleanEmpData: Record<string, any> = {};
+      for (const [k, v] of Object.entries(empData)) {
+        if (v !== null && v !== undefined && v !== '') {
+          cleanEmpData[k] = v;
+        }
+      }
+
+      try {
+        const existing = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+        if (existing.length > 0) {
+          await db.update(employees).set(cleanEmpData).where(eq(employees.nik, nik));
+          updatedCount++;
+        } else {
+          await db.insert(employees).values(empData as any);
+          insertedCount++;
+        }
+      } catch (err: any) {
+        errorCount++;
+        errors.push(`Row ${i + 1} (${nik} - ${name}): ${err.message}`);
+      }
+    }
+
+    res.json({
+      status: "success",
+      message: `Import berhasil: ${updatedCount} diperbarui, ${insertedCount} ditambahkan.`,
+      stats: {
+        total: rows.length,
+        updated: updatedCount,
+        inserted: insertedCount,
+        errors: errorCount,
+        errorList: errors.slice(0, 10)
+      }
+    });
+  } catch (error: any) {
+    console.error("Error importing employees:", error);
+    res.status(500).json({ status: "error", message: error.message || "Gagal mengimport data karyawan." });
+  }
+});
+
 employeesRouter.post("/avatar", async (req, res) => {
   try {
     const { nik, avatar } = req.body;
@@ -178,3 +363,5 @@ employeesRouter.post("/cover", async (req, res) => {
     res.status(500).json({ status: "error", message: "Failed to update cover" });
   }
 });
+
+

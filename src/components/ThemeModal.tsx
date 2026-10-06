@@ -146,22 +146,22 @@ export function evaluateThemeReadability(colors: ThemeColors): ReadabilityCheckR
 export const PRESET_THEMES: Record<string, { name: string; desc: string; colors: ThemeColors }> = {
   preplab_emerald: {
     name: 'PrepLab Classic (Emerald & Amber)',
-    desc: 'Tema resmi PrepLab dengan nuansa hijau emerald dan sentuhan aksen amber.',
+    desc: 'Tema resmi PrepLab dengan teks hitam pekat berdaya baca tinggi untuk layar ruang meeting & proyektor.',
     colors: {
       '--bg-main': '#F4F7F6',
       '--primary': '#2A9D8F',
       '--primary-hover': '#21867A',
       '--accent': '#E9930D',
       '--card-bg': '#FFFFFF',
-      '--text-main': '#1E293B',
-      '--text-muted': '#64748B',
-      '--border-main': '#DCE8F8',
+      '--text-main': '#000000',
+      '--text-muted': '#000000',
+      '--border-main': '#CBD5E1',
       '--input-bg': '#FFFFFF',
       '--bubble-color': '#E9930D',
       '--header-bg': '#FFFFFF',
-      '--header-text': '#1E293B',
+      '--header-text': '#000000',
       '--footer-selected': '#2A9D8F',
-      '--username-color': '#E9930D'
+      '--username-color': '#000000'
     }
   },
   midnight_oled: {

@@ -41,21 +41,38 @@
   --color-orange-900: #78470a;
   --color-orange-950: #452402;
 
-  /* Abu-Abu Tua (Teks Utama & Judul), Biru Muda / Abu-Abu Terang (Aksesori) */
+  /* Hitam Pekat (Teks Utama, Judul & Teks Redup untuk Ruang Meeting / Classic Theme) */
   --color-slate-50: #ffffff;
   --color-slate-100: #dce8f8;
   --color-slate-200: #c6d6eb;
   --color-slate-300: #a2b9d6;
-  --color-slate-400: #7a98bd;
-  --color-slate-500: #4a4a4a;
-  --color-slate-600: #3f3f3f;
-  --color-slate-700: #333333;
-  --color-slate-800: #222222;
-  --color-slate-900: #111111;
-  --color-slate-950: #0a0a0a;
+  --color-slate-400: #000000;
+  --color-slate-500: #000000;
+  --color-slate-600: #000000;
+  --color-slate-700: #000000;
+  --color-slate-800: #000000;
+  --color-slate-900: #000000;
+  --color-slate-950: #000000;
 
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --bg-main: #F4F7F6;
+  --primary: #2A9D8F;
+  --primary-hover: #21867A;
+  --accent: #E9930D;
+  --card-bg: #FFFFFF;
+  --text-main: #000000;
+  --text-muted: #000000;
+  --border-main: #CBD5E1;
+  --input-bg: #FFFFFF;
+  --bubble-color: #E9930D;
+  --header-bg: #FFFFFF;
+  --header-text: #000000;
+  --footer-selected: #2A9D8F;
+  --username-color: #000000;
 }
 
 /* ==========================================================
@@ -146,11 +163,75 @@ html.font-size-xl .text-\[12px\] {
   font-size: 0.95rem !important;
 }
 
+/* ==========================================================
+   DEFAULT THEME / MEETING ROOM HIGH-CONTRAST READABILITY
+   All text across the entire portal is crisp solid black (#000000).
+   Any status indicators, tags, badges, or alerts use background
+   highlighting rather than colored text fonts.
+   ========================================================== */
 body {
-  background-color: #FFFFFF;
-  color: #333333;
+  background-color: var(--bg-main, #F4F7F6);
+  color: var(--text-main, #000000);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Ensure common text utilities and muted elements resolve to solid black */
+.text-muted,
+.text-secondary,
+.text-subtle {
+  color: #000000 !important;
+}
+
+/* Highlight chips & badges: retain colored background highlights with high-visibility black text */
+[class*="bg-emerald-100"][class*="text-"],
+[class*="bg-emerald-500/"][class*="text-"],
+[class*="bg-emerald-50"][class*="text-"],
+[class*="bg-teal-100"][class*="text-"],
+[class*="bg-teal-500/"][class*="text-"],
+[class*="bg-teal-50"][class*="text-"],
+[class*="bg-amber-100"][class*="text-"],
+[class*="bg-amber-500/"][class*="text-"],
+[class*="bg-amber-50"][class*="text-"],
+[class*="bg-orange-100"][class*="text-"],
+[class*="bg-orange-500/"][class*="text-"],
+[class*="bg-orange-50"][class*="text-"],
+[class*="bg-yellow-100"][class*="text-"],
+[class*="bg-yellow-500/"][class*="text-"],
+[class*="bg-yellow-50"][class*="text-"],
+[class*="bg-rose-100"][class*="text-"],
+[class*="bg-rose-500/"][class*="text-"],
+[class*="bg-rose-50"][class*="text-"],
+[class*="bg-red-100"][class*="text-"],
+[class*="bg-red-500/"][class*="text-"],
+[class*="bg-red-50"][class*="text-"],
+[class*="bg-blue-100"][class*="text-"],
+[class*="bg-blue-500/"][class*="text-"],
+[class*="bg-blue-50"][class*="text-"],
+[class*="bg-sky-100"][class*="text-"],
+[class*="bg-sky-500/"][class*="text-"],
+[class*="bg-sky-50"][class*="text-"],
+[class*="bg-cyan-100"][class*="text-"],
+[class*="bg-cyan-500/"][class*="text-"],
+[class*="bg-purple-100"][class*="text-"],
+[class*="bg-purple-500/"][class*="text-"],
+[class*="bg-indigo-100"][class*="text-"],
+[class*="bg-indigo-500/"][class*="text-"] {
+  color: #000000 !important;
+}
+
+/* Ensure solid white buttons stay white */
+.text-white,
+.text-slate-50,
+.text-slate-100,
+button[class*="bg-teal-600"],
+button[class*="bg-emerald-600"],
+button[class*="bg-blue-600"],
+button[class*="bg-rose-600"],
+button[class*="bg-red-600"],
+button[class*="bg-slate-800"],
+button[class*="bg-slate-900"] {
+  color: #ffffff;
 }
 
 /* Custom Scrollbar for a sleek look */

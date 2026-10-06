@@ -494,9 +494,9 @@ export default function App() {
       }
     } catch(e) {}
     return {
-      morning: { '--bg-main': '#FFFFFF', '--primary': '#2A9D8F', '--primary-hover': '#23A3B4', '--accent': '#E9930D', '--card-bg': '#FFFFFF', '--text-main': '#333333', '--text-muted': '#4A4A4A', '--border-main': '#DCE8F8', '--input-bg': '#FFFFFF', '--bubble-color': '#E9930D', '--header-bg': '#FFFFFF', '--header-text': '#1E293B', '--footer-selected': '#2A9D8F' },
-      afternoon: { '--bg-main': '#FFFFFF', '--primary': '#2A9D8F', '--primary-hover': '#23A3B4', '--accent': '#E9930D', '--card-bg': '#FFFFFF', '--text-main': '#333333', '--text-muted': '#4A4A4A', '--border-main': '#DCE8F8', '--input-bg': '#FFFFFF', '--bubble-color': '#E9930D', '--header-bg': '#FFFFFF', '--header-text': '#1E293B', '--footer-selected': '#2A9D8F' },
-      evening: { '--bg-main': '#0F172A', '--primary': '#2A9D8F', '--primary-hover': '#23A3B4', '--accent': '#E9930D', '--card-bg': '#1E293B', '--text-main': '#F8FAFC', '--text-muted': '#94A3B8', '--border-main': '#334155', '--input-bg': '#0F172A', '--bubble-color': '#E9930D', '--header-bg': '#1E293B', '--header-text': '#F8FAFC', '--footer-selected': '#2A9D8F' }
+      morning: { '--bg-main': '#F4F7F6', '--primary': '#2A9D8F', '--primary-hover': '#21867A', '--accent': '#E9930D', '--card-bg': '#FFFFFF', '--text-main': '#000000', '--text-muted': '#000000', '--border-main': '#CBD5E1', '--input-bg': '#FFFFFF', '--bubble-color': '#E9930D', '--header-bg': '#FFFFFF', '--header-text': '#000000', '--footer-selected': '#2A9D8F', '--username-color': '#000000' },
+      afternoon: { '--bg-main': '#F4F7F6', '--primary': '#2A9D8F', '--primary-hover': '#21867A', '--accent': '#E9930D', '--card-bg': '#FFFFFF', '--text-main': '#000000', '--text-muted': '#000000', '--border-main': '#CBD5E1', '--input-bg': '#FFFFFF', '--bubble-color': '#E9930D', '--header-bg': '#FFFFFF', '--header-text': '#000000', '--footer-selected': '#2A9D8F', '--username-color': '#000000' },
+      evening: { '--bg-main': '#0F172A', '--primary': '#2A9D8F', '--primary-hover': '#21867A', '--accent': '#E9930D', '--card-bg': '#1E293B', '--text-main': '#F8FAFC', '--text-muted': '#94A3B8', '--border-main': '#334155', '--input-bg': '#0F172A', '--bubble-color': '#E9930D', '--header-bg': '#1E293B', '--header-text': '#F8FAFC', '--footer-selected': '#2A9D8F', '--username-color': '#2A9D8F' }
     };
   });
 
@@ -1222,7 +1222,7 @@ export default function App() {
     <div className="flex w-full min-h-[100dvh] overflow-hidden" style={{ backgroundColor: 'var(--bg-main, #F4F7F6)' }}>
       <div 
         className="flex-1 relative transition-all duration-300 overflow-x-hidden overflow-y-auto h-[100dvh]"
-        style={{ backgroundColor: 'var(--bg-main, #F4F7F6)', color: 'var(--text-main, #333)' }}
+        style={{ backgroundColor: 'var(--bg-main, #F4F7F6)', color: 'var(--text-main, #000000)' }}
       >
         {appEnv === 'staging' && (
           <div className="w-full bg-orange-500 text-white text-xs font-bold py-1 px-4 text-center z-[100] relative tracking-widest uppercase">

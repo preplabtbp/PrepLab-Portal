@@ -1,110 +1,125 @@
 import fs from 'fs';
 import path from 'path';
-import { db } from '../src/db';
-import { employees } from '../src/db/schema';
+import { db, pool } from '../src/db/index.js';
+import { employees } from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { fileURLToPath } from 'url';
+import Papa from 'papaparse';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-function parseCSVLine(line: string): string[] {
-  const re = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
-  return line.split(re).map(x => x.replace(/^"|"$/g, '').trim());
-}
-
 async function run() {
   console.log('Starting employee data import...');
-  const csvPath = path.resolve(__dirname, '../data.csv');
+  const targetArg = process.argv[2];
+  const csvPath = targetArg ? path.resolve(process.cwd(), targetArg) : path.resolve(__dirname, '../data.csv');
   
   if (!fs.existsSync(csvPath)) {
-    console.error('File data.csv not found at', csvPath);
+    console.error('File not found at:', csvPath);
     process.exit(1);
   }
 
   const content = fs.readFileSync(csvPath, 'utf8');
-  const lines = content.split(/\r?\n/).filter(line => line.trim().length > 0);
-  
-  if (lines.length < 2) {
-    console.error('CSV is empty or only has headers');
-    process.exit(1);
-  }
+  const parsed = Papa.parse<Record<string, string>>(content, {
+    header: true,
+    skipEmptyLines: true,
+  });
 
-  const headers = parseCSVLine(lines[0]);
-  console.log('Headers parsed:', headers.length, 'columns');
+  const rows = parsed.data;
+  console.log(`Parsed ${rows.length} rows from ${csvPath}`);
 
-  let successCount = 0;
+  let updatedCount = 0;
+  let insertedCount = 0;
   let errorCount = 0;
 
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    const row = parseCSVLine(line);
-    
-    if (row.length < 28) {
-      console.warn(`Line ${i+1} has fewer columns than expected (${row.length}), skipping...`);
+  for (let i = 0; i < rows.length; i++) {
+    const raw = rows[i];
+    if (!raw) continue;
+
+    // Normalize keys
+    const normalized: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      const cleanK = String(k || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (cleanK) {
+        normalized[cleanK] = v !== undefined && v !== null ? String(v).trim() : '';
+      }
+    }
+
+    const nik = normalized['nik'] || '';
+    if (!nik || nik === '#N/A' || nik.toUpperCase().includes('DEMO')) {
       continue;
     }
 
-    const rowObj = {
-      // 0: No.
-      name: row[1],
-      nik: row[2],
-      ktp: row[3],
-      pt: row[4],
-      poh: row[5],
-      sponsor: row[6],
-      statusKaryawan: row[7],
-      tanggalAwalBergabung: row[8],
-      tanggalJabatanBaru: row[9],
-      masaKerja: row[10],
-      masaKerjaJabatanTerakhir: row[11],
-      department: row[12],
-      section: row[13],
-      jobGrade: row[14],
-      gol: row[15],
-      jabatan: row[16],
-      statusKontrak: row[17],
-      tanggalPermanent: row[18],
-      tempatLahir: row[19],
-      tanggalLahir: row[20],
-      phone: row[21],
-      keluargaKandung: row[22],
-      phoneKeluarga: row[23],
-      orangTerdekat: row[24],
-      phoneDarurat: row[25],
-      alamatKtp: row[26],
-      alamatDomisili: row[27],
+    const name = normalized['nama'] || normalized['name'] || '';
+    if (!name || name === '#N/A') {
+      continue;
+    }
+
+    const foto = normalized['foto'] || normalized['photo'] || normalized['avatar'] || null;
+
+    const empData: Record<string, any> = {
+      name,
+      nik,
+      ktp: normalized['noktp'] || normalized['ktp'] || normalized['nikktp'] || null,
+      pt: normalized['pt'] || normalized['perusahaan'] || null,
+      poh: normalized['poh'] || null,
+      sponsor: normalized['sponsor'] || null,
+      statusKaryawan: normalized['statuskaryawan'] || normalized['status'] || null,
+      tanggalEfektifTidakBekerja: normalized['tanggalefektiftidakbekerja'] || normalized['tgleftidakbekerja'] || normalized['tanggaltidakbekerja'] || normalized['efektiftidakbekerja'] || null,
+      tanggalAwalBergabung: normalized['dohawal'] || normalized['doh'] || normalized['tanggalawalbergabung'] || null,
+      tanggalJabatanBaru: normalized['tanggaljabatanbaru'] || normalized['tgljabatanbaru'] || null,
+      masaKerja: normalized['masakerja'] || null,
+      masaKerjaJabatanTerakhir: normalized['masakerjajabatanterakhir'] || normalized['masakerjajabatan'] || null,
+      department: normalized['departemen'] || normalized['department'] || null,
+      section: normalized['bagian'] || normalized['section'] || null,
+      jobGrade: normalized['jobgrade'] || null,
+      gol: normalized['gol'] || normalized['golongan'] || null,
+      jabatan: normalized['jabatanbaru'] || normalized['jabatan'] || null,
+      statusKontrak: normalized['statuskontrak'] || null,
+      tanggalPermanent: normalized['tanggalpermanent'] || normalized['tanggalpermanen'] || null,
+      tempatLahir: normalized['tempatlahir'] || null,
+      tanggalLahir: normalized['tanggallahir'] || null,
+      phone: normalized['nomortelppribadi'] || normalized['notelp'] || normalized['nomortelp'] || normalized['phone'] || null,
+      keluargaKandung: normalized['keluargakandungyangbisadihubungi'] || normalized['keluargakandung'] || normalized['kelkandung'] || null,
+      phoneKeluarga: normalized['notelephonekeluargakandung'] || normalized['notelpkeluarga'] || normalized['telpkel'] || normalized['telpkeluarga'] || null,
+      orangTerdekat: normalized['orangterdekatyangbisadihubungi'] || normalized['orangterdekat'] || normalized['orgterdekat'] || null,
+      phoneDarurat: normalized['notelephonedaruratorangterdekat'] || normalized['notelpdarurat'] || normalized['telpdarurat'] || null,
+      alamatKtp: normalized['alamatsesuaiktp'] || normalized['alamatktp'] || null,
+      alamatDomisili: normalized['alamatdomisili'] || normalized['domisili'] || null,
+      ...(foto ? { avatar: foto } : {})
     };
 
-    if (!rowObj.nik || rowObj.nik === '#N/A') {
-      console.warn(`Line ${i+1} has invalid NIK (${rowObj.nik}), skipping...`);
-      errorCount++;
-      continue;
+    const cleanEmpData: Record<string, any> = {};
+    for (const [k, v] of Object.entries(empData)) {
+      if (v !== null && v !== undefined && v !== '') {
+        cleanEmpData[k] = v;
+      }
     }
 
     try {
-      // Check if exists
-      const existing = await db.select().from(employees).where(eq(employees.nik, rowObj.nik)).limit(1);
-
+      const existing = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
       if (existing.length > 0) {
-        await db.update(employees).set(rowObj).where(eq(employees.nik, rowObj.nik));
-        console.log(`Updated NIK: ${rowObj.nik}`);
+        await db.update(employees).set(cleanEmpData).where(eq(employees.nik, nik));
+        updatedCount++;
       } else {
-        await db.insert(employees).values(rowObj);
-        console.log(`Inserted NIK: ${rowObj.nik}`);
+        await db.insert(employees).values(empData as any);
+        insertedCount++;
       }
-      successCount++;
     } catch (err: any) {
-      console.error(`Error processing NIK ${rowObj.nik}:`, err.message);
       errorCount++;
+      console.error(`Error processing NIK ${nik}:`, err.message);
     }
   }
 
-  console.log(`\nImport complete. Success: ${successCount}, Errors: ${errorCount}`);
+  console.log(`\nImport complete! Updated: ${updatedCount}, Inserted: ${insertedCount}, Errors: ${errorCount}`);
+  await pool.end();
   process.exit(0);
 }
 
-run().catch(err => {
+run().catch(async (err) => {
   console.error('Fatal error:', err);
+  await pool.end();
   process.exit(1);
 });
+
+
