@@ -436,37 +436,52 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     Status & Kehadiran
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-[#369CA3] rounded-2xl p-4 text-white shadow-md">
-                      <p className="text-white text-xs uppercase font-bold tracking-wider mb-1">Status Karyawan</p>
-                      <p className="font-extrabold text-base text-white">{selectedEmployee.statusKaryawan || '-'}</p>
+                    {/* Status Karyawan */}
+                    <div className="bg-gradient-to-br from-[#38AEB8] via-[#2BA1AA] to-[#1C7F88] rounded-2xl p-4 text-white shadow-md shadow-[#2BA1AA]/20 border border-white/25 relative overflow-hidden group hover:shadow-lg transition-all">
+                      <div className="absolute top-0 right-0 w-16 h-16 bg-white/10 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"></div>
+                      <p className="text-[#E2F9FB] text-[11px] uppercase font-extrabold tracking-wider mb-1 relative z-10">Status Karyawan</p>
+                      <p className="font-black text-lg text-white drop-shadow-xs relative z-10">{selectedEmployee.statusKaryawan || '-'}</p>
                     </div>
-                    <div className="bg-[#f09b13] rounded-2xl p-4 text-white shadow-md">
-                      <p className="text-[#fef6e7] text-xs uppercase font-bold tracking-wider mb-1">Status Kontrak</p>
-                      <p className="font-extrabold text-base">{selectedEmployee.statusKontrak || '-'}</p>
+
+                    {/* Status Kontrak */}
+                    <div className="bg-gradient-to-br from-[#F5A623] via-[#E89516] to-[#C97906] rounded-2xl p-4 text-white shadow-md shadow-[#E89516]/20 border border-white/25 relative overflow-hidden group hover:shadow-lg transition-all">
+                      <div className="absolute top-0 right-0 w-16 h-16 bg-white/10 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"></div>
+                      <p className="text-[#FEF6E7] text-[11px] uppercase font-extrabold tracking-wider mb-1 relative z-10">Status Kontrak</p>
+                      <p className="font-black text-lg text-white drop-shadow-xs relative z-10">{selectedEmployee.statusKontrak || '-'}</p>
                     </div>
+
+                    {/* Tgl Efektif Tidak Bekerja (Conditional) */}
                     {selectedEmployee.tanggalEfektifTidakBekerja && (
-                      <div className="col-span-2 bg-gradient-to-br from-rose-600 to-rose-700 rounded-2xl p-4 text-white shadow-md flex justify-between items-center">
-                        <div>
-                          <p className="text-rose-100 text-xs uppercase font-bold tracking-wider mb-1">Tgl Efektif Tidak Bekerja</p>
-                          <p className="font-bold">{selectedEmployee.tanggalEfektifTidakBekerja}</p>
+                      <div className="col-span-2 bg-gradient-to-br from-[#E13B56] via-[#CB2440] to-[#A8162E] rounded-2xl p-4 text-white shadow-md shadow-[#CB2440]/20 border border-white/25 flex justify-between items-center relative overflow-hidden">
+                        <div className="relative z-10">
+                          <p className="text-[#FDE8EC] text-[11px] uppercase font-extrabold tracking-wider mb-1">Tgl Efektif Tidak Bekerja</p>
+                          <p className="font-black text-base drop-shadow-xs">{selectedEmployee.tanggalEfektifTidakBekerja}</p>
                         </div>
-                        <Calendar className="w-6 h-6 text-rose-200 opacity-60" />
+                        <Calendar className="w-6 h-6 text-white/60 relative z-10" />
                       </div>
                     )}
-                    <div className="bg-[#369CA3] rounded-2xl p-4 text-white shadow-md">
-                      <p className="text-white text-xs uppercase font-bold tracking-wider mb-1">Sisa Cuti (CT)</p>
-                      <p className="font-extrabold text-lg text-white">{selectedEmployee.sisaCt || '-'}</p>
+
+                    {/* Sisa Cuti (CT) */}
+                    <div className="bg-gradient-to-br from-[#32A8B2] via-[#24959E] to-[#18757D] rounded-2xl p-4 text-white shadow-md shadow-[#24959E]/20 border border-white/25 relative overflow-hidden group hover:shadow-lg transition-all">
+                      <div className="absolute top-0 right-0 w-16 h-16 bg-white/10 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"></div>
+                      <p className="text-[#E2F9FB] text-[11px] uppercase font-extrabold tracking-wider mb-1 relative z-10">Sisa Cuti (CT)</p>
+                      <p className="font-black text-2xl text-white drop-shadow-xs relative z-10">{selectedEmployee.sisaCt || '-'}</p>
                     </div>
-                    <div className="bg-[#369CA3] rounded-2xl p-4 text-white shadow-md">
-                      <p className="text-white text-xs uppercase font-bold tracking-wider mb-1">Jatuh Tempo CT</p>
-                      <p className="font-extrabold text-white">{selectedEmployee.jatuhTempoCt || '-'}</p>
+
+                    {/* Jatuh Tempo CT */}
+                    <div className="bg-gradient-to-br from-[#248D96] via-[#1A7780] to-[#125B63] rounded-2xl p-4 text-white shadow-md shadow-[#1A7780]/20 border border-white/25 relative overflow-hidden group hover:shadow-lg transition-all">
+                      <div className="absolute top-0 right-0 w-16 h-16 bg-white/10 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"></div>
+                      <p className="text-[#D4F3F5] text-[11px] uppercase font-extrabold tracking-wider mb-1 relative z-10">Jatuh Tempo CT</p>
+                      <p className="font-black text-base text-white drop-shadow-xs relative z-10">{selectedEmployee.jatuhTempoCt || '-'}</p>
                     </div>
-                    <div className="col-span-2 bg-gradient-to-r from-[#558ED5] to-[#4379be] rounded-xl p-4 text-white shadow-md flex justify-between items-center">
-                      <div>
-                        <p className="text-[#e3eeff] text-xs uppercase font-bold tracking-wider mb-1">Tanggal Permanen</p>
-                        <p className="font-extrabold text-base">{selectedEmployee.tanggalPermanent || '-'}</p>
+
+                    {/* Tanggal Permanen */}
+                    <div className="col-span-2 bg-gradient-to-br from-[#5B95DE] via-[#4680C8] to-[#346AAE] rounded-2xl p-4 text-white shadow-md shadow-[#4680C8]/20 border border-white/25 flex justify-between items-center relative overflow-hidden group hover:shadow-lg transition-all">
+                      <div className="relative z-10">
+                        <p className="text-[#E3EEFF] text-[11px] uppercase font-extrabold tracking-wider mb-1">Tanggal Permanen</p>
+                        <p className="font-black text-base drop-shadow-xs">{selectedEmployee.tanggalPermanent || '-'}</p>
                       </div>
-                      <Calendar className="w-8 h-8 text-white/50" />
+                      <Calendar className="w-8 h-8 text-white/50 relative z-10" />
                     </div>
                   </div>
                 </div>
