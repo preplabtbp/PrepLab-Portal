@@ -363,14 +363,15 @@ Sebagai Supervisor, Anda memiliki modul tambahan "Temuan Inspeksi K3 Terbuka" un
 
   return createPortal(
     <div className="fixed inset-0 z-[99999] pointer-events-auto">
-      {/* Dark overlay backdrop with subtle blur */}
+      {/* Click outside backdrop to dismiss/skip (Transparent click listener without blur or dark fill) */}
       <div 
         onClick={() => handleFinish(true)}
-        className="fixed inset-0 bg-black/70 backdrop-blur-[2px] transition-all duration-300"
+        className="fixed inset-0 z-[99998] cursor-pointer"
+        aria-label="Tutup tutorial"
       />
 
-      {/* Target Element Spotlight Highlight */}
-      {targetRect && (
+      {/* Target Element Spotlight Highlight (boxShadow creates the darkened area outside, while inside stays 100% crystal clear and unblurred) */}
+      {targetRect ? (
         <div
           style={{
             position: 'fixed',
@@ -379,12 +380,19 @@ Sebagai Supervisor, Anda memiliki modul tambahan "Temuan Inspeksi K3 Terbuka" un
             width: `${Math.min(window.innerWidth - 12, targetRect.width + 12)}px`,
             height: `${targetRect.height + 12}px`,
             borderRadius: '16px',
-            boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.7), 0 0 25px rgba(20, 184, 166, 0.7)',
-            border: '2px solid rgba(45, 212, 191, 0.9)',
+            backgroundColor: 'transparent',
+            boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.75), 0 0 25px rgba(20, 184, 166, 0.65)',
+            border: '2px solid rgba(45, 212, 191, 0.95)',
             pointerEvents: 'none',
             zIndex: 99999,
             transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
           }}
+        />
+      ) : (
+        /* Fallback dark overlay if target rect has not yet measured */
+        <div 
+          onClick={() => handleFinish(true)}
+          className="fixed inset-0 bg-black/75 z-[99999] transition-all duration-300"
         />
       )}
 
