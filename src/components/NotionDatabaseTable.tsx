@@ -3371,86 +3371,18 @@ export function NotionDatabaseTable({
         <div 
           ref={tableScrollRef}
           onScroll={handleTableScroll}
-          className={`overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] min-h-[420px] w-full transition-all pb-1 rounded-b-xl ${
-            isNotionLight ? 'notion-table-scroll-light' : 'notion-table-scroll-dark'
-          }`}
+          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] min-h-[420px] w-full transition-all pb-1 rounded-b-xl notion-table-scroll-hide"
           style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
         >
           <style>{`
-            .notion-table-scroll-light {
-              scrollbar-color: transparent transparent;
-              scrollbar-width: thin;
-              transition: scrollbar-color 0.2s ease;
+            .notion-table-scroll-hide {
+              scrollbar-width: none;
+              -ms-overflow-style: none;
             }
-            .notion-table-scroll-light:hover {
-              scrollbar-color: #0d9488 rgba(241, 245, 249, 0.7);
-            }
-            .notion-table-scroll-light::-webkit-scrollbar {
-              width: 5px;
-              height: 5px;
-              transition: all 0.2s ease;
-            }
-            .notion-table-scroll-light:hover::-webkit-scrollbar {
-              height: 6px;
-              width: 6px;
-            }
-            .notion-table-scroll-light::-webkit-scrollbar-track {
-              background: transparent;
-              border-radius: 9999px;
-            }
-            .notion-table-scroll-light:hover::-webkit-scrollbar-track {
-              background: rgba(241, 245, 249, 0.7);
-            }
-            .notion-table-scroll-light::-webkit-scrollbar-thumb {
-              background: transparent;
-              border-radius: 9999px;
-              transition: all 0.2s ease;
-            }
-            .notion-table-scroll-light:hover::-webkit-scrollbar-thumb {
-              background: #0d9488;
-              box-shadow: 0 1px 4px rgba(13, 148, 136, 0.4);
-            }
-            .notion-table-scroll-light::-webkit-scrollbar-thumb:hover {
-              background: #0f766e;
-              box-shadow: 0 0 8px rgba(15, 118, 110, 0.6);
-            }
-
-            .notion-table-scroll-dark {
-              scrollbar-color: transparent transparent;
-              scrollbar-width: thin;
-              transition: scrollbar-color 0.2s ease;
-            }
-            .notion-table-scroll-dark:hover {
-              scrollbar-color: #14b8a6 rgba(24, 24, 27, 0.7);
-            }
-            .notion-table-scroll-dark::-webkit-scrollbar {
-              width: 5px;
-              height: 5px;
-              transition: all 0.2s ease;
-            }
-            .notion-table-scroll-dark:hover::-webkit-scrollbar {
-              height: 6px;
-              width: 6px;
-            }
-            .notion-table-scroll-dark::-webkit-scrollbar-track {
-              background: transparent;
-              border-radius: 9999px;
-            }
-            .notion-table-scroll-dark:hover::-webkit-scrollbar-track {
-              background: rgba(24, 24, 27, 0.7);
-            }
-            .notion-table-scroll-dark::-webkit-scrollbar-thumb {
-              background: transparent;
-              border-radius: 9999px;
-              transition: all 0.2s ease;
-            }
-            .notion-table-scroll-dark:hover::-webkit-scrollbar-thumb {
-              background: #14b8a6;
-              box-shadow: 0 1px 6px rgba(20, 184, 166, 0.45);
-            }
-            .notion-table-scroll-dark::-webkit-scrollbar-thumb:hover {
-              background: #2dd4bf;
-              box-shadow: 0 0 10px rgba(45, 212, 191, 0.7);
+            .notion-table-scroll-hide::-webkit-scrollbar {
+              display: none;
+              width: 0;
+              height: 0;
             }
 
             .notion-floating-scroll-light {
@@ -3458,7 +3390,7 @@ export function NotionDatabaseTable({
               scrollbar-width: thin;
             }
             .notion-floating-scroll-light::-webkit-scrollbar {
-              height: 6px;
+              height: 7px;
             }
             .notion-floating-scroll-light::-webkit-scrollbar-track {
               background: rgba(241, 245, 249, 0.85);
@@ -3479,7 +3411,7 @@ export function NotionDatabaseTable({
               scrollbar-width: thin;
             }
             .notion-floating-scroll-dark::-webkit-scrollbar {
-              height: 6px;
+              height: 7px;
             }
             .notion-floating-scroll-dark::-webkit-scrollbar-track {
               background: rgba(24, 24, 27, 0.85);
