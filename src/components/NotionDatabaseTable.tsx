@@ -683,6 +683,24 @@ export function NotionDatabaseTable({
     setCollapsedGroups(prev => ({ ...prev, [grp]: !prev[grp] }));
   };
 
+  // Sticky Controls Height & Position Measurement for Freezing Table Column Headers
+  const [controlsBottom, setControlsBottom] = useState<number>(158);
+  const controlsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = controlsRef.current;
+    if (!el) return;
+    const updatePos = () => {
+      if (el) {
+        setControlsBottom(48 + (el.offsetHeight || 110));
+      }
+    };
+    updatePos();
+    const obs = new ResizeObserver(updatePos);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
   // Helper to categorize rows into Notion Database Groups (e.g. 'Non Routine Lainnya', 'PTK GTS')
   const getRowGroup = useCallback((row: TableRowData): string => {
     const gVal = 
@@ -3030,49 +3048,12 @@ export function NotionDatabaseTable({
       {/* NOTION TOP CONTROLS & HEADER GROUP (Breadcrumbs, Toolbar, Filter)         */}
       {/* ========================================================================= */}
       <div 
+        ref={controlsRef}
         className={`sticky top-12 z-30 transition-all border-b shadow-2xs backdrop-blur-md ${
           isNotionLight ? 'bg-white/98 border-slate-200' : 'bg-[#181818]/98 border-[#2d2d2d]'
         }`}
       >
-        {/* 1. NOTION BREADCRUMBS & TOP BAR (Matching Notion Screenshot) */}
-        <div 
-          className={`px-4 py-2.5 border-b flex items-center justify-between text-xs transition-colors select-none ${
-            isNotionLight 
-              ? 'bg-white/90 border-slate-200/90 text-slate-800' 
-              : 'bg-[#1e1e1e]/90 border-slate-800 text-slate-300'
-          }`}
-        >
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <span className="text-amber-500 font-bold">⚡</span>
-          <span className={`font-semibold ${isNotionLight ? 'text-slate-800' : 'text-slate-200'}`}>{pt || 'PT. TBP & GPS'}</span>
-          <span className="text-slate-400">/</span>
-          <span className="text-slate-500">🗄️</span>
-          <span className={`font-semibold ${isNotionLight ? 'text-slate-800' : 'text-slate-200'}`}>{section || 'ADMINISTRASI'}</span>
-          <span className="text-slate-400">/</span>
-          <span className={`font-bold ${isNotionLight ? 'text-slate-900' : 'text-white'}`}>{title || 'Non Routine'}</span>
-        </div>
-        <div className="flex items-center gap-2.5 text-[11px] text-slate-400 shrink-0">
-          <span className="hidden sm:inline">Edited today</span>
-          <div className="flex items-center -space-x-1.5 overflow-hidden">
-            <div className="inline-block h-5 w-5 rounded-full ring-2 ring-white bg-teal-600 text-white text-[9px] font-bold flex items-center justify-center">M</div>
-            <div className="inline-block h-5 w-5 rounded-full ring-2 ring-white bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center">A</div>
-            <div className="inline-block h-5 w-5 rounded-full ring-2 ring-white bg-slate-400 text-white text-[9px] font-bold flex items-center justify-center">+24</div>
-          </div>
-          <button 
-            type="button" 
-            onClick={() => toast.info('Tautan dokumen tersalin ke clipboard')}
-            className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${
-              isNotionLight 
-                ? 'border-slate-300 bg-white hover:bg-slate-100 text-slate-700' 
-                : 'border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300'
-            }`}
-          >
-            Share
-          </button>
-        </div>
-      </div>
-
-      {/* Top Header Bar */}
+        {/* Top Header Bar */}
       <div 
         className={`p-3.5 sm:p-4 border-b flex flex-wrap items-center justify-between gap-3 ${
           isNotionLight ? 'bg-[#fafafa] border-slate-200' : 'bg-[#202020] border-[#2d2d2d]'
@@ -3464,14 +3445,15 @@ export function NotionDatabaseTable({
             {/* Table Header */}
             <thead>
               <tr 
-                className={`border-b select-none transition-colors ${
-                  isNotionLight
-                    ? 'bg-[#fbfbfa] border-slate-200 text-slate-600'
-                    : 'bg-[#242424] border-[#303030] text-slate-400'
-                }`}
+                className="border-b select-none transition-colors"
               >
                 {/* Select All Checkbox Column */}
-                <th className={`text-center ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}>
+                <th 
+                  style={{ top: `${controlsBottom}px` }}
+                  className={`sticky z-20 text-center shadow-2xs ${
+                    isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#202020] text-slate-300 border-b border-[#303030]'
+                  } ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}
+                >
                   <div className="flex items-center justify-center">
                     <input
                       type="checkbox"
@@ -3520,8 +3502,10 @@ export function NotionDatabaseTable({
                   return (
                     <th
                       key={colHeader}
-                      style={getColStyle(colHeader)}
-                      className={`font-bold hover:opacity-90 transition-opacity group/th relative ${widthClass}`}
+                      style={{ top: `${controlsBottom}px`, ...getColStyle(colHeader) }}
+                      className={`sticky z-20 shadow-2xs font-bold hover:opacity-90 transition-opacity group/th relative ${
+                        isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#202020] text-slate-300 border-b border-[#303030]'
+                      } ${widthClass}`}
                     >
                       <div className={`flex items-center justify-between gap-1.5 ${isNum ? 'justify-center' : ''}`}>
                         <div 
@@ -3612,7 +3596,13 @@ export function NotionDatabaseTable({
                 })}
 
                 {/* Add Column Header Button (+) */}
-                <th className="w-10 text-center px-1 py-2 relative" ref={addColumnRef}>
+                <th 
+                  style={{ top: `${controlsBottom}px` }}
+                  className={`sticky z-20 w-10 text-center px-1 py-2 relative shadow-2xs ${
+                    isNotionLight ? 'bg-[#fbfbfa] border-b border-slate-200' : 'bg-[#202020] border-b border-[#303030]'
+                  }`} 
+                  ref={addColumnRef}
+                >
                   <button
                     type="button"
                     onClick={(e) => {
@@ -3735,7 +3725,14 @@ export function NotionDatabaseTable({
                   )}
                 </th>
 
-                <th className={`text-center ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${isNotionLight ? 'text-slate-500 font-semibold' : 'text-slate-400 font-bold'}`}>Aksi</th>
+                <th 
+                  style={{ top: `${controlsBottom}px` }}
+                  className={`sticky z-20 text-center shadow-2xs ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${
+                    isNotionLight ? 'bg-[#fbfbfa] text-slate-500 font-semibold border-b border-slate-200' : 'bg-[#202020] text-slate-400 font-bold border-b border-[#303030]'
+                  }`}
+                >
+                  Aksi
+                </th>
               </tr>
             </thead>
 
