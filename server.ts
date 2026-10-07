@@ -97,6 +97,37 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_name TEXT;`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_content TEXT;`);
     
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS employee_attendance (
+      id SERIAL PRIMARY KEY,
+      nik TEXT NOT NULL,
+      name TEXT,
+      year INTEGER DEFAULT 2026 NOT NULL,
+      izin INTEGER DEFAULT 0,
+      izin_khusus INTEGER DEFAULT 0,
+      sakit INTEGER DEFAULT 0,
+      sakit_site_count INTEGER DEFAULT 0,
+      sakit_luar_count INTEGER DEFAULT 0,
+      alpa INTEGER DEFAULT 0,
+      tanggal_izin TEXT,
+      tanggal_izin_khusus TEXT,
+      tanggal_sakit_site TEXT,
+      tanggal_sakit_luar TEXT,
+      tanggal_alpa TEXT,
+      alasan_izin TEXT,
+      alasan_izin_khusus TEXT,
+      alasan_sakit_site TEXT,
+      alasan_sakit_luar TEXT,
+      alasan_sakit TEXT,
+      details JSONB,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_attendance_nik_year ON employee_attendance(nik, year);`);
+    await db.execute(sql`ALTER TABLE employee_attendance ADD COLUMN IF NOT EXISTS alasan_izin_khusus TEXT;`);
+    await db.execute(sql`ALTER TABLE employee_attendance ADD COLUMN IF NOT EXISTS alasan_sakit_site TEXT;`);
+    await db.execute(sql`ALTER TABLE employee_attendance ADD COLUMN IF NOT EXISTS alasan_sakit_luar TEXT;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS attendance_data JSONB;`);
+
     await db.execute(sql`CREATE TABLE IF NOT EXISTS rekap_manual_overrides (
       id SERIAL PRIMARY KEY,
       week TEXT NOT NULL,

@@ -38,6 +38,9 @@ async function getAttendanceMap(): Promise<Record<string, any>> {
         tanggalSakitLuar: item.tanggalSakitLuar || '',
         tanggalAlpa: item.tanggalAlpa || '',
         alasanIzin: item.alasanIzin || '',
+        alasanIzinKhusus: item.alasanIzinKhusus || '',
+        alasanSakitSite: item.alasanSakitSite || '',
+        alasanSakitLuar: item.alasanSakitLuar || '',
         alasanSakit: item.alasanSakit || '',
         details: item.details || []
       };
@@ -65,6 +68,9 @@ function attachAttendanceToEmployee(e: any, attMap: Record<string, any>) {
     tanggalSakitLuar: '',
     tanggalAlpa: '',
     alasanIzin: '',
+    alasanIzinKhusus: '',
+    alasanSakitSite: '',
+    alasanSakitLuar: '',
     alasanSakit: '',
     details: []
   };
@@ -625,11 +631,36 @@ employeesRouter.post("/import", async (req, res) => {
           ''
         ).trim();
 
+        const alasanIzinKhusus = String(
+          attRaw['Alasan Izin Khusus'] ?? 
+          attRaw['AlasanIzinKhusus'] ?? 
+          attNorm['alasanizinkhusus'] ?? 
+          ''
+        ).trim();
+
+        const alasanSakitSite = String(
+          attRaw['Alasan Sakit Site (SS)'] ?? 
+          attRaw['Alasan Sakit Site'] ?? 
+          attRaw['AlasanSakitSite'] ?? 
+          attNorm['alasansakitsitess'] ?? 
+          attNorm['alasansakitsite'] ?? 
+          ''
+        ).trim();
+
+        const alasanSakitLuar = String(
+          attRaw['Alasan Sakit Luar (SL)'] ?? 
+          attRaw['Alasan Sakit Luar'] ?? 
+          attRaw['AlasanSakitLuar'] ?? 
+          attNorm['alasansakitluarsl'] ?? 
+          attNorm['alasansakitluar'] ?? 
+          ''
+        ).trim();
+
         const alasanSakit = String(
           attRaw['Alasan Sakit'] ?? 
           attNorm['alasansakit'] ?? 
           ''
-        ).trim() || alasanIzin;
+        ).trim() || alasanSakitSite || alasanSakitLuar || (alasanIzin ? alasanIzin : '');
 
         const sakitSiteCount = parseCount(tanggalSakitSite);
         const sakitLuarCount = parseCount(tanggalSakitLuar);
@@ -652,6 +683,9 @@ employeesRouter.post("/import", async (req, res) => {
           tanggalSakitLuar,
           tanggalAlpa,
           alasanIzin,
+          alasanIzinKhusus,
+          alasanSakitSite,
+          alasanSakitLuar,
           alasanSakit,
           updatedAt: new Date()
         };
@@ -686,6 +720,9 @@ employeesRouter.post("/import", async (req, res) => {
               tanggalSakitLuar,
               tanggalAlpa,
               alasanIzin,
+              alasanIzinKhusus,
+              alasanSakitSite,
+              alasanSakitLuar,
               alasanSakit
             }
           };

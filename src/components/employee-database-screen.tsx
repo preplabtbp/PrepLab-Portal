@@ -813,10 +813,18 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 );
 
                 const alasanIzinItems = parseReasonList(att26.alasanIzin);
-                const rawAlasanSakit = parseReasonList(att26.alasanSakit);
-                const alasanSakitItems = rawAlasanSakit.length > 0
-                  ? rawAlasanSakit
-                  : (att26.alasanSakit ? [String(att26.alasanSakit)] : alasanIzinItems.filter(r => /sakit|berobat|rawat|rs|opname|dokter|medis/i.test(r)));
+                const alasanIzinKhususItems = parseReasonList(att26.alasanIzinKhusus);
+                const rawAlasanSakitSite = parseReasonList(att26.alasanSakitSite);
+                const rawAlasanSakitLuar = parseReasonList(att26.alasanSakitLuar);
+                const rawLegacySakit = parseReasonList(att26.alasanSakit);
+                
+                const alasanSakitSiteItems = rawAlasanSakitSite.length > 0
+                  ? rawAlasanSakitSite
+                  : (att26.alasanSakitSite ? [String(att26.alasanSakitSite)] : rawLegacySakit.filter(r => /site|ss|klinik/i.test(r)));
+
+                const alasanSakitLuarItems = rawAlasanSakitLuar.length > 0
+                  ? rawAlasanSakitLuar
+                  : (att26.alasanSakitLuar ? [String(att26.alasanSakitLuar)] : rawLegacySakit.filter(r => /luar|sl|rs|rumah sakit|dokter luar/i.test(r)));
 
                 return (
                   <div className="mb-8">
@@ -825,8 +833,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       Tanggal Absensi 2026 & Alasan
                     </h3>
                     
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      <Card className="lg:col-span-2 p-0 overflow-hidden border-slate-200/60 shadow-sm flex flex-col">
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                      <Card className="xl:col-span-7 p-0 overflow-hidden border-slate-200/60 shadow-sm flex flex-col">
                         <div className="flex-1 overflow-x-auto">
                           <table className="w-full text-sm text-left">
                             <thead className="text-xs text-slate-600 uppercase bg-slate-50/80 border-b border-slate-200">
@@ -901,52 +909,124 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         </div>
                       </Card>
 
-                      <div className="lg:col-span-1 space-y-4">
-                        <Card className="p-4 shadow-sm border-slate-200/60 bg-white">
-                          <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
-                            <span>Alasan Izin</span>
-                            {alasanIzinItems.length > 0 && (
-                              <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold">
-                                {alasanIzinItems.length} catatan
+                      <div className="xl:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        {/* 1. Alasan Izin */}
+                        <Card className="p-3.5 shadow-sm border-slate-200/60 bg-white flex flex-col justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
+                              <span className="text-[#135e69] flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-[#22a7b8]"></span>
+                                Alasan Izin
                               </span>
-                            )}
-                          </p>
-                          <div className="bg-slate-50/80 p-3.5 rounded-xl text-sm border border-slate-100 min-h-[90px] max-h-48 overflow-y-auto">
-                            {alasanIzinItems.length > 0 ? (
-                              <ul className="space-y-2">
-                                {alasanIzinItems.map((reason, i) => (
-                                  <li key={i} className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-2 rounded-lg border border-slate-200/60 shadow-xs">
-                                    {reason}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="text-xs text-slate-400 italic">Tidak ada catatan alasan izin.</p>
-                            )}
+                              {alasanIzinItems.length > 0 && (
+                                <span className="text-[10px] bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8] px-2 py-0.5 rounded-full font-bold">
+                                  {alasanIzinItems.length}
+                                </span>
+                              )}
+                            </p>
+                            <div className="bg-slate-50/80 p-2.5 rounded-xl text-sm border border-slate-100 min-h-[75px] max-h-36 overflow-y-auto">
+                              {alasanIzinItems.length > 0 ? (
+                                <ul className="space-y-1.5">
+                                  {alasanIzinItems.map((reason, i) => (
+                                    <li key={i} className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-2 rounded-lg border border-slate-200/60 shadow-xs">
+                                      {reason}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-xs text-slate-400 italic">Tidak ada catatan alasan izin.</p>
+                              )}
+                            </div>
                           </div>
                         </Card>
 
-                        <Card className="p-4 shadow-sm border-slate-200/60 bg-white">
-                          <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
-                            <span>Alasan Sakit (Site & Luar)</span>
-                            {alasanSakitItems.length > 0 && (
-                              <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200">
-                                {alasanSakitItems.length} catatan
+                        {/* 2. Alasan Izin Khusus */}
+                        <Card className="p-3.5 shadow-sm border-slate-200/60 bg-white flex flex-col justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
+                              <span className="text-[#135e69] flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-[#135e69]"></span>
+                                Alasan Izin Khusus
                               </span>
-                            )}
-                          </p>
-                          <div className="bg-slate-50/80 p-3.5 rounded-xl text-sm border border-slate-100 min-h-[90px] max-h-48 overflow-y-auto">
-                            {alasanSakitItems.length > 0 ? (
-                              <ul className="space-y-2">
-                                {alasanSakitItems.map((reason, i) => (
-                                  <li key={i} className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-2 rounded-lg border border-slate-200/60 shadow-xs">
-                                    {reason}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="text-xs text-slate-400 italic">Tidak ada catatan alasan sakit.</p>
-                            )}
+                              {alasanIzinKhususItems.length > 0 && (
+                                <span className="text-[10px] bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8] px-2 py-0.5 rounded-full font-bold">
+                                  {alasanIzinKhususItems.length}
+                                </span>
+                              )}
+                            </p>
+                            <div className="bg-slate-50/80 p-2.5 rounded-xl text-sm border border-slate-100 min-h-[75px] max-h-36 overflow-y-auto">
+                              {alasanIzinKhususItems.length > 0 ? (
+                                <ul className="space-y-1.5">
+                                  {alasanIzinKhususItems.map((reason, i) => (
+                                    <li key={i} className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-2 rounded-lg border border-slate-200/60 shadow-xs">
+                                      {reason}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-xs text-slate-400 italic">Tidak ada catatan alasan izin khusus.</p>
+                              )}
+                            </div>
+                          </div>
+                        </Card>
+
+                        {/* 3. Alasan Sakit Site (SS) */}
+                        <Card className="p-3.5 shadow-sm border-slate-200/60 bg-white flex flex-col justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
+                              <span className="text-amber-900 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                Alasan Sakit Site (SS)
+                              </span>
+                              {alasanSakitSiteItems.length > 0 && (
+                                <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-bold">
+                                  {alasanSakitSiteItems.length}
+                                </span>
+                              )}
+                            </p>
+                            <div className="bg-slate-50/80 p-2.5 rounded-xl text-sm border border-slate-100 min-h-[75px] max-h-36 overflow-y-auto">
+                              {alasanSakitSiteItems.length > 0 ? (
+                                <ul className="space-y-1.5">
+                                  {alasanSakitSiteItems.map((reason, i) => (
+                                    <li key={i} className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-2 rounded-lg border border-slate-200/60 shadow-xs">
+                                      {reason}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-xs text-slate-400 italic">Tidak ada catatan alasan sakit site.</p>
+                              )}
+                            </div>
+                          </div>
+                        </Card>
+
+                        {/* 4. Alasan Sakit Luar (SL) */}
+                        <Card className="p-3.5 shadow-sm border-slate-200/60 bg-white flex flex-col justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
+                              <span className="text-amber-800 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                                Alasan Sakit Luar (SL)
+                              </span>
+                              {alasanSakitLuarItems.length > 0 && (
+                                <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-bold">
+                                  {alasanSakitLuarItems.length}
+                                </span>
+                              )}
+                            </p>
+                            <div className="bg-slate-50/80 p-2.5 rounded-xl text-sm border border-slate-100 min-h-[75px] max-h-36 overflow-y-auto">
+                              {alasanSakitLuarItems.length > 0 ? (
+                                <ul className="space-y-1.5">
+                                  {alasanSakitLuarItems.map((reason, i) => (
+                                    <li key={i} className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-2 rounded-lg border border-slate-200/60 shadow-xs">
+                                      {reason}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-xs text-slate-400 italic">Tidak ada catatan alasan sakit luar.</p>
+                              )}
+                            </div>
                           </div>
                         </Card>
                       </div>

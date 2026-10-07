@@ -230,7 +230,10 @@ export const ABSENSI_EMPLOYEE_COLUMNS = [
   "Sakit Site (SS)",
   "Sakit Luar (SL)",
   "Alpa (Tanggal)",
-  "Alasan Izin"
+  "Alasan Izin",
+  "Alasan Izin Khusus",
+  "Alasan Sakit Site (SS)",
+  "Alasan Sakit Luar (SL)"
 ];
 
 interface EmployeeImportModalProps {
@@ -426,22 +429,22 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
       [
         "1",
         "Deni Nugraha Perdana",
-        "", "", "", "", "", "", "", "", "", ""
+        "", "", "", "", "", "", "", "", "", "", "", "", ""
       ],
       [
         "2",
         "Arif Maulana Leway",
-        "3", "", "", "", "15-Agu-2026\n16-Agu-2026\n17-Agu-2026", "", "", "", "", "15-Aug-26 s/d 17-Aug-26 (3 Hari) - Acara Keluarga"
+        "3", "", "", "", "15-Agu-2026\n16-Agu-2026\n17-Agu-2026", "", "", "", "", "15-Aug-26 s/d 17-Aug-26 (3 Hari) - Acara Keluarga", "", "", ""
       ],
       [
         "3",
         "Donald Febri Andriano Taweli",
-        "2", "", "9", "", "16-Apr-2026\n17-Apr-2025", "", "07-Jan-2026\n08-Jan-2026\n09-Jan-2026\n10-Jan-2026\n11-Jan-2026\n12-Jan-2026\n13-Jan-2026\n14-Jan-2026\n02-Agu-2026", "", "", ""
+        "2", "", "9", "", "16-Apr-2026\n17-Apr-2025", "", "07-Jan-2026\n08-Jan-2026\n09-Jan-2026\n10-Jan-2026\n11-Jan-2026\n12-Jan-2026\n13-Jan-2026\n14-Jan-2026\n02-Agu-2026", "", "", "", "", "1. 07-Jan-26 s/d 14-Jan-26 (8 Hari) - Ispa & asma\n2. 02-Aug-26 s/d 02-Aug-26 (1 Hari) - Sakit", ""
       ],
       [
         "4",
         "Murti Tamraun Harun",
-        "6", "", "", "", "08-Mei-2026\n16-Jul-2026\n17-Jul-2026\n02-Okt-2026\n03-Okt-2026\n04-Okt-2026", "", "", "", "", "1. 08-May-26 s/d 08-May-26 (1 Hari) - Sakit\n2. 16-Jul-26 s/d 17-Jul-26 (2 Hari) - Antar Orang Tua(Mama Berobat)\n3. 02-Okt-26 s/d 04-Okt-26 (3 Hari) - Rawat Ibu di rumah sakit"
+        "6", "5", "1", "", "08-Mei-2026\n16-Jul-2026\n17-Jul-2026\n02-Okt-2026\n03-Okt-2026\n04-Okt-2026", "13-Feb-2026 s/d 17-Feb-2026", "23-Agu-2026", "", "", "1. 08-May-26 s/d 08-May-26 (1 Hari) - Sakit\n2. 16-Jul-26 s/d 17-Jul-26 (2 Hari) - Antar Orang Tua(Mama Berobat)\n3. 02-Okt-26 s/d 04-Okt-26 (3 Hari) - Rawat Ibu di rumah sakit", "1. 13-Feb-26 s/d 17-Feb-26 (5 Hari) - Menikah\n2. 07-May-26 s/d 07-May-26 (1 Hari) - Wisuda", "23-Aug-26 s/d 23-Aug-26 (1 Hari) - Sakit", ""
       ]
     ];
 
@@ -522,24 +525,36 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
       } else if (c === 5 || (clean === 'alpa' && c < 6)) {
         key = 'alpa';
         label = 'Alpa';
-      } else if (c === 6 || clean.includes('tanggalizin') || clean === 'tglizin') {
+      } else if (c === 6 || (clean.includes('tanggal') && clean.includes('izin') && !clean.includes('khusus')) || clean === 'tglizin') {
         key = 'tanggalIzin';
         label = 'Tanggal Izin';
-      } else if (c === 7 || (clean.includes('izinkhusus') && c >= 6)) {
+      } else if (c === 7 || (clean.includes('izinkhusus') && !clean.includes('alasan') && c >= 6)) {
         key = 'tanggalIzinKhusus';
         label = 'Izin Khusus (Tanggal)';
-      } else if (c === 8 || clean.includes('sakitsitess') || clean.includes('sakitsite')) {
+      } else if (c === 8 || ((clean.includes('sakitsitess') || clean.includes('sakitsite') || clean.includes('ss')) && !clean.includes('alasan') && c >= 6)) {
         key = 'tanggalSakitSite';
         label = 'Sakit Site (SS)';
-      } else if (c === 9 || clean.includes('sakitluarsl') || clean.includes('sakitluar')) {
+      } else if (c === 9 || ((clean.includes('sakitluarsl') || clean.includes('sakitluar') || clean.includes('sl')) && !clean.includes('alasan') && c >= 6)) {
         key = 'tanggalSakitLuar';
         label = 'Sakit Luar (SL)';
       } else if (c === 10 || (clean.includes('alpa') && c >= 6)) {
         key = 'tanggalAlpa';
         label = 'Alpa (Tanggal)';
-      } else if (c === 11 || clean.includes('alasan')) {
+      } else if (c === 11 || (clean.includes('alasan') && clean.includes('izin') && !clean.includes('khusus')) || clean === 'alasanizin' || (clean === 'alasan' && c === 11)) {
         key = 'alasanIzin';
         label = 'Alasan Izin';
+      } else if (c === 12 || (clean.includes('alasan') && clean.includes('khusus')) || clean.includes('alasanizinkhusus')) {
+        key = 'alasanIzinKhusus';
+        label = 'Alasan Izin Khusus';
+      } else if (c === 13 || (clean.includes('alasan') && (clean.includes('sakitsite') || clean.includes('site') || clean.includes('ss')))) {
+        key = 'alasanSakitSite';
+        label = 'Alasan Sakit Site (SS)';
+      } else if (c === 14 || (clean.includes('alasan') && (clean.includes('sakitluar') || clean.includes('luar') || clean.includes('sl')))) {
+        key = 'alasanSakitLuar';
+        label = 'Alasan Sakit Luar (SL)';
+      } else if (clean.includes('alasan')) {
+        key = 'alasanIzin';
+        label = rawHeader || 'Alasan Izin';
       } else {
         key = `col_${c}`;
         label = rawHeader || `Col_${c}`;
@@ -599,6 +614,14 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         } else if (col.key === 'alasanIzin') {
           rowObj['Alasan Izin'] = val;
           rowObj['Alasan'] = val;
+        } else if (col.key === 'alasanIzinKhusus') {
+          rowObj['Alasan Izin Khusus'] = val;
+        } else if (col.key === 'alasanSakitSite') {
+          rowObj['Alasan Sakit Site (SS)'] = val;
+          rowObj['Alasan Sakit Site'] = val;
+        } else if (col.key === 'alasanSakitLuar') {
+          rowObj['Alasan Sakit Luar (SL)'] = val;
+          rowObj['Alasan Sakit Luar'] = val;
         }
       }
 
@@ -1374,9 +1397,14 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                         <th className="p-2.5 whitespace-nowrap text-center">Sakit</th>
                         <th className="p-2.5 whitespace-nowrap text-center text-rose-600">Alpa</th>
                         <th className="p-2.5 whitespace-nowrap">Tanggal Izin</th>
+                        <th className="p-2.5 whitespace-nowrap">Izin Khusus (Tgl)</th>
                         <th className="p-2.5 whitespace-nowrap">Sakit Site (SS)</th>
                         <th className="p-2.5 whitespace-nowrap">Sakit Luar (SL)</th>
+                        <th className="p-2.5 whitespace-nowrap">Alpa (Tgl)</th>
                         <th className="p-2.5 whitespace-nowrap">Alasan Izin</th>
+                        <th className="p-2.5 whitespace-nowrap">Alasan Izin Khusus</th>
+                        <th className="p-2.5 whitespace-nowrap">Alasan Sakit Site</th>
+                        <th className="p-2.5 whitespace-nowrap">Alasan Sakit Luar</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 font-medium text-slate-800">
@@ -1387,9 +1415,14 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                         const sakit = row['Sakit'] || row['sakit'] || '-';
                         const alpa = row['Alpa'] || row['alpa'] || '-';
                         const tglIzin = row['Tanggal Izin'] || row['tanggalizin'] || '-';
+                        const tglIzinKhusus = row['Izin Khusus (Tanggal)'] || row['Tanggal Izin Khusus'] || row['tanggalizinkhusus'] || '-';
                         const ss = row['Sakit Site (SS)'] || row['Sakit Site'] || row['sakitsitess'] || '-';
                         const sl = row['Sakit Luar (SL)'] || row['Sakit Luar'] || row['sakitluarsl'] || '-';
-                        const alasan = row['Alasan Izin'] || row['Alasan'] || row['alasanizin'] || '-';
+                        const tglAlpa = row['Alpa (Tanggal)'] || row['Tanggal Alpa'] || row['tanggalalpa'] || '-';
+                        const alasanIzin = row['Alasan Izin'] || row['Alasan'] || row['alasanizin'] || '-';
+                        const alasanIzinKhusus = row['Alasan Izin Khusus'] || row['alasanizinkhusus'] || '-';
+                        const alasanSakitSite = row['Alasan Sakit Site (SS)'] || row['Alasan Sakit Site'] || row['alasansakitsite'] || '-';
+                        const alasanSakitLuar = row['Alasan Sakit Luar (SL)'] || row['Alasan Sakit Luar'] || row['alasansakitluar'] || '-';
 
                         return (
                           <tr key={idx} className="hover:bg-slate-50 transition-colors">
@@ -1400,9 +1433,14 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                             <td className="p-2.5 text-center font-extrabold text-[#f09b13]">{sakit}</td>
                             <td className="p-2.5 text-center font-bold text-rose-600">{alpa}</td>
                             <td className="p-2.5 text-slate-600 font-mono text-[11px] max-w-[120px] truncate" title={tglIzin}>{tglIzin}</td>
+                            <td className="p-2.5 text-slate-600 font-mono text-[11px] max-w-[120px] truncate" title={tglIzinKhusus}>{tglIzinKhusus}</td>
                             <td className="p-2.5 text-slate-600 font-mono text-[11px] max-w-[120px] truncate" title={ss}>{ss}</td>
                             <td className="p-2.5 text-slate-600 font-mono text-[11px] max-w-[120px] truncate" title={sl}>{sl}</td>
-                            <td className="p-2.5 text-slate-600 text-[11px] max-w-[160px] truncate" title={alasan}>{alasan}</td>
+                            <td className="p-2.5 text-slate-600 font-mono text-[11px] max-w-[120px] truncate" title={tglAlpa}>{tglAlpa}</td>
+                            <td className="p-2.5 text-slate-600 text-[11px] max-w-[140px] truncate" title={alasanIzin}>{alasanIzin}</td>
+                            <td className="p-2.5 text-slate-600 text-[11px] max-w-[140px] truncate" title={alasanIzinKhusus}>{alasanIzinKhusus}</td>
+                            <td className="p-2.5 text-slate-600 text-[11px] max-w-[140px] truncate" title={alasanSakitSite}>{alasanSakitSite}</td>
+                            <td className="p-2.5 text-slate-600 text-[11px] max-w-[140px] truncate" title={alasanSakitLuar}>{alasanSakitLuar}</td>
                           </tr>
                         );
                       })}
