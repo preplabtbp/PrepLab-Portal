@@ -3371,7 +3371,7 @@ export function NotionDatabaseTable({
         <div 
           ref={tableScrollRef}
           onScroll={handleTableScroll}
-          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] min-h-[420px] w-full transition-all pb-1 rounded-b-xl notion-table-scroll-hide"
+          className="overflow-x-auto w-full transition-all rounded-b-xl notion-table-scroll-hide"
           style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
         >
           <style>{`
@@ -4300,10 +4300,10 @@ export function NotionDatabaseTable({
             </tbody>
           </table>
 
-          {/* Bottom Table Add Row Shortcut & Select All */}
+          {/* Bottom Table Add Row Shortcut & Select All (Natural at end of table) */}
           <div 
-            className={`p-3 border-t flex items-center justify-between transition-colors sticky bottom-0 z-10 backdrop-blur-md ${
-              isNotionLight ? 'bg-[#fafafa]/95 border-slate-200 text-slate-600' : 'bg-[#181818]/95 border-[#2d2d2d] text-slate-400'
+            className={`p-3 border-t flex items-center justify-between transition-colors ${
+              isNotionLight ? 'bg-[#fafafa] border-slate-200 text-slate-600' : 'bg-[#181818] border-[#2d2d2d] text-slate-400'
             }`}
           >
             <div className="flex items-center gap-3">
