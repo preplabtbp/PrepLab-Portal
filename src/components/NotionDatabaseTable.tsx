@@ -4182,16 +4182,17 @@ export function NotionDatabaseTable({
                                       {isEditingThis ? (
                                         <NotionInlineEditor
                                           initialValue={val}
-                                          fieldLabel="Keterangan & Tasklist"
+                                          fieldLabel={isSubItem ? "Keterangan" : "Keterangan & Tasklist"}
                                           multiline={true}
                                           isNotionLight={isNotionLight}
+                                          allowTasklistMode={!isSubItem}
                                           onSave={(newVal) => {
                                             handleUpdateCellDirect(actualRowIndex, colName, newVal);
                                             setActiveInlineEditor(null);
                                           }}
                                           onCancel={() => setActiveInlineEditor(null)}
                                         />
-                                      ) : taskProgress.hasTasklist ? (
+                                      ) : (!isSubItem && taskProgress.hasTasklist) ? (
                                         <div 
                                           className="relative group/cell"
                                           onDoubleClick={(e) => {

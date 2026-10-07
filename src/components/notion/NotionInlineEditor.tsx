@@ -27,6 +27,7 @@ interface NotionInlineEditorProps {
   onCancel: () => void;
   multiline?: boolean;
   isNotionLight?: boolean;
+  allowTasklistMode?: boolean;
 }
 
 export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
@@ -35,7 +36,8 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
   onSave,
   onCancel,
   multiline = true,
-  isNotionLight = true
+  isNotionLight = true,
+  allowTasklistMode = true
 }) => {
   // --- SINGLE LINE MODE (e.g. Judul Kegiatan, Completed Time) ---
   const [singleText, setSingleText] = useState(initialValue || '');
@@ -116,6 +118,7 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
       onSave={onSave}
       onCancel={onCancel}
       isNotionLight={isNotionLight}
+      allowTasklistMode={allowTasklistMode}
     />
   );
 };
@@ -127,14 +130,15 @@ const NotionMultilineDispatcher: React.FC<{
   onSave: (val: string) => void;
   onCancel: () => void;
   isNotionLight: boolean;
-}> = ({ initialValue, fieldLabel, onSave, onCancel, isNotionLight }) => {
+  allowTasklistMode?: boolean;
+}> = ({ initialValue, fieldLabel, onSave, onCancel, isNotionLight, allowTasklistMode = true }) => {
   const parsed = parseTasklist(initialValue);
   const [mode, setMode] = useState<'tasklist' | 'freeform'>(() => 
-    parsed.hasTasklist ? 'tasklist' : 'freeform'
+    (allowTasklistMode && parsed.hasTasklist) ? 'tasklist' : 'freeform'
   );
   const [currentVal, setCurrentVal] = useState(initialValue || '');
 
-  if (mode === 'tasklist') {
+  if (allowTasklistMode && mode === 'tasklist') {
     return (
       <NotionTasklistInlineEditor
         initialValue={currentVal}
@@ -155,7 +159,9 @@ const NotionMultilineDispatcher: React.FC<{
       fieldLabel={fieldLabel}
       onSave={onSave}
       onCancel={onCancel}
+      allowTasklistMode={allowTasklistMode}
       onSwitchToTasklist={(text) => {
+        if (!allowTasklistMode) return;
         setCurrentVal(text);
         setMode('tasklist');
       }}
@@ -803,6 +809,7 @@ interface NotionMultilineBubbleEditorProps {
   onCancel: () => void;
   onSwitchToTasklist: (text: string) => void;
   isNotionLight: boolean;
+  allowTasklistMode?: boolean;
 }
 
 const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = ({
@@ -811,7 +818,8 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
   onSave,
   onCancel,
   onSwitchToTasklist,
-  isNotionLight
+  isNotionLight,
+  allowTasklistMode = true
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -1042,15 +1050,21 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
 
       {/* Mini Bottom Toolbar */}
       <div className="mt-1 pt-1 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px] select-none px-1">
-        <button
-          type="button"
-          onClick={handleConvertToTasklist}
-          className="inline-flex items-center gap-1 font-medium text-teal-600 hover:text-teal-700 transition-colors cursor-pointer py-0.5 px-1 rounded hover:bg-teal-50"
-          title="Ubah teks ini menjadi daftar checklist"
-        >
-          <ListTodo className="w-3 h-3" />
-          <span>Ubah ke Checklist</span>
-        </button>
+        {allowTasklistMode ? (
+          <button
+            type="button"
+            onClick={handleConvertToTasklist}
+            className="inline-flex items-center gap-1 font-medium text-teal-600 hover:text-teal-700 transition-colors cursor-pointer py-0.5 px-1 rounded hover:bg-teal-50"
+            title="Ubah teks ini menjadi daftar checklist"
+          >
+            <ListTodo className="w-3 h-3" />
+            <span>Ubah ke Checklist</span>
+          </button>
+        ) : (
+          <span className="text-[10px] text-slate-400 font-sans">
+            Mode Teks
+          </span>
+        )}
 
         <div className="flex items-center gap-1.5">
           <button
