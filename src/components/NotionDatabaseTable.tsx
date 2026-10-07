@@ -1043,12 +1043,34 @@ export function NotionDatabaseTable({
 
     window.addEventListener('resize', checkOverflow);
 
+      return () => {
+        ro.disconnect();
+        io.disconnect();
+        window.removeEventListener('resize', checkOverflow);
+      };
+    }, [localRows, displayHeaders, zoomPercent, fitPageMode]);
+
+  // Frozen Header & Sticky Controls States (Freeze toolbar, filter bar, and column headers)
+  const headerControlRef = useRef<HTMLDivElement>(null);
+  const [headerControlHeight, setHeaderControlHeight] = useState(140);
+
+  useEffect(() => {
+    const el = headerControlRef.current;
+    if (!el) return;
+    const updateH = () => {
+      if (headerControlRef.current) {
+        setHeaderControlHeight(headerControlRef.current.offsetHeight);
+      }
+    };
+    updateH();
+    const ro = new ResizeObserver(updateH);
+    ro.observe(el);
+    window.addEventListener('resize', updateH);
     return () => {
       ro.disconnect();
-      io.disconnect();
-      window.removeEventListener('resize', checkOverflow);
+      window.removeEventListener('resize', updateH);
     };
-  }, [localRows, displayHeaders, zoomPercent, fitPageMode]);
+  }, [viewMode, searchQuery, statusFilter, priorityFilter]);
 
   const [showAddColumnPopover, setShowAddColumnPopover] = useState(false);
   const [customColumnName, setCustomColumnName] = useState('');
@@ -2998,20 +3020,29 @@ export function NotionDatabaseTable({
 
   return (
     <div 
-      className={`w-full rounded-2xl overflow-hidden my-4 border transition-all ${
+      className={`w-full rounded-2xl my-4 border transition-all ${
         isNotionLight 
           ? 'bg-white border-slate-200 text-slate-900 shadow-xs' 
           : 'bg-[#181818] border-slate-700 text-slate-200 shadow-xl'
       }`}
     >
-      {/* 1. NOTION BREADCRUMBS & TOP BAR (Matching Notion Screenshot) */}
+      {/* ========================================================================= */}
+      {/* FROZEN STICKY TOP CONTROLS & HEADER GROUP (Breadcrumbs, Toolbar, Filter)  */}
+      {/* ========================================================================= */}
       <div 
-        className={`px-4 py-2.5 border-b flex items-center justify-between text-xs transition-colors select-none ${
-          isNotionLight 
-            ? 'bg-white border-slate-200/90 text-slate-800' 
-            : 'bg-[#1e1e1e] border-slate-800 text-slate-300'
+        ref={headerControlRef}
+        className={`sticky top-0 z-30 transition-all border-b shadow-xs backdrop-blur-md rounded-t-2xl ${
+          isNotionLight ? 'bg-white/95 border-slate-200' : 'bg-[#181818]/95 border-[#2d2d2d]'
         }`}
       >
+        {/* 1. NOTION BREADCRUMBS & TOP BAR (Matching Notion Screenshot) */}
+        <div 
+          className={`px-4 py-2.5 border-b flex items-center justify-between text-xs transition-colors select-none ${
+            isNotionLight 
+              ? 'bg-white/90 border-slate-200/90 text-slate-800' 
+              : 'bg-[#1e1e1e]/90 border-slate-800 text-slate-300'
+          }`}
+        >
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <span className="text-amber-500 font-bold">⚡</span>
           <span className={`font-semibold ${isNotionLight ? 'text-slate-800' : 'text-slate-200'}`}>{pt || 'PT. TBP & GPS'}</span>
@@ -3363,6 +3394,7 @@ export function NotionDatabaseTable({
           </button>
         </div>
       </div>
+      </div>
 
       {/* ========================================================================= */}
       {/* 1. TABLE VIEW (Exact Notion Column Hierarchy & Zoom / Fit Page)            */}
@@ -3430,14 +3462,15 @@ export function NotionDatabaseTable({
           <table className={`w-full min-w-max text-left border-collapse ${
             fitPageMode ? 'table-fixed text-[11px]' : 'text-xs'
           }`}>
-            {/* Table Header */}
+            {/* Table Header (Frozen Sticky Stacked under Controls) */}
             <thead>
               <tr 
-                className={`border-b select-none transition-colors sticky top-0 z-20 shadow-xs backdrop-blur-md ${
+                className={`border-b select-none transition-colors sticky z-20 shadow-xs backdrop-blur-md ${
                   isNotionLight
                     ? 'bg-[#fbfbfa]/95 border-slate-200 text-slate-600'
                     : 'bg-[#242424]/95 border-[#303030] text-slate-400'
                 }`}
+                style={{ top: `${headerControlHeight}px` }}
               >
                 {/* Select All Checkbox Column */}
                 <th className={`text-center ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}>
