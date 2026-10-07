@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { db } from "../../src/db/index.js";
-import { appFeedbacks, developerUsers } from "../../src/db/schema.js";
+import { appFeedbacks, developerUsers, notifications } from "../../src/db/schema.js";
 import { eq, desc, and } from "drizzle-orm";
+import { sendWebPush } from "../utils.js";
 
 export const router = Router();
 
@@ -39,7 +40,7 @@ router.get("/api/feedbacks", async (req, res) => {
 router.post("/api/feedbacks", async (req, res) => {
   try {
     const {
-      type = 'bug',
+      type = 'suggestion',
       category,
       module,
       priority = 'medium',
@@ -80,6 +81,43 @@ router.post("/api/feedbacks", async (req, res) => {
       })
       .returning();
 
+    // Buat notifikasi khusus Developer dengan kategori khusus 'dev'
+    const cleanTitle = title.trim();
+    const cleanDesc = description.trim();
+    const cleanAuthor = authorName ? String(authorName).trim() : 'Personil PrepLab';
+    const cleanSection = authorSection ? String(authorSection).trim() : 'Prep & Lab';
+
+    let notifPrefix = '💡 [Saran Masuk]';
+    if (type === 'bug') notifPrefix = '🐛 [Bug Report]';
+    else if (type === 'improvement') notifPrefix = '🚀 [Peningkatan]';
+    else if (type === 'question') notifPrefix = '❓ [Pertanyaan]';
+
+    const notifTitle = `${notifPrefix} ${cleanTitle}`;
+    const descPreview = cleanDesc.length > 120 ? cleanDesc.slice(0, 117) + '...' : cleanDesc;
+    const notifMessage = `${cleanAuthor} (${cleanSection}) - Modul: ${module || 'Umum'}\n"${descPreview}"`;
+
+    try {
+      const createdNotif = await db.insert(notifications).values({
+        role: 'Developer',
+        category: 'dev',
+        type: 'dev',
+        title: notifTitle,
+        message: notifMessage,
+        link: '/feedback-support',
+        isRead: false
+      }).returning();
+
+      if (createdNotif && createdNotif[0]) {
+        const hardcodedDevs = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
+        const devUsersList = await db.select({ nik: developerUsers.nik }).from(developerUsers);
+        const allDevNiks = Array.from(new Set([...hardcodedDevs, ...devUsersList.map(d => d.nik.trim())]));
+
+        sendWebPush(createdNotif[0], { targetNiks: allDevNiks });
+      }
+    } catch (notifErr) {
+      console.error("Gagal membuat notifikasi dev untuk saran masuk:", notifErr);
+    }
+
     res.json({
       status: "success",
       message: "Laporan masukan / bug berhasil dikirim ke Developer",
@@ -116,6 +154,29 @@ router.put("/api/feedbacks/:id/status", async (req, res) => {
 
     if (!updated || updated.length === 0) {
       return res.status(404).json({ status: "error", message: "Data laporan tidak ditemukan" });
+    }
+
+    // Beri notifikasi ke pelapor saat status diperbarui oleh Developer
+    const item = updated[0];
+    if (item && item.authorNik && status) {
+      try {
+        const statusLabel = status === 'RESOLVED' ? 'Telah Diselesaikan ✅' : status === 'IN_PROGRESS' ? 'Sedang Dikerjakan 🛠️' : status;
+        const authorNotif = await db.insert(notifications).values({
+          userId: item.authorNik,
+          category: 'feedback',
+          type: 'info',
+          title: `Tanggapan Developer: "${item.title.slice(0, 35)}"`,
+          message: `Status: ${statusLabel}${developerNotes ? `\nCatatan: "${developerNotes}"` : ''}`,
+          link: '/feedback-support',
+          isRead: false
+        }).returning();
+
+        if (authorNotif && authorNotif[0]) {
+          sendWebPush(authorNotif[0], { targetNiks: [item.authorNik] });
+        }
+      } catch (authNotifErr) {
+        console.error("Gagal mengirim notifikasi status feedback ke pelapor:", authNotifErr);
+      }
     }
 
     res.json({

@@ -437,6 +437,7 @@ export const notifications = pgTable('notifications', {
   title: text('title').notNull(),
   message: text('message').notNull(),
   type: text('type').default('info'), // info, success, warning, error
+  category: text('category'), // e.g. 'dev', 'wo', 'safety', etc.
   isRead: boolean('is_read').default(false),
   link: text('link'),
   createdAt: timestamp('created_at').defaultNow(),

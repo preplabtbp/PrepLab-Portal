@@ -62,19 +62,28 @@ export async function sendWebPush(
         subs = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.nik, notif.userId));
       } else if (notif.role && notif.role !== 'ALL' && notif.role !== 'all' && notif.role !== 'Semua') {
         const roleLower = String(notif.role).toLowerCase().trim();
-        const allEmployees = await db.select().from(employees);
-        const targetNiks = allEmployees.filter((e: any) => {
-          const d = (e.department || '').toLowerCase();
-          const s = (e.section || '').toLowerCase();
-          const j = (e.jabatan || '').toLowerCase();
-          if (roleLower === 'safety' || roleLower === 'k3' || roleLower === 'hse') {
-            return d.includes('safety') || s.includes('safety') || j.includes('safety') ||
-                   d.includes('qa') || s.includes('qa') || j.includes('supervisor') ||
-                   j.includes('manager') || j.includes('superintendent') || j.includes('admin') ||
-                   d.includes('admin') || s.includes('admin');
-          }
-          return d.includes(roleLower) || s.includes(roleLower) || j.includes(roleLower);
-        }).map((e: any) => e.nik);
+        const catLower = String(notif.category || '').toLowerCase().trim();
+        let targetNiks: string[] = [];
+
+        if (roleLower === 'developer' || roleLower === 'dev' || catLower === 'dev' || catLower === 'developer') {
+          const hardcodedDevs = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
+          const devRows = await db.select({ nik: developerUsers.nik }).from(developerUsers);
+          targetNiks = Array.from(new Set([...hardcodedDevs, ...devRows.map(d => d.nik.trim())]));
+        } else {
+          const allEmployees = await db.select().from(employees);
+          targetNiks = allEmployees.filter((e: any) => {
+            const d = (e.department || '').toLowerCase();
+            const s = (e.section || '').toLowerCase();
+            const j = (e.jabatan || '').toLowerCase();
+            if (roleLower === 'safety' || roleLower === 'k3' || roleLower === 'hse') {
+              return d.includes('safety') || s.includes('safety') || j.includes('safety') ||
+                     d.includes('qa') || s.includes('qa') || j.includes('supervisor') ||
+                     j.includes('manager') || j.includes('superintendent') || j.includes('admin') ||
+                     d.includes('admin') || s.includes('admin');
+            }
+            return d.includes(roleLower) || s.includes(roleLower) || j.includes(roleLower);
+          }).map((e: any) => e.nik);
+        }
 
         if (targetNiks.length > 0) {
           subs = await db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.nik, targetNiks));

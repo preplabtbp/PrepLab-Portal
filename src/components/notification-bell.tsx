@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Bell, Check, X, BellRing, Wrench, ChevronRight, Megaphone, ClipboardCheck, Download, Pin, Newspaper, BookOpen, Calendar, ChevronDown, CheckSquare, Layers, Trophy, MessageSquare, ShieldAlert } from 'lucide-react';
+import { Bell, Check, X, BellRing, Wrench, ChevronRight, Megaphone, ClipboardCheck, Download, Pin, Newspaper, BookOpen, Calendar, ChevronDown, CheckSquare, Layers, Trophy, MessageSquare, ShieldAlert, Code2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { subscribeUserToPush } from '../push-notifications';
@@ -18,12 +18,33 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeTab, setActiveTab] = useState('Semua');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [developerList, setDeveloperList] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch('/api/developers')
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) {
+          setDeveloperList(d.map((x: any) => (typeof x === 'string' ? x : x.nik || '')));
+        }
+      })
+      .catch(() => {});
+  }, []);
   
   // WO Detail Modal states
   const [selectedWoId, setSelectedWoId] = useState<string | null>(null);
   const [showWoModal, setShowWoModal] = useState(false);
 
-  const isDev = userNik === '02D25000055' || userNik === '02D24000043' || userNik === 'M0403240177' || userNik === 'preplabadmin';
+  const isDev = useMemo(() => {
+    if (!userNik) return false;
+    const clean = userNik.toUpperCase();
+    const hardcoded = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
+    if (hardcoded.includes(clean)) return true;
+    if (developerList.map(n => n.toUpperCase()).includes(clean)) return true;
+    if (localStorage.getItem('p2h_is_developer') === 'true') return true;
+    return false;
+  }, [userNik, developerList]);
+
   const userJabatan = (() => {
     try {
       const p = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
@@ -412,6 +433,9 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     } else if (notif.link?.startsWith('/agenda') || notif.title?.toLowerCase().includes('agenda')) {
       setIsOpen(false);
       window.dispatchEvent(new CustomEvent('navigate-agenda', { detail: { link: notif.link || '/agenda' } }));
+    } else if (notif.link?.startsWith('/feedback-support') || isDevNotification(notif)) {
+      setIsOpen(false);
+      window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'feedback-support' } }));
     } else if (notif.link) {
       setIsOpen(false);
       if (notif.link.startsWith('/')) {
@@ -420,22 +444,64 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     }
   };
 
+  const isDevNotification = (notif: any): boolean => {
+    const role = (notif.role || '').toLowerCase();
+    const type = (notif.type || '').toLowerCase();
+    const category = (notif.category || '').toLowerCase();
+    const link = (notif.link || '').toLowerCase();
+    const title = (notif.title || '').toLowerCase();
+    const msg = (notif.message || '').toLowerCase();
+
+    return (
+      role === 'developer' ||
+      role === 'dev' ||
+      category === 'dev' ||
+      category === 'developer' ||
+      category === 'saran' ||
+      type === 'dev' ||
+      type === 'suggestion' ||
+      type === 'dev_feedback' ||
+      link.includes('/feedback-support') ||
+      title.includes('saran masuk') ||
+      title.includes('[saran') ||
+      title.includes('[bug report]') ||
+      title.includes('[peningkatan]') ||
+      title.includes('[pertanyaan]') ||
+      msg.includes('saran masuk') ||
+      msg.includes('laporan masukan') ||
+      msg.includes('ide / masukan')
+    );
+  };
+
   const filteredNotifs = notifications.filter(n => {
     if (activeTab === 'Semua') return true;
+    if (activeTab === 'Developer') return isDevNotification(n);
     if (activeTab === 'Maintenance') return n.role === 'Maintenance';
     if (activeTab === 'Administration') return n.role === 'Administration' || n.role === 'admin';
     if (activeTab === 'Laboratory') return n.role === 'Laboratory';
     if (activeTab === 'Preparation') return n.role === 'Preparation';
     if (activeTab === 'QA') return n.role === 'QA';
     if (activeTab === 'Inventory Control') return n.role === 'Inventory Control';
-    if (activeTab === 'Sistem') return !n.role || (!['Maintenance', 'Administration', 'admin', 'Laboratory', 'Preparation', 'QA', 'Inventory Control'].includes(n.role));
+    if (activeTab === 'Sistem') return !n.role || (!['Maintenance', 'Administration', 'admin', 'Laboratory', 'Preparation', 'QA', 'Inventory Control', 'Developer', 'dev'].includes(n.role) && !isDevNotification(n));
     return true;
   });
 
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
-  // Group notifications into 5 pinned category summaries with pop counters
+  // Group notifications into pinned category summaries with pop counters
   const { pinnedCategories, generalNotifs } = useMemo(() => {
+    const devGroup = {
+      id: 'dev_feedback',
+      title: 'Saran & Masukan Developer',
+      badgeText: 'Khusus Dev',
+      colorClass: 'text-violet-600 dark:text-violet-400',
+      bgClass: 'bg-violet-500/10',
+      borderClass: 'border-violet-500/30',
+      icon: Code2,
+      items: [] as any[],
+      unreadCount: 0
+    };
+
     const groups: {
       id: string;
       title: string;
@@ -507,7 +573,10 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     const general: any[] = [];
 
     filteredNotifs.forEach((n) => {
-      if (isChatNotification(n)) {
+      if (isDevNotification(n)) {
+        devGroup.items.push(n);
+        if (!n.isRead) devGroup.unreadCount++;
+      } else if (isChatNotification(n)) {
         groups[4].items.push(n);
         if (!n.isRead) groups[4].unreadCount++;
       } else if (isGamificationNotification(n)) {
@@ -527,8 +596,10 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
       }
     });
 
+    const allCategoryGroups = [devGroup, ...groups];
+
     return {
-      pinnedCategories: groups.filter(g => g.items.length > 0),
+      pinnedCategories: allCategoryGroups.filter(g => g.items.length > 0),
       generalNotifs: general
     };
   }, [filteredNotifs]);
@@ -594,7 +665,10 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
 
               {(isDev || isSpvUp) && (
                 <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
-                  {['Semua', 'Maintenance', 'Laboratory', 'Preparation', 'QA', 'Inventory Control', 'Administration', 'Sistem'].map(tab => (
+                  {(isDev 
+                    ? ['Semua', 'Developer', 'Maintenance', 'Laboratory', 'Preparation', 'QA', 'Inventory Control', 'Administration', 'Sistem']
+                    : ['Semua', 'Maintenance', 'Laboratory', 'Preparation', 'QA', 'Inventory Control', 'Administration', 'Sistem']
+                  ).map(tab => (
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}
@@ -657,7 +731,9 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                         key={cat.id}
                         className={`rounded-xl border transition-all ${
                           cat.unreadCount > 0
-                            ? 'bg-gradient-to-r from-teal-500/10 via-emerald-500/5 to-transparent border-teal-500/40 shadow-xs'
+                            ? cat.id === 'dev_feedback'
+                              ? 'bg-gradient-to-r from-violet-500/15 via-purple-500/5 to-transparent border-violet-500/40 shadow-xs'
+                              : 'bg-gradient-to-r from-teal-500/10 via-emerald-500/5 to-transparent border-teal-500/40 shadow-xs'
                             : 'border-slate-200'
                         }`}
                         style={{ backgroundColor: cat.unreadCount === 0 ? 'var(--card-bg, #FFFFFF)' : undefined }}
@@ -672,10 +748,15 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
                               <IconComponent className="w-3.5 h-3.5" />
                             </div>
                             <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-bold text-xs truncate" style={{ color: 'var(--text-main, #1E293B)' }}>
                                   {cat.title}
                                 </span>
+                                {cat.badgeText && (
+                                  <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-md uppercase tracking-wider ${cat.colorClass} ${cat.bgClass} border ${cat.borderClass}`}>
+                                    {cat.badgeText}
+                                  </span>
+                                )}
                               </div>
                               <p className="text-[11px] truncate opacity-70" style={{ color: 'var(--text-muted, #64748B)' }}>
                                 {latestItem?.title || latestItem?.message || `${cat.items.length} aktivitas terdata`}
