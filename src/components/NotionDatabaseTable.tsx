@@ -411,9 +411,19 @@ export const isSubItemRow = (row: TableRowData): boolean => {
   return false;
 };
 
+export const isSubItemCompleted = (row: TableRowData): boolean => {
+  if (!row) return false;
+  if (row.isCompleted === 'true' || (row as any).isCompleted === true) return true;
+  const statusStr = (getCellValue(row, 'Status') || '').toUpperCase();
+  if (statusStr.includes('CLOSE') || statusStr.includes('SELESAI') || statusStr.includes('DONE')) return true;
+  const title = (getCellValue(row, 'Jenis kegiatan') || getCellValue(row, 'Jenis Kegiatan') || '').trim();
+  if (title.startsWith('↳ [x]') || title.startsWith('↳ [X]') || title.startsWith('[x]') || title.startsWith('[X]')) return true;
+  return false;
+};
+
 export const getDisplayTitle = (title: string): string => {
   if (!title) return '';
-  return title.replace(/^[↳↪\->\s–]+/, '').trim();
+  return title.replace(/^[↳↪\->\s–]+/, '').replace(/^\[[ xX]\]\s*/, '').trim();
 };
 
 // Canonical Notion Table Column definition in exact order
@@ -2106,6 +2116,40 @@ export function NotionDatabaseTable({
     }
 
     toast.success(`Sub-kegiatan "${cleanTitle}" berhasil ditambahkan`);
+  };
+
+  // Toggle Checklist Sub-Item Completed Status
+  const handleToggleSubItemCompleted = (subRowIndex: number, currentCompleted: boolean) => {
+    const nextCompleted = !currentCompleted;
+    const subRow = localRows[subRowIndex];
+    if (!subRow) return;
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const updatedRow = { ...subRow };
+    updatedRow.isCompleted = nextCompleted ? 'true' : 'false';
+    updatedRow.Status = nextCompleted ? 'Closed' : 'Open';
+    
+    // Sinkronisasi tanggal selesai jika ada kolomnya
+    displayHeaders.forEach(h => {
+      const hLower = h.toLowerCase().trim();
+      if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
+        updatedRow[h] = nextCompleted ? todayStr : '-';
+      }
+    });
+
+    const nextRows = [...localRows];
+    nextRows[subRowIndex] = updatedRow;
+    setLocalRows(nextRows);
+
+    const updatedDirty = new Set(dirtyRowIndices);
+    updatedDirty.add(subRowIndex);
+    setDirtyRowIndices(updatedDirty);
+
+    if (onRowsChange) onRowsChange(nextRows);
+    if (postId && onPostContentUpdate) {
+      const newMd = serializeMarkdownTable(headers, nextRows, beforeText, afterText);
+      onPostContentUpdate(newMd);
+    }
   };
 
   // Edit Row Handler
@@ -3923,10 +3967,12 @@ export function NotionDatabaseTable({
                           isSubItem: boolean,
                           hasChildren: boolean,
                           isExpanded: boolean,
+                          subItemsList?: Array<{ row: TableRowData; actualIndex: number }>,
                           onToggleExpand?: (e: React.MouseEvent) => void
                         ) => {
                           const isDirty = dirtyRowIndices.has(actualRowIndex);
                           const isSelected = selectedRowIndices.has(actualRowIndex);
+                          const isSubCompleted = isSubItem ? isSubItemCompleted(row) : false;
                           const rawTitle = (getRowVal(row, 'Jenis kegiatan') || getRowVal(row, 'Name') || getRowVal(row, 'Judul') || row['Name'] || row['= Name'] || `Baris ${actualRowIndex + 1}`).trim();
                           const displayTitle = getDisplayTitle(rawTitle);
                           const topicKey = displayTitle.toLowerCase().trim();
@@ -4032,11 +4078,36 @@ export function NotionDatabaseTable({
                                               </button>
                                             )}
 
+                                            {/* Sub-item Checklist Checkbox */}
+                                            {isSubItem && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleToggleSubItemCompleted(actualRowIndex, isSubCompleted);
+                                                }}
+                                                className={`w-4 h-4 rounded border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                                                  isSubCompleted
+                                                    ? 'bg-teal-600 border-teal-600 text-white shadow-2xs'
+                                                    : isNotionLight
+                                                    ? 'border-slate-400 hover:border-teal-500 bg-white'
+                                                    : 'border-slate-500 hover:border-teal-400 bg-slate-800'
+                                                }`}
+                                                title={isSubCompleted ? "Tandai sub-kegiatan belum selesai" : "Tandai sub-kegiatan selesai (Checklist)"}
+                                              >
+                                                {isSubCompleted && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                              </button>
+                                            )}
+
                                             {/* Notion Document Icon */}
                                             <span className="text-slate-400 select-none text-xs shrink-0">📄</span>
 
-                                            <span className={`leading-snug block font-medium ${
-                                              isNotionLight ? 'text-slate-900 font-semibold' : 'text-slate-100'
+                                            <span className={`leading-snug block font-medium transition-all ${
+                                              isSubCompleted 
+                                                ? 'line-through text-slate-400 dark:text-slate-500' 
+                                                : isNotionLight 
+                                                  ? 'text-slate-900 font-semibold' 
+                                                  : 'text-slate-100'
                                             } ${fitPageMode ? 'line-clamp-2 break-words text-[11px]' : 'text-xs'}`}>
                                               {displayTitle ? displayTitle : <em style={{ color: 'var(--text-muted, #64748b)' }}>Tanpa Judul</em>}
                                             </span>
@@ -4261,12 +4332,34 @@ export function NotionDatabaseTable({
 
                                 // 7. Status Column (Interactive Dropdown & Progress Bar / Duration when Closed)
                                 if (colLower.includes('status')) {
+                                  // Jika baris adalah sub-kegiatan: status disatukan dengan kegiatan utama (tidak memunculkan dropdown status sendiri)
+                                  if (isSubItem) {
+                                    return (
+                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono ${fitPageMode ? 'px-1 py-1.5' : 'px-4 py-2'}`}>
+                                        {isSubCompleted ? (
+                                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800">
+                                            <CheckCircle2 className="w-3 h-3" />
+                                            <span>Selesai</span>
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-400 text-xs font-mono">-</span>
+                                        )}
+                                      </td>
+                                    );
+                                  }
+
                                   const ketVal = getRowVal(row, 'Keterangan');
                                   const taskProgress = parseTasklist(ketVal);
                                   const isClosed = (val || '').toUpperCase().includes('CLOSE') || 
                                                    (val || '').toUpperCase().includes('SELESAI') || 
                                                    (val || '').toUpperCase().includes('DONE');
                                   const durationInfo = isClosed ? getRowDurationInfo(row, taskProgress) : null;
+
+                                  // Hitung progres sub-kegiatan milik kegiatan utama ini
+                                  const hasSubs = Boolean(subItemsList && subItemsList.length > 0);
+                                  const totalSubs = subItemsList ? subItemsList.length : 0;
+                                  const completedSubs = subItemsList ? subItemsList.filter(s => isSubItemCompleted(s.row)).length : 0;
+                                  const pctSubs = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 0;
 
                                   return (
                                     <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-1.5 overflow-hidden' : 'px-4 py-2 whitespace-nowrap'}`}>
@@ -4277,6 +4370,38 @@ export function NotionDatabaseTable({
                                           compact={fitPageMode}
                                           onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
                                         />
+                                        {/* Progress Sub-kegiatan bila ada */}
+                                        {hasSubs && (
+                                          <div className="w-full min-w-[95px] max-w-[130px] space-y-0.5 pt-0.5" title={`Progres Sub-kegiatan: ${completedSubs} dari ${totalSubs} selesai`}>
+                                            <div className="flex items-center justify-between text-[9px] font-mono leading-none">
+                                              <span className={`font-bold ${
+                                                completedSubs === totalSubs && totalSubs > 0
+                                                  ? 'text-emerald-500 dark:text-emerald-400'
+                                                  : completedSubs > 0
+                                                  ? 'text-amber-500 dark:text-amber-400'
+                                                  : 'text-teal-600 dark:text-teal-400'
+                                              }`}>
+                                                Sub: {completedSubs}/{totalSubs}
+                                              </span>
+                                              <span className="text-slate-400 font-bold">
+                                                {pctSubs}%
+                                              </span>
+                                            </div>
+                                            <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-300/60 dark:border-slate-700/60">
+                                              <div
+                                                className={`h-full transition-all duration-300 ${
+                                                  completedSubs === totalSubs && totalSubs > 0
+                                                    ? 'bg-emerald-500'
+                                                    : completedSubs > 0
+                                                    ? 'bg-amber-500'
+                                                    : 'bg-teal-500'
+                                                }`}
+                                                style={{ width: `${pctSubs}%` }}
+                                              />
+                                            </div>
+                                          </div>
+                                        )}
+
                                         {isClosed ? (
                                           <div 
                                             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors shadow-2xs select-none ${
@@ -4289,7 +4414,7 @@ export function NotionDatabaseTable({
                                             <Clock className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                             <span className="truncate max-w-[125px]">{durationInfo?.label}</span>
                                           </div>
-                                        ) : taskProgress.hasTasklist ? (
+                                        ) : !hasSubs && taskProgress.hasTasklist ? (
                                           <div className="w-full min-w-[95px] max-w-[125px] space-y-0.5 pt-0.5">
                                             <div className="flex items-center justify-between text-[9px] font-mono leading-none">
                                               <span className={`font-bold ${
@@ -4459,6 +4584,7 @@ export function NotionDatabaseTable({
                                 false,
                                 hItem.subItems.length > 0,
                                 isParentExpanded,
+                                hItem.subItems,
                                 (e) => {
                                   e.stopPropagation();
                                   setExpandedParents(prev => ({
@@ -4471,7 +4597,7 @@ export function NotionDatabaseTable({
                               {/* Render Sub-items if Parent is expanded */}
                               {isParentExpanded && hItem.subItems.map((sub) => (
                                 <React.Fragment key={`sub-${sub.actualIndex}`}>
-                                  {renderRowItem(sub.row, sub.actualIndex, true, false, false)}
+                                  {renderRowItem(sub.row, sub.actualIndex, true, false, false, undefined)}
                                 </React.Fragment>
                               ))}
 
