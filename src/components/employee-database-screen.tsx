@@ -391,7 +391,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto">
+      <div className={`flex-1 ${selectedEmployee ? 'overflow-hidden h-[calc(100vh-64px)]' : 'overflow-y-auto'}`}>
         {!selectedEmployee ? (
           /* SEARCH MODE - ENTERPRISE HERO (CLEAN WHITE) */
           <div className="w-full min-h-full flex flex-col relative overflow-hidden bg-white">
@@ -464,14 +464,14 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             initial={{ opacity: 0, y: 15 }} 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="flex flex-col lg:flex-row min-h-full p-4 sm:p-6 lg:p-8 bg-white gap-6 relative"
+            className="flex flex-col lg:flex-row h-full w-full p-3 sm:p-4 lg:p-6 bg-slate-50/70 gap-4 lg:gap-6 overflow-hidden relative"
           >
-            {/* SIDEBAR (Profile Info) - PALET #32AEB8 (TIMBUL ELEVATED CARD) */}
-            <div className="lg:w-88 xl:w-96 bg-gradient-to-b from-[#1da8b5] via-[#168a96] to-[#106771] text-white shrink-0 shadow-[0_20px_50px_-10px_rgba(16,103,113,0.4),0_10px_20px_-5px_rgba(0,0,0,0.1)] rounded-3xl z-10 p-6 lg:p-8 flex flex-col items-center lg:items-start text-center lg:text-left relative overflow-hidden border-2 border-white/40 ring-1 ring-slate-900/5 transition-all hover:shadow-[0_25px_60px_-10px_rgba(16,103,113,0.5)]">
-              <div className="absolute top-0 right-0 p-32 bg-white/10 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2"></div>
+            {/* SIDEBAR (Profile Info) - PALET #32AEB8 (TIMBUL ELEVATED CARD - TETAP DIAM) */}
+            <div className="lg:w-80 xl:w-92 h-full max-h-full bg-gradient-to-b from-[#1da8b5] via-[#168a96] to-[#106771] text-white shrink-0 shadow-[0_20px_50px_-10px_rgba(16,103,113,0.35),0_10px_20px_-5px_rgba(0,0,0,0.1)] rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center lg:items-start text-center lg:text-left relative overflow-hidden border-2 border-white/40 ring-1 ring-slate-900/5 transition-all">
+              <div className="absolute top-0 right-0 p-32 bg-white/10 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
               
-              <div className="flex flex-col items-center lg:items-start mb-6 w-full">
-                <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl bg-white/20 border-2 border-white/50 overflow-hidden flex items-center justify-center shrink-0 shadow-2xl relative backdrop-blur-xs ring-4 ring-black/10 group">
+              <div className="flex flex-col items-center lg:items-start mb-3 w-full shrink-0">
+                <div className="w-24 h-24 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-3xl bg-white/20 border-2 border-white/50 overflow-hidden flex items-center justify-center shrink-0 shadow-xl relative backdrop-blur-xs ring-4 ring-black/10 group">
                   {selectedEmployee.photo ? (
                     <img 
                       src={formatAvatarUrl(selectedEmployee.photo)} 
@@ -483,11 +483,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       }}
                     />
                   ) : (
-                    <User className="w-16 h-16 text-white" />
+                    <User className="w-12 h-12 lg:w-16 lg:h-16 text-white" />
                   )}
                   {isUploadingPhoto && (
                     <div className="absolute inset-0 bg-[#1c7e87]/90 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white">
-                      <RefreshCw className="w-6 h-6 animate-spin text-white mb-1" />
+                      <RefreshCw className="w-5 h-5 animate-spin text-white mb-1" />
                       <span>Mengunggah...</span>
                     </div>
                   )}
@@ -506,7 +506,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       type="button"
                       onClick={() => photoInputRef.current?.click()}
                       disabled={isUploadingPhoto}
-                      className="mt-3 text-xs font-bold px-3.5 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-sm border border-white/30 cursor-pointer backdrop-blur-xs"
+                      className="mt-2.5 text-[11px] font-bold px-3 py-1 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-sm border border-white/30 cursor-pointer backdrop-blur-xs"
                       title="Perbarui atau unggah foto karyawan di database (Khusus Administration & Developer)"
                     >
                       <Camera className="w-3.5 h-3.5 text-white" />
@@ -514,78 +514,81 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </button>
                   </>
                 )}
+
+                <h2 className="text-lg lg:text-xl font-black mt-2.5 mb-1 leading-tight text-white drop-shadow-md text-center lg:text-left w-full">{selectedEmployee.name}</h2>
+                <div className="w-full flex justify-center lg:justify-start">
+                  <p className="text-white flex items-center bg-[#f09b13] px-3 py-1 rounded-full text-[11px] font-black shadow-md ring-2 ring-white/30">
+                    <Fingerprint className="w-3.5 h-3.5 mr-1.5" />
+                    NIK: {selectedEmployee.nik}
+                  </p>
+                </div>
               </div>
 
-              <h2 className="text-xl lg:text-2xl font-black mb-1 leading-tight text-white drop-shadow-md">{selectedEmployee.name}</h2>
-              <p className="text-white mb-6 flex items-center justify-center lg:justify-start bg-[#f09b13] px-3.5 py-1.5 rounded-full text-xs font-black shadow-lg ring-2 ring-white/30">
-                <Fingerprint className="w-3.5 h-3.5 mr-1.5" />
-                NIK: {selectedEmployee.nik}
-              </p>
-
-              <div className="w-full space-y-4 text-sm text-white">
-                <div className="border-b border-white/25 pb-3">
-                  <p className="text-[#e2f9fb] text-[11px] font-bold mb-1 uppercase tracking-wider">Jabatan Baru</p>
-                  <p className="font-bold text-white text-base leading-snug">{selectedEmployee.jabatan || '-'}</p>
+              {/* Detail profil disesuaikan agar tidak terpotong & scrollable internal */}
+              <div className="w-full flex-1 overflow-y-auto pr-1 space-y-2 text-white divide-y divide-white/20 custom-scrollbar-teal">
+                <div className="pt-1.5 first:pt-0">
+                  <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Jabatan Baru</p>
+                  <p className="font-bold text-white text-xs sm:text-sm leading-snug">{selectedEmployee.jabatan || '-'}</p>
                 </div>
                 
-                <div className="border-b border-white/25 pb-3">
-                  <p className="text-[#e2f9fb] text-[11px] font-bold mb-1 uppercase tracking-wider">Perusahaan</p>
-                  <p className="font-bold text-white">{selectedEmployee.pt || '-'}</p>
+                <div className="pt-1.5">
+                  <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Perusahaan</p>
+                  <p className="font-bold text-white text-xs">{selectedEmployee.pt || '-'}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 border-b border-white/25 pb-3">
+                <div className="grid grid-cols-2 gap-2 pt-1.5">
                   <div>
-                    <p className="text-[#e2f9fb] text-[11px] font-bold mb-1 uppercase tracking-wider">Job Grade</p>
-                    <p className="font-bold text-white">{selectedEmployee.jobGrade || '-'}</p>
+                    <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Job Grade</p>
+                    <p className="font-bold text-white text-xs">{selectedEmployee.jobGrade || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-[#e2f9fb] text-[11px] font-bold mb-1 uppercase tracking-wider">Golongan</p>
-                    <p className="font-bold text-white">{selectedEmployee.gol || '-'}</p>
-                  </div>
-                </div>
-
-                <div className="border-b border-white/25 pb-3">
-                  <p className="text-[#e2f9fb] text-[11px] font-bold mb-1 uppercase tracking-wider">Bagian (Section)</p>
-                  <p className="font-bold text-white">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 border-b border-white/25 pb-3">
-                  <div>
-                    <p className="text-[#e2f9fb] text-[11px] font-bold mb-1 uppercase tracking-wider">DOH Awal</p>
-                    <p className="font-bold text-white">{selectedEmployee.tanggalAwalBergabung || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[#e2f9fb] text-[11px] font-bold mb-1 uppercase tracking-wider">Tgl Jabatan Baru</p>
-                    <p className="font-bold text-white">{selectedEmployee.tanggalJabatanBaru || '-'}</p>
+                    <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Golongan</p>
+                    <p className="font-bold text-white text-xs">{selectedEmployee.gol || '-'}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="pt-1.5">
+                  <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Bagian (Section)</p>
+                  <p className="font-bold text-white text-xs">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1.5">
                   <div>
-                    <p className="text-[#e2f9fb] text-[11px] font-bold mb-1 uppercase tracking-wider">Masa Kerja</p>
-                    <p className="font-bold text-white">{selectedEmployee.masaKerja || '-'}</p>
+                    <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">DOH Awal</p>
+                    <p className="font-bold text-white text-xs">{selectedEmployee.tanggalAwalBergabung || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-[#e2f9fb] text-[11px] font-bold mb-1 uppercase tracking-wider">Masa Kerja Jabatan</p>
-                    <p className="font-bold text-white">{selectedEmployee.masaKerjaJabatanTerakhir || '-'}</p>
+                    <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
+                    <p className="font-bold text-white text-xs">{selectedEmployee.tanggalJabatanBaru || '-'}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1.5 pb-2">
+                  <div>
+                    <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Masa Kerja</p>
+                    <p className="font-bold text-white text-xs">{selectedEmployee.masaKerja || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Masa Kerja Jabatan</p>
+                    <p className="font-bold text-white text-xs">{selectedEmployee.masaKerjaJabatanTerakhir || '-'}</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* MAIN CONTENT AREA (CLEAN WHITE CARD) */}
-            <div className="flex-1 p-6 lg:p-8 overflow-y-auto bg-white rounded-3xl shadow-md border border-slate-200/80 pb-20 ring-1 ring-slate-900/5 transition-all">
+            {/* MAIN CONTENT AREA (CLEAN WHITE CARD - SCROLLABLE KE BAWAH) */}
+            <div className="flex-1 h-full max-h-full p-5 sm:p-6 lg:p-8 overflow-y-auto bg-white rounded-3xl shadow-sm border border-slate-200/80 pb-24 ring-1 ring-slate-900/5 transition-all custom-scrollbar">
               
               {/* HEADER W/ SPONSOR */}
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                  <h1 className="text-3xl font-extrabold text-slate-900">{selectedEmployee.name}</h1>
-                  <p className="text-slate-500 mt-1 font-medium">{selectedEmployee.jabatan || 'Karyawan'}</p>
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">{selectedEmployee.name}</h1>
+                  <p className="text-slate-500 mt-1 font-medium text-sm sm:text-base">{selectedEmployee.jabatan || 'Karyawan'}</p>
                 </div>
                 
-                <Card className="p-4 bg-white shadow-md border-l-4 border-l-[#f09b13] min-w-[200px] border border-slate-200/80 rounded-2xl">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Sponsor</p>
-                  <p className="font-extrabold text-slate-800 text-lg">{selectedEmployee.sponsor || '-'}</p>
+                <Card className="p-3.5 sm:p-4 bg-white shadow-sm border-l-4 border-l-[#f09b13] min-w-[200px] border border-slate-200/80 rounded-2xl">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Sponsor</p>
+                  <p className="font-extrabold text-slate-800 text-base sm:text-lg">{selectedEmployee.sponsor || '-'}</p>
                 </Card>
               </div>
 
