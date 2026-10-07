@@ -846,4 +846,274 @@ employeesRouter.post("/cover", async (req, res) => {
   }
 });
 
+employeesRouter.put("/:nik", async (req, res) => {
+  try {
+    const { nik } = req.params;
+    const requesterNik = req.body?.editorNik || req.headers['x-user-nik'];
+    const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
+    if (!isAuth) {
+      return res.status(403).json({
+        status: "error",
+        message: "Akses ditolak: Pengeditan data karyawan hanya dapat dilakukan oleh section Administration atau Developer."
+      });
+    }
+
+    if (!nik) {
+      return res.status(400).json({ status: "error", message: "NIK karyawan wajib diisi." });
+    }
+
+    const currentEmp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+    if (currentEmp.length === 0) {
+      return res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan." });
+    }
+
+    const body = req.body || {};
+    const empUpdate: Record<string, any> = {};
+
+    const stringFields = [
+      'name', 'ktp', 'pt', 'poh', 'sponsor', 'statusKaryawan', 'statusKontrak',
+      'tanggalEfektifTidakBekerja', 'tanggalAwalBergabung', 'tanggalJabatanBaru',
+      'masaKerja', 'masaKerjaJabatanTerakhir', 'department', 'section',
+      'jobGrade', 'gol', 'jabatan', 'tanggalPermanent', 'tempatLahir',
+      'tanggalLahir', 'phone', 'keluargaKandung', 'phoneKeluarga',
+      'orangTerdekat', 'phoneDarurat', 'alamatKtp', 'alamatDomisili',
+      'sisaCt', 'jatuhTempoCt', 'photo'
+    ];
+
+    for (const f of stringFields) {
+      if (body[f] !== undefined) {
+        empUpdate[f] = body[f] === '' ? null : body[f];
+      }
+    }
+
+    // Process Attendance Updates if provided
+    const att26 = body.attendance2026 || body.attendance?.['2026'] || body.attendance?.[2026];
+    if (att26 && typeof att26 === 'object') {
+      const year = 2026;
+      const cleanDateOrReason = (v: any) => v !== undefined && v !== null ? String(v).trim() : '';
+
+      const tglIzin = cleanDateOrReason(att26.tanggalIzin);
+      const tglIzinKhusus = cleanDateOrReason(att26.tanggalIzinKhusus);
+      const tglSakitSite = cleanDateOrReason(att26.tanggalSakitSite);
+      const tglSakitLuar = cleanDateOrReason(att26.tanggalSakitLuar);
+      const tglAlpa = cleanDateOrReason(att26.tanggalAlpa);
+
+      const alasanIzin = cleanDateOrReason(att26.alasanIzin);
+      const alasanIzinKhusus = cleanDateOrReason(att26.alasanIzinKhusus);
+      const alasanSakitSite = cleanDateOrReason(att26.alasanSakitSite);
+      const alasanSakitLuar = cleanDateOrReason(att26.alasanSakitLuar);
+      const alasanSakit = cleanDateOrReason(att26.alasanSakit) || alasanSakitSite || alasanSakitLuar;
+
+      const countFromLines = (val: string, fallbackNum?: any) => {
+        if (fallbackNum !== undefined && fallbackNum !== null && fallbackNum !== '' && !isNaN(Number(fallbackNum))) {
+          return Number(fallbackNum);
+        }
+        if (!val) return 0;
+        return val.split(/[\r\n,;]+/).map(s => s.trim()).filter(Boolean).length;
+      };
+
+      const ssCount = countFromLines(tglSakitSite, att26.sakitSite);
+      const slCount = countFromLines(tglSakitLuar, att26.sakitLuar);
+      const izinCount = countFromLines(tglIzin, att26.izin);
+      const izinKhususCount = countFromLines(tglIzinKhusus, att26.izinKhusus);
+      const alpaCount = countFromLines(tglAlpa, att26.alpa);
+      const sakitCount = (att26.sakit !== undefined && att26.sakit !== null && att26.sakit !== '')
+        ? Number(att26.sakit)
+        : (ssCount + slCount);
+
+      const attRecord = {
+        nik,
+        name: body.name || currentEmp[0].name || '',
+        year,
+        izin: izinCount,
+        izinKhusus: izinKhususCount,
+        sakit: sakitCount,
+        sakitSiteCount: ssCount,
+        sakitLuarCount: slCount,
+        alpa: alpaCount,
+        tanggalIzin: tglIzin,
+        tanggalIzinKhusus: tglIzinKhusus,
+        tanggalSakitSite: tglSakitSite,
+        tanggalSakitLuar: tglSakitLuar,
+        tanggalAlpa: tglAlpa,
+        alasanIzin,
+        alasanIzinKhusus,
+        alasanSakitSite,
+        alasanSakitLuar,
+        alasanSakit,
+        updatedAt: new Date()
+      };
+
+      const existingAtt = await db.select().from(employeeAttendance)
+        .where(sql`${employeeAttendance.nik} = ${nik} AND ${employeeAttendance.year} = ${year}`)
+        .limit(1);
+
+      if (existingAtt.length > 0) {
+        await db.update(employeeAttendance).set(attRecord)
+          .where(sql`${employeeAttendance.nik} = ${nik} AND ${employeeAttendance.year} = ${year}`);
+      } else {
+        await db.insert(employeeAttendance).values(attRecord);
+      }
+
+      // Also update cached attendanceData on employee
+      const currentAttData = (currentEmp[0].attendanceData as Record<string, any>) || {};
+      empUpdate.attendanceData = {
+        ...currentAttData,
+        [year]: {
+          izin: izinCount,
+          izinKhusus: izinKhususCount,
+          sakit: sakitCount,
+          sakitSite: ssCount,
+          sakitLuar: slCount,
+          alpa: alpaCount,
+          tanggalIzin: tglIzin,
+          tanggalIzinKhusus: tglIzinKhusus,
+          tanggalSakitSite: tglSakitSite,
+          tanggalSakitLuar: tglSakitLuar,
+          tanggalAlpa: tglAlpa,
+          alasanIzin,
+          alasanIzinKhusus,
+          alasanSakitSite,
+          alasanSakitLuar,
+          alasanSakit
+        }
+      };
+    }
+
+    if (Object.keys(empUpdate).length > 0) {
+      await db.update(employees).set(empUpdate).where(eq(employees.nik, nik));
+    }
+
+    const updatedEmp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+    const attMap = await getAttendanceMap();
+    const finalEmp = attachAttendanceToEmployee(updatedEmp[0], attMap);
+
+    res.json({
+      status: "success",
+      message: "Data karyawan berhasil diperbarui.",
+      data: finalEmp
+    });
+  } catch (error: any) {
+    console.error("Error updating employee:", error);
+    res.status(500).json({ status: "error", message: error.message || "Gagal memperbarui data karyawan." });
+  }
+});
+
+employeesRouter.post("/:nik/attendance-entry", async (req, res) => {
+  try {
+    const { nik } = req.params;
+    const requesterNik = req.body?.editorNik || req.headers['x-user-nik'];
+    const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
+    if (!isAuth) {
+      return res.status(403).json({
+        status: "error",
+        message: "Akses ditolak: Penambahan catatan absensi hanya dapat dilakukan oleh section Administration atau Developer."
+      });
+    }
+
+    const { category, value, date, note, year = 2026 } = req.body;
+    if (!category || !value) {
+      return res.status(400).json({ status: "error", message: "Kategori dan isi data wajib diisi." });
+    }
+
+    const currentEmp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+    if (currentEmp.length === 0) {
+      return res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan." });
+    }
+
+    const existingAtt = await db.select().from(employeeAttendance)
+      .where(sql`${employeeAttendance.nik} = ${nik} AND ${employeeAttendance.year} = ${year}`)
+      .limit(1);
+
+    const currentAtt = existingAtt[0] || {
+      nik,
+      name: currentEmp[0].name || '',
+      year,
+      izin: 0,
+      izinKhusus: 0,
+      sakit: 0,
+      sakitSiteCount: 0,
+      sakitLuarCount: 0,
+      alpa: 0,
+      tanggalIzin: '',
+      tanggalIzinKhusus: '',
+      tanggalSakitSite: '',
+      tanggalSakitLuar: '',
+      tanggalAlpa: '',
+      alasanIzin: '',
+      alasanIzinKhusus: '',
+      alasanSakitSite: '',
+      alasanSakitLuar: '',
+      alasanSakit: ''
+    };
+
+    const appendText = (current: string | null | undefined, addition: string) => {
+      const cur = (current || '').trim();
+      const add = addition.trim();
+      if (!cur) return add;
+      return `${cur}\n${add}`;
+    };
+
+    const updateObj: Record<string, any> = {
+      updatedAt: new Date()
+    };
+
+    const countLines = (str: string) => str.split(/[\r\n,;]+/).map(s => s.trim()).filter(Boolean).length;
+
+    if (category === 'tanggalIzin') {
+      const updated = appendText(currentAtt.tanggalIzin, value);
+      updateObj.tanggalIzin = updated;
+      updateObj.izin = countLines(updated);
+    } else if (category === 'tanggalIzinKhusus') {
+      const updated = appendText(currentAtt.tanggalIzinKhusus, value);
+      updateObj.tanggalIzinKhusus = updated;
+      updateObj.izinKhusus = countLines(updated);
+    } else if (category === 'tanggalSakitSite') {
+      const updated = appendText(currentAtt.tanggalSakitSite, value);
+      updateObj.tanggalSakitSite = updated;
+      updateObj.sakitSiteCount = countLines(updated);
+      updateObj.sakit = (updateObj.sakitSiteCount || currentAtt.sakitSiteCount || 0) + (currentAtt.sakitLuarCount || 0);
+    } else if (category === 'tanggalSakitLuar') {
+      const updated = appendText(currentAtt.tanggalSakitLuar, value);
+      updateObj.tanggalSakitLuar = updated;
+      updateObj.sakitLuarCount = countLines(updated);
+      updateObj.sakit = (currentAtt.sakitSiteCount || 0) + (updateObj.sakitLuarCount || 0);
+    } else if (category === 'tanggalAlpa') {
+      const updated = appendText(currentAtt.tanggalAlpa, value);
+      updateObj.tanggalAlpa = updated;
+      updateObj.alpa = countLines(updated);
+    } else if (category === 'alasanIzin') {
+      updateObj.alasanIzin = appendText(currentAtt.alasanIzin, value);
+    } else if (category === 'alasanIzinKhusus') {
+      updateObj.alasanIzinKhusus = appendText(currentAtt.alasanIzinKhusus, value);
+    } else if (category === 'alasanSakitSite') {
+      updateObj.alasanSakitSite = appendText(currentAtt.alasanSakitSite, value);
+    } else if (category === 'alasanSakitLuar') {
+      updateObj.alasanSakitLuar = appendText(currentAtt.alasanSakitLuar, value);
+    }
+
+    if (existingAtt.length > 0) {
+      await db.update(employeeAttendance).set(updateObj)
+        .where(sql`${employeeAttendance.nik} = ${nik} AND ${employeeAttendance.year} = ${year}`);
+    } else {
+      await db.insert(employeeAttendance).values({ ...currentAtt, ...updateObj });
+    }
+
+    // Refresh attendance and return
+    const attMap = await getAttendanceMap();
+    const refreshedEmp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+    const finalEmp = attachAttendanceToEmployee(refreshedEmp[0], attMap);
+
+    res.json({
+      status: "success",
+      message: "Catatan absensi berhasil ditambahkan.",
+      data: finalEmp
+    });
+  } catch (error: any) {
+    console.error("Error adding attendance entry:", error);
+    res.status(500).json({ status: "error", message: error.message || "Gagal menambahkan catatan absensi." });
+  }
+});
+
+
 

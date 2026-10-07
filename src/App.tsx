@@ -209,6 +209,7 @@ export default function App() {
   const isAutoHide = activeTab !== 'home';
   const [isSidebarPeeked, setIsSidebarPeeked] = useState(false);
   const isBulletin = location.pathname.startsWith('/bulletin');
+  const isEmployeeDatabase = location.pathname.startsWith('/employee-database');
   const [bulletinFocusMode, setBulletinFocusMode] = useState(true);
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
 
@@ -1703,7 +1704,7 @@ export default function App() {
       {/* Header */}
       <header 
         className={`px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-40 backdrop-blur-md border-b w-full flex justify-center transition-all duration-300 ${
-          isBulletin && bulletinFocusMode ? 'hidden' : ''
+          (isBulletin && bulletinFocusMode) || isEmployeeDatabase ? 'hidden' : ''
         }`}
         style={{
           backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
@@ -1779,7 +1780,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className={`@container flex-1 flex flex-col w-full bg-transparent min-w-0 transition-all duration-300 ${
-        isBulletin && bulletinFocusMode ? 'h-[100dvh] overflow-hidden p-0' : 'h-full'
+        (isBulletin && bulletinFocusMode) || isEmployeeDatabase ? 'h-[100dvh] overflow-hidden p-0' : 'h-full'
       }`}>
         
       <Suspense fallback={<div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>

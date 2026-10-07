@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud, Camera } from 'lucide-react';
+import { ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud, Camera, Pencil, Plus, Edit3 } from 'lucide-react';
 import { Card, Input, Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
 import { EmployeeImportModal } from './EmployeeImportModal';
+import { EmployeeEditModal } from './EmployeeEditModal';
+import { AddAttendanceEntryModal } from './AddAttendanceEntryModal';
 import { toast } from 'sonner';
 import { formatAvatarUrl } from '../lib/avatarUtils';
 
@@ -14,6 +16,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAddAttendanceModalOpen, setIsAddAttendanceModalOpen] = useState(false);
+  const [selectedAddCategory, setSelectedAddCategory] = useState<string>('tanggalIzin');
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -322,12 +327,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     <div className="flex-1 w-full h-full flex flex-col bg-white overflow-hidden relative">
       {/* Top Navigation */}
       <div className="bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between sticky top-0 z-40 shrink-0 shadow-xs min-h-[64px]">
-        <div className="flex items-center">
-          <Button variant="ghost" size="sm" onClick={() => selectedEmployee ? setSelectedEmployee(null) : (onBack && onBack())} className="mr-2">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => selectedEmployee ? setSelectedEmployee(null) : (onBack && onBack())} className="mr-1">
             <ArrowLeft className="w-5 h-5 mr-1" />
             {selectedEmployee ? 'Kembali' : 'Tutup'}
           </Button>
-          {!selectedEmployee && (
+          {!selectedEmployee ? (
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 rounded-lg bg-[#f09b13] text-white font-bold text-xs uppercase tracking-wider shadow-xs hidden sm:inline-block">
                 Manpower
@@ -336,10 +341,30 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 Database Karyawan
               </h1>
             </div>
+          ) : (
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]">
+                {selectedEmployee.name}
+              </span>
+              <span className="text-xs text-slate-400 font-mono">
+                ({selectedEmployee.nik})
+              </span>
+            </div>
           )}
         </div>
 
         <div className="flex items-center gap-2">
+          {selectedEmployee && canManageDatabase && (
+            <Button
+              onClick={() => setIsEditModalOpen(true)}
+              size="sm"
+              className="bg-[#f09b13] hover:bg-[#d88708] text-white flex items-center gap-1.5 rounded-xl text-xs font-bold px-3 py-1.5 shadow-sm transition-all cursor-pointer"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Edit Data</span>
+            </Button>
+          )}
+
           {!selectedEmployee && canManageDatabase && (
             <>
               <Button
@@ -579,17 +604,30 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             {/* MAIN CONTENT AREA (CLEAN WHITE CARD - SCROLLABLE KE BAWAH) */}
             <div className="flex-1 h-full max-h-full p-5 sm:p-6 lg:p-8 overflow-y-auto bg-white rounded-3xl shadow-sm border border-slate-200/80 pb-24 ring-1 ring-slate-900/5 transition-all custom-scrollbar">
               
-              {/* HEADER W/ SPONSOR */}
+              {/* HEADER W/ SPONSOR & EDIT BUTTON */}
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">{selectedEmployee.name}</h1>
                   <p className="text-slate-500 mt-1 font-medium text-sm sm:text-base">{selectedEmployee.jabatan || 'Karyawan'}</p>
                 </div>
                 
-                <Card className="p-3.5 sm:p-4 bg-white shadow-sm border-l-4 border-l-[#f09b13] min-w-[200px] border border-slate-200/80 rounded-2xl">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Sponsor</p>
-                  <p className="font-extrabold text-slate-800 text-base sm:text-lg">{selectedEmployee.sponsor || '-'}</p>
-                </Card>
+                <div className="flex items-center gap-3">
+                  {canManageDatabase && (
+                    <Button
+                      onClick={() => setIsEditModalOpen(true)}
+                      size="sm"
+                      className="bg-[#22a7b8] hover:bg-[#1b8f9e] text-white flex items-center gap-1.5 rounded-2xl text-xs font-bold px-4 py-2.5 shadow-md shadow-teal-500/20 active:scale-95 transition-all cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Edit Data Karyawan</span>
+                    </Button>
+                  )}
+                  
+                  <Card className="p-3.5 sm:p-4 bg-white shadow-sm border-l-4 border-l-[#f09b13] min-w-[180px] border border-slate-200/80 rounded-2xl">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Sponsor</p>
+                    <p className="font-extrabold text-slate-800 text-base sm:text-lg">{selectedEmployee.sponsor || '-'}</p>
+                  </Card>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
@@ -828,10 +866,35 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                 return (
                   <div className="mb-8">
-                    <h3 className="text-lg font-bold text-slate-800 mb-5 flex items-center">
-                      <Calendar className="w-5 h-5 mr-2 text-[#22a7b8]" />
-                      Tanggal Absensi 2026 & Alasan
-                    </h3>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                      <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                        <Calendar className="w-5 h-5 mr-2 text-[#22a7b8]" />
+                        Tanggal Absensi 2026 & Alasan
+                      </h3>
+                      {canManageDatabase && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedAddCategory('tanggalIzin');
+                              setIsAddAttendanceModalOpen(true);
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-[#135e69] border border-teal-200 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-[#22a7b8]" />
+                            <span>+ Tambah Absensi / Alasan</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsEditModalOpen(true)}
+                            className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Edit Rekap</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     
                     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
                       <Card className="xl:col-span-7 p-0 overflow-hidden border-slate-200/60 shadow-sm flex flex-col">
@@ -907,23 +970,57 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             </tbody>
                           </table>
                         </div>
+
+                        {canManageDatabase && (
+                          <div className="p-2.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-xs px-4">
+                            <span className="text-[11px] text-slate-400 font-medium">
+                              Total {maxRows} baris rincian tanggal
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedAddCategory('tanggalIzin');
+                                setIsAddAttendanceModalOpen(true);
+                              }}
+                              className="text-xs font-bold text-[#135e69] hover:text-[#22a7b8] flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>+ Tambah Tanggal Izin / Sakit</span>
+                            </button>
+                          </div>
+                        )}
                       </Card>
 
                       <div className="xl:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         {/* 1. Alasan Izin */}
                         <Card className="p-3.5 shadow-sm border-slate-200/60 bg-white flex flex-col justify-between">
                           <div>
-                            <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
-                              <span className="text-[#135e69] flex items-center gap-1.5">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-[#22a7b8]"></span>
-                                Alasan Izin
-                              </span>
-                              {alasanIzinItems.length > 0 && (
-                                <span className="text-[10px] bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8] px-2 py-0.5 rounded-full font-bold">
-                                  {alasanIzinItems.length}
-                                </span>
-                              )}
-                            </p>
+                                <span className="text-[#135e69]">Alasan Izin</span>
+                              </p>
+                              <div className="flex items-center gap-1.5">
+                                {canManageDatabase && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedAddCategory('alasanIzin');
+                                      setIsAddAttendanceModalOpen(true);
+                                    }}
+                                    className="w-5 h-5 rounded-md bg-teal-50 hover:bg-teal-100 text-[#135e69] flex items-center justify-center transition-colors cursor-pointer"
+                                    title="Tambah Alasan Izin"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </button>
+                                )}
+                                {alasanIzinItems.length > 0 && (
+                                  <span className="text-[10px] bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8] px-2 py-0.5 rounded-full font-bold">
+                                    {alasanIzinItems.length}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                             <div className="bg-slate-50/80 p-2.5 rounded-xl text-sm border border-slate-100 min-h-[75px] max-h-36 overflow-y-auto">
                               {alasanIzinItems.length > 0 ? (
                                 <ul className="space-y-1.5">
@@ -943,17 +1040,32 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         {/* 2. Alasan Izin Khusus */}
                         <Card className="p-3.5 shadow-sm border-slate-200/60 bg-white flex flex-col justify-between">
                           <div>
-                            <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
-                              <span className="text-[#135e69] flex items-center gap-1.5">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-[#135e69]"></span>
-                                Alasan Izin Khusus
-                              </span>
-                              {alasanIzinKhususItems.length > 0 && (
-                                <span className="text-[10px] bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8] px-2 py-0.5 rounded-full font-bold">
-                                  {alasanIzinKhususItems.length}
-                                </span>
-                              )}
-                            </p>
+                                <span className="text-[#135e69]">Alasan Izin Khusus</span>
+                              </p>
+                              <div className="flex items-center gap-1.5">
+                                {canManageDatabase && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedAddCategory('alasanIzinKhusus');
+                                      setIsAddAttendanceModalOpen(true);
+                                    }}
+                                    className="w-5 h-5 rounded-md bg-teal-50 hover:bg-teal-100 text-[#135e69] flex items-center justify-center transition-colors cursor-pointer"
+                                    title="Tambah Alasan Izin Khusus"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </button>
+                                )}
+                                {alasanIzinKhususItems.length > 0 && (
+                                  <span className="text-[10px] bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8] px-2 py-0.5 rounded-full font-bold">
+                                    {alasanIzinKhususItems.length}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                             <div className="bg-slate-50/80 p-2.5 rounded-xl text-sm border border-slate-100 min-h-[75px] max-h-36 overflow-y-auto">
                               {alasanIzinKhususItems.length > 0 ? (
                                 <ul className="space-y-1.5">
@@ -973,17 +1085,32 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         {/* 3. Alasan Sakit Site (SS) */}
                         <Card className="p-3.5 shadow-sm border-slate-200/60 bg-white flex flex-col justify-between">
                           <div>
-                            <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
-                              <span className="text-amber-900 flex items-center gap-1.5">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                Alasan Sakit Site (SS)
-                              </span>
-                              {alasanSakitSiteItems.length > 0 && (
-                                <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-bold">
-                                  {alasanSakitSiteItems.length}
-                                </span>
-                              )}
-                            </p>
+                                <span className="text-amber-900">Alasan Sakit Site (SS)</span>
+                              </p>
+                              <div className="flex items-center gap-1.5">
+                                {canManageDatabase && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedAddCategory('alasanSakitSite');
+                                      setIsAddAttendanceModalOpen(true);
+                                    }}
+                                    className="w-5 h-5 rounded-md bg-amber-100 hover:bg-amber-200 text-amber-800 flex items-center justify-center transition-colors cursor-pointer"
+                                    title="Tambah Alasan Sakit Site"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </button>
+                                )}
+                                {alasanSakitSiteItems.length > 0 && (
+                                  <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-bold">
+                                    {alasanSakitSiteItems.length}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                             <div className="bg-slate-50/80 p-2.5 rounded-xl text-sm border border-slate-100 min-h-[75px] max-h-36 overflow-y-auto">
                               {alasanSakitSiteItems.length > 0 ? (
                                 <ul className="space-y-1.5">
@@ -1003,17 +1130,32 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         {/* 4. Alasan Sakit Luar (SL) */}
                         <Card className="p-3.5 shadow-sm border-slate-200/60 bg-white flex flex-col justify-between">
                           <div>
-                            <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
-                              <span className="text-amber-800 flex items-center gap-1.5">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                                Alasan Sakit Luar (SL)
-                              </span>
-                              {alasanSakitLuarItems.length > 0 && (
-                                <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-bold">
-                                  {alasanSakitLuarItems.length}
-                                </span>
-                              )}
-                            </p>
+                                <span className="text-amber-800">Alasan Sakit Luar (SL)</span>
+                              </p>
+                              <div className="flex items-center gap-1.5">
+                                {canManageDatabase && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedAddCategory('alasanSakitLuar');
+                                      setIsAddAttendanceModalOpen(true);
+                                    }}
+                                    className="w-5 h-5 rounded-md bg-amber-100 hover:bg-amber-200 text-amber-800 flex items-center justify-center transition-colors cursor-pointer"
+                                    title="Tambah Alasan Sakit Luar"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </button>
+                                )}
+                                {alasanSakitLuarItems.length > 0 && (
+                                  <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-bold">
+                                    {alasanSakitLuarItems.length}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                             <div className="bg-slate-50/80 p-2.5 rounded-xl text-sm border border-slate-100 min-h-[75px] max-h-36 overflow-y-auto">
                               {alasanSakitLuarItems.length > 0 ? (
                                 <ul className="space-y-1.5">
@@ -1155,6 +1297,31 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
           fetchEmployees();
         }}
         inspectorNik={inspectorNik}
+      />
+
+      {/* Modal Edit Data Karyawan Lengkap (Khusus Administration) */}
+      <EmployeeEditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        employee={selectedEmployee}
+        inspectorNik={inspectorNik}
+        onSuccess={(updated) => {
+          setSelectedEmployee(updated);
+          setEmployees(prev => prev.map(e => e.nik === updated.nik ? updated : e));
+        }}
+      />
+
+      {/* Modal Tambah Catatan / Tanggal Absensi Cepat (Khusus Administration) */}
+      <AddAttendanceEntryModal
+        isOpen={isAddAttendanceModalOpen}
+        onClose={() => setIsAddAttendanceModalOpen(false)}
+        employee={selectedEmployee}
+        inspectorNik={inspectorNik}
+        defaultCategory={selectedAddCategory}
+        onSuccess={(updated) => {
+          setSelectedEmployee(updated);
+          setEmployees(prev => prev.map(e => e.nik === updated.nik ? updated : e));
+        }}
       />
     </div>
   );
