@@ -944,15 +944,59 @@ employeesRouter.post("/import", async (req, res) => {
           cRaw['Alasan Konseling 1'] ?? 
           cRaw['Alasan Konseling I'] ?? 
           cNorm['alasankonseling'] ?? 
+          cNorm['alasankonselingpembinaan'] ?? 
           cNorm['alasanpembinaan'] ?? 
           cNorm['topikkonseling'] ?? 
           cNorm['catatankonseling'] ?? 
+          cNorm['konselingalasan'] ?? 
           cNorm['alasankonseling1'] ?? 
           cNorm['alasankonselingi'] ?? 
           ''
         ).trim();
 
-        const alasanSp = String(cRaw['Alasan Surat Peringatan'] ?? cRaw['Alasan SP'] ?? cRaw['Alasan'] ?? cNorm['alasansuratperingatan'] ?? cNorm['alasansp'] ?? cNorm['alasan'] ?? cNorm['alasansanksi'] ?? cNorm['alasanperingatan'] ?? cNorm['alasanst'] ?? '').trim();
+        const alasanSp = String(
+          cRaw['Alasan Surat Peringatan'] ?? 
+          cRaw['Alasan SP'] ?? 
+          cRaw['Alasan SPDK'] ?? 
+          cRaw['Alasan Sanksi SPDK'] ?? 
+          cRaw['Alasan Sanksi'] ?? 
+          cRaw['Alasan Pelanggaran'] ?? 
+          cRaw['Alasan ST'] ?? 
+          cRaw['Alasan Surat Teguran'] ?? 
+          cRaw['Alasan SP 1'] ?? 
+          cRaw['Alasan SP 2'] ?? 
+          cRaw['Alasan SP 3'] ?? 
+          cRaw['Alasan SPPT'] ?? 
+          cRaw['Pelanggaran'] ?? 
+          cRaw['Kasus'] ?? 
+          cRaw['Uraian Pelanggaran'] ?? 
+          cRaw['Uraian Masalah'] ?? 
+          cRaw['Deskripsi Masalah'] ?? 
+          cRaw['Alasan Sanksi Disiplin'] ?? 
+          cRaw['Alasan'] ?? 
+          cNorm['alasansuratperingatan'] ?? 
+          cNorm['alasansp'] ?? 
+          cNorm['alasanspdk'] ?? 
+          cNorm['alasansanksispdk'] ?? 
+          cNorm['alasansanksi'] ?? 
+          cNorm['alasanpelanggaran'] ?? 
+          cNorm['alasanst'] ?? 
+          cNorm['alasansuratteguran'] ?? 
+          cNorm['alasansp1'] ?? 
+          cNorm['alasansp2'] ?? 
+          cNorm['alasansp3'] ?? 
+          cNorm['alasansppt'] ?? 
+          cNorm['pelanggaran'] ?? 
+          cNorm['kasus'] ?? 
+          cNorm['uraianpelanggaran'] ?? 
+          cNorm['uraianmasalah'] ?? 
+          cNorm['deskripsimasalah'] ?? 
+          cNorm['alasansanksidisiplin'] ?? 
+          cNorm['alasan'] ?? 
+          cNorm['alasanperingatan'] ?? 
+          ''
+        ).trim();
+
         const keterangan = String(cRaw['Keterangan SP'] ?? cRaw['Keterangan'] ?? cRaw['Catatan'] ?? cNorm['keterangansp'] ?? cNorm['keterangan'] ?? cNorm['catatan'] ?? '').trim();
         const pernahSpSebelumnya = String(cRaw['Pernah SP/ST Sebelumnya'] ?? cRaw['Pernah SP/ST'] ?? cRaw['Pernah SP'] ?? cNorm['pernahspstsebelumnya'] ?? cNorm['pernahspsebelumnya'] ?? cNorm['pernahspst'] ?? cNorm['pernahsp'] ?? cNorm['spsebelumnya'] ?? cNorm['riwayatsp'] ?? '').trim();
         let pernahTerlibatSpdk = String(cRaw['Pernah Terlibat SPDK'] ?? cRaw['Terlibat SPDK'] ?? cRaw['SPDK'] ?? cNorm['pernahterlibatspdk'] ?? cNorm['terlibatspdk'] ?? cNorm['spdk'] ?? cNorm['statusspdk'] ?? '').trim();
@@ -989,8 +1033,9 @@ employeesRouter.post("/import", async (req, res) => {
             else if (st && st !== '-' && st !== '0') tindakanSpdk = 'Pemberian Surat Teguran (ST) Tertulis';
             else if (phk && phk !== '-' && phk !== '0') tindakanSpdk = 'Terminasi Hubungan Kerja (PHK)';
           }
-          if (!kronologiSpdk && (alasanSp || alasanKonseling)) {
-            kronologiSpdk = alasanSp || alasanKonseling;
+          // Kronologi SPDK HANYA diisi dari Alasan SPDK / SP / Pelanggaran (TIDAK boleh dari Alasan Konseling)
+          if (!kronologiSpdk && alasanSp) {
+            kronologiSpdk = alasanSp;
           }
         }
 
@@ -1363,8 +1408,8 @@ employeesRouter.put("/:nik", async (req, res) => {
           else if (st && st !== '-' && st !== '0') tindakanSpdk = 'Pemberian Surat Teguran (ST) Tertulis';
           else if (phk && phk !== '-' && phk !== '0') tindakanSpdk = 'Terminasi Hubungan Kerja (PHK)';
         }
-        if (!kronologiSpdk && (alasanSp || alasanKonseling)) {
-          kronologiSpdk = alasanSp || alasanKonseling;
+        if (!kronologiSpdk && alasanSp) {
+          kronologiSpdk = alasanSp;
         }
       }
 

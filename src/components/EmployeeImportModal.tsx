@@ -604,8 +604,29 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         if (h.clean === 'masaberlakusanksi' || h.clean === 'masaberlaku' || h.clean === 'periodeberlaku' || h.clean === 'tglberlaku' || h.clean === 'tanggalberlaku') rowObj['Masa Berlaku Sanksi'] = val;
         if (h.clean === 'masapemulihani' || h.clean === 'masapemulihan1' || h.clean === 'pemulihani' || h.clean === 'pemulihan1') rowObj['Masa Pemulihan I'] = val;
         if (h.clean === 'masapemulihanii' || h.clean === 'masapemulihan2' || h.clean === 'pemulihanii' || h.clean === 'pemulihan2') rowObj['Masa Pemulihan II'] = val;
-        if (h.clean === 'alasankonseling' || h.clean === 'alasankonselingpembinaan' || h.clean === 'alasanpembinaan' || h.clean === 'topikkonseling' || h.clean === 'catatankonseling') rowObj['Alasan Konseling'] = val;
-        if (h.clean === 'alasansuratperingatan' || h.clean === 'alasansp' || h.clean === 'alasan' || h.clean === 'alasansanksi') rowObj['Alasan Surat Peringatan'] = val;
+        if (h.clean === 'alasankonseling' || h.clean === 'alasankonselingpembinaan' || h.clean === 'alasanpembinaan' || h.clean === 'topikkonseling' || h.clean === 'catatankonseling' || h.clean === 'konselingalasan' || h.clean === 'alasankonseling1' || h.clean === 'alasankonselingi') rowObj['Alasan Konseling'] = val;
+        if (
+          h.clean === 'alasansuratperingatan' || 
+          h.clean === 'alasansp' || 
+          h.clean === 'alasanspdk' || 
+          h.clean === 'alasansanksispdk' || 
+          h.clean === 'alasansanksi' || 
+          h.clean === 'alasanpelanggaran' || 
+          h.clean === 'alasanst' || 
+          h.clean === 'alasansuratteguran' || 
+          h.clean === 'alasansp1' || 
+          h.clean === 'alasansp2' || 
+          h.clean === 'alasansp3' || 
+          h.clean === 'alasansppt' || 
+          h.clean === 'pelanggaran' || 
+          h.clean === 'kasus' || 
+          h.clean === 'uraianpelanggaran' || 
+          h.clean === 'uraianmasalah' || 
+          h.clean === 'deskripsimasalah' || 
+          h.clean === 'alasansanksidisiplin' || 
+          h.clean === 'alasanperingatan' || 
+          h.clean === 'alasan'
+        ) rowObj['Alasan Surat Peringatan'] = val;
         if (h.clean === 'keterangansp' || h.clean === 'keterangan' || h.clean === 'catatan') rowObj['Keterangan SP'] = val;
         if (h.clean === 'pernahspstsebelumnya' || h.clean === 'pernahspsebelumnya' || h.clean === 'pernahspst' || h.clean === 'pernahsp' || h.clean === 'riwayatsp') rowObj['Pernah SP/ST Sebelumnya'] = val;
         if (h.clean === 'pernahterlibatspdk' || h.clean === 'terlibatspdk' || h.clean === 'spdk' || h.clean === 'statusspdk') rowObj['Pernah Terlibat SPDK'] = val;
@@ -936,8 +957,29 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                   if (clean === 'masaberlakusanksi' || clean === 'masaberlaku' || clean === 'periodeberlaku' || clean === 'tglberlaku' || clean === 'tanggalberlaku') rowObj['Masa Berlaku Sanksi'] = v;
                   if (clean === 'masapemulihani' || clean === 'masapemulihan1' || clean === 'pemulihani' || clean === 'pemulihan1') rowObj['Masa Pemulihan I'] = v;
                   if (clean === 'masapemulihanii' || clean === 'masapemulihan2' || clean === 'pemulihanii' || clean === 'pemulihan2') rowObj['Masa Pemulihan II'] = v;
-                  if (clean === 'alasankonseling' || clean === 'alasankonselingpembinaan' || clean === 'alasanpembinaan' || clean === 'topikkonseling' || clean === 'catatankonseling') rowObj['Alasan Konseling'] = v;
-                  if (clean === 'alasansuratperingatan' || clean === 'alasansp' || clean === 'alasan' || clean === 'alasansanksi') rowObj['Alasan Surat Peringatan'] = v;
+                  if (clean === 'alasankonseling' || clean === 'alasankonselingpembinaan' || clean === 'alasanpembinaan' || clean === 'topikkonseling' || clean === 'catatankonseling' || clean === 'konselingalasan' || clean === 'alasankonseling1' || clean === 'alasankonselingi') rowObj['Alasan Konseling'] = v;
+                  if (
+                    clean === 'alasansuratperingatan' || 
+                    clean === 'alasansp' || 
+                    clean === 'alasanspdk' || 
+                    clean === 'alasansanksispdk' || 
+                    clean === 'alasansanksi' || 
+                    clean === 'alasanpelanggaran' || 
+                    clean === 'alasanst' || 
+                    clean === 'alasansuratteguran' || 
+                    clean === 'alasansp1' || 
+                    clean === 'alasansp2' || 
+                    clean === 'alasansp3' || 
+                    clean === 'alasansppt' || 
+                    clean === 'pelanggaran' || 
+                    clean === 'kasus' || 
+                    clean === 'uraianpelanggaran' || 
+                    clean === 'uraianmasalah' || 
+                    clean === 'deskripsimasalah' || 
+                    clean === 'alasansanksidisiplin' || 
+                    clean === 'alasanperingatan' || 
+                    clean === 'alasan'
+                  ) rowObj['Alasan Surat Peringatan'] = v;
                   if (clean === 'keterangansp' || clean === 'keterangan' || clean === 'catatan') rowObj['Keterangan SP'] = v;
                   if (clean === 'pernahspstsebelumnya' || clean === 'pernahspsebelumnya' || clean === 'pernahspst' || clean === 'pernahsp' || clean === 'riwayatsp') rowObj['Pernah SP/ST Sebelumnya'] = v;
                   if (clean === 'pernahterlibatspdk' || clean === 'terlibatspdk' || clean === 'spdk' || clean === 'statusspdk') rowObj['Pernah Terlibat SPDK'] = v;

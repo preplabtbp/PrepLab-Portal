@@ -1358,36 +1358,170 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 const phk = cData.phk || '';
 
                 // Deteksi apakah personil memiliki catatan SP (SP 1, 2, 3, SPPT, ST)
-                const hasAnySp = Boolean(
+                const hasSpMajor = Boolean(
                   (sp1 && sp1 !== '-' && sp1 !== '0') || 
                   (sp2 && sp2 !== '-' && sp2 !== '0') || 
                   (sp3 && sp3 !== '-' && sp3 !== '0') || 
-                  (sppt && sppt !== '-' && sppt !== '0') || 
-                  (st && st !== '-' && st !== '0') ||
-                  (phk && phk !== '-' && phk !== '0') ||
-                  (totalSpNum > 0)
+                  (sppt && sppt !== '-' && sppt !== '0')
                 );
+                const hasSt = Boolean(st && st !== '-' && st !== '0');
+                const hasPhk = Boolean(phk && phk !== '-' && phk !== '0');
+                const hasCounseling = Boolean(
+                  (k1 && k1 !== '-' && k1 !== '0') || 
+                  (k2 && k2 !== '-' && k2 !== '0') || 
+                  (k3 && k3 !== '-' && k3 !== '0')
+                );
+                const hasAnySp = hasSpMajor || hasSt || hasPhk || (totalSpNum > 0);
 
                 // Otomatis SP 1, 2, 3 dan SPPT masuk dalam kategori SPDK
                 const isSpdkInvolved = String(pernahTerlibatSpdk || '').toLowerCase().includes('ya') || hasAnySp;
 
-                // Ambil tanggal SP aktif untuk plotting ke dashboard
-                const activeSpDate = [sppt, sp3, sp2, sp1, st].find(v => v && v !== '-' && v !== '0' && (v.includes('-') || v.includes('/') || v.length > 3)) || tanggalSp || bulanKonseling;
+                // Date Parsing & Duration Calculation Helper
+                const INDO_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+                const MONTH_MAP: Record<string, number> = {
+                  jan: 0, januari: 0, january: 0,
+                  feb: 1, februari: 1, february: 1,
+                  mar: 2, maret: 2, march: 2,
+                  apr: 3, april: 3,
+                  mei: 4, may: 4,
+                  jun: 5, juni: 5, june: 5,
+                  jul: 6, juli: 6, july: 6,
+                  agu: 7, ags: 7, agustus: 7, aug: 7, august: 7,
+                  sep: 8, sept: 8, september: 8,
+                  okt: 9, oktober: 9, oct: 9, october: 9,
+                  nov: 10, november: 10,
+                  des: 11, desember: 11, dec: 11, december: 11
+                };
 
-                // Hitung fallback Masa Berlaku Sanksi dari Tanggal SP
-                let masaBerlaku = rawMasaBerlaku;
-                if (!masaBerlaku || masaBerlaku === '-' || masaBerlaku.toLowerCase().includes('tidak ada')) {
-                  if (activeSpDate) {
-                    masaBerlaku = `${activeSpDate} (Aktif)`;
-                  } else if (hasAnySp) {
-                    masaBerlaku = bulanKonseling ? `${bulanKonseling} (Aktif)` : 'Sanksi Disiplin Aktif';
+                const parseSanctionDate = (val?: any): Date | null => {
+                  if (!val) return null;
+                  const str = String(val).trim().split(/[\r\n,;]+/)[0].trim();
+                  if (!str || str === '-' || str === '#N/A' || str === '0') return null;
+
+                  const dMmmY = str.match(/^(\d{1,2})[-\s/]([a-zA-Z]+)[-\s/](\d{2,4})$/);
+                  if (dMmmY) {
+                    const day = parseInt(dMmmY[1], 10);
+                    const mStr = dMmmY[2].toLowerCase();
+                    let year = parseInt(dMmmY[3], 10);
+                    if (year < 100) year += 2000;
+                    const month = MONTH_MAP[mStr];
+                    if (month !== undefined && !isNaN(day) && !isNaN(year)) {
+                      return new Date(year, month, day);
+                    }
+                  }
+
+                  const ymd = str.match(/^(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})$/);
+                  if (ymd) {
+                    const year = parseInt(ymd[1], 10);
+                    const month = parseInt(ymd[2], 10) - 1;
+                    const day = parseInt(ymd[3], 10);
+                    return new Date(year, month, day);
+                  }
+
+                  const dmy = str.match(/^(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{2,4})$/);
+                  if (dmy) {
+                    const day = parseInt(dmy[1], 10);
+                    const month = parseInt(dmy[2], 10) - 1;
+                    let year = parseInt(dmy[3], 10);
+                    if (year < 100) year += 2000;
+                    return new Date(year, month, day);
+                  }
+
+                  const mY = str.match(/^([a-zA-Z]+)[-\s/](\d{4})$/);
+                  if (mY) {
+                    const month = MONTH_MAP[mY[1].toLowerCase()];
+                    const year = parseInt(mY[2], 10);
+                    if (month !== undefined && !isNaN(year)) {
+                      return new Date(year, month, 1);
+                    }
+                  }
+
+                  const d = new Date(str);
+                  return isNaN(d.getTime()) ? null : d;
+                };
+
+                const formatIndoDateStr = (d: Date): string => {
+                  const day = String(d.getDate()).padStart(2, '0');
+                  const month = INDO_MONTHS_SHORT[d.getMonth()] || 'Jan';
+                  const year = d.getFullYear();
+                  return `${day}-${month}-${year}`;
+                };
+
+                // Identifikasi tanggal sanksi utama
+                const spMajorDateStr = [sppt, sp3, sp2, sp1].find(v => v && v !== '-' && v !== '0') || (hasSpMajor ? tanggalSp : '');
+                const stDateStr = st && st !== '-' && st !== '0' ? st : (hasSt ? tanggalSp : '');
+                const counselingDateStr = [k3, k2, k1].find(v => v && v !== '-' && v !== '0') || bulanKonseling;
+
+                // Aturan Masa Aktif:
+                // 1. SP 1 - SPPT = 6 Bulan dari sanksi keluar (+3 Bln Evaluasi, +6 Bln Pemutihan)
+                // 2. ST / Surat Teguran = 3 Bulan dari sanksi keluar (+45 Hari / 1.5 Bln Evaluasi, +3 Bln Pemutihan)
+                // 3. Konseling = 3 Bulan (+1.5 Bln Evaluasi, +3 Bln Selesai)
+                let calculatedMasaBerlaku = '';
+                let calculatedPemulihan1 = '';
+                let calculatedPemulihan2 = '';
+
+                if (hasSpMajor && spMajorDateStr) {
+                  const baseDate = parseSanctionDate(spMajorDateStr);
+                  if (baseDate) {
+                    const evalDate = new Date(baseDate.getTime());
+                    evalDate.setMonth(evalDate.getMonth() + 3);
+                    const endDate = new Date(baseDate.getTime());
+                    endDate.setMonth(endDate.getMonth() + 6);
+
+                    calculatedMasaBerlaku = `${formatIndoDateStr(baseDate)} s/d ${formatIndoDateStr(endDate)} (6 Bulan)`;
+                    calculatedPemulihan1 = `${formatIndoDateStr(evalDate)} (Evaluasi Disiplin)`;
+                    calculatedPemulihan2 = `${formatIndoDateStr(endDate)} (Pemutihan Status)`;
+                  } else {
+                    calculatedMasaBerlaku = `${spMajorDateStr} (Masa Aktif 6 Bulan)`;
+                    calculatedPemulihan1 = `${spMajorDateStr} + 3 Bulan`;
+                    calculatedPemulihan2 = `${spMajorDateStr} + 6 Bulan`;
+                  }
+                } else if (hasSt && stDateStr) {
+                  const baseDate = parseSanctionDate(stDateStr);
+                  if (baseDate) {
+                    const evalDate = new Date(baseDate.getTime());
+                    evalDate.setDate(evalDate.getDate() + 45);
+                    const endDate = new Date(baseDate.getTime());
+                    endDate.setMonth(endDate.getMonth() + 3);
+
+                    calculatedMasaBerlaku = `${formatIndoDateStr(baseDate)} s/d ${formatIndoDateStr(endDate)} (3 Bulan)`;
+                    calculatedPemulihan1 = `${formatIndoDateStr(evalDate)} (Evaluasi Disiplin)`;
+                    calculatedPemulihan2 = `${formatIndoDateStr(endDate)} (Pemutihan Status)`;
+                  } else {
+                    calculatedMasaBerlaku = `${stDateStr} (Masa Aktif 3 Bulan)`;
+                    calculatedPemulihan1 = `${stDateStr} + 45 Hari`;
+                    calculatedPemulihan2 = `${stDateStr} + 3 Bulan`;
+                  }
+                } else if (hasCounseling && counselingDateStr) {
+                  const baseDate = parseSanctionDate(counselingDateStr);
+                  if (baseDate) {
+                    const evalDate = new Date(baseDate.getTime());
+                    evalDate.setDate(evalDate.getDate() + 45);
+                    const endDate = new Date(baseDate.getTime());
+                    endDate.setMonth(endDate.getMonth() + 3);
+
+                    calculatedMasaBerlaku = `${formatIndoDateStr(baseDate)} s/d ${formatIndoDateStr(endDate)} (3 Bulan)`;
+                    calculatedPemulihan1 = `${formatIndoDateStr(evalDate)} (Evaluasi Pembinaan)`;
+                    calculatedPemulihan2 = `${formatIndoDateStr(endDate)} (Selesai Pembinaan)`;
+                  } else {
+                    calculatedMasaBerlaku = `${counselingDateStr} (Masa Berlaku 3 Bulan)`;
+                    calculatedPemulihan1 = `${counselingDateStr} + 45 Hari`;
+                    calculatedPemulihan2 = `${counselingDateStr} + 3 Bulan`;
+                  }
+                }
+
+                // Tentukan Masa Berlaku Sanksi
+                let masaBerlaku = calculatedMasaBerlaku || (rawMasaBerlaku && rawMasaBerlaku !== '-' ? rawMasaBerlaku : '');
+                if (!masaBerlaku) {
+                  if (hasAnySp) {
+                    masaBerlaku = bulanKonseling ? `${bulanKonseling} (Sanksi Aktif)` : 'Sanksi Disiplin Aktif';
                   } else {
                     masaBerlaku = 'Tidak ada sanksi aktif';
                   }
                 }
 
-                const masaPemulihan1 = rawMasaPemulihan1 && rawMasaPemulihan1 !== '-' ? rawMasaPemulihan1 : (hasAnySp && activeSpDate ? `${activeSpDate} + 3 Bln` : '-');
-                const masaPemulihan2 = rawMasaPemulihan2 && rawMasaPemulihan2 !== '-' ? rawMasaPemulihan2 : (hasAnySp && activeSpDate ? `${activeSpDate} + 6 Bln` : '-');
+                const masaPemulihan1 = calculatedPemulihan1 || (rawMasaPemulihan1 && rawMasaPemulihan1 !== '-' ? rawMasaPemulihan1 : '-');
+                const masaPemulihan2 = calculatedPemulihan2 || (rawMasaPemulihan2 && rawMasaPemulihan2 !== '-' ? rawMasaPemulihan2 : '-');
 
                 // Otomatis tentukan Kategori SPDK berdasarkan tingkatan SP
                 let effectiveKategoriSpdk = kategoriSpdk && kategoriSpdk !== '-' && kategoriSpdk.toLowerCase() !== 'tidak ada' ? kategoriSpdk : '';
@@ -1408,12 +1542,18 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   else if (sp2 && sp2 !== '-' && sp2 !== '0') effectiveTindakanSpdk = 'Penerbitan SP II & Evaluasi Kedisiplinan';
                   else if (sp1 && sp1 !== '-' && sp1 !== '0') effectiveTindakanSpdk = 'Penerbitan SP I & Pembinaan Kedisiplinan';
                   else if (st && st !== '-' && st !== '0') effectiveTindakanSpdk = 'Pemberian Surat Teguran (ST) Tertulis';
+                  else if (phk && phk !== '-' && phk !== '0') effectiveTindakanSpdk = 'Terminasi Hubungan Kerja (PHK)';
                 }
 
-                // Kronologi SPDK fallback ke Alasan SP / Alasan Konseling jika kronologi kosong
+                // Alasan Surat Peringatan: cantumkan dari alasanSp atau alasan SPDK yang aktif / kronologi SPDK
+                const effectiveAlasanSp = (alasanSp && alasanSp !== '-') 
+                  ? alasanSp 
+                  : ((kronologiSpdk && kronologiSpdk !== '-') ? kronologiSpdk : '');
+
+                // Kronologi Kejadian SPDK HANYA menampilkan alasan / kronologi sanksi SPDK (SP 1 - SPPT / ST), TIDAK boleh mengambil dari Alasan Konseling!
                 const effectiveKronologiSpdk = (kronologiSpdk && kronologiSpdk !== '-' && kronologiSpdk.length > 3) 
                   ? kronologiSpdk 
-                  : (alasanSp || alasanKonseling || '');
+                  : (alasanSp && alasanSp !== '-' ? alasanSp : '');
 
                 // Determine sanction level (0 - 6)
                 let severityLevel = 0;
@@ -1715,7 +1855,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             <div>
                               <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Alasan Surat Peringatan:</p>
                               <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100 leading-relaxed font-medium">
-                                {alasanSp || 'Tidak ada catatan alasan surat peringatan.'}
+                                {effectiveAlasanSp || 'Tidak ada catatan alasan surat peringatan.'}
                               </p>
                             </div>
 
