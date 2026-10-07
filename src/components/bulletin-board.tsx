@@ -1374,7 +1374,7 @@ ${aiMeetingNotes
       >
         {/* Topbar with Hierarchical Navigation */}
         <div 
-          className="h-12 border-b flex items-center px-4 justify-between sticky top-0 backdrop-blur-md z-10 transition-colors"
+          className="h-12 border-b flex items-center px-4 justify-between sticky top-0 backdrop-blur-md z-40 transition-colors shadow-2xs"
           style={{
             backgroundColor: 'var(--card-bg, #ffffff)',
             borderColor: 'var(--border-main, #e2e8f0)',

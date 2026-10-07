@@ -3031,7 +3031,7 @@ export function NotionDatabaseTable({
       {/* ========================================================================= */}
       <div 
         ref={headerControlRef}
-        className={`sticky top-0 z-30 transition-all border-b shadow-2xs backdrop-blur-md ${
+        className={`sticky top-12 z-30 transition-all border-b shadow-2xs backdrop-blur-md ${
           isNotionLight ? 'bg-white/95 border-slate-200' : 'bg-[#181818]/95 border-[#2d2d2d]'
         }`}
       >
@@ -3470,7 +3470,7 @@ export function NotionDatabaseTable({
                     ? 'bg-[#fbfbfa]/95 border-slate-200 text-slate-600'
                     : 'bg-[#242424]/95 border-[#303030] text-slate-400'
                 }`}
-                style={{ top: `${headerControlHeight}px` }}
+                style={{ top: `${headerControlHeight + 48}px` }}
               >
                 {/* Select All Checkbox Column */}
                 <th className={`text-center ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}>
