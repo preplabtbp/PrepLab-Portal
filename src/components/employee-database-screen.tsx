@@ -9,8 +9,31 @@ import { toast } from 'sonner';
 import { formatAvatarUrl } from '../lib/avatarUtils';
 
 export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik: string, onBack?: () => void }) {
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = `preplab_emp_db_${inspectorNik || 'all'}`;
+
+  // Instant hydration dari cache lokal agar langsung tampil seketika (0ms wait)
+  const [employees, setEmployees] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem(cacheKey) || localStorage.getItem(cacheKey) || localStorage.getItem('preplab_emp_db_all');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      const cached = sessionStorage.getItem(cacheKey) || localStorage.getItem(cacheKey) || localStorage.getItem('preplab_emp_db_all');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return false;
+      }
+    } catch {}
+    return true;
+  });
+
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
@@ -75,25 +98,37 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     return false;
   }, [inspectorNik, developerList, employees]);
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = async (silent = false) => {
+    if (!silent && employees.length === 0) {
+      setLoading(true);
+    }
     try {
-      const res = await fetch(`/api/employees/hierarchy/${inspectorNik}`);
+      const url = inspectorNik ? `/api/employees/hierarchy/${encodeURIComponent(inspectorNik)}` : `/api/employees`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Gagal mengambil data karyawan");
       const data = await res.json();
-      if (data.status === 'success') {
-        setEmployees(data.data || []);
-      } else {
-        throw new Error(data.message || "Gagal mengambil data karyawan");
+      const list = data.status === 'success' ? (data.data || []) : (Array.isArray(data) ? data : []);
+      if (list.length > 0) {
+        setEmployees(list);
+        try {
+          const cacheStr = JSON.stringify(list);
+          sessionStorage.setItem(cacheKey, cacheStr);
+          localStorage.setItem(cacheKey, cacheStr);
+          localStorage.setItem('preplab_emp_db_all', cacheStr);
+        } catch {}
       }
     } catch (err: any) {
-      setError(err.message);
+      if (employees.length === 0) {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchEmployees();
+    // Jalankan revalidasi data di background secara instan
+    fetchEmployees(employees.length > 0);
   }, [inspectorNik]);
 
   const handleManualSync = async () => {
@@ -1284,7 +1319,15 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         inspectorNik={inspectorNik}
         onSuccess={(updated) => {
           setSelectedEmployee(updated);
-          setEmployees(prev => prev.map(e => e.nik === updated.nik ? updated : e));
+          setEmployees(prev => {
+            const next = prev.map(e => e.nik === updated.nik ? updated : e);
+            try {
+              const cacheStr = JSON.stringify(next);
+              localStorage.setItem(cacheKey, cacheStr);
+              sessionStorage.setItem(cacheKey, cacheStr);
+            } catch {}
+            return next;
+          });
         }}
       />
 
@@ -1297,7 +1340,15 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         defaultCategory={selectedAddCategory}
         onSuccess={(updated) => {
           setSelectedEmployee(updated);
-          setEmployees(prev => prev.map(e => e.nik === updated.nik ? updated : e));
+          setEmployees(prev => {
+            const next = prev.map(e => e.nik === updated.nik ? updated : e);
+            try {
+              const cacheStr = JSON.stringify(next);
+              localStorage.setItem(cacheKey, cacheStr);
+              sessionStorage.setItem(cacheKey, cacheStr);
+            } catch {}
+            return next;
+          });
         }}
       />
     </div>

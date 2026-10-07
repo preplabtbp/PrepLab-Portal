@@ -17,7 +17,23 @@ export function normalizeNameKey(name: string): string {
     .trim();
 }
 
+// In-memory cache for ultra-fast employee and attendance data serving
+let cachedAttendanceMap: { data: Record<string, any>; timestamp: number } | null = null;
+let cachedHierarchy: Map<string, { data: any[]; timestamp: number }> = new Map();
+let cachedAllEmployees: { data: any[]; timestamp: number } | null = null;
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
+
+export function clearEmployeeCache() {
+  cachedAttendanceMap = null;
+  cachedHierarchy.clear();
+  cachedAllEmployees = null;
+}
+
 async function getAttendanceMap(): Promise<Record<string, any>> {
+  const now = Date.now();
+  if (cachedAttendanceMap && (now - cachedAttendanceMap.timestamp < CACHE_TTL_MS)) {
+    return cachedAttendanceMap.data;
+  }
   try {
     const allAtt = await db.select().from(employeeAttendance);
     const map: Record<string, any> = {};
@@ -45,6 +61,7 @@ async function getAttendanceMap(): Promise<Record<string, any>> {
         details: item.details || []
       };
     }
+    cachedAttendanceMap = { data: map, timestamp: now };
     return map;
   } catch (e) {
     return {};
@@ -285,6 +302,12 @@ employeesRouter.get("/", async (req, res) => {
 employeesRouter.get("/hierarchy/:nik", async (req, res) => {
   try {
     const { nik } = req.params;
+    const now = Date.now();
+    const cached = cachedHierarchy.get(nik);
+    if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+      return res.json({ status: "success", data: cached.data });
+    }
+
     const userResult = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
     
     if (userResult.length === 0) {
@@ -302,7 +325,9 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
         sectionLower.includes("qa") || deptLower.includes("qa") || sectionLower.includes("quality assurance") || deptLower.includes("quality assurance") ||
         jabatanLower.includes("admin")) {
       const allData = await db.select().from(employees);
-      return res.json({ status: "success", data: allData.map(e => attachAttendanceToEmployee(e, attMap)) });
+      const formatted = allData.map(e => attachAttendanceToEmployee(e, attMap));
+      cachedHierarchy.set(nik, { data: formatted, timestamp: now });
+      return res.json({ status: "success", data: formatted });
     }
     
     // Determine subordinates based on Jabatan
@@ -317,7 +342,9 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     
     if (allowedJabatans.length === 0) {
       // Crew or someone with no subordinates
-      return res.json({ status: "success", data: [attachAttendanceToEmployee(user, attMap)] });
+      const formatted = [attachAttendanceToEmployee(user, attMap)];
+      cachedHierarchy.set(nik, { data: formatted, timestamp: now });
+      return res.json({ status: "success", data: formatted });
     }
     
     // Fetch all employees
@@ -337,7 +364,9 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
       subordinates.unshift(user);
     }
     
-    res.json({ status: "success", data: subordinates.map(e => attachAttendanceToEmployee(e, attMap)) });
+    const formatted = subordinates.map(e => attachAttendanceToEmployee(e, attMap));
+    cachedHierarchy.set(nik, { data: formatted, timestamp: now });
+    res.json({ status: "success", data: formatted });
   } catch (error) {
     console.error("Error fetching hierarchy:", error);
     res.status(500).json({ status: "error", message: "Failed to fetch hierarchy" });
@@ -753,6 +782,8 @@ employeesRouter.post("/import", async (req, res) => {
   } catch (error: any) {
     console.error("Error importing employees:", error);
     res.status(500).json({ status: "error", message: error.message || "Gagal mengimport data karyawan." });
+  } finally {
+    clearEmployeeCache();
   }
 });
 
@@ -781,6 +812,7 @@ employeesRouter.post("/avatar", async (req, res) => {
       return res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan" });
     }
 
+    clearEmployeeCache();
     return res.json({ status: "success", employee: toPublicEmployee(result[0]) || null });
   } catch (error) {
     console.error("Error updating avatar:", error);
@@ -822,6 +854,7 @@ employeesRouter.post("/photo", async (req, res) => {
       return res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan" });
     }
 
+    clearEmployeeCache();
     return res.json({ status: "success", employee: toPublicEmployee(result[0]) || null });
   } catch (error) {
     console.error("Error updating photo:", error);
@@ -984,6 +1017,8 @@ employeesRouter.put("/:nik", async (req, res) => {
       await db.update(employees).set(empUpdate).where(eq(employees.nik, nik));
     }
 
+    clearEmployeeCache();
+
     const updatedEmp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
     const attMap = await getAttendanceMap();
     const finalEmp = attachAttendanceToEmployee(updatedEmp[0], attMap);
@@ -1098,6 +1133,8 @@ employeesRouter.post("/:nik/attendance-entry", async (req, res) => {
     } else {
       await db.insert(employeeAttendance).values({ ...currentAtt, ...updateObj });
     }
+
+    clearEmployeeCache();
 
     // Refresh attendance and return
     const attMap = await getAttendanceMap();
