@@ -987,6 +987,69 @@ export function NotionDatabaseTable({
     });
   }, [tableHeaders]);
 
+  // Floating Synchronized Horizontal Scrollbar (Tetap di bawah viewport, transparan saat idle, muncul saat disentuh kursor)
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const floatingScrollRef = useRef<HTMLDivElement>(null);
+  const [tableScrollWidth, setTableScrollWidth] = useState(0);
+  const [tableClientWidth, setTableClientWidth] = useState(0);
+  const [isTableVisible, setIsTableVisible] = useState(true);
+  const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
+  const isSyncingScrollRef = useRef(false);
+
+  const handleTableScroll = useCallback(() => {
+    if (isSyncingScrollRef.current) return;
+    isSyncingScrollRef.current = true;
+    if (tableScrollRef.current && floatingScrollRef.current) {
+      floatingScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false;
+    });
+  }, []);
+
+  const handleFloatingScroll = useCallback(() => {
+    if (isSyncingScrollRef.current) return;
+    isSyncingScrollRef.current = true;
+    if (tableScrollRef.current && floatingScrollRef.current) {
+      tableScrollRef.current.scrollLeft = floatingScrollRef.current.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false;
+    });
+  }, []);
+
+  useEffect(() => {
+    const checkOverflow = () => {
+      if (tableScrollRef.current) {
+        const sWidth = tableScrollRef.current.scrollWidth;
+        const cWidth = tableScrollRef.current.clientWidth;
+        setTableScrollWidth(sWidth);
+        setTableClientWidth(cWidth);
+        setHasHorizontalOverflow(sWidth > cWidth + 6);
+      }
+    };
+
+    checkOverflow();
+    const el = tableScrollRef.current;
+    if (!el) return;
+
+    const ro = new ResizeObserver(checkOverflow);
+    ro.observe(el);
+
+    const io = new IntersectionObserver(([entry]) => {
+      setIsTableVisible(entry.isIntersecting);
+    }, { threshold: 0.05 });
+    io.observe(el);
+
+    window.addEventListener('resize', checkOverflow);
+
+    return () => {
+      ro.disconnect();
+      io.disconnect();
+      window.removeEventListener('resize', checkOverflow);
+    };
+  }, [localRows, displayHeaders, zoomPercent, fitPageMode]);
+
   const [showAddColumnPopover, setShowAddColumnPopover] = useState(false);
   const [customColumnName, setCustomColumnName] = useState('');
   const addColumnRef = useRef<HTMLTableHeaderCellElement>(null);
@@ -3306,6 +3369,8 @@ export function NotionDatabaseTable({
       {/* ========================================================================= */}
       {viewMode === 'table' && (
         <div 
+          ref={tableScrollRef}
+          onScroll={handleTableScroll}
           className={`overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] min-h-[420px] w-full transition-all pb-1 rounded-b-xl ${
             isNotionLight ? 'notion-table-scroll-light' : 'notion-table-scroll-dark'
           }`}
@@ -3386,6 +3451,48 @@ export function NotionDatabaseTable({
             .notion-table-scroll-dark::-webkit-scrollbar-thumb:hover {
               background: #2dd4bf;
               box-shadow: 0 0 10px rgba(45, 212, 191, 0.7);
+            }
+
+            .notion-floating-scroll-light {
+              scrollbar-color: #0d9488 rgba(241, 245, 249, 0.85);
+              scrollbar-width: thin;
+            }
+            .notion-floating-scroll-light::-webkit-scrollbar {
+              height: 6px;
+            }
+            .notion-floating-scroll-light::-webkit-scrollbar-track {
+              background: rgba(241, 245, 249, 0.85);
+              border-radius: 9999px;
+            }
+            .notion-floating-scroll-light::-webkit-scrollbar-thumb {
+              background: #0d9488;
+              border-radius: 9999px;
+              box-shadow: 0 1px 4px rgba(13, 148, 136, 0.45);
+            }
+            .notion-floating-scroll-light::-webkit-scrollbar-thumb:hover {
+              background: #0f766e;
+              box-shadow: 0 0 8px rgba(15, 118, 110, 0.65);
+            }
+
+            .notion-floating-scroll-dark {
+              scrollbar-color: #14b8a6 rgba(24, 24, 27, 0.85);
+              scrollbar-width: thin;
+            }
+            .notion-floating-scroll-dark::-webkit-scrollbar {
+              height: 6px;
+            }
+            .notion-floating-scroll-dark::-webkit-scrollbar-track {
+              background: rgba(24, 24, 27, 0.85);
+              border-radius: 9999px;
+            }
+            .notion-floating-scroll-dark::-webkit-scrollbar-thumb {
+              background: #14b8a6;
+              border-radius: 9999px;
+              box-shadow: 0 1px 6px rgba(20, 184, 166, 0.5);
+            }
+            .notion-floating-scroll-dark::-webkit-scrollbar-thumb:hover {
+              background: #2dd4bf;
+              box-shadow: 0 0 10px rgba(45, 212, 191, 0.75);
             }
           `}</style>
           <table className={`w-full min-w-max text-left border-collapse ${
@@ -4420,6 +4527,29 @@ export function NotionDatabaseTable({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Floating Horizontal Viewport Scrollbar (Pinned to bottom of viewport, transparent when idle, appears on bottom hover) */}
+      {viewMode === 'table' && hasHorizontalOverflow && isTableVisible && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-40 group/floating-scroll py-1 px-4 flex justify-center pointer-events-none transition-all duration-300"
+          style={{ zIndex: 45 }}
+        >
+          <div
+            ref={floatingScrollRef}
+            onScroll={handleFloatingScroll}
+            className={`w-full max-w-[1700px] overflow-x-auto overflow-y-hidden transition-all duration-300 pointer-events-auto opacity-0 group-hover/floating-scroll:opacity-100 hover:opacity-100 rounded-full ${
+              isNotionLight ? 'notion-floating-scroll-light' : 'notion-floating-scroll-dark'
+            }`}
+            style={{
+              height: '14px',
+              backgroundColor: 'transparent',
+            }}
+            title="Scroll horizontal tabel (Geser kanan/kiri)"
+          >
+            <div style={{ width: `${tableScrollWidth}px`, height: '1px' }} />
+          </div>
         </div>
       )}
 
