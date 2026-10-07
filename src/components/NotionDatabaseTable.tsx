@@ -64,6 +64,7 @@ import { NotionDropdownCell } from './notion/NotionDropdownCell';
 import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
+import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
 import {
   normalizeCadence,
   isPeriodicCadence,
