@@ -1100,48 +1100,6 @@ export function EmployeeEditModal({
                 </div>
               </div>
 
-              {/* Periode Masa Berlaku & Pemulihan */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Masa Berlaku Sanksi
-                  </label>
-                  <input
-                    type="text"
-                    value={counselData.masaBerlakuSanksi || ''}
-                    onChange={(e) => handleCounselChange('masaBerlakuSanksi', e.target.value)}
-                    placeholder="15-Agu-2026"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-teal-800 uppercase tracking-wider mb-1.5">
-                    Masa Pemulihan I
-                  </label>
-                  <input
-                    type="text"
-                    value={counselData.masaPemulihan1 || ''}
-                    onChange={(e) => handleCounselChange('masaPemulihan1', e.target.value)}
-                    placeholder="15-Mei-2026"
-                    className="w-full px-3.5 py-2 rounded-xl border border-teal-200 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1.5">
-                    Masa Pemulihan II
-                  </label>
-                  <input
-                    type="text"
-                    value={counselData.masaPemulihan2 || ''}
-                    onChange={(e) => handleCounselChange('masaPemulihan2', e.target.value)}
-                    placeholder="15-Agu-2026"
-                    className="w-full px-3.5 py-2 rounded-xl border border-emerald-200 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-
               {/* Alasan Konseling / Pembinaan */}
               <div>
                 <label className="block text-xs font-bold text-teal-800 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
