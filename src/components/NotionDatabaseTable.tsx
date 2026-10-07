@@ -683,24 +683,6 @@ export function NotionDatabaseTable({
     setCollapsedGroups(prev => ({ ...prev, [grp]: !prev[grp] }));
   };
 
-  // Sticky Controls Height & Position Measurement for Freezing Table Column Headers
-  const [controlsBottom, setControlsBottom] = useState<number>(158);
-  const controlsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = controlsRef.current;
-    if (!el) return;
-    const updatePos = () => {
-      if (el) {
-        setControlsBottom(48 + (el.offsetHeight || 110));
-      }
-    };
-    updatePos();
-    const obs = new ResizeObserver(updatePos);
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
   // Helper to categorize rows into Notion Database Groups (e.g. 'Non Routine Lainnya', 'PTK GTS')
   const getRowGroup = useCallback((row: TableRowData): string => {
     const gVal = 
@@ -3048,7 +3030,6 @@ export function NotionDatabaseTable({
       {/* NOTION TOP CONTROLS & HEADER GROUP (Breadcrumbs, Toolbar, Filter)         */}
       {/* ========================================================================= */}
       <div 
-        ref={controlsRef}
         className={`sticky top-12 z-30 transition-all border-b shadow-2xs backdrop-blur-md ${
           isNotionLight ? 'bg-white/98 border-slate-200' : 'bg-[#181818]/98 border-[#2d2d2d]'
         }`}
@@ -3449,8 +3430,7 @@ export function NotionDatabaseTable({
               >
                 {/* Select All Checkbox Column */}
                 <th 
-                  style={{ top: `${controlsBottom}px` }}
-                  className={`sticky z-20 text-center shadow-2xs ${
+                  className={`sticky top-0 z-20 text-center shadow-2xs ${
                     isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#202020] text-slate-300 border-b border-[#303030]'
                   } ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}
                 >
@@ -3502,8 +3482,8 @@ export function NotionDatabaseTable({
                   return (
                     <th
                       key={colHeader}
-                      style={{ top: `${controlsBottom}px`, ...getColStyle(colHeader) }}
-                      className={`sticky z-20 shadow-2xs font-bold hover:opacity-90 transition-opacity group/th relative ${
+                      style={getColStyle(colHeader)}
+                      className={`sticky top-0 z-20 shadow-2xs font-bold hover:opacity-90 transition-opacity group/th relative ${
                         isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#202020] text-slate-300 border-b border-[#303030]'
                       } ${widthClass}`}
                     >
@@ -3597,8 +3577,7 @@ export function NotionDatabaseTable({
 
                 {/* Add Column Header Button (+) */}
                 <th 
-                  style={{ top: `${controlsBottom}px` }}
-                  className={`sticky z-20 w-10 text-center px-1 py-2 relative shadow-2xs ${
+                  className={`sticky top-0 z-20 w-10 text-center px-1 py-2 relative shadow-2xs ${
                     isNotionLight ? 'bg-[#fbfbfa] border-b border-slate-200' : 'bg-[#202020] border-b border-[#303030]'
                   }`} 
                   ref={addColumnRef}
@@ -3726,8 +3705,7 @@ export function NotionDatabaseTable({
                 </th>
 
                 <th 
-                  style={{ top: `${controlsBottom}px` }}
-                  className={`sticky z-20 text-center shadow-2xs ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${
+                  className={`sticky top-0 z-20 text-center shadow-2xs ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${
                     isNotionLight ? 'bg-[#fbfbfa] text-slate-500 font-semibold border-b border-slate-200' : 'bg-[#202020] text-slate-400 font-bold border-b border-[#303030]'
                   }`}
                 >
