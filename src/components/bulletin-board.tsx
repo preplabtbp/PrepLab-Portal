@@ -1471,31 +1471,6 @@ ${aiMeetingNotes
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Toggle Focus Mode Button */}
-            <button
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent('toggle-bulletin-focus'));
-              }}
-              className={`px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
-                isFocusMode
-                  ? 'bg-teal-500/15 border-teal-500/40 text-teal-400 font-bold hover:bg-teal-500/25'
-                  : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white'
-              }`}
-              title={isFocusMode ? "Buka Header & Menu Portal (Keluar Focus Mode)" : "Minimize Header & Sidebar (Masuk Focus Mode Diskusi)"}
-            >
-              {isFocusMode ? (
-                <>
-                  <Minimize2 className="w-3.5 h-3.5 text-teal-400" />
-                  <span className="hidden sm:inline">Focus Mode</span>
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="hidden sm:inline">Focus Mode</span>
-                </>
-              )}
-            </button>
-
             {/* Direct Jump to Log Book Section */}
             <button
               onClick={() => navigate('/logbook')}

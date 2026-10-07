@@ -1700,35 +1700,6 @@ export default function App() {
           
       <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-slate-200/50 to-transparent pointer-events-none"></div>
       
-      {/* Sleek Floating Focus Mode Pill when Header & Sidebar are Minimized */}
-      {isBulletin && bulletinFocusMode && (
-        <div className="fixed bottom-5 left-4 sm:bottom-6 sm:left-6 sm:top-auto sm:right-auto z-50 flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-full bg-slate-900/85 dark:bg-black/90 backdrop-blur-md text-white border border-teal-500/40 shadow-2xl text-xs select-none transition-all hover:scale-[1.02]">
-          <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-          <span className="font-semibold text-slate-200 hidden sm:inline">Focus Mode • Diskusi Kerja</span>
-          <div className="h-3 w-px bg-white/20 hidden sm:block" />
-          <button
-            onClick={() => {
-              setBulletinFocusMode(false);
-              window.dispatchEvent(new CustomEvent('bulletin-focus-changed', { detail: { focus: false } }));
-            }}
-            className="text-teal-300 hover:text-white transition-colors cursor-pointer flex items-center gap-1 font-medium px-1.5 py-0.5 rounded hover:bg-white/10"
-            title="Tampilkan Header & Menu Portal"
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-            <span className="text-[11px]">Buka Menu</span>
-          </button>
-          <div className="h-3 w-px bg-white/20" />
-          <button
-            onClick={() => handleNav('home')}
-            className="text-slate-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/10"
-            title="Kembali ke Beranda Portal"
-          >
-            <Home className="w-3.5 h-3.5" />
-            <span className="text-[11px]">Beranda</span>
-          </button>
-        </div>
-      )}
-
       {/* Header */}
       <header 
         className={`px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-40 backdrop-blur-md border-b w-full flex justify-center transition-all duration-300 ${
@@ -1782,19 +1753,6 @@ export default function App() {
         />
 
         <div className="flex items-center gap-3">
-          {isBulletin && !bulletinFocusMode && (
-            <button
-              onClick={() => {
-                setBulletinFocusMode(true);
-                window.dispatchEvent(new CustomEvent('bulletin-focus-changed', { detail: { focus: true } }));
-              }}
-              className="px-2.5 py-1 rounded-full text-xs font-bold border border-teal-500/40 bg-teal-500/10 text-teal-600 dark:text-teal-400 hover:bg-teal-500/20 transition-all flex items-center gap-1 cursor-pointer"
-              title="Masuk ke Focus Mode Diskusi Kerja"
-            >
-              <Minimize2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Focus Mode</span>
-            </button>
-          )}
           <NotificationBell 
             userNik={inspectorNik || undefined} 
             userName={inspectorName || undefined}
