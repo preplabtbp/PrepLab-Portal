@@ -780,20 +780,22 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
               {/* SECTION: HISTORI ABSENSI & ALASAN */}
               {(() => {
-                const att26 = selectedEmployee.attendance2026 || {};
-                const parseDateList = (val?: string | null) => {
+                const att26 = selectedEmployee.attendance2026 || selectedEmployee.attendance?.['2026'] || selectedEmployee.attendance?.[2026] || selectedEmployee.attendanceData?.['2026'] || selectedEmployee.attendanceData?.[2026] || {};
+                const parseDateList = (val?: any) => {
                   if (!val) return [];
+                  if (Array.isArray(val)) return val.map(s => String(s).trim()).filter(Boolean);
                   return String(val)
-                    .split(/[\r\n,]+/)
+                    .split(/[\r\n,;]+/)
                     .map(s => s.trim())
-                    .filter(Boolean);
+                    .filter(s => s && s !== '-' && s !== '#N/A');
                 };
-                const parseReasonList = (val?: string | null) => {
+                const parseReasonList = (val?: any) => {
                   if (!val) return [];
+                  if (Array.isArray(val)) return val.map(s => String(s).trim()).filter(Boolean);
                   return String(val)
                     .split(/\r?\n/)
                     .map(s => s.trim())
-                    .filter(Boolean);
+                    .filter(s => s && s !== '-' && s !== '#N/A');
                 };
 
                 const izinDates = parseDateList(att26.tanggalIzin);
@@ -811,7 +813,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 );
 
                 const alasanIzinItems = parseReasonList(att26.alasanIzin);
-                const alasanSakitItems = parseReasonList(att26.alasanSakit);
+                const rawAlasanSakit = parseReasonList(att26.alasanSakit);
+                const alasanSakitItems = rawAlasanSakit.length > 0
+                  ? rawAlasanSakit
+                  : (att26.alasanSakit ? [String(att26.alasanSakit)] : alasanIzinItems.filter(r => /sakit|berobat|rawat|rs|opname|dokter|medis/i.test(r)));
 
                 return (
                   <div className="mb-8">

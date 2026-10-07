@@ -529,8 +529,8 @@ employeesRouter.post("/import", async (req, res) => {
           }
         }
 
-        const rawName = attNorm['employeename'] || attNorm['nama'] || attNorm['name'] || attNorm['namakaryawan'] || attRaw['Employee Name'] || attRaw['Nama'] || '';
-        const rawNik = attNorm['nik'] || attRaw['NIK'] || '';
+        const rawName = attRaw['Employee Name'] || attRaw['Nama'] || attNorm['employeename'] || attNorm['nama'] || attNorm['name'] || attNorm['namakaryawan'] || '';
+        const rawNik = attRaw['NIK'] || attNorm['nik'] || '';
 
         // Match with employee
         let matchedEmp = rawNik ? nikToEmpMap.get(rawNik.toUpperCase().trim()) : null;
@@ -540,7 +540,19 @@ employeesRouter.post("/import", async (req, res) => {
           if (!matchedEmp) {
             // Partial inclusion search
             for (const [key, emp] of nameToEmpMap.entries()) {
-              if (key.includes(normN) || normN.includes(key)) {
+              if (key && normN && (key.includes(normN) || normN.includes(key))) {
+                matchedEmp = emp;
+                break;
+              }
+            }
+          }
+          if (!matchedEmp) {
+            // Word token match: if at least 2 words match
+            const wordsN = rawName.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+            for (const emp of allCurrentEmployees) {
+              const empWords = (emp.name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+              const matches = wordsN.filter(w => empWords.includes(w));
+              if (matches.length >= 2 || (wordsN.length === 1 && matches.length === 1)) {
                 matchedEmp = emp;
                 break;
               }
@@ -549,24 +561,75 @@ employeesRouter.post("/import", async (req, res) => {
         }
 
         if (!matchedEmp) {
-          // If no matching employee found, skip or log warning
           continue;
         }
 
         const targetNik = matchedEmp.nik;
         const targetName = matchedEmp.name || rawName;
 
-        const izin = parseCount(attNorm['izin'] || attRaw['Izin']);
-        const izinKhusus = parseCount(attNorm['izinkhusus'] || attRaw['Izin Khusus']);
-        const sakit = parseCount(attNorm['sakit'] || attRaw['Sakit']);
-        const alpa = parseCount(attNorm['alpa'] || attRaw['Alpa']);
+        const izin = parseCount(attRaw['Izin'] ?? attNorm['izin']);
+        const izinKhusus = parseCount(attRaw['Izin Khusus'] ?? attNorm['izinkhusus']);
+        const sakit = parseCount(attRaw['Sakit'] ?? attNorm['sakit']);
+        const alpa = parseCount(attRaw['Alpa'] ?? attNorm['alpa']);
 
-        const tanggalIzin = attNorm['tanggalizin'] || attRaw['Tanggal Izin'] || '';
-        const tanggalIzinKhusus = attNorm['izinkhususdates'] || attRaw['Izin Khusus (Tanggal)'] || attNorm['tanggalizinkhusus'] || '';
-        const tanggalSakitSite = attNorm['sakitsitess'] || attNorm['sakitsite'] || attRaw['Sakit Site (SS)'] || attRaw['Sakit Site'] || '';
-        const tanggalSakitLuar = attNorm['sakitluarsl'] || attNorm['sakitluar'] || attRaw['Sakit Luar (SL)'] || attRaw['Sakit Luar'] || '';
-        const tanggalAlpa = attNorm['tanggalalpa'] || attRaw['Alpa (Tanggal)'] || '';
-        const alasanIzin = attNorm['alasanizin'] || attNorm['alasan'] || attRaw['Alasan Izin'] || attRaw['Alasan'] || '';
+        const tanggalIzin = String(
+          attRaw['Tanggal Izin'] ?? 
+          attRaw['TanggalIzin'] ?? 
+          attNorm['tanggalizin'] ?? 
+          attNorm['tglizin'] ?? 
+          ''
+        ).trim();
+
+        const tanggalIzinKhusus = String(
+          attRaw['Izin Khusus (Tanggal)'] ?? 
+          attRaw['Tanggal Izin Khusus'] ?? 
+          attNorm['izinkhusustanggal'] ?? 
+          attNorm['tanggalizinkhusus'] ?? 
+          attNorm['izinkhususdates'] ?? 
+          ''
+        ).trim();
+
+        const tanggalSakitSite = String(
+          attRaw['Sakit Site (SS)'] ?? 
+          attRaw['Tanggal Sakit Site'] ?? 
+          attRaw['Sakit Site'] ?? 
+          attNorm['sakitsitess'] ?? 
+          attNorm['sakitsite'] ?? 
+          attNorm['tanggalsakitsite'] ?? 
+          ''
+        ).trim();
+
+        const tanggalSakitLuar = String(
+          attRaw['Sakit Luar (SL)'] ?? 
+          attRaw['Tanggal Sakit Luar'] ?? 
+          attRaw['Sakit Luar'] ?? 
+          attNorm['sakitluarsl'] ?? 
+          attNorm['sakitluar'] ?? 
+          attNorm['tanggalsakitluar'] ?? 
+          ''
+        ).trim();
+
+        const tanggalAlpa = String(
+          attRaw['Alpa (Tanggal)'] ?? 
+          attRaw['Tanggal Alpa'] ?? 
+          attNorm['alpatanggal'] ?? 
+          attNorm['tanggalalpa'] ?? 
+          ''
+        ).trim();
+
+        const alasanIzin = String(
+          attRaw['Alasan Izin'] ?? 
+          attRaw['Alasan'] ?? 
+          attNorm['alasanizin'] ?? 
+          attNorm['alasan'] ?? 
+          ''
+        ).trim();
+
+        const alasanSakit = String(
+          attRaw['Alasan Sakit'] ?? 
+          attNorm['alasansakit'] ?? 
+          ''
+        ).trim() || alasanIzin;
 
         const sakitSiteCount = parseCount(tanggalSakitSite);
         const sakitLuarCount = parseCount(tanggalSakitLuar);
@@ -589,7 +652,7 @@ employeesRouter.post("/import", async (req, res) => {
           tanggalSakitLuar,
           tanggalAlpa,
           alasanIzin,
-          alasanSakit: alasanIzin,
+          alasanSakit,
           updatedAt: new Date()
         };
 
@@ -623,7 +686,7 @@ employeesRouter.post("/import", async (req, res) => {
               tanggalSakitLuar,
               tanggalAlpa,
               alasanIzin,
-              alasanSakit: alasanIzin
+              alasanSakit
             }
           };
 

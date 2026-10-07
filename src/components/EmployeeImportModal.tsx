@@ -469,6 +469,148 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
     }
   };
 
+  const parseAttendanceWorksheet = (worksheet: XLSX.WorkSheet) => {
+    if (!worksheet || !worksheet['!ref']) return { rows: [], headers: ABSENSI_EMPLOYEE_COLUMNS };
+    const range = XLSX.utils.decode_range(worksheet['!ref']);
+
+    // Find header row (check row 0, 1, 2, 3, 4)
+    let headerRowIdx = 0;
+    for (let r = 0; r <= Math.min(4, range.e.r); r++) {
+      let rowCells: string[] = [];
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const cell = worksheet[XLSX.utils.encode_cell({ r, c })];
+        if (cell && cell.v !== undefined) {
+          rowCells.push(String(cell.v).toLowerCase().trim());
+        }
+      }
+      const rowText = rowCells.join(' ');
+      if (
+        rowText.includes('employee name') || rowText.includes('nama') ||
+        rowText.includes('izin') || rowText.includes('sakit') || rowText.includes('alpa')
+      ) {
+        headerRowIdx = r;
+        break;
+      }
+    }
+
+    // Determine column keys based on header name & column index
+    const colMap: { colIdx: number; key: string; label: string }[] = [];
+
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = worksheet[XLSX.utils.encode_cell({ r: headerRowIdx, c })];
+      const rawHeader = cell && cell.v !== undefined ? String(cell.v).trim() : '';
+      const clean = rawHeader.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      let key = '';
+      let label = rawHeader;
+
+      if (clean === 'no' || clean === 'nomor' || c === 0) {
+        key = 'no';
+        label = 'NO';
+      } else if (clean.includes('employeename') || clean.includes('nama') || clean === 'name' || c === 1) {
+        key = 'employeeName';
+        label = 'Employee Name';
+      } else if (c === 2 || (clean === 'izin' && c < 6)) {
+        key = 'izin';
+        label = 'Izin';
+      } else if (c === 3 || (clean.includes('izinkhusus') && c < 6)) {
+        key = 'izinKhusus';
+        label = 'Izin Khusus';
+      } else if (c === 4 || (clean === 'sakit' && c < 6)) {
+        key = 'sakit';
+        label = 'Sakit';
+      } else if (c === 5 || (clean === 'alpa' && c < 6)) {
+        key = 'alpa';
+        label = 'Alpa';
+      } else if (c === 6 || clean.includes('tanggalizin') || clean === 'tglizin') {
+        key = 'tanggalIzin';
+        label = 'Tanggal Izin';
+      } else if (c === 7 || (clean.includes('izinkhusus') && c >= 6)) {
+        key = 'tanggalIzinKhusus';
+        label = 'Izin Khusus (Tanggal)';
+      } else if (c === 8 || clean.includes('sakitsitess') || clean.includes('sakitsite')) {
+        key = 'tanggalSakitSite';
+        label = 'Sakit Site (SS)';
+      } else if (c === 9 || clean.includes('sakitluarsl') || clean.includes('sakitluar')) {
+        key = 'tanggalSakitLuar';
+        label = 'Sakit Luar (SL)';
+      } else if (c === 10 || (clean.includes('alpa') && c >= 6)) {
+        key = 'tanggalAlpa';
+        label = 'Alpa (Tanggal)';
+      } else if (c === 11 || clean.includes('alasan')) {
+        key = 'alasanIzin';
+        label = 'Alasan Izin';
+      } else {
+        key = `col_${c}`;
+        label = rawHeader || `Col_${c}`;
+      }
+
+      colMap.push({ colIdx: c, key, label });
+    }
+
+    const rows: any[] = [];
+    for (let r = headerRowIdx + 1; r <= range.e.r; r++) {
+      const rowObj: Record<string, any> = {};
+      let hasAnyData = false;
+
+      for (const col of colMap) {
+        const cellAddr = XLSX.utils.encode_cell({ r, c: col.colIdx });
+        const cell = worksheet[cellAddr];
+        let val = '';
+
+        if (cell) {
+          if (cell.w !== undefined && String(cell.w).trim()) {
+            val = String(cell.w).trim();
+          } else if (cell.v !== undefined && cell.v !== null) {
+            val = cell.v instanceof Date ? formatExcelDate(cell.v) : String(cell.v).trim();
+          }
+        }
+
+        if (val !== undefined && val !== null && val !== '' && val !== '-') {
+          hasAnyData = true;
+        }
+
+        rowObj[col.label] = val;
+        if (col.key === 'employeeName') {
+          rowObj['Employee Name'] = val;
+          rowObj['Nama'] = val;
+        } else if (col.key === 'izin') {
+          rowObj['Izin'] = val;
+        } else if (col.key === 'izinKhusus') {
+          rowObj['Izin Khusus'] = val;
+        } else if (col.key === 'sakit') {
+          rowObj['Sakit'] = val;
+        } else if (col.key === 'alpa') {
+          rowObj['Alpa'] = val;
+        } else if (col.key === 'tanggalIzin') {
+          rowObj['Tanggal Izin'] = val;
+        } else if (col.key === 'tanggalIzinKhusus') {
+          rowObj['Izin Khusus (Tanggal)'] = val;
+          rowObj['Tanggal Izin Khusus'] = val;
+        } else if (col.key === 'tanggalSakitSite') {
+          rowObj['Sakit Site (SS)'] = val;
+          rowObj['Tanggal Sakit Site'] = val;
+        } else if (col.key === 'tanggalSakitLuar') {
+          rowObj['Sakit Luar (SL)'] = val;
+          rowObj['Tanggal Sakit Luar'] = val;
+        } else if (col.key === 'tanggalAlpa') {
+          rowObj['Alpa (Tanggal)'] = val;
+          rowObj['Tanggal Alpa'] = val;
+        } else if (col.key === 'alasanIzin') {
+          rowObj['Alasan Izin'] = val;
+          rowObj['Alasan'] = val;
+        }
+      }
+
+      const empName = rowObj['Employee Name'] || rowObj['Nama'];
+      if (hasAnyData && empName && String(empName).toLowerCase() !== 'employee name' && String(empName).toLowerCase() !== 'nama') {
+        rows.push(rowObj);
+      }
+    }
+
+    return { rows, headers: ABSENSI_EMPLOYEE_COLUMNS };
+  };
+
   const parseWorksheetGeneric = (worksheet: XLSX.WorkSheet, defaultCols: string[]) => {
     if (!worksheet || !worksheet['!ref']) return { rows: [], headers: [] };
     const range = XLSX.utils.decode_range(worksheet['!ref']);
@@ -753,14 +895,11 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
           }
         }
 
-        // Parse Attendance Sheet if present
+        // Parse Attendance Sheet if present with specialized parser
         if (attendanceSheetName && attendanceSheetName !== masterSheetName && workbook.Sheets[attendanceSheetName]) {
           const wsAtt = workbook.Sheets[attendanceSheetName];
-          const attParsed = parseWorksheetGeneric(wsAtt, ABSENSI_EMPLOYEE_COLUMNS);
-          attRows = attParsed.rows.filter(r => {
-            const name = r['Employee Name'] || r['Nama'] || r['name'] || '';
-            return name && String(name).toLowerCase() !== 'employee name' && String(name).toLowerCase() !== 'nama';
-          });
+          const attParsed = parseAttendanceWorksheet(wsAtt);
+          attRows = attParsed.rows;
           attHeaders = attParsed.headers;
         }
 
