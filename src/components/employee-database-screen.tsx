@@ -239,11 +239,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     );
   }
 
-  // The Search Input Component that we will share across states via layoutId
+  // The Search Input Component that we will share across states
   const renderSearchBar = (isSmall: boolean) => (
-    <motion.div 
-      layoutId="search-container"
-      className={`relative z-50 ${isSmall ? 'w-64 md:w-80' : 'w-full max-w-xl mx-auto'}`}
+    <div 
+      className={`relative z-50 ${isSmall ? 'w-64 sm:w-80 md:w-96' : 'w-full max-w-xl mx-auto'}`}
     >
       <div className="relative">
         <Input
@@ -252,14 +251,14 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className={`w-full rounded-2xl shadow-sm border-slate-200 focus:ring-4 focus:ring-[#22a7b8]/20 focus:border-[#22a7b8] bg-white
-            ${isSmall ? 'pl-10 py-2.5 text-sm' : 'pl-12 py-6 text-lg'}`}
+            ${isSmall ? 'pl-10 py-2 text-sm' : 'pl-12 py-6 text-lg'}`}
         />
-        <Search className={`absolute text-slate-400 ${isSmall ? 'left-3 w-5 h-5 top-2.5' : 'left-4 w-6 h-6 top-1/2 -translate-y-1/2'}`} />
+        <Search className={`absolute text-slate-400 ${isSmall ? 'left-3 w-4 h-4 top-1/2 -translate-y-1/2' : 'left-4 w-6 h-6 top-1/2 -translate-y-1/2'}`} />
         
         {searchTerm && (
           <button 
             onClick={() => setSearchTerm('')} 
-            className={`absolute text-slate-400 hover:text-slate-600 ${isSmall ? 'right-3 top-2.5' : 'right-4 top-1/2 -translate-y-1/2'}`}
+            className={`absolute text-slate-400 hover:text-slate-600 ${isSmall ? 'right-3 top-1/2 -translate-y-1/2' : 'right-4 top-1/2 -translate-y-1/2'}`}
           >
             <X className={isSmall ? "w-4 h-4" : "w-5 h-5"} />
           </button>
@@ -320,7 +319,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 
   return (
@@ -332,39 +331,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             <ArrowLeft className="w-5 h-5 mr-1" />
             {selectedEmployee ? 'Kembali' : 'Tutup'}
           </Button>
-          {!selectedEmployee ? (
-            <div className="flex items-center gap-2">
-              <span className="px-3 py-1 rounded-lg bg-[#f09b13] text-white font-bold text-xs uppercase tracking-wider shadow-xs hidden sm:inline-block">
-                Manpower
-              </span>
-              <h1 className="text-lg font-bold text-slate-800 hidden sm:block">
-                Database Karyawan
-              </h1>
-            </div>
-          ) : (
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]">
-                {selectedEmployee.name}
-              </span>
-              <span className="text-xs text-slate-400 font-mono">
-                ({selectedEmployee.nik})
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-lg bg-[#f09b13] text-white font-bold text-xs uppercase tracking-wider shadow-xs hidden sm:inline-block">
+              Manpower
+            </span>
+            <h1 className="text-lg font-bold text-slate-800 hidden sm:block">
+              Database Karyawan
+            </h1>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {selectedEmployee && canManageDatabase && (
-            <Button
-              onClick={() => setIsEditModalOpen(true)}
-              size="sm"
-              className="bg-[#f09b13] hover:bg-[#d88708] text-white flex items-center gap-1.5 rounded-xl text-xs font-bold px-3 py-1.5 shadow-sm transition-all cursor-pointer"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-              <span>Edit Data</span>
-            </Button>
-          )}
-
           {!selectedEmployee && canManageDatabase && (
             <>
               <Button
@@ -388,7 +365,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             </>
           )}
 
-          {/* Small Search Bar (Animated into header) */}
+          {/* General Search Bar in Header when in Profile Mode */}
           {selectedEmployee && renderSearchBar(true)}
         </div>
       </div>
