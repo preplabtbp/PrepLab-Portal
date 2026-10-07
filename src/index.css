@@ -454,3 +454,12 @@ h1, h2, h3, h4, .font-display {
   }
 }
 
+/* Global Modern Text Selection Highlight */
+::selection {
+  background-color: #a5f3fc;
+  color: #0f172a;
+}
+.dark ::selection {
+  background-color: #0e7490;
+  color: #f8fafc;
+}
