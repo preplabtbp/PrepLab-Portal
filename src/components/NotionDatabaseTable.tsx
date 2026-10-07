@@ -3020,7 +3020,7 @@ export function NotionDatabaseTable({
 
   return (
     <div 
-      className={`w-full my-2 border-b transition-all ${
+      className={`w-full my-0 mb-4 border-b transition-all ${
         isNotionLight 
           ? 'bg-white border-slate-200 text-slate-900' 
           : 'bg-[#181818] border-[#2d2d2d] text-slate-200'

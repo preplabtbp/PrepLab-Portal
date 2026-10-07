@@ -1545,7 +1545,7 @@ ${aiMeetingNotes
         </div>
 
         {/* Content Body */}
-        <div className={`flex-1 w-full pb-32 ${isSectionHubPost(selectedPost) ? 'p-2 sm:p-4 md:p-6' : parsedTableData ? 'p-2 sm:p-3 md:p-4' : 'p-4 md:p-6 lg:p-8'}`}>
+        <div className={`flex-1 w-full pb-32 ${isSectionHubPost(selectedPost) ? 'p-2 sm:p-4 md:p-6' : parsedTableData ? 'p-0 sm:px-2 md:px-3 pt-0' : 'p-4 md:p-6 lg:p-8'}`}>
           {!selectedPost && !isEditing ? (
             <TbpDashboard
               posts={selectedPtFilter !== "ALL" ? posts.filter((p) => {
@@ -1825,34 +1825,11 @@ ${aiMeetingNotes
               />
             </div>
           ) : parsedTableData ? (
-            <div className="space-y-6 w-full max-w-none animate-in fade-in duration-200">
-              {/* View Mode Contextual Header Bar */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
-                <button
-                  onClick={goBack}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs transition-all group cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
-                  <span>Kembali ke <strong className="text-slate-900 font-bold">{immediateParentTitle}</strong></span>
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono flex items-center gap-1.5 font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
-                    DATABASE TABLE
-                  </span>
-                  <span 
-                    className="text-[11px] px-2.5 py-1 rounded-full font-mono border bg-slate-50 text-slate-600 border-slate-200"
-                  >
-                    {selectedPost.category || "PAGE"}
-                  </span>
-                </div>
-              </div>
-
+            <div className="w-full max-w-none animate-in fade-in duration-200">
               {/* Cover Image */}
               {selectedPost.coverImage && (
                 <div 
-                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border border-slate-200/80 shadow-xs"
+                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-3 border border-slate-200/80 shadow-xs"
                 >
                   <img
                     src={selectedPost.coverImage}
@@ -1861,35 +1838,6 @@ ${aiMeetingNotes
                   />
                 </div>
               )}
-
-              {/* Title & Metadata */}
-              <div>
-                <h1 
-                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3 text-slate-900"
-                >
-                  {getPostTitle(selectedPost)}
-                </h1>
-
-                <div 
-                  className="flex items-center gap-2 text-xs pb-2 font-medium"
-                  style={{ color: 'var(--text-muted, #94a3b8)' }}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 opacity-70" />
-                    <span>{selectedPost.authorName || "System"}</span>
-                  </div>
-                  <span>•</span>
-                  <div className="flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 opacity-70" />
-                    <span>
-                      {new Date(selectedPost.createdAt).toLocaleDateString(
-                        "id-ID",
-                        { day: "numeric", month: "long", year: "numeric" }
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </div>
 
               {/* Content Before Table */}
               {parsedTableData.beforeText.trim() && (
