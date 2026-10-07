@@ -56,10 +56,39 @@ export const employees = pgTable('employees', {
   equippedTitle: text('equipped_title').default('Frontline Trainee'),
   sisaCt: text('sisa_ct'),
   jatuhTempoCt: text('jatuh_tempo_ct'),
+  attendanceData: json('attendance_data'),
   firstLoginComplete: boolean('first_login_complete').default(false),
   homeTutorialCompleted: boolean('home_tutorial_completed').default(false),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+// Define 'employee_attendance' table (Rekap Absensi Karyawan: Izin, Sakit, Alpa, Tanggal & Alasan)
+export const employeeAttendance = pgTable('employee_attendance', {
+  id: serial('id').primaryKey(),
+  nik: text('nik').notNull(),
+  name: text('name'),
+  year: integer('year').default(2026).notNull(),
+  izin: integer('izin').default(0),
+  izinKhusus: integer('izin_khusus').default(0),
+  sakit: integer('sakit').default(0),
+  sakitSiteCount: integer('sakit_site_count').default(0),
+  sakitLuarCount: integer('sakit_luar_count').default(0),
+  alpa: integer('alpa').default(0),
+  tanggalIzin: text('tanggal_izin'),
+  tanggalIzinKhusus: text('tanggal_izin_khusus'),
+  tanggalSakitSite: text('tanggal_sakit_site'),
+  tanggalSakitLuar: text('tanggal_sakit_luar'),
+  tanggalAlpa: text('tanggal_alpa'),
+  alasanIzin: text('alasan_izin'),
+  alasanSakit: text('alasan_sakit'),
+  details: json('details'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_employee_attendance_nik_year').on(t.nik, t.year),
+  index('idx_employee_attendance_nik').on(t.nik),
+  index('idx_employee_attendance_year').on(t.year),
+]);
 
 // Define 'equipments' table (Alat / Unit)
 export const equipments = pgTable('equipments', {

@@ -1,12 +1,81 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../../src/db/index.js";
-import { employees, developerUsers } from "../../src/db/schema.js";
+import { employees, developerUsers, employeeAttendance } from "../../src/db/schema.js";
 import { toPublicEmployee } from "../middleware/auth.js";
 import { drive } from "../../google-services.js";
 import { Readable } from "stream";
 
 export const employeesRouter = Router();
+
+export function normalizeNameKey(name: string): string {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .replace(/\b(st|s\.t|s\.sos|s\.pi|s\.e|a\.md|s\.kom|s\.pd|dr|drs|ir|m\.t|m\.si)\b/gi, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+}
+
+async function getAttendanceMap(): Promise<Record<string, any>> {
+  try {
+    const allAtt = await db.select().from(employeeAttendance);
+    const map: Record<string, any> = {};
+    for (const item of allAtt) {
+      const nik = item.nik;
+      if (!map[nik]) map[nik] = {};
+      const yr = item.year || 2026;
+      map[nik][yr] = {
+        izin: item.izin || 0,
+        izinKhusus: item.izinKhusus || 0,
+        sakit: item.sakit || 0,
+        sakitSite: item.sakitSiteCount || 0,
+        sakitLuar: item.sakitLuarCount || 0,
+        alpa: item.alpa || 0,
+        tanggalIzin: item.tanggalIzin || '',
+        tanggalIzinKhusus: item.tanggalIzinKhusus || '',
+        tanggalSakitSite: item.tanggalSakitSite || '',
+        tanggalSakitLuar: item.tanggalSakitLuar || '',
+        tanggalAlpa: item.tanggalAlpa || '',
+        alasanIzin: item.alasanIzin || '',
+        alasanSakit: item.alasanSakit || '',
+        details: item.details || []
+      };
+    }
+    return map;
+  } catch (e) {
+    return {};
+  }
+}
+
+function attachAttendanceToEmployee(e: any, attMap: Record<string, any>) {
+  const publicEmp = toPublicEmployee(e);
+  const attForEmp = attMap[e.nik] || e.attendanceData || {};
+
+  const emptyAttendance = {
+    izin: 0,
+    izinKhusus: 0,
+    sakit: 0,
+    sakitSite: 0,
+    sakitLuar: 0,
+    alpa: 0,
+    tanggalIzin: '',
+    tanggalIzinKhusus: '',
+    tanggalSakitSite: '',
+    tanggalSakitLuar: '',
+    tanggalAlpa: '',
+    alasanIzin: '',
+    alasanSakit: '',
+    details: []
+  };
+
+  return {
+    ...publicEmp,
+    attendance: attForEmp,
+    attendance2026: attForEmp[2026] || attForEmp['2026'] || emptyAttendance,
+    attendance2025: attForEmp[2025] || attForEmp['2025'] || emptyAttendance
+  };
+}
 
 export async function isAuthorizedDatabaseEditor(editorNik?: string): Promise<boolean> {
   if (!editorNik) return false;
@@ -157,6 +226,7 @@ employeesRouter.get("/", async (req, res) => {
   try {
     const { pt, all } = req.query;
     let data = await db.select().from(employees);
+    const attMap = await getAttendanceMap();
 
     // Strictly exclude demo, staging, admin and broken spreadsheet accounts
     data = data.filter(e => {
@@ -199,7 +269,7 @@ employeesRouter.get("/", async (req, res) => {
       }
     }
 
-    res.json(data.map(e => toPublicEmployee(e)));
+    res.json(data.map(e => attachAttendanceToEmployee(e, attMap)));
   } catch (error) {
     console.error("Error fetching employees:", error);
     res.status(500).json({ error: "Failed to fetch employees" });
@@ -219,13 +289,14 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     const sectionLower = (user.section || "").toLowerCase();
     const deptLower = (user.department || "").toLowerCase();
     const jabatanLower = (user.jabatan || "").toLowerCase();
+    const attMap = await getAttendanceMap();
     
     // Check if user is Admin, Administrasi or QA (Admin can see all)
     if (sectionLower.includes("administrasi") || deptLower.includes("administrasi") || 
         sectionLower.includes("qa") || deptLower.includes("qa") || sectionLower.includes("quality assurance") || deptLower.includes("quality assurance") ||
         jabatanLower.includes("admin")) {
       const allData = await db.select().from(employees);
-      return res.json({ status: "success", data: allData.map(e => toPublicEmployee(e)) });
+      return res.json({ status: "success", data: allData.map(e => attachAttendanceToEmployee(e, attMap)) });
     }
     
     // Determine subordinates based on Jabatan
@@ -240,7 +311,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     
     if (allowedJabatans.length === 0) {
       // Crew or someone with no subordinates
-      return res.json({ status: "success", data: [toPublicEmployee(user)] });
+      return res.json({ status: "success", data: [attachAttendanceToEmployee(user, attMap)] });
     }
     
     // Fetch all employees
@@ -260,7 +331,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
       subordinates.unshift(user);
     }
     
-    res.json({ status: "success", data: subordinates.map(e => toPublicEmployee(e)) });
+    res.json({ status: "success", data: subordinates.map(e => attachAttendanceToEmployee(e, attMap)) });
   } catch (error) {
     console.error("Error fetching hierarchy:", error);
     res.status(500).json({ status: "error", message: "Failed to fetch hierarchy" });
@@ -272,7 +343,8 @@ employeesRouter.get("/:nik", async (req, res) => {
     const { nik } = req.params;
     const data = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
     if (data.length > 0) {
-      res.json({ status: "success", employee: toPublicEmployee(data[0]) });
+      const attMap = await getAttendanceMap();
+      res.json({ status: "success", employee: attachAttendanceToEmployee(data[0], attMap) });
     } else {
       res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan" });
     }
@@ -309,9 +381,18 @@ function cleanDateVal(v: any): string | null {
   return str;
 }
 
+function parseCount(val: any): number {
+  if (val === undefined || val === null || val === '') return 0;
+  const num = parseInt(String(val).trim(), 10);
+  if (!isNaN(num)) return num;
+  // If multiline date list, count non-empty lines
+  const lines = String(val).split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+  return lines.length;
+}
+
 employeesRouter.post("/import", async (req, res) => {
   try {
-    const { rows, editorNik } = req.body;
+    const { rows, attendanceRows, editorNik } = req.body;
     const requesterNik = editorNik || req.headers['x-user-nik'] || req.body?.requesterNik;
     const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
     if (!isAuth) {
@@ -321,106 +402,250 @@ employeesRouter.post("/import", async (req, res) => {
       });
     }
 
-    if (!Array.isArray(rows) || rows.length === 0) {
+    const hasRows = Array.isArray(rows) && rows.length > 0;
+    const hasAttRows = Array.isArray(attendanceRows) && attendanceRows.length > 0;
+
+    if (!hasRows && !hasAttRows) {
       return res.status(400).json({ status: "error", message: "Tidak ada data baris yang dikirim untuk diimport." });
     }
 
     let insertedCount = 0;
     let updatedCount = 0;
     let errorCount = 0;
+    let attUpdatedCount = 0;
     const errors: string[] = [];
 
-    for (let i = 0; i < rows.length; i++) {
-      const raw = rows[i];
-      if (!raw || typeof raw !== 'object') continue;
+    // 1. Process Master Employee Rows (Sheet 1)
+    if (hasRows) {
+      for (let i = 0; i < rows.length; i++) {
+        const raw = rows[i];
+        if (!raw || typeof raw !== 'object') continue;
 
-      // Normalize row keys
-      const normalized: Record<string, string> = {};
-      for (const [k, v] of Object.entries(raw)) {
-        const cleanK = String(k || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (cleanK) {
-          normalized[cleanK] = v !== undefined && v !== null ? String(v).trim() : '';
+        // Normalize row keys
+        const normalized: Record<string, string> = {};
+        for (const [k, v] of Object.entries(raw)) {
+          const cleanK = String(k || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (cleanK) {
+            normalized[cleanK] = v !== undefined && v !== null ? String(v).trim() : '';
+          }
+        }
+
+        const nik = normalized['nik'] || '';
+        if (!nik || nik === '#N/A' || nik.toUpperCase().includes('DEMO')) {
+          continue;
+        }
+
+        const name = normalized['nama'] || normalized['name'] || '';
+        if (!name || name === '#N/A') {
+          continue;
+        }
+
+        const rawFoto = raw['Foto'] || raw['foto'] || normalized['foto'] || normalized['photo'] || normalized['avatar'] || normalized['fotoprofil'] || normalized['kolomfoto'] || normalized['gambar'] || normalized['image'] || '';
+        let driveAvatarUrl: string | null = null;
+        if (rawFoto && rawFoto !== '-' && rawFoto !== '#N/A') {
+          driveAvatarUrl = await uploadEmployeePhotoToDrive(nik, name, rawFoto);
+        }
+
+        const empData: Record<string, any> = {
+          name,
+          nik,
+          ktp: normalized['noktp'] || normalized['ktp'] || normalized['nikktp'] || null,
+          pt: normalized['pt'] || normalized['perusahaan'] || null,
+          poh: normalized['poh'] || null,
+          sponsor: normalized['sponsor'] || null,
+          statusKaryawan: normalized['statuskaryawan'] || normalized['status'] || null,
+          tanggalEfektifTidakBekerja: cleanDateVal(normalized['tanggalefektiftidakbekerja'] || normalized['tgleftidakbekerja'] || normalized['tanggaltidakbekerja'] || normalized['efektiftidakbekerja']),
+          tanggalAwalBergabung: cleanDateVal(normalized['dohawal'] || normalized['doh'] || normalized['tanggalawalbergabung']),
+          tanggalJabatanBaru: cleanDateVal(normalized['tanggaljabatanbaru'] || normalized['tgljabatanbaru']),
+          masaKerja: normalized['masakerja'] || null,
+          masaKerjaJabatanTerakhir: normalized['masakerjajabatanterakhir'] || normalized['masakerjajabatan'] || null,
+          department: normalized['departemen'] || normalized['department'] || null,
+          section: normalized['bagian'] || normalized['section'] || null,
+          jobGrade: normalized['jobgrade'] || null,
+          gol: normalized['gol'] || normalized['golongan'] || null,
+          jabatan: normalized['jabatanbaru'] || normalized['jabatan'] || null,
+          statusKontrak: normalized['statuskontrak'] || null,
+          tanggalPermanent: cleanDateVal(normalized['tanggalpermanent'] || normalized['tanggalpermanen']),
+          tempatLahir: normalized['tempatlahir'] || null,
+          tanggalLahir: cleanDateVal(normalized['tanggallahir']),
+          phone: normalized['nomortelppribadi'] || normalized['notelp'] || normalized['nomortelp'] || normalized['phone'] || null,
+          keluargaKandung: normalized['keluargakandungyangbisadihubungi'] || normalized['keluargakandung'] || normalized['kelkandung'] || null,
+          phoneKeluarga: normalized['notelephonekeluargakandung'] || normalized['notelpkeluarga'] || normalized['telpkel'] || normalized['telpkeluarga'] || null,
+          orangTerdekat: normalized['orangterdekatyangbisadihubungi'] || normalized['orangterdekat'] || normalized['orgterdekat'] || null,
+          phoneDarurat: normalized['notelephonedaruratorangterdekat'] || normalized['notelpdarurat'] || normalized['telpdarurat'] || null,
+          alamatKtp: normalized['alamatsesuaiktp'] || normalized['alamatktp'] || null,
+          alamatDomisili: normalized['alamatdomisili'] || normalized['domisili'] || null,
+          ...(driveAvatarUrl ? { photo: driveAvatarUrl } : {})
+        };
+
+        const cleanEmpData: Record<string, any> = {};
+        for (const [k, v] of Object.entries(empData)) {
+          if (v !== null && v !== undefined && v !== '') {
+            cleanEmpData[k] = v;
+          }
+        }
+
+        try {
+          const existing = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+          if (existing.length > 0) {
+            await db.update(employees).set(cleanEmpData).where(eq(employees.nik, nik));
+            updatedCount++;
+          } else {
+            await db.insert(employees).values(empData as any);
+            insertedCount++;
+          }
+        } catch (err: any) {
+          errorCount++;
+          errors.push(`Row ${i + 1} (${nik} - ${name}): ${err.message}`);
+        }
+      }
+    }
+
+    // 2. Process Attendance Rows (Sheet 2: "Absensi karyawan")
+    if (hasAttRows) {
+      // Fetch all employees to build normalized name-to-NIK index
+      const allCurrentEmployees = await db.select().from(employees);
+      const nameToEmpMap = new Map<string, any>();
+      const nikToEmpMap = new Map<string, any>();
+
+      for (const emp of allCurrentEmployees) {
+        if (emp.nik) nikToEmpMap.set(emp.nik.toUpperCase().trim(), emp);
+        if (emp.name) {
+          const normKey = normalizeNameKey(emp.name);
+          if (normKey) nameToEmpMap.set(normKey, emp);
         }
       }
 
-      const nik = normalized['nik'] || '';
-      if (!nik || nik === '#N/A' || nik.toUpperCase().includes('DEMO')) {
-        continue;
-      }
+      for (let j = 0; j < attendanceRows.length; j++) {
+        const attRaw = attendanceRows[j];
+        if (!attRaw || typeof attRaw !== 'object') continue;
 
-      const name = normalized['nama'] || normalized['name'] || '';
-      if (!name || name === '#N/A') {
-        continue;
-      }
-
-      const rawFoto = raw['Foto'] || raw['foto'] || normalized['foto'] || normalized['photo'] || normalized['avatar'] || normalized['fotoprofil'] || normalized['kolomfoto'] || normalized['gambar'] || normalized['image'] || '';
-      let driveAvatarUrl: string | null = null;
-      if (rawFoto && rawFoto !== '-' && rawFoto !== '#N/A') {
-        driveAvatarUrl = await uploadEmployeePhotoToDrive(nik, name, rawFoto);
-      }
-
-      const empData: Record<string, any> = {
-        name,
-        nik,
-        ktp: normalized['noktp'] || normalized['ktp'] || normalized['nikktp'] || null,
-        pt: normalized['pt'] || normalized['perusahaan'] || null,
-        poh: normalized['poh'] || null,
-        sponsor: normalized['sponsor'] || null,
-        statusKaryawan: normalized['statuskaryawan'] || normalized['status'] || null,
-        tanggalEfektifTidakBekerja: cleanDateVal(normalized['tanggalefektiftidakbekerja'] || normalized['tgleftidakbekerja'] || normalized['tanggaltidakbekerja'] || normalized['efektiftidakbekerja']),
-        tanggalAwalBergabung: cleanDateVal(normalized['dohawal'] || normalized['doh'] || normalized['tanggalawalbergabung']),
-        tanggalJabatanBaru: cleanDateVal(normalized['tanggaljabatanbaru'] || normalized['tgljabatanbaru']),
-        masaKerja: normalized['masakerja'] || null,
-        masaKerjaJabatanTerakhir: normalized['masakerjajabatanterakhir'] || normalized['masakerjajabatan'] || null,
-        department: normalized['departemen'] || normalized['department'] || null,
-        section: normalized['bagian'] || normalized['section'] || null,
-        jobGrade: normalized['jobgrade'] || null,
-        gol: normalized['gol'] || normalized['golongan'] || null,
-        jabatan: normalized['jabatanbaru'] || normalized['jabatan'] || null,
-        statusKontrak: normalized['statuskontrak'] || null,
-        tanggalPermanent: cleanDateVal(normalized['tanggalpermanent'] || normalized['tanggalpermanen']),
-        tempatLahir: normalized['tempatlahir'] || null,
-        tanggalLahir: cleanDateVal(normalized['tanggallahir']),
-        phone: normalized['nomortelppribadi'] || normalized['notelp'] || normalized['nomortelp'] || normalized['phone'] || null,
-        keluargaKandung: normalized['keluargakandungyangbisadihubungi'] || normalized['keluargakandung'] || normalized['kelkandung'] || null,
-        phoneKeluarga: normalized['notelephonekeluargakandung'] || normalized['notelpkeluarga'] || normalized['telpkel'] || normalized['telpkeluarga'] || null,
-        orangTerdekat: normalized['orangterdekatyangbisadihubungi'] || normalized['orangterdekat'] || normalized['orgterdekat'] || null,
-        phoneDarurat: normalized['notelephonedaruratorangterdekat'] || normalized['notelpdarurat'] || normalized['telpdarurat'] || null,
-        alamatKtp: normalized['alamatsesuaiktp'] || normalized['alamatktp'] || null,
-        alamatDomisili: normalized['alamatdomisili'] || normalized['domisili'] || null,
-        ...(driveAvatarUrl ? { photo: driveAvatarUrl } : {})
-      };
-
-      // Filter out null/empty from update payload if not present in imported file to prevent overwriting existing data
-      const cleanEmpData: Record<string, any> = {};
-      for (const [k, v] of Object.entries(empData)) {
-        if (v !== null && v !== undefined && v !== '') {
-          cleanEmpData[k] = v;
+        // Clean & normalize attendance row keys
+        const attNorm: Record<string, string> = {};
+        for (const [k, v] of Object.entries(attRaw)) {
+          const cleanK = String(k || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (cleanK) {
+            attNorm[cleanK] = v !== undefined && v !== null ? String(v).trim() : '';
+          }
         }
-      }
 
-      try {
-        const existing = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
-        if (existing.length > 0) {
-          await db.update(employees).set(cleanEmpData).where(eq(employees.nik, nik));
-          updatedCount++;
-        } else {
-          await db.insert(employees).values(empData as any);
-          insertedCount++;
+        const rawName = attNorm['employeename'] || attNorm['nama'] || attNorm['name'] || attNorm['namakaryawan'] || attRaw['Employee Name'] || attRaw['Nama'] || '';
+        const rawNik = attNorm['nik'] || attRaw['NIK'] || '';
+
+        // Match with employee
+        let matchedEmp = rawNik ? nikToEmpMap.get(rawNik.toUpperCase().trim()) : null;
+        if (!matchedEmp && rawName) {
+          const normN = normalizeNameKey(rawName);
+          matchedEmp = nameToEmpMap.get(normN);
+          if (!matchedEmp) {
+            // Partial inclusion search
+            for (const [key, emp] of nameToEmpMap.entries()) {
+              if (key.includes(normN) || normN.includes(key)) {
+                matchedEmp = emp;
+                break;
+              }
+            }
+          }
         }
-      } catch (err: any) {
-        errorCount++;
-        errors.push(`Row ${i + 1} (${nik} - ${name}): ${err.message}`);
+
+        if (!matchedEmp) {
+          // If no matching employee found, skip or log warning
+          continue;
+        }
+
+        const targetNik = matchedEmp.nik;
+        const targetName = matchedEmp.name || rawName;
+
+        const izin = parseCount(attNorm['izin'] || attRaw['Izin']);
+        const izinKhusus = parseCount(attNorm['izinkhusus'] || attRaw['Izin Khusus']);
+        const sakit = parseCount(attNorm['sakit'] || attRaw['Sakit']);
+        const alpa = parseCount(attNorm['alpa'] || attRaw['Alpa']);
+
+        const tanggalIzin = attNorm['tanggalizin'] || attRaw['Tanggal Izin'] || '';
+        const tanggalIzinKhusus = attNorm['izinkhususdates'] || attRaw['Izin Khusus (Tanggal)'] || attNorm['tanggalizinkhusus'] || '';
+        const tanggalSakitSite = attNorm['sakitsitess'] || attNorm['sakitsite'] || attRaw['Sakit Site (SS)'] || attRaw['Sakit Site'] || '';
+        const tanggalSakitLuar = attNorm['sakitluarsl'] || attNorm['sakitluar'] || attRaw['Sakit Luar (SL)'] || attRaw['Sakit Luar'] || '';
+        const tanggalAlpa = attNorm['tanggalalpa'] || attRaw['Alpa (Tanggal)'] || '';
+        const alasanIzin = attNorm['alasanizin'] || attNorm['alasan'] || attRaw['Alasan Izin'] || attRaw['Alasan'] || '';
+
+        const sakitSiteCount = parseCount(tanggalSakitSite);
+        const sakitLuarCount = parseCount(tanggalSakitLuar);
+
+        const year = 2026;
+
+        const attRecord = {
+          nik: targetNik,
+          name: targetName,
+          year,
+          izin,
+          izinKhusus,
+          sakit: sakit || (sakitSiteCount + sakitLuarCount),
+          sakitSiteCount,
+          sakitLuarCount,
+          alpa,
+          tanggalIzin,
+          tanggalIzinKhusus,
+          tanggalSakitSite,
+          tanggalSakitLuar,
+          tanggalAlpa,
+          alasanIzin,
+          alasanSakit: alasanIzin,
+          updatedAt: new Date()
+        };
+
+        try {
+          // Upsert into employee_attendance table
+          const existingAtt = await db.select().from(employeeAttendance)
+            .where(sql`${employeeAttendance.nik} = ${targetNik} AND ${employeeAttendance.year} = ${year}`)
+            .limit(1);
+
+          if (existingAtt.length > 0) {
+            await db.update(employeeAttendance).set(attRecord)
+              .where(sql`${employeeAttendance.nik} = ${targetNik} AND ${employeeAttendance.year} = ${year}`);
+          } else {
+            await db.insert(employeeAttendance).values(attRecord);
+          }
+
+          // Cache onto employees.attendance_data
+          const currentAttData = matchedEmp.attendanceData || {};
+          const updatedAttData = {
+            ...currentAttData,
+            [year]: {
+              izin,
+              izinKhusus,
+              sakit: attRecord.sakit,
+              sakitSite: sakitSiteCount,
+              sakitLuar: sakitLuarCount,
+              alpa,
+              tanggalIzin,
+              tanggalIzinKhusus,
+              tanggalSakitSite,
+              tanggalSakitLuar,
+              tanggalAlpa,
+              alasanIzin,
+              alasanSakit: alasanIzin
+            }
+          };
+
+          await db.update(employees)
+            .set({ attendanceData: updatedAttData })
+            .where(eq(employees.nik, targetNik));
+
+          attUpdatedCount++;
+        } catch (attErr: any) {
+          console.warn(`Error updating attendance for ${targetNik}:`, attErr.message);
+        }
       }
     }
 
     res.json({
       status: "success",
-      message: `Import berhasil: ${updatedCount} diperbarui, ${insertedCount} ditambahkan.`,
+      message: `Import berhasil selesai! ${updatedCount} data master diperbarui, ${insertedCount} ditambahkan, ${attUpdatedCount} absensi karyawan disinkronkan.`,
       stats: {
-        total: rows.length,
+        total: (rows?.length || 0) + (attendanceRows?.length || 0),
         updated: updatedCount,
         inserted: insertedCount,
+        attendanceUpdated: attUpdatedCount,
         errors: errorCount,
         errorList: errors.slice(0, 10)
       }

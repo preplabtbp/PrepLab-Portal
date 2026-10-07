@@ -450,8 +450,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   </div>
                 </div>
                 <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-200/90 text-center hover:border-rose-400 hover:shadow-lg transition-all shadow-sm">
-                  <div className="text-rose-600 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 md:mb-2">Sakit Hari Ini</div>
-                  <div className="text-2xl md:text-3xl font-black text-rose-600">0</div>
+                  <div className="text-rose-600 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 md:mb-2">Total Sakit (2026)</div>
+                  <div className="text-2xl md:text-3xl font-black text-rose-600">
+                    {employees.reduce((acc, emp) => acc + (Number(emp.attendance2026?.sakit) || 0), 0)}
+                  </div>
                 </div>
               </motion.div>
             </div>
@@ -649,52 +651,60 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 <div className="xl:col-span-2 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* 2026 */}
-                    <Card className="p-5 shadow-sm border-slate-200/60">
-                      <h4 className="font-bold text-slate-700 mb-4 flex items-center">
-                        <BarChart3 className="w-4 h-4 mr-2 text-[#22a7b8]" />
-                        Rekap Absensi 2026
-                      </h4>
+                    <Card className="p-5 shadow-sm border-slate-200/60 bg-white">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-bold text-slate-800 flex items-center">
+                          <BarChart3 className="w-4 h-4 mr-2 text-[#22a7b8]" />
+                          Rekap Absensi 2026
+                        </h4>
+                        {(selectedEmployee.attendance2026?.sakitSite > 0 || selectedEmployee.attendance2026?.sakitLuar > 0) && (
+                          <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                            SS: {selectedEmployee.attendance2026.sakitSite} | SL: {selectedEmployee.attendance2026.sakitLuar}
+                          </span>
+                        )}
+                      </div>
                       <div className="grid grid-cols-4 gap-2">
-                        <div className="text-center p-2.5 rounded-lg bg-[#e6f7f9] border border-[#a2e0e8]">
+                        <div className="text-center p-2.5 rounded-xl bg-[#e6f7f9] border border-[#a2e0e8]">
                           <p className="text-[10px] md:text-xs uppercase font-extrabold text-[#135e69] mb-1">Izin</p>
-                          <p className="font-black text-slate-800">0</p>
+                          <p className="font-black text-lg text-slate-900">{selectedEmployee.attendance2026?.izin ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-lg bg-[#e6f7f9] border border-[#a2e0e8]">
+                        <div className="text-center p-2.5 rounded-xl bg-[#e6f7f9] border border-[#a2e0e8]">
                           <p className="text-[10px] md:text-xs uppercase font-extrabold text-[#22a7b8] mb-1">I.Khusus</p>
-                          <p className="font-black text-slate-800">0</p>
+                          <p className="font-black text-lg text-slate-900">{selectedEmployee.attendance2026?.izinKhusus ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-lg bg-[#fef6e7] border border-[#fad79a]">
+                        <div className="text-center p-2.5 rounded-xl bg-[#fef6e7] border border-[#fad79a]">
                           <p className="text-[10px] md:text-xs uppercase font-extrabold text-[#f09b13] mb-1">Sakit</p>
-                          <p className="font-black text-slate-800">0</p>
+                          <p className="font-black text-lg text-amber-900">{selectedEmployee.attendance2026?.sakit ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-lg bg-rose-50 border border-rose-200">
+                        <div className="text-center p-2.5 rounded-xl bg-rose-50 border border-rose-200">
                           <p className="text-[10px] md:text-xs uppercase font-extrabold text-rose-600 mb-1">Alpa</p>
-                          <p className="font-black text-rose-700">0</p>
+                          <p className="font-black text-lg text-rose-700">{selectedEmployee.attendance2026?.alpa ?? 0}</p>
                         </div>
                       </div>
                     </Card>
+
                     {/* 2025 */}
-                    <Card className="p-5 shadow-sm border-slate-200/60 opacity-80">
+                    <Card className="p-5 shadow-sm border-slate-200/60 bg-white opacity-90">
                       <h4 className="font-bold text-slate-600 mb-4 flex items-center">
                         <BarChart3 className="w-4 h-4 mr-2 text-slate-400" />
                         Rekap Absensi 2025
                       </h4>
                       <div className="grid grid-cols-4 gap-2">
-                        <div className="text-center p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                        <div className="text-center p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                           <p className="text-[10px] md:text-xs uppercase font-bold text-slate-500 mb-1">Izin</p>
-                          <p className="font-bold text-slate-700">0</p>
+                          <p className="font-bold text-base text-slate-700">{selectedEmployee.attendance2025?.izin ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                        <div className="text-center p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                           <p className="text-[10px] md:text-xs uppercase font-bold text-slate-500 mb-1">I.Khusus</p>
-                          <p className="font-bold text-slate-700">0</p>
+                          <p className="font-bold text-base text-slate-700">{selectedEmployee.attendance2025?.izinKhusus ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                        <div className="text-center p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                           <p className="text-[10px] md:text-xs uppercase font-bold text-slate-500 mb-1">Sakit</p>
-                          <p className="font-bold text-slate-700">0</p>
+                          <p className="font-bold text-base text-slate-700">{selectedEmployee.attendance2025?.sakit ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-lg bg-rose-50 border border-rose-100">
+                        <div className="text-center p-2.5 rounded-xl bg-rose-50 border border-rose-100">
                           <p className="text-[10px] md:text-xs uppercase font-bold text-rose-500 mb-1">Alpa</p>
-                          <p className="font-bold text-rose-600">0</p>
+                          <p className="font-bold text-base text-rose-600">{selectedEmployee.attendance2025?.alpa ?? 0}</p>
                         </div>
                       </div>
                     </Card>
@@ -766,85 +776,283 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               </div>
 
               {/* SECTION: HISTORI ABSENSI & ALASAN */}
-              <div className="mb-8">
-                <h3 className="text-lg font-bold text-slate-800 mb-5 flex items-center">
-                  <Calendar className="w-5 h-5 mr-2 text-[#22a7b8]" />
-                  Tanggal Absensi 2026 & Alasan
-                </h3>
-                
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <Card className="lg:col-span-2 p-0 overflow-hidden border-slate-200/60 shadow-sm flex flex-col">
-                    <div className="flex-1 overflow-x-auto">
-                      <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
-                          <tr>
-                            <th className="px-4 py-3 font-semibold whitespace-nowrap">Izin</th>
-                            <th className="px-4 py-3 font-semibold whitespace-nowrap">Izin Khusus</th>
-                            <th className="px-4 py-3 font-semibold whitespace-nowrap">Sakit Site</th>
-                            <th className="px-4 py-3 font-semibold whitespace-nowrap">Sakit Luar</th>
-                            <th className="px-4 py-3 font-semibold text-rose-500 whitespace-nowrap">Alpa</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {/* Placeholder Rows */}
-                          <tr className="border-b border-slate-50">
-                            <td className="px-4 py-3 text-slate-400 italic">-</td>
-                            <td className="px-4 py-3 text-slate-400 italic">-</td>
-                            <td className="px-4 py-3 text-slate-400 italic">-</td>
-                            <td className="px-4 py-3 text-slate-400 italic">-</td>
-                            <td className="px-4 py-3 text-slate-400 italic">-</td>
-                          </tr>
-                          <tr className="border-b border-slate-50 bg-slate-50/50">
-                            <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                              Belum ada catatan absensi
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
+              {(() => {
+                const att26 = selectedEmployee.attendance2026 || {};
+                const parseDateList = (val?: string | null) => {
+                  if (!val) return [];
+                  return String(val)
+                    .split(/[\r\n,]+/)
+                    .map(s => s.trim())
+                    .filter(Boolean);
+                };
+                const parseReasonList = (val?: string | null) => {
+                  if (!val) return [];
+                  return String(val)
+                    .split(/\r?\n/)
+                    .map(s => s.trim())
+                    .filter(Boolean);
+                };
+
+                const izinDates = parseDateList(att26.tanggalIzin);
+                const izinKhususDates = parseDateList(att26.tanggalIzinKhusus);
+                const sakitSiteDates = parseDateList(att26.tanggalSakitSite);
+                const sakitLuarDates = parseDateList(att26.tanggalSakitLuar);
+                const alpaDates = parseDateList(att26.tanggalAlpa);
+
+                const maxRows = Math.max(
+                  izinDates.length,
+                  izinKhususDates.length,
+                  sakitSiteDates.length,
+                  sakitLuarDates.length,
+                  alpaDates.length
+                );
+
+                const alasanIzinItems = parseReasonList(att26.alasanIzin);
+                const alasanSakitItems = parseReasonList(att26.alasanSakit);
+
+                return (
+                  <div className="mb-8">
+                    <h3 className="text-lg font-bold text-slate-800 mb-5 flex items-center">
+                      <Calendar className="w-5 h-5 mr-2 text-[#22a7b8]" />
+                      Tanggal Absensi 2026 & Alasan
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <Card className="lg:col-span-2 p-0 overflow-hidden border-slate-200/60 shadow-sm flex flex-col">
+                        <div className="flex-1 overflow-x-auto">
+                          <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-slate-600 uppercase bg-slate-50/80 border-b border-slate-200">
+                              <tr>
+                                <th className="px-4 py-3 font-bold text-[#135e69] whitespace-nowrap">Tanggal Izin</th>
+                                <th className="px-4 py-3 font-bold text-[#22a7b8] whitespace-nowrap">Izin Khusus</th>
+                                <th className="px-4 py-3 font-bold text-amber-700 whitespace-nowrap">Sakit Site (SS)</th>
+                                <th className="px-4 py-3 font-bold text-amber-600 whitespace-nowrap">Sakit Luar (SL)</th>
+                                <th className="px-4 py-3 font-bold text-rose-600 whitespace-nowrap">Alpa</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {maxRows === 0 ? (
+                                <tr className="border-b border-slate-50 bg-slate-50/30">
+                                  <td colSpan={5} className="px-4 py-10 text-center text-slate-400 font-medium">
+                                    Belum ada catatan rincian tanggal absensi untuk tahun 2026
+                                  </td>
+                                </tr>
+                              ) : (
+                                Array.from({ length: maxRows }).map((_, idx) => (
+                                  <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
+                                    <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                      {izinDates[idx] ? (
+                                        <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]">
+                                          {izinDates[idx]}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-300">-</span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                      {izinKhususDates[idx] ? (
+                                        <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-[#e6f7f9] text-[#22a7b8] border border-[#a2e0e8]">
+                                          {izinKhususDates[idx]}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-300">-</span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                      {sakitSiteDates[idx] ? (
+                                        <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                                          {sakitSiteDates[idx]}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-300">-</span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                      {sakitLuarDates[idx] ? (
+                                        <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                                          {sakitLuarDates[idx]}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-300">-</span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                      {alpaDates[idx] ? (
+                                        <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-rose-50 text-rose-700 border border-rose-200">
+                                          {alpaDates[idx]}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-300">-</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </Card>
+
+                      <div className="lg:col-span-1 space-y-4">
+                        <Card className="p-4 shadow-sm border-slate-200/60 bg-white">
+                          <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
+                            <span>Alasan Izin</span>
+                            {alasanIzinItems.length > 0 && (
+                              <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold">
+                                {alasanIzinItems.length} catatan
+                              </span>
+                            )}
+                          </p>
+                          <div className="bg-slate-50/80 p-3.5 rounded-xl text-sm border border-slate-100 min-h-[90px] max-h-48 overflow-y-auto">
+                            {alasanIzinItems.length > 0 ? (
+                              <ul className="space-y-2">
+                                {alasanIzinItems.map((reason, i) => (
+                                  <li key={i} className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-2 rounded-lg border border-slate-200/60 shadow-xs">
+                                    {reason}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-xs text-slate-400 italic">Tidak ada catatan alasan izin.</p>
+                            )}
+                          </div>
+                        </Card>
+
+                        <Card className="p-4 shadow-sm border-slate-200/60 bg-white">
+                          <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
+                            <span>Alasan Sakit (Site & Luar)</span>
+                            {alasanSakitItems.length > 0 && (
+                              <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200">
+                                {alasanSakitItems.length} catatan
+                              </span>
+                            )}
+                          </p>
+                          <div className="bg-slate-50/80 p-3.5 rounded-xl text-sm border border-slate-100 min-h-[90px] max-h-48 overflow-y-auto">
+                            {alasanSakitItems.length > 0 ? (
+                              <ul className="space-y-2">
+                                {alasanSakitItems.map((reason, i) => (
+                                  <li key={i} className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-2 rounded-lg border border-slate-200/60 shadow-xs">
+                                    {reason}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-xs text-slate-400 italic">Tidak ada catatan alasan sakit.</p>
+                            )}
+                          </div>
+                        </Card>
+                      </div>
                     </div>
+                  </div>
+                );
+              })()}
+
+              {/* DIAGRAM ABSENSI KARYAWAN 2026 */}
+              {(() => {
+                const att26 = selectedEmployee.attendance2026 || {};
+                const sisaCuti = Number(selectedEmployee.sisaCt) || 0;
+                const izin = (Number(att26.izin) || 0) + (Number(att26.izinKhusus) || 0);
+                const sakit = Number(att26.sakit) || 0;
+                const alpa = Number(att26.alpa) || 0;
+
+                const ESTIMASI_HARI_KERJA = 260;
+                const totalAbsen = izin + sakit + alpa;
+                const estimasiHadir = Math.max(0, ESTIMASI_HARI_KERJA - totalAbsen);
+                const pctHadir = Math.min(100, Math.max(0, Math.round((estimasiHadir / ESTIMASI_HARI_KERJA) * 100)));
+                const pctCuti = Math.min(100, Math.max(0, Math.round((sisaCuti / 12) * 100)));
+                const pctIzin = Math.min(100, Math.round((izin / ESTIMASI_HARI_KERJA) * 100));
+                const pctSakit = Math.min(100, Math.round((sakit / ESTIMASI_HARI_KERJA) * 100));
+                const pctAlpa = Math.min(100, Math.round((alpa / ESTIMASI_HARI_KERJA) * 100));
+
+                return (
+                  <Card className="p-6 shadow-sm border-slate-200/60 bg-white">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+                      <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                        <Activity className="w-5 h-5 mr-2 text-[#22a7b8]" />
+                        Diagram Absensi Karyawan 2026
+                      </h3>
+                      <div className="text-xs text-slate-500 font-medium">
+                        Kehadiran: <span className="font-bold text-[#135e69]">{pctHadir}%</span> (Est. {estimasiHadir} Hari)
+                      </div>
+                    </div>
+
+                    <div className="h-56 flex items-end justify-around px-4 pb-4 border-b border-slate-200 gap-2">
+                      {/* Sisa Cuti */}
+                      <div className="flex flex-col items-center flex-1 max-w-[80px] group">
+                        <span className="text-[11px] font-bold text-[#135e69] mb-1 group-hover:scale-110 transition-transform">
+                          {sisaCuti} Hari ({pctCuti}%)
+                        </span>
+                        <div className="w-full bg-slate-100 rounded-t-lg h-36 flex items-end overflow-hidden">
+                          <div 
+                            className="w-full bg-[#22a7b8] rounded-t-lg transition-all duration-500 group-hover:brightness-95" 
+                            style={{ height: `${Math.max(8, pctCuti)}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-xs font-bold mt-2 text-slate-700">%Cuti</span>
+                      </div>
+
+                      {/* Kehadiran */}
+                      <div className="flex flex-col items-center flex-1 max-w-[80px] group">
+                        <span className="text-[11px] font-bold text-[#c77d07] mb-1 group-hover:scale-110 transition-transform">
+                          {pctHadir}%
+                        </span>
+                        <div className="w-full bg-slate-100 rounded-t-lg h-36 flex items-end overflow-hidden">
+                          <div 
+                            className="w-full bg-[#f09b13] rounded-t-lg transition-all duration-500 group-hover:brightness-95" 
+                            style={{ height: `${Math.max(8, pctHadir)}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-xs font-bold mt-2 text-slate-700">%Hadir</span>
+                      </div>
+
+                      {/* Izin */}
+                      <div className="flex flex-col items-center flex-1 max-w-[80px] group">
+                        <span className="text-[11px] font-bold text-slate-600 mb-1 group-hover:scale-110 transition-transform">
+                          {izin} Hari ({pctIzin}%)
+                        </span>
+                        <div className="w-full bg-slate-100 rounded-t-lg h-36 flex items-end overflow-hidden">
+                          <div 
+                            className="w-full bg-slate-400 rounded-t-lg transition-all duration-500 group-hover:brightness-95" 
+                            style={{ height: `${Math.max(8, pctIzin)}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-xs font-bold mt-2 text-slate-700">%Izin</span>
+                      </div>
+
+                      {/* Sakit */}
+                      <div className="flex flex-col items-center flex-1 max-w-[80px] group">
+                        <span className="text-[11px] font-bold text-amber-700 mb-1 group-hover:scale-110 transition-transform">
+                          {sakit} Hari ({pctSakit}%)
+                        </span>
+                        <div className="w-full bg-slate-100 rounded-t-lg h-36 flex items-end overflow-hidden">
+                          <div 
+                            className="w-full bg-amber-500 rounded-t-lg transition-all duration-500 group-hover:brightness-95" 
+                            style={{ height: `${Math.max(8, pctSakit)}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-xs font-bold mt-2 text-slate-700">%Sakit</span>
+                      </div>
+
+                      {/* Alpha */}
+                      <div className="flex flex-col items-center flex-1 max-w-[80px] group">
+                        <span className="text-[11px] font-bold text-rose-600 mb-1 group-hover:scale-110 transition-transform">
+                          {alpa} Hari ({pctAlpa}%)
+                        </span>
+                        <div className="w-full bg-slate-100 rounded-t-lg h-36 flex items-end overflow-hidden">
+                          <div 
+                            className="w-full bg-rose-500 rounded-t-lg transition-all duration-500 group-hover:brightness-95" 
+                            style={{ height: `${Math.max(8, pctAlpa)}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-xs font-bold mt-2 text-slate-700">%Alpha</span>
+                      </div>
+                    </div>
+                    <p className="text-center text-xs text-slate-400 mt-4 italic">
+                      * Diagram Absensi Laboratorium (Palet Cyan #22A7B8 &amp; Ochre #F09B13)
+                    </p>
                   </Card>
-
-                  <div className="lg:col-span-1 space-y-4">
-                    <Card className="p-4 shadow-sm border-slate-200/60 bg-white">
-                      <p className="text-xs font-bold text-slate-800 uppercase mb-2">Alasan Izin</p>
-                      <div className="bg-slate-50 p-3 rounded-lg text-sm text-slate-500 border border-slate-100 min-h-[80px]">
-                        -
-                      </div>
-                    </Card>
-                    <Card className="p-4 shadow-sm border-slate-200/60 bg-white">
-                      <p className="text-xs font-bold text-slate-800 uppercase mb-2">Alasan Sakit (Site & Luar)</p>
-                      <div className="bg-slate-50 p-3 rounded-lg text-sm text-slate-500 border border-slate-100 min-h-[80px]">
-                        -
-                      </div>
-                    </Card>
-                  </div>
-                </div>
-              </div>
-
-              {/* CHART PLACEHOLDER */}
-              <Card className="p-6 shadow-sm border-slate-200/60 bg-white">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 text-center">Diagram Absensi Karyawan 2026</h3>
-                <div className="h-48 flex items-end justify-center space-x-12 px-8 pb-4 border-b border-slate-200">
-                  {/* Mock Bars matching the exact reference palette */}
-                  <div className="flex flex-col items-center w-16">
-                    <div className="w-full bg-[#22a7b8] rounded-t-sm h-[60%] hover:opacity-80 transition-opacity"></div>
-                    <span className="text-xs font-bold mt-2 text-slate-600">%Cuti</span>
-                  </div>
-                  <div className="flex flex-col items-center w-16">
-                    <div className="w-full bg-[#f09b13] rounded-t-sm h-[80%] hover:opacity-80 transition-opacity"></div>
-                    <span className="text-xs font-bold mt-2 text-slate-600">%Hadir</span>
-                  </div>
-                  <div className="flex flex-col items-center w-16">
-                    <div className="w-full bg-slate-300 rounded-t-sm h-[10%] hover:opacity-80 transition-opacity"></div>
-                    <span className="text-xs font-bold mt-2 text-slate-600">%Izin</span>
-                  </div>
-                  <div className="flex flex-col items-center w-16">
-                    <div className="w-full bg-rose-500 rounded-t-sm h-[5%] hover:opacity-80 transition-opacity"></div>
-                    <span className="text-xs font-bold mt-2 text-slate-600">%Alpha</span>
-                  </div>
-                </div>
-                <p className="text-center text-xs text-slate-400 mt-4 italic">* Diagram Absensi Laboratorium (Palet Cyan #22A7B8 & Ochre #F09B13)</p>
-              </Card>
+                );
+              })()}
 
             </div>
           </motion.div>

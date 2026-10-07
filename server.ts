@@ -262,6 +262,38 @@ async function initDbSchema() {
       console.warn("Clinic visits table init warning:", clinicInitErr.message);
     }
 
+    // Employee Attendance Table (Rekap Absensi: Sakit, Izin, Alpa, Tanggal & Alasan)
+    try {
+      await db.execute(sql`CREATE TABLE IF NOT EXISTS employee_attendance (
+        id SERIAL PRIMARY KEY,
+        nik TEXT NOT NULL,
+        name TEXT,
+        year INTEGER NOT NULL DEFAULT 2026,
+        izin INTEGER DEFAULT 0,
+        izin_khusus INTEGER DEFAULT 0,
+        sakit INTEGER DEFAULT 0,
+        sakit_site_count INTEGER DEFAULT 0,
+        sakit_luar_count INTEGER DEFAULT 0,
+        alpa INTEGER DEFAULT 0,
+        tanggal_izin TEXT,
+        tanggal_izin_khusus TEXT,
+        tanggal_sakit_site TEXT,
+        tanggal_sakit_luar TEXT,
+        tanggal_alpa TEXT,
+        alasan_izin TEXT,
+        alasan_sakit TEXT,
+        details JSONB,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );`);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_attendance_nik_year ON employee_attendance(nik, year);`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_employee_attendance_nik ON employee_attendance(nik);`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_employee_attendance_year ON employee_attendance(year);`);
+      await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS attendance_data JSONB;`);
+    } catch (attendanceInitErr: any) {
+      console.warn("Employee attendance table init warning:", attendanceInitErr.message);
+    }
+
     // Auto seed questions if table is empty
     const qCount = await db.select().from(questions).limit(1);
     if (!qCount || qCount.length === 0) {
