@@ -1417,16 +1417,16 @@ export default function App() {
 
   return (
     <div className="flex w-full min-h-[100dvh] h-[100dvh] overflow-hidden transition-colors duration-300" style={{ backgroundColor: activeModuleStyle.bg }}>
-      {/* 0. Left Edge Hover Trigger: Hover near left edge to reveal sidebar on subpages */}
+      {/* 0. Left Edge Hover Trigger: Desktop only (Hidden on Mobile) */}
       {isAutoHide && !isCrewRole && (
         <div 
-          className="fixed top-0 left-0 w-3.5 h-[100dvh] z-40 cursor-pointer pointer-events-auto select-none"
+          className="hidden md:block fixed top-0 left-0 w-3.5 h-[100dvh] z-40 cursor-pointer pointer-events-auto select-none"
           onMouseEnter={() => setIsSidebarPeeked(true)}
           title="Arahkan kursor ke sini untuk membuka menu sidebar"
         />
       )}
 
-      {/* 1. Left Sidebar: Full-height past the header, unified navigation rail */}
+      {/* 1. Left Sidebar: Full-height past the header, unified navigation rail (Desktop only, strictly hidden on mobile) */}
       {!isCrewRole && (
         <aside 
           onMouseEnter={() => {
@@ -1436,8 +1436,8 @@ export default function App() {
             setHoveredNav(null);
             if (isAutoHide) setIsSidebarPeeked(false);
           }}
-          className={`flex-col items-center w-20 lg:w-22 shrink-0 select-none py-3 justify-between overflow-y-auto overflow-x-hidden ${
-            isBulletin && bulletinFocusMode && !isSidebarPeeked ? 'hidden' : 'flex'
+          className={`hidden md:flex flex-col items-center w-20 lg:w-22 shrink-0 select-none py-3 justify-between overflow-y-auto overflow-x-hidden ${
+            isBulletin && bulletinFocusMode && !isSidebarPeeked ? 'md:hidden' : 'md:flex'
           } ${
             isAutoHide
               ? `fixed top-0 left-0 h-[100dvh] z-50 transition-transform duration-300 ease-out ${
@@ -1671,7 +1671,7 @@ export default function App() {
             STAGING ENVIRONMENT - DATA TEST
           </div>
         )}
-        <div className="flex flex-col pb-20 md:pb-6 relative min-h-[100dvh]">
+        <div className="flex flex-col pb-24 md:pb-6 relative min-h-[100dvh]">
           {/* Modals & Portals */}
           <ThemeModal 
             show={showGlobalThemeModal} 
