@@ -93,6 +93,41 @@ export const employeeAttendance = pgTable('employee_attendance', {
   index('idx_employee_attendance_year').on(t.year),
 ]);
 
+// Define 'employee_counseling' table (Data Konseling & Sanksi SPDK Karyawan)
+export const employeeCounseling = pgTable('employee_counseling', {
+  id: serial('id').primaryKey(),
+  nik: text('nik').notNull(),
+  name: text('name'),
+  jabatan: text('jabatan'),
+  pt: text('pt'),
+  totalSp: text('total_sp'),
+  bulanKonseling: text('bulan_konseling'),
+  konseling1: text('konseling_1'),
+  konseling2: text('konseling_2'),
+  konseling3: text('konseling_3'),
+  st: text('st'),
+  sp1: text('sp_1'),
+  sp2: text('sp_2'),
+  sp3: text('sp_3'),
+  phk: text('phk'),
+  masaBerlakuSanksi: text('masa_berlaku_sanksi'),
+  masaPemulihan1: text('masa_pemulihan_1'),
+  masaPemulihan2: text('masa_pemulihan_2'),
+  alasanSp: text('alasan_sp'),
+  keterangan: text('keterangan'),
+  pernahSpSebelumnya: text('pernah_sp_sebelumnya'),
+  pernahTerlibatSpdk: text('pernah_terlibat_spdk'),
+  kronologiSpdk: text('kronologi_spdk'),
+  kategoriSpdk: text('kategori_spdk'),
+  tindakanSpdk: text('tindakan_spdk'),
+  statusSanksi: text('status_sanksi').default('Aman'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_employee_counseling_nik').on(t.nik),
+  index('idx_employee_counseling_name').on(t.name),
+]);
+
 // Define 'equipments' table (Alat / Unit)
 export const equipments = pgTable('equipments', {
   id: serial('id').primaryKey(),

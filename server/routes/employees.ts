@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, sql } from "drizzle-orm";
 import { db } from "../../src/db/index.js";
-import { employees, developerUsers, employeeAttendance } from "../../src/db/schema.js";
+import { employees, developerUsers, employeeAttendance, employeeCounseling } from "../../src/db/schema.js";
 import { toPublicEmployee } from "../middleware/auth.js";
 import { drive } from "../../google-services.js";
 import { Readable } from "stream";
@@ -17,14 +17,16 @@ export function normalizeNameKey(name: string): string {
     .trim();
 }
 
-// In-memory cache for ultra-fast employee and attendance data serving
+// In-memory cache for ultra-fast employee, attendance & counseling data serving
 let cachedAttendanceMap: { data: Record<string, any>; timestamp: number } | null = null;
+let cachedCounselingMap: { data: Record<string, any>; timestamp: number } | null = null;
 let cachedHierarchy: Map<string, { data: any[]; timestamp: number }> = new Map();
 let cachedAllEmployees: { data: any[]; timestamp: number } | null = null;
 const CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
 
 export function clearEmployeeCache() {
   cachedAttendanceMap = null;
+  cachedCounselingMap = null;
   cachedHierarchy.clear();
   cachedAllEmployees = null;
 }
@@ -68,9 +70,68 @@ async function getAttendanceMap(): Promise<Record<string, any>> {
   }
 }
 
-function attachAttendanceToEmployee(e: any, attMap: Record<string, any>) {
+async function getCounselingMap(): Promise<Record<string, any>> {
+  const now = Date.now();
+  if (cachedCounselingMap && (now - cachedCounselingMap.timestamp < CACHE_TTL_MS)) {
+    return cachedCounselingMap.data;
+  }
+  try {
+    // Ensure table exists
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS employee_counseling (
+        id SERIAL PRIMARY KEY,
+        nik TEXT NOT NULL,
+        name TEXT,
+        jabatan TEXT,
+        pt TEXT,
+        total_sp TEXT,
+        bulan_konseling TEXT,
+        konseling_1 TEXT,
+        konseling_2 TEXT,
+        konseling_3 TEXT,
+        st TEXT,
+        sp_1 TEXT,
+        sp_2 TEXT,
+        sp_3 TEXT,
+        phk TEXT,
+        masa_berlaku_sanksi TEXT,
+        masa_pemulihan_1 TEXT,
+        masa_pemulihan_2 TEXT,
+        alasan_sp TEXT,
+        keterangan TEXT,
+        pernah_sp_sebelumnya TEXT,
+        pernah_terlibat_spdk TEXT,
+        kronologi_spdk TEXT,
+        kategori_spdk TEXT,
+        tindakan_spdk TEXT,
+        status_sanksi TEXT DEFAULT 'Aman',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_counseling_nik ON employee_counseling(nik);
+    `);
+
+    const allC = await db.select().from(employeeCounseling);
+    const map: Record<string, any> = {};
+    for (const item of allC) {
+      if (item.nik) {
+        map[item.nik] = item;
+      }
+      if (item.name) {
+        map[normalizeNameKey(item.name)] = item;
+      }
+    }
+    cachedCounselingMap = { data: map, timestamp: now };
+    return map;
+  } catch (e) {
+    return {};
+  }
+}
+
+function attachAttendanceToEmployee(e: any, attMap: Record<string, any>, counselMap?: Record<string, any>) {
   const publicEmp = toPublicEmployee(e);
   const attForEmp = attMap[e.nik] || e.attendanceData || {};
+  const counsel = (counselMap && (counselMap[e.nik] || counselMap[normalizeNameKey(e.name)])) || (e.counselingSpdk || null);
 
   const emptyAttendance = {
     izin: 0,
@@ -106,7 +167,8 @@ function attachAttendanceToEmployee(e: any, attMap: Record<string, any>) {
     ...publicEmp,
     attendance: attForEmp,
     attendance2026: formatAtt(rawAtt26),
-    attendance2025: formatAtt(rawAtt25)
+    attendance2025: formatAtt(rawAtt25),
+    counselingSpdk: counsel
   };
 }
 
@@ -259,7 +321,6 @@ employeesRouter.get("/", async (req, res) => {
   try {
     const { pt, all } = req.query;
     let data = await db.select().from(employees);
-    const attMap = await getAttendanceMap();
 
     // Strictly exclude demo, staging, admin and broken spreadsheet accounts
     data = data.filter(e => {
@@ -302,7 +363,9 @@ employeesRouter.get("/", async (req, res) => {
       }
     }
 
-    res.json(data.map(e => attachAttendanceToEmployee(e, attMap)));
+    const attMap = await getAttendanceMap();
+    const counselMap = await getCounselingMap();
+    res.json(data.map(e => attachAttendanceToEmployee(e, attMap, counselMap)));
   } catch (error) {
     console.error("Error fetching employees:", error);
     res.status(500).json({ error: "Failed to fetch employees" });
@@ -329,13 +392,14 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     const deptLower = (user.department || "").toLowerCase();
     const jabatanLower = (user.jabatan || "").toLowerCase();
     const attMap = await getAttendanceMap();
+    const counselMap = await getCounselingMap();
     
     // Check if user is Admin, Administrasi or QA (Admin can see all)
     if (sectionLower.includes("administrasi") || deptLower.includes("administrasi") || 
         sectionLower.includes("qa") || deptLower.includes("qa") || sectionLower.includes("quality assurance") || deptLower.includes("quality assurance") ||
         jabatanLower.includes("admin")) {
       const allData = await db.select().from(employees);
-      const formatted = allData.map(e => attachAttendanceToEmployee(e, attMap));
+      const formatted = allData.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
       cachedHierarchy.set(nik, { data: formatted, timestamp: now });
       return res.json({ status: "success", data: formatted });
     }
@@ -352,7 +416,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     
     if (allowedJabatans.length === 0) {
       // Crew or someone with no subordinates
-      const formatted = [attachAttendanceToEmployee(user, attMap)];
+      const formatted = [attachAttendanceToEmployee(user, attMap, counselMap)];
       cachedHierarchy.set(nik, { data: formatted, timestamp: now });
       return res.json({ status: "success", data: formatted });
     }
@@ -374,7 +438,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
       subordinates.unshift(user);
     }
     
-    const formatted = subordinates.map(e => attachAttendanceToEmployee(e, attMap));
+    const formatted = subordinates.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
     cachedHierarchy.set(nik, { data: formatted, timestamp: now });
     res.json({ status: "success", data: formatted });
   } catch (error) {
@@ -389,7 +453,8 @@ employeesRouter.get("/:nik", async (req, res) => {
     const data = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
     if (data.length > 0) {
       const attMap = await getAttendanceMap();
-      res.json({ status: "success", employee: attachAttendanceToEmployee(data[0], attMap) });
+      const counselMap = await getCounselingMap();
+      res.json({ status: "success", employee: attachAttendanceToEmployee(data[0], attMap, counselMap) });
     } else {
       res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan" });
     }
@@ -437,7 +502,7 @@ function parseCount(val: any): number {
 
 employeesRouter.post("/import", async (req, res) => {
   try {
-    const { rows, attendanceRows, editorNik } = req.body;
+    const { rows, attendanceRows, counselingRows, editorNik } = req.body;
     const requesterNik = editorNik || req.headers['x-user-nik'] || req.body?.requesterNik;
     const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
     if (!isAuth) {
@@ -449,8 +514,9 @@ employeesRouter.post("/import", async (req, res) => {
 
     const hasRows = Array.isArray(rows) && rows.length > 0;
     const hasAttRows = Array.isArray(attendanceRows) && attendanceRows.length > 0;
+    const hasCounselRows = Array.isArray(counselingRows) && counselingRows.length > 0;
 
-    if (!hasRows && !hasAttRows) {
+    if (!hasRows && !hasAttRows && !hasCounselRows) {
       return res.status(400).json({ status: "error", message: "Tidak ada data baris yang dikirim untuk diimport." });
     }
 
@@ -458,6 +524,7 @@ employeesRouter.post("/import", async (req, res) => {
     let updatedCount = 0;
     let errorCount = 0;
     let attUpdatedCount = 0;
+    let counselUpdatedCount = 0;
     const errors: string[] = [];
 
     // 1. Process Master Employee Rows (Sheet 1)
@@ -788,14 +855,140 @@ employeesRouter.post("/import", async (req, res) => {
       }
     }
 
+    // 3. Process Counseling & SPDK Rows (Sheet 3: "Konseling & SPDK")
+    if (hasCounselRows) {
+      const allCurrentEmployees = await db.select().from(employees);
+      const nameToEmpMap = new Map<string, any>();
+      const nikToEmpMap = new Map<string, any>();
+
+      for (const emp of allCurrentEmployees) {
+        if (emp.nik) nikToEmpMap.set(emp.nik.toUpperCase().trim(), emp);
+        if (emp.name) {
+          const normKey = normalizeNameKey(emp.name);
+          if (normKey) nameToEmpMap.set(normKey, emp);
+        }
+      }
+
+      for (let k = 0; k < counselingRows.length; k++) {
+        const cRaw = counselingRows[k];
+        if (!cRaw || typeof cRaw !== 'object') continue;
+
+        // Clean & normalize counseling row keys
+        const cNorm: Record<string, string> = {};
+        for (const [key, v] of Object.entries(cRaw)) {
+          const cleanK = String(key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (cleanK) {
+            cNorm[cleanK] = v !== undefined && v !== null ? String(v).trim() : '';
+          }
+        }
+
+        const rawName = cRaw['Nama Karyawan'] || cRaw['Nama'] || cNorm['namakaryawan'] || cNorm['nama'] || cNorm['name'] || '';
+        const rawNik = cRaw['NIK'] || cNorm['nik'] || '';
+
+        // Match with employee
+        let matchedEmp = rawNik ? nikToEmpMap.get(rawNik.toUpperCase().trim()) : null;
+        if (!matchedEmp && rawName) {
+          const normN = normalizeNameKey(rawName);
+          matchedEmp = nameToEmpMap.get(normN);
+          if (!matchedEmp) {
+            for (const [key, emp] of nameToEmpMap.entries()) {
+              if (key && normN && (key.includes(normN) || normN.includes(key))) {
+                matchedEmp = emp;
+                break;
+              }
+            }
+          }
+        }
+
+        const targetNik = matchedEmp ? matchedEmp.nik : (rawNik || `TEMP-${Date.now()}-${k}`);
+        const targetName = matchedEmp ? matchedEmp.name : (rawName || 'Karyawan');
+        const jabatan = cRaw['Jabatan'] || cNorm['jabatan'] || matchedEmp?.jabatan || '';
+        const pt = cRaw['PT'] || cNorm['pt'] || matchedEmp?.pt || '';
+        const totalSp = String(cRaw['Total SP'] ?? cNorm['totalsp'] ?? '').trim();
+        const bulanKonseling = String(cRaw['Bulan Konseling'] ?? cNorm['bulankonseling'] ?? '').trim();
+        const konseling1 = String(cRaw['Konseling I'] ?? cRaw['Konseling 1'] ?? cNorm['konselingi'] ?? cNorm['konseling1'] ?? '').trim();
+        const konseling2 = String(cRaw['Konseling II'] ?? cRaw['Konseling 2'] ?? cNorm['konselingii'] ?? cNorm['konseling2'] ?? '').trim();
+        const konseling3 = String(cRaw['Konseling III'] ?? cRaw['Konseling 3'] ?? cNorm['konselingiii'] ?? cNorm['konseling3'] ?? '').trim();
+        const st = String(cRaw['ST'] ?? cRaw['Surat Teguran'] ?? cNorm['st'] ?? cNorm['suratteguran'] ?? '').trim();
+        const sp1 = String(cRaw['SP I'] ?? cRaw['SP 1'] ?? cNorm['spi'] ?? cNorm['sp1'] ?? '').trim();
+        const sp2 = String(cRaw['SP II'] ?? cRaw['SP 2'] ?? cNorm['spii'] ?? cNorm['sp2'] ?? '').trim();
+        const sp3 = String(cRaw['SP III'] ?? cRaw['SP 3'] ?? cNorm['spiii'] ?? cNorm['sp3'] ?? '').trim();
+        const phk = String(cRaw['PHK'] ?? cNorm['phk'] ?? '').trim();
+        const masaBerlakuSanksi = cleanDateVal(cRaw['Masa Berlaku Sanksi'] ?? cNorm['masaberlakusanksi'] ?? cNorm['masaberlaku']) || String(cRaw['Masa Berlaku Sanksi'] ?? cNorm['masaberlakusanksi'] ?? '').trim();
+        const masaPemulihan1 = cleanDateVal(cRaw['Masa Pemulihan I'] ?? cRaw['Masa Pemulihan 1'] ?? cNorm['masapemulihani'] ?? cNorm['masapemulihan1']) || String(cRaw['Masa Pemulihan I'] ?? cNorm['masapemulihani'] ?? '').trim();
+        const masaPemulihan2 = cleanDateVal(cRaw['Masa Pemulihan II'] ?? cRaw['Masa Pemulihan 2'] ?? cNorm['masapemulihanii'] ?? cNorm['masapemulihan2']) || String(cRaw['Masa Pemulihan II'] ?? cNorm['masapemulihanii'] ?? '').trim();
+        const alasanSp = String(cRaw['Alasan Surat Peringatan'] ?? cRaw['Alasan SP'] ?? cNorm['alasansuratperingatan'] ?? cNorm['alasansp'] ?? '').trim();
+        const keterangan = String(cRaw['Keterangan SP'] ?? cRaw['Keterangan'] ?? cNorm['keterangansp'] ?? cNorm['keterangan'] ?? '').trim();
+        const pernahSpSebelumnya = String(cRaw['Pernah SP/ST Sebelumnya'] ?? cRaw['Pernah SP'] ?? cNorm['pernahspstsebelumnya'] ?? cNorm['pernahspsebelumnya'] ?? '').trim();
+        const pernahTerlibatSpdk = String(cRaw['Pernah Terlibat SPDK'] ?? cNorm['pernahterlibatspdk'] ?? '').trim();
+        const kronologiSpdk = String(cRaw['Kronologi Kejadian SPDK'] ?? cRaw['Kronologi'] ?? cNorm['kronologikejadianspdk'] ?? cNorm['kronologi'] ?? '').trim();
+        const kategoriSpdk = String(cRaw['Kategori Sanksi SPDK'] ?? cRaw['Kategori SPDK'] ?? cNorm['kategorisanksispdk'] ?? cNorm['kategorispdk'] ?? '').trim();
+        const tindakanSpdk = String(cRaw['Tindakan Disiplin SPDK'] ?? cRaw['Tindakan SPDK'] ?? cNorm['tindakandisiplinspdk'] ?? cNorm['tindakanspdk'] ?? '').trim();
+
+        // Calculate status sanksi
+        let statusSanksi = 'Aman';
+        if (phk && phk !== '-' && phk !== '0') statusSanksi = 'PHK';
+        else if (sp3 && sp3 !== '-' && sp3 !== '0') statusSanksi = 'SP III';
+        else if (sp2 && sp2 !== '-' && sp2 !== '0') statusSanksi = 'SP II';
+        else if (sp1 && sp1 !== '-' && sp1 !== '0') statusSanksi = 'SP I';
+        else if (st && st !== '-' && st !== '0') statusSanksi = 'Surat Teguran (ST)';
+        else if (konseling3 && konseling3 !== '-' && konseling3 !== '0') statusSanksi = 'Konseling III';
+        else if (konseling2 && konseling2 !== '-' && konseling2 !== '0') statusSanksi = 'Konseling II';
+        else if (konseling1 && konseling1 !== '-' && konseling1 !== '0') statusSanksi = 'Konseling I';
+        else if (pernahTerlibatSpdk.toLowerCase().includes('ya') || kronologiSpdk.length > 5) statusSanksi = 'SPDK';
+
+        const counselRecord = {
+          nik: targetNik,
+          name: targetName,
+          jabatan,
+          pt,
+          totalSp,
+          bulanKonseling,
+          konseling1,
+          konseling2,
+          konseling3,
+          st,
+          sp1,
+          sp2,
+          sp3,
+          phk,
+          masaBerlakuSanksi,
+          masaPemulihan1,
+          masaPemulihan2,
+          alasanSp,
+          keterangan,
+          pernahSpSebelumnya,
+          pernahTerlibatSpdk,
+          kronologiSpdk,
+          kategoriSpdk,
+          tindakanSpdk,
+          statusSanksi,
+          updatedAt: new Date()
+        };
+
+        try {
+          const existing = await db.select().from(employeeCounseling).where(eq(employeeCounseling.nik, targetNik)).limit(1);
+          if (existing.length > 0) {
+            await db.update(employeeCounseling).set(counselRecord).where(eq(employeeCounseling.nik, targetNik));
+          } else {
+            await db.insert(employeeCounseling).values(counselRecord);
+          }
+          counselUpdatedCount++;
+        } catch (cErr: any) {
+          console.warn(`Error updating counseling for ${targetNik}:`, cErr.message);
+        }
+      }
+    }
+
     res.json({
       status: "success",
-      message: `Import berhasil selesai! ${updatedCount} data master diperbarui, ${insertedCount} ditambahkan, ${attUpdatedCount} absensi karyawan disinkronkan.`,
+      message: `Import berhasil selesai! ${updatedCount} data master diperbarui, ${insertedCount} ditambahkan, ${attUpdatedCount} absensi & ${counselUpdatedCount} data konseling/SPDK disinkronkan.`,
       stats: {
-        total: (rows?.length || 0) + (attendanceRows?.length || 0),
+        total: (rows?.length || 0) + (attendanceRows?.length || 0) + (counselingRows?.length || 0),
         updated: updatedCount,
         inserted: insertedCount,
         attendanceUpdated: attUpdatedCount,
+        counselingUpdated: counselUpdatedCount,
         errors: errorCount,
         errorList: errors.slice(0, 10)
       }

@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud, Camera, Pencil, Plus, Edit3 } from 'lucide-react';
+import { 
+  ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, 
+  FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, 
+  Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud, Camera, Pencil, 
+  Plus, Edit3, ShieldAlert, Scale, Gavel, Clock, AlertOctagon, Info, ShieldCheck
+} from 'lucide-react';
 import { Card, Input, Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
 import { EmployeeImportModal } from './EmployeeImportModal';
@@ -1301,6 +1306,355 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     <p className="text-center text-xs text-slate-400 mt-4 italic">
                       * Diagram Absensi Laboratorium (Palet Cyan #22A7B8 &amp; Ochre #F09B13)
                     </p>
+                  </Card>
+                );
+              })()}
+
+              {/* SECTION: DATA KONSELING, SANKSI DISIPLIN & SPDK */}
+              {(() => {
+                const cData = selectedEmployee.counselingSpdk || {};
+                const totalSpNum = parseInt(String(cData.totalSp || '0').trim(), 10) || 0;
+                const statusSanksi = String(cData.statusSanksi || (totalSpNum > 0 ? `SP ${totalSpNum}` : 'Aman')).trim();
+                
+                // Determine sanction level (0 - 6)
+                let severityLevel = 0;
+                let levelLabel = 'Disiplin Baik (Aman)';
+                let levelColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+                let levelBadgeBg = 'bg-emerald-500';
+
+                if (cData.phk && cData.phk !== '-' && cData.phk !== '0') {
+                  severityLevel = 6;
+                  levelLabel = 'PHK (Pemutusan Hubungan Kerja)';
+                  levelColor = 'text-rose-900 bg-rose-100 border-rose-300';
+                  levelBadgeBg = 'bg-rose-700';
+                } else if (cData.sp3 && cData.sp3 !== '-' && cData.sp3 !== '0') {
+                  severityLevel = 5;
+                  levelLabel = 'Surat Peringatan III (SP III)';
+                  levelColor = 'text-rose-800 bg-rose-50 border-rose-200';
+                  levelBadgeBg = 'bg-rose-600';
+                } else if (cData.sp2 && cData.sp2 !== '-' && cData.sp2 !== '0') {
+                  severityLevel = 4;
+                  levelLabel = 'Surat Peringatan II (SP II)';
+                  levelColor = 'text-orange-800 bg-orange-50 border-orange-200';
+                  levelBadgeBg = 'bg-orange-600';
+                } else if (cData.sp1 && cData.sp1 !== '-' && cData.sp1 !== '0') {
+                  severityLevel = 3;
+                  levelLabel = 'Surat Peringatan I (SP I)';
+                  levelColor = 'text-amber-800 bg-amber-50 border-amber-200';
+                  levelBadgeBg = 'bg-amber-500';
+                } else if (cData.st && cData.st !== '-' && cData.st !== '0') {
+                  severityLevel = 2;
+                  levelLabel = 'Surat Teguran (ST)';
+                  levelColor = 'text-yellow-800 bg-yellow-50 border-yellow-200';
+                  levelBadgeBg = 'bg-yellow-500';
+                } else if ((cData.konseling1 && cData.konseling1 !== '-') || (cData.konseling2 && cData.konseling2 !== '-') || (cData.konseling3 && cData.konseling3 !== '-')) {
+                  severityLevel = 1;
+                  levelLabel = 'Dalam Pembinaan / Konseling';
+                  levelColor = 'text-teal-800 bg-teal-50 border-teal-200';
+                  levelBadgeBg = 'bg-teal-500';
+                } else if (String(cData.pernahTerlibatSpdk || '').toLowerCase().includes('ya') || (cData.kronologiSpdk && cData.kronologiSpdk.length > 5)) {
+                  severityLevel = 2;
+                  levelLabel = 'Tercatat Insiden SPDK';
+                  levelColor = 'text-purple-800 bg-purple-50 border-purple-200';
+                  levelBadgeBg = 'bg-purple-600';
+                }
+
+                const levels = [
+                  { level: 0, label: 'Aman', sub: 'Zero Sanction' },
+                  { level: 1, label: 'Konseling', sub: 'Tahap I - III' },
+                  { level: 2, label: 'ST', sub: 'Surat Teguran' },
+                  { level: 3, label: 'SP I', sub: 'Peringatan I' },
+                  { level: 4, label: 'SP II', sub: 'Peringatan II' },
+                  { level: 5, label: 'SP III', sub: 'Peringatan III' },
+                  { level: 6, label: 'PHK', sub: 'Terminasi' }
+                ];
+
+                const hasActiveSanction = severityLevel > 0;
+
+                return (
+                  <Card className="p-6 shadow-sm border-slate-200/60 bg-white">
+                    {/* Header Section */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                          <Scale className="w-5 h-5 text-purple-600" />
+                          <span>Status Konseling, Sanksi Disiplin &amp; SPDK</span>
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Rekap pembinaan konseling karyawan, penerbitan surat peringatan (ST/SP), dan penanganan pelanggaran disiplin kerja (SPDK).
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border flex items-center gap-1.5 shadow-2xs ${levelColor}`}>
+                          {severityLevel === 0 ? (
+                            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <ShieldAlert className="w-4 h-4 text-current animate-pulse" />
+                          )}
+                          <span>{levelLabel}</span>
+                        </span>
+
+                        {cData.bulanKonseling && cData.bulanKonseling !== '-' && (
+                          <span className="px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold font-mono">
+                            Bulan: {cData.bulanKonseling}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* DIAGRAM JENJANG SANKSI DISIPLIN (STEPPER GAUGE) */}
+                    <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-50 via-purple-50/20 to-slate-50 border border-slate-200/80 mb-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <BarChart3 className="w-4 h-4 text-purple-600" />
+                          Diagram Tingkat Severity Sanksi Karyawan
+                        </span>
+                        <span className="text-[11px] font-bold text-slate-500 font-mono">
+                          Tingkat: {severityLevel} / 6
+                        </span>
+                      </div>
+
+                      {/* Stepper Diagram */}
+                      <div className="grid grid-cols-7 gap-1.5 sm:gap-2 pt-2">
+                        {levels.map((item) => {
+                          const isActive = severityLevel === item.level;
+                          const isPassed = severityLevel >= item.level && item.level > 0;
+                          
+                          let bgStep = 'bg-slate-100 border-slate-200 text-slate-400';
+                          if (isActive) {
+                            if (item.level === 0) bgStep = 'bg-emerald-500 border-emerald-600 text-white shadow-md ring-2 ring-emerald-300';
+                            else if (item.level === 1) bgStep = 'bg-teal-500 border-teal-600 text-white shadow-md ring-2 ring-teal-300';
+                            else if (item.level === 2) bgStep = 'bg-yellow-500 border-yellow-600 text-white shadow-md ring-2 ring-yellow-300';
+                            else if (item.level === 3) bgStep = 'bg-amber-500 border-amber-600 text-white shadow-md ring-2 ring-amber-300';
+                            else if (item.level === 4) bgStep = 'bg-orange-500 border-orange-600 text-white shadow-md ring-2 ring-orange-300';
+                            else if (item.level === 5) bgStep = 'bg-rose-600 border-rose-700 text-white shadow-md ring-2 ring-rose-300 animate-pulse';
+                            else if (item.level === 6) bgStep = 'bg-rose-900 border-rose-950 text-white shadow-md ring-2 ring-rose-500 animate-pulse';
+                          } else if (isPassed) {
+                            bgStep = 'bg-purple-100 border-purple-300 text-purple-800';
+                          }
+
+                          return (
+                            <div key={item.level} className="flex flex-col items-center text-center">
+                              <div className={`w-full py-2 px-1 rounded-xl border font-black text-[11px] sm:text-xs transition-all duration-300 flex flex-col items-center justify-center ${bgStep}`}>
+                                <span>{item.label}</span>
+                              </div>
+                              <span className="text-[10px] text-slate-500 font-semibold mt-1 hidden sm:block">
+                                {item.sub}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Disciplinary Level Description */}
+                      <div className="mt-3 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-600 flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <Info className="w-4 h-4 text-purple-500 shrink-0" />
+                          <span>
+                            {severityLevel === 0 
+                              ? 'Karyawan memiliki catatan disiplin bersih tanpa sanksi aktif.' 
+                              : `Karyawan saat ini berada pada tingkatan status: ${levelLabel}.`}
+                          </span>
+                        </div>
+                        {cData.totalSp && (
+                          <span className="font-mono font-bold text-slate-700">
+                            Total Catatan SP: <span className="text-rose-600">{cData.totalSp}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* DETAIL KARTU SANKSI & PEMULIHAN */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      {/* Masa Berlaku Sanksi */}
+                      <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5 uppercase">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" />
+                            Masa Berlaku Sanksi
+                          </span>
+                        </div>
+                        <p className="text-sm font-extrabold text-slate-800 font-mono">
+                          {cData.masaBerlakuSanksi && cData.masaBerlakuSanksi !== '-' ? cData.masaBerlakuSanksi : 'Tidak ada sanksi aktif'}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Periode berlakunya surat peringatan / teguran
+                        </p>
+                      </div>
+
+                      {/* Masa Pemulihan I */}
+                      <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5 uppercase">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
+                            Masa Pemulihan I
+                          </span>
+                        </div>
+                        <p className="text-sm font-extrabold text-teal-800 font-mono">
+                          {cData.masaPemulihan1 && cData.masaPemulihan1 !== '-' ? cData.masaPemulihan1 : '-'}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Evaluasi tahap awal pemulihan kedisiplinan
+                        </p>
+                      </div>
+
+                      {/* Masa Pemulihan II */}
+                      <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5 uppercase">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            Masa Pemulihan II
+                          </span>
+                        </div>
+                        <p className="text-sm font-extrabold text-emerald-800 font-mono">
+                          {cData.masaPemulihan2 && cData.masaPemulihan2 !== '-' ? cData.masaPemulihan2 : '-'}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Tahap penutupan sanksi &amp; pemutihan status
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* GRID RINCIAN KONSELING & SP & SPDK */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Kolom Kiri: Rincian Konseling & Surat Peringatan */}
+                      <div className="space-y-4">
+                        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-3">
+                          <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                            <Gavel className="w-4 h-4 text-[#22a7b8]" />
+                            Rincian Surat Peringatan &amp; Pembinaan
+                          </h4>
+
+                          <div className="grid grid-cols-3 gap-2 text-xs">
+                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                              <span className="text-[10px] text-slate-400 font-bold block uppercase">Konseling I</span>
+                              <span className="font-extrabold text-slate-700 font-mono mt-0.5 block truncate">
+                                {cData.konseling1 || '-'}
+                              </span>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                              <span className="text-[10px] text-slate-400 font-bold block uppercase">Konseling II</span>
+                              <span className="font-extrabold text-slate-700 font-mono mt-0.5 block truncate">
+                                {cData.konseling2 || '-'}
+                              </span>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                              <span className="text-[10px] text-slate-400 font-bold block uppercase">Konseling III</span>
+                              <span className="font-extrabold text-slate-700 font-mono mt-0.5 block truncate">
+                                {cData.konseling3 || '-'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-4 gap-2 text-xs">
+                            <div className="p-2 rounded-xl bg-yellow-50/50 border border-yellow-100 text-center">
+                              <span className="text-[10px] text-yellow-800 font-bold block">ST</span>
+                              <span className="font-extrabold text-yellow-900 font-mono text-[11px] truncate block">
+                                {cData.st || '-'}
+                              </span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-amber-50/50 border border-amber-100 text-center">
+                              <span className="text-[10px] text-amber-800 font-bold block">SP I</span>
+                              <span className="font-extrabold text-amber-900 font-mono text-[11px] truncate block">
+                                {cData.sp1 || '-'}
+                              </span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-orange-50/50 border border-orange-100 text-center">
+                              <span className="text-[10px] text-orange-800 font-bold block">SP II</span>
+                              <span className="font-extrabold text-orange-900 font-mono text-[11px] truncate block">
+                                {cData.sp2 || '-'}
+                              </span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-rose-50/50 border border-rose-100 text-center">
+                              <span className="text-[10px] text-rose-800 font-bold block">SP III</span>
+                              <span className="font-extrabold text-rose-900 font-mono text-[11px] truncate block">
+                                {cData.sp3 || '-'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Alasan SP & Keterangan */}
+                          <div className="pt-2 space-y-2">
+                            <div>
+                              <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Alasan Surat Peringatan:</p>
+                              <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100 leading-relaxed font-medium">
+                                {cData.alasanSp || 'Tidak ada catatan alasan surat peringatan.'}
+                              </p>
+                            </div>
+
+                            {cData.keterangan && cData.keterangan !== '-' && (
+                              <div>
+                                <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Keterangan Tambahan:</p>
+                                <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 leading-relaxed">
+                                  {cData.keterangan}
+                                </p>
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-between text-xs pt-1 text-slate-500">
+                              <span>Pernah SP/ST Sebelumnya:</span>
+                              <span className={`font-bold px-2 py-0.5 rounded-md ${
+                                String(cData.pernahSpSebelumnya || '').toLowerCase().includes('ya') 
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200' 
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}>
+                                {cData.pernahSpSebelumnya || 'Tidak'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Kolom Kanan: Detail SPDK & Kronologi Kejadian */}
+                      <div className="space-y-4">
+                        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-3">
+                          <h4 className="text-xs font-extrabold text-purple-900 uppercase tracking-wider flex items-center justify-between border-b border-purple-100 pb-2">
+                            <span className="flex items-center gap-1.5">
+                              <AlertOctagon className="w-4 h-4 text-purple-600" />
+                              Sanksi Pelanggaran Disiplin Kerja (SPDK)
+                            </span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                              String(cData.pernahTerlibatSpdk || '').toLowerCase().includes('ya')
+                                ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {String(cData.pernahTerlibatSpdk || '').toLowerCase().includes('ya') ? 'Terlibat SPDK' : 'Tidak Terlibat'}
+                            </span>
+                          </h4>
+
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className="p-3 rounded-xl bg-purple-50/50 border border-purple-100">
+                              <span className="text-[10px] text-purple-700 font-bold block uppercase">Kategori SPDK</span>
+                              <span className="font-bold text-slate-800 mt-1 block">
+                                {cData.kategoriSpdk && cData.kategoriSpdk !== '-' ? cData.kategoriSpdk : 'Tidak Ada'}
+                              </span>
+                            </div>
+                            <div className="p-3 rounded-xl bg-purple-50/50 border border-purple-100">
+                              <span className="text-[10px] text-purple-700 font-bold block uppercase">Tindakan Disiplin</span>
+                              <span className="font-bold text-slate-800 mt-1 block">
+                                {cData.tindakanSpdk && cData.tindakanSpdk !== '-' ? cData.tindakanSpdk : '-'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Kronologi Kejadian SPDK:</p>
+                            <div className="text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-100 leading-relaxed min-h-[100px] max-h-48 overflow-y-auto">
+                              {cData.kronologiSpdk && cData.kronologiSpdk !== '-' ? (
+                                <p className="font-medium whitespace-pre-line text-slate-800">
+                                  {cData.kronologiSpdk}
+                                </p>
+                              ) : (
+                                <p className="text-slate-400 italic">
+                                  Tidak ada catatan riwayat kronologi kejadian pelanggaran disiplin (SPDK) untuk karyawan ini.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </Card>
                 );
               })()}
