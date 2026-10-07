@@ -116,6 +116,7 @@ async function getCounselingMap(): Promise<Record<string, any>> {
     for (const item of allC) {
       if (item.nik) {
         map[item.nik] = item;
+        map[item.nik.toUpperCase().trim()] = item;
       }
       if (item.name) {
         map[normalizeNameKey(item.name)] = item;
@@ -131,7 +132,11 @@ async function getCounselingMap(): Promise<Record<string, any>> {
 function attachAttendanceToEmployee(e: any, attMap: Record<string, any>, counselMap?: Record<string, any>) {
   const publicEmp = toPublicEmployee(e);
   const attForEmp = attMap[e.nik] || e.attendanceData || {};
-  const counsel = (counselMap && (counselMap[e.nik] || counselMap[normalizeNameKey(e.name)])) || (e.counselingSpdk || null);
+  const counsel = (counselMap && (
+    counselMap[e.nik] || 
+    counselMap[e.nik.toUpperCase().trim()] || 
+    counselMap[normalizeNameKey(e.name)]
+  )) || (e.counselingSpdk || null);
 
   const emptyAttendance = {
     izin: 0,
@@ -882,8 +887,8 @@ employeesRouter.post("/import", async (req, res) => {
           }
         }
 
-        const rawName = cRaw['Nama Karyawan'] || cRaw['Nama'] || cNorm['namakaryawan'] || cNorm['nama'] || cNorm['name'] || '';
-        const rawNik = cRaw['NIK'] || cNorm['nik'] || '';
+        const rawName = cRaw['Nama Karyawan'] || cRaw['Nama'] || cRaw['Name'] || cRaw['Employee Name'] || cNorm['namakaryawan'] || cNorm['nama'] || cNorm['name'] || cNorm['employeename'] || '';
+        const rawNik = cRaw['NIK'] || cRaw['nik'] || cNorm['nik'] || cNorm['id'] || cNorm['noid'] || '';
 
         // Match with employee
         let matchedEmp = rawNik ? nikToEmpMap.get(rawNik.toUpperCase().trim()) : null;
@@ -902,28 +907,35 @@ employeesRouter.post("/import", async (req, res) => {
 
         const targetNik = matchedEmp ? matchedEmp.nik : (rawNik || `TEMP-${Date.now()}-${k}`);
         const targetName = matchedEmp ? matchedEmp.name : (rawName || 'Karyawan');
-        const jabatan = cRaw['Jabatan'] || cNorm['jabatan'] || matchedEmp?.jabatan || '';
-        const pt = cRaw['PT'] || cNorm['pt'] || matchedEmp?.pt || '';
-        const totalSp = String(cRaw['Total SP'] ?? cNorm['totalsp'] ?? '').trim();
-        const bulanKonseling = String(cRaw['Bulan Konseling'] ?? cNorm['bulankonseling'] ?? '').trim();
-        const konseling1 = String(cRaw['Konseling I'] ?? cRaw['Konseling 1'] ?? cNorm['konselingi'] ?? cNorm['konseling1'] ?? '').trim();
-        const konseling2 = String(cRaw['Konseling II'] ?? cRaw['Konseling 2'] ?? cNorm['konselingii'] ?? cNorm['konseling2'] ?? '').trim();
-        const konseling3 = String(cRaw['Konseling III'] ?? cRaw['Konseling 3'] ?? cNorm['konselingiii'] ?? cNorm['konseling3'] ?? '').trim();
-        const st = String(cRaw['ST'] ?? cRaw['Surat Teguran'] ?? cNorm['st'] ?? cNorm['suratteguran'] ?? '').trim();
-        const sp1 = String(cRaw['SP I'] ?? cRaw['SP 1'] ?? cNorm['spi'] ?? cNorm['sp1'] ?? '').trim();
-        const sp2 = String(cRaw['SP II'] ?? cRaw['SP 2'] ?? cNorm['spii'] ?? cNorm['sp2'] ?? '').trim();
-        const sp3 = String(cRaw['SP III'] ?? cRaw['SP 3'] ?? cNorm['spiii'] ?? cNorm['sp3'] ?? '').trim();
+        const jabatan = cRaw['Jabatan'] || cRaw['Posisi'] || cNorm['jabatan'] || cNorm['posisi'] || cNorm['jabatanbaru'] || matchedEmp?.jabatan || '';
+        const pt = cRaw['PT'] || cRaw['Perusahaan'] || cNorm['pt'] || cNorm['perusahaan'] || matchedEmp?.pt || '';
+        const totalSp = String(cRaw['Total SP'] ?? cRaw['Total Sanksi'] ?? cNorm['totalsp'] ?? cNorm['totalsanksi'] ?? cNorm['total'] ?? '').trim();
+        const bulanKonseling = String(cRaw['Bulan Konseling'] ?? cRaw['Bulan Sanksi'] ?? cRaw['Bulan'] ?? cNorm['bulankonseling'] ?? cNorm['bulansanksi'] ?? cNorm['bulan'] ?? cNorm['periode'] ?? '').trim();
+        const konseling1 = String(cRaw['Konseling I'] ?? cRaw['Konseling 1'] ?? cNorm['konselingi'] ?? cNorm['konseling1'] ?? cNorm['konselingpertama'] ?? '').trim();
+        const konseling2 = String(cRaw['Konseling II'] ?? cRaw['Konseling 2'] ?? cNorm['konselingii'] ?? cNorm['konseling2'] ?? cNorm['konselingkedua'] ?? '').trim();
+        const konseling3 = String(cRaw['Konseling III'] ?? cRaw['Konseling 3'] ?? cNorm['konselingiii'] ?? cNorm['konseling3'] ?? cNorm['konselingketiga'] ?? '').trim();
+        const st = String(cRaw['ST'] ?? cRaw['Surat Teguran'] ?? cNorm['st'] ?? cNorm['suratteguran'] ?? cNorm['teguran'] ?? '').trim();
+        const sp1 = String(cRaw['SP I'] ?? cRaw['SP 1'] ?? cRaw['SP-1'] ?? cNorm['spi'] ?? cNorm['sp1'] ?? cNorm['suratperingatan1'] ?? cNorm['suratperingatani'] ?? '').trim();
+        const sp2 = String(cRaw['SP II'] ?? cRaw['SP 2'] ?? cRaw['SP-2'] ?? cNorm['spii'] ?? cNorm['sp2'] ?? cNorm['suratperingatan2'] ?? cNorm['suratperingatanii'] ?? '').trim();
+        const sp3 = String(cRaw['SP III'] ?? cRaw['SP 3'] ?? cRaw['SP-3'] ?? cNorm['spiii'] ?? cNorm['sp3'] ?? cNorm['suratperingatan3'] ?? cNorm['suratperingataniii'] ?? '').trim();
         const phk = String(cRaw['PHK'] ?? cNorm['phk'] ?? '').trim();
-        const masaBerlakuSanksi = cleanDateVal(cRaw['Masa Berlaku Sanksi'] ?? cNorm['masaberlakusanksi'] ?? cNorm['masaberlaku']) || String(cRaw['Masa Berlaku Sanksi'] ?? cNorm['masaberlakusanksi'] ?? '').trim();
-        const masaPemulihan1 = cleanDateVal(cRaw['Masa Pemulihan I'] ?? cRaw['Masa Pemulihan 1'] ?? cNorm['masapemulihani'] ?? cNorm['masapemulihan1']) || String(cRaw['Masa Pemulihan I'] ?? cNorm['masapemulihani'] ?? '').trim();
-        const masaPemulihan2 = cleanDateVal(cRaw['Masa Pemulihan II'] ?? cRaw['Masa Pemulihan 2'] ?? cNorm['masapemulihanii'] ?? cNorm['masapemulihan2']) || String(cRaw['Masa Pemulihan II'] ?? cNorm['masapemulihanii'] ?? '').trim();
-        const alasanSp = String(cRaw['Alasan Surat Peringatan'] ?? cRaw['Alasan SP'] ?? cNorm['alasansuratperingatan'] ?? cNorm['alasansp'] ?? '').trim();
-        const keterangan = String(cRaw['Keterangan SP'] ?? cRaw['Keterangan'] ?? cNorm['keterangansp'] ?? cNorm['keterangan'] ?? '').trim();
-        const pernahSpSebelumnya = String(cRaw['Pernah SP/ST Sebelumnya'] ?? cRaw['Pernah SP'] ?? cNorm['pernahspstsebelumnya'] ?? cNorm['pernahspsebelumnya'] ?? '').trim();
-        const pernahTerlibatSpdk = String(cRaw['Pernah Terlibat SPDK'] ?? cNorm['pernahterlibatspdk'] ?? '').trim();
-        const kronologiSpdk = String(cRaw['Kronologi Kejadian SPDK'] ?? cRaw['Kronologi'] ?? cNorm['kronologikejadianspdk'] ?? cNorm['kronologi'] ?? '').trim();
-        const kategoriSpdk = String(cRaw['Kategori Sanksi SPDK'] ?? cRaw['Kategori SPDK'] ?? cNorm['kategorisanksispdk'] ?? cNorm['kategorispdk'] ?? '').trim();
-        const tindakanSpdk = String(cRaw['Tindakan Disiplin SPDK'] ?? cRaw['Tindakan SPDK'] ?? cNorm['tindakandisiplinspdk'] ?? cNorm['tindakanspdk'] ?? '').trim();
+        
+        const rawMasaBerlaku = cRaw['Masa Berlaku Sanksi'] ?? cRaw['Masa Berlaku'] ?? cRaw['Periode Berlaku'] ?? cNorm['masaberlakusanksi'] ?? cNorm['masaberlaku'] ?? cNorm['periodeberlaku'] ?? cNorm['tglberlaku'] ?? cNorm['tanggalberlaku'] ?? '';
+        const masaBerlakuSanksi = cleanDateVal(rawMasaBerlaku) || String(rawMasaBerlaku).trim();
+        
+        const rawMasaPemulihan1 = cRaw['Masa Pemulihan I'] ?? cRaw['Masa Pemulihan 1'] ?? cNorm['masapemulihani'] ?? cNorm['masapemulihan1'] ?? cNorm['pemulihani'] ?? cNorm['pemulihan1'] ?? cNorm['masapemulihantahap1'] ?? '';
+        const masaPemulihan1 = cleanDateVal(rawMasaPemulihan1) || String(rawMasaPemulihan1).trim();
+        
+        const rawMasaPemulihan2 = cRaw['Masa Pemulihan II'] ?? cRaw['Masa Pemulihan 2'] ?? cNorm['masapemulihanii'] ?? cNorm['masapemulihan2'] ?? cNorm['pemulihanii'] ?? cNorm['pemulihan2'] ?? cNorm['masapemulihantahap2'] ?? '';
+        const masaPemulihan2 = cleanDateVal(rawMasaPemulihan2) || String(rawMasaPemulihan2).trim();
+        
+        const alasanSp = String(cRaw['Alasan Surat Peringatan'] ?? cRaw['Alasan SP'] ?? cRaw['Alasan'] ?? cNorm['alasansuratperingatan'] ?? cNorm['alasansp'] ?? cNorm['alasan'] ?? cNorm['alasansanksi'] ?? cNorm['alasanperingatan'] ?? cNorm['alasanst'] ?? '').trim();
+        const keterangan = String(cRaw['Keterangan SP'] ?? cRaw['Keterangan'] ?? cRaw['Catatan'] ?? cNorm['keterangansp'] ?? cNorm['keterangan'] ?? cNorm['catatan'] ?? '').trim();
+        const pernahSpSebelumnya = String(cRaw['Pernah SP/ST Sebelumnya'] ?? cRaw['Pernah SP/ST'] ?? cRaw['Pernah SP'] ?? cNorm['pernahspstsebelumnya'] ?? cNorm['pernahspsebelumnya'] ?? cNorm['pernahspst'] ?? cNorm['pernahsp'] ?? cNorm['spsebelumnya'] ?? cNorm['riwayatsp'] ?? '').trim();
+        const pernahTerlibatSpdk = String(cRaw['Pernah Terlibat SPDK'] ?? cRaw['Terlibat SPDK'] ?? cRaw['SPDK'] ?? cNorm['pernahterlibatspdk'] ?? cNorm['terlibatspdk'] ?? cNorm['spdk'] ?? cNorm['statusspdk'] ?? '').trim();
+        const kronologiSpdk = String(cRaw['Kronologi Kejadian SPDK'] ?? cRaw['Kronologi Kejadian'] ?? cRaw['Kronologi SPDK'] ?? cRaw['Kronologi'] ?? cNorm['kronologikejadianspdk'] ?? cNorm['kronologikejadian'] ?? cNorm['kronologispdk'] ?? cNorm['kronologi'] ?? cNorm['riwayatkejadian'] ?? '').trim();
+        const kategoriSpdk = String(cRaw['Kategori Sanksi SPDK'] ?? cRaw['Kategori SPDK'] ?? cRaw['Kategori Sanksi'] ?? cRaw['Kategori Pelanggaran'] ?? cNorm['kategorisanksispdk'] ?? cNorm['kategorispdk'] ?? cNorm['kategorisanksi'] ?? cNorm['kategoripelanggaran'] ?? cNorm['jenispelanggaran'] ?? '').trim();
+        const tindakanSpdk = String(cRaw['Tindakan Disiplin SPDK'] ?? cRaw['Tindakan Disiplin'] ?? cRaw['Tindakan SPDK'] ?? cRaw['Sanksi SPDK'] ?? cNorm['tindakandisiplinspdk'] ?? cNorm['tindakandisiplin'] ?? cNorm['tindakanspdk'] ?? cNorm['sanksispdk'] ?? cNorm['tindakan'] ?? '').trim();
 
         // Calculate status sanksi
         let statusSanksi = 'Aman';

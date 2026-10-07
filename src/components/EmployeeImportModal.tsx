@@ -583,30 +583,30 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         }
 
         rowObj[h.name] = val;
-        if (h.clean === 'nik') rowObj['NIK'] = val;
-        if (h.clean === 'namakaryawan' || h.clean === 'nama' || h.clean === 'name') rowObj['Nama Karyawan'] = val;
-        if (h.clean === 'jabatan') rowObj['Jabatan'] = val;
-        if (h.clean === 'pt') rowObj['PT'] = val;
-        if (h.clean === 'totalsp') rowObj['Total SP'] = val;
-        if (h.clean === 'bulankonseling') rowObj['Bulan Konseling'] = val;
-        if (h.clean === 'konselingi' || h.clean === 'konseling1') rowObj['Konseling I'] = val;
-        if (h.clean === 'konselingii' || h.clean === 'konseling2') rowObj['Konseling II'] = val;
-        if (h.clean === 'konselingiii' || h.clean === 'konseling3') rowObj['Konseling III'] = val;
-        if (h.clean === 'st' || h.clean === 'suratteguran') rowObj['ST'] = val;
-        if (h.clean === 'spi' || h.clean === 'sp1') rowObj['SP I'] = val;
-        if (h.clean === 'spii' || h.clean === 'sp2') rowObj['SP II'] = val;
-        if (h.clean === 'spiii' || h.clean === 'sp3') rowObj['SP III'] = val;
+        if (h.clean === 'nik' || h.clean === 'id' || h.clean === 'noid') rowObj['NIK'] = val;
+        if (h.clean === 'namakaryawan' || h.clean === 'nama' || h.clean === 'name' || h.clean === 'employeename') rowObj['Nama Karyawan'] = val;
+        if (h.clean === 'jabatan' || h.clean === 'posisi' || h.clean === 'jabatanbaru') rowObj['Jabatan'] = val;
+        if (h.clean === 'pt' || h.clean === 'perusahaan') rowObj['PT'] = val;
+        if (h.clean === 'totalsp' || h.clean === 'totalsanksi' || h.clean === 'total') rowObj['Total SP'] = val;
+        if (h.clean === 'bulankonseling' || h.clean === 'bulansanksi' || h.clean === 'bulan' || h.clean === 'periode') rowObj['Bulan Konseling'] = val;
+        if (h.clean === 'konselingi' || h.clean === 'konseling1' || h.clean === 'konselingpertama') rowObj['Konseling I'] = val;
+        if (h.clean === 'konselingii' || h.clean === 'konseling2' || h.clean === 'konselingkedua') rowObj['Konseling II'] = val;
+        if (h.clean === 'konselingiii' || h.clean === 'konseling3' || h.clean === 'konselingketiga') rowObj['Konseling III'] = val;
+        if (h.clean === 'st' || h.clean === 'suratteguran' || h.clean === 'teguran') rowObj['ST'] = val;
+        if (h.clean === 'spi' || h.clean === 'sp1' || h.clean === 'suratperingatan1' || h.clean === 'suratperingatani') rowObj['SP I'] = val;
+        if (h.clean === 'spii' || h.clean === 'sp2' || h.clean === 'suratperingatan2' || h.clean === 'suratperingatanii') rowObj['SP II'] = val;
+        if (h.clean === 'spiii' || h.clean === 'sp3' || h.clean === 'suratperingatan3' || h.clean === 'suratperingataniii') rowObj['SP III'] = val;
         if (h.clean === 'phk') rowObj['PHK'] = val;
-        if (h.clean === 'masaberlakusanksi') rowObj['Masa Berlaku Sanksi'] = val;
-        if (h.clean === 'masapemulihani' || h.clean === 'masapemulihan1') rowObj['Masa Pemulihan I'] = val;
-        if (h.clean === 'masapemulihanii' || h.clean === 'masapemulihan2') rowObj['Masa Pemulihan II'] = val;
-        if (h.clean === 'alasansuratperingatan' || h.clean === 'alasansp') rowObj['Alasan Surat Peringatan'] = val;
-        if (h.clean === 'keterangansp' || h.clean === 'keterangan') rowObj['Keterangan SP'] = val;
-        if (h.clean === 'pernahspstsebelumnya' || h.clean === 'pernahspsebelumnya') rowObj['Pernah SP/ST Sebelumnya'] = val;
-        if (h.clean === 'pernahterlibatspdk') rowObj['Pernah Terlibat SPDK'] = val;
-        if (h.clean === 'kronologikejadianspdk' || h.clean === 'kronologi') rowObj['Kronologi Kejadian SPDK'] = val;
-        if (h.clean === 'kategorisanksispdk' || h.clean === 'kategorispdk') rowObj['Kategori Sanksi SPDK'] = val;
-        if (h.clean === 'tindakandisiplinspdk' || h.clean === 'tindakanspdk') rowObj['Tindakan Disiplin SPDK'] = val;
+        if (h.clean === 'masaberlakusanksi' || h.clean === 'masaberlaku' || h.clean === 'periodeberlaku' || h.clean === 'tglberlaku' || h.clean === 'tanggalberlaku') rowObj['Masa Berlaku Sanksi'] = val;
+        if (h.clean === 'masapemulihani' || h.clean === 'masapemulihan1' || h.clean === 'pemulihani' || h.clean === 'pemulihan1') rowObj['Masa Pemulihan I'] = val;
+        if (h.clean === 'masapemulihanii' || h.clean === 'masapemulihan2' || h.clean === 'pemulihanii' || h.clean === 'pemulihan2') rowObj['Masa Pemulihan II'] = val;
+        if (h.clean === 'alasansuratperingatan' || h.clean === 'alasansp' || h.clean === 'alasan' || h.clean === 'alasansanksi') rowObj['Alasan Surat Peringatan'] = val;
+        if (h.clean === 'keterangansp' || h.clean === 'keterangan' || h.clean === 'catatan') rowObj['Keterangan SP'] = val;
+        if (h.clean === 'pernahspstsebelumnya' || h.clean === 'pernahspsebelumnya' || h.clean === 'pernahspst' || h.clean === 'pernahsp' || h.clean === 'riwayatsp') rowObj['Pernah SP/ST Sebelumnya'] = val;
+        if (h.clean === 'pernahterlibatspdk' || h.clean === 'terlibatspdk' || h.clean === 'spdk' || h.clean === 'statusspdk') rowObj['Pernah Terlibat SPDK'] = val;
+        if (h.clean === 'kronologikejadianspdk' || h.clean === 'kronologikejadian' || h.clean === 'kronologispdk' || h.clean === 'kronologi' || h.clean === 'riwayatkejadian') rowObj['Kronologi Kejadian SPDK'] = val;
+        if (h.clean === 'kategorisanksispdk' || h.clean === 'kategorispdk' || h.clean === 'kategorisanksi' || h.clean === 'kategoripelanggaran' || h.clean === 'jenispelanggaran') rowObj['Kategori Sanksi SPDK'] = val;
+        if (h.clean === 'tindakandisiplinspdk' || h.clean === 'tindakandisiplin' || h.clean === 'tindakanspdk' || h.clean === 'sanksispdk' || h.clean === 'tindakan') rowObj['Tindakan Disiplin SPDK'] = val;
       }
 
       const hasNameOrNik = rowObj['Nama Karyawan'] || rowObj['Nama'] || rowObj['NIK'];
@@ -869,8 +869,10 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
     setImportResult(null);
     setParsedRows([]);
     setParsedAttendanceRows([]);
+    setParsedCounselingRows([]);
     setDetectedHeaders([]);
     setDetectedAttendanceHeaders([]);
+    setDetectedCounselingHeaders([]);
     setDetectedSheets([]);
 
     const fileName = selectedFile.name.toLowerCase();
@@ -882,9 +884,84 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         complete: (results) => {
           setIsParsing(false);
           if (results.data && results.data.length > 0) {
-            setParsedRows(results.data);
-            if (results.meta && results.meta.fields) {
-              setDetectedHeaders(results.meta.fields);
+            const rawFields = results.meta?.fields || Object.keys(results.data[0] || {});
+            const cleanFields = rawFields.map(f => String(f).toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+            const isCounseling = cleanFields.some(f => 
+              f.includes('konseling') || f.includes('spdk') || f.includes('totalsp') || 
+              f.includes('masaberlaku') || f.includes('masapemulihan') || 
+              f.includes('alasansp') || f.includes('alasansuratperingatan') || 
+              f.includes('kronologi') || f.includes('tindakanspdk') || f.includes('kategorispdk') ||
+              f === 'st' || f === 'spi' || f === 'sp1' || f === 'spii' || f === 'sp2' || f === 'spiii' || f === 'sp3' || f === 'phk'
+            );
+
+            const isAttendance = cleanFields.some(f => 
+              f.includes('izin') || f.includes('sakitsite') || f.includes('sakitluar') || 
+              f.includes('alpa') || f.includes('alpha') || f.includes('alasanizin') || f.includes('alasansakit')
+            );
+
+            const isMaster = cleanFields.some(f => 
+              f.includes('noktp') || f.includes('dohawal') || f.includes('doh') || 
+              f.includes('poh') || f.includes('sponsor') || f.includes('statuskaryawan') || 
+              f.includes('jobgrade') || f.includes('gol') || f.includes('tanggallahir') || 
+              f.includes('alamatsesuaiktp') || f.includes('alamatdomisili') || f === 'foto'
+            );
+
+            if (isCounseling && !isMaster) {
+              const mappedCounseling = results.data.map((r: any) => {
+                const rowObj: Record<string, any> = { ...r };
+                for (const [k, v] of Object.entries(r)) {
+                  const clean = String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+                  if (clean === 'nik' || clean === 'id' || clean === 'noid') rowObj['NIK'] = v;
+                  if (clean === 'namakaryawan' || clean === 'nama' || clean === 'name' || clean === 'employeename') rowObj['Nama Karyawan'] = v;
+                  if (clean === 'jabatan' || clean === 'posisi' || clean === 'jabatanbaru') rowObj['Jabatan'] = v;
+                  if (clean === 'pt' || clean === 'perusahaan') rowObj['PT'] = v;
+                  if (clean === 'totalsp' || clean === 'totalsanksi' || clean === 'total') rowObj['Total SP'] = v;
+                  if (clean === 'bulankonseling' || clean === 'bulansanksi' || clean === 'bulan' || clean === 'periode') rowObj['Bulan Konseling'] = v;
+                  if (clean === 'konselingi' || clean === 'konseling1' || clean === 'konselingpertama') rowObj['Konseling I'] = v;
+                  if (clean === 'konselingii' || clean === 'konseling2' || clean === 'konselingkedua') rowObj['Konseling II'] = v;
+                  if (clean === 'konselingiii' || clean === 'konseling3' || clean === 'konselingketiga') rowObj['Konseling III'] = v;
+                  if (clean === 'st' || clean === 'suratteguran' || clean === 'teguran') rowObj['ST'] = v;
+                  if (clean === 'spi' || clean === 'sp1' || clean === 'suratperingatan1' || clean === 'suratperingatani') rowObj['SP I'] = v;
+                  if (clean === 'spii' || clean === 'sp2' || clean === 'suratperingatan2' || clean === 'suratperingatanii') rowObj['SP II'] = v;
+                  if (clean === 'spiii' || clean === 'sp3' || clean === 'suratperingatan3' || clean === 'suratperingataniii') rowObj['SP III'] = v;
+                  if (clean === 'phk') rowObj['PHK'] = v;
+                  if (clean === 'masaberlakusanksi' || clean === 'masaberlaku' || clean === 'periodeberlaku' || clean === 'tglberlaku' || clean === 'tanggalberlaku') rowObj['Masa Berlaku Sanksi'] = v;
+                  if (clean === 'masapemulihani' || clean === 'masapemulihan1' || clean === 'pemulihani' || clean === 'pemulihan1') rowObj['Masa Pemulihan I'] = v;
+                  if (clean === 'masapemulihanii' || clean === 'masapemulihan2' || clean === 'pemulihanii' || clean === 'pemulihan2') rowObj['Masa Pemulihan II'] = v;
+                  if (clean === 'alasansuratperingatan' || clean === 'alasansp' || clean === 'alasan' || clean === 'alasansanksi') rowObj['Alasan Surat Peringatan'] = v;
+                  if (clean === 'keterangansp' || clean === 'keterangan' || clean === 'catatan') rowObj['Keterangan SP'] = v;
+                  if (clean === 'pernahspstsebelumnya' || clean === 'pernahspsebelumnya' || clean === 'pernahspst' || clean === 'pernahsp' || clean === 'riwayatsp') rowObj['Pernah SP/ST Sebelumnya'] = v;
+                  if (clean === 'pernahterlibatspdk' || clean === 'terlibatspdk' || clean === 'spdk' || clean === 'statusspdk') rowObj['Pernah Terlibat SPDK'] = v;
+                  if (clean === 'kronologikejadianspdk' || clean === 'kronologikejadian' || clean === 'kronologispdk' || clean === 'kronologi' || clean === 'riwayatkejadian') rowObj['Kronologi Kejadian SPDK'] = v;
+                  if (clean === 'kategorisanksispdk' || clean === 'kategorispdk' || clean === 'kategorisanksi' || clean === 'kategoripelanggaran' || clean === 'jenispelanggaran') rowObj['Kategori Sanksi SPDK'] = v;
+                  if (clean === 'tindakandisiplinspdk' || clean === 'tindakandisiplin' || clean === 'tindakanspdk' || clean === 'sanksispdk' || clean === 'tindakan') rowObj['Tindakan Disiplin SPDK'] = v;
+                }
+                return rowObj;
+              });
+              setParsedCounselingRows(mappedCounseling);
+              setDetectedCounselingHeaders(rawFields);
+              setParsedRows([]);
+              setParsedAttendanceRows([]);
+              setActivePreviewTab('konseling');
+            } else if (isAttendance && !isMaster) {
+              setParsedAttendanceRows(results.data);
+              setDetectedAttendanceHeaders(rawFields);
+              setParsedRows([]);
+              setParsedCounselingRows([]);
+              setActivePreviewTab('absensi');
+            } else {
+              setParsedRows(results.data);
+              setDetectedHeaders(rawFields);
+              if (isCounseling) {
+                setParsedCounselingRows(results.data);
+                setDetectedCounselingHeaders(rawFields);
+              }
+              if (isAttendance) {
+                setParsedAttendanceRows(results.data);
+                setDetectedAttendanceHeaders(rawFields);
+              }
+              setActivePreviewTab('master');
             }
           } else {
             setErrorMsg("File CSV kosong atau tidak memiliki format baris yang valid.");
@@ -920,28 +997,57 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         const sheetNames = workbook.SheetNames || [];
         setDetectedSheets(sheetNames);
 
-        // Find sheets by name
-        let masterSheetName = sheetNames.find(s => {
-          const l = s.toLowerCase();
-          return l.includes('database') || l.includes('master') || (l.includes('karyawan') && !l.includes('absen') && !l.includes('konseling') && !l.includes('spdk'));
-        }) || sheetNames[0];
+        // Check each sheet to determine its role
+        let masterSheetName: string | undefined;
+        let attendanceSheetName: string | undefined;
+        let counselingSheetName: string | undefined;
 
-        let attendanceSheetName = sheetNames.find(s => {
-          const l = s.toLowerCase();
-          return l.includes('absen') || l.includes('absensi') || l.includes('attendance') || l.includes('kehadiran') || l.includes('sakit');
-        });
+        for (const sName of sheetNames) {
+          const l = sName.toLowerCase();
+          const ws = workbook.Sheets[sName];
+          if (!ws || !ws['!ref']) continue;
 
-        let counselingSheetName = sheetNames.find(s => {
-          const l = s.toLowerCase();
-          return l.includes('konseling') || l.includes('spdk') || l.includes('sanksi') || l.includes('disiplin') || l.includes('peringatan') || l.includes('teguran') || l.includes('sp');
-        });
-
-        // Fallbacks if sheet names are generic Sheet1, Sheet2, Sheet3
-        if (!attendanceSheetName && sheetNames.length > 1) {
-          attendanceSheetName = sheetNames.find(s => s !== masterSheetName && s !== counselingSheetName);
+          if (l.includes('konseling') || l.includes('spdk') || l.includes('sanksi') || l.includes('disiplin')) {
+            counselingSheetName = sName;
+          } else if (l.includes('absen') || l.includes('absensi') || l.includes('attendance') || l.includes('kehadiran')) {
+            attendanceSheetName = sName;
+          } else if (l.includes('database') || l.includes('master') || l.includes('karyawan')) {
+            masterSheetName = sName;
+          }
         }
-        if (!counselingSheetName && sheetNames.length > 2) {
-          counselingSheetName = sheetNames.find(s => s !== masterSheetName && s !== attendanceSheetName);
+
+        // If not found by name, check content of sheets
+        if (sheetNames.length === 1) {
+          const singleWs = workbook.Sheets[sheetNames[0]];
+          const ref = singleWs ? singleWs['!ref'] : '';
+          let sampleText = '';
+          if (ref) {
+            const range = XLSX.utils.decode_range(ref);
+            for (let r = 0; r <= Math.min(3, range.e.r); r++) {
+              for (let c = range.s.c; c <= range.e.c; c++) {
+                const cell = singleWs[XLSX.utils.encode_cell({ r, c })];
+                if (cell && cell.v !== undefined) {
+                  sampleText += ' ' + String(cell.v).toLowerCase();
+                }
+              }
+            }
+          }
+
+          if (sampleText.includes('konseling') || sampleText.includes('spdk') || sampleText.includes('total sp') || sampleText.includes('sanksi')) {
+            counselingSheetName = sheetNames[0];
+          } else if (sampleText.includes('izin') || sampleText.includes('sakit site') || sampleText.includes('sakit luar') || sampleText.includes('alpa')) {
+            attendanceSheetName = sheetNames[0];
+          } else {
+            masterSheetName = sheetNames[0];
+          }
+        } else {
+          if (!masterSheetName) masterSheetName = sheetNames[0];
+          if (!attendanceSheetName && sheetNames.length > 1) {
+            attendanceSheetName = sheetNames.find(s => s !== masterSheetName && s !== counselingSheetName);
+          }
+          if (!counselingSheetName && sheetNames.length > 2) {
+            counselingSheetName = sheetNames.find(s => s !== masterSheetName && s !== attendanceSheetName);
+          }
         }
 
         let masterRows: any[] = [];
