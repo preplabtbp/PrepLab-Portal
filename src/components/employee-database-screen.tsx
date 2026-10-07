@@ -3,7 +3,8 @@ import {
   ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, 
   FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, 
   Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud, Camera, Pencil, 
-  Plus, Edit3, ShieldAlert, Scale, Gavel, Clock, AlertOctagon, Info, ShieldCheck
+  Plus, Edit3, ShieldAlert, Scale, Gavel, Clock, AlertOctagon, Info, ShieldCheck,
+  HeartHandshake
 } from 'lucide-react';
 import { Card, Input, Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1320,6 +1321,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 const masaBerlaku = cData.masaBerlakuSanksi || cData.masa_berlaku_sanksi || cData.masaBerlaku || cData.masa_berlaku || cData.periodeBerlaku || cData.periode_berlaku || cData.tanggalBerlaku || cData.tanggal_berlaku || '';
                 const masaPemulihan1 = cData.masaPemulihan1 || cData.masa_pemulihan_1 || cData.masaPemulihanI || cData.pemulihan1 || cData.pemulihanI || cData.pemulihan_1 || cData.pemulihan_i || '';
                 const masaPemulihan2 = cData.masaPemulihan2 || cData.masa_pemulihan_2 || cData.masaPemulihanIi || cData.pemulihan2 || cData.pemulihanIi || cData.pemulihan_2 || cData.pemulihan_ii || '';
+                const alasanKonseling = cData.alasanKonseling || cData.alasan_konseling || cData.alasanPembinaan || cData.alasan_pembinaan || '';
                 const alasanSp = cData.alasanSp || cData.alasan_sp || cData.alasanSuratPeringatan || cData.alasan_surat_peringatan || cData.alasan || cData.alasanSanksi || cData.alasan_sanksi || cData.alasanPelanggaran || cData.alasan_pelanggaran || '';
                 const keterangan = cData.keterangan || cData.keterangan_sp || cData.keteranganSp || cData.catatan || '';
                 const pernahSpSebelumnya = cData.pernahSpSebelumnya || cData.pernah_sp_sebelumnya || cData.pernahSp || cData.pernah_sp || 'Tidak';
@@ -1611,8 +1613,20 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             </div>
                           </div>
 
-                          {/* Alasan SP & Keterangan */}
-                          <div className="pt-2 space-y-2">
+                          {/* Alasan Konseling & Alasan SP & Keterangan */}
+                          <div className="pt-2 space-y-2.5">
+                            {/* Alasan Konseling / Pembinaan */}
+                            <div>
+                              <p className="text-[11px] font-bold text-teal-800 uppercase mb-1 flex items-center gap-1">
+                                <HeartHandshake className="w-3.5 h-3.5 text-teal-600" />
+                                Alasan Konseling / Pembinaan:
+                              </p>
+                              <p className="text-xs text-teal-950 bg-teal-50/70 p-3 rounded-xl border border-teal-200/80 leading-relaxed font-medium">
+                                {alasanKonseling || 'Tidak ada catatan alasan konseling/pembinaan.'}
+                              </p>
+                            </div>
+
+                            {/* Alasan Surat Peringatan */}
                             <div>
                               <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Alasan Surat Peringatan:</p>
                               <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100 leading-relaxed font-medium">

@@ -121,6 +121,7 @@ export function EmployeeEditModal({
         masaBerlakuSanksi: rawCounsel.masaBerlakuSanksi ?? rawCounsel.masa_berlaku_sanksi ?? rawCounsel.masaBerlaku ?? rawCounsel.masa_berlaku ?? rawCounsel.periodeBerlaku ?? rawCounsel.tanggalBerlaku ?? '',
         masaPemulihan1: rawCounsel.masaPemulihan1 ?? rawCounsel.masa_pemulihan_1 ?? rawCounsel.pemulihan1 ?? rawCounsel.pemulihan_1 ?? '',
         masaPemulihan2: rawCounsel.masaPemulihan2 ?? rawCounsel.masa_pemulihan_2 ?? rawCounsel.pemulihan2 ?? rawCounsel.pemulihan_2 ?? '',
+        alasanKonseling: rawCounsel.alasanKonseling ?? rawCounsel.alasan_konseling ?? rawCounsel.alasanPembinaan ?? rawCounsel.alasan_pembinaan ?? '',
         alasanSp: rawCounsel.alasanSp ?? rawCounsel.alasan_sp ?? rawCounsel.alasanSuratPeringatan ?? rawCounsel.alasan_surat_peringatan ?? rawCounsel.alasan ?? rawCounsel.alasanSanksi ?? '',
         keterangan: rawCounsel.keterangan ?? rawCounsel.keterangan_sp ?? rawCounsel.keteranganSp ?? rawCounsel.catatan ?? '',
         pernahSpSebelumnya: rawCounsel.pernahSpSebelumnya ?? rawCounsel.pernah_sp_sebelumnya ?? rawCounsel.pernahSp ?? 'Tidak',
@@ -1127,6 +1128,21 @@ export function EmployeeEditModal({
                     className="w-full px-3.5 py-2 rounded-xl border border-emerald-200 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
+              </div>
+
+              {/* Alasan Konseling / Pembinaan */}
+              <div>
+                <label className="block text-xs font-bold text-teal-800 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <HeartHandshake className="w-4 h-4 text-teal-600" />
+                  Alasan Konseling / Pembinaan Karyawan
+                </label>
+                <textarea
+                  rows={2}
+                  value={counselData.alasanKonseling || ''}
+                  onChange={(e) => handleCounselChange('alasanKonseling', e.target.value)}
+                  placeholder="Contoh: Keterlambatan kedatangan shift kerja, pembinaan kepatuhan SOP / APD, evaluasi koordinasi tim..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-teal-200 bg-teal-50/20 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
               </div>
 
               {/* Alasan SP & Keterangan */}

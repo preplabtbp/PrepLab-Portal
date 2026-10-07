@@ -97,6 +97,7 @@ async function getCounselingMap(): Promise<Record<string, any>> {
         masa_berlaku_sanksi TEXT,
         masa_pemulihan_1 TEXT,
         masa_pemulihan_2 TEXT,
+        alasan_konseling TEXT,
         alasan_sp TEXT,
         keterangan TEXT,
         pernah_sp_sebelumnya TEXT,
@@ -109,6 +110,7 @@ async function getCounselingMap(): Promise<Record<string, any>> {
         updated_at TIMESTAMP DEFAULT NOW()
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_counseling_nik ON employee_counseling(nik);
+      ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS alasan_konseling TEXT;
     `);
 
     const allC = await db.select().from(employeeCounseling);
@@ -929,6 +931,23 @@ employeesRouter.post("/import", async (req, res) => {
         const rawMasaPemulihan2 = cRaw['Masa Pemulihan II'] ?? cRaw['Masa Pemulihan 2'] ?? cNorm['masapemulihanii'] ?? cNorm['masapemulihan2'] ?? cNorm['pemulihanii'] ?? cNorm['pemulihan2'] ?? cNorm['masapemulihantahap2'] ?? '';
         const masaPemulihan2 = cleanDateVal(rawMasaPemulihan2) || String(rawMasaPemulihan2).trim();
         
+        const alasanKonseling = String(
+          cRaw['Alasan Konseling'] ?? 
+          cRaw['Alasan Pembinaan'] ?? 
+          cRaw['Topik Konseling'] ?? 
+          cRaw['Catatan Konseling'] ?? 
+          cRaw['Konseling Alasan'] ?? 
+          cRaw['Alasan Konseling 1'] ?? 
+          cRaw['Alasan Konseling I'] ?? 
+          cNorm['alasankonseling'] ?? 
+          cNorm['alasanpembinaan'] ?? 
+          cNorm['topikkonseling'] ?? 
+          cNorm['catatankonseling'] ?? 
+          cNorm['alasankonseling1'] ?? 
+          cNorm['alasankonselingi'] ?? 
+          ''
+        ).trim();
+
         const alasanSp = String(cRaw['Alasan Surat Peringatan'] ?? cRaw['Alasan SP'] ?? cRaw['Alasan'] ?? cNorm['alasansuratperingatan'] ?? cNorm['alasansp'] ?? cNorm['alasan'] ?? cNorm['alasansanksi'] ?? cNorm['alasanperingatan'] ?? cNorm['alasanst'] ?? '').trim();
         const keterangan = String(cRaw['Keterangan SP'] ?? cRaw['Keterangan'] ?? cRaw['Catatan'] ?? cNorm['keterangansp'] ?? cNorm['keterangan'] ?? cNorm['catatan'] ?? '').trim();
         const pernahSpSebelumnya = String(cRaw['Pernah SP/ST Sebelumnya'] ?? cRaw['Pernah SP/ST'] ?? cRaw['Pernah SP'] ?? cNorm['pernahspstsebelumnya'] ?? cNorm['pernahspsebelumnya'] ?? cNorm['pernahspst'] ?? cNorm['pernahsp'] ?? cNorm['spsebelumnya'] ?? cNorm['riwayatsp'] ?? '').trim();
@@ -967,6 +986,7 @@ employeesRouter.post("/import", async (req, res) => {
           masaBerlakuSanksi,
           masaPemulihan1,
           masaPemulihan2,
+          alasanKonseling,
           alasanSp,
           keterangan,
           pernahSpSebelumnya,
@@ -1262,6 +1282,7 @@ employeesRouter.put("/:nik", async (req, res) => {
       const rawMasaPemulihan2 = cData.masaPemulihan2 ?? cData.masa_pemulihan_2 ?? cData.pemulihan2 ?? cData.pemulihan_2 ?? '';
       const masaPemulihan2 = (rawMasaPemulihan2 && typeof rawMasaPemulihan2 === 'string') ? rawMasaPemulihan2.trim() : (cleanDateVal(rawMasaPemulihan2) || String(rawMasaPemulihan2 || '').trim());
       
+      const alasanKonseling = String(cData.alasanKonseling ?? cData.alasan_konseling ?? '').trim();
       const alasanSp = String(cData.alasanSp ?? cData.alasan_sp ?? cData.alasanSuratPeringatan ?? cData.alasan_surat_peringatan ?? cData.alasan ?? cData.alasanSanksi ?? '').trim();
       const keterangan = String(cData.keterangan ?? cData.keterangan_sp ?? cData.keteranganSp ?? cData.catatan ?? '').trim();
       const pernahSpSebelumnya = String(cData.pernahSpSebelumnya ?? cData.pernah_sp_sebelumnya ?? cData.pernahSp ?? 'Tidak').trim();
@@ -1300,6 +1321,7 @@ employeesRouter.put("/:nik", async (req, res) => {
         masaBerlakuSanksi,
         masaPemulihan1,
         masaPemulihan2,
+        alasanKonseling,
         alasanSp,
         keterangan,
         pernahSpSebelumnya,

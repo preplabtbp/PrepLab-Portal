@@ -255,6 +255,7 @@ export const KONSELING_SPDK_COLUMNS = [
   "Masa Berlaku Sanksi",
   "Masa Pemulihan I",
   "Masa Pemulihan II",
+  "Alasan Konseling",
   "Alasan Surat Peringatan",
   "Keterangan SP",
   "Pernah SP/ST Sebelumnya",
@@ -483,13 +484,13 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
     const konselingData = [
       KONSELING_SPDK_COLUMNS,
       [
-        "1", "Deni Nugraha Perdana", "Preparation Foreman", "TBP", "02D25000001", "0", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Tidak", "Tidak", "", "", ""
+        "1", "Deni Nugraha Perdana", "Preparation Foreman", "TBP", "02D25000001", "0", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Tidak", "Tidak", "", "", ""
       ],
       [
-        "2", "Arif Maulana Leway", "Laboratory Analyst", "TBP", "02D24000012", "1", "Februari 2026", "05-Feb-2026", "", "", "12-Feb-2026", "", "", "", "", "12-Agu-2026", "12-Mei-2026", "12-Agu-2026", "Terlambat Masuk Kerja Lebih Dari 3 Kali", "Konseling dan ST diberikan oleh Foreman", "Tidak", "Tidak", "", "", "Teguran Tertulis"
+        "2", "Arif Maulana Leway", "Laboratory Analyst", "TBP", "02D24000012", "1", "Februari 2026", "05-Feb-2026", "", "", "12-Feb-2026", "", "", "", "", "12-Agu-2026", "12-Mei-2026", "12-Agu-2026", "Briefing kedisiplinan jam kedatangan shift", "Terlambat Masuk Kerja Lebih Dari 3 Kali", "Konseling dan ST diberikan oleh Foreman", "Tidak", "Tidak", "", "", "Teguran Tertulis"
       ],
       [
-        "3", "Donald Febri Andriano Taweli", "Preparation Crew", "TBP", "02D23000045", "2", "Januari 2026", "10-Jan-2026", "24-Jan-2026", "", "", "28-Jan-2026", "", "", "", "28-Jul-2026", "28-Apr-2026", "28-Jul-2026", "Alpa berturut-turut tanpa keterangan", "Surat Peringatan I (SP 1)", "Ya", "Ya", "Kronologi insiden ketidakhadiran kerja tanpa izin", "Pelanggaran Disiplin Sedang", "Penerbitan SP I & Evaluasi Kerja"
+        "3", "Donald Febri Andriano Taweli", "Preparation Crew", "TBP", "02D23000045", "2", "Januari 2026", "10-Jan-2026", "24-Jan-2026", "", "", "28-Jan-2026", "", "", "", "28-Jul-2026", "28-Apr-2026", "28-Jul-2026", "Pembinaan absensi dan kehadiran kerja", "Alpa berturut-turut tanpa keterangan", "Surat Peringatan I (SP 1)", "Ya", "Ya", "Kronologi insiden ketidakhadiran kerja tanpa izin", "Pelanggaran Disiplin Sedang", "Penerbitan SP I & Evaluasi Kerja"
       ]
     ];
 
@@ -600,6 +601,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         if (h.clean === 'masaberlakusanksi' || h.clean === 'masaberlaku' || h.clean === 'periodeberlaku' || h.clean === 'tglberlaku' || h.clean === 'tanggalberlaku') rowObj['Masa Berlaku Sanksi'] = val;
         if (h.clean === 'masapemulihani' || h.clean === 'masapemulihan1' || h.clean === 'pemulihani' || h.clean === 'pemulihan1') rowObj['Masa Pemulihan I'] = val;
         if (h.clean === 'masapemulihanii' || h.clean === 'masapemulihan2' || h.clean === 'pemulihanii' || h.clean === 'pemulihan2') rowObj['Masa Pemulihan II'] = val;
+        if (h.clean === 'alasankonseling' || h.clean === 'alasankonselingpembinaan' || h.clean === 'alasanpembinaan' || h.clean === 'topikkonseling' || h.clean === 'catatankonseling') rowObj['Alasan Konseling'] = val;
         if (h.clean === 'alasansuratperingatan' || h.clean === 'alasansp' || h.clean === 'alasan' || h.clean === 'alasansanksi') rowObj['Alasan Surat Peringatan'] = val;
         if (h.clean === 'keterangansp' || h.clean === 'keterangan' || h.clean === 'catatan') rowObj['Keterangan SP'] = val;
         if (h.clean === 'pernahspstsebelumnya' || h.clean === 'pernahspsebelumnya' || h.clean === 'pernahspst' || h.clean === 'pernahsp' || h.clean === 'riwayatsp') rowObj['Pernah SP/ST Sebelumnya'] = val;
@@ -929,6 +931,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                   if (clean === 'masaberlakusanksi' || clean === 'masaberlaku' || clean === 'periodeberlaku' || clean === 'tglberlaku' || clean === 'tanggalberlaku') rowObj['Masa Berlaku Sanksi'] = v;
                   if (clean === 'masapemulihani' || clean === 'masapemulihan1' || clean === 'pemulihani' || clean === 'pemulihan1') rowObj['Masa Pemulihan I'] = v;
                   if (clean === 'masapemulihanii' || clean === 'masapemulihan2' || clean === 'pemulihanii' || clean === 'pemulihan2') rowObj['Masa Pemulihan II'] = v;
+                  if (clean === 'alasankonseling' || clean === 'alasankonselingpembinaan' || clean === 'alasanpembinaan' || clean === 'topikkonseling' || clean === 'catatankonseling') rowObj['Alasan Konseling'] = v;
                   if (clean === 'alasansuratperingatan' || clean === 'alasansp' || clean === 'alasan' || clean === 'alasansanksi') rowObj['Alasan Surat Peringatan'] = v;
                   if (clean === 'keterangansp' || clean === 'keterangan' || clean === 'catatan') rowObj['Keterangan SP'] = v;
                   if (clean === 'pernahspstsebelumnya' || clean === 'pernahspsebelumnya' || clean === 'pernahspst' || clean === 'pernahsp' || clean === 'riwayatsp') rowObj['Pernah SP/ST Sebelumnya'] = v;
@@ -1772,6 +1775,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                         <th className="p-2.5 whitespace-nowrap">SP III</th>
                         <th className="p-2.5 whitespace-nowrap">Masa Berlaku</th>
                         <th className="p-2.5 whitespace-nowrap">Pemulihan I &amp; II</th>
+                        <th className="p-2.5 whitespace-nowrap">Alasan Konseling</th>
                         <th className="p-2.5 whitespace-nowrap">Alasan SP</th>
                         <th className="p-2.5 whitespace-nowrap">SPDK &amp; Kronologi</th>
                       </tr>
@@ -1789,6 +1793,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                         const masa = row['Masa Berlaku Sanksi'] || row['masaBerlakuSanksi'] || '-';
                         const p1 = row['Masa Pemulihan I'] || row['masaPemulihan1'] || '-';
                         const p2 = row['Masa Pemulihan II'] || row['masaPemulihan2'] || '-';
+                        const alasanKonseling = row['Alasan Konseling'] || row['alasanKonseling'] || row['alasanPembinaan'] || '-';
                         const alasan = row['Alasan Surat Peringatan'] || row['Alasan SP'] || row['alasanSp'] || '-';
                         const spdk = row['Kronologi Kejadian SPDK'] || row['kronologiSpdk'] || row['Pernah Terlibat SPDK'] || '-';
 
@@ -1805,6 +1810,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                             <td className="p-2.5 text-rose-700 font-semibold text-[11px]">{sp3}</td>
                             <td className="p-2.5 text-slate-600 font-mono text-[11px]">{masa}</td>
                             <td className="p-2.5 text-slate-600 font-mono text-[11px]">{p1 !== '-' ? `${p1} / ${p2}` : '-'}</td>
+                            <td className="p-2.5 text-teal-700 text-[11px] max-w-[140px] truncate" title={alasanKonseling}>{alasanKonseling}</td>
                             <td className="p-2.5 text-slate-600 text-[11px] max-w-[140px] truncate" title={alasan}>{alasan}</td>
                             <td className="p-2.5 text-slate-600 text-[11px] max-w-[140px] truncate" title={spdk}>{spdk}</td>
                           </tr>

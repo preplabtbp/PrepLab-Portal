@@ -113,6 +113,7 @@ export const employeeCounseling = pgTable('employee_counseling', {
   masaBerlakuSanksi: text('masa_berlaku_sanksi'),
   masaPemulihan1: text('masa_pemulihan_1'),
   masaPemulihan2: text('masa_pemulihan_2'),
+  alasanKonseling: text('alasan_konseling'),
   alasanSp: text('alasan_sp'),
   keterangan: text('keterangan'),
   pernahSpSebelumnya: text('pernah_sp_sebelumnya'),
