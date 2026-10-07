@@ -10,16 +10,21 @@ import { getPelanggaranData } from '../sheets-api';
 const mapStatusToCategory = (status: string) => {
   const s = status.toLowerCase();
   if (s.includes('sppt') || s.includes('pertama dan terakhir')) return 'SPPT (SP 3)';
-  if (s.includes('sp 3') || s.includes('sp3')) return 'SPPT (SP 3)';
+  if (s.includes('sp 3') || s.includes('sp3')) return 'SP 3';
   if (s.includes('sp 2') || s.includes('sp2')) return 'SP 2';
   if (s.includes('sp 1') || s.includes('sp1')) return 'SP 1';
   if (s.includes('sp')) return 'SP 1';
-  if (s.includes('teguran')) return 'Surat Teguran';
+  if (s.includes('teguran') || s.includes('st')) return 'Surat Teguran';
   if (s.includes('konseling 3')) return 'Konseling 3';
   if (s.includes('konseling 2')) return 'Konseling 2';
   if (s.includes('konseling 1')) return 'Konseling 1';
   if (s.includes('konseling')) return 'Konseling 1';
   return 'Lainnya';
+};
+
+const getValidityMonths = (cat: string) => {
+  if (cat.startsWith('SP') || cat.includes('SPPT')) return 6;
+  return 3;
 };
 
 export function PelanggaranDashboard() {
@@ -38,8 +43,6 @@ export function PelanggaranDashboard() {
     fetchData();
   }, []);
 
-  
-  
   const fetchData = async () => {
     setLoading(true);
     setError(null);
@@ -72,7 +75,8 @@ export function PelanggaranDashboard() {
         'Surat Teguran': 4,
         'SP 1': 5,
         'SP 2': 6,
-        'SPPT (SP 3)': 7
+        'SP 3': 7,
+        'SPPT (SP 3)': 8
       };
 
       // Process chronologically for each person
@@ -86,6 +90,7 @@ export function PelanggaranDashboard() {
           const { id, nama, status, penjelasan, parsedDate } = row;
           const category = mapStatusToCategory(status);
           const rank = rankMap[category] || 0;
+          const validityMonths = getValidityMonths(category);
           
           let expiryDate = new Date(parsedDate);
           let escalatedFrom = undefined;
@@ -101,7 +106,7 @@ export function PelanggaranDashboard() {
             if (rank >= highestActive.rank) {
               // Escalation!
               expiryDate = new Date(highestActive.rawExpiryDate);
-              expiryDate.setMonth(expiryDate.getMonth() + 3);
+              expiryDate.setMonth(expiryDate.getMonth() + validityMonths);
               
               escalatedFrom = highestActive.status;
               
@@ -113,13 +118,12 @@ export function PelanggaranDashboard() {
                 }
               }
             } else {
-              // Not an escalation (lower rank). Standard 3 months from its own date.
-              // It doesn't affect existing higher-rank violations.
-              expiryDate.setMonth(expiryDate.getMonth() + 3);
+              // Not an escalation (lower rank). Standard months from its own date.
+              expiryDate.setMonth(expiryDate.getMonth() + validityMonths);
             }
           } else {
-            // No active violations. Standard 3 months from its own date.
-            expiryDate.setMonth(expiryDate.getMonth() + 3);
+            // No active violations. Standard validity months from its own date.
+            expiryDate.setMonth(expiryDate.getMonth() + validityMonths);
           }
           
           history.push({
@@ -128,6 +132,7 @@ export function PelanggaranDashboard() {
             status,
             category,
             rank,
+            validityMonths,
             penjelasan,
             parsedDate,
             rawExpiryDate: expiryDate,
@@ -168,7 +173,7 @@ export function PelanggaranDashboard() {
              tanggal: v.parsedDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
              expiryDate: v.rawExpiryDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
              daysLeft,
-             monthsValidity: 3,
+             monthsValidity: v.validityMonths,
              penjelasan: v.penjelasan,
              isActive: v.isActive,
              category: v.category,
@@ -252,6 +257,7 @@ export function PelanggaranDashboard() {
     'Surat Teguran': 0,
     'SP 1': 0,
     'SP 2': 0,
+    'SP 3': 0,
     'SPPT (SP 3)': 0
   };
   
@@ -277,9 +283,8 @@ export function PelanggaranDashboard() {
           <h2 className="text-2xl font-display font-semibold text-slate-800 flex items-center gap-2">
             <AlertTriangle className="w-6 h-6 text-rose-600" /> Dashboard Pelanggaran
           </h2>
-          <p className="text-sm text-slate-500 mt-1">Daftar Personel dengan Sanksi Indisipliner</p>
+          <p className="text-sm text-slate-500 mt-1">Daftar Personel dengan Sanksi Indisipliner & SPDK</p>
         </div>
-        
         
         <div className="flex gap-2">
           <button onClick={handleMigrate} className="p-2 bg-blue-50 text-blue-600 rounded-full border border-blue-200 hover:bg-blue-100 flex items-center gap-2 px-4 text-sm font-bold">
@@ -292,11 +297,8 @@ export function PelanggaranDashboard() {
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
-
-
       </div>
 
-      
       {showAddForm && (
         <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-xl">
@@ -330,12 +332,8 @@ export function PelanggaranDashboard() {
                 <input type="date" required value={newPelanggaran.tanggal} onChange={e => setNewPelanggaran({...newPelanggaran, tanggal: e.target.value})} className="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Deskripsi Pelanggaran</label>
-                <textarea rows={3} required value={newPelanggaran.penjelasan} onChange={e => setNewPelanggaran({...newPelanggaran, penjelasan: e.target.value})} className="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" placeholder="Masukkan detail pelanggaran..." />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Deskripsi Pelanggaran</label>
-                <textarea rows={3} required value={newPelanggaran.penjelasan} onChange={e => setNewPelanggaran({...newPelanggaran, penjelasan: e.target.value})} className="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" placeholder="Masukkan detail pelanggaran..." />
+                <label className="block text-sm font-medium text-slate-700 mb-1">Deskripsi Pelanggaran / Alasan</label>
+                <textarea rows={3} required value={newPelanggaran.penjelasan} onChange={e => setNewPelanggaran({...newPelanggaran, penjelasan: e.target.value})} className="w-full border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" placeholder="Masukkan detail atau alasan pelanggaran..." />
               </div>
               <div className="pt-2 flex gap-3">
                 <button type="button" onClick={() => setShowAddForm(false)} className="flex-1 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-600 hover:bg-slate-50">Batal</button>
@@ -362,7 +360,7 @@ export function PelanggaranDashboard() {
         </div>
       ) : (
         <div className="space-y-4">
-                    <div className="flex gap-2 bg-slate-100 p-1 rounded-lg w-max mb-6">
+          <div className="flex gap-2 bg-slate-100 p-1 rounded-lg w-max mb-6">
             <button onClick={() => { setActiveFilter('AKTIF'); setSelectedCategory(null); }} className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${activeFilter === 'AKTIF' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Sanksi Aktif</button>
             <button onClick={() => { setActiveFilter('SEMUA'); setSelectedCategory(null); }} className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${activeFilter === 'SEMUA' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua Sanksi</button>
           </div>
@@ -390,9 +388,12 @@ export function PelanggaranDashboard() {
                       chartData.map((entry, index) => {
                         const isActive = selectedCategory === entry.name;
                         const isOthersActive = selectedCategory !== null && !isActive;
-                        let color = '#3b82f6'; // default
-                        if (entry.name === 'SPPT (SP 3)') color = '#e11d48';
-                        else if (entry.name.includes('SP')) color = '#f59e0b';
+                        let color = '#3b82f6'; // Default Konseling (Blue)
+                        if (entry.name === 'SPPT (SP 3)') color = '#be123c';
+                        else if (entry.name === 'SP 3') color = '#e11d48';
+                        else if (entry.name === 'SP 2') color = '#ea580c';
+                        else if (entry.name === 'SP 1') color = '#f59e0b';
+                        else if (entry.name === 'Surat Teguran') color = '#6366f1';
                         
                         return <Cell key={`cell-${index}`} fill={color} opacity={isOthersActive ? 0.3 : 1} style={{ cursor: 'pointer', transition: 'opacity 0.2s' }} onClick={() => setSelectedCategory(selectedCategory === entry.name ? null : entry.name)} />;
                       })
@@ -401,14 +402,14 @@ export function PelanggaranDashboard() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <p className="text-xs text-slate-400 mt-4 text-center">Klik pada batang grafik untuk melihat detail pelanggaran</p>
+            <p className="text-xs text-slate-400 mt-4 text-center">Klik pada batang grafik untuk melihat detail personel & sanksi</p>
           </div>
 
           {selectedCategory && (
             <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
               <div className="flex items-center gap-3">
                 <Filter className="w-5 h-5 text-slate-400" />
-                <span className="font-semibold text-slate-700">Menampilkan Detail: <span className="text-slate-900">{selectedCategory}</span></span>
+                <span className="font-semibold text-slate-700">Menampilkan Detail: <span className="text-slate-900 font-bold">{selectedCategory}</span></span>
               </div>
               <button onClick={() => setSelectedCategory(null)} className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-500 transition-colors">
                 <X className="w-4 h-4" />
@@ -416,8 +417,7 @@ export function PelanggaranDashboard() {
             </div>
           )}
 
-
-                    {!selectedCategory ? null : filteredData.length === 0 ? (
+          {!selectedCategory ? null : filteredData.length === 0 ? (
             <div className="bg-white p-10 rounded-2xl border border-slate-200 text-center flex flex-col items-center">
               <ShieldAlert className="w-12 h-12 text-slate-300 mb-3" />
               <p className="text-slate-500 font-medium">Tidak ada pelanggaran dalam kategori ini.</p>
@@ -429,9 +429,9 @@ export function PelanggaranDashboard() {
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nama Personel</th>
-                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status Sanksi</th>
                       <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tgl Kejadian</th>
-                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Berlaku s/d</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Masa Berlaku s/d</th>
                       <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Aksi</th>
                     </tr>
                   </thead>
@@ -447,8 +447,11 @@ export function PelanggaranDashboard() {
                           <td className="px-6 py-4">
                             <div className="flex flex-col items-start">
                               <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
-                                item.monthsValidity === 15 ? 'bg-rose-100 text-rose-700' : 
-                                item.monthsValidity === 6 ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                                item.category === 'SPPT (SP 3)' || item.category === 'SP 3' ? 'bg-rose-100 text-rose-700 border border-rose-200' :
+                                item.category === 'SP 2' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
+                                item.category === 'SP 1' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                                item.category === 'Surat Teguran' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' :
+                                'bg-blue-100 text-blue-700 border border-blue-200'
                               }`}>
                                 {item.status}
                               </span>
@@ -473,8 +476,8 @@ export function PelanggaranDashboard() {
                               <div className="flex gap-3">
                                 <FileText className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
                                 <div>
-                                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Detail Pelanggaran</h4>
-                                  <p className="text-sm text-slate-700 leading-relaxed max-w-3xl">{item.penjelasan || 'Tidak ada penjelasan detail.'}</p>
+                                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Detail / Alasan Pelanggaran</h4>
+                                  <p className="text-sm text-slate-700 leading-relaxed max-w-3xl whitespace-pre-line">{item.penjelasan || 'Tidak ada penjelasan detail.'}</p>
                                 </div>
                               </div>
                             </td>
@@ -490,7 +493,7 @@ export function PelanggaranDashboard() {
           <div className="bg-amber-50 text-amber-800 p-4 rounded-xl border border-amber-200 text-xs mt-6 flex gap-3">
             <AlertTriangle className="w-5 h-5 shrink-0 text-amber-500" />
             <p>
-              <strong>Aturan Eskalasi:</strong> Masa berlaku SP (SP 1, 2, 3, SPPT) adalah 3 bulan. Jika personil melakukan pelanggaran lagi selama masa berlakunya status sekarang, maka sanksi akan otomatis meningkat ke tingkat selanjutnya dan masa berlaku akan ditambahkan 3 bulan dari sisa masa berlaku sebelumnya.
+              <strong>Aturan Masa Aktif Sanksi:</strong> Masa berlaku Surat Teguran (ST) dan Konseling adalah 3 bulan, sedangkan Surat Peringatan (SP 1, SP 2, SP 3, SPPT / SPDK) adalah 6 bulan dari sanksi keluar. Jika personil melakukan pelanggaran baru selama sanksi sebelumnya masih aktif, sanksi akan otomatis meningkat ke tingkat selanjutnya dan masa berlakunya diperpanjang dari sisa masa berlaku sebelumnya.
             </p>
           </div>
         </div>

@@ -35,6 +35,8 @@ import { router as changelogRouter } from "./server/routes/changelog.js";
 import webpush from 'web-push';
 import { generatePdfFromTemplate, drive } from './google-services.js';
 import path from "path";
+import * as fs from "fs";
+import Papa from "papaparse";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { setIoInstance } from "./server/utils.js";
@@ -1225,123 +1227,127 @@ async function syncBulletinToAgenda(post: any) {
   
   app.post("/api/pelanggaran/migrate", async (req, res) => {
     try {
-      // Clear existing records before migrating
       await db.delete(pelanggaran);
 
-      const url = "https://docs.google.com/spreadsheets/d/17bU5vvVD9O8g-KATgGf1ZNDI1B8_EwS-r3xNtEPaw3s/export?format=csv&sheet=Rekapan";
-      const csvRes = await fetch(url);
-      if (!csvRes.ok) throw new Error("Gagal mengunduh CSV dari Google Sheets.");
-      
-      const csvText = await csvRes.text();
-      
-      const parseCSV = (text) => {
-        const result = [];
-        let row = [];
-        let inQuotes = false;
-        let val = '';
-        for (let i = 0; i < text.length; i++) {
-          const char = text[i];
-          if (char === '"') {
-            inQuotes = !inQuotes;
-          } else if (char === ',' && !inQuotes) {
-            row.push(val);
-            val = '';
-          } else if (char === '' && !inQuotes) {
-            row.push(val);
-            result.push(row);
-            row = [];
-            val = '';
-          } else if (char !== '\r') {
-            val += char;
+      let csvText = '';
+      const localCsvPath = path.join(process.cwd(), 'scripts', 'counseling_spdk_data.csv');
+      if (fs.existsSync(localCsvPath)) {
+        csvText = fs.readFileSync(localCsvPath, 'utf8');
+      } else {
+        const url = "https://docs.google.com/spreadsheets/d/17bU5vvVD9O8g-KATgGf1ZNDI1B8_EwS-r3xNtEPaw3s/export?format=csv&sheet=Rekapan";
+        const csvRes = await fetch(url);
+        if (csvRes.ok) {
+          csvText = await csvRes.text();
+        }
+      }
+
+      if (!csvText) {
+        return res.status(500).json({ error: "Data CSV konseling tidak ditemukan" });
+      }
+
+      const parseIndoDate = (str: string): Date | null => {
+        if (!str) return null;
+        const monthMap: Record<string, number> = {
+          jan: 0, januari: 0,
+          feb: 1, februari: 1,
+          mar: 2, maret: 2,
+          apr: 3, april: 3,
+          mei: 4, may: 4,
+          jun: 5, juni: 5,
+          jul: 6, juli: 6,
+          agu: 7, agt: 7, agustus: 7, aug: 7,
+          sep: 8, september: 8,
+          okt: 9, oktober: 9, oct: 9,
+          nov: 10, november: 10,
+          des: 11, desember: 11, dec: 11
+        };
+        const clean = str.trim().toLowerCase();
+        const parts = clean.split(/[\/\-\s]+/).filter(Boolean);
+        if (parts.length === 3) {
+          let day = parseInt(parts[0], 10);
+          let monthName = parts[1];
+          let year = parseInt(parts[2], 10);
+          if (year < 100) year += 2000;
+          const month = monthMap[monthName] ?? (parseInt(monthName, 10) - 1);
+          if (!isNaN(day) && month !== undefined && !isNaN(year)) {
+            return new Date(Date.UTC(year, month, day));
           }
         }
-        if (val || row.length > 0) {
-          row.push(val);
-          result.push(row);
-        }
-        return result;
+        const d = new Date(str);
+        return isNaN(d.getTime()) ? null : d;
       };
 
-      const rows = parseCSV(csvText);
-      if (!rows || rows.length < 2) return res.json({ success: true, migrated: 0 });
-      
-      const statuses = [
-        { index: 11, label: 'Konseling 1' },
-        { index: 12, label: 'Konseling 2' },
-        { index: 13, label: 'Konseling 3' },
-        { index: 14, label: 'Surat Teguran' },
-        { index: 15, label: 'SP 1' },
-        { index: 16, label: 'SP 2' },
-        { index: 17, label: 'SP 3' },
-        { index: 18, label: 'SPPT' }
+      const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+      const rows = parsed.data as Record<string, string>[];
+
+      const cols = [
+        { tglKey: ' Tanggal Konseling \n1', rKey: 'Alasan Konseling 1', status: 'Konseling 1' },
+        { tglKey: ' Tanggal Konseling \n2', rKey: 'Alasan Konseling 2', status: 'Konseling 2' },
+        { tglKey: ' Tanggal Konseling \n3', rKey: 'Alasan Konseling 3', status: 'Konseling 3' },
+        { tglKey: ' Tanggal Surat Teguran', rKey: 'Alasan Surat Teguran', status: 'Surat Teguran' },
+        { tglKey: ' Tanggal SP 1', rKey: 'Alasan SP 1', status: 'SP 1' },
+        { tglKey: ' Tanggal SP 2', rKey: 'Alasan SP 2', status: 'SP 2' },
+        { tglKey: ' Tanggal SP 3', rKey: 'Alasan SP 3', status: 'SP 3' },
+        { tglKey: 'Tanggal SPPT', rKey: 'Alasan SPPT', status: 'SPPT' },
       ];
 
-      let count = 0;
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length < 2) continue;
-        const nama = row[1] ? row[1].trim() : '';
-        if (!nama || nama === '-') continue;
+      const insertData: any[] = [];
+      for (const r of rows) {
+        const nama = r['Nama Karyawan'] || r['Nama'] || '';
+        if (!nama || nama.trim() === '-') continue;
 
-        for (const statusObj of statuses) {
-          const tanggalStr = row[statusObj.index];
-          if (!tanggalStr || tanggalStr.trim() === '') continue;
+        for (const c of cols) {
+          let rawDates = r[c.tglKey] || '';
+          let rawReasons = r[c.rKey] || '';
 
-          let tgl = new Date(tanggalStr.trim());
-          if (isNaN(tgl.getTime())) {
-            let normalizedDate = tanggalStr.toLowerCase();
-            for (const [id, en] of Object.entries({
-              'januari': '01', 'jan': '01',
-              'februari': '02', 'feb': '02',
-              'maret': '03', 'mar': '03',
-              'april': '04', 'apr': '04',
-              'mei': '05',
-              'juni': '06', 'jun': '06',
-              'juli': '07', 'jul': '07',
-              'agustus': '08', 'agu': '08',
-              'september': '09', 'sep': '09',
-              'oktober': '10', 'okt': '10',
-              'november': '11', 'nov': '11',
-              'desember': '12', 'des': '12'
-            })) {
-              if (normalizedDate.includes(id)) {
-                normalizedDate = normalizedDate.replace(id, en);
+          if (!rawDates) {
+            for (const [k, v] of Object.entries(r)) {
+              const cleanK = k.replace(/[\r\n\s]/g, '').toLowerCase();
+              const targetK = c.tglKey.replace(/[\r\n\s]/g, '').toLowerCase();
+              if (cleanK === targetK) {
+                rawDates = v || '';
                 break;
               }
             }
+          }
 
-            const parts = normalizedDate.trim().split(/[\/\- ]/).filter(Boolean);
-            if (parts.length === 3) {
-              let day = parts[0];
-              let month = parts[1];
-              let year = parts[2];
-              
-              if (year.length === 2) year = '20' + year;
-              if (day.length === 4) {
-                 let temp = day;
-                 day = year;
-                 year = temp;
+          if (!rawReasons) {
+            for (const [k, v] of Object.entries(r)) {
+              const cleanK = k.replace(/[\r\n\s]/g, '').toLowerCase();
+              const targetK = c.rKey.replace(/[\r\n\s]/g, '').toLowerCase();
+              if (cleanK === targetK) {
+                rawReasons = v || '';
+                break;
               }
-              
-              tgl = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
             }
           }
-          
-          if (!isNaN(tgl.getTime())) {
-            const penjelasan = row[statusObj.index + 8] ? row[statusObj.index + 8].trim() : null;
-            await db.insert(pelanggaran).values({
-              nama,
-              status: statusObj.label,
-              tanggal: tgl.toISOString(),
-              penjelasan
-            });
-            count++;
+
+          if (!rawDates || !rawDates.trim()) continue;
+
+          const dateLines = rawDates.split('\n').map(s => s.trim()).filter(Boolean);
+          const reasonLines = rawReasons.split('\n').map(s => s.trim()).filter(Boolean);
+
+          for (let i = 0; i < dateLines.length; i++) {
+            const d = parseIndoDate(dateLines[i]);
+            if (d) {
+              const reason = reasonLines[i] || reasonLines.join('; ') || rawReasons.trim() || null;
+              insertData.push({
+                nama: nama.trim(),
+                status: c.status,
+                tanggal: d.toISOString(),
+                penjelasan: reason
+              });
+            }
           }
         }
       }
-      
-      res.json({ success: true, migrated: count });
-    } catch (error) {
+
+      for (let i = 0; i < insertData.length; i += 50) {
+        await db.insert(pelanggaran).values(insertData.slice(i, i + 50));
+      }
+
+      res.json({ success: true, migrated: insertData.length });
+    } catch (error: any) {
       console.error("Error migrating:", error.message || error);
       res.status(500).json({ error: error.message || "Failed to migrate" });
     }
