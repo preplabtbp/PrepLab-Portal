@@ -1733,164 +1733,184 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       </div>
                     </div>
 
-                    {/* DETAIL KARTU SANKSI & PEMULIHAN (STYLE REKAPAN TANGGAL IZIN) */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                      {/* 1. Masa Berlaku Sanksi */}
-                      <Card className="p-4 shadow-sm border-slate-200/80 bg-white flex flex-col justify-between rounded-2xl hover:border-amber-300 transition-all">
-                        <div>
-                          <div className="flex items-center justify-between mb-2.5">
-                            <p className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                              <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                              <Clock className="w-3.5 h-3.5 text-amber-600" />
-                              <span>Masa Berlaku Sanksi</span>
-                            </p>
-                            {hasAnySp && (
-                              <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-bold">
-                                {hasSpMajor ? 'SP (6 Bln)' : (hasSt ? 'ST (3 Bln)' : 'Aktif')}
-                              </span>
-                            )}
-                          </div>
-                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100 min-h-[64px] flex items-center flex-wrap gap-2">
-                            {masaBerlaku && masaBerlaku !== '-' && !masaBerlaku.toLowerCase().includes('tidak ada') ? (
-                              <span className="inline-block px-3 py-1.5 text-xs font-extrabold rounded-md bg-amber-50 text-amber-900 border border-amber-200 font-mono shadow-2xs">
-                                {masaBerlaku}
-                              </span>
-                            ) : (
-                              <p className="text-xs text-slate-400 italic">Tidak ada catatan sanksi aktif</p>
-                            )}
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
-                          <Info className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>Periode berlakunya surat peringatan / teguran</span>
-                        </p>
-                      </Card>
+                    {/* TABEL RINCIAN TANGGAL SURAT PERINGATAN, ST & KONSELING (PERSIS SEPERTI TABEL TANGGAL ABSENSI) */}
+                    {(() => {
+                      const parseSanctionDateList = (val?: any): string[] => {
+                        if (!val) return [];
+                        if (Array.isArray(val)) return val.map(s => String(s).trim()).filter(s => s && s !== '-' && s !== '0' && s !== '#N/A');
+                        return String(val)
+                          .split(/[\r\n,;]+/)
+                          .map(s => s.trim())
+                          .filter(s => s && s !== '-' && s !== '0' && s !== '#N/A');
+                      };
 
-                      {/* 2. Masa Pemulihan I */}
-                      <Card className="p-4 shadow-sm border-slate-200/80 bg-white flex flex-col justify-between rounded-2xl hover:border-[#22a7b8]/40 transition-all">
-                        <div>
-                          <div className="flex items-center justify-between mb-2.5">
-                            <p className="text-xs font-bold text-[#135e69] uppercase tracking-wider flex items-center gap-1.5">
-                              <span className="w-2.5 h-2.5 rounded-full bg-[#22a7b8]"></span>
-                              <CheckCircle2 className="w-3.5 h-3.5 text-[#22a7b8]" />
-                              <span>Masa Pemulihan I</span>
-                            </p>
-                            <span className="text-[10px] bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8] px-2 py-0.5 rounded-full font-bold">
-                              Tahap Evaluasi
+                      const k1Dates = parseSanctionDateList(k1);
+                      const k2Dates = parseSanctionDateList(k2);
+                      const k3Dates = parseSanctionDateList(k3);
+                      const stDates = parseSanctionDateList(st);
+                      const sp1Dates = parseSanctionDateList(sp1);
+                      const sp2Dates = parseSanctionDateList(sp2);
+                      const sp3Dates = parseSanctionDateList(sp3);
+                      const spptDates = parseSanctionDateList(sppt);
+
+                      if (tanggalSp && isDateLike(tanggalSp)) {
+                        const spDatesList = parseSanctionDateList(tanggalSp);
+                        if (sppt && (sppt === '1' || sppt === 'Ya' || spptDates.length === 0)) spptDates.push(...spDatesList);
+                        else if (sp3 && (sp3 === '1' || sp3 === 'Ya' || sp3Dates.length === 0)) sp3Dates.push(...spDatesList);
+                        else if (sp2 && (sp2 === '1' || sp2 === 'Ya' || sp2Dates.length === 0)) sp2Dates.push(...spDatesList);
+                        else if (sp1 && (sp1 === '1' || sp1 === 'Ya' || sp1Dates.length === 0)) sp1Dates.push(...spDatesList);
+                        else if (st && (st === '1' || st === 'Ya' || stDates.length === 0)) stDates.push(...spDatesList);
+                      }
+
+                      const maxSanctionRows = Math.max(
+                        k1Dates.length,
+                        k2Dates.length,
+                        k3Dates.length,
+                        stDates.length,
+                        sp1Dates.length,
+                        sp2Dates.length,
+                        sp3Dates.length,
+                        spptDates.length
+                      );
+
+                      return (
+                        <Card className="p-0 overflow-hidden border-slate-200/60 shadow-sm flex flex-col mb-6 bg-white rounded-2xl max-h-[360px]">
+                          <div className="overflow-x-auto overflow-y-auto max-h-[300px] custom-scrollbar">
+                            <table className="w-full text-sm text-left border-collapse">
+                              <thead className="text-xs uppercase bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
+                                <tr>
+                                  <th className="px-4 py-3 font-bold text-[#135e69] whitespace-nowrap bg-slate-50">Konseling I</th>
+                                  <th className="px-4 py-3 font-bold text-[#135e69] whitespace-nowrap bg-slate-50">Konseling II</th>
+                                  <th className="px-4 py-3 font-bold text-[#135e69] whitespace-nowrap bg-slate-50">Konseling III</th>
+                                  <th className="px-4 py-3 font-bold text-yellow-700 whitespace-nowrap bg-slate-50">Surat Teguran (ST)</th>
+                                  <th className="px-4 py-3 font-bold text-amber-700 whitespace-nowrap bg-slate-50">SP I</th>
+                                  <th className="px-4 py-3 font-bold text-orange-700 whitespace-nowrap bg-slate-50">SP II</th>
+                                  <th className="px-4 py-3 font-bold text-rose-700 whitespace-nowrap bg-slate-50">SP III</th>
+                                  <th className="px-4 py-3 font-bold text-rose-900 whitespace-nowrap bg-slate-50">SPPT</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {maxSanctionRows === 0 ? (
+                                  <tr className="border-b border-slate-50 bg-slate-50/30">
+                                    <td colSpan={8} className="px-4 py-10 text-center text-slate-400 font-medium">
+                                      Belum ada catatan rincian tanggal surat peringatan (ST/SP) atau konseling.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  Array.from({ length: maxSanctionRows }).map((_, idx) => (
+                                    <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
+                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                        {k1Dates[idx] ? (
+                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]">
+                                            {k1Dates[idx]}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-300">-</span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                        {k2Dates[idx] ? (
+                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]">
+                                            {k2Dates[idx]}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-300">-</span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                        {k3Dates[idx] ? (
+                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]">
+                                            {k3Dates[idx]}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-300">-</span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                        {stDates[idx] ? (
+                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-yellow-50 text-yellow-800 border border-yellow-200">
+                                            {stDates[idx]}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-300">-</span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                        {sp1Dates[idx] ? (
+                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                                            {sp1Dates[idx]}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-300">-</span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                        {sp2Dates[idx] ? (
+                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-orange-50 text-orange-800 border border-orange-200">
+                                            {sp2Dates[idx]}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-300">-</span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                        {sp3Dates[idx] ? (
+                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-rose-50 text-rose-700 border border-rose-200">
+                                            {sp3Dates[idx]}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-300">-</span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                                        {spptDates[idx] ? (
+                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-rose-100 text-rose-950 border border-rose-300 font-bold">
+                                            {spptDates[idx]}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-300">-</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="p-2.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-xs px-4">
+                            <span className="text-[11px] text-slate-400 font-medium">
+                              Total {maxSanctionRows} baris rincian tanggal sanksi &amp; pembinaan
                             </span>
-                          </div>
-                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100 min-h-[64px] flex items-center flex-wrap gap-2">
-                            {masaPemulihan1 && masaPemulihan1 !== '-' ? (
-                              <span className="inline-block px-3 py-1.5 text-xs font-extrabold rounded-md bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8] font-mono shadow-2xs">
-                                {masaPemulihan1}
-                              </span>
-                            ) : (
-                              <p className="text-xs text-slate-400 italic">-</p>
+                            {canManageDatabase && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditModalTab('counseling');
+                                  setIsEditModalOpen(true);
+                                }}
+                                className="text-xs font-bold text-[#135e69] hover:text-[#22a7b8] flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>+ Edit Tanggal Sanksi / SP</span>
+                              </button>
                             )}
                           </div>
-                        </div>
-                        <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
-                          <Info className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>Evaluasi tahap awal pemulihan kedisiplinan</span>
-                        </p>
-                      </Card>
+                        </Card>
+                      );
+                    })()}
 
-                      {/* 3. Masa Pemulihan II */}
-                      <Card className="p-4 shadow-sm border-slate-200/80 bg-white flex flex-col justify-between rounded-2xl hover:border-emerald-300 transition-all">
-                        <div>
-                          <div className="flex items-center justify-between mb-2.5">
-                            <p className="text-xs font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
-                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Masa Pemulihan II</span>
-                            </p>
-                            <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">
-                              Pemutihan Status
-                            </span>
-                          </div>
-                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100 min-h-[64px] flex items-center flex-wrap gap-2">
-                            {masaPemulihan2 && masaPemulihan2 !== '-' ? (
-                              <span className="inline-block px-3 py-1.5 text-xs font-extrabold rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 font-mono shadow-2xs">
-                                {masaPemulihan2}
-                              </span>
-                            ) : (
-                              <p className="text-xs text-slate-400 italic">-</p>
-                            )}
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
-                          <Info className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>Tahap penutupan sanksi &amp; pemutihan status</span>
-                        </p>
-                      </Card>
-                    </div>
-
-                    {/* GRID RINCIAN KONSELING & SP & SPDK */}
+                    {/* GRID ALASAN KONSELING & SP & SPDK */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Kolom Kiri: Rincian Konseling & Surat Peringatan */}
+                      {/* Kolom Kiri: Alasan Konseling & Surat Peringatan */}
                       <div className="space-y-4">
                         <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-3">
                           <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
                             <Gavel className="w-4 h-4 text-[#22a7b8]" />
-                            Rincian Surat Peringatan &amp; Pembinaan
+                            Alasan Surat Peringatan &amp; Pembinaan
                           </h4>
 
-                          <div className="grid grid-cols-3 gap-2 text-xs">
-                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
-                              <span className="text-[10px] text-slate-400 font-bold block uppercase">Konseling I</span>
-                              <span className="font-extrabold text-slate-700 font-mono mt-0.5 block truncate">
-                                {k1 || '-'}
-                              </span>
-                            </div>
-                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
-                              <span className="text-[10px] text-slate-400 font-bold block uppercase">Konseling II</span>
-                              <span className="font-extrabold text-slate-700 font-mono mt-0.5 block truncate">
-                                {k2 || '-'}
-                              </span>
-                            </div>
-                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
-                              <span className="text-[10px] text-slate-400 font-bold block uppercase">Konseling III</span>
-                              <span className="font-extrabold text-slate-700 font-mono mt-0.5 block truncate">
-                                {k3 || '-'}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-                            <div className="p-2 rounded-xl bg-yellow-50/50 border border-yellow-100 text-center">
-                              <span className="text-[10px] text-yellow-800 font-bold block">ST</span>
-                              <span className="font-extrabold text-yellow-900 font-mono text-[11px] truncate block">
-                                {st || '-'}
-                              </span>
-                            </div>
-                            <div className="p-2 rounded-xl bg-amber-50/50 border border-amber-100 text-center">
-                              <span className="text-[10px] text-amber-800 font-bold block">SP I</span>
-                              <span className="font-extrabold text-amber-900 font-mono text-[11px] truncate block">
-                                {sp1 || '-'}
-                              </span>
-                            </div>
-                            <div className="p-2 rounded-xl bg-orange-50/50 border border-orange-100 text-center">
-                              <span className="text-[10px] text-orange-800 font-bold block">SP II</span>
-                              <span className="font-extrabold text-orange-900 font-mono text-[11px] truncate block">
-                                {sp2 || '-'}
-                              </span>
-                            </div>
-                            <div className="p-2 rounded-xl bg-rose-50/50 border border-rose-100 text-center">
-                              <span className="text-[10px] text-rose-800 font-bold block">SP III</span>
-                              <span className="font-extrabold text-rose-900 font-mono text-[11px] truncate block">
-                                {sp3 || '-'}
-                              </span>
-                            </div>
-                            <div className="p-2 rounded-xl bg-rose-100/50 border border-rose-200 text-center col-span-2 sm:col-span-1">
-                              <span className="text-[10px] text-rose-950 font-bold block">SPPT</span>
-                              <span className="font-extrabold text-rose-950 font-mono text-[11px] truncate block">
-                                {sppt || '-'}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Alasan Konseling & Alasan SP & Keterangan */}
-                          <div className="pt-2 space-y-2.5">
+                          <div className="space-y-3">
                             {/* Alasan Konseling / Pembinaan */}
                             <div>
                               <p className="text-[11px] font-bold text-teal-800 uppercase mb-1 flex items-center gap-1">
