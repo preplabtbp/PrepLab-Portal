@@ -1063,18 +1063,18 @@ export default function App() {
         />
 
         {/* Top Security Status Bar */}
-        <div className="relative z-10 mb-6 flex items-center gap-3 px-4 py-1.5 rounded-full bg-slate-900/80 border border-teal-500/20 backdrop-blur-md text-[11px] font-mono text-teal-300/90 shadow-lg">
+        <div className="relative z-10 mb-6 flex items-center gap-3 px-4 py-1.5 rounded-full bg-slate-900/90 border border-teal-500/30 backdrop-blur-md text-[11px] font-mono shadow-lg">
           <span className="flex h-2 w-2 relative">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
           </span>
-          <span>PREPLAB ENTERPRISE GATEWAY</span>
-          <span className="text-slate-600">|</span>
-          <span className="text-slate-400">HARITA NICKEL • TBP & GPS</span>
+          <span className="text-teal-300 font-semibold">PREPLAB ENTERPRISE GATEWAY</span>
+          <span className="text-teal-500/50">|</span>
+          <span className="text-teal-100/90 font-medium">HARITA NICKEL • TBP & GPS</span>
         </div>
 
         {/* Main Glassmorphic Login Card */}
-        <div className="relative z-10 w-full max-w-md bg-[#0d1527]/85 backdrop-blur-2xl rounded-3xl border border-teal-500/25 shadow-[0_0_60px_-15px_rgba(20,184,166,0.3)] p-8 sm:p-10 space-y-6 overflow-hidden">
+        <div className="relative z-10 w-full max-w-md bg-[#0d1527]/90 backdrop-blur-2xl rounded-3xl border border-teal-500/30 shadow-[0_0_60px_-15px_rgba(20,184,166,0.35)] p-8 sm:p-10 space-y-6 overflow-hidden">
           
           {/* Card Top Light Accent Streak */}
           <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-80" />
@@ -1083,14 +1083,14 @@ export default function App() {
           {/* Logo & Brand Emblem */}
           <div className="flex flex-col items-center text-center space-y-3">
             <div className="relative group">
-              <div className="w-20 h-20 rounded-3xl bg-slate-950/80 border border-teal-400/30 p-2 flex items-center justify-center shadow-2xl shadow-teal-500/20 group-hover:scale-105 transition-all duration-300 backdrop-blur-md">
+              <div className="w-20 h-20 rounded-3xl bg-slate-950/90 border border-teal-400/40 p-2 flex items-center justify-center shadow-2xl shadow-teal-500/25 group-hover:scale-105 transition-all duration-300 backdrop-blur-md">
                 <img 
                   src="/preplab-logo.png" 
                   alt="Prep & Lab Logo" 
                   className="w-full h-full object-contain filter drop-shadow-[0_0_12px_rgba(249,115,22,0.3)]" 
                 />
               </div>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-400 backdrop-blur-md shadow-sm">
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500/25 border border-emerald-400/60 flex items-center justify-center text-emerald-400 backdrop-blur-md shadow-sm">
                 <ShieldCheck className="w-3.5 h-3.5" />
               </div>
             </div>
@@ -1099,7 +1099,7 @@ export default function App() {
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-white via-teal-100 to-teal-400 bg-clip-text text-transparent">
                 PREP &amp; LAB PORTAL
               </h1>
-              <p className="text-xs text-slate-400 mt-1 font-medium tracking-wide">
+              <p className="text-xs text-teal-200/80 mt-1 font-medium tracking-wide">
                 PRECISION IN EVERY ELEMENT • HARITA NICKEL
               </p>
             </div>
@@ -1110,7 +1110,7 @@ export default function App() {
             {loginStep === 'nik' && (
               <div className="space-y-4 animate-in fade-in duration-300">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <label className="text-xs font-semibold text-teal-100 flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-teal-400" />
                     <span>NIK atau Username</span>
                   </label>
@@ -1122,10 +1122,10 @@ export default function App() {
                       onChange={e => setNikInput(e.target.value)}
                       required
                       autoFocus
-                      className="w-full px-4 py-3 bg-slate-950/70 border border-slate-700/80 rounded-xl text-white placeholder:text-slate-500 font-mono text-center text-sm sm:text-base tracking-wider focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all shadow-inner"
+                      className="w-full px-4 py-3 bg-slate-950/80 border border-teal-500/30 rounded-xl text-white placeholder:text-slate-400 font-mono text-center text-sm sm:text-base tracking-wider focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30 transition-all shadow-inner"
                     />
                   </div>
-                  <p className="text-[11px] text-slate-400 text-center pt-0.5">
+                  <p className="text-[11px] text-teal-300/80 text-center pt-0.5 font-medium">
                     Gunakan NIK resmi karyawan atau username yang terdaftar
                   </p>
                 </div>
@@ -1152,20 +1152,20 @@ export default function App() {
 
             {loginStep === 'password' && (
               <div className="space-y-4 animate-in fade-in duration-300">
-                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div className="p-3 bg-slate-950/70 rounded-xl border border-teal-500/30 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-teal-950/60 border border-teal-700/50 flex items-center justify-center text-teal-400">
+                    <div className="w-8 h-8 rounded-lg bg-teal-950/80 border border-teal-500/50 flex items-center justify-center text-teal-400">
                       <User className="w-4 h-4" />
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 uppercase font-mono block">Akun Terpilih</span>
+                      <span className="text-[10px] text-teal-300/80 uppercase font-mono block font-semibold">Akun Terpilih</span>
                       <span className="text-xs font-bold text-white font-mono">{nikInput}</span>
                     </div>
                   </div>
                   <button 
                     type="button" 
                     onClick={() => setLoginStep('nik')} 
-                    className="text-xs text-teal-400 hover:text-teal-300 font-semibold underline underline-offset-2 cursor-pointer"
+                    className="text-xs text-teal-300 hover:text-teal-100 font-bold underline underline-offset-2 cursor-pointer transition-colors"
                   >
                     Ganti
                   </button>
@@ -1173,23 +1173,23 @@ export default function App() {
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <label className="text-xs font-semibold text-teal-100 flex items-center gap-1.5">
                       <Lock className="w-3.5 h-3.5 text-teal-400" />
                       <span>Password Akun</span>
                     </label>
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="text-[11px] text-slate-400 hover:text-teal-400 flex items-center gap-1 cursor-pointer transition-colors"
+                      className="text-[11px] text-teal-300/90 hover:text-teal-100 flex items-center gap-1 cursor-pointer transition-colors font-medium"
                     >
                       {showPassword ? (
                         <>
-                          <EyeOff className="w-3 h-3 text-teal-400" />
-                          <span className="text-teal-400 font-medium">Sembunyikan</span>
+                          <EyeOff className="w-3.5 h-3.5 text-teal-400" />
+                          <span className="text-teal-300 font-semibold">Sembunyikan</span>
                         </>
                       ) : (
                         <>
-                          <Eye className="w-3 h-3" />
+                          <Eye className="w-3.5 h-3.5 text-teal-400" />
                           <span>Lihat Password</span>
                         </>
                       )}
@@ -1203,15 +1203,15 @@ export default function App() {
                       onChange={e => setPasswordInput(e.target.value)}
                       required
                       autoFocus
-                      className="w-full px-4 py-3 pr-11 bg-slate-950/70 border border-slate-700/80 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all shadow-inner font-sans"
+                      className="w-full px-4 py-3 pr-11 bg-slate-950/80 border border-teal-500/30 rounded-xl text-white placeholder:text-slate-400 text-sm focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30 transition-all shadow-inner font-sans"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-400 p-1 cursor-pointer transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-teal-400/80 hover:text-teal-200 p-1 cursor-pointer transition-colors"
                       title={showPassword ? "Sembunyikan password" : "Lihat password"}
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4 text-teal-400" /> : <Eye className="w-4 h-4" />}
+                      {showPassword ? <EyeOff className="w-4 h-4 text-teal-300" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -1238,7 +1238,7 @@ export default function App() {
                   <button 
                     type="button" 
                     onClick={() => setLoginStep('forgot')} 
-                    className="text-xs text-slate-400 hover:text-teal-400 transition-colors cursor-pointer"
+                    className="text-xs text-teal-300/90 hover:text-teal-100 font-semibold transition-colors cursor-pointer"
                   >
                     Lupa Password?
                   </button>
@@ -1248,33 +1248,33 @@ export default function App() {
 
             {loginStep === 'setup' && (
               <div className="space-y-3.5 animate-in fade-in duration-300">
-                <div className="p-2.5 rounded-xl bg-teal-950/40 border border-teal-500/30 text-teal-300 text-xs">
-                  <p className="font-bold flex items-center gap-1.5 mb-0.5">
+                <div className="p-2.5 rounded-xl bg-teal-950/50 border border-teal-500/40 text-teal-200 text-xs">
+                  <p className="font-bold flex items-center gap-1.5 mb-0.5 text-teal-100">
                     <Sparkles className="w-3.5 h-3.5 text-teal-400" />
                     <span>Setup Akun Pertama Kali</span>
                   </p>
-                  <p className="text-[11px] text-teal-200/80">Lengkapi data di bawah untuk mengamankan akun Anda.</p>
+                  <p className="text-[11px] text-teal-200/90">Lengkapi data di bawah untuk mengamankan akun Anda.</p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-300">Email Aktif (Reset Password)</label>
+                  <label className="text-[11px] font-semibold text-teal-100">Email Aktif (Reset Password)</label>
                   <input 
                     type="email"
                     placeholder="nama@haritanickel.com"
                     value={setupEmail}
                     onChange={e => setSetupEmail(e.target.value)}
                     required
-                    className="w-full px-3 py-2 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
+                    className="w-full px-3 py-2 bg-slate-950/80 border border-teal-500/30 rounded-lg text-white placeholder:text-slate-400 text-xs focus:outline-none focus:border-teal-400"
                   />
                 </div>
 
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-semibold text-slate-300">Password Baru</label>
+                    <label className="text-[11px] font-semibold text-teal-100">Password Baru</label>
                     <button
                       type="button"
                       onClick={() => setShowSetupPassword1(!showSetupPassword1)}
-                      className="text-[10px] text-slate-400 hover:text-teal-400 flex items-center gap-1 cursor-pointer"
+                      className="text-[10px] text-teal-300 hover:text-teal-100 flex items-center gap-1 cursor-pointer font-medium"
                     >
                       {showSetupPassword1 ? <EyeOff className="w-3 h-3 text-teal-400" /> : <Eye className="w-3 h-3" />}
                     </button>
@@ -1286,12 +1286,12 @@ export default function App() {
                       value={setupPassword1}
                       onChange={e => setSetupPassword1(e.target.value)}
                       required
-                      className="w-full px-3 py-2 pr-9 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
+                      className="w-full px-3 py-2 pr-9 bg-slate-950/80 border border-teal-500/30 rounded-lg text-white placeholder:text-slate-400 text-xs focus:outline-none focus:border-teal-400"
                     />
                     <button
                       type="button"
                       onClick={() => setShowSetupPassword1(!showSetupPassword1)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-400 p-0.5 cursor-pointer"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-teal-400 hover:text-teal-200 p-0.5 cursor-pointer"
                     >
                       {showSetupPassword1 ? <EyeOff className="w-3.5 h-3.5 text-teal-400" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
@@ -1300,11 +1300,11 @@ export default function App() {
 
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-semibold text-slate-300">Konfirmasi Password Baru</label>
+                    <label className="text-[11px] font-semibold text-teal-100">Konfirmasi Password Baru</label>
                     <button
                       type="button"
                       onClick={() => setShowSetupPassword2(!showSetupPassword2)}
-                      className="text-[10px] text-slate-400 hover:text-teal-400 flex items-center gap-1 cursor-pointer"
+                      className="text-[10px] text-teal-300 hover:text-teal-100 flex items-center gap-1 cursor-pointer font-medium"
                     >
                       {showSetupPassword2 ? <EyeOff className="w-3 h-3 text-teal-400" /> : <Eye className="w-3 h-3" />}
                     </button>
@@ -1316,12 +1316,12 @@ export default function App() {
                       value={setupPassword2}
                       onChange={e => setSetupPassword2(e.target.value)}
                       required
-                      className="w-full px-3 py-2 pr-9 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
+                      className="w-full px-3 py-2 pr-9 bg-slate-950/80 border border-teal-500/30 rounded-lg text-white placeholder:text-slate-400 text-xs focus:outline-none focus:border-teal-400"
                     />
                     <button
                       type="button"
                       onClick={() => setShowSetupPassword2(!showSetupPassword2)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-400 p-0.5 cursor-pointer"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-teal-400 hover:text-teal-200 p-0.5 cursor-pointer"
                     >
                       {showSetupPassword2 ? <EyeOff className="w-3.5 h-3.5 text-teal-400" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
@@ -1338,7 +1338,7 @@ export default function App() {
                 <button 
                   type="button" 
                   onClick={() => setLoginStep('nik')} 
-                  className="w-full py-2 text-xs text-slate-400 hover:text-white cursor-pointer"
+                  className="w-full py-2 text-xs text-teal-300/80 hover:text-white font-medium cursor-pointer transition-colors"
                 >
                   Batal
                 </button>
@@ -1347,23 +1347,23 @@ export default function App() {
 
             {loginStep === 'forgot' && (
               <div className="space-y-3.5 animate-in fade-in duration-300">
-                <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-300 text-xs">
-                  <p className="font-bold mb-0.5">Reset Password Mandiri</p>
-                  <p className="text-[11px] text-indigo-200/80">Masukkan email aktif yang terdaftar pada akun Anda.</p>
+                <div className="p-2.5 rounded-xl bg-indigo-950/60 border border-indigo-500/40 text-indigo-200 text-xs">
+                  <p className="font-bold mb-0.5 text-indigo-100">Reset Password Mandiri</p>
+                  <p className="text-[11px] text-indigo-200/90">Masukkan email aktif yang terdaftar pada akun Anda.</p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-300">Nomor Induk Karyawan (NIK)</label>
+                  <label className="text-[11px] font-semibold text-teal-100">Nomor Induk Karyawan (NIK)</label>
                   <input 
                     type="text"
                     value={nikInput}
                     disabled
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-400 font-mono text-xs cursor-not-allowed"
+                    className="w-full px-3 py-2 bg-slate-900/90 border border-slate-700/80 rounded-lg text-teal-200/80 font-mono text-xs cursor-not-allowed"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-300">Email Terdaftar</label>
+                  <label className="text-[11px] font-semibold text-teal-100">Email Terdaftar</label>
                   <input 
                     type="email"
                     placeholder="nama@haritanickel.com"
@@ -1371,7 +1371,7 @@ export default function App() {
                     onChange={e => setForgotEmail(e.target.value)}
                     required
                     autoFocus
-                    className="w-full px-3 py-2 bg-slate-950/70 border border-slate-700/80 rounded-lg text-white text-xs focus:outline-none focus:border-teal-400"
+                    className="w-full px-3 py-2 bg-slate-950/80 border border-teal-500/30 rounded-lg text-white placeholder:text-slate-400 text-xs focus:outline-none focus:border-teal-400"
                   />
                 </div>
 
@@ -1385,7 +1385,7 @@ export default function App() {
                 <button 
                   type="button" 
                   onClick={() => setLoginStep('password')} 
-                  className="w-full py-2 text-xs text-slate-400 hover:text-white cursor-pointer"
+                  className="w-full py-2 text-xs text-teal-300/80 hover:text-white font-medium cursor-pointer transition-colors"
                 >
                   Batal
                 </button>
@@ -1394,20 +1394,20 @@ export default function App() {
           </form>
 
           {/* Bottom Trust Badge */}
-          <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500 font-mono">
-            <span className="flex items-center gap-1 text-slate-400">
-              <Shield className="w-3 h-3 text-teal-400" />
+          <div className="pt-4 border-t border-teal-500/20 flex items-center justify-between text-[10px] text-teal-300/80 font-mono">
+            <span className="flex items-center gap-1.5 text-teal-200/90">
+              <Shield className="w-3.5 h-3.5 text-teal-400" />
               <span>SSL 256-Bit Encrypted</span>
             </span>
-            <span>v2.6 Enterprise</span>
+            <span className="text-teal-400 font-semibold">v2.6 Enterprise</span>
           </div>
 
         </div>
 
         {/* Global Footer Motto */}
-        <div className="relative z-10 mt-6 text-center text-slate-500 text-xs">
-          <p className="font-semibold text-slate-400">Divisi Quality Assurance & Laboratorium • Harita Nickel</p>
-          <p className="text-[11px] text-slate-600 mt-0.5">Safety • Precision • Integrity • Continuous Improvement</p>
+        <div className="relative z-10 mt-6 text-center text-xs">
+          <p className="font-semibold text-teal-200/90">Divisi Quality Assurance & Laboratorium • Harita Nickel</p>
+          <p className="text-[11px] text-teal-400/70 mt-0.5">Safety • Precision • Integrity • Continuous Improvement</p>
         </div>
 
       </div>
