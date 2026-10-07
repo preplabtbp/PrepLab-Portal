@@ -3313,79 +3313,79 @@ export function NotionDatabaseTable({
         >
           <style>{`
             .notion-table-scroll-light {
-              scrollbar-color: rgba(148, 163, 184, 0.2) transparent;
+              scrollbar-color: transparent transparent;
               scrollbar-width: thin;
-              transition: scrollbar-color 0.25s ease;
+              transition: scrollbar-color 0.2s ease;
             }
             .notion-table-scroll-light:hover {
-              scrollbar-color: #0d9488 rgba(241, 245, 249, 0.85);
+              scrollbar-color: #0d9488 rgba(241, 245, 249, 0.7);
             }
             .notion-table-scroll-light::-webkit-scrollbar {
-              width: 8px;
-              height: 10px;
-              transition: all 0.25s ease;
+              width: 5px;
+              height: 5px;
+              transition: all 0.2s ease;
+            }
+            .notion-table-scroll-light:hover::-webkit-scrollbar {
+              height: 6px;
+              width: 6px;
             }
             .notion-table-scroll-light::-webkit-scrollbar-track {
               background: transparent;
               border-radius: 9999px;
-              transition: background 0.25s ease;
             }
             .notion-table-scroll-light:hover::-webkit-scrollbar-track {
-              background: rgba(241, 245, 249, 0.85);
+              background: rgba(241, 245, 249, 0.7);
             }
             .notion-table-scroll-light::-webkit-scrollbar-thumb {
-              background: rgba(148, 163, 184, 0.2);
+              background: transparent;
               border-radius: 9999px;
-              border: 2px solid transparent;
-              background-clip: padding-box;
-              transition: all 0.25s ease;
+              transition: all 0.2s ease;
             }
             .notion-table-scroll-light:hover::-webkit-scrollbar-thumb {
               background: #0d9488;
-              border: 1.5px solid #ffffff;
-              box-shadow: 0 1px 6px rgba(13, 148, 136, 0.45);
+              box-shadow: 0 1px 4px rgba(13, 148, 136, 0.4);
             }
             .notion-table-scroll-light::-webkit-scrollbar-thumb:hover {
               background: #0f766e;
-              box-shadow: 0 0 10px rgba(15, 118, 110, 0.7);
+              box-shadow: 0 0 8px rgba(15, 118, 110, 0.6);
             }
 
             .notion-table-scroll-dark {
-              scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+              scrollbar-color: transparent transparent;
               scrollbar-width: thin;
-              transition: scrollbar-color 0.25s ease;
+              transition: scrollbar-color 0.2s ease;
             }
             .notion-table-scroll-dark:hover {
-              scrollbar-color: #14b8a6 rgba(24, 24, 27, 0.85);
+              scrollbar-color: #14b8a6 rgba(24, 24, 27, 0.7);
             }
             .notion-table-scroll-dark::-webkit-scrollbar {
-              width: 8px;
-              height: 10px;
-              transition: all 0.25s ease;
+              width: 5px;
+              height: 5px;
+              transition: all 0.2s ease;
+            }
+            .notion-table-scroll-dark:hover::-webkit-scrollbar {
+              height: 6px;
+              width: 6px;
             }
             .notion-table-scroll-dark::-webkit-scrollbar-track {
               background: transparent;
               border-radius: 9999px;
-              transition: background 0.25s ease;
             }
             .notion-table-scroll-dark:hover::-webkit-scrollbar-track {
-              background: rgba(24, 24, 27, 0.85);
+              background: rgba(24, 24, 27, 0.7);
             }
             .notion-table-scroll-dark::-webkit-scrollbar-thumb {
-              background: rgba(255, 255, 255, 0.15);
+              background: transparent;
               border-radius: 9999px;
-              border: 2px solid transparent;
-              background-clip: padding-box;
-              transition: all 0.25s ease;
+              transition: all 0.2s ease;
             }
             .notion-table-scroll-dark:hover::-webkit-scrollbar-thumb {
               background: #14b8a6;
-              border: 1.5px solid #18181b;
-              box-shadow: 0 1px 8px rgba(20, 184, 166, 0.5);
+              box-shadow: 0 1px 6px rgba(20, 184, 166, 0.45);
             }
             .notion-table-scroll-dark::-webkit-scrollbar-thumb:hover {
               background: #2dd4bf;
-              box-shadow: 0 0 12px rgba(45, 212, 191, 0.75);
+              box-shadow: 0 0 10px rgba(45, 212, 191, 0.7);
             }
           `}</style>
           <table className={`w-full min-w-max text-left border-collapse ${
