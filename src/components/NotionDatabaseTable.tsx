@@ -683,6 +683,28 @@ export function NotionDatabaseTable({
     setCollapsedGroups(prev => ({ ...prev, [grp]: !prev[grp] }));
   };
 
+  // Sticky Controls Height Measurement for Freezing Table Column Headers seamlessly below Controls
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const [controlsHeight, setControlsHeight] = useState<number>(110);
+
+  useEffect(() => {
+    const el = controlsRef.current;
+    if (!el) return;
+    const updateHeight = () => {
+      if (controlsRef.current) {
+        setControlsHeight(controlsRef.current.offsetHeight);
+      }
+    };
+    updateHeight();
+    const ro = new ResizeObserver(updateHeight);
+    ro.observe(el);
+    window.addEventListener('resize', updateHeight);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, [viewMode, searchQuery, statusFilter, priorityFilter, selectedRowIndices.size]);
+
   // Helper to categorize rows into Notion Database Groups (e.g. 'Non Routine Lainnya', 'PTK GTS')
   const getRowGroup = useCallback((row: TableRowData): string => {
     const gVal = 
@@ -3030,6 +3052,7 @@ export function NotionDatabaseTable({
       {/* NOTION TOP CONTROLS & HEADER GROUP (Breadcrumbs, Toolbar, Filter)         */}
       {/* ========================================================================= */}
       <div 
+        ref={controlsRef}
         className={`sticky top-12 z-30 transition-all border-b shadow-2xs backdrop-blur-md ${
           isNotionLight ? 'bg-white/98 border-slate-200' : 'bg-[#181818]/98 border-[#2d2d2d]'
         }`}
@@ -3430,7 +3453,8 @@ export function NotionDatabaseTable({
               >
                 {/* Select All Checkbox Column */}
                 <th 
-                  className={`sticky top-0 z-20 text-center shadow-2xs ${
+                  style={{ top: `${48 + controlsHeight}px` }}
+                  className={`sticky z-20 text-center shadow-2xs ${
                     isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#202020] text-slate-300 border-b border-[#303030]'
                   } ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}
                 >
@@ -3482,8 +3506,8 @@ export function NotionDatabaseTable({
                   return (
                     <th
                       key={colHeader}
-                      style={getColStyle(colHeader)}
-                      className={`sticky top-0 z-20 shadow-2xs font-bold hover:opacity-90 transition-opacity group/th relative ${
+                      style={{ top: `${48 + controlsHeight}px`, ...getColStyle(colHeader) }}
+                      className={`sticky z-20 shadow-2xs font-bold hover:opacity-90 transition-opacity group/th relative ${
                         isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#202020] text-slate-300 border-b border-[#303030]'
                       } ${widthClass}`}
                     >
@@ -3577,7 +3601,8 @@ export function NotionDatabaseTable({
 
                 {/* Add Column Header Button (+) */}
                 <th 
-                  className={`sticky top-0 z-20 w-10 text-center px-1 py-2 relative shadow-2xs ${
+                  style={{ top: `${48 + controlsHeight}px` }}
+                  className={`sticky z-20 w-10 text-center px-1 py-2 relative shadow-2xs ${
                     isNotionLight ? 'bg-[#fbfbfa] border-b border-slate-200' : 'bg-[#202020] border-b border-[#303030]'
                   }`} 
                   ref={addColumnRef}
@@ -3687,7 +3712,7 @@ export function NotionDatabaseTable({
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <span className="text-sm shrink-0">{tmpl.icon}</span>
                                 <div className="min-w-0">
-                                  <p className="font-semibold text-xs truncate">{tmpl.name}</p>
+                                   <p className="font-semibold text-xs truncate">{tmpl.name}</p>
                                   <p className="text-[10px] truncate" style={{ color: 'var(--text-muted, #64748b)' }}>{tmpl.desc}</p>
                                 </div>
                               </div>
@@ -3705,7 +3730,8 @@ export function NotionDatabaseTable({
                 </th>
 
                 <th 
-                  className={`sticky top-0 z-20 text-center shadow-2xs ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${
+                  style={{ top: `${48 + controlsHeight}px` }}
+                  className={`sticky z-20 text-center shadow-2xs ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${
                     isNotionLight ? 'bg-[#fbfbfa] text-slate-500 font-semibold border-b border-slate-200' : 'bg-[#202020] text-slate-400 font-bold border-b border-[#303030]'
                   }`}
                 >
