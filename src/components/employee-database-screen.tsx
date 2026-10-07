@@ -45,6 +45,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   const [isSyncing, setIsSyncing] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editModalTab, setEditModalTab] = useState<'job' | 'personal' | 'attendance' | 'reasons' | 'counseling'>('job');
   const [isAddAttendanceModalOpen, setIsAddAttendanceModalOpen] = useState(false);
   const [selectedAddCategory, setSelectedAddCategory] = useState<string>('tanggalIzin');
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -1400,6 +1401,20 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             Bulan: {cData.bulanKonseling}
                           </span>
                         )}
+
+                        {canManageDatabase && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditModalTab('counseling');
+                              setIsEditModalOpen(true);
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Edit Konseling &amp; SPDK</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -1680,6 +1695,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         onClose={() => setIsEditModalOpen(false)}
         employee={selectedEmployee}
         inspectorNik={inspectorNik}
+        initialTab={editModalTab}
         onSuccess={(updated) => {
           setSelectedEmployee(updated);
           setEmployees(prev => {

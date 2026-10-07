@@ -1227,6 +1227,79 @@ employeesRouter.put("/:nik", async (req, res) => {
       };
     }
 
+    // Process Counseling & SPDK Updates if provided
+    const cData = body.counselingSpdk || body.counseling;
+    if (cData && typeof cData === 'object') {
+      const totalSp = String(cData.totalSp ?? '').trim();
+      const bulanKonseling = String(cData.bulanKonseling ?? '').trim();
+      const konseling1 = String(cData.konseling1 ?? '').trim();
+      const konseling2 = String(cData.konseling2 ?? '').trim();
+      const konseling3 = String(cData.konseling3 ?? '').trim();
+      const st = String(cData.st ?? '').trim();
+      const sp1 = String(cData.sp1 ?? '').trim();
+      const sp2 = String(cData.sp2 ?? '').trim();
+      const sp3 = String(cData.sp3 ?? '').trim();
+      const phk = String(cData.phk ?? '').trim();
+      const masaBerlakuSanksi = cleanDateVal(cData.masaBerlakuSanksi) || String(cData.masaBerlakuSanksi ?? '').trim();
+      const masaPemulihan1 = cleanDateVal(cData.masaPemulihan1) || String(cData.masaPemulihan1 ?? '').trim();
+      const masaPemulihan2 = cleanDateVal(cData.masaPemulihan2) || String(cData.masaPemulihan2 ?? '').trim();
+      const alasanSp = String(cData.alasanSp ?? '').trim();
+      const keterangan = String(cData.keterangan ?? '').trim();
+      const pernahSpSebelumnya = String(cData.pernahSpSebelumnya ?? '').trim();
+      const pernahTerlibatSpdk = String(cData.pernahTerlibatSpdk ?? '').trim();
+      const kronologiSpdk = String(cData.kronologiSpdk ?? '').trim();
+      const kategoriSpdk = String(cData.kategoriSpdk ?? '').trim();
+      const tindakanSpdk = String(cData.tindakanSpdk ?? '').trim();
+
+      // Calculate status sanksi
+      let statusSanksi = 'Aman';
+      if (phk && phk !== '-' && phk !== '0') statusSanksi = 'PHK';
+      else if (sp3 && sp3 !== '-' && sp3 !== '0') statusSanksi = 'SP III';
+      else if (sp2 && sp2 !== '-' && sp2 !== '0') statusSanksi = 'SP II';
+      else if (sp1 && sp1 !== '-' && sp1 !== '0') statusSanksi = 'SP I';
+      else if (st && st !== '-' && st !== '0') statusSanksi = 'Surat Teguran (ST)';
+      else if (konseling3 && konseling3 !== '-' && konseling3 !== '0') statusSanksi = 'Konseling III';
+      else if (konseling2 && konseling2 !== '-' && konseling2 !== '0') statusSanksi = 'Konseling II';
+      else if (konseling1 && konseling1 !== '-' && konseling1 !== '0') statusSanksi = 'Konseling I';
+      else if (pernahTerlibatSpdk.toLowerCase().includes('ya') || kronologiSpdk.length > 5) statusSanksi = 'SPDK';
+
+      const counselRecord = {
+        nik,
+        name: body.name || currentEmp[0].name || '',
+        jabatan: body.jabatan || currentEmp[0].jabatan || '',
+        pt: body.pt || currentEmp[0].pt || '',
+        totalSp,
+        bulanKonseling,
+        konseling1,
+        konseling2,
+        konseling3,
+        st,
+        sp1,
+        sp2,
+        sp3,
+        phk,
+        masaBerlakuSanksi,
+        masaPemulihan1,
+        masaPemulihan2,
+        alasanSp,
+        keterangan,
+        pernahSpSebelumnya,
+        pernahTerlibatSpdk,
+        kronologiSpdk,
+        kategoriSpdk,
+        tindakanSpdk,
+        statusSanksi,
+        updatedAt: new Date()
+      };
+
+      const existingCounsel = await db.select().from(employeeCounseling).where(eq(employeeCounseling.nik, nik)).limit(1);
+      if (existingCounsel.length > 0) {
+        await db.update(employeeCounseling).set(counselRecord).where(eq(employeeCounseling.nik, nik));
+      } else {
+        await db.insert(employeeCounseling).values(counselRecord);
+      }
+    }
+
     if (Object.keys(empUpdate).length > 0) {
       await db.update(employees).set(empUpdate).where(eq(employees.nik, nik));
     }
@@ -1235,7 +1308,8 @@ employeesRouter.put("/:nik", async (req, res) => {
 
     const updatedEmp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
     const attMap = await getAttendanceMap();
-    const finalEmp = attachAttendanceToEmployee(updatedEmp[0], attMap);
+    const counselMap = await getCounselingMap();
+    const finalEmp = attachAttendanceToEmployee(updatedEmp[0], attMap, counselMap);
 
     res.json({
       status: "success",

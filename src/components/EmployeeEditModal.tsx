@@ -13,7 +13,11 @@ import {
   Clock,
   Building,
   CreditCard,
-  HeartHandshake
+  HeartHandshake,
+  Scale,
+  ShieldAlert,
+  Gavel,
+  AlertOctagon
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -22,6 +26,7 @@ interface EmployeeEditModalProps {
   onClose: () => void;
   employee: any;
   inspectorNik: string;
+  initialTab?: 'job' | 'personal' | 'attendance' | 'reasons' | 'counseling';
   onSuccess: (updatedEmployee: any) => void;
 }
 
@@ -30,12 +35,22 @@ export function EmployeeEditModal({
   onClose,
   employee,
   inspectorNik,
+  initialTab = 'job',
   onSuccess
 }: EmployeeEditModalProps) {
-  const [activeTab, setActiveTab] = useState<'job' | 'personal' | 'attendance' | 'reasons'>('job');
+  const [activeTab, setActiveTab] = useState<'job' | 'personal' | 'attendance' | 'reasons' | 'counseling'>(initialTab);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [attData, setAttData] = useState<Record<string, any>>({});
+  const [counselData, setCounselData] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    if (isOpen) {
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
+    }
+  }, [isOpen, initialTab]);
 
   useEffect(() => {
     if (employee && isOpen) {
@@ -90,8 +105,33 @@ export function EmployeeEditModal({
         alasanSakitSite: Array.isArray(rawAtt26.alasanSakitSite) ? rawAtt26.alasanSakitSite.join('\n') : (rawAtt26.alasanSakitSite || ''),
         alasanSakitLuar: Array.isArray(rawAtt26.alasanSakitLuar) ? rawAtt26.alasanSakitLuar.join('\n') : (rawAtt26.alasanSakitLuar || '')
       });
+
+      const rawCounsel = employee.counselingSpdk || {};
+      setCounselData({
+        totalSp: rawCounsel.totalSp !== undefined && rawCounsel.totalSp !== null ? String(rawCounsel.totalSp) : '0',
+        bulanKonseling: rawCounsel.bulanKonseling || '',
+        konseling1: rawCounsel.konseling1 || '',
+        konseling2: rawCounsel.konseling2 || '',
+        konseling3: rawCounsel.konseling3 || '',
+        st: rawCounsel.st || '',
+        sp1: rawCounsel.sp1 || '',
+        sp2: rawCounsel.sp2 || '',
+        sp3: rawCounsel.sp3 || '',
+        phk: rawCounsel.phk || '',
+        masaBerlakuSanksi: rawCounsel.masaBerlakuSanksi || '',
+        masaPemulihan1: rawCounsel.masaPemulihan1 || '',
+        masaPemulihan2: rawCounsel.masaPemulihan2 || '',
+        alasanSp: rawCounsel.alasanSp || '',
+        keterangan: rawCounsel.keterangan || '',
+        pernahSpSebelumnya: rawCounsel.pernahSpSebelumnya || 'Tidak',
+        pernahTerlibatSpdk: rawCounsel.pernahTerlibatSpdk || 'Tidak',
+        kronologiSpdk: rawCounsel.kronologiSpdk || '',
+        kategoriSpdk: rawCounsel.kategoriSpdk || '',
+        tindakanSpdk: rawCounsel.tindakanSpdk || '',
+        statusSanksi: rawCounsel.statusSanksi || 'Aman'
+      });
     }
-  }, [employee, isOpen]);
+  }, [employee, isOpen, initialTab]);
 
   if (!isOpen || !employee) return null;
 
@@ -103,6 +143,10 @@ export function EmployeeEditModal({
     setAttData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleCounselChange = (field: string, value: string) => {
+    setCounselData(prev => ({ ...prev, [field]: value }));
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -112,6 +156,9 @@ export function EmployeeEditModal({
         ...formData,
         attendance2026: {
           ...attData
+        },
+        counselingSpdk: {
+          ...counselData
         },
         editorNik: inspectorNik
       };
@@ -131,8 +178,8 @@ export function EmployeeEditModal({
         throw new Error(json.message || 'Gagal menyimpan perubahan data karyawan');
       }
 
-      toast.success('Data karyawan berhasil diperbarui di database!', {
-        description: `Perubahan untuk ${formData.name || employee.name} telah disimpan.`
+      toast.success('Data karyawan & Konseling/SPDK berhasil diperbarui!', {
+        description: `Perubahan untuk ${formData.name || employee.name} telah disimpan di database.`
       });
 
       if (json.data) {
@@ -233,6 +280,19 @@ export function EmployeeEditModal({
           >
             <FileText className="w-3.5 h-3.5" />
             <span>Alasan Absensi (4 Kategori)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('counseling')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'counseling'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'bg-white text-purple-800 hover:bg-purple-50 border border-purple-200'
+            }`}
+          >
+            <Scale className="w-3.5 h-3.5 text-purple-600" />
+            <span>Konseling &amp; SPDK</span>
           </button>
         </div>
 
@@ -838,6 +898,325 @@ export function EmployeeEditModal({
                     onChange={(e) => handleAttChange('alasanSakitLuar', e.target.value)}
                     placeholder="10-May-26 s/d 14-May-26 (5 Hari) - Rawat Inap RS Luar Site"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-orange-300 bg-white text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: KONSELING, SANKSI & SPDK */}
+          {activeTab === 'counseling' && (
+            <div className="space-y-5 animate-in fade-in duration-150">
+              {/* Header Info Box */}
+              <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-200 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 rounded-xl bg-purple-600 text-white shadow-2xs">
+                    <Scale className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h4 className="text-xs font-extrabold text-purple-900 uppercase">
+                      Pengaturan Konseling, Surat Peringatan &amp; SPDK
+                    </h4>
+                    <p className="text-[11px] text-purple-700 mt-0.5">
+                      Kelola catatan pembinaan karyawan, status level sanksi, masa pemulihan, dan insiden SPDK.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-600">Status Sanksi:</span>
+                  <select
+                    value={counselData.statusSanksi || 'Aman'}
+                    onChange={(e) => handleCounselChange('statusSanksi', e.target.value)}
+                    className="px-3 py-1.5 rounded-xl border border-purple-300 bg-white font-extrabold text-xs text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="Aman">Aman (Disiplin Baik)</option>
+                    <option value="Konseling I">Konseling I</option>
+                    <option value="Konseling II">Konseling II</option>
+                    <option value="Konseling III">Konseling III</option>
+                    <option value="Surat Teguran (ST)">Surat Teguran (ST)</option>
+                    <option value="SP I">Surat Peringatan I (SP I)</option>
+                    <option value="SP II">Surat Peringatan II (SP II)</option>
+                    <option value="SP III">Surat Peringatan III (SP III)</option>
+                    <option value="PHK">PHK (Terminasi)</option>
+                    <option value="SPDK">SPDK (Pelanggaran Disiplin Kerja)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* General Disciplinary Stats */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Total SP / Akumulasi
+                  </label>
+                  <input
+                    type="text"
+                    value={counselData.totalSp || '0'}
+                    onChange={(e) => handleCounselChange('totalSp', e.target.value)}
+                    placeholder="0"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-extrabold text-xs text-rose-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Bulan Konseling
+                  </label>
+                  <input
+                    type="text"
+                    value={counselData.bulanKonseling || ''}
+                    onChange={(e) => handleCounselChange('bulanKonseling', e.target.value)}
+                    placeholder="Contoh: Februari 2026"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Pernah SP/ST Sebelumnya?
+                  </label>
+                  <select
+                    value={counselData.pernahSpSebelumnya || 'Tidak'}
+                    onChange={(e) => handleCounselChange('pernahSpSebelumnya', e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-bold text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="Tidak">Tidak</option>
+                    <option value="Ya">Ya (Pernah)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Tahapan Konseling I, II, III */}
+              <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3">
+                <h5 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-teal-600" />
+                  Tanggal Pelaksanaan Konseling / Pembinaan
+                </h5>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Konseling I (Tanggal)</label>
+                    <input
+                      type="text"
+                      value={counselData.konseling1 || ''}
+                      onChange={(e) => handleCounselChange('konseling1', e.target.value)}
+                      placeholder="05-Feb-2026"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Konseling II (Tanggal)</label>
+                    <input
+                      type="text"
+                      value={counselData.konseling2 || ''}
+                      onChange={(e) => handleCounselChange('konseling2', e.target.value)}
+                      placeholder="12-Feb-2026"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Konseling III (Tanggal)</label>
+                    <input
+                      type="text"
+                      value={counselData.konseling3 || ''}
+                      onChange={(e) => handleCounselChange('konseling3', e.target.value)}
+                      placeholder="19-Feb-2026"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Jenjang Penerbitan Surat Peringatan & ST */}
+              <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3">
+                <h5 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Gavel className="w-3.5 h-3.5 text-amber-600" />
+                  Tanggal Penerbitan Surat Peringatan &amp; Sanksi
+                </h5>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-yellow-800 mb-1">ST (Surat Teguran)</label>
+                    <input
+                      type="text"
+                      value={counselData.st || ''}
+                      onChange={(e) => handleCounselChange('st', e.target.value)}
+                      placeholder="01-Feb-2026"
+                      className="w-full px-3 py-1.5 rounded-xl border border-yellow-200 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-amber-800 mb-1">SP I (Peringatan 1)</label>
+                    <input
+                      type="text"
+                      value={counselData.sp1 || ''}
+                      onChange={(e) => handleCounselChange('sp1', e.target.value)}
+                      placeholder="15-Feb-2026"
+                      className="w-full px-3 py-1.5 rounded-xl border border-amber-200 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-orange-800 mb-1">SP II (Peringatan 2)</label>
+                    <input
+                      type="text"
+                      value={counselData.sp2 || ''}
+                      onChange={(e) => handleCounselChange('sp2', e.target.value)}
+                      placeholder="-"
+                      className="w-full px-3 py-1.5 rounded-xl border border-orange-200 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-rose-800 mb-1">SP III (Peringatan 3)</label>
+                    <input
+                      type="text"
+                      value={counselData.sp3 || ''}
+                      onChange={(e) => handleCounselChange('sp3', e.target.value)}
+                      placeholder="-"
+                      className="w-full px-3 py-1.5 rounded-xl border border-rose-200 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-rose-950 mb-1">PHK (Terminasi)</label>
+                    <input
+                      type="text"
+                      value={counselData.phk || ''}
+                      onChange={(e) => handleCounselChange('phk', e.target.value)}
+                      placeholder="-"
+                      className="w-full px-3 py-1.5 rounded-xl border border-rose-300 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-rose-900"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Periode Masa Berlaku & Pemulihan */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Masa Berlaku Sanksi
+                  </label>
+                  <input
+                    type="text"
+                    value={counselData.masaBerlakuSanksi || ''}
+                    onChange={(e) => handleCounselChange('masaBerlakuSanksi', e.target.value)}
+                    placeholder="15-Agu-2026"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-teal-800 uppercase tracking-wider mb-1.5">
+                    Masa Pemulihan I
+                  </label>
+                  <input
+                    type="text"
+                    value={counselData.masaPemulihan1 || ''}
+                    onChange={(e) => handleCounselChange('masaPemulihan1', e.target.value)}
+                    placeholder="15-Mei-2026"
+                    className="w-full px-3.5 py-2 rounded-xl border border-teal-200 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1.5">
+                    Masa Pemulihan II
+                  </label>
+                  <input
+                    type="text"
+                    value={counselData.masaPemulihan2 || ''}
+                    onChange={(e) => handleCounselChange('masaPemulihan2', e.target.value)}
+                    placeholder="15-Agu-2026"
+                    className="w-full px-3.5 py-2 rounded-xl border border-emerald-200 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Alasan SP & Keterangan */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Alasan Surat Peringatan (Pelanggaran)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={counselData.alasanSp || ''}
+                    onChange={(e) => handleCounselChange('alasanSp', e.target.value)}
+                    placeholder="Contoh: Terlambat Masuk Kerja Lebih Dari 3 Kali / Alpa tanpa izin"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Keterangan / Catatan Tambahan
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={counselData.keterangan || ''}
+                    onChange={(e) => handleCounselChange('keterangan', e.target.value)}
+                    placeholder="Contoh: Konseling telah dilakukan oleh Foreman dan dievaluasi bulanan"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+
+              {/* Section Khusus SPDK (Sanksi Pelanggaran Disiplin Kerja) */}
+              <div className="p-4 rounded-2xl border border-purple-200 bg-purple-50/30 space-y-4">
+                <div className="flex items-center justify-between border-b border-purple-200 pb-2">
+                  <h5 className="text-xs font-extrabold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertOctagon className="w-4 h-4 text-purple-600" />
+                    Penanganan Kasus SPDK (Pelanggaran Disiplin Kerja)
+                  </h5>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-purple-800">Pernah Terlibat SPDK:</span>
+                    <select
+                      value={counselData.pernahTerlibatSpdk || 'Tidak'}
+                      onChange={(e) => handleCounselChange('pernahTerlibatSpdk', e.target.value)}
+                      className="px-2.5 py-1 rounded-lg border border-purple-300 bg-white font-bold text-xs text-purple-900 focus:outline-none"
+                    >
+                      <option value="Tidak">Tidak</option>
+                      <option value="Ya">Ya (Terlibat)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-purple-900 mb-1">
+                      Kategori Sanksi SPDK
+                    </label>
+                    <input
+                      type="text"
+                      value={counselData.kategoriSpdk || ''}
+                      onChange={(e) => handleCounselChange('kategoriSpdk', e.target.value)}
+                      placeholder="Contoh: Pelanggaran Disiplin Ringan / Sedang / Berat"
+                      className="w-full px-3.5 py-2 rounded-xl border border-purple-200 bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-purple-900 mb-1">
+                      Tindakan Disiplin SPDK
+                    </label>
+                    <input
+                      type="text"
+                      value={counselData.tindakanSpdk || ''}
+                      onChange={(e) => handleCounselChange('tindakanSpdk', e.target.value)}
+                      placeholder="Contoh: Penerbitan SP I & Evaluasi Kerja"
+                      className="w-full px-3.5 py-2 rounded-xl border border-purple-200 bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-purple-900 mb-1">
+                    Kronologi Kejadian SPDK
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={counselData.kronologiSpdk || ''}
+                    onChange={(e) => handleCounselChange('kronologiSpdk', e.target.value)}
+                    placeholder="Tuliskan rincian kronologi kejadian insiden pelanggaran disiplin kerja di sini..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-purple-300 bg-white text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-purple-500 leading-relaxed"
                   />
                 </div>
               </div>
