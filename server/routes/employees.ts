@@ -92,11 +92,21 @@ function attachAttendanceToEmployee(e: any, attMap: Record<string, any>) {
     details: []
   };
 
+  const rawAtt26 = attForEmp[2026] || attForEmp['2026'] || {};
+  const rawAtt25 = attForEmp[2025] || attForEmp['2025'] || {};
+
+  const formatAtt = (raw: any) => ({
+    ...emptyAttendance,
+    ...raw,
+    alpa: raw.alpa !== undefined ? raw.alpa : (raw.alpha !== undefined ? raw.alpha : 0),
+    tanggalAlpa: raw.tanggalAlpa || raw.tanggalAlpha || raw.tanggal_alpa || raw.tanggal_alpha || raw.alpaTanggal || raw.alphaTanggal || (typeof raw.alpa === 'string' && (raw.alpa.includes('-') || raw.alpa.includes('/')) ? raw.alpa : '') || ''
+  });
+
   return {
     ...publicEmp,
     attendance: attForEmp,
-    attendance2026: attForEmp[2026] || attForEmp['2026'] || emptyAttendance,
-    attendance2025: attForEmp[2025] || attForEmp['2025'] || emptyAttendance
+    attendance2026: formatAtt(rawAtt26),
+    attendance2025: formatAtt(rawAtt25)
   };
 }
 
@@ -644,13 +654,24 @@ employeesRouter.post("/import", async (req, res) => {
           ''
         ).trim();
 
-        const tanggalAlpa = String(
+        const rawTanggalAlpa = String(
           attRaw['Alpa (Tanggal)'] ?? 
           attRaw['Tanggal Alpa'] ?? 
+          attRaw['Tanggal Alpha'] ?? 
+          attRaw['Alpha (Tanggal)'] ?? 
+          attRaw['Tgl Alpa'] ?? 
+          attRaw['Tgl Alpha'] ?? 
           attNorm['alpatanggal'] ?? 
           attNorm['tanggalalpa'] ?? 
+          attNorm['alphatanggal'] ?? 
+          attNorm['tanggalalpha'] ?? 
+          attNorm['tglalpa'] ?? 
+          attNorm['tglalpha'] ?? 
           ''
         ).trim();
+
+        const rawAlpaVal = String(attRaw['Alpa'] ?? attRaw['Alpha'] ?? attNorm['alpa'] ?? attNorm['alpha'] ?? '').trim();
+        const tanggalAlpa = rawTanggalAlpa || (rawAlpaVal && (rawAlpaVal.includes('-') || rawAlpaVal.includes('/') || rawAlpaVal.includes('\n') || /[a-z]/i.test(rawAlpaVal)) ? rawAlpaVal : '');
 
         const alasanIzin = String(
           attRaw['Alasan Izin'] ?? 

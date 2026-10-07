@@ -77,12 +77,14 @@ export function EmployeeEditModal({
         izin: rawAtt26.izin !== undefined ? String(rawAtt26.izin) : '0',
         izinKhusus: rawAtt26.izinKhusus !== undefined ? String(rawAtt26.izinKhusus) : '0',
         sakit: rawAtt26.sakit !== undefined ? String(rawAtt26.sakit) : '0',
-        alpa: rawAtt26.alpa !== undefined ? String(rawAtt26.alpa) : '0',
+        alpa: rawAtt26.alpa !== undefined ? String(rawAtt26.alpa) : (rawAtt26.alpha !== undefined ? String(rawAtt26.alpha) : '0'),
         tanggalIzin: Array.isArray(rawAtt26.tanggalIzin) ? rawAtt26.tanggalIzin.join('\n') : (rawAtt26.tanggalIzin || ''),
         tanggalIzinKhusus: Array.isArray(rawAtt26.tanggalIzinKhusus) ? rawAtt26.tanggalIzinKhusus.join('\n') : (rawAtt26.tanggalIzinKhusus || ''),
         tanggalSakitSite: Array.isArray(rawAtt26.tanggalSakitSite) ? rawAtt26.tanggalSakitSite.join('\n') : (rawAtt26.tanggalSakitSite || ''),
         tanggalSakitLuar: Array.isArray(rawAtt26.tanggalSakitLuar) ? rawAtt26.tanggalSakitLuar.join('\n') : (rawAtt26.tanggalSakitLuar || ''),
-        tanggalAlpa: Array.isArray(rawAtt26.tanggalAlpa) ? rawAtt26.tanggalAlpa.join('\n') : (rawAtt26.tanggalAlpa || ''),
+        tanggalAlpa: Array.isArray(rawAtt26.tanggalAlpa) 
+          ? rawAtt26.tanggalAlpa.join('\n') 
+          : (rawAtt26.tanggalAlpa || rawAtt26.tanggalAlpha || rawAtt26.tanggal_alpa || rawAtt26.tanggal_alpha || (typeof rawAtt26.alpa === 'string' && (rawAtt26.alpa.includes('-') || rawAtt26.alpa.includes('\n')) ? rawAtt26.alpa : '') || ''),
         alasanIzin: Array.isArray(rawAtt26.alasanIzin) ? rawAtt26.alasanIzin.join('\n') : (rawAtt26.alasanIzin || ''),
         alasanIzinKhusus: Array.isArray(rawAtt26.alasanIzinKhusus) ? rawAtt26.alasanIzinKhusus.join('\n') : (rawAtt26.alasanIzinKhusus || ''),
         alasanSakitSite: Array.isArray(rawAtt26.alasanSakitSite) ? rawAtt26.alasanSakitSite.join('\n') : (rawAtt26.alasanSakitSite || ''),

@@ -522,7 +522,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
       } else if (c === 4 || (clean === 'sakit' && c < 6)) {
         key = 'sakit';
         label = 'Sakit';
-      } else if (c === 5 || (clean === 'alpa' && c < 6)) {
+      } else if (c === 5 || ((clean === 'alpa' || clean === 'alpha') && c < 6)) {
         key = 'alpa';
         label = 'Alpa';
       } else if (c === 6 || (clean.includes('tanggal') && clean.includes('izin') && !clean.includes('khusus')) || clean === 'tglizin') {
@@ -537,7 +537,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
       } else if (c === 9 || ((clean.includes('sakitluarsl') || clean.includes('sakitluar') || clean.includes('sl')) && !clean.includes('alasan') && c >= 6)) {
         key = 'tanggalSakitLuar';
         label = 'Sakit Luar (SL)';
-      } else if (c === 10 || (clean.includes('alpa') && c >= 6)) {
+      } else if (c === 10 || ((clean.includes('alpa') || clean.includes('alpha')) && c >= 6)) {
         key = 'tanggalAlpa';
         label = 'Alpa (Tanggal)';
       } else if (c === 11 || (clean.includes('alasan') && clean.includes('izin') && !clean.includes('khusus')) || clean === 'alasanizin' || (clean === 'alasan' && c === 11)) {
@@ -597,6 +597,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
           rowObj['Sakit'] = val;
         } else if (col.key === 'alpa') {
           rowObj['Alpa'] = val;
+          rowObj['Alpha'] = val;
         } else if (col.key === 'tanggalIzin') {
           rowObj['Tanggal Izin'] = val;
         } else if (col.key === 'tanggalIzinKhusus') {
@@ -611,6 +612,8 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         } else if (col.key === 'tanggalAlpa') {
           rowObj['Alpa (Tanggal)'] = val;
           rowObj['Tanggal Alpa'] = val;
+          rowObj['Alpha (Tanggal)'] = val;
+          rowObj['Tanggal Alpha'] = val;
         } else if (col.key === 'alasanIzin') {
           rowObj['Alasan Izin'] = val;
           rowObj['Alasan'] = val;

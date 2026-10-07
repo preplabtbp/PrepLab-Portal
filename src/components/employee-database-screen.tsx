@@ -848,11 +848,20 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     .filter(s => s && s !== '-' && s !== '#N/A');
                 };
 
-                const izinDates = parseDateList(att26.tanggalIzin);
-                const izinKhususDates = parseDateList(att26.tanggalIzinKhusus);
-                const sakitSiteDates = parseDateList(att26.tanggalSakitSite);
-                const sakitLuarDates = parseDateList(att26.tanggalSakitLuar);
-                const alpaDates = parseDateList(att26.tanggalAlpa);
+                const izinDates = parseDateList(att26.tanggalIzin || att26.tanggal_izin);
+                const izinKhususDates = parseDateList(att26.tanggalIzinKhusus || att26.tanggal_izin_khusus);
+                const sakitSiteDates = parseDateList(att26.tanggalSakitSite || att26.tanggal_sakit_site);
+                const sakitLuarDates = parseDateList(att26.tanggalSakitLuar || att26.tanggal_sakit_luar);
+                const alpaDates = parseDateList(
+                  att26.tanggalAlpa || 
+                  att26.tanggalAlpha || 
+                  att26.tanggal_alpa || 
+                  att26.tanggal_alpha || 
+                  att26.alpaTanggal || 
+                  att26.alphaTanggal ||
+                  (typeof att26.alpa === 'string' && (att26.alpa.includes('-') || att26.alpa.includes('/') || att26.alpa.includes('\n') || /[a-z]/i.test(att26.alpa)) ? att26.alpa : '') ||
+                  (typeof att26.alpha === 'string' && (att26.alpha.includes('-') || att26.alpha.includes('/') || att26.alpha.includes('\n') || /[a-z]/i.test(att26.alpha)) ? att26.alpha : '')
+                );
 
                 const maxRows = Math.max(
                   izinDates.length,
