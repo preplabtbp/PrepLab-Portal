@@ -111,6 +111,8 @@ async function getCounselingMap(): Promise<Record<string, any>> {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_counseling_nik ON employee_counseling(nik);
       ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS alasan_konseling TEXT;
+      ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS sppt TEXT;
+      ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS tanggal_sp TEXT;
     `);
 
     const allC = await db.select().from(employeeCounseling);
@@ -920,6 +922,8 @@ employeesRouter.post("/import", async (req, res) => {
         const sp1 = String(cRaw['SP I'] ?? cRaw['SP 1'] ?? cRaw['SP-1'] ?? cNorm['spi'] ?? cNorm['sp1'] ?? cNorm['suratperingatan1'] ?? cNorm['suratperingatani'] ?? '').trim();
         const sp2 = String(cRaw['SP II'] ?? cRaw['SP 2'] ?? cRaw['SP-2'] ?? cNorm['spii'] ?? cNorm['sp2'] ?? cNorm['suratperingatan2'] ?? cNorm['suratperingatanii'] ?? '').trim();
         const sp3 = String(cRaw['SP III'] ?? cRaw['SP 3'] ?? cRaw['SP-3'] ?? cNorm['spiii'] ?? cNorm['sp3'] ?? cNorm['suratperingatan3'] ?? cNorm['suratperingataniii'] ?? '').trim();
+        const sppt = String(cRaw['SPPT'] ?? cRaw['SP Pertama dan Terakhir'] ?? cRaw['SPPT (SP 3)'] ?? cNorm['sppt'] ?? cNorm['sppertamadanterakhir'] ?? cNorm['sp1sppt'] ?? cNorm['spterakhir'] ?? '').trim();
+        const tanggalSp = String(cRaw['Tanggal SP'] ?? cRaw['Tanggal Surat Peringatan'] ?? cNorm['tanggalsp'] ?? cNorm['tglsp'] ?? cNorm['tanggalperingatan'] ?? cNorm['tglperingatan'] ?? '').trim();
         const phk = String(cRaw['PHK'] ?? cNorm['phk'] ?? '').trim();
         
         const rawMasaBerlaku = cRaw['Masa Berlaku Sanksi'] ?? cRaw['Masa Berlaku'] ?? cRaw['Periode Berlaku'] ?? cNorm['masaberlakusanksi'] ?? cNorm['masaberlaku'] ?? cNorm['periodeberlaku'] ?? cNorm['tglberlaku'] ?? cNorm['tanggalberlaku'] ?? '';
@@ -951,14 +955,49 @@ employeesRouter.post("/import", async (req, res) => {
         const alasanSp = String(cRaw['Alasan Surat Peringatan'] ?? cRaw['Alasan SP'] ?? cRaw['Alasan'] ?? cNorm['alasansuratperingatan'] ?? cNorm['alasansp'] ?? cNorm['alasan'] ?? cNorm['alasansanksi'] ?? cNorm['alasanperingatan'] ?? cNorm['alasanst'] ?? '').trim();
         const keterangan = String(cRaw['Keterangan SP'] ?? cRaw['Keterangan'] ?? cRaw['Catatan'] ?? cNorm['keterangansp'] ?? cNorm['keterangan'] ?? cNorm['catatan'] ?? '').trim();
         const pernahSpSebelumnya = String(cRaw['Pernah SP/ST Sebelumnya'] ?? cRaw['Pernah SP/ST'] ?? cRaw['Pernah SP'] ?? cNorm['pernahspstsebelumnya'] ?? cNorm['pernahspsebelumnya'] ?? cNorm['pernahspst'] ?? cNorm['pernahsp'] ?? cNorm['spsebelumnya'] ?? cNorm['riwayatsp'] ?? '').trim();
-        const pernahTerlibatSpdk = String(cRaw['Pernah Terlibat SPDK'] ?? cRaw['Terlibat SPDK'] ?? cRaw['SPDK'] ?? cNorm['pernahterlibatspdk'] ?? cNorm['terlibatspdk'] ?? cNorm['spdk'] ?? cNorm['statusspdk'] ?? '').trim();
-        const kronologiSpdk = String(cRaw['Kronologi Kejadian SPDK'] ?? cRaw['Kronologi Kejadian'] ?? cRaw['Kronologi SPDK'] ?? cRaw['Kronologi'] ?? cNorm['kronologikejadianspdk'] ?? cNorm['kronologikejadian'] ?? cNorm['kronologispdk'] ?? cNorm['kronologi'] ?? cNorm['riwayatkejadian'] ?? '').trim();
-        const kategoriSpdk = String(cRaw['Kategori Sanksi SPDK'] ?? cRaw['Kategori SPDK'] ?? cRaw['Kategori Sanksi'] ?? cRaw['Kategori Pelanggaran'] ?? cNorm['kategorisanksispdk'] ?? cNorm['kategorispdk'] ?? cNorm['kategorisanksi'] ?? cNorm['kategoripelanggaran'] ?? cNorm['jenispelanggaran'] ?? '').trim();
-        const tindakanSpdk = String(cRaw['Tindakan Disiplin SPDK'] ?? cRaw['Tindakan Disiplin'] ?? cRaw['Tindakan SPDK'] ?? cRaw['Sanksi SPDK'] ?? cNorm['tindakandisiplinspdk'] ?? cNorm['tindakandisiplin'] ?? cNorm['tindakanspdk'] ?? cNorm['sanksispdk'] ?? cNorm['tindakan'] ?? '').trim();
+        let pernahTerlibatSpdk = String(cRaw['Pernah Terlibat SPDK'] ?? cRaw['Terlibat SPDK'] ?? cRaw['SPDK'] ?? cNorm['pernahterlibatspdk'] ?? cNorm['terlibatspdk'] ?? cNorm['spdk'] ?? cNorm['statusspdk'] ?? '').trim();
+        let kronologiSpdk = String(cRaw['Kronologi Kejadian SPDK'] ?? cRaw['Kronologi Kejadian'] ?? cRaw['Kronologi SPDK'] ?? cRaw['Kronologi'] ?? cNorm['kronologikejadianspdk'] ?? cNorm['kronologikejadian'] ?? cNorm['kronologispdk'] ?? cNorm['kronologi'] ?? cNorm['riwayatkejadian'] ?? '').trim();
+        let kategoriSpdk = String(cRaw['Kategori Sanksi SPDK'] ?? cRaw['Kategori SPDK'] ?? cRaw['Kategori Sanksi'] ?? cRaw['Kategori Pelanggaran'] ?? cNorm['kategorisanksispdk'] ?? cNorm['kategorispdk'] ?? cNorm['kategorisanksi'] ?? cNorm['kategoripelanggaran'] ?? cNorm['jenispelanggaran'] ?? '').trim();
+        let tindakanSpdk = String(cRaw['Tindakan Disiplin SPDK'] ?? cRaw['Tindakan Disiplin'] ?? cRaw['Tindakan SPDK'] ?? cRaw['Sanksi SPDK'] ?? cNorm['tindakandisiplinspdk'] ?? cNorm['tindakandisiplin'] ?? cNorm['tindakanspdk'] ?? cNorm['sanksispdk'] ?? cNorm['tindakan'] ?? '').trim();
+
+        // Check if employee has active SP (SP 1, 2, 3, SPPT, ST) -> Kesimpulan: Masuk Kategori SPDK
+        const hasActiveSp = Boolean(
+          (sp1 && sp1 !== '-' && sp1 !== '0') || 
+          (sp2 && sp2 !== '-' && sp2 !== '0') || 
+          (sp3 && sp3 !== '-' && sp3 !== '0') || 
+          (sppt && sppt !== '-' && sppt !== '0') || 
+          (st && st !== '-' && st !== '0') ||
+          (phk && phk !== '-' && phk !== '0') ||
+          (totalSp && totalSp !== '0' && totalSp !== '-')
+        );
+
+        if (hasActiveSp) {
+          pernahTerlibatSpdk = 'Ya';
+          if (!kategoriSpdk || kategoriSpdk === '-' || kategoriSpdk.toLowerCase() === 'tidak ada') {
+            if (sppt && sppt !== '-' && sppt !== '0') kategoriSpdk = 'Pelanggaran Disiplin Berat (SPPT - Pertama & Terakhir)';
+            else if (sp3 && sp3 !== '-' && sp3 !== '0') kategoriSpdk = 'Pelanggaran Disiplin Berat (SP III)';
+            else if (sp2 && sp2 !== '-' && sp2 !== '0') kategoriSpdk = 'Pelanggaran Disiplin Sedang (SP II)';
+            else if (sp1 && sp1 !== '-' && sp1 !== '0') kategoriSpdk = 'Pelanggaran Disiplin Kerja (SP I)';
+            else if (st && st !== '-' && st !== '0') kategoriSpdk = 'Pelanggaran Tata Tertib (Surat Teguran / ST)';
+            else if (phk && phk !== '-' && phk !== '0') kategoriSpdk = 'Pemutusan Hubungan Kerja (PHK)';
+          }
+          if (!tindakanSpdk || tindakanSpdk === '-') {
+            if (sppt && sppt !== '-' && sppt !== '0') tindakanSpdk = 'Penerbitan SPPT & Evaluasi Kerja';
+            else if (sp3 && sp3 !== '-' && sp3 !== '0') tindakanSpdk = 'Penerbitan SP III & Evaluasi Status';
+            else if (sp2 && sp2 !== '-' && sp2 !== '0') tindakanSpdk = 'Penerbitan SP II & Evaluasi Kedisiplinan';
+            else if (sp1 && sp1 !== '-' && sp1 !== '0') tindakanSpdk = 'Penerbitan SP I & Pembinaan Kedisiplinan';
+            else if (st && st !== '-' && st !== '0') tindakanSpdk = 'Pemberian Surat Teguran (ST) Tertulis';
+            else if (phk && phk !== '-' && phk !== '0') tindakanSpdk = 'Terminasi Hubungan Kerja (PHK)';
+          }
+          if (!kronologiSpdk && (alasanSp || alasanKonseling)) {
+            kronologiSpdk = alasanSp || alasanKonseling;
+          }
+        }
 
         // Calculate status sanksi
         let statusSanksi = 'Aman';
         if (phk && phk !== '-' && phk !== '0') statusSanksi = 'PHK';
+        else if (sppt && sppt !== '-' && sppt !== '0') statusSanksi = 'SPPT';
         else if (sp3 && sp3 !== '-' && sp3 !== '0') statusSanksi = 'SP III';
         else if (sp2 && sp2 !== '-' && sp2 !== '0') statusSanksi = 'SP II';
         else if (sp1 && sp1 !== '-' && sp1 !== '0') statusSanksi = 'SP I';
@@ -982,6 +1021,8 @@ employeesRouter.post("/import", async (req, res) => {
           sp1,
           sp2,
           sp3,
+          sppt,
+          tanggalSp,
           phk,
           masaBerlakuSanksi,
           masaPemulihan1,
@@ -1271,6 +1312,8 @@ employeesRouter.put("/:nik", async (req, res) => {
       const sp1 = String(cData.sp1 ?? cData.sp_1 ?? '').trim();
       const sp2 = String(cData.sp2 ?? cData.sp_2 ?? '').trim();
       const sp3 = String(cData.sp3 ?? cData.sp_3 ?? '').trim();
+      const sppt = String(cData.sppt ?? cData.sp_pt ?? '').trim();
+      const tanggalSp = String(cData.tanggalSp ?? cData.tanggal_sp ?? '').trim();
       const phk = String(cData.phk ?? '').trim();
       
       const rawMasaBerlaku = cData.masaBerlakuSanksi ?? cData.masa_berlaku_sanksi ?? cData.masaBerlaku ?? cData.masa_berlaku ?? cData.periodeBerlaku ?? cData.tanggalBerlaku ?? '';
@@ -1286,14 +1329,49 @@ employeesRouter.put("/:nik", async (req, res) => {
       const alasanSp = String(cData.alasanSp ?? cData.alasan_sp ?? cData.alasanSuratPeringatan ?? cData.alasan_surat_peringatan ?? cData.alasan ?? cData.alasanSanksi ?? '').trim();
       const keterangan = String(cData.keterangan ?? cData.keterangan_sp ?? cData.keteranganSp ?? cData.catatan ?? '').trim();
       const pernahSpSebelumnya = String(cData.pernahSpSebelumnya ?? cData.pernah_sp_sebelumnya ?? cData.pernahSp ?? 'Tidak').trim();
-      const pernahTerlibatSpdk = String(cData.pernahTerlibatSpdk ?? cData.pernah_terlibat_spdk ?? cData.spdk ?? 'Tidak').trim();
-      const kronologiSpdk = String(cData.kronologiSpdk ?? cData.kronologi_spdk ?? cData.kronologiKejadianSpdk ?? cData.kronologi ?? '').trim();
-      const kategoriSpdk = String(cData.kategoriSpdk ?? cData.kategori_spdk ?? cData.kategoriSanksiSpdk ?? cData.kategori ?? '').trim();
-      const tindakanSpdk = String(cData.tindakanSpdk ?? cData.tindakan_spdk ?? cData.tindakanDisiplinSpdk ?? cData.tindakan ?? '').trim();
+      let pernahTerlibatSpdk = String(cData.pernahTerlibatSpdk ?? cData.pernah_terlibat_spdk ?? cData.spdk ?? 'Tidak').trim();
+      let kronologiSpdk = String(cData.kronologiSpdk ?? cData.kronologi_spdk ?? cData.kronologiKejadianSpdk ?? cData.kronologi ?? '').trim();
+      let kategoriSpdk = String(cData.kategoriSpdk ?? cData.kategori_spdk ?? cData.kategoriSanksiSpdk ?? cData.kategori ?? '').trim();
+      let tindakanSpdk = String(cData.tindakanSpdk ?? cData.tindakan_spdk ?? cData.tindakanDisiplinSpdk ?? cData.tindakan ?? '').trim();
+
+      // Check if employee has active SP (SP 1, 2, 3, SPPT, ST) -> Kesimpulan: Masuk Kategori SPDK
+      const hasActiveSp = Boolean(
+        (sp1 && sp1 !== '-' && sp1 !== '0') || 
+        (sp2 && sp2 !== '-' && sp2 !== '0') || 
+        (sp3 && sp3 !== '-' && sp3 !== '0') || 
+        (sppt && sppt !== '-' && sppt !== '0') || 
+        (st && st !== '-' && st !== '0') ||
+        (phk && phk !== '-' && phk !== '0') ||
+        (totalSp && totalSp !== '0' && totalSp !== '-')
+      );
+
+      if (hasActiveSp) {
+        pernahTerlibatSpdk = 'Ya';
+        if (!kategoriSpdk || kategoriSpdk === '-' || kategoriSpdk.toLowerCase() === 'tidak ada') {
+          if (sppt && sppt !== '-' && sppt !== '0') kategoriSpdk = 'Pelanggaran Disiplin Berat (SPPT - Pertama & Terakhir)';
+          else if (sp3 && sp3 !== '-' && sp3 !== '0') kategoriSpdk = 'Pelanggaran Disiplin Berat (SP III)';
+          else if (sp2 && sp2 !== '-' && sp2 !== '0') kategoriSpdk = 'Pelanggaran Disiplin Sedang (SP II)';
+          else if (sp1 && sp1 !== '-' && sp1 !== '0') kategoriSpdk = 'Pelanggaran Disiplin Kerja (SP I)';
+          else if (st && st !== '-' && st !== '0') kategoriSpdk = 'Pelanggaran Tata Tertib (Surat Teguran / ST)';
+          else if (phk && phk !== '-' && phk !== '0') kategoriSpdk = 'Pemutusan Hubungan Kerja (PHK)';
+        }
+        if (!tindakanSpdk || tindakanSpdk === '-') {
+          if (sppt && sppt !== '-' && sppt !== '0') tindakanSpdk = 'Penerbitan SPPT & Evaluasi Kerja';
+          else if (sp3 && sp3 !== '-' && sp3 !== '0') tindakanSpdk = 'Penerbitan SP III & Evaluasi Status';
+          else if (sp2 && sp2 !== '-' && sp2 !== '0') tindakanSpdk = 'Penerbitan SP II & Evaluasi Kedisiplinan';
+          else if (sp1 && sp1 !== '-' && sp1 !== '0') tindakanSpdk = 'Penerbitan SP I & Pembinaan Kedisiplinan';
+          else if (st && st !== '-' && st !== '0') tindakanSpdk = 'Pemberian Surat Teguran (ST) Tertulis';
+          else if (phk && phk !== '-' && phk !== '0') tindakanSpdk = 'Terminasi Hubungan Kerja (PHK)';
+        }
+        if (!kronologiSpdk && (alasanSp || alasanKonseling)) {
+          kronologiSpdk = alasanSp || alasanKonseling;
+        }
+      }
 
       // Calculate status sanksi
       let statusSanksi = 'Aman';
       if (phk && phk !== '-' && phk !== '0') statusSanksi = 'PHK';
+      else if (sppt && sppt !== '-' && sppt !== '0') statusSanksi = 'SPPT';
       else if (sp3 && sp3 !== '-' && sp3 !== '0') statusSanksi = 'SP III';
       else if (sp2 && sp2 !== '-' && sp2 !== '0') statusSanksi = 'SP II';
       else if (sp1 && sp1 !== '-' && sp1 !== '0') statusSanksi = 'SP I';
@@ -1317,6 +1395,8 @@ employeesRouter.put("/:nik", async (req, res) => {
         sp1,
         sp2,
         sp3,
+        sppt,
+        tanggalSp,
         phk,
         masaBerlakuSanksi,
         masaPemulihan1,

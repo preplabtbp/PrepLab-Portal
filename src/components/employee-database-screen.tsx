@@ -477,26 +477,41 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 initial={{ opacity: 0, y: 20 }} 
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 w-full max-w-3xl px-2"
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4 w-full max-w-4xl px-2"
               >
-                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-200/90 text-center hover:border-[#22a7b8]/60 hover:shadow-lg transition-all shadow-sm">
-                  <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 md:mb-2">Total Data</div>
+                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center hover:border-[#22a7b8]/60 hover:shadow-lg transition-all shadow-sm">
+                  <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Total Data</div>
                   <div className="text-2xl md:text-3xl font-black text-[#104b50]">{employees.length}</div>
                 </div>
-                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-200/90 text-center hover:border-[#f09b13]/60 hover:shadow-lg transition-all shadow-sm">
-                  <div className="text-[#c77d07] text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 md:mb-2">Dept. Aktif</div>
+                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center hover:border-[#f09b13]/60 hover:shadow-lg transition-all shadow-sm">
+                  <div className="text-[#c77d07] text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Dept. Aktif</div>
                   <div className="text-2xl md:text-3xl font-black text-slate-800">{new Set(employees.map(e => e.department).filter(Boolean)).size}</div>
                 </div>
-                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-200/90 text-center hover:border-teal-400 hover:shadow-lg transition-all shadow-sm">
-                  <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 md:mb-2">Status PKWTT</div>
+                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center hover:border-teal-400 hover:shadow-lg transition-all shadow-sm">
+                  <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Status PKWTT</div>
                   <div className="text-2xl md:text-3xl font-black text-teal-700">
                     {employees.filter(e => e.statusKontrak && e.statusKontrak.toLowerCase().includes('pkwtt')).length}
                   </div>
                 </div>
-                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-4 md:p-5 border border-slate-200/90 text-center hover:border-rose-400 hover:shadow-lg transition-all shadow-sm">
-                  <div className="text-rose-600 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 md:mb-2">Total Sakit (2026)</div>
+                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center hover:border-rose-400 hover:shadow-lg transition-all shadow-sm">
+                  <div className="text-rose-600 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Total Sakit</div>
                   <div className="text-2xl md:text-3xl font-black text-rose-600">
                     {employees.reduce((acc, emp) => acc + (Number(emp.attendance2026?.sakit) || 0), 0)}
+                  </div>
+                </div>
+                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-purple-200 text-center hover:border-purple-400 hover:shadow-lg transition-all shadow-sm col-span-2 sm:col-span-1">
+                  <div className="text-purple-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">SPDK &amp; Sanksi</div>
+                  <div className="text-2xl md:text-3xl font-black text-purple-800">
+                    {employees.filter(emp => {
+                      const c = emp.counselingSpdk || emp.counseling || {};
+                      return (c.sp1 && c.sp1 !== '-' && c.sp1 !== '0') || 
+                             (c.sp2 && c.sp2 !== '-' && c.sp2 !== '0') || 
+                             (c.sp3 && c.sp3 !== '-' && c.sp3 !== '0') || 
+                             (c.sppt && c.sppt !== '-' && c.sppt !== '0') || 
+                             (c.st && c.st !== '-' && c.st !== '0') || 
+                             (c.totalSp && c.totalSp !== '0' && c.totalSp !== '-') ||
+                             String(c.pernahTerlibatSpdk || '').toLowerCase().includes('ya');
+                    }).length}
                   </div>
                 </div>
               </motion.div>
@@ -1316,11 +1331,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               {(() => {
                 const cData = selectedEmployee.counselingSpdk || (selectedEmployee as any).counseling || {};
                 const totalSpNum = parseInt(String(cData.totalSp || cData.total_sp || '0').trim(), 10) || 0;
-                const statusSanksi = String(cData.statusSanksi || cData.status_sanksi || (totalSpNum > 0 ? `SP ${totalSpNum}` : 'Aman')).trim();
                 
-                const masaBerlaku = cData.masaBerlakuSanksi || cData.masa_berlaku_sanksi || cData.masaBerlaku || cData.masa_berlaku || cData.periodeBerlaku || cData.periode_berlaku || cData.tanggalBerlaku || cData.tanggal_berlaku || '';
-                const masaPemulihan1 = cData.masaPemulihan1 || cData.masa_pemulihan_1 || cData.masaPemulihanI || cData.pemulihan1 || cData.pemulihanI || cData.pemulihan_1 || cData.pemulihan_i || '';
-                const masaPemulihan2 = cData.masaPemulihan2 || cData.masa_pemulihan_2 || cData.masaPemulihanIi || cData.pemulihan2 || cData.pemulihanIi || cData.pemulihan_2 || cData.pemulihan_ii || '';
+                const rawMasaBerlaku = cData.masaBerlakuSanksi || cData.masa_berlaku_sanksi || cData.masaBerlaku || cData.masa_berlaku || cData.periodeBerlaku || cData.periode_berlaku || cData.tanggalBerlaku || cData.tanggal_berlaku || '';
+                const rawMasaPemulihan1 = cData.masaPemulihan1 || cData.masa_pemulihan_1 || cData.masaPemulihanI || cData.pemulihan1 || cData.pemulihanI || cData.pemulihan_1 || cData.pemulihan_i || '';
+                const rawMasaPemulihan2 = cData.masaPemulihan2 || cData.masa_pemulihan_2 || cData.masaPemulihanIi || cData.pemulihan2 || cData.pemulihanIi || cData.pemulihan_2 || cData.pemulihan_ii || '';
                 const alasanKonseling = cData.alasanKonseling || cData.alasan_konseling || cData.alasanPembinaan || cData.alasan_pembinaan || '';
                 const alasanSp = cData.alasanSp || cData.alasan_sp || cData.alasanSuratPeringatan || cData.alasan_surat_peringatan || cData.alasan || cData.alasanSanksi || cData.alasan_sanksi || cData.alasanPelanggaran || cData.alasan_pelanggaran || '';
                 const keterangan = cData.keterangan || cData.keterangan_sp || cData.keteranganSp || cData.catatan || '';
@@ -1339,7 +1353,67 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 const sp1 = cData.sp1 || cData.sp_1 || '';
                 const sp2 = cData.sp2 || cData.sp_2 || '';
                 const sp3 = cData.sp3 || cData.sp_3 || '';
+                const sppt = cData.sppt || cData.sp_pt || '';
+                const tanggalSp = cData.tanggalSp || cData.tanggal_sp || '';
                 const phk = cData.phk || '';
+
+                // Deteksi apakah personil memiliki catatan SP (SP 1, 2, 3, SPPT, ST)
+                const hasAnySp = Boolean(
+                  (sp1 && sp1 !== '-' && sp1 !== '0') || 
+                  (sp2 && sp2 !== '-' && sp2 !== '0') || 
+                  (sp3 && sp3 !== '-' && sp3 !== '0') || 
+                  (sppt && sppt !== '-' && sppt !== '0') || 
+                  (st && st !== '-' && st !== '0') ||
+                  (phk && phk !== '-' && phk !== '0') ||
+                  (totalSpNum > 0)
+                );
+
+                // Otomatis SP 1, 2, 3 dan SPPT masuk dalam kategori SPDK
+                const isSpdkInvolved = String(pernahTerlibatSpdk || '').toLowerCase().includes('ya') || hasAnySp;
+
+                // Ambil tanggal SP aktif untuk plotting ke dashboard
+                const activeSpDate = [sppt, sp3, sp2, sp1, st].find(v => v && v !== '-' && v !== '0' && (v.includes('-') || v.includes('/') || v.length > 3)) || tanggalSp || bulanKonseling;
+
+                // Hitung fallback Masa Berlaku Sanksi dari Tanggal SP
+                let masaBerlaku = rawMasaBerlaku;
+                if (!masaBerlaku || masaBerlaku === '-' || masaBerlaku.toLowerCase().includes('tidak ada')) {
+                  if (activeSpDate) {
+                    masaBerlaku = `${activeSpDate} (Aktif)`;
+                  } else if (hasAnySp) {
+                    masaBerlaku = bulanKonseling ? `${bulanKonseling} (Aktif)` : 'Sanksi Disiplin Aktif';
+                  } else {
+                    masaBerlaku = 'Tidak ada sanksi aktif';
+                  }
+                }
+
+                const masaPemulihan1 = rawMasaPemulihan1 && rawMasaPemulihan1 !== '-' ? rawMasaPemulihan1 : (hasAnySp && activeSpDate ? `${activeSpDate} + 3 Bln` : '-');
+                const masaPemulihan2 = rawMasaPemulihan2 && rawMasaPemulihan2 !== '-' ? rawMasaPemulihan2 : (hasAnySp && activeSpDate ? `${activeSpDate} + 6 Bln` : '-');
+
+                // Otomatis tentukan Kategori SPDK berdasarkan tingkatan SP
+                let effectiveKategoriSpdk = kategoriSpdk && kategoriSpdk !== '-' && kategoriSpdk.toLowerCase() !== 'tidak ada' ? kategoriSpdk : '';
+                if (!effectiveKategoriSpdk && hasAnySp) {
+                  if (sppt && sppt !== '-' && sppt !== '0') effectiveKategoriSpdk = 'Pelanggaran Disiplin Berat (SPPT - Surat Peringatan Pertama & Terakhir)';
+                  else if (sp3 && sp3 !== '-' && sp3 !== '0') effectiveKategoriSpdk = 'Pelanggaran Disiplin Berat (SP III)';
+                  else if (sp2 && sp2 !== '-' && sp2 !== '0') effectiveKategoriSpdk = 'Pelanggaran Disiplin Sedang (SP II)';
+                  else if (sp1 && sp1 !== '-' && sp1 !== '0') effectiveKategoriSpdk = 'Pelanggaran Disiplin Kerja (SP I)';
+                  else if (st && st !== '-' && st !== '0') effectiveKategoriSpdk = 'Pelanggaran Tata Tertib (Surat Teguran / ST)';
+                  else if (phk && phk !== '-' && phk !== '0') effectiveKategoriSpdk = 'Pemutusan Hubungan Kerja (PHK)';
+                }
+
+                // Otomatis tentukan Tindakan Disiplin SPDK
+                let effectiveTindakanSpdk = tindakanSpdk && tindakanSpdk !== '-' ? tindakanSpdk : '';
+                if (!effectiveTindakanSpdk && hasAnySp) {
+                  if (sppt && sppt !== '-' && sppt !== '0') effectiveTindakanSpdk = 'Penerbitan SPPT & Evaluasi Kerja';
+                  else if (sp3 && sp3 !== '-' && sp3 !== '0') effectiveTindakanSpdk = 'Penerbitan SP III & Evaluasi Status';
+                  else if (sp2 && sp2 !== '-' && sp2 !== '0') effectiveTindakanSpdk = 'Penerbitan SP II & Evaluasi Kedisiplinan';
+                  else if (sp1 && sp1 !== '-' && sp1 !== '0') effectiveTindakanSpdk = 'Penerbitan SP I & Pembinaan Kedisiplinan';
+                  else if (st && st !== '-' && st !== '0') effectiveTindakanSpdk = 'Pemberian Surat Teguran (ST) Tertulis';
+                }
+
+                // Kronologi SPDK fallback ke Alasan SP / Alasan Konseling jika kronologi kosong
+                const effectiveKronologiSpdk = (kronologiSpdk && kronologiSpdk !== '-' && kronologiSpdk.length > 3) 
+                  ? kronologiSpdk 
+                  : (alasanSp || alasanKonseling || '');
 
                 // Determine sanction level (0 - 6)
                 let severityLevel = 0;
@@ -1352,6 +1426,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   levelLabel = 'PHK (Pemutusan Hubungan Kerja)';
                   levelColor = 'text-rose-900 bg-rose-100 border-rose-300';
                   levelBadgeBg = 'bg-rose-700';
+                } else if (sppt && sppt !== '-' && sppt !== '0') {
+                  severityLevel = 5;
+                  levelLabel = 'SPPT (Surat Peringatan Pertama & Terakhir)';
+                  levelColor = 'text-rose-800 bg-rose-50 border-rose-200';
+                  levelBadgeBg = 'bg-rose-600';
                 } else if (sp3 && sp3 !== '-' && sp3 !== '0') {
                   severityLevel = 5;
                   levelLabel = 'Surat Peringatan III (SP III)';
@@ -1377,7 +1456,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   levelLabel = 'Dalam Pembinaan / Konseling';
                   levelColor = 'text-teal-800 bg-teal-50 border-teal-200';
                   levelBadgeBg = 'bg-teal-500';
-                } else if (String(pernahTerlibatSpdk || '').toLowerCase().includes('ya') || (kronologiSpdk && kronologiSpdk.length > 5)) {
+                } else if (isSpdkInvolved || (kronologiSpdk && kronologiSpdk.length > 5)) {
                   severityLevel = 2;
                   levelLabel = 'Tercatat Insiden SPDK';
                   levelColor = 'text-purple-800 bg-purple-50 border-purple-200';
@@ -1390,7 +1469,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   { level: 2, label: 'ST', sub: 'Surat Teguran' },
                   { level: 3, label: 'SP I', sub: 'Peringatan I' },
                   { level: 4, label: 'SP II', sub: 'Peringatan II' },
-                  { level: 5, label: 'SP III', sub: 'Peringatan III' },
+                  { level: 5, label: 'SP III / SPPT', sub: 'Peringatan III / SPPT' },
                   { level: 6, label: 'PHK', sub: 'Terminasi' }
                 ];
 
@@ -1586,7 +1665,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-4 gap-2 text-xs">
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
                             <div className="p-2 rounded-xl bg-yellow-50/50 border border-yellow-100 text-center">
                               <span className="text-[10px] text-yellow-800 font-bold block">ST</span>
                               <span className="font-extrabold text-yellow-900 font-mono text-[11px] truncate block">
@@ -1609,6 +1688,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               <span className="text-[10px] text-rose-800 font-bold block">SP III</span>
                               <span className="font-extrabold text-rose-900 font-mono text-[11px] truncate block">
                                 {sp3 || '-'}
+                              </span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-rose-100/50 border border-rose-200 text-center col-span-2 sm:col-span-1">
+                              <span className="text-[10px] text-rose-950 font-bold block">SPPT</span>
+                              <span className="font-extrabold text-rose-950 font-mono text-[11px] truncate block">
+                                {sppt || '-'}
                               </span>
                             </div>
                           </div>
@@ -1646,11 +1731,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             <div className="flex items-center justify-between text-xs pt-1 text-slate-500">
                               <span>Pernah SP/ST Sebelumnya:</span>
                               <span className={`font-bold px-2 py-0.5 rounded-md ${
-                                String(pernahSpSebelumnya || '').toLowerCase().includes('ya') 
+                                String(pernahSpSebelumnya || '').toLowerCase().includes('ya') || hasAnySp
                                   ? 'bg-rose-50 text-rose-700 border border-rose-200' 
                                   : 'bg-slate-100 text-slate-700'
                               }`}>
-                                {pernahSpSebelumnya || 'Tidak'}
+                                {pernahSpSebelumnya && pernahSpSebelumnya !== 'Tidak' ? pernahSpSebelumnya : (hasAnySp ? 'Ya' : 'Tidak')}
                               </span>
                             </div>
                           </div>
@@ -1665,26 +1750,26 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               <AlertOctagon className="w-4 h-4 text-purple-600" />
                               Sanksi Pelanggaran Disiplin Kerja (SPDK)
                             </span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                              String(pernahTerlibatSpdk || '').toLowerCase().includes('ya')
-                                ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+                              isSpdkInvolved
+                                ? 'bg-purple-100 text-purple-800 border border-purple-200 shadow-2xs'
                                 : 'bg-slate-100 text-slate-600'
                             }`}>
-                              {String(pernahTerlibatSpdk || '').toLowerCase().includes('ya') ? 'Terlibat SPDK' : 'Tidak Terlibat'}
+                              {isSpdkInvolved ? 'TERLIBAT SPDK' : 'TIDAK TERLIBAT'}
                             </span>
                           </h4>
 
                           <div className="grid grid-cols-2 gap-3 text-xs">
                             <div className="p-3 rounded-xl bg-purple-50/50 border border-purple-100">
                               <span className="text-[10px] text-purple-700 font-bold block uppercase">Kategori SPDK</span>
-                              <span className="font-bold text-slate-800 mt-1 block">
-                                {kategoriSpdk && kategoriSpdk !== '-' ? kategoriSpdk : 'Tidak Ada'}
+                              <span className="font-bold text-slate-800 mt-1 block leading-snug">
+                                {effectiveKategoriSpdk || 'Tidak Ada'}
                               </span>
                             </div>
                             <div className="p-3 rounded-xl bg-purple-50/50 border border-purple-100">
                               <span className="text-[10px] text-purple-700 font-bold block uppercase">Tindakan Disiplin</span>
-                              <span className="font-bold text-slate-800 mt-1 block">
-                                {tindakanSpdk && tindakanSpdk !== '-' ? tindakanSpdk : '-'}
+                              <span className="font-bold text-slate-800 mt-1 block leading-snug">
+                                {effectiveTindakanSpdk || '-'}
                               </span>
                             </div>
                           </div>
@@ -1692,9 +1777,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           <div>
                             <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Kronologi Kejadian SPDK:</p>
                             <div className="text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-100 leading-relaxed min-h-[100px] max-h-48 overflow-y-auto">
-                              {kronologiSpdk && kronologiSpdk !== '-' ? (
+                              {effectiveKronologiSpdk && effectiveKronologiSpdk !== '-' ? (
                                 <p className="font-medium whitespace-pre-line text-slate-800">
-                                  {kronologiSpdk}
+                                  {effectiveKronologiSpdk}
                                 </p>
                               ) : (
                                 <p className="text-slate-400 italic">

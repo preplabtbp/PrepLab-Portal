@@ -251,6 +251,7 @@ export const KONSELING_SPDK_COLUMNS = [
   "SP I",
   "SP II",
   "SP III",
+  "SPPT",
   "PHK",
   "Masa Berlaku Sanksi",
   "Masa Pemulihan I",
@@ -597,6 +598,8 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         if (h.clean === 'spi' || h.clean === 'sp1' || h.clean === 'suratperingatan1' || h.clean === 'suratperingatani') rowObj['SP I'] = val;
         if (h.clean === 'spii' || h.clean === 'sp2' || h.clean === 'suratperingatan2' || h.clean === 'suratperingatanii') rowObj['SP II'] = val;
         if (h.clean === 'spiii' || h.clean === 'sp3' || h.clean === 'suratperingatan3' || h.clean === 'suratperingataniii') rowObj['SP III'] = val;
+        if (h.clean === 'sppt' || h.clean === 'sp1sppt' || h.clean === 'sppertamadanterakhir' || h.clean === 'spterakhir' || h.clean === 'spptsp3') rowObj['SPPT'] = val;
+        if (h.clean === 'tanggalsp' || h.clean === 'tglsp' || h.clean === 'tanggalperingatan' || h.clean === 'tglperingatan') rowObj['Tanggal SP'] = val;
         if (h.clean === 'phk') rowObj['PHK'] = val;
         if (h.clean === 'masaberlakusanksi' || h.clean === 'masaberlaku' || h.clean === 'periodeberlaku' || h.clean === 'tglberlaku' || h.clean === 'tanggalberlaku') rowObj['Masa Berlaku Sanksi'] = val;
         if (h.clean === 'masapemulihani' || h.clean === 'masapemulihan1' || h.clean === 'pemulihani' || h.clean === 'pemulihan1') rowObj['Masa Pemulihan I'] = val;
@@ -927,6 +930,8 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                   if (clean === 'spi' || clean === 'sp1' || clean === 'suratperingatan1' || clean === 'suratperingatani') rowObj['SP I'] = v;
                   if (clean === 'spii' || clean === 'sp2' || clean === 'suratperingatan2' || clean === 'suratperingatanii') rowObj['SP II'] = v;
                   if (clean === 'spiii' || clean === 'sp3' || clean === 'suratperingatan3' || clean === 'suratperingataniii') rowObj['SP III'] = v;
+                  if (clean === 'sppt' || clean === 'sp1sppt' || clean === 'sppertamadanterakhir' || clean === 'spterakhir' || clean === 'spptsp3') rowObj['SPPT'] = v;
+                  if (clean === 'tanggalsp' || clean === 'tglsp' || clean === 'tanggalperingatan' || clean === 'tglperingatan') rowObj['Tanggal SP'] = v;
                   if (clean === 'phk') rowObj['PHK'] = v;
                   if (clean === 'masaberlakusanksi' || clean === 'masaberlaku' || clean === 'periodeberlaku' || clean === 'tglberlaku' || clean === 'tanggalberlaku') rowObj['Masa Berlaku Sanksi'] = v;
                   if (clean === 'masapemulihani' || clean === 'masapemulihan1' || clean === 'pemulihani' || clean === 'pemulihan1') rowObj['Masa Pemulihan I'] = v;
@@ -1773,6 +1778,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                         <th className="p-2.5 whitespace-nowrap">SP I</th>
                         <th className="p-2.5 whitespace-nowrap">SP II</th>
                         <th className="p-2.5 whitespace-nowrap">SP III</th>
+                        <th className="p-2.5 whitespace-nowrap">SPPT</th>
                         <th className="p-2.5 whitespace-nowrap">Masa Berlaku</th>
                         <th className="p-2.5 whitespace-nowrap">Pemulihan I &amp; II</th>
                         <th className="p-2.5 whitespace-nowrap">Alasan Konseling</th>
@@ -1790,6 +1796,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                         const sp1 = row['SP I'] || row['SP 1'] || row['sp1'] || '-';
                         const sp2 = row['SP II'] || row['SP 2'] || row['sp2'] || '-';
                         const sp3 = row['SP III'] || row['SP 3'] || row['sp3'] || '-';
+                        const sppt = row['SPPT'] || row['sppt'] || row['sp1sppt'] || '-';
                         const masa = row['Masa Berlaku Sanksi'] || row['masaBerlakuSanksi'] || '-';
                         const p1 = row['Masa Pemulihan I'] || row['masaPemulihan1'] || '-';
                         const p2 = row['Masa Pemulihan II'] || row['masaPemulihan2'] || '-';
@@ -1808,6 +1815,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                             <td className="p-2.5 text-amber-700 font-semibold text-[11px]">{sp1}</td>
                             <td className="p-2.5 text-orange-700 font-semibold text-[11px]">{sp2}</td>
                             <td className="p-2.5 text-rose-700 font-semibold text-[11px]">{sp3}</td>
+                            <td className="p-2.5 text-rose-900 font-bold text-[11px]">{sppt}</td>
                             <td className="p-2.5 text-slate-600 font-mono text-[11px]">{masa}</td>
                             <td className="p-2.5 text-slate-600 font-mono text-[11px]">{p1 !== '-' ? `${p1} / ${p2}` : '-'}</td>
                             <td className="p-2.5 text-teal-700 text-[11px] max-w-[140px] truncate" title={alasanKonseling}>{alasanKonseling}</td>

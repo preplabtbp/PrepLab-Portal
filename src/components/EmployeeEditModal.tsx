@@ -117,6 +117,8 @@ export function EmployeeEditModal({
         sp1: rawCounsel.sp1 ?? rawCounsel.sp_1 ?? '',
         sp2: rawCounsel.sp2 ?? rawCounsel.sp_2 ?? '',
         sp3: rawCounsel.sp3 ?? rawCounsel.sp_3 ?? '',
+        sppt: rawCounsel.sppt ?? rawCounsel.sp_pt ?? '',
+        tanggalSp: rawCounsel.tanggalSp ?? rawCounsel.tanggal_sp ?? '',
         phk: rawCounsel.phk ?? '',
         masaBerlakuSanksi: rawCounsel.masaBerlakuSanksi ?? rawCounsel.masa_berlaku_sanksi ?? rawCounsel.masaBerlaku ?? rawCounsel.masa_berlaku ?? rawCounsel.periodeBerlaku ?? rawCounsel.tanggalBerlaku ?? '',
         masaPemulihan1: rawCounsel.masaPemulihan1 ?? rawCounsel.masa_pemulihan_1 ?? rawCounsel.pemulihan1 ?? rawCounsel.pemulihan_1 ?? '',
@@ -1073,6 +1075,16 @@ export function EmployeeEditModal({
                       onChange={(e) => handleCounselChange('sp3', e.target.value)}
                       placeholder="-"
                       className="w-full px-3 py-1.5 rounded-xl border border-rose-200 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-rose-900 mb-1">SPPT (SP Terakhir)</label>
+                    <input
+                      type="text"
+                      value={counselData.sppt || ''}
+                      onChange={(e) => handleCounselChange('sppt', e.target.value)}
+                      placeholder="-"
+                      className="w-full px-3 py-1.5 rounded-xl border border-rose-300 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-rose-600"
                     />
                   </div>
                   <div>
