@@ -915,15 +915,36 @@ employeesRouter.post("/import", async (req, res) => {
         const pt = cRaw['PT'] || cRaw['Perusahaan'] || cNorm['pt'] || cNorm['perusahaan'] || matchedEmp?.pt || '';
         const totalSp = String(cRaw['Total SP'] ?? cRaw['Total Sanksi'] ?? cNorm['totalsp'] ?? cNorm['totalsanksi'] ?? cNorm['total'] ?? '').trim();
         const bulanKonseling = String(cRaw['Bulan Konseling'] ?? cRaw['Bulan Sanksi'] ?? cRaw['Bulan'] ?? cNorm['bulankonseling'] ?? cNorm['bulansanksi'] ?? cNorm['bulan'] ?? cNorm['periode'] ?? '').trim();
-        const konseling1 = String(cRaw['Konseling I'] ?? cRaw['Konseling 1'] ?? cNorm['konselingi'] ?? cNorm['konseling1'] ?? cNorm['konselingpertama'] ?? '').trim();
-        const konseling2 = String(cRaw['Konseling II'] ?? cRaw['Konseling 2'] ?? cNorm['konselingii'] ?? cNorm['konseling2'] ?? cNorm['konselingkedua'] ?? '').trim();
-        const konseling3 = String(cRaw['Konseling III'] ?? cRaw['Konseling 3'] ?? cNorm['konselingiii'] ?? cNorm['konseling3'] ?? cNorm['konselingketiga'] ?? '').trim();
-        const st = String(cRaw['ST'] ?? cRaw['Surat Teguran'] ?? cNorm['st'] ?? cNorm['suratteguran'] ?? cNorm['teguran'] ?? '').trim();
-        const sp1 = String(cRaw['SP I'] ?? cRaw['SP 1'] ?? cRaw['SP-1'] ?? cNorm['spi'] ?? cNorm['sp1'] ?? cNorm['suratperingatan1'] ?? cNorm['suratperingatani'] ?? '').trim();
-        const sp2 = String(cRaw['SP II'] ?? cRaw['SP 2'] ?? cRaw['SP-2'] ?? cNorm['spii'] ?? cNorm['sp2'] ?? cNorm['suratperingatan2'] ?? cNorm['suratperingatanii'] ?? '').trim();
-        const sp3 = String(cRaw['SP III'] ?? cRaw['SP 3'] ?? cRaw['SP-3'] ?? cNorm['spiii'] ?? cNorm['sp3'] ?? cNorm['suratperingatan3'] ?? cNorm['suratperingataniii'] ?? '').trim();
-        const sppt = String(cRaw['SPPT'] ?? cRaw['SP Pertama dan Terakhir'] ?? cRaw['SPPT (SP 3)'] ?? cNorm['sppt'] ?? cNorm['sppertamadanterakhir'] ?? cNorm['sp1sppt'] ?? cNorm['spterakhir'] ?? '').trim();
-        const tanggalSp = String(cRaw['Tanggal SP'] ?? cRaw['Tanggal Surat Peringatan'] ?? cNorm['tanggalsp'] ?? cNorm['tglsp'] ?? cNorm['tanggalperingatan'] ?? cNorm['tglperingatan'] ?? '').trim();
+        // Per-level Dates
+        const tglK1 = String(cRaw['Tanggal Konseling 1'] ?? cRaw['Tanggal Konseling I'] ?? cNorm['tanggalkonseling1'] ?? cNorm['tanggalkonselingi'] ?? '').trim();
+        const tglK2 = String(cRaw['Tanggal Konseling 2'] ?? cRaw['Tanggal Konseling II'] ?? cNorm['tanggalkonseling2'] ?? cNorm['tanggalkonselingii'] ?? '').trim();
+        const tglK3 = String(cRaw['Tanggal Konseling 3'] ?? cRaw['Tanggal Konseling III'] ?? cNorm['tanggalkonseling3'] ?? cNorm['tanggalkonselingiii'] ?? '').trim();
+        const tglSt = String(cRaw['Tanggal Surat Teguran'] ?? cRaw['Tanggal ST'] ?? cNorm['tanggalsuratteguran'] ?? cNorm['tanggalst'] ?? '').trim();
+        const tglSp1 = String(cRaw['Tanggal SP 1'] ?? cRaw['Tanggal SP I'] ?? cNorm['tanggalsp1'] ?? cNorm['tanggalspi'] ?? '').trim();
+        const tglSp2 = String(cRaw['Tanggal SP 2'] ?? cRaw['Tanggal SP II'] ?? cNorm['tanggalsp2'] ?? cNorm['tanggalspii'] ?? '').trim();
+        const tglSp3 = String(cRaw['Tanggal SP 3'] ?? cRaw['Tanggal SP III'] ?? cNorm['tanggalsp3'] ?? cNorm['tanggalspiii'] ?? '').trim();
+        const tglSppt = String(cRaw['Tanggal SPPT'] ?? cRaw['Tanggal SP Pertama dan Terakhir'] ?? cNorm['tanggalsppt'] ?? cNorm['tanggalsppertamadanterakhir'] ?? '').trim();
+
+        // Flags or raw dates
+        const rawK1 = String(cRaw['Konseling I'] ?? cRaw['Konseling 1'] ?? cNorm['konselingi'] ?? cNorm['konseling1'] ?? cNorm['konselingpertama'] ?? '').trim();
+        const rawK2 = String(cRaw['Konseling II'] ?? cRaw['Konseling 2'] ?? cNorm['konselingii'] ?? cNorm['konseling2'] ?? cNorm['konselingkedua'] ?? '').trim();
+        const rawK3 = String(cRaw['Konseling III'] ?? cRaw['Konseling 3'] ?? cNorm['konselingiii'] ?? cNorm['konseling3'] ?? cNorm['konselingketiga'] ?? '').trim();
+        const rawSt = String(cRaw['ST'] ?? cRaw['Surat Teguran'] ?? cNorm['st'] ?? cNorm['suratteguran'] ?? cNorm['teguran'] ?? '').trim();
+        const rawSp1 = String(cRaw['SP I'] ?? cRaw['SP 1'] ?? cRaw['SP-1'] ?? cNorm['spi'] ?? cNorm['sp1'] ?? cNorm['suratperingatan1'] ?? cNorm['suratperingatani'] ?? '').trim();
+        const rawSp2 = String(cRaw['SP II'] ?? cRaw['SP 2'] ?? cRaw['SP-2'] ?? cNorm['spii'] ?? cNorm['sp2'] ?? cNorm['suratperingatan2'] ?? cNorm['suratperingatanii'] ?? '').trim();
+        const rawSp3 = String(cRaw['SP III'] ?? cRaw['SP 3'] ?? cRaw['SP-3'] ?? cNorm['spiii'] ?? cNorm['sp3'] ?? cNorm['suratperingatan3'] ?? cNorm['suratperingataniii'] ?? '').trim();
+        const rawSppt = String(cRaw['SPPT'] ?? cRaw['SP Pertama dan Terakhir'] ?? cRaw['SPPT (SP 3)'] ?? cNorm['sppt'] ?? cNorm['sppertamadanterakhir'] ?? cNorm['sp1sppt'] ?? cNorm['spterakhir'] ?? '').trim();
+
+        const konseling1 = tglK1 || (rawK1 !== '0' ? rawK1 : '');
+        const konseling2 = tglK2 || (rawK2 !== '0' ? rawK2 : '');
+        const konseling3 = tglK3 || (rawK3 !== '0' ? rawK3 : '');
+        const st = tglSt || (rawSt !== '0' ? rawSt : '');
+        const sp1 = tglSp1 || (rawSp1 !== '0' ? rawSp1 : '');
+        const sp2 = tglSp2 || (rawSp2 !== '0' ? rawSp2 : '');
+        const sp3 = tglSp3 || (rawSp3 !== '0' ? rawSp3 : '');
+        const sppt = tglSppt || (rawSppt !== '0' ? rawSppt : '');
+
+        const tanggalSp = [tglSppt, tglSp3, tglSp2, tglSp1, tglSt].filter(Boolean).join('; ') || String(cRaw['Tanggal SP'] ?? cRaw['Tanggal Surat Peringatan'] ?? cNorm['tanggalsp'] ?? cNorm['tglsp'] ?? cNorm['tanggalperingatan'] ?? cNorm['tglperingatan'] ?? '').trim();
         const phk = String(cRaw['PHK'] ?? cNorm['phk'] ?? '').trim();
         
         const rawMasaBerlaku = cRaw['Masa Berlaku Sanksi'] ?? cRaw['Masa Berlaku'] ?? cRaw['Periode Berlaku'] ?? cNorm['masaberlakusanksi'] ?? cNorm['masaberlaku'] ?? cNorm['periodeberlaku'] ?? cNorm['tglberlaku'] ?? cNorm['tanggalberlaku'] ?? '';
@@ -935,26 +956,35 @@ employeesRouter.post("/import", async (req, res) => {
         const rawMasaPemulihan2 = cRaw['Masa Pemulihan II'] ?? cRaw['Masa Pemulihan 2'] ?? cNorm['masapemulihanii'] ?? cNorm['masapemulihan2'] ?? cNorm['pemulihanii'] ?? cNorm['pemulihan2'] ?? cNorm['masapemulihantahap2'] ?? '';
         const masaPemulihan2 = cleanDateVal(rawMasaPemulihan2) || String(rawMasaPemulihan2).trim();
         
-        const alasanKonseling = String(
+        // Multi-level reasons
+        const ak1 = String(cRaw['Alasan Konseling 1'] ?? cRaw['Alasan Konseling I'] ?? cNorm['alasankonseling1'] ?? cNorm['alasankonselingi'] ?? '').trim();
+        const ak2 = String(cRaw['Alasan Konseling 2'] ?? cRaw['Alasan Konseling II'] ?? cNorm['alasankonseling2'] ?? cNorm['alasankonselingii'] ?? '').trim();
+        const ak3 = String(cRaw['Alasan Konseling 3'] ?? cRaw['Alasan Konseling III'] ?? cNorm['alasankonseling3'] ?? cNorm['alasankonselingiii'] ?? '').trim();
+        const akCombined = [ak1, ak2, ak3].filter(Boolean).join('\n');
+
+        const alasanKonseling = akCombined || String(
           cRaw['Alasan Konseling'] ?? 
           cRaw['Alasan Pembinaan'] ?? 
           cRaw['Topik Konseling'] ?? 
           cRaw['Catatan Konseling'] ?? 
           cRaw['Konseling Alasan'] ?? 
-          cRaw['Alasan Konseling 1'] ?? 
-          cRaw['Alasan Konseling I'] ?? 
           cNorm['alasankonseling'] ?? 
           cNorm['alasankonselingpembinaan'] ?? 
           cNorm['alasanpembinaan'] ?? 
           cNorm['topikkonseling'] ?? 
           cNorm['catatankonseling'] ?? 
           cNorm['konselingalasan'] ?? 
-          cNorm['alasankonseling1'] ?? 
-          cNorm['alasankonselingi'] ?? 
           ''
         ).trim();
 
-        const alasanSp = String(
+        const ast = String(cRaw['Alasan Surat Teguran'] ?? cRaw['Alasan ST'] ?? cNorm['alasansuratteguran'] ?? cNorm['alasanst'] ?? '').trim();
+        const asp1 = String(cRaw['Alasan SP 1'] ?? cRaw['Alasan SP I'] ?? cNorm['alasansp1'] ?? cNorm['alasanspi'] ?? '').trim();
+        const asp2 = String(cRaw['Alasan SP 2'] ?? cRaw['Alasan SP II'] ?? cNorm['alasansp2'] ?? cNorm['alasanspii'] ?? '').trim();
+        const asp3 = String(cRaw['Alasan SP 3'] ?? cRaw['Alasan SP III'] ?? cNorm['alasansp3'] ?? cNorm['alasanspiii'] ?? '').trim();
+        const asppt = String(cRaw['Alasan SPPT'] ?? cRaw['Alasan SP Pertama dan Terakhir'] ?? cNorm['alasansppt'] ?? cNorm['alasansppertamadanterakhir'] ?? '').trim();
+        const aspCombined = [ast, asp1, asp2, asp3, asppt].filter(Boolean).join('\n');
+
+        const alasanSp = aspCombined || String(
           cRaw['Alasan Surat Peringatan'] ?? 
           cRaw['Alasan SP'] ?? 
           cRaw['Alasan SPDK'] ?? 
@@ -963,10 +993,6 @@ employeesRouter.post("/import", async (req, res) => {
           cRaw['Alasan Pelanggaran'] ?? 
           cRaw['Alasan ST'] ?? 
           cRaw['Alasan Surat Teguran'] ?? 
-          cRaw['Alasan SP 1'] ?? 
-          cRaw['Alasan SP 2'] ?? 
-          cRaw['Alasan SP 3'] ?? 
-          cRaw['Alasan SPPT'] ?? 
           cRaw['Pelanggaran'] ?? 
           cRaw['Kasus'] ?? 
           cRaw['Uraian Pelanggaran'] ?? 

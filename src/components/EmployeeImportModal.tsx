@@ -591,20 +591,38 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         if (h.clean === 'pt' || h.clean === 'perusahaan') rowObj['PT'] = val;
         if (h.clean === 'totalsp' || h.clean === 'totalsanksi' || h.clean === 'total') rowObj['Total SP'] = val;
         if (h.clean === 'bulankonseling' || h.clean === 'bulansanksi' || h.clean === 'bulan' || h.clean === 'periode') rowObj['Bulan Konseling'] = val;
-        if (h.clean === 'konselingi' || h.clean === 'konseling1' || h.clean === 'konselingpertama') rowObj['Konseling I'] = val;
-        if (h.clean === 'konselingii' || h.clean === 'konseling2' || h.clean === 'konselingkedua') rowObj['Konseling II'] = val;
-        if (h.clean === 'konselingiii' || h.clean === 'konseling3' || h.clean === 'konselingketiga') rowObj['Konseling III'] = val;
-        if (h.clean === 'st' || h.clean === 'suratteguran' || h.clean === 'teguran') rowObj['ST'] = val;
-        if (h.clean === 'spi' || h.clean === 'sp1' || h.clean === 'suratperingatan1' || h.clean === 'suratperingatani') rowObj['SP I'] = val;
-        if (h.clean === 'spii' || h.clean === 'sp2' || h.clean === 'suratperingatan2' || h.clean === 'suratperingatanii') rowObj['SP II'] = val;
-        if (h.clean === 'spiii' || h.clean === 'sp3' || h.clean === 'suratperingatan3' || h.clean === 'suratperingataniii') rowObj['SP III'] = val;
-        if (h.clean === 'sppt' || h.clean === 'sp1sppt' || h.clean === 'sppertamadanterakhir' || h.clean === 'spterakhir' || h.clean === 'spptsp3') rowObj['SPPT'] = val;
+        if (h.clean === 'konselingi' || h.clean === 'konseling1' || h.clean === 'konselingpertama' || h.clean === 'tanggalkonseling1' || h.clean === 'tanggalkonselingi') {
+          if (!rowObj['Konseling I'] || val.includes('-') || val.includes('/')) rowObj['Konseling I'] = val;
+        }
+        if (h.clean === 'konselingii' || h.clean === 'konseling2' || h.clean === 'konselingkedua' || h.clean === 'tanggalkonseling2' || h.clean === 'tanggalkonselingii') {
+          if (!rowObj['Konseling II'] || val.includes('-') || val.includes('/')) rowObj['Konseling II'] = val;
+        }
+        if (h.clean === 'konselingiii' || h.clean === 'konseling3' || h.clean === 'konselingketiga' || h.clean === 'tanggalkonseling3' || h.clean === 'tanggalkonselingiii') {
+          if (!rowObj['Konseling III'] || val.includes('-') || val.includes('/')) rowObj['Konseling III'] = val;
+        }
+        if (h.clean === 'st' || h.clean === 'suratteguran' || h.clean === 'teguran' || h.clean === 'tanggalsuratteguran' || h.clean === 'tanggalst') {
+          if (!rowObj['ST'] || val.includes('-') || val.includes('/')) rowObj['ST'] = val;
+        }
+        if (h.clean === 'spi' || h.clean === 'sp1' || h.clean === 'suratperingatan1' || h.clean === 'suratperingatani' || h.clean === 'tanggalsp1' || h.clean === 'tanggalspi') {
+          if (!rowObj['SP I'] || val.includes('-') || val.includes('/')) rowObj['SP I'] = val;
+        }
+        if (h.clean === 'spii' || h.clean === 'sp2' || h.clean === 'suratperingatan2' || h.clean === 'suratperingatanii' || h.clean === 'tanggalsp2' || h.clean === 'tanggalspii') {
+          if (!rowObj['SP II'] || val.includes('-') || val.includes('/')) rowObj['SP II'] = val;
+        }
+        if (h.clean === 'spiii' || h.clean === 'sp3' || h.clean === 'suratperingatan3' || h.clean === 'suratperingataniii' || h.clean === 'tanggalsp3' || h.clean === 'tanggalspiii') {
+          if (!rowObj['SP III'] || val.includes('-') || val.includes('/')) rowObj['SP III'] = val;
+        }
+        if (h.clean === 'sppt' || h.clean === 'sp1sppt' || h.clean === 'sppertamadanterakhir' || h.clean === 'spterakhir' || h.clean === 'spptsp3' || h.clean === 'tanggalsppt') {
+          if (!rowObj['SPPT'] || val.includes('-') || val.includes('/')) rowObj['SPPT'] = val;
+        }
         if (h.clean === 'tanggalsp' || h.clean === 'tglsp' || h.clean === 'tanggalperingatan' || h.clean === 'tglperingatan') rowObj['Tanggal SP'] = val;
         if (h.clean === 'phk') rowObj['PHK'] = val;
         if (h.clean === 'masaberlakusanksi' || h.clean === 'masaberlaku' || h.clean === 'periodeberlaku' || h.clean === 'tglberlaku' || h.clean === 'tanggalberlaku') rowObj['Masa Berlaku Sanksi'] = val;
         if (h.clean === 'masapemulihani' || h.clean === 'masapemulihan1' || h.clean === 'pemulihani' || h.clean === 'pemulihan1') rowObj['Masa Pemulihan I'] = val;
         if (h.clean === 'masapemulihanii' || h.clean === 'masapemulihan2' || h.clean === 'pemulihanii' || h.clean === 'pemulihan2') rowObj['Masa Pemulihan II'] = val;
-        if (h.clean === 'alasankonseling' || h.clean === 'alasankonselingpembinaan' || h.clean === 'alasanpembinaan' || h.clean === 'topikkonseling' || h.clean === 'catatankonseling' || h.clean === 'konselingalasan' || h.clean === 'alasankonseling1' || h.clean === 'alasankonselingi') rowObj['Alasan Konseling'] = val;
+        if (h.clean === 'alasankonseling' || h.clean === 'alasankonselingpembinaan' || h.clean === 'alasanpembinaan' || h.clean === 'topikkonseling' || h.clean === 'catatankonseling' || h.clean === 'konselingalasan' || h.clean === 'alasankonseling1' || h.clean === 'alasankonselingi' || h.clean === 'alasankonseling2' || h.clean === 'alasankonselingii' || h.clean === 'alasankonseling3' || h.clean === 'alasankonselingiii') {
+          rowObj['Alasan Konseling'] = rowObj['Alasan Konseling'] ? `${rowObj['Alasan Konseling']}\n${val}` : val;
+        }
         if (
           h.clean === 'alasansuratperingatan' || 
           h.clean === 'alasansp' || 
@@ -626,7 +644,9 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
           h.clean === 'alasansanksidisiplin' || 
           h.clean === 'alasanperingatan' || 
           h.clean === 'alasan'
-        ) rowObj['Alasan Surat Peringatan'] = val;
+        ) {
+          rowObj['Alasan Surat Peringatan'] = rowObj['Alasan Surat Peringatan'] ? `${rowObj['Alasan Surat Peringatan']}\n${val}` : val;
+        }
         if (h.clean === 'keterangansp' || h.clean === 'keterangan' || h.clean === 'catatan') rowObj['Keterangan SP'] = val;
         if (h.clean === 'pernahspstsebelumnya' || h.clean === 'pernahspsebelumnya' || h.clean === 'pernahspst' || h.clean === 'pernahsp' || h.clean === 'riwayatsp') rowObj['Pernah SP/ST Sebelumnya'] = val;
         if (h.clean === 'pernahterlibatspdk' || h.clean === 'terlibatspdk' || h.clean === 'spdk' || h.clean === 'statusspdk') rowObj['Pernah Terlibat SPDK'] = val;
