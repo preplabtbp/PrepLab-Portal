@@ -4318,6 +4318,14 @@ export function NotionDatabaseTable({
 
                                 // 6. Priority Column (Interactive Dropdown)
                                 if (colLower.includes('priority') || colLower.includes('prioritas')) {
+                                  if (isSubItem) {
+                                    return (
+                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono ${fitPageMode ? 'px-1 py-1.5' : 'px-3.5 py-2'}`}>
+                                        <span className="text-slate-400 text-xs font-mono">-</span>
+                                      </td>
+                                    );
+                                  }
+
                                   return (
                                     <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-2 overflow-hidden' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
                                       <NotionDropdownCell
@@ -4469,6 +4477,14 @@ export function NotionDatabaseTable({
 
                                 // 9. Kategori Column
                                 if (colLower.includes('kategori') || colLower.includes('category')) {
+                                  if (isSubItem) {
+                                    return (
+                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono ${fitPageMode ? 'px-1 py-1.5' : 'px-3.5 py-2'}`}>
+                                        <span className="text-slate-400 text-xs font-mono">-</span>
+                                      </td>
+                                    );
+                                  }
+
                                   return (
                                     <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
                                       {val && val !== '-' ? (
@@ -4490,6 +4506,14 @@ export function NotionDatabaseTable({
 
                                 // 10. Activity Column (Interactive Dropdown)
                                 if (colLower.includes('activity') || colLower.includes('aktivitas')) {
+                                  if (isSubItem) {
+                                    return (
+                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono ${fitPageMode ? 'px-1 py-1.5' : 'px-3.5 py-2'}`}>
+                                        <span className="text-slate-400 text-xs font-mono">-</span>
+                                      </td>
+                                    );
+                                  }
+
                                   return (
                                     <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
                                       <NotionDropdownCell
@@ -4507,6 +4531,14 @@ export function NotionDatabaseTable({
 
                                 // 11. Period Column (Interactive Dropdown)
                                 if (colLower.includes('period') || colLower.includes('periode')) {
+                                  if (isSubItem) {
+                                    return (
+                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono ${fitPageMode ? 'px-1 py-1.5' : 'px-3.5 py-2'}`}>
+                                        <span className="text-slate-400 text-xs font-mono">-</span>
+                                      </td>
+                                    );
+                                  }
+
                                   return (
                                     <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
                                       <NotionDropdownCell
@@ -4515,6 +4547,25 @@ export function NotionDatabaseTable({
                                         compact={fitPageMode}
                                         onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
                                       />
+                                    </td>
+                                  );
+                                }
+
+                                // 12. Risk Assessment Column
+                                if (colLower.includes('risk') || colLower.includes('resiko') || colLower.includes('assessment')) {
+                                  if (isSubItem) {
+                                    return (
+                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono ${fitPageMode ? 'px-1 py-1.5' : 'px-3.5 py-2'}`}>
+                                        <span className="text-slate-400 text-xs font-mono">-</span>
+                                      </td>
+                                    );
+                                  }
+
+                                  return (
+                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} className={`whitespace-nowrap ${
+                                      fitPageMode ? 'px-1 py-2 text-[10.5px]' : 'px-3.5 py-2.5 text-xs'
+                                    }`}>
+                                      {val && val !== '-' ? val : <span className="font-mono text-slate-400">-</span>}
                                     </td>
                                   );
                                 }
@@ -4534,8 +4585,8 @@ export function NotionDatabaseTable({
 
                               {/* Row Action Buttons */}
                               <td className={`text-center whitespace-nowrap ${fitPageMode ? 'px-1 py-2' : 'px-3 py-2.5'}`}>
-                                <div className="flex items-center justify-center gap-1">
-                                  {!isSubItem && (
+                                {!isSubItem ? (
+                                  <div className="flex items-center justify-center gap-1">
                                     <button
                                       type="button"
                                       onClick={(e) => {
@@ -4549,22 +4600,34 @@ export function NotionDatabaseTable({
                                     >
                                       <Plus className="w-3.5 h-3.5" />
                                     </button>
-                                  )}
-                                  <button
-                                    onClick={(e) => handleOpenEditModal(row, actualRowIndex, e)}
-                                    className="p-1.5 rounded-lg hover:text-amber-500 text-slate-400 transition-colors cursor-pointer"
-                                    title="Edit Data Kegiatan Ini"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={(e) => handleDeleteRow(actualRowIndex, e)}
-                                    className="p-1.5 rounded-lg hover:text-rose-500 text-slate-400 transition-colors cursor-pointer"
-                                    title={isSubItem ? "Hapus Sub-kegiatan Ini" : "Hapus Baris Ini"}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
+                                    <button
+                                      onClick={(e) => handleOpenEditModal(row, actualRowIndex, e)}
+                                      className="p-1.5 rounded-lg hover:text-amber-500 text-slate-400 transition-colors cursor-pointer"
+                                      title="Edit Data Kegiatan Ini"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => handleDeleteRow(actualRowIndex, e)}
+                                      className="p-1.5 rounded-lg hover:text-rose-500 text-slate-400 transition-colors cursor-pointer"
+                                      title="Hapus Baris Ini"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-center">
+                                    {/* Tombol hapus sub-item cepat saat hover jika diperlukan */}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleDeleteRow(actualRowIndex, e)}
+                                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:text-rose-500 text-slate-400 transition-all cursor-pointer"
+                                      title="Hapus Sub-kegiatan Ini"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           );
