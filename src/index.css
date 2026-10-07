@@ -235,20 +235,25 @@ button[class*="bg-slate-900"] {
   color: #ffffff;
 }
 
-/* Custom Scrollbar for a sleek look */
+/* Custom Scrollbar for a sleek look - Transparent idle, prominent on hover */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #CBD5E0;
-  border-radius: 3px;
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+  transition: all 0.25s ease;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #A0AEC0;
+  background: #0d9488;
+  border-color: #ffffff;
+  box-shadow: 0 0 8px rgba(13, 148, 136, 0.5);
 }
 
 /* Glassmorphism helpers for light pastel theme */
