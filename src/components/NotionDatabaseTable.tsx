@@ -3497,18 +3497,27 @@ export function NotionDatabaseTable({
         <div 
           ref={tableScrollRef}
           onScroll={handleTableScroll}
-          className="overflow-x-auto w-full transition-all notion-table-scroll-hide"
+          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] w-full transition-all notion-table-scroll-freeze rounded-b-xl border-t border-slate-200 dark:border-[#2d2d2d]"
           style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
         >
           <style>{`
-            .notion-table-scroll-hide {
-              scrollbar-width: none;
-              -ms-overflow-style: none;
+            .notion-table-scroll-freeze {
+              scrollbar-width: thin;
+              scrollbar-color: rgba(13, 148, 136, 0.4) transparent;
             }
-            .notion-table-scroll-hide::-webkit-scrollbar {
-              display: none;
-              width: 0;
-              height: 0;
+            .notion-table-scroll-freeze::-webkit-scrollbar {
+              width: 6px;
+              height: 0px;
+            }
+            .notion-table-scroll-freeze::-webkit-scrollbar-track {
+              background: transparent;
+            }
+            .notion-table-scroll-freeze::-webkit-scrollbar-thumb {
+              background: rgba(13, 148, 136, 0.4);
+              border-radius: 9999px;
+            }
+            .notion-table-scroll-freeze::-webkit-scrollbar-thumb:hover {
+              background: rgba(13, 148, 136, 0.7);
             }
 
             .notion-floating-scroll-light {
