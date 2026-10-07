@@ -3562,7 +3562,7 @@ export function NotionDatabaseTable({
               >
                 {/* Select All Checkbox Column */}
                 <th 
-                  className={`sticky top-12 z-20 text-center shadow-2xs ${
+                  className={`sticky top-0 z-20 text-center shadow-2xs ${
                     isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#202020] text-slate-300 border-b border-[#303030]'
                   } ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}
                 >
@@ -3615,7 +3615,7 @@ export function NotionDatabaseTable({
                     <th
                       key={colHeader}
                       style={getColStyle(colHeader)}
-                      className={`sticky top-12 z-20 shadow-2xs font-bold hover:opacity-90 transition-opacity group/th relative ${
+                      className={`sticky top-0 z-20 shadow-2xs font-bold hover:opacity-90 transition-opacity group/th relative ${
                         isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#202020] text-slate-300 border-b border-[#303030]'
                       } ${widthClass}`}
                     >
@@ -3709,7 +3709,7 @@ export function NotionDatabaseTable({
 
                 {/* Add Column Header Button (+) */}
                 <th 
-                  className={`sticky top-12 z-20 w-10 text-center px-1 py-2 relative shadow-2xs ${
+                  className={`sticky top-0 z-20 w-10 text-center px-1 py-2 relative shadow-2xs ${
                     isNotionLight ? 'bg-[#fbfbfa] border-b border-slate-200' : 'bg-[#202020] border-b border-[#303030]'
                   }`} 
                   ref={addColumnRef}
@@ -3837,7 +3837,7 @@ export function NotionDatabaseTable({
                 </th>
 
                 <th 
-                  className={`sticky top-12 z-20 text-center shadow-2xs ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${
+                  className={`sticky top-0 z-20 text-center shadow-2xs ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${
                     isNotionLight ? 'bg-[#fbfbfa] text-slate-500 font-semibold border-b border-slate-200' : 'bg-[#202020] text-slate-400 font-bold border-b border-[#303030]'
                   }`}
                 >
