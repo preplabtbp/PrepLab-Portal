@@ -1545,7 +1545,7 @@ ${aiMeetingNotes
         </div>
 
         {/* Content Body */}
-        <div className={`flex-1 w-full pb-32 ${isSectionHubPost(selectedPost) ? 'p-2 sm:p-4 md:p-6' : 'p-4 md:p-6 lg:p-8'}`}>
+        <div className={`flex-1 w-full pb-32 ${isSectionHubPost(selectedPost) ? 'p-2 sm:p-4 md:p-6' : parsedTableData ? 'p-2 sm:p-3 md:p-4' : 'p-4 md:p-6 lg:p-8'}`}>
           {!selectedPost && !isEditing ? (
             <TbpDashboard
               posts={selectedPtFilter !== "ALL" ? posts.filter((p) => {

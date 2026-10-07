@@ -3020,10 +3020,10 @@ export function NotionDatabaseTable({
 
   return (
     <div 
-      className={`w-full rounded-2xl my-4 border transition-all ${
+      className={`w-full my-2 border-b transition-all ${
         isNotionLight 
-          ? 'bg-white border-slate-200 text-slate-900 shadow-xs' 
-          : 'bg-[#181818] border-slate-700 text-slate-200 shadow-xl'
+          ? 'bg-white border-slate-200 text-slate-900' 
+          : 'bg-[#181818] border-[#2d2d2d] text-slate-200'
       }`}
     >
       {/* ========================================================================= */}
@@ -3031,7 +3031,7 @@ export function NotionDatabaseTable({
       {/* ========================================================================= */}
       <div 
         ref={headerControlRef}
-        className={`sticky top-0 z-30 transition-all border-b shadow-xs backdrop-blur-md rounded-t-2xl ${
+        className={`sticky top-0 z-30 transition-all border-b shadow-2xs backdrop-blur-md ${
           isNotionLight ? 'bg-white/95 border-slate-200' : 'bg-[#181818]/95 border-[#2d2d2d]'
         }`}
       >
@@ -3403,7 +3403,7 @@ export function NotionDatabaseTable({
         <div 
           ref={tableScrollRef}
           onScroll={handleTableScroll}
-          className="overflow-x-auto w-full transition-all rounded-b-xl notion-table-scroll-hide"
+          className="overflow-x-auto w-full transition-all notion-table-scroll-hide"
           style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
         >
           <style>{`
