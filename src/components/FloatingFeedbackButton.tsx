@@ -5,7 +5,7 @@ import {
   Image as ImageIcon, ExternalLink, Loader2, CheckCircle2,
   Camera, Clipboard, Trash2, RefreshCw
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { toJpeg } from 'html-to-image';
 import { toast } from 'sonner';
 import { uploadPhotoToDrive } from '../sheets-api';
 import { triggerExpGain } from '../lib/gamificationEvents';
@@ -121,45 +121,65 @@ export function FloatingFeedbackButton({
   const handleCaptureScreen = async () => {
     setCapturingScreen(true);
     const toastId = toast.loading('Mengambil tangkapan layar tampilan portal...');
+    const modalEl = document.querySelector('.feedback-modal-container') as HTMLElement;
+    const backdropEl = document.querySelector('.feedback-modal-backdrop') as HTMLElement;
     try {
-      const modalEl = document.querySelector('.feedback-modal-container') as HTMLElement;
-      const backdropEl = document.querySelector('.feedback-modal-backdrop') as HTMLElement;
-      if (modalEl) modalEl.style.opacity = '0';
-      if (backdropEl) backdropEl.style.opacity = '0';
+      if (modalEl) modalEl.style.display = 'none';
+      if (backdropEl) backdropEl.style.display = 'none';
 
-      // Jeda sejenak agar browser merender penghilangan modal
-      await new Promise(r => setTimeout(r, 60));
+      // Jeda sejenak agar browser merender penghilangan modal sepenuhnya
+      await new Promise(r => setTimeout(r, 80));
 
       const targetEl = document.getElementById('root') || document.body;
-      const canvas = await html2canvas(targetEl, {
-        useCORS: true,
-        allowTaint: true,
-        scale: Math.min(window.devicePixelRatio || 1, 1.5),
-        logging: false,
-        ignoreElements: (element) => {
-          return (
-            element.hasAttribute('data-html2canvas-ignore') ||
-            element.classList.contains('feedback-modal-container') ||
-            element.classList.contains('feedback-modal-backdrop') ||
-            element.tagName === 'NOSCRIPT'
-          );
+      
+      let dataUrl: string = '';
+      try {
+        dataUrl = await toJpeg(targetEl, {
+          quality: 0.85,
+          skipFonts: true,
+          cacheBust: false,
+          pixelRatio: Math.min(window.devicePixelRatio || 1, 1.25),
+          filter: (node: any) => {
+            if (!node || !node.tagName) return true;
+            if (node.hasAttribute?.('data-html2canvas-ignore')) return false;
+            if (node.classList?.contains('feedback-modal-container') ||
+                node.classList?.contains('feedback-modal-backdrop') ||
+                node.classList?.contains('feedback-ignore-capture')) {
+              return false;
+            }
+            return true;
+          }
+        });
+      } catch (domCaptureErr) {
+        console.warn('html-to-image error, attempting displayMedia fallback:', domCaptureErr);
+        if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { displaySurface: 'browser' } as any,
+            audio: false
+          });
+          const video = document.createElement('video');
+          video.srcObject = stream;
+          await video.play();
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+          stream.getTracks().forEach(t => t.stop());
+          dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        } else {
+          throw domCaptureErr;
         }
-      });
+      }
 
-      if (modalEl) modalEl.style.opacity = '1';
-      if (backdropEl) backdropEl.style.opacity = '1';
-
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       setScreenshotBase64(dataUrl);
       toast.success('Tampilan portal yang sedang diakses berhasil dilampirkan! 📸', { id: toastId });
     } catch (err: any) {
       console.error('Failed to capture screen:', err);
-      const modalEl = document.querySelector('.feedback-modal-container') as HTMLElement;
-      const backdropEl = document.querySelector('.feedback-modal-backdrop') as HTMLElement;
-      if (modalEl) modalEl.style.opacity = '1';
-      if (backdropEl) backdropEl.style.opacity = '1';
-      toast.error('Gagal mengambil tangkapan layar otomatis. Silakan tempel (Ctrl+V) atau pilih file manual.', { id: toastId });
+      toast.error('Gagal mengambil screenshot otomatis. Silakan gunakan tombol PrtSc / Snipping Tool lalu tekan Ctrl + V.', { id: toastId });
     } finally {
+      if (modalEl) modalEl.style.display = '';
+      if (backdropEl) backdropEl.style.display = '';
       setCapturingScreen(false);
     }
   };
@@ -324,28 +344,20 @@ export function FloatingFeedbackButton({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.2 }}
-              className="feedback-modal-container relative w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden z-10 transition-colors my-auto"
-              style={{
-                backgroundColor: 'var(--card-bg, #1e293b)',
-                borderColor: 'var(--border-main, rgba(148, 163, 184, 0.25))',
-                color: 'var(--text-main, #f8fafc)'
-              }}
+              className="feedback-modal-container relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden z-10 my-auto text-slate-900"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div 
-                className="px-5 py-4 border-b flex items-center justify-between"
-                style={{ borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))' }}
-              >
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400">
-                    <Sparkles className="w-4 h-4 text-amber-400" />
+                  <div className="w-8 h-8 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-700">
+                    <Sparkles className="w-4 h-4 text-teal-600" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm sm:text-base leading-tight">
+                    <h3 className="font-bold text-sm sm:text-base text-slate-900 leading-tight">
                       Kirim Masukan &amp; Saran
                     </h3>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    <p className="text-xs text-slate-500 mt-0.5 font-normal">
                       Bantu kami menyempurnakan PrepLab Portal
                     </p>
                   </div>
@@ -355,7 +367,7 @@ export function FloatingFeedbackButton({
                   type="button"
                   onClick={() => setIsOpen(false)}
                   disabled={submitting}
-                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-slate-400 hover:text-white cursor-pointer"
+                  className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-800 cursor-pointer"
                   title="Tutup"
                 >
                   <X className="w-4 h-4" />
@@ -364,32 +376,32 @@ export function FloatingFeedbackButton({
 
               {/* Success Notification View */}
               {isSuccess ? (
-                <div className="p-8 text-center flex flex-col items-center justify-center space-y-3">
-                  <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 animate-bounce">
+                <div className="p-8 text-center flex flex-col items-center justify-center space-y-3 bg-white">
+                  <div className="w-14 h-14 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-600 animate-bounce">
                     <CheckCircle2 className="w-8 h-8" />
                   </div>
-                  <h4 className="font-bold text-base text-emerald-400">
+                  <h4 className="font-bold text-base text-slate-900">
                     Masukan Berhasil Terkirim!
                   </h4>
-                  <p className="text-xs text-slate-300 max-w-xs">
-                    Terima kasih atas kontribusi Anda. Poin <strong>+100 EXP</strong> telah ditambahkan ke profil Anda.
+                  <p className="text-xs text-slate-600 max-w-xs">
+                    Terima kasih atas kontribusi Anda. Poin <strong className="text-teal-700 font-bold">+100 EXP</strong> telah ditambahkan ke profil Anda.
                   </p>
                 </div>
               ) : (
                 /* Main Form */
-                <form onSubmit={handleSubmit} className="p-5 space-y-4">
-                  {/* Category Type Pills */}
+                <form onSubmit={handleSubmit} className="p-5 space-y-4 bg-white text-slate-900">
+                  {/* Category Type Pills - Strict 3 Colors (Slate / Teal / Black) */}
                   <div>
-                    <label className="block text-xs font-semibold text-[var(--text-muted)] mb-2">
+                    <label className="block text-xs font-bold text-slate-900 mb-2">
                       Kategori Masukan:
                     </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {(
                         [
-                          { key: 'suggestion', label: 'Saran Fitur', icon: Lightbulb, color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
-                          { key: 'bug', label: 'Kendala / Bug', icon: Bug, color: 'text-rose-400 border-rose-500/40 bg-rose-500/10' },
-                          { key: 'improvement', label: 'Peningkatan', icon: Sparkles, color: 'text-sky-400 border-sky-500/40 bg-sky-500/10' },
-                          { key: 'question', label: 'Pertanyaan', icon: MessageSquarePlus, color: 'text-teal-400 border-teal-500/40 bg-teal-500/10' }
+                          { key: 'suggestion', label: 'Saran Fitur', icon: Lightbulb },
+                          { key: 'bug', label: 'Kendala / Bug', icon: Bug },
+                          { key: 'improvement', label: 'Peningkatan', icon: Sparkles },
+                          { key: 'question', label: 'Pertanyaan', icon: MessageSquarePlus }
                         ] as const
                       ).map((item) => {
                         const isSelected = type === item.key;
@@ -399,13 +411,13 @@ export function FloatingFeedbackButton({
                             key={item.key}
                             type="button"
                             onClick={() => setType(item.key)}
-                            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                            className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs transition-all cursor-pointer ${
                               isSelected
-                                ? `${item.color} shadow-xs font-bold scale-[1.02] ring-1 ring-teal-400/30`
-                                : 'border-slate-700/60 bg-slate-800/40 text-slate-400 hover:text-slate-200'
+                                ? 'bg-teal-50 border-2 border-teal-600 text-teal-950 font-bold shadow-xs'
+                                : 'bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 font-semibold'
                             }`}
                           >
-                            <Icon className="w-3.5 h-3.5" />
+                            <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-teal-700' : 'text-slate-600'}`} />
                             <span>{item.label}</span>
                           </button>
                         );
@@ -415,18 +427,13 @@ export function FloatingFeedbackButton({
 
                   {/* Target Module Selection */}
                   <div>
-                    <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
+                    <label className="block text-xs font-bold text-slate-900 mb-1.5">
                       Modul Terkait:
                     </label>
                     <select
                       value={module}
                       onChange={(e) => setModule(e.target.value)}
-                      className="w-full text-xs rounded-xl px-3 py-2 border outline-none focus:border-teal-500 transition-colors"
-                      style={{
-                        backgroundColor: 'var(--input-bg, rgba(0, 0, 0, 0.25))',
-                        borderColor: 'var(--border-main, rgba(148, 163, 184, 0.25))',
-                        color: 'var(--text-main, #f8fafc)'
-                      }}
+                      className="w-full text-xs font-medium rounded-xl px-3 py-2.5 border border-slate-300 bg-white text-slate-900 outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 transition-colors shadow-2xs"
                     >
                       {MODULE_OPTIONS.map((m) => (
                         <option key={m} value={m}>
@@ -438,27 +445,22 @@ export function FloatingFeedbackButton({
 
                   {/* Title (Optional) */}
                   <div>
-                    <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
-                      Judul Ringkas <span className="opacity-60 font-normal">(opsional)</span>:
+                    <label className="block text-xs font-bold text-slate-900 mb-1.5">
+                      Judul Ringkas <span className="text-slate-500 font-normal">(opsional)</span>:
                     </label>
                     <input
                       type="text"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       placeholder="Contoh: Tombol simpan laporan KTA terlalu kecil"
-                      className="w-full text-xs rounded-xl px-3 py-2 border outline-none focus:border-teal-500 transition-colors"
-                      style={{
-                        backgroundColor: 'var(--input-bg, rgba(0, 0, 0, 0.25))',
-                        borderColor: 'var(--border-main, rgba(148, 163, 184, 0.25))',
-                        color: 'var(--text-main, #f8fafc)'
-                      }}
+                      className="w-full text-xs font-medium rounded-xl px-3 py-2.5 border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 transition-colors shadow-2xs"
                     />
                   </div>
 
                   {/* Description Textarea */}
                   <div>
-                    <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
-                      Deskripsi Masukan / Kendala: <span className="text-rose-400">*</span>
+                    <label className="block text-xs font-bold text-slate-900 mb-1.5">
+                      Deskripsi Masukan / Kendala: <span className="text-rose-600">*</span>
                     </label>
                     <textarea
                       rows={3}
@@ -466,27 +468,22 @@ export function FloatingFeedbackButton({
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="Jelaskan kendala, ide perbaikan, atau masukan yang Anda harapkan..."
                       required
-                      className="w-full text-xs rounded-xl p-3 border outline-none focus:border-teal-500 transition-colors resize-none"
-                      style={{
-                        backgroundColor: 'var(--input-bg, rgba(0, 0, 0, 0.25))',
-                        borderColor: 'var(--border-main, rgba(148, 163, 184, 0.25))',
-                        color: 'var(--text-main, #f8fafc)'
-                      }}
+                      className="w-full text-xs font-medium rounded-xl p-3 border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 transition-colors resize-none leading-relaxed shadow-2xs"
                     />
                   </div>
 
                   {/* Screenshot Attachment with Auto Capture & Ctrl+V Paste */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-[var(--text-muted)] flex items-center gap-1.5">
-                        <ImageIcon className="w-3.5 h-3.5 text-teal-400" />
-                        <span>Lampiran Screenshot Layar <span className="opacity-60 font-normal">(opsional)</span>:</span>
+                      <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-teal-700" />
+                        <span>Lampiran Screenshot Layar <span className="text-slate-500 font-normal">(opsional)</span>:</span>
                       </label>
                       {screenshotBase64 && (
                         <button
                           type="button"
                           onClick={() => setScreenshotBase64(null)}
-                          className="text-[11px] text-rose-400 hover:underline cursor-pointer"
+                          className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold hover:underline cursor-pointer"
                         >
                           Hapus Gambar
                         </button>
@@ -494,34 +491,34 @@ export function FloatingFeedbackButton({
                     </div>
 
                     {screenshotBase64 ? (
-                      <div className="relative w-full rounded-2xl overflow-hidden border border-teal-500/50 bg-black/40 p-2.5 flex items-center gap-3 shadow-inner">
+                      <div className="relative w-full rounded-2xl overflow-hidden border border-teal-300 bg-teal-50/50 p-3 flex items-center gap-3 shadow-2xs">
                         <img 
                           src={screenshotBase64} 
                           alt="Screenshot Lampiran" 
-                          className="w-24 h-16 object-cover rounded-xl border border-teal-500/40 shrink-0 shadow-xs" 
+                          className="w-24 h-16 object-cover rounded-xl border border-teal-200 shrink-0 shadow-xs" 
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-teal-300 flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <p className="text-xs font-bold text-teal-950 flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-teal-700" />
                             <span>Tangkapan Layar Terlampir</span>
                           </p>
-                          <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
-                            Akan otomatis terkirim bersama saran ke tim Developer
+                          <p className="text-[11px] text-slate-600 mt-0.5 line-clamp-1">
+                            Akan otomatis terkirim bersama saran ke Developer
                           </p>
                           <div className="flex items-center gap-2 mt-1.5">
                             <button
                               type="button"
                               onClick={handleCaptureScreen}
                               disabled={capturingScreen}
-                              className="text-[10.5px] font-semibold text-teal-300 hover:underline flex items-center gap-1 cursor-pointer"
+                              className="text-[11px] font-bold text-teal-700 hover:text-teal-800 hover:underline flex items-center gap-1 cursor-pointer"
                             >
                               <Camera className="w-3 h-3" /> Tangkap Ulang Layar
                             </button>
-                            <span className="text-slate-600">•</span>
+                            <span className="text-slate-300">•</span>
                             <button
                               type="button"
                               onClick={() => setScreenshotBase64(null)}
-                              className="text-[10.5px] font-semibold text-rose-400 hover:underline cursor-pointer"
+                              className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
                             >
                               Hapus
                             </button>
@@ -535,17 +532,17 @@ export function FloatingFeedbackButton({
                           type="button"
                           onClick={handleCaptureScreen}
                           disabled={capturingScreen}
-                          className="w-full py-2.5 px-3.5 rounded-xl border border-teal-500/40 bg-teal-500/15 hover:bg-teal-500/25 active:scale-[0.99] text-teal-300 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+                          className="w-full py-2.5 px-4 rounded-xl border border-teal-300 bg-teal-50 hover:bg-teal-100 active:scale-[0.99] text-teal-950 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
                           title="Ambil tangkapan layar tampilan portal yang sedang aktif di belakang jendela ini"
                         >
                           {capturingScreen ? (
                             <>
-                              <Loader2 className="w-4 h-4 animate-spin text-teal-400" />
+                              <Loader2 className="w-4 h-4 animate-spin text-teal-700" />
                               <span>Sedang mengambil tampilan layar portal...</span>
                             </>
                           ) : (
                             <>
-                              <Camera className="w-4 h-4 text-teal-400" />
+                              <Camera className="w-4 h-4 text-teal-700" />
                               <span>📸 Tangkap Tampilan Layar Portal Saat Ini</span>
                             </>
                           )}
@@ -554,22 +551,22 @@ export function FloatingFeedbackButton({
                         {/* Dropzone & Paste (Ctrl+V) Area */}
                         <div 
                           onClick={() => fileInputRef.current?.click()}
-                          className="p-3 rounded-xl border border-dashed border-slate-700/80 bg-slate-800/30 hover:bg-slate-800/60 transition-colors flex items-center justify-between gap-2.5 cursor-pointer group"
+                          className="p-3.5 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-teal-50/40 hover:border-teal-400 transition-colors flex items-center justify-between gap-3 cursor-pointer group"
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-8 h-8 rounded-lg bg-teal-500/10 text-teal-400 flex items-center justify-center shrink-0 border border-teal-500/20 group-hover:scale-105 transition-transform">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center shrink-0 border border-teal-200 group-hover:scale-105 transition-transform">
                               <Clipboard className="w-4 h-4" />
                             </div>
                             <div className="min-w-0 text-left">
-                              <p className="text-xs font-semibold text-slate-200 truncate">
-                                Atau tekan <strong className="text-teal-300 font-mono bg-teal-500/10 px-1 py-0.5 rounded border border-teal-500/30">Ctrl + V</strong> dari clipboard
+                              <p className="text-xs font-bold text-slate-900 truncate">
+                                Atau tekan <kbd className="text-teal-950 font-mono bg-white px-1.5 py-0.5 rounded border border-slate-300 font-bold shadow-2xs text-[11px]">Ctrl + V</kbd> untuk tempel gambar
                               </p>
-                              <p className="text-[10px] text-slate-400">
-                                Bisa juga klik di sini untuk memilih file gambar (PNG, JPG)
+                              <p className="text-[11px] text-slate-600 mt-0.5">
+                                Bisa juga klik di sini untuk memilih file (PNG, JPG)
                               </p>
                             </div>
                           </div>
-                          <span className="text-[10px] font-bold text-teal-400 shrink-0 px-2 py-1 bg-teal-500/10 rounded-lg border border-teal-500/30 group-hover:bg-teal-500/20 transition-colors">
+                          <span className="text-xs font-bold text-slate-800 shrink-0 px-3 py-1.5 bg-white rounded-lg border border-slate-300 group-hover:border-teal-400 group-hover:text-teal-800 transition-colors shadow-2xs">
                             Pilih File
                           </span>
                           <input
@@ -585,21 +582,18 @@ export function FloatingFeedbackButton({
                   </div>
 
                   {/* Modal Footer & Buttons */}
-                  <div 
-                    className="pt-3 border-t flex flex-wrap items-center justify-between gap-2"
-                    style={{ borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))' }}
-                  >
+                  <div className="pt-3.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         setIsOpen(false);
                         onNavigate('/feedback-support');
                       }}
-                      className="text-xs text-teal-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
+                      className="text-xs text-slate-700 hover:text-teal-700 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
                       title="Buka Halaman Lengkap Feedback & Support"
                     >
                       <span>Lihat Riwayat Laporan</span>
-                      <ExternalLink className="w-3 h-3" />
+                      <ExternalLink className="w-3.5 h-3.5" />
                     </button>
 
                     <div className="flex items-center gap-2 ml-auto">
@@ -607,14 +601,14 @@ export function FloatingFeedbackButton({
                         type="button"
                         onClick={() => setIsOpen(false)}
                         disabled={submitting}
-                        className="px-3 py-1.5 rounded-xl border border-slate-700 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                        className="px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
                       >
                         Batal
                       </button>
                       <button
                         type="submit"
                         disabled={submitting || !description.trim()}
-                        className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-bold shadow-md shadow-teal-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        className="px-4.5 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                       >
                         {submitting ? (
                           <>

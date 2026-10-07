@@ -6,7 +6,7 @@ import {
   MessageSquare, ShieldCheck, HelpCircle, Layers, Image as ImageIcon,
   ExternalLink, ChevronRight, RefreshCw, Eye, Camera, Clipboard, Loader2
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { toJpeg } from 'html-to-image';
 import { toast } from 'sonner';
 import { PageHeader } from './PageHeader';
 import { uploadPhotoToDrive } from '../sheets-api';
@@ -128,26 +128,48 @@ export function FeedbackSupportScreen({
       toast.loading('Menangkap tampilan layar portal...', { id: 'screen-capture' });
       
       const targetElement = document.getElementById('root') || document.body;
-      const canvas = await html2canvas(targetElement, {
-        useCORS: true,
-        allowTaint: true,
-        scale: Math.min(window.devicePixelRatio || 1, 1.5),
-        logging: false,
-        backgroundColor: '#0f172a',
-        ignoreElements: (element) => {
-          return (
-            element.getAttribute('data-html2canvas-ignore') === 'true' ||
-            element.classList.contains('feedback-ignore-capture')
-          );
+      let base64: string = '';
+      
+      try {
+        base64 = await toJpeg(targetElement, {
+          quality: 0.85,
+          skipFonts: true,
+          cacheBust: false,
+          pixelRatio: Math.min(window.devicePixelRatio || 1, 1.25),
+          filter: (node: any) => {
+            if (!node || !node.tagName) return true;
+            if (node.hasAttribute?.('data-html2canvas-ignore')) return false;
+            if (node.classList?.contains('feedback-ignore-capture')) return false;
+            return true;
+          }
+        });
+      } catch (domCaptureErr) {
+        console.warn('html-to-image error, attempting displayMedia fallback:', domCaptureErr);
+        if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { displaySurface: 'browser' } as any,
+            audio: false
+          });
+          const video = document.createElement('video');
+          video.srcObject = stream;
+          await video.play();
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+          stream.getTracks().forEach(t => t.stop());
+          base64 = canvas.toDataURL('image/jpeg', 0.85);
+        } else {
+          throw domCaptureErr;
         }
-      });
+      }
 
-      const base64 = canvas.toDataURL('image/jpeg', 0.85);
       setScreenshotBase64(base64);
       toast.success('Screenshot portal berhasil diambil!', { id: 'screen-capture' });
     } catch (err: any) {
       console.error('Failed to capture screen:', err);
-      toast.error('Gagal mengambil screenshot: ' + (err.message || 'Gunakan PrtSc lalu tekan Ctrl+V'), { id: 'screen-capture' });
+      toast.error('Gagal mengambil screenshot otomatis. Silakan gunakan tombol PrtSc / Snipping Tool lalu tekan Ctrl + V.', { id: 'screen-capture' });
     } finally {
       setCapturingScreen(false);
     }
@@ -521,54 +543,54 @@ export function FeedbackSupportScreen({
           ) : (
             <form 
               onSubmit={handleSubmit}
-              className="p-6 sm:p-8 rounded-3xl border shadow-sm space-y-6"
-              style={{
-                backgroundColor: 'var(--card-bg, #ffffff)',
-                borderColor: 'var(--border-main, #e2e8f0)'
-              }}
+              className="p-6 sm:p-8 rounded-3xl border border-slate-200 bg-white shadow-sm space-y-6 text-slate-900"
             >
-              {/* Type Selection */}
+              {/* Type Selection - Strict 3 Colors (Slate / Teal / Black) */}
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider opacity-70">
+                <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">
                   Jenis Laporan / Masukan
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {[
-                    { id: 'bug', label: 'Lapor Bug', icon: <Bug className="w-4 h-4 text-rose-500" />, desc: 'Fitur error / rusak' },
-                    { id: 'suggestion', label: 'Saran Fitur', icon: <Lightbulb className="w-4 h-4 text-amber-500" />, desc: 'Ide menu / opsi baru' },
-                    { id: 'improvement', label: 'Peningkatan UI', icon: <Sparkles className="w-4 h-4 text-teal-500" />, desc: 'Tampilan & responsivitas' },
-                    { id: 'question', label: 'Pertanyaan', icon: <HelpCircle className="w-4 h-4 text-indigo-500" />, desc: 'Bantuan penggunaan' },
-                  ].map(t => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setType(t.id as any)}
-                      className={`p-3 rounded-2xl border text-left flex flex-col justify-between gap-1.5 transition-all cursor-pointer ${
-                        type === t.id 
-                          ? 'border-teal-500 ring-2 ring-teal-500/20 bg-teal-500/5 font-bold shadow-xs' 
-                          : 'opacity-70 hover:opacity-100 hover:bg-slate-50'
-                      }`}
-                      style={{
-                        borderColor: type === t.id ? 'var(--primary, #0D9488)' : 'var(--border-main, #e2e8f0)'
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        {t.icon}
-                        {type === t.id && <div className="w-2 h-2 rounded-full bg-teal-500" />}
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold">{t.label}</p>
-                        <p className="text-[10px] opacity-60 leading-tight">{t.desc}</p>
-                      </div>
-                    </button>
-                  ))}
+                    { id: 'bug', label: 'Lapor Bug', icon: <Bug className="w-4 h-4" />, desc: 'Fitur error / rusak' },
+                    { id: 'suggestion', label: 'Saran Fitur', icon: <Lightbulb className="w-4 h-4" />, desc: 'Ide menu / opsi baru' },
+                    { id: 'improvement', label: 'Peningkatan UI', icon: <Sparkles className="w-4 h-4" />, desc: 'Tampilan & responsivitas' },
+                    { id: 'question', label: 'Pertanyaan', icon: <HelpCircle className="w-4 h-4" />, desc: 'Bantuan penggunaan' },
+                  ].map(t => {
+                    const isSelected = type === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setType(t.id as any)}
+                        className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between gap-2 transition-all cursor-pointer ${
+                          isSelected 
+                            ? 'border-2 border-teal-600 bg-teal-50 text-teal-950 font-bold shadow-xs' 
+                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800 font-semibold'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={isSelected ? 'text-teal-700' : 'text-slate-600'}>
+                            {t.icon}
+                          </span>
+                          {isSelected && <div className="w-2 h-2 rounded-full bg-teal-600" />}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold leading-tight">{t.label}</p>
+                          <p className={`text-[11px] mt-0.5 leading-tight ${isSelected ? 'text-teal-800' : 'text-slate-600'}`}>
+                            {t.desc}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Description Input */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold opacity-80">
-                  Deskripsi Kendala / Masukan / Ide Fitur *
+                <label className="text-xs font-bold text-slate-900">
+                  Deskripsi Kendala / Masukan / Ide Fitur <span className="text-rose-600">*</span>
                 </label>
                 <textarea
                   required
@@ -576,52 +598,52 @@ export function FeedbackSupportScreen({
                   placeholder="Tuliskan secara jelas kendala yang dialami, saran perbaikan, atau ide fitur yang Anda inginkan..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-4 py-3 rounded-2xl border text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/20 leading-relaxed"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #ffffff)',
-                    borderColor: 'var(--border-main, #e2e8f0)',
-                    color: 'var(--text-main, #1e293b)'
-                  }}
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 text-xs font-medium outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 leading-relaxed shadow-2xs"
                 />
               </div>
 
               {/* Screenshot Upload */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold opacity-80 flex items-center gap-1.5">
-                    <ImageIcon className="w-3.5 h-3.5 text-teal-500" />
-                    <span>Lampirkan Screenshot / Foto (Opsional)</span>
+                  <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-teal-700" />
+                    <span>Lampirkan Screenshot / Foto <span className="text-slate-500 font-normal">(opsional)</span>:</span>
                   </label>
                   <button
                     type="button"
                     onClick={handleCaptureScreen}
                     disabled={capturingScreen}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-500/10 text-teal-600 dark:text-teal-400 hover:bg-teal-500/20 border border-teal-500/30 transition-all cursor-pointer shadow-2xs active:scale-95"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-teal-50 hover:bg-teal-100 text-teal-950 border border-teal-300 transition-all cursor-pointer shadow-2xs active:scale-95"
                   >
                     {capturingScreen ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-700" />
                     ) : (
-                      <Camera className="w-3.5 h-3.5" />
+                      <Camera className="w-3.5 h-3.5 text-teal-700" />
                     )}
                     <span>{capturingScreen ? 'Mengambil Layar...' : '📸 Tangkap Layar Saat Ini'}</span>
                   </button>
                 </div>
                 
                 {screenshotBase64 ? (
-                  <div className="relative p-3 rounded-2xl border flex items-center gap-3.5" style={{ borderColor: 'var(--border-main)', backgroundColor: 'var(--input-bg, #ffffff)' }}>
+                  <div className="relative p-3 rounded-2xl border border-teal-300 bg-teal-50/50 flex items-center gap-3.5 shadow-2xs">
                     <img 
                       src={screenshotBase64} 
                       alt="Preview" 
-                      className="w-16 h-16 object-cover rounded-xl border shadow-2xs shrink-0" 
+                      className="w-16 h-16 object-cover rounded-xl border border-teal-200 shadow-xs shrink-0" 
                     />
                     <div className="flex-1 min-w-0 text-xs">
-                      <p className="font-bold truncate text-teal-600 dark:text-teal-400">Screenshot siap dilampirkan</p>
-                      <p className="opacity-60 text-[11px]">Akan diunggah otomatis ke Google Drive sistem saat dikirim</p>
+                      <p className="font-bold truncate text-teal-950 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-teal-700" />
+                        <span>Screenshot siap dilampirkan</span>
+                      </p>
+                      <p className="text-slate-600 text-[11px] mt-0.5">
+                        Akan diunggah otomatis ke Google Drive sistem saat dikirim
+                      </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => setScreenshotBase64(null)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-rose-200 dark:border-rose-800 cursor-pointer transition-colors"
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 cursor-pointer transition-colors"
                     >
                       Hapus
                     </button>
@@ -629,17 +651,16 @@ export function FeedbackSupportScreen({
                 ) : (
                   <div className="space-y-2">
                     <label 
-                      className="p-5 rounded-2xl border border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-teal-500/5 transition-all text-center group"
-                      style={{ borderColor: 'var(--border-main)' }}
+                      className="p-5 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-teal-50/40 hover:border-teal-400 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all text-center group"
                     >
-                      <div className="w-10 h-10 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center group-hover:scale-110 transition-transform border border-teal-200">
                         <ImageIcon className="w-5 h-5" />
                       </div>
                       <div className="space-y-0.5">
-                        <span className="text-xs font-semibold block text-slate-700 dark:text-slate-200">
-                          Klik untuk memilih file gambar atau tekan <kbd className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-teal-600 dark:text-teal-400 shadow-2xs">Ctrl + V</kbd> untuk Paste
+                        <span className="text-xs font-bold block text-slate-900">
+                          Klik untuk memilih file gambar atau tekan <kbd className="px-1.5 py-0.5 text-[11px] font-mono rounded bg-white border border-slate-300 font-bold text-teal-950 shadow-2xs">Ctrl + V</kbd> untuk tempel gambar
                         </span>
-                        <span className="text-[10px] opacity-50 block">PNG, JPG, JPEG (Maks. 5MB)</span>
+                        <span className="text-[11px] text-slate-500 block">PNG, JPG, JPEG (Maks. 5MB)</span>
                       </div>
                       <input 
                         type="file" 
@@ -648,9 +669,9 @@ export function FeedbackSupportScreen({
                         className="hidden" 
                       />
                     </label>
-                    <div className="flex items-center justify-between px-2 text-[10px] opacity-60">
+                    <div className="flex items-center justify-between px-2 text-[11px] text-slate-600">
                       <span className="flex items-center gap-1">
-                        <Clipboard className="w-3 h-3 text-teal-500" />
+                        <Clipboard className="w-3.5 h-3.5 text-teal-700" />
                         Dukungan <b>Ctrl + V</b> langsung dari clipboard (Snipping Tool / Screenshot)
                       </span>
                       <span>Otomatis terhubung</span>
@@ -660,23 +681,17 @@ export function FeedbackSupportScreen({
               </div>
 
               {/* Reporter Info Preview */}
-              <div 
-                className="p-3.5 rounded-2xl border text-xs flex flex-wrap items-center justify-between gap-2"
-                style={{
-                  backgroundColor: 'var(--input-bg, #f8fafc)',
-                  borderColor: 'var(--border-main, #e2e8f0)'
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-teal-500 text-white flex items-center justify-center font-bold text-xs">
+              <div className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-teal-700 text-white flex items-center justify-center font-bold text-xs">
                     {(inspectorName || 'U').charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <span className="font-bold block leading-tight">{inspectorName || 'Personil PrepLab'}</span>
-                    <span className="opacity-65 text-[10px]">NIK: {inspectorNik} • {authorRole} ({authorSection})</span>
+                    <span className="font-bold block leading-tight text-slate-900">{inspectorName || 'Personil PrepLab'}</span>
+                    <span className="text-slate-600 text-[11px]">NIK: {inspectorNik} • {authorRole} ({authorSection})</span>
                   </div>
                 </div>
-                <span className="text-[10px] opacity-50 font-mono">
+                <span className="text-[11px] text-slate-500 font-mono">
                   Info perangkat terlampir otomatis
                 </span>
               </div>
@@ -685,8 +700,7 @@ export function FeedbackSupportScreen({
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-3.5 rounded-2xl text-xs font-bold text-white shadow-md flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
-                style={{ backgroundColor: 'var(--primary, #0D9488)' }}
+                className="w-full py-3.5 rounded-2xl text-xs font-bold text-white shadow-xs bg-teal-700 hover:bg-teal-800 flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
               >
                 {submitting ? (
                   <>
