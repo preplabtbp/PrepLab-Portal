@@ -1242,26 +1242,33 @@ employeesRouter.put("/:nik", async (req, res) => {
     // Process Counseling & SPDK Updates if provided
     const cData = body.counselingSpdk || body.counseling;
     if (cData && typeof cData === 'object') {
-      const totalSp = String(cData.totalSp ?? '').trim();
-      const bulanKonseling = String(cData.bulanKonseling ?? '').trim();
-      const konseling1 = String(cData.konseling1 ?? '').trim();
-      const konseling2 = String(cData.konseling2 ?? '').trim();
-      const konseling3 = String(cData.konseling3 ?? '').trim();
+      const totalSp = String(cData.totalSp ?? cData.total_sp ?? '').trim();
+      const bulanKonseling = String(cData.bulanKonseling ?? cData.bulan_konseling ?? cData.bulan ?? '').trim();
+      const konseling1 = String(cData.konseling1 ?? cData.konseling_1 ?? '').trim();
+      const konseling2 = String(cData.konseling2 ?? cData.konseling_2 ?? '').trim();
+      const konseling3 = String(cData.konseling3 ?? cData.konseling_3 ?? '').trim();
       const st = String(cData.st ?? '').trim();
-      const sp1 = String(cData.sp1 ?? '').trim();
-      const sp2 = String(cData.sp2 ?? '').trim();
-      const sp3 = String(cData.sp3 ?? '').trim();
+      const sp1 = String(cData.sp1 ?? cData.sp_1 ?? '').trim();
+      const sp2 = String(cData.sp2 ?? cData.sp_2 ?? '').trim();
+      const sp3 = String(cData.sp3 ?? cData.sp_3 ?? '').trim();
       const phk = String(cData.phk ?? '').trim();
-      const masaBerlakuSanksi = cleanDateVal(cData.masaBerlakuSanksi) || String(cData.masaBerlakuSanksi ?? '').trim();
-      const masaPemulihan1 = cleanDateVal(cData.masaPemulihan1) || String(cData.masaPemulihan1 ?? '').trim();
-      const masaPemulihan2 = cleanDateVal(cData.masaPemulihan2) || String(cData.masaPemulihan2 ?? '').trim();
-      const alasanSp = String(cData.alasanSp ?? '').trim();
-      const keterangan = String(cData.keterangan ?? '').trim();
-      const pernahSpSebelumnya = String(cData.pernahSpSebelumnya ?? '').trim();
-      const pernahTerlibatSpdk = String(cData.pernahTerlibatSpdk ?? '').trim();
-      const kronologiSpdk = String(cData.kronologiSpdk ?? '').trim();
-      const kategoriSpdk = String(cData.kategoriSpdk ?? '').trim();
-      const tindakanSpdk = String(cData.tindakanSpdk ?? '').trim();
+      
+      const rawMasaBerlaku = cData.masaBerlakuSanksi ?? cData.masa_berlaku_sanksi ?? cData.masaBerlaku ?? cData.masa_berlaku ?? cData.periodeBerlaku ?? cData.tanggalBerlaku ?? '';
+      const masaBerlakuSanksi = (rawMasaBerlaku && typeof rawMasaBerlaku === 'string') ? rawMasaBerlaku.trim() : (cleanDateVal(rawMasaBerlaku) || String(rawMasaBerlaku || '').trim());
+      
+      const rawMasaPemulihan1 = cData.masaPemulihan1 ?? cData.masa_pemulihan_1 ?? cData.pemulihan1 ?? cData.pemulihan_1 ?? '';
+      const masaPemulihan1 = (rawMasaPemulihan1 && typeof rawMasaPemulihan1 === 'string') ? rawMasaPemulihan1.trim() : (cleanDateVal(rawMasaPemulihan1) || String(rawMasaPemulihan1 || '').trim());
+      
+      const rawMasaPemulihan2 = cData.masaPemulihan2 ?? cData.masa_pemulihan_2 ?? cData.pemulihan2 ?? cData.pemulihan_2 ?? '';
+      const masaPemulihan2 = (rawMasaPemulihan2 && typeof rawMasaPemulihan2 === 'string') ? rawMasaPemulihan2.trim() : (cleanDateVal(rawMasaPemulihan2) || String(rawMasaPemulihan2 || '').trim());
+      
+      const alasanSp = String(cData.alasanSp ?? cData.alasan_sp ?? cData.alasanSuratPeringatan ?? cData.alasan_surat_peringatan ?? cData.alasan ?? cData.alasanSanksi ?? '').trim();
+      const keterangan = String(cData.keterangan ?? cData.keterangan_sp ?? cData.keteranganSp ?? cData.catatan ?? '').trim();
+      const pernahSpSebelumnya = String(cData.pernahSpSebelumnya ?? cData.pernah_sp_sebelumnya ?? cData.pernahSp ?? 'Tidak').trim();
+      const pernahTerlibatSpdk = String(cData.pernahTerlibatSpdk ?? cData.pernah_terlibat_spdk ?? cData.spdk ?? 'Tidak').trim();
+      const kronologiSpdk = String(cData.kronologiSpdk ?? cData.kronologi_spdk ?? cData.kronologiKejadianSpdk ?? cData.kronologi ?? '').trim();
+      const kategoriSpdk = String(cData.kategoriSpdk ?? cData.kategori_spdk ?? cData.kategoriSanksiSpdk ?? cData.kategori ?? '').trim();
+      const tindakanSpdk = String(cData.tindakanSpdk ?? cData.tindakan_spdk ?? cData.tindakanDisiplinSpdk ?? cData.tindakan ?? '').trim();
 
       // Calculate status sanksi
       let statusSanksi = 'Aman';

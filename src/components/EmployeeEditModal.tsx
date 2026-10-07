@@ -106,29 +106,29 @@ export function EmployeeEditModal({
         alasanSakitLuar: Array.isArray(rawAtt26.alasanSakitLuar) ? rawAtt26.alasanSakitLuar.join('\n') : (rawAtt26.alasanSakitLuar || '')
       });
 
-      const rawCounsel = employee.counselingSpdk || {};
+      const rawCounsel = employee.counselingSpdk || employee.counseling || {};
       setCounselData({
-        totalSp: rawCounsel.totalSp !== undefined && rawCounsel.totalSp !== null ? String(rawCounsel.totalSp) : '0',
-        bulanKonseling: rawCounsel.bulanKonseling || '',
-        konseling1: rawCounsel.konseling1 || '',
-        konseling2: rawCounsel.konseling2 || '',
-        konseling3: rawCounsel.konseling3 || '',
-        st: rawCounsel.st || '',
-        sp1: rawCounsel.sp1 || '',
-        sp2: rawCounsel.sp2 || '',
-        sp3: rawCounsel.sp3 || '',
-        phk: rawCounsel.phk || '',
-        masaBerlakuSanksi: rawCounsel.masaBerlakuSanksi || '',
-        masaPemulihan1: rawCounsel.masaPemulihan1 || '',
-        masaPemulihan2: rawCounsel.masaPemulihan2 || '',
-        alasanSp: rawCounsel.alasanSp || '',
-        keterangan: rawCounsel.keterangan || '',
-        pernahSpSebelumnya: rawCounsel.pernahSpSebelumnya || 'Tidak',
-        pernahTerlibatSpdk: rawCounsel.pernahTerlibatSpdk || 'Tidak',
-        kronologiSpdk: rawCounsel.kronologiSpdk || '',
-        kategoriSpdk: rawCounsel.kategoriSpdk || '',
-        tindakanSpdk: rawCounsel.tindakanSpdk || '',
-        statusSanksi: rawCounsel.statusSanksi || 'Aman'
+        totalSp: String(rawCounsel.totalSp ?? rawCounsel.total_sp ?? '0'),
+        bulanKonseling: rawCounsel.bulanKonseling ?? rawCounsel.bulan_konseling ?? rawCounsel.bulan ?? '',
+        konseling1: rawCounsel.konseling1 ?? rawCounsel.konseling_1 ?? '',
+        konseling2: rawCounsel.konseling2 ?? rawCounsel.konseling_2 ?? '',
+        konseling3: rawCounsel.konseling3 ?? rawCounsel.konseling_3 ?? '',
+        st: rawCounsel.st ?? '',
+        sp1: rawCounsel.sp1 ?? rawCounsel.sp_1 ?? '',
+        sp2: rawCounsel.sp2 ?? rawCounsel.sp_2 ?? '',
+        sp3: rawCounsel.sp3 ?? rawCounsel.sp_3 ?? '',
+        phk: rawCounsel.phk ?? '',
+        masaBerlakuSanksi: rawCounsel.masaBerlakuSanksi ?? rawCounsel.masa_berlaku_sanksi ?? rawCounsel.masaBerlaku ?? rawCounsel.masa_berlaku ?? rawCounsel.periodeBerlaku ?? rawCounsel.tanggalBerlaku ?? '',
+        masaPemulihan1: rawCounsel.masaPemulihan1 ?? rawCounsel.masa_pemulihan_1 ?? rawCounsel.pemulihan1 ?? rawCounsel.pemulihan_1 ?? '',
+        masaPemulihan2: rawCounsel.masaPemulihan2 ?? rawCounsel.masa_pemulihan_2 ?? rawCounsel.pemulihan2 ?? rawCounsel.pemulihan_2 ?? '',
+        alasanSp: rawCounsel.alasanSp ?? rawCounsel.alasan_sp ?? rawCounsel.alasanSuratPeringatan ?? rawCounsel.alasan_surat_peringatan ?? rawCounsel.alasan ?? rawCounsel.alasanSanksi ?? '',
+        keterangan: rawCounsel.keterangan ?? rawCounsel.keterangan_sp ?? rawCounsel.keteranganSp ?? rawCounsel.catatan ?? '',
+        pernahSpSebelumnya: rawCounsel.pernahSpSebelumnya ?? rawCounsel.pernah_sp_sebelumnya ?? rawCounsel.pernahSp ?? 'Tidak',
+        pernahTerlibatSpdk: rawCounsel.pernahTerlibatSpdk ?? rawCounsel.pernah_terlibat_spdk ?? rawCounsel.spdk ?? 'Tidak',
+        kronologiSpdk: rawCounsel.kronologiSpdk ?? rawCounsel.kronologi_spdk ?? rawCounsel.kronologiKejadianSpdk ?? rawCounsel.kronologi ?? '',
+        kategoriSpdk: rawCounsel.kategoriSpdk ?? rawCounsel.kategori_spdk ?? rawCounsel.kategoriSanksiSpdk ?? rawCounsel.kategori ?? '',
+        tindakanSpdk: rawCounsel.tindakanSpdk ?? rawCounsel.tindakan_spdk ?? rawCounsel.tindakanDisiplinSpdk ?? rawCounsel.tindakan ?? '',
+        statusSanksi: rawCounsel.statusSanksi ?? rawCounsel.status_sanksi ?? 'Aman'
       });
     }
   }, [employee, isOpen, initialTab]);

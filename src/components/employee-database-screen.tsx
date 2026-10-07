@@ -1313,47 +1313,69 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
               {/* SECTION: DATA KONSELING, SANKSI DISIPLIN & SPDK */}
               {(() => {
-                const cData = selectedEmployee.counselingSpdk || {};
-                const totalSpNum = parseInt(String(cData.totalSp || '0').trim(), 10) || 0;
-                const statusSanksi = String(cData.statusSanksi || (totalSpNum > 0 ? `SP ${totalSpNum}` : 'Aman')).trim();
+                const cData = selectedEmployee.counselingSpdk || (selectedEmployee as any).counseling || {};
+                const totalSpNum = parseInt(String(cData.totalSp || cData.total_sp || '0').trim(), 10) || 0;
+                const statusSanksi = String(cData.statusSanksi || cData.status_sanksi || (totalSpNum > 0 ? `SP ${totalSpNum}` : 'Aman')).trim();
                 
+                const masaBerlaku = cData.masaBerlakuSanksi || cData.masa_berlaku_sanksi || cData.masaBerlaku || cData.masa_berlaku || cData.periodeBerlaku || cData.periode_berlaku || cData.tanggalBerlaku || cData.tanggal_berlaku || '';
+                const masaPemulihan1 = cData.masaPemulihan1 || cData.masa_pemulihan_1 || cData.masaPemulihanI || cData.pemulihan1 || cData.pemulihanI || cData.pemulihan_1 || cData.pemulihan_i || '';
+                const masaPemulihan2 = cData.masaPemulihan2 || cData.masa_pemulihan_2 || cData.masaPemulihanIi || cData.pemulihan2 || cData.pemulihanIi || cData.pemulihan_2 || cData.pemulihan_ii || '';
+                const alasanSp = cData.alasanSp || cData.alasan_sp || cData.alasanSuratPeringatan || cData.alasan_surat_peringatan || cData.alasan || cData.alasanSanksi || cData.alasan_sanksi || cData.alasanPelanggaran || cData.alasan_pelanggaran || '';
+                const keterangan = cData.keterangan || cData.keterangan_sp || cData.keteranganSp || cData.catatan || '';
+                const pernahSpSebelumnya = cData.pernahSpSebelumnya || cData.pernah_sp_sebelumnya || cData.pernahSp || cData.pernah_sp || 'Tidak';
+                const pernahTerlibatSpdk = cData.pernahTerlibatSpdk || cData.pernah_terlibat_spdk || cData.spdk || 'Tidak';
+                const kategoriSpdk = cData.kategoriSpdk || cData.kategori_spdk || cData.kategoriSanksiSpdk || cData.kategori_sanksi_spdk || cData.kategori || cData.kategoriSanksi || '';
+                const tindakanSpdk = cData.tindakanSpdk || cData.tindakan_spdk || cData.tindakanDisiplinSpdk || cData.tindakan_disiplin_spdk || cData.tindakan || cData.tindakanDisiplin || '';
+                const kronologiSpdk = cData.kronologiSpdk || cData.kronologi_spdk || cData.kronologiKejadianSpdk || cData.kronologi_kejadian_spdk || cData.kronologi || cData.kronologiKejadian || '';
+                const bulanKonseling = cData.bulanKonseling || cData.bulan_konseling || cData.bulan || '';
+                const totalSpDisplay = cData.totalSp || cData.total_sp || '';
+
+                const k1 = cData.konseling1 || cData.konseling_1 || '';
+                const k2 = cData.konseling2 || cData.konseling_2 || '';
+                const k3 = cData.konseling3 || cData.konseling_3 || '';
+                const st = cData.st || '';
+                const sp1 = cData.sp1 || cData.sp_1 || '';
+                const sp2 = cData.sp2 || cData.sp_2 || '';
+                const sp3 = cData.sp3 || cData.sp_3 || '';
+                const phk = cData.phk || '';
+
                 // Determine sanction level (0 - 6)
                 let severityLevel = 0;
                 let levelLabel = 'Disiplin Baik (Aman)';
                 let levelColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
                 let levelBadgeBg = 'bg-emerald-500';
 
-                if (cData.phk && cData.phk !== '-' && cData.phk !== '0') {
+                if (phk && phk !== '-' && phk !== '0') {
                   severityLevel = 6;
                   levelLabel = 'PHK (Pemutusan Hubungan Kerja)';
                   levelColor = 'text-rose-900 bg-rose-100 border-rose-300';
                   levelBadgeBg = 'bg-rose-700';
-                } else if (cData.sp3 && cData.sp3 !== '-' && cData.sp3 !== '0') {
+                } else if (sp3 && sp3 !== '-' && sp3 !== '0') {
                   severityLevel = 5;
                   levelLabel = 'Surat Peringatan III (SP III)';
                   levelColor = 'text-rose-800 bg-rose-50 border-rose-200';
                   levelBadgeBg = 'bg-rose-600';
-                } else if (cData.sp2 && cData.sp2 !== '-' && cData.sp2 !== '0') {
+                } else if (sp2 && sp2 !== '-' && sp2 !== '0') {
                   severityLevel = 4;
                   levelLabel = 'Surat Peringatan II (SP II)';
                   levelColor = 'text-orange-800 bg-orange-50 border-orange-200';
                   levelBadgeBg = 'bg-orange-600';
-                } else if (cData.sp1 && cData.sp1 !== '-' && cData.sp1 !== '0') {
+                } else if (sp1 && sp1 !== '-' && sp1 !== '0') {
                   severityLevel = 3;
                   levelLabel = 'Surat Peringatan I (SP I)';
                   levelColor = 'text-amber-800 bg-amber-50 border-amber-200';
                   levelBadgeBg = 'bg-amber-500';
-                } else if (cData.st && cData.st !== '-' && cData.st !== '0') {
+                } else if (st && st !== '-' && st !== '0') {
                   severityLevel = 2;
                   levelLabel = 'Surat Teguran (ST)';
                   levelColor = 'text-yellow-800 bg-yellow-50 border-yellow-200';
                   levelBadgeBg = 'bg-yellow-500';
-                } else if ((cData.konseling1 && cData.konseling1 !== '-') || (cData.konseling2 && cData.konseling2 !== '-') || (cData.konseling3 && cData.konseling3 !== '-')) {
+                } else if ((k1 && k1 !== '-' && k1 !== '0') || (k2 && k2 !== '-' && k2 !== '0') || (k3 && k3 !== '-' && k3 !== '0')) {
                   severityLevel = 1;
                   levelLabel = 'Dalam Pembinaan / Konseling';
                   levelColor = 'text-teal-800 bg-teal-50 border-teal-200';
                   levelBadgeBg = 'bg-teal-500';
-                } else if (String(cData.pernahTerlibatSpdk || '').toLowerCase().includes('ya') || (cData.kronologiSpdk && cData.kronologiSpdk.length > 5)) {
+                } else if (String(pernahTerlibatSpdk || '').toLowerCase().includes('ya') || (kronologiSpdk && kronologiSpdk.length > 5)) {
                   severityLevel = 2;
                   levelLabel = 'Tercatat Insiden SPDK';
                   levelColor = 'text-purple-800 bg-purple-50 border-purple-200';
@@ -1396,9 +1418,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           <span>{levelLabel}</span>
                         </span>
 
-                        {cData.bulanKonseling && cData.bulanKonseling !== '-' && (
+                        {bulanKonseling && bulanKonseling !== '-' && (
                           <span className="px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold font-mono">
-                            Bulan: {cData.bulanKonseling}
+                            Bulan: {bulanKonseling}
                           </span>
                         )}
 
@@ -1472,9 +1494,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               : `Karyawan saat ini berada pada tingkatan status: ${levelLabel}.`}
                           </span>
                         </div>
-                        {cData.totalSp && (
+                        {totalSpDisplay && (
                           <span className="font-mono font-bold text-slate-700">
-                            Total Catatan SP: <span className="text-rose-600">{cData.totalSp}</span>
+                            Total Catatan SP: <span className="text-rose-600">{totalSpDisplay}</span>
                           </span>
                         )}
                       </div>
@@ -1491,7 +1513,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           </span>
                         </div>
                         <p className="text-sm font-extrabold text-slate-800 font-mono">
-                          {cData.masaBerlakuSanksi && cData.masaBerlakuSanksi !== '-' ? cData.masaBerlakuSanksi : 'Tidak ada sanksi aktif'}
+                          {masaBerlaku && masaBerlaku !== '-' ? masaBerlaku : 'Tidak ada sanksi aktif'}
                         </p>
                         <p className="text-[11px] text-slate-400 mt-1">
                           Periode berlakunya surat peringatan / teguran
@@ -1507,7 +1529,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           </span>
                         </div>
                         <p className="text-sm font-extrabold text-teal-800 font-mono">
-                          {cData.masaPemulihan1 && cData.masaPemulihan1 !== '-' ? cData.masaPemulihan1 : '-'}
+                          {masaPemulihan1 && masaPemulihan1 !== '-' ? masaPemulihan1 : '-'}
                         </p>
                         <p className="text-[11px] text-slate-400 mt-1">
                           Evaluasi tahap awal pemulihan kedisiplinan
@@ -1523,7 +1545,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           </span>
                         </div>
                         <p className="text-sm font-extrabold text-emerald-800 font-mono">
-                          {cData.masaPemulihan2 && cData.masaPemulihan2 !== '-' ? cData.masaPemulihan2 : '-'}
+                          {masaPemulihan2 && masaPemulihan2 !== '-' ? masaPemulihan2 : '-'}
                         </p>
                         <p className="text-[11px] text-slate-400 mt-1">
                           Tahap penutupan sanksi &amp; pemutihan status
@@ -1545,19 +1567,19 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
                               <span className="text-[10px] text-slate-400 font-bold block uppercase">Konseling I</span>
                               <span className="font-extrabold text-slate-700 font-mono mt-0.5 block truncate">
-                                {cData.konseling1 || '-'}
+                                {k1 || '-'}
                               </span>
                             </div>
                             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
                               <span className="text-[10px] text-slate-400 font-bold block uppercase">Konseling II</span>
                               <span className="font-extrabold text-slate-700 font-mono mt-0.5 block truncate">
-                                {cData.konseling2 || '-'}
+                                {k2 || '-'}
                               </span>
                             </div>
                             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
                               <span className="text-[10px] text-slate-400 font-bold block uppercase">Konseling III</span>
                               <span className="font-extrabold text-slate-700 font-mono mt-0.5 block truncate">
-                                {cData.konseling3 || '-'}
+                                {k3 || '-'}
                               </span>
                             </div>
                           </div>
@@ -1566,25 +1588,25 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             <div className="p-2 rounded-xl bg-yellow-50/50 border border-yellow-100 text-center">
                               <span className="text-[10px] text-yellow-800 font-bold block">ST</span>
                               <span className="font-extrabold text-yellow-900 font-mono text-[11px] truncate block">
-                                {cData.st || '-'}
+                                {st || '-'}
                               </span>
                             </div>
                             <div className="p-2 rounded-xl bg-amber-50/50 border border-amber-100 text-center">
                               <span className="text-[10px] text-amber-800 font-bold block">SP I</span>
                               <span className="font-extrabold text-amber-900 font-mono text-[11px] truncate block">
-                                {cData.sp1 || '-'}
+                                {sp1 || '-'}
                               </span>
                             </div>
                             <div className="p-2 rounded-xl bg-orange-50/50 border border-orange-100 text-center">
                               <span className="text-[10px] text-orange-800 font-bold block">SP II</span>
                               <span className="font-extrabold text-orange-900 font-mono text-[11px] truncate block">
-                                {cData.sp2 || '-'}
+                                {sp2 || '-'}
                               </span>
                             </div>
                             <div className="p-2 rounded-xl bg-rose-50/50 border border-rose-100 text-center">
                               <span className="text-[10px] text-rose-800 font-bold block">SP III</span>
                               <span className="font-extrabold text-rose-900 font-mono text-[11px] truncate block">
-                                {cData.sp3 || '-'}
+                                {sp3 || '-'}
                               </span>
                             </div>
                           </div>
@@ -1594,15 +1616,15 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             <div>
                               <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Alasan Surat Peringatan:</p>
                               <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100 leading-relaxed font-medium">
-                                {cData.alasanSp || 'Tidak ada catatan alasan surat peringatan.'}
+                                {alasanSp || 'Tidak ada catatan alasan surat peringatan.'}
                               </p>
                             </div>
 
-                            {cData.keterangan && cData.keterangan !== '-' && (
+                            {keterangan && keterangan !== '-' && (
                               <div>
                                 <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Keterangan Tambahan:</p>
                                 <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 leading-relaxed">
-                                  {cData.keterangan}
+                                  {keterangan}
                                 </p>
                               </div>
                             )}
@@ -1610,11 +1632,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             <div className="flex items-center justify-between text-xs pt-1 text-slate-500">
                               <span>Pernah SP/ST Sebelumnya:</span>
                               <span className={`font-bold px-2 py-0.5 rounded-md ${
-                                String(cData.pernahSpSebelumnya || '').toLowerCase().includes('ya') 
+                                String(pernahSpSebelumnya || '').toLowerCase().includes('ya') 
                                   ? 'bg-rose-50 text-rose-700 border border-rose-200' 
                                   : 'bg-slate-100 text-slate-700'
                               }`}>
-                                {cData.pernahSpSebelumnya || 'Tidak'}
+                                {pernahSpSebelumnya || 'Tidak'}
                               </span>
                             </div>
                           </div>
@@ -1630,11 +1652,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               Sanksi Pelanggaran Disiplin Kerja (SPDK)
                             </span>
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                              String(cData.pernahTerlibatSpdk || '').toLowerCase().includes('ya')
+                              String(pernahTerlibatSpdk || '').toLowerCase().includes('ya')
                                 ? 'bg-purple-100 text-purple-800 border border-purple-200'
                                 : 'bg-slate-100 text-slate-600'
                             }`}>
-                              {String(cData.pernahTerlibatSpdk || '').toLowerCase().includes('ya') ? 'Terlibat SPDK' : 'Tidak Terlibat'}
+                              {String(pernahTerlibatSpdk || '').toLowerCase().includes('ya') ? 'Terlibat SPDK' : 'Tidak Terlibat'}
                             </span>
                           </h4>
 
@@ -1642,13 +1664,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             <div className="p-3 rounded-xl bg-purple-50/50 border border-purple-100">
                               <span className="text-[10px] text-purple-700 font-bold block uppercase">Kategori SPDK</span>
                               <span className="font-bold text-slate-800 mt-1 block">
-                                {cData.kategoriSpdk && cData.kategoriSpdk !== '-' ? cData.kategoriSpdk : 'Tidak Ada'}
+                                {kategoriSpdk && kategoriSpdk !== '-' ? kategoriSpdk : 'Tidak Ada'}
                               </span>
                             </div>
                             <div className="p-3 rounded-xl bg-purple-50/50 border border-purple-100">
                               <span className="text-[10px] text-purple-700 font-bold block uppercase">Tindakan Disiplin</span>
                               <span className="font-bold text-slate-800 mt-1 block">
-                                {cData.tindakanSpdk && cData.tindakanSpdk !== '-' ? cData.tindakanSpdk : '-'}
+                                {tindakanSpdk && tindakanSpdk !== '-' ? tindakanSpdk : '-'}
                               </span>
                             </div>
                           </div>
@@ -1656,9 +1678,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           <div>
                             <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Kronologi Kejadian SPDK:</p>
                             <div className="text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-100 leading-relaxed min-h-[100px] max-h-48 overflow-y-auto">
-                              {cData.kronologiSpdk && cData.kronologiSpdk !== '-' ? (
+                              {kronologiSpdk && kronologiSpdk !== '-' ? (
                                 <p className="font-medium whitespace-pre-line text-slate-800">
-                                  {cData.kronologiSpdk}
+                                  {kronologiSpdk}
                                 </p>
                               ) : (
                                 <p className="text-slate-400 italic">
