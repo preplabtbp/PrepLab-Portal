@@ -899,6 +899,85 @@ export function NotionDatabaseTable({
     }
   }, [headers, normalizeAndOrderHeaders]);
 
+  // Interactive Column Widths & Resizer State
+  const tableStorageKey = `preplab_col_widths_${postId || title || 'default'}`;
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem(`preplab_col_widths_${postId || title || 'default'}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const [resizingCol, setResizingCol] = useState<string | null>(null);
+  const resizeInfoRef = useRef<{
+    colHeader: string;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+
+  const handleResizeStart = (e: React.MouseEvent | React.TouchEvent, colHeader: string, currentDomWidth: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const initialWidth = columnWidths[colHeader] || currentDomWidth || 180;
+    resizeInfoRef.current = { colHeader, startX: clientX, startWidth: initialWidth };
+    setResizingCol(colHeader);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
+      if (!resizeInfoRef.current) return;
+      const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
+      const deltaX = currentX - resizeInfoRef.current.startX;
+      const newWidth = Math.max(50, Math.min(1200, Math.round(resizeInfoRef.current.startWidth + deltaX)));
+
+      setColumnWidths((prev) => ({
+        ...prev,
+        [resizeInfoRef.current!.colHeader]: newWidth
+      }));
+    };
+
+    const handleMouseUp = () => {
+      if (resizeInfoRef.current) {
+        setColumnWidths((prev) => {
+          try {
+            localStorage.setItem(tableStorageKey, JSON.stringify(prev));
+          } catch {}
+          return prev;
+        });
+      }
+      resizeInfoRef.current = null;
+      setResizingCol(null);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('touchmove', handleMouseMove, { passive: false });
+    window.addEventListener('touchend', handleMouseUp);
+  };
+
+  // Helper for applying custom dragged column widths to <th> and <td>
+  const getColStyle = (colName: string): React.CSSProperties | undefined => {
+    const customW = columnWidths[colName];
+    if (customW) {
+      return {
+        width: `${customW}px`,
+        minWidth: `${customW}px`,
+        maxWidth: `${customW}px`,
+      };
+    }
+    return undefined;
+  };
+
   // Ensure Progress and Target Selesai columns are never rendered in displayHeaders
   const displayHeaders = useMemo(() => {
     return tableHeaders.filter(h => {
@@ -978,8 +1057,12 @@ export function NotionDatabaseTable({
 
   const handleResetColumnOrder = () => {
     setTableHeaders(prev => normalizeAndOrderHeaders(prev));
+    setColumnWidths({});
+    try {
+      localStorage.removeItem(tableStorageKey);
+    } catch {}
     setDirtyRowIndices(new Set(Array.from({ length: localRows.length }, (_, i) => i)));
-    toast.success('Urutan kolom berhasil dirapikan sesuai standar Notion!');
+    toast.success('Urutan dan lebar kolom berhasil dirapikan sesuai standar Notion!');
   };
 
   // Helper to read row property with fuzzy matching across header aliases
@@ -3223,10 +3306,44 @@ export function NotionDatabaseTable({
       {/* ========================================================================= */}
       {viewMode === 'table' && (
         <div 
-          className="overflow-x-auto transition-all"
+          className={`overflow-x-auto w-full transition-all pb-2 ${
+            isNotionLight ? 'notion-table-scroll-light' : 'notion-table-scroll-dark'
+          }`}
           style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
         >
-          <table className={`w-full text-left border-collapse ${
+          <style>{`
+            .notion-table-scroll-light::-webkit-scrollbar {
+              height: 10px;
+            }
+            .notion-table-scroll-light::-webkit-scrollbar-track {
+              background: #f1f5f9;
+              border-radius: 6px;
+            }
+            .notion-table-scroll-light::-webkit-scrollbar-thumb {
+              background: #94a3b8;
+              border-radius: 6px;
+              border: 2px solid #f1f5f9;
+            }
+            .notion-table-scroll-light::-webkit-scrollbar-thumb:hover {
+              background: #0d9488;
+            }
+            .notion-table-scroll-dark::-webkit-scrollbar {
+              height: 10px;
+            }
+            .notion-table-scroll-dark::-webkit-scrollbar-track {
+              background: #18181b;
+              border-radius: 6px;
+            }
+            .notion-table-scroll-dark::-webkit-scrollbar-thumb {
+              background: #3f3f46;
+              border-radius: 6px;
+              border: 2px solid #18181b;
+            }
+            .notion-table-scroll-dark::-webkit-scrollbar-thumb:hover {
+              background: #14b8a6;
+            }
+          `}</style>
+          <table className={`w-full min-w-max text-left border-collapse ${
             fitPageMode ? 'table-fixed text-[11px]' : 'text-xs'
           }`}>
             {/* Table Header */}
@@ -3288,6 +3405,7 @@ export function NotionDatabaseTable({
                   return (
                     <th
                       key={colHeader}
+                      style={getColStyle(colHeader)}
                       className={`font-bold hover:opacity-90 transition-opacity group/th relative ${widthClass}`}
                     >
                       <div className={`flex items-center justify-between gap-1.5 ${isNum ? 'justify-center' : ''}`}>
@@ -3356,6 +3474,23 @@ export function NotionDatabaseTable({
                             )}
                           </div>
                         )}
+                      </div>
+
+                      {/* Column Resizer Handle (Draggable Divider) */}
+                      <div
+                        onMouseDown={(e) => handleResizeStart(e, colHeader, (e.currentTarget.parentElement?.offsetWidth || 180))}
+                        onTouchStart={(e) => handleResizeStart(e, colHeader, (e.currentTarget.parentElement?.offsetWidth || 180))}
+                        onClick={(e) => e.stopPropagation()}
+                        title={`Geser untuk atur lebar kolom "${colHeader}"`}
+                        className={`absolute right-0 top-0 bottom-0 w-3 cursor-col-resize select-none flex items-center justify-center z-20 group/resizer hover:bg-teal-500/30 ${
+                          resizingCol === colHeader ? 'bg-teal-500/50 w-2.5' : ''
+                        }`}
+                      >
+                        <div className={`w-[2px] h-4 rounded-full transition-colors ${
+                          resizingCol === colHeader 
+                            ? 'bg-teal-400' 
+                            : 'bg-slate-300 dark:bg-slate-600 group-hover/resizer:bg-teal-400'
+                        }`} />
                       </div>
                     </th>
                   );
@@ -3621,9 +3756,9 @@ export function NotionDatabaseTable({
                               // 1. Number Column
                               if (colLower === 'number' || colLower === 'no') {
                                 return (
-                                  <td key={colName} className={`text-center font-mono ${
+                                  <td key={colName} style={{ ...getColStyle(colName), color: isDirty ? '#f59e0b' : isNotionLight ? '#64748b' : 'var(--text-muted, #64748b)' }} className={`text-center font-mono ${
                                     fitPageMode ? 'px-1 py-2 text-[10px]' : 'px-3.5 py-3 text-[11px]'
-                                  }`} style={{ color: isDirty ? '#f59e0b' : isNotionLight ? '#64748b' : 'var(--text-muted, #64748b)' }}>
+                                  }`}>
                                     <div className="flex items-center justify-center gap-1">
                                       {isDirty && (
                                         <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" title="Ada perubahan belum disimpan" />
@@ -3639,9 +3774,9 @@ export function NotionDatabaseTable({
                                 const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
 
                                 return (
-                                  <td key={colName} className={`font-semibold transition-colors ${
+                                  <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#1e293b' : 'var(--text-main, #f8fafc)' }} className={`font-semibold transition-colors ${
                                     fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-2.5'
-                                  }`} style={{ color: isNotionLight ? '#1e293b' : 'var(--text-main, #f8fafc)' }}>
+                                  }`}>
                                     {isEditingThis ? (
                                       <NotionInlineEditor
                                         initialValue={val}
@@ -3728,7 +3863,7 @@ export function NotionDatabaseTable({
                                 const taskProgress = parseTasklist(val);
 
                                 return (
-                                  <td key={colName} className={`${
+                                  <td key={colName} style={getColStyle(colName)} className={`${
                                     fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-2.5 max-w-md'
                                   }`}>
                                     {isEditingThis ? (
@@ -3820,9 +3955,9 @@ export function NotionDatabaseTable({
                                 }
 
                                 return (
-                                  <td key={colName} className={`font-sans ${
+                                  <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} className={`font-sans ${
                                     fitPageMode ? 'px-1 py-2 text-[10px] truncate' : 'px-3.5 py-3 whitespace-nowrap text-[11px]'
-                                  }`} style={{ color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }}>
+                                  }`}>
                                     {isEditingThis ? (
                                       <NotionInlineEditor
                                         initialValue={val}
@@ -3863,7 +3998,7 @@ export function NotionDatabaseTable({
                               // 5. PIC Column
                               if (colLower === 'pic' || colLower.includes('assignee')) {
                                 return (
-                                  <td key={colName} className={`${fitPageMode ? 'px-1.5 py-2 overflow-hidden' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                                  <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1.5 py-2 overflow-hidden' : 'px-3.5 py-3 whitespace-nowrap'}`}>
                                     {renderPicBadge(val)}
                                   </td>
                                 );
@@ -3872,7 +4007,7 @@ export function NotionDatabaseTable({
                               // 6. Priority Column (Interactive Dropdown)
                               if (colLower.includes('priority') || colLower.includes('prioritas')) {
                                 return (
-                                  <td key={colName} className={`${fitPageMode ? 'px-1 py-2 overflow-hidden' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                                  <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-2 overflow-hidden' : 'px-3.5 py-3 whitespace-nowrap'}`}>
                                     <NotionDropdownCell
                                       type="priority"
                                       value={val}
@@ -3893,7 +4028,7 @@ export function NotionDatabaseTable({
                                 const durationInfo = isClosed ? getRowDurationInfo(row, taskProgress) : null;
 
                                 return (
-                                  <td key={colName} className={`${fitPageMode ? 'px-1 py-1.5 overflow-hidden' : 'px-4 py-2.5 whitespace-nowrap'}`}>
+                                  <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-1.5 overflow-hidden' : 'px-4 py-2.5 whitespace-nowrap'}`}>
                                     <div className="flex flex-col items-start gap-1">
                                       <NotionDropdownCell
                                         type="status"
@@ -3953,9 +4088,9 @@ export function NotionDatabaseTable({
                               // 8. Created Time Column
                               if (colLower.includes('created')) {
                                 return (
-                                  <td key={colName} className={`font-sans ${
+                                  <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} className={`font-sans ${
                                     fitPageMode ? 'px-1 py-2 text-[10px] truncate' : 'px-3.5 py-3 whitespace-nowrap text-[11px]'
-                                  }`} style={{ color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }}>
+                                  }`}>
                                     {val && val !== '-' ? (
                                       <span className="inline-flex items-center gap-1">
                                         <Clock className="w-3 h-3 text-slate-400 shrink-0" />
@@ -3971,7 +4106,7 @@ export function NotionDatabaseTable({
                               // 9. Kategori Column
                               if (colLower.includes('kategori') || colLower.includes('category')) {
                                 return (
-                                  <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                                  <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
                                     {val && val !== '-' ? (
                                       <span 
                                         className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] border truncate ${
@@ -3992,7 +4127,7 @@ export function NotionDatabaseTable({
                               // 10. Activity Column (Interactive Dropdown)
                               if (colLower.includes('activity') || colLower.includes('aktivitas')) {
                                 return (
-                                  <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                                  <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
                                     <NotionDropdownCell
                                       type="activity"
                                       value={val}
@@ -4009,7 +4144,7 @@ export function NotionDatabaseTable({
                               // 11. Period Column (Interactive Dropdown)
                               if (colLower.includes('period') || colLower.includes('periode')) {
                                 return (
-                                  <td key={colName} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
+                                  <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-3 whitespace-nowrap'}`}>
                                     <NotionDropdownCell
                                       type="period"
                                       value={val}
@@ -4022,9 +4157,9 @@ export function NotionDatabaseTable({
 
                               // Default custom column
                               return (
-                                <td key={colName} className={`whitespace-nowrap ${
+                                <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} className={`whitespace-nowrap ${
                                   fitPageMode ? 'px-1 py-2 text-[10.5px]' : 'px-3.5 py-3 text-xs'
-                                }`} style={{ color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }}>
+                                }`}>
                                   {val && val !== '-' ? val : <span className="font-mono text-slate-400">-</span>}
                                 </td>
                               );

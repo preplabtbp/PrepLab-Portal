@@ -1420,7 +1420,7 @@ export default function App() {
       {/* 0. Left Edge Hover Trigger: Desktop only (Hidden on Mobile) */}
       {isAutoHide && !isCrewRole && (
         <div 
-          className="hidden md:block fixed top-0 left-0 w-3.5 h-[100dvh] z-40 cursor-pointer pointer-events-auto select-none"
+          className="hidden md:block fixed top-0 left-0 w-4.5 h-[100dvh] z-40 cursor-pointer pointer-events-auto select-none"
           onMouseEnter={() => setIsSidebarPeeked(true)}
           title="Arahkan kursor ke sini untuk membuka menu sidebar"
         />
@@ -1437,11 +1437,11 @@ export default function App() {
             if (isAutoHide) setIsSidebarPeeked(false);
           }}
           className={`hidden md:flex flex-col items-center w-20 lg:w-22 shrink-0 select-none py-3 justify-between overflow-y-auto overflow-x-hidden ${
-            isBulletin && bulletinFocusMode && !isSidebarPeeked ? 'md:hidden' : 'md:flex'
-          } ${
             isAutoHide
-              ? `fixed top-0 left-0 h-[100dvh] z-50 transition-transform duration-300 ease-out ${
-                  isSidebarPeeked ? 'translate-x-0 shadow-2xl pointer-events-auto' : '-translate-x-full pointer-events-none'
+              ? `fixed top-0 left-0 h-[100dvh] z-50 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                  isSidebarPeeked 
+                    ? 'translate-x-0 shadow-2xl pointer-events-auto opacity-100' 
+                    : '-translate-x-full pointer-events-none opacity-0'
                 }`
               : 'relative h-[100dvh] z-50 transition-all duration-300'
           }`}
@@ -1449,7 +1449,8 @@ export default function App() {
             background: 'linear-gradient(180deg, #1da8b5 0%, #168a96 45%, #106771 100%)',
             boxShadow: isAutoHide && isSidebarPeeked
               ? 'inset -1px 0 0 0 rgba(255,255,255,0.22), 8px 0 32px rgba(0,0,0,0.32)'
-              : 'inset -1px 0 0 0 rgba(255,255,255,0.18), 4px 0 20px rgba(0,0,0,0.08)'
+              : 'inset -1px 0 0 0 rgba(255,255,255,0.18), 4px 0 20px rgba(0,0,0,0.08)',
+            willChange: 'transform, opacity'
           }}
         >
           {/* Top Branding Section with PrepLab & HARITA NICKEL */}
