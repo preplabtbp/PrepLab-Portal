@@ -897,16 +897,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                     
                     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-                      <Card className="xl:col-span-7 p-0 overflow-hidden border-slate-200/60 shadow-sm flex flex-col">
-                        <div className="flex-1 overflow-x-auto">
-                          <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-slate-600 uppercase bg-slate-50/80 border-b border-slate-200">
+                      <Card className="xl:col-span-7 p-0 overflow-hidden border-slate-200/60 shadow-sm flex flex-col max-h-[380px]">
+                        <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[320px] custom-scrollbar">
+                          <table className="w-full text-sm text-left border-collapse">
+                            <thead className="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
                               <tr>
-                                <th className="px-4 py-3 font-bold text-[#135e69] whitespace-nowrap">Tanggal Izin</th>
-                                <th className="px-4 py-3 font-bold text-[#22a7b8] whitespace-nowrap">Izin Khusus</th>
-                                <th className="px-4 py-3 font-bold text-amber-700 whitespace-nowrap">Sakit Site (SS)</th>
-                                <th className="px-4 py-3 font-bold text-amber-600 whitespace-nowrap">Sakit Luar (SL)</th>
-                                <th className="px-4 py-3 font-bold text-rose-600 whitespace-nowrap">Alpa</th>
+                                <th className="px-4 py-3 font-bold text-[#135e69] whitespace-nowrap bg-slate-50">Tanggal Izin</th>
+                                <th className="px-4 py-3 font-bold text-[#22a7b8] whitespace-nowrap bg-slate-50">Izin Khusus</th>
+                                <th className="px-4 py-3 font-bold text-amber-700 whitespace-nowrap bg-slate-50">Sakit Site (SS)</th>
+                                <th className="px-4 py-3 font-bold text-amber-600 whitespace-nowrap bg-slate-50">Sakit Luar (SL)</th>
+                                <th className="px-4 py-3 font-bold text-rose-600 whitespace-nowrap bg-slate-50">Alpa</th>
                               </tr>
                             </thead>
                             <tbody>
