@@ -1393,10 +1393,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   des: 11, desember: 11, dec: 11, december: 11
                 };
 
+                const isDateLike = (s?: any): boolean => {
+                  if (!s) return false;
+                  const str = String(s).trim();
+                  if (!str || str === '-' || str === '#N/A' || str === '0' || /^\d{1,2}$/.test(str) || /^(ya|tidak|ok|v|x|true|false)$/i.test(str)) return false;
+                  return str.includes('-') || str.includes('/') || /[a-zA-Z]{3,}/.test(str);
+                };
+
                 const parseSanctionDate = (val?: any): Date | null => {
                   if (!val) return null;
                   const str = String(val).trim().split(/[\r\n,;]+/)[0].trim();
-                  if (!str || str === '-' || str === '#N/A' || str === '0') return null;
+                  if (!isDateLike(str)) return null;
 
                   const dMmmY = str.match(/^(\d{1,2})[-\s/]([a-zA-Z]+)[-\s/](\d{2,4})$/);
                   if (dMmmY) {
@@ -1436,8 +1443,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     }
                   }
 
-                  const d = new Date(str);
-                  return isNaN(d.getTime()) ? null : d;
+                  if (/\d{4}/.test(str)) {
+                    const d = new Date(str);
+                    return isNaN(d.getTime()) ? null : d;
+                  }
+                  return null;
                 };
 
                 const formatIndoDateStr = (d: Date): string => {
@@ -1447,10 +1457,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   return `${day}-${month}-${year}`;
                 };
 
-                // Identifikasi tanggal sanksi utama
-                const spMajorDateStr = [sppt, sp3, sp2, sp1].find(v => v && v !== '-' && v !== '0') || (hasSpMajor ? tanggalSp : '');
-                const stDateStr = st && st !== '-' && st !== '0' ? st : (hasSt ? tanggalSp : '');
-                const counselingDateStr = [k3, k2, k1].find(v => v && v !== '-' && v !== '0') || bulanKonseling;
+                // Identifikasi tanggal sanksi utama yang valid
+                const spMajorDateStr = [sppt, sp3, sp2, sp1].find(isDateLike) || (isDateLike(tanggalSp) ? tanggalSp : '') || (isDateLike(bulanKonseling) ? bulanKonseling : '');
+                const stDateStr = (isDateLike(st) ? st : '') || (isDateLike(tanggalSp) ? tanggalSp : '') || (isDateLike(bulanKonseling) ? bulanKonseling : '');
+                const counselingDateStr = [k3, k2, k1].find(isDateLike) || (isDateLike(bulanKonseling) ? bulanKonseling : '') || (isDateLike(tanggalSp) ? tanggalSp : '');
 
                 // Aturan Masa Aktif:
                 // 1. SP 1 - SPPT = 6 Bulan dari sanksi keluar (+3 Bln Evaluasi, +6 Bln Pemutihan)
@@ -1723,55 +1733,96 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       </div>
                     </div>
 
-                    {/* DETAIL KARTU SANKSI & PEMULIHAN */}
+                    {/* DETAIL KARTU SANKSI & PEMULIHAN (STYLE REKAPAN TANGGAL IZIN) */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                      {/* Masa Berlaku Sanksi */}
-                      <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5 uppercase">
-                            <Clock className="w-3.5 h-3.5 text-amber-600" />
-                            Masa Berlaku Sanksi
-                          </span>
+                      {/* 1. Masa Berlaku Sanksi */}
+                      <Card className="p-4 shadow-sm border-slate-200/80 bg-white flex flex-col justify-between rounded-2xl hover:border-amber-300 transition-all">
+                        <div>
+                          <div className="flex items-center justify-between mb-2.5">
+                            <p className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                              <Clock className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Masa Berlaku Sanksi</span>
+                            </p>
+                            {hasAnySp && (
+                              <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-bold">
+                                {hasSpMajor ? 'SP (6 Bln)' : (hasSt ? 'ST (3 Bln)' : 'Aktif')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100 min-h-[64px] flex items-center flex-wrap gap-2">
+                            {masaBerlaku && masaBerlaku !== '-' && !masaBerlaku.toLowerCase().includes('tidak ada') ? (
+                              <span className="inline-block px-3 py-1.5 text-xs font-extrabold rounded-md bg-amber-50 text-amber-900 border border-amber-200 font-mono shadow-2xs">
+                                {masaBerlaku}
+                              </span>
+                            ) : (
+                              <p className="text-xs text-slate-400 italic">Tidak ada catatan sanksi aktif</p>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-sm font-extrabold text-slate-800 font-mono">
-                          {masaBerlaku && masaBerlaku !== '-' ? masaBerlaku : 'Tidak ada sanksi aktif'}
+                        <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
+                          <Info className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>Periode berlakunya surat peringatan / teguran</span>
                         </p>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          Periode berlakunya surat peringatan / teguran
-                        </p>
-                      </div>
+                      </Card>
 
-                      {/* Masa Pemulihan I */}
-                      <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5 uppercase">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
-                            Masa Pemulihan I
-                          </span>
+                      {/* 2. Masa Pemulihan I */}
+                      <Card className="p-4 shadow-sm border-slate-200/80 bg-white flex flex-col justify-between rounded-2xl hover:border-[#22a7b8]/40 transition-all">
+                        <div>
+                          <div className="flex items-center justify-between mb-2.5">
+                            <p className="text-xs font-bold text-[#135e69] uppercase tracking-wider flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-[#22a7b8]"></span>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-[#22a7b8]" />
+                              <span>Masa Pemulihan I</span>
+                            </p>
+                            <span className="text-[10px] bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8] px-2 py-0.5 rounded-full font-bold">
+                              Tahap Evaluasi
+                            </span>
+                          </div>
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100 min-h-[64px] flex items-center flex-wrap gap-2">
+                            {masaPemulihan1 && masaPemulihan1 !== '-' ? (
+                              <span className="inline-block px-3 py-1.5 text-xs font-extrabold rounded-md bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8] font-mono shadow-2xs">
+                                {masaPemulihan1}
+                              </span>
+                            ) : (
+                              <p className="text-xs text-slate-400 italic">-</p>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-sm font-extrabold text-teal-800 font-mono">
-                          {masaPemulihan1 && masaPemulihan1 !== '-' ? masaPemulihan1 : '-'}
+                        <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
+                          <Info className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>Evaluasi tahap awal pemulihan kedisiplinan</span>
                         </p>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          Evaluasi tahap awal pemulihan kedisiplinan
-                        </p>
-                      </div>
+                      </Card>
 
-                      {/* Masa Pemulihan II */}
-                      <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5 uppercase">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            Masa Pemulihan II
-                          </span>
+                      {/* 3. Masa Pemulihan II */}
+                      <Card className="p-4 shadow-sm border-slate-200/80 bg-white flex flex-col justify-between rounded-2xl hover:border-emerald-300 transition-all">
+                        <div>
+                          <div className="flex items-center justify-between mb-2.5">
+                            <p className="text-xs font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Masa Pemulihan II</span>
+                            </p>
+                            <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">
+                              Pemutihan Status
+                            </span>
+                          </div>
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100 min-h-[64px] flex items-center flex-wrap gap-2">
+                            {masaPemulihan2 && masaPemulihan2 !== '-' ? (
+                              <span className="inline-block px-3 py-1.5 text-xs font-extrabold rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 font-mono shadow-2xs">
+                                {masaPemulihan2}
+                              </span>
+                            ) : (
+                              <p className="text-xs text-slate-400 italic">-</p>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-sm font-extrabold text-emerald-800 font-mono">
-                          {masaPemulihan2 && masaPemulihan2 !== '-' ? masaPemulihan2 : '-'}
+                        <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
+                          <Info className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>Tahap penutupan sanksi &amp; pemutihan status</span>
                         </p>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          Tahap penutupan sanksi &amp; pemutihan status
-                        </p>
-                      </div>
+                      </Card>
                     </div>
 
                     {/* GRID RINCIAN KONSELING & SP & SPDK */}
