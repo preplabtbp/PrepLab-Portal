@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Lightbulb, Bug, MessageSquarePlus, X, Send, Sparkles, 
-  Image as ImageIcon, ExternalLink, Loader2, CheckCircle2 
+  Image as ImageIcon, ExternalLink, Loader2, CheckCircle2,
+  Camera, Clipboard, Trash2, RefreshCw
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
 import { uploadPhotoToDrive } from '../sheets-api';
 import { triggerExpGain } from '../lib/gamificationEvents';
@@ -73,6 +75,94 @@ export function FloatingFeedbackButton({
   const [screenshotBase64, setScreenshotBase64] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [capturingScreen, setCapturingScreen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Tangani penempelan (Ctrl+V) gambar dari clipboard ketika modal masukan terbuka
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            const reader = new FileReader();
+            reader.onload = () => {
+              setScreenshotBase64(reader.result as string);
+              toast.success('Screenshot berhasil ditempel (Ctrl+V) dari clipboard! 📋');
+            };
+            reader.readAsDataURL(file);
+            break;
+          }
+        }
+      }
+    };
+
+    const handleCustomPasted = (e: any) => {
+      if (e.detail?.base64) {
+        setScreenshotBase64(e.detail.base64);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    window.addEventListener('portal:image_pasted', handleCustomPasted);
+    return () => {
+      window.removeEventListener('paste', handlePaste);
+      window.removeEventListener('portal:image_pasted', handleCustomPasted);
+    };
+  }, [isOpen]);
+
+  // Ambil tangkapan layar tampilan portal yang sedang diakses secara otomatis
+  const handleCaptureScreen = async () => {
+    setCapturingScreen(true);
+    const toastId = toast.loading('Mengambil tangkapan layar tampilan portal...');
+    try {
+      const modalEl = document.querySelector('.feedback-modal-container') as HTMLElement;
+      const backdropEl = document.querySelector('.feedback-modal-backdrop') as HTMLElement;
+      if (modalEl) modalEl.style.opacity = '0';
+      if (backdropEl) backdropEl.style.opacity = '0';
+
+      // Jeda sejenak agar browser merender penghilangan modal
+      await new Promise(r => setTimeout(r, 60));
+
+      const targetEl = document.getElementById('root') || document.body;
+      const canvas = await html2canvas(targetEl, {
+        useCORS: true,
+        allowTaint: true,
+        scale: Math.min(window.devicePixelRatio || 1, 1.5),
+        logging: false,
+        ignoreElements: (element) => {
+          return (
+            element.hasAttribute('data-html2canvas-ignore') ||
+            element.classList.contains('feedback-modal-container') ||
+            element.classList.contains('feedback-modal-backdrop') ||
+            element.tagName === 'NOSCRIPT'
+          );
+        }
+      });
+
+      if (modalEl) modalEl.style.opacity = '1';
+      if (backdropEl) backdropEl.style.opacity = '1';
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      setScreenshotBase64(dataUrl);
+      toast.success('Tampilan portal yang sedang diakses berhasil dilampirkan! 📸', { id: toastId });
+    } catch (err: any) {
+      console.error('Failed to capture screen:', err);
+      const modalEl = document.querySelector('.feedback-modal-container') as HTMLElement;
+      const backdropEl = document.querySelector('.feedback-modal-backdrop') as HTMLElement;
+      if (modalEl) modalEl.style.opacity = '1';
+      if (backdropEl) backdropEl.style.opacity = '1';
+      toast.error('Gagal mengambil tangkapan layar otomatis. Silakan tempel (Ctrl+V) atau pilih file manual.', { id: toastId });
+    } finally {
+      setCapturingScreen(false);
+    }
+  };
 
   // Position calculation: avoids mobile bottom nav & desktop right rail
   const hasMobileBottomNav = !isCrewRole && !(isBulletin && isBulletinFocusMode);
@@ -219,20 +309,22 @@ export function FloatingFeedbackButton({
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
             {/* Backdrop */}
             <motion.div
+              data-html2canvas-ignore="true"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => !submitting && setIsOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+              className="feedback-modal-backdrop fixed inset-0 bg-black/60 backdrop-blur-xs"
             />
 
             {/* Modal Dialog Card */}
             <motion.div
+              data-html2canvas-ignore="true"
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.2 }}
-              className="relative w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden z-10 transition-colors my-auto"
+              className="feedback-modal-container relative w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden z-10 transition-colors my-auto"
               style={{
                 backgroundColor: 'var(--card-bg, #1e293b)',
                 borderColor: 'var(--border-main, rgba(148, 163, 184, 0.25))',
@@ -383,12 +475,12 @@ export function FloatingFeedbackButton({
                     />
                   </div>
 
-                  {/* Screenshot Attachment (Optional) */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
+                  {/* Screenshot Attachment with Auto Capture & Ctrl+V Paste */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
                       <label className="text-xs font-semibold text-[var(--text-muted)] flex items-center gap-1.5">
-                        <ImageIcon className="w-3.5 h-3.5" />
-                        <span>Lampiran Gambar / Screenshot <span className="opacity-60 font-normal">(opsional)</span>:</span>
+                        <ImageIcon className="w-3.5 h-3.5 text-teal-400" />
+                        <span>Lampiran Screenshot Layar <span className="opacity-60 font-normal">(opsional)</span>:</span>
                       </label>
                       {screenshotBase64 && (
                         <button
@@ -400,21 +492,95 @@ export function FloatingFeedbackButton({
                         </button>
                       )}
                     </div>
+
                     {screenshotBase64 ? (
-                      <div className="relative w-full h-24 rounded-xl overflow-hidden border border-teal-500/40">
+                      <div className="relative w-full rounded-2xl overflow-hidden border border-teal-500/50 bg-black/40 p-2.5 flex items-center gap-3 shadow-inner">
                         <img 
                           src={screenshotBase64} 
                           alt="Screenshot Lampiran" 
-                          className="w-full h-full object-cover" 
+                          className="w-24 h-16 object-cover rounded-xl border border-teal-500/40 shrink-0 shadow-xs" 
                         />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-teal-300 flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Tangkapan Layar Terlampir</span>
+                          </p>
+                          <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
+                            Akan otomatis terkirim bersama saran ke tim Developer
+                          </p>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <button
+                              type="button"
+                              onClick={handleCaptureScreen}
+                              disabled={capturingScreen}
+                              className="text-[10.5px] font-semibold text-teal-300 hover:underline flex items-center gap-1 cursor-pointer"
+                            >
+                              <Camera className="w-3 h-3" /> Tangkap Ulang Layar
+                            </button>
+                            <span className="text-slate-600">•</span>
+                            <button
+                              type="button"
+                              onClick={() => setScreenshotBase64(null)}
+                              className="text-[10.5px] font-semibold text-rose-400 hover:underline cursor-pointer"
+                            >
+                              Hapus
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     ) : (
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        className="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-teal-500/20 file:text-teal-300 hover:file:bg-teal-500/30 cursor-pointer"
-                      />
+                      <div className="space-y-2">
+                        {/* 1-Click Tangkap Tampilan Layar Portal yang Sedang Diakses */}
+                        <button
+                          type="button"
+                          onClick={handleCaptureScreen}
+                          disabled={capturingScreen}
+                          className="w-full py-2.5 px-3.5 rounded-xl border border-teal-500/40 bg-teal-500/15 hover:bg-teal-500/25 active:scale-[0.99] text-teal-300 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+                          title="Ambil tangkapan layar tampilan portal yang sedang aktif di belakang jendela ini"
+                        >
+                          {capturingScreen ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin text-teal-400" />
+                              <span>Sedang mengambil tampilan layar portal...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Camera className="w-4 h-4 text-teal-400" />
+                              <span>📸 Tangkap Tampilan Layar Portal Saat Ini</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* Dropzone & Paste (Ctrl+V) Area */}
+                        <div 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="p-3 rounded-xl border border-dashed border-slate-700/80 bg-slate-800/30 hover:bg-slate-800/60 transition-colors flex items-center justify-between gap-2.5 cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-teal-500/10 text-teal-400 flex items-center justify-center shrink-0 border border-teal-500/20 group-hover:scale-105 transition-transform">
+                              <Clipboard className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0 text-left">
+                              <p className="text-xs font-semibold text-slate-200 truncate">
+                                Atau tekan <strong className="text-teal-300 font-mono bg-teal-500/10 px-1 py-0.5 rounded border border-teal-500/30">Ctrl + V</strong> dari clipboard
+                              </p>
+                              <p className="text-[10px] text-slate-400">
+                                Bisa juga klik di sini untuk memilih file gambar (PNG, JPG)
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold text-teal-400 shrink-0 px-2 py-1 bg-teal-500/10 rounded-lg border border-teal-500/30 group-hover:bg-teal-500/20 transition-colors">
+                            Pilih File
+                          </span>
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className="hidden"
+                          />
+                        </div>
+                      </div>
                     )}
                   </div>
 

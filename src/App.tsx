@@ -23,6 +23,7 @@ import { MeetingRoomDevModal } from './components/MeetingRoomDevModal';
 import { FloatingFeedbackButton } from './components/FloatingFeedbackButton';
 import { initFontSize } from './utils/fontSize';
 import { formatAvatarUrl } from './lib/avatarUtils';
+import { setupGlobalAttachmentPaste } from './utils/attachmentPasteHelper';
 
 // Initialize portal-wide font scale on boot
 initFontSize();
@@ -259,6 +260,11 @@ export default function App() {
   }, []);
 
   const [syncTick, setSyncTick] = useState(0);
+
+  // Mendaftarkan handler universal agar setiap input attachment bisa menerima Ctrl+V gambar
+  useEffect(() => {
+    return setupGlobalAttachmentPaste();
+  }, []);
 
   useEffect(() => {
     const handleProfileUpdate = () => setSyncTick(t => t + 1);

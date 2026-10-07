@@ -4,8 +4,9 @@ import {
   Bug, Lightbulb, MessageSquarePlus, ArrowLeft, Send, CheckCircle2, 
   Clock, AlertCircle, Sparkles, Filter, Search, Trash2, 
   MessageSquare, ShieldCheck, HelpCircle, Layers, Image as ImageIcon,
-  ExternalLink, ChevronRight, RefreshCw, Eye
+  ExternalLink, ChevronRight, RefreshCw, Eye, Camera, Clipboard, Loader2
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
 import { PageHeader } from './PageHeader';
 import { uploadPhotoToDrive } from '../sheets-api';
@@ -63,6 +64,7 @@ export function FeedbackSupportScreen({
   const [type, setType] = useState<'bug' | 'suggestion' | 'improvement' | 'question'>('bug');
   const [description, setDescription] = useState('');
   const [screenshotBase64, setScreenshotBase64] = useState<string | null>(null);
+  const [capturingScreen, setCapturingScreen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
@@ -118,6 +120,81 @@ export function FeedbackSupportScreen({
   useEffect(() => {
     loadFeedbacks();
   }, [isDeveloper]);
+
+  // Handle Capture Current Portal Screen
+  const handleCaptureScreen = async () => {
+    try {
+      setCapturingScreen(true);
+      toast.loading('Menangkap tampilan layar portal...', { id: 'screen-capture' });
+      
+      const targetElement = document.getElementById('root') || document.body;
+      const canvas = await html2canvas(targetElement, {
+        useCORS: true,
+        allowTaint: true,
+        scale: Math.min(window.devicePixelRatio || 1, 1.5),
+        logging: false,
+        backgroundColor: '#0f172a',
+        ignoreElements: (element) => {
+          return (
+            element.getAttribute('data-html2canvas-ignore') === 'true' ||
+            element.classList.contains('feedback-ignore-capture')
+          );
+        }
+      });
+
+      const base64 = canvas.toDataURL('image/jpeg', 0.85);
+      setScreenshotBase64(base64);
+      toast.success('Screenshot portal berhasil diambil!', { id: 'screen-capture' });
+    } catch (err: any) {
+      console.error('Failed to capture screen:', err);
+      toast.error('Gagal mengambil screenshot: ' + (err.message || 'Gunakan PrtSc lalu tekan Ctrl+V'), { id: 'screen-capture' });
+    } finally {
+      setCapturingScreen(false);
+    }
+  };
+
+  // Support Ctrl+V paste directly on this screen
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (activeTab !== 'create') return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const blob = items[i].getAsFile();
+          if (blob) {
+            if (blob.size > 5 * 1024 * 1024) {
+              toast.error('Ukuran gambar maksimal 5MB');
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+              setScreenshotBase64(reader.result as string);
+              toast.success('Screenshot dari clipboard (Ctrl+V) berhasil dilampirkan!');
+            };
+            reader.readAsDataURL(blob);
+            break;
+          }
+        }
+      }
+    };
+
+    const handleCustomPasted = (e: any) => {
+      if (activeTab !== 'create') return;
+      if (e.detail?.base64) {
+        setScreenshotBase64(e.detail.base64);
+        toast.success('Screenshot dari clipboard (Ctrl+V) berhasil dilampirkan!');
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    window.addEventListener('portal:image_pasted', handleCustomPasted);
+    return () => {
+      window.removeEventListener('paste', handlePaste);
+      window.removeEventListener('portal:image_pasted', handleCustomPasted);
+    };
+  }, [activeTab]);
 
   // Handle Image Upload
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -509,46 +586,76 @@ export function FeedbackSupportScreen({
               </div>
 
               {/* Screenshot Upload */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold opacity-80 flex items-center gap-1.5">
-                  <ImageIcon className="w-3.5 h-3.5 text-teal-500" />
-                  <span>Lampirkan Screenshot / Foto (Opsional)</span>
-                </label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold opacity-80 flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-teal-500" />
+                    <span>Lampirkan Screenshot / Foto (Opsional)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleCaptureScreen}
+                    disabled={capturingScreen}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-500/10 text-teal-600 dark:text-teal-400 hover:bg-teal-500/20 border border-teal-500/30 transition-all cursor-pointer shadow-2xs active:scale-95"
+                  >
+                    {capturingScreen ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Camera className="w-3.5 h-3.5" />
+                    )}
+                    <span>{capturingScreen ? 'Mengambil Layar...' : '📸 Tangkap Layar Saat Ini'}</span>
+                  </button>
+                </div>
                 
                 {screenshotBase64 ? (
-                  <div className="relative p-2 rounded-2xl border flex items-center gap-3" style={{ borderColor: 'var(--border-main)' }}>
+                  <div className="relative p-3 rounded-2xl border flex items-center gap-3.5" style={{ borderColor: 'var(--border-main)', backgroundColor: 'var(--input-bg, #ffffff)' }}>
                     <img 
                       src={screenshotBase64} 
                       alt="Preview" 
-                      className="w-16 h-16 object-cover rounded-xl border shadow-2xs" 
+                      className="w-16 h-16 object-cover rounded-xl border shadow-2xs shrink-0" 
                     />
                     <div className="flex-1 min-w-0 text-xs">
-                      <p className="font-bold truncate">Screenshot siap dikirim</p>
-                      <p className="opacity-60 text-[11px]">Akan diunggah otomatis ke Google Drive sistem</p>
+                      <p className="font-bold truncate text-teal-600 dark:text-teal-400">Screenshot siap dilampirkan</p>
+                      <p className="opacity-60 text-[11px]">Akan diunggah otomatis ke Google Drive sistem saat dikirim</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => setScreenshotBase64(null)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-500 hover:bg-rose-50 border border-rose-200 cursor-pointer"
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-rose-200 dark:border-rose-800 cursor-pointer transition-colors"
                     >
                       Hapus
                     </button>
                   </div>
                 ) : (
-                  <label 
-                    className="p-4 rounded-2xl border border-dashed flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-50 transition-colors text-center"
-                    style={{ borderColor: 'var(--border-main)' }}
-                  >
-                    <ImageIcon className="w-6 h-6 opacity-40 text-teal-600" />
-                    <span className="text-xs font-semibold opacity-80">Klik untuk memilih screenshot gambar</span>
-                    <span className="text-[10px] opacity-50">PNG, JPG, JPEG (Maks. 5MB)</span>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleImageChange} 
-                      className="hidden" 
-                    />
-                  </label>
+                  <div className="space-y-2">
+                    <label 
+                      className="p-5 rounded-2xl border border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-teal-500/5 transition-all text-center group"
+                      style={{ borderColor: 'var(--border-main)' }}
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <ImageIcon className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-semibold block text-slate-700 dark:text-slate-200">
+                          Klik untuk memilih file gambar atau tekan <kbd className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-teal-600 dark:text-teal-400 shadow-2xs">Ctrl + V</kbd> untuk Paste
+                        </span>
+                        <span className="text-[10px] opacity-50 block">PNG, JPG, JPEG (Maks. 5MB)</span>
+                      </div>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleImageChange} 
+                        className="hidden" 
+                      />
+                    </label>
+                    <div className="flex items-center justify-between px-2 text-[10px] opacity-60">
+                      <span className="flex items-center gap-1">
+                        <Clipboard className="w-3 h-3 text-teal-500" />
+                        Dukungan <b>Ctrl + V</b> langsung dari clipboard (Snipping Tool / Screenshot)
+                      </span>
+                      <span>Otomatis terhubung</span>
+                    </div>
+                  </div>
                 )}
               </div>
 
