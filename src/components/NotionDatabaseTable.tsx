@@ -683,6 +683,24 @@ export function NotionDatabaseTable({
     setCollapsedGroups(prev => ({ ...prev, [grp]: !prev[grp] }));
   };
 
+  // Sticky Header Controls Measurement for Synchronized Multi-Row Freezing
+  const [controlsHeight, setControlsHeight] = useState<number>(140);
+  const controlsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = controlsRef.current;
+    if (!el) return;
+    const updateHeight = () => {
+      if (el) {
+        setControlsHeight(el.offsetHeight || 140);
+      }
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   // Helper to categorize rows into Notion Database Groups (e.g. 'Non Routine Lainnya', 'PTK GTS')
   const getRowGroup = useCallback((row: TableRowData): string => {
     const gVal = 
@@ -3030,8 +3048,9 @@ export function NotionDatabaseTable({
       {/* NOTION TOP CONTROLS & HEADER GROUP (Breadcrumbs, Toolbar, Filter)         */}
       {/* ========================================================================= */}
       <div 
-        className={`transition-all border-b shadow-2xs ${
-          isNotionLight ? 'bg-white border-slate-200' : 'bg-[#181818] border-[#2d2d2d]'
+        ref={controlsRef}
+        className={`sticky top-12 z-30 transition-all border-b shadow-2xs backdrop-blur-md ${
+          isNotionLight ? 'bg-white/98 border-slate-200' : 'bg-[#181818]/98 border-[#2d2d2d]'
         }`}
       >
         {/* 1. NOTION BREADCRUMBS & TOP BAR (Matching Notion Screenshot) */}
@@ -3464,14 +3483,15 @@ export function NotionDatabaseTable({
             {/* Table Header */}
             <thead>
               <tr 
-                className={`border-b select-none transition-colors ${
-                  isNotionLight
-                    ? 'bg-[#fbfbfa] border-slate-200 text-slate-600'
-                    : 'bg-[#242424] border-[#303030] text-slate-400'
-                }`}
+                className="border-b select-none transition-colors"
               >
                 {/* Select All Checkbox Column */}
-                <th className={`text-center ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}>
+                <th 
+                  style={{ top: `${48 + controlsHeight}px` }}
+                  className={`sticky z-20 text-center shadow-2xs ${
+                    isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#242424] text-slate-300 border-b border-[#303030]'
+                  } ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}
+                >
                   <div className="flex items-center justify-center">
                     <input
                       type="checkbox"
@@ -3520,8 +3540,10 @@ export function NotionDatabaseTable({
                   return (
                     <th
                       key={colHeader}
-                      style={getColStyle(colHeader)}
-                      className={`font-bold hover:opacity-90 transition-opacity group/th relative ${widthClass}`}
+                      style={{ top: `${48 + controlsHeight}px`, ...getColStyle(colHeader) }}
+                      className={`sticky z-20 shadow-2xs font-bold hover:opacity-90 transition-opacity group/th relative ${
+                        isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#242424] text-slate-300 border-b border-[#303030]'
+                      } ${widthClass}`}
                     >
                       <div className={`flex items-center justify-between gap-1.5 ${isNum ? 'justify-center' : ''}`}>
                         <div 
@@ -3612,7 +3634,13 @@ export function NotionDatabaseTable({
                 })}
 
                 {/* Add Column Header Button (+) */}
-                <th className="w-10 text-center px-1 py-2 relative" ref={addColumnRef}>
+                <th 
+                  style={{ top: `${48 + controlsHeight}px` }}
+                  className={`sticky z-20 w-10 text-center px-1 py-2 relative shadow-2xs ${
+                    isNotionLight ? 'bg-[#fbfbfa] border-b border-slate-200' : 'bg-[#242424] border-b border-[#303030]'
+                  }`} 
+                  ref={addColumnRef}
+                >
                   <button
                     type="button"
                     onClick={(e) => {
@@ -3735,7 +3763,14 @@ export function NotionDatabaseTable({
                   )}
                 </th>
 
-                <th className={`text-center ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${isNotionLight ? 'text-slate-500 font-semibold' : 'text-slate-400 font-bold'}`}>Aksi</th>
+                <th 
+                  style={{ top: `${48 + controlsHeight}px` }}
+                  className={`sticky z-20 text-center shadow-2xs ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${
+                    isNotionLight ? 'bg-[#fbfbfa] text-slate-500 font-semibold border-b border-slate-200' : 'bg-[#242424] text-slate-400 font-bold border-b border-[#303030]'
+                  }`}
+                >
+                  Aksi
+                </th>
               </tr>
             </thead>
 
