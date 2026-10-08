@@ -411,33 +411,36 @@ export function TimeRangeFetchModal({
     }
   };
 
-  // 2. Export Official Management Reporting Diagram (PNG Formal Pelaporan)
+  // 2. Export Ultra-HD Official Management Reporting Diagram (PNG 2400x1680 High-Res)
   const handleExportPngChart = () => {
     setIsExportingPng(true);
-    toast.info('Menyusun Diagram Pelaporan Resmi...');
+    toast.info('Menyusun Diagram Pelaporan Resmi Resolusi Tinggi (HD)...');
 
     setTimeout(() => {
       try {
-        const width = 1920;
-        const height = 1350;
+        const width = 2400;
+        const height = 1680;
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('Canvas context tidak tersedia');
 
-        // Document Paper Background (Clean Formal Executive White)
+        // Font constant for ultra crisp typography
+        const FONT_FAMILY = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
+
+        // Document Paper Background (Ultra Clean Formal Executive White)
         ctx.fillStyle = '#f8fafc';
         ctx.fillRect(0, 0, width, height);
 
         // Document Border Frame
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(30, 30, width - 60, height - 60);
+        ctx.fillRect(35, 35, width - 70, height - 70);
         ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(30, 30, width - 60, height - 60);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(35, 35, width - 70, height - 70);
 
-        // Helper: Rounded Rectangle
+        // Helper: Rounded Rectangle with optional top-only or all rounded
         const drawRoundedRect = (
           x: number, 
           y: number, 
@@ -469,105 +472,106 @@ export function TimeRangeFetchModal({
         };
 
         // --- 1. OFFICIAL CORPORATE HEADER ---
-        // Top Corporate Stripe
-        const headGrad = ctx.createLinearGradient(30, 30, width - 30, 30);
-        headGrad.addColorStop(0, '#0f3a42');
+        const headGrad = ctx.createLinearGradient(35, 35, width - 35, 35);
+        headGrad.addColorStop(0, '#0a2e35');
         headGrad.addColorStop(0.5, '#135e69');
-        headGrad.addColorStop(1, '#0f766e');
+        headGrad.addColorStop(1, '#0e7490');
         ctx.fillStyle = headGrad;
-        ctx.fillRect(30, 30, width - 60, 110);
+        ctx.fillRect(35, 35, width - 70, 130);
 
         // Header Company Logo Box
-        drawRoundedRect(55, 48, 74, 74, 12, '#ffffff', '#e2e8f0', 1);
+        drawRoundedRect(65, 55, 90, 90, 16, '#ffffff', '#e2e8f0', 1.5);
         ctx.fillStyle = '#135e69';
-        ctx.font = 'bold 36px sans-serif';
+        ctx.font = `bold 44px ${FONT_FAMILY}`;
         ctx.textAlign = 'center';
-        ctx.fillText('PL', 92, 98);
+        ctx.fillText('PL', 110, 116);
         ctx.textAlign = 'left';
 
         // Header Titles
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 28px sans-serif';
-        ctx.fillText('DIAGRAM & LAPORAN ANALISIS ABSENSI, KEDISIPLINAN & MANPOWER', 145, 78);
+        ctx.font = `bold 32px ${FONT_FAMILY}`;
+        ctx.fillText('DIAGRAM & LAPORAN ANALISIS ABSENSI, KEDISIPLINAN & MANPOWER', 180, 92);
 
         ctx.fillStyle = '#ccfbf1';
-        ctx.font = '15px sans-serif';
-        ctx.fillText('PREPLAB PORTAL ENTERPRISE • PT TRIMEGAH BANGUN PERSADA Tbk & PT GANE PERMAI SENTOSA', 145, 106);
+        ctx.font = `17px ${FONT_FAMILY}`;
+        ctx.fillText('PREPLAB PORTAL ENTERPRISE • PT TRIMEGAH BANGUN PERSADA Tbk & PT GANE PERMAI SENTOSA', 180, 126);
 
         // Metadata Header Table Box (Right Side)
-        drawRoundedRect(width - 450, 45, 400, 80, 8, 'rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.3)', 1);
+        drawRoundedRect(width - 540, 52, 480, 96, 10, 'rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.3)', 1);
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText(`NO. LAPORAN : RPT/PLP/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${Math.floor(1000 + Math.random() * 9000)}`, width - 435, 68);
-        ctx.font = '12px sans-serif';
-        ctx.fillText(`PERIODE        : ${startDate} s/d ${endDate} (${calculateDays()} Hari Kerja)`, width - 435, 88);
-        ctx.fillText(`CAKUPAN PT : ${selectedPt === 'ALL' ? 'Semua PT (TBP & GTS)' : 'PT ' + selectedPt} | Cetak: ${now.toLocaleDateString('id-ID')}`, width - 435, 108);
+        ctx.font = `bold 14px ${FONT_FAMILY}`;
+        ctx.fillText(`NO. LAPORAN : RPT/PLP/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${Math.floor(1000 + Math.random() * 9000)}`, width - 520, 78);
+        ctx.font = `13px ${FONT_FAMILY}`;
+        ctx.fillText(`PERIODE        : ${startDate} s/d ${endDate} (${calculateDays()} Hari Kerja)`, width - 520, 102);
+        ctx.fillText(`CAKUPAN PT : ${selectedPt === 'ALL' ? 'Semua PT (TBP & GTS)' : 'PT ' + selectedPt}   •   Cetak: ${now.toLocaleDateString('id-ID')}`, width - 520, 126);
 
-        // --- 2. EXECUTIVE SUMMARY KPI INDICATOR STRIP ---
+        // --- 2. EXECUTIVE SUMMARY KPI INDICATOR STRIP (VERTICAL CLEAN NO OVERLAP) ---
         const kpis = [
-          { label: 'TOTAL TENAGA KERJA', val: `${rangeAggregates.totalEmployees}`, unit: 'Karyawan', color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4' },
-          { label: 'TOTAL HARI IZIN', val: `${rangeAggregates.totalIzinDays}`, unit: 'Hari Kerja', color: '#0284c7', bg: '#f0f9ff', border: '#bae6fd' },
-          { label: 'TOTAL HARI SAKIT', val: `${rangeAggregates.totalSakitDays}`, unit: `SS: ${rangeAggregates.totalSakitSiteDays} | SL: ${rangeAggregates.totalSakitLuarDays}`, color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
-          { label: 'TOTAL ALPA (MANGKIR)', val: `${rangeAggregates.totalAlpaDays}`, unit: 'Hari Kerja', color: '#e11d48', bg: '#fff1f2', border: '#fecdd3' },
-          { label: 'SPDK & SANKSI AKTIF', val: `${rangeAggregates.totalActiveSpdk}`, unit: 'Kasus Berjalan', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' }
+          { label: 'TOTAL TENAGA KERJA', val: `${rangeAggregates.totalEmployees}`, sub: 'Karyawan Aktif', color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4' },
+          { label: 'TOTAL HARI IZIN', val: `${rangeAggregates.totalIzinDays}`, sub: `${rangeAggregates.izinByEmp.length} Karyawan Izin`, color: '#0284c7', bg: '#f0f9ff', border: '#bae6fd' },
+          { label: 'TOTAL HARI SAKIT', val: `${rangeAggregates.totalSakitDays}`, sub: `Site: ${rangeAggregates.totalSakitSiteDays}h • Luar: ${rangeAggregates.totalSakitLuarDays}h`, color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+          { label: 'TOTAL ALPA (MANGKIR)', val: `${rangeAggregates.totalAlpaDays}`, sub: rangeAggregates.totalAlpaDays === 0 ? 'Disiplin 100%' : `${rangeAggregates.alpaByEmp.length} Karyawan Alpa`, color: '#e11d48', bg: '#fff1f2', border: '#fecdd3' },
+          { label: 'SPDK & SANKSI AKTIF', val: `${rangeAggregates.totalActiveSpdk}`, sub: 'Kasus Dalam Pembinaan', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' }
         ];
 
-        const kpiW = (width - 120 - 40) / 5;
+        const kpiW = (width - 140 - 48) / 5;
         kpis.forEach((kpi, idx) => {
-          const kx = 60 + idx * (kpiW + 10);
-          const ky = 155;
-          drawRoundedRect(kx, ky, kpiW, 82, 10, kpi.bg, kpi.border, 1.5);
+          const kx = 70 + idx * (kpiW + 12);
+          const ky = 185;
+          drawRoundedRect(kx, ky, kpiW, 105, 12, kpi.bg, kpi.border, 1.5);
 
-          ctx.fillStyle = '#64748b';
-          ctx.font = 'bold 11px sans-serif';
-          ctx.fillText(kpi.label, kx + 14, ky + 24);
-
-          ctx.fillStyle = kpi.color;
-          ctx.font = 'bold 26px sans-serif';
-          ctx.fillText(kpi.val, kx + 14, ky + 56);
-
+          // 1. Label Top
           ctx.fillStyle = '#475569';
-          ctx.font = 'bold 11px sans-serif';
-          const valW = ctx.measureText(kpi.val).width;
-          ctx.fillText(kpi.unit, kx + 22 + valW, ky + 54);
+          ctx.font = `bold 12px ${FONT_FAMILY}`;
+          ctx.fillText(kpi.label, kx + 16, ky + 28);
+
+          // 2. Large Number Middle
+          ctx.fillStyle = kpi.color;
+          ctx.font = `bold 36px ${FONT_FAMILY}`;
+          ctx.fillText(kpi.val, kx + 16, ky + 68);
+
+          // 3. Subtext Bottom
+          ctx.fillStyle = '#64748b';
+          ctx.font = `bold 12px ${FONT_FAMILY}`;
+          ctx.fillText(kpi.sub, kx + 16, ky + 92);
         });
 
         // --- 3. 4 REPORTING DIAGRAM BLOCKS (2x2 GRID) ---
-        const colW = (width - 120 - 20) / 2;
-        const colH = 430;
-        const row1Y = 250;
-        const row2Y = 695;
+        const colW = (width - 140 - 24) / 2;
+        const colH = 540;
+        const row1Y = 310;
+        const row2Y = 870;
 
         // ================= DIAGRAM 1: CLUSTERED COLUMN CHART (KOMPARASI PER DEPARTEMEN) =================
-        const d1x = 60;
+        const d1x = 70;
         const d1y = row1Y;
-        drawRoundedRect(d1x, d1y, colW, colH, 12, '#ffffff', '#cbd5e1', 1.5);
+        drawRoundedRect(d1x, d1y, colW, colH, 14, '#ffffff', '#cbd5e1', 1.5);
 
         // Diagram 1 Header
         ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.fillText('DIAGRAM 1: Komparasi Absensi per Departemen / Section (Hari)', d1x + 20, d1y + 32);
+        ctx.font = `bold 19px ${FONT_FAMILY}`;
+        ctx.fillText('DIAGRAM 1: Komparasi Absensi per Departemen / Section (Hari)', d1x + 24, d1y + 38);
         
-        // Legend
+        // Legend Box
         const d1Legends = [
           { label: 'Izin', color: '#0284c7' },
           { label: 'Sakit', color: '#d97706' },
           { label: 'Alpa', color: '#e11d48' }
         ];
         d1Legends.forEach((leg, i) => {
-          const lx = d1x + colW - 220 + i * 70;
+          const lx = d1x + colW - 270 + i * 85;
           ctx.fillStyle = leg.color;
-          ctx.fillRect(lx, d1y + 20, 12, 12);
-          ctx.fillStyle = '#475569';
-          ctx.font = 'bold 11px sans-serif';
-          ctx.fillText(leg.label, lx + 18, d1y + 30);
+          drawRoundedRect(lx, d1y + 24, 14, 14, 3, leg.color);
+          ctx.fillStyle = '#334155';
+          ctx.font = `bold 13px ${FONT_FAMILY}`;
+          ctx.fillText(leg.label, lx + 22, d1y + 36);
         });
 
         // Diagram 1 Chart Plot Area
-        const chartPlotX = d1x + 50;
-        const chartPlotY = d1y + 60;
-        const chartPlotW = colW - 70;
-        const chartPlotH = colH - 120;
+        const chartPlotX = d1x + 65;
+        const chartPlotY = d1y + 75;
+        const chartPlotW = colW - 95;
+        const chartPlotH = colH - 160;
 
         // Grid lines Y
         const maxValD1 = Math.max(
@@ -575,7 +579,7 @@ export function TimeRangeFetchModal({
           5
         );
         ctx.strokeStyle = '#f1f5f9';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.5;
         for (let i = 0; i <= 4; i++) {
           const gy = chartPlotY + chartPlotH - (i / 4) * chartPlotH;
           ctx.beginPath();
@@ -583,10 +587,10 @@ export function TimeRangeFetchModal({
           ctx.lineTo(chartPlotX + chartPlotW, gy);
           ctx.stroke();
 
-          ctx.fillStyle = '#94a3b8';
-          ctx.font = '10px sans-serif';
+          ctx.fillStyle = '#64748b';
+          ctx.font = `bold 12px ${FONT_FAMILY}`;
           ctx.textAlign = 'right';
-          ctx.fillText(String(Math.round((i / 4) * maxValD1)), chartPlotX - 8, gy + 4);
+          ctx.fillText(String(Math.round((i / 4) * maxValD1)), chartPlotX - 10, gy + 4);
         }
         ctx.textAlign = 'left';
 
@@ -594,70 +598,67 @@ export function TimeRangeFetchModal({
         const deptsToShow = rangeAggregates.deptBreakdown.slice(0, 5);
         if (deptsToShow.length === 0) {
           ctx.fillStyle = '#94a3b8';
-          ctx.font = 'italic 13px sans-serif';
-          ctx.fillText('Tidak ada data absensi departemen pada rentang waktu ini.', d1x + 100, d1y + 200);
+          ctx.font = `italic 15px ${FONT_FAMILY}`;
+          ctx.fillText('Tidak ada data absensi departemen pada rentang waktu ini.', d1x + 120, d1y + 250);
         } else {
           const groupW = chartPlotW / deptsToShow.length;
-          const barW = Math.min(22, (groupW - 20) / 3);
+          const barW = Math.min(28, (groupW - 24) / 3);
 
           deptsToShow.forEach((d, idx) => {
-            const gx = chartPlotX + idx * groupW + (groupW - barW * 3 - 6) / 2;
+            const gx = chartPlotX + idx * groupW + (groupW - barW * 3 - 8) / 2;
             const baseY = chartPlotY + chartPlotH;
 
             // Bar 1: Izin
-            const hIzin = (d.izin / maxValD1) * chartPlotH;
-            ctx.fillStyle = '#0284c7';
-            ctx.fillRect(gx, baseY - hIzin, barW, hIzin);
+            const hIzin = Math.max(4, (d.izin / maxValD1) * chartPlotH);
             if (d.izin > 0) {
+              drawRoundedRect(gx, baseY - hIzin, barW, hIzin, 4, '#0284c7');
               ctx.fillStyle = '#0f172a';
-              ctx.font = 'bold 10px sans-serif';
+              ctx.font = `bold 12px ${FONT_FAMILY}`;
               ctx.textAlign = 'center';
-              ctx.fillText(String(d.izin), gx + barW / 2, baseY - hIzin - 4);
+              ctx.fillText(String(d.izin), gx + barW / 2, baseY - hIzin - 6);
             }
 
             // Bar 2: Sakit
-            const hSakit = (d.sakit / maxValD1) * chartPlotH;
-            ctx.fillStyle = '#d97706';
-            ctx.fillRect(gx + barW + 3, baseY - hSakit, barW, hSakit);
+            const hSakit = Math.max(4, (d.sakit / maxValD1) * chartPlotH);
             if (d.sakit > 0) {
+              drawRoundedRect(gx + barW + 4, baseY - hSakit, barW, hSakit, 4, '#d97706');
               ctx.fillStyle = '#0f172a';
-              ctx.font = 'bold 10px sans-serif';
+              ctx.font = `bold 12px ${FONT_FAMILY}`;
               ctx.textAlign = 'center';
-              ctx.fillText(String(d.sakit), gx + barW + 3 + barW / 2, baseY - hSakit - 4);
+              ctx.fillText(String(d.sakit), gx + barW + 4 + barW / 2, baseY - hSakit - 6);
             }
 
             // Bar 3: Alpa
-            const hAlpa = (d.alpa / maxValD1) * chartPlotH;
-            ctx.fillStyle = '#e11d48';
-            ctx.fillRect(gx + (barW + 3) * 2, baseY - hAlpa, barW, hAlpa);
+            const hAlpa = Math.max(4, (d.alpa / maxValD1) * chartPlotH);
             if (d.alpa > 0) {
+              drawRoundedRect(gx + (barW + 4) * 2, baseY - hAlpa, barW, hAlpa, 4, '#e11d48');
               ctx.fillStyle = '#0f172a';
-              ctx.font = 'bold 10px sans-serif';
+              ctx.font = `bold 12px ${FONT_FAMILY}`;
               ctx.textAlign = 'center';
-              ctx.fillText(String(d.alpa), gx + (barW + 3) * 2 + barW / 2, baseY - hAlpa - 4);
+              ctx.fillText(String(d.alpa), gx + (barW + 4) * 2 + barW / 2, baseY - hAlpa - 6);
             }
 
             // X Axis Label
-            ctx.fillStyle = '#334155';
-            ctx.font = 'bold 11px sans-serif';
+            ctx.fillStyle = '#1e293b';
+            ctx.font = `bold 13px ${FONT_FAMILY}`;
             ctx.textAlign = 'center';
-            const shortDept = d.dept.length > 14 ? d.dept.substring(0, 12) + '..' : d.dept;
-            ctx.fillText(shortDept, gx + (barW * 3 + 6) / 2, baseY + 22);
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = '10px sans-serif';
-            ctx.fillText(`(${d.count} Org)`, gx + (barW * 3 + 6) / 2, baseY + 36);
+            const shortDept = d.dept.length > 16 ? d.dept.substring(0, 14) + '..' : d.dept;
+            ctx.fillText(shortDept, gx + (barW * 3 + 8) / 2, baseY + 26);
+            ctx.fillStyle = '#64748b';
+            ctx.font = `11px ${FONT_FAMILY}`;
+            ctx.fillText(`(${d.count} Karyawan)`, gx + (barW * 3 + 8) / 2, baseY + 44);
           });
           ctx.textAlign = 'left';
         }
 
         // ================= DIAGRAM 2: DONUT CHART (DISTRIBUSI SPDK & TINGKAT SANKSI) =================
-        const d2x = 60 + colW + 20;
+        const d2x = 70 + colW + 24;
         const d2y = row1Y;
-        drawRoundedRect(d2x, d2y, colW, colH, 12, '#ffffff', '#cbd5e1', 1.5);
+        drawRoundedRect(d2x, d2y, colW, colH, 14, '#ffffff', '#cbd5e1', 1.5);
 
         ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.fillText('DIAGRAM 2: Distribusi Sanksi Disiplin & SPDK Berjalan', d2x + 20, d2y + 32);
+        ctx.font = `bold 19px ${FONT_FAMILY}`;
+        ctx.fillText('DIAGRAM 2: Distribusi Sanksi Disiplin & SPDK Berjalan', d2x + 24, d2y + 38);
 
         const spList = [
           { name: 'Surat Teguran (ST)', count: rangeAggregates.spdkCounts.st, color: '#eab308' },
@@ -669,13 +670,12 @@ export function TimeRangeFetchModal({
         ];
 
         const totalSpCases = spList.reduce((sum, s) => sum + s.count, 0);
-        const donutCenterX = d2x + 170;
-        const donutCenterY = d2y + 225;
-        const outerR = 120;
-        const innerR = 70;
+        const donutCenterX = d2x + 210;
+        const donutCenterY = d2y + 280;
+        const outerR = 150;
+        const innerR = 90;
 
         if (totalSpCases === 0) {
-          // Zero case green circle
           ctx.beginPath();
           ctx.arc(donutCenterX, donutCenterY, outerR, 0, Math.PI * 2);
           ctx.fillStyle = '#22c55e';
@@ -687,11 +687,11 @@ export function TimeRangeFetchModal({
           ctx.fill();
 
           ctx.fillStyle = '#15803d';
-          ctx.font = 'bold 15px sans-serif';
+          ctx.font = `bold 18px ${FONT_FAMILY}`;
           ctx.textAlign = 'center';
-          ctx.fillText('NIHIL SPDK', donutCenterX, donutCenterY - 4);
-          ctx.font = '11px sans-serif';
-          ctx.fillText('100% Kondusif', donutCenterX, donutCenterY + 16);
+          ctx.fillText('NIHIL SPDK', donutCenterX, donutCenterY - 6);
+          ctx.font = `13px ${FONT_FAMILY}`;
+          ctx.fillText('100% Kondusif', donutCenterX, donutCenterY + 18);
           ctx.textAlign = 'left';
         } else {
           let startAngle = -Math.PI / 2;
@@ -715,118 +715,117 @@ export function TimeRangeFetchModal({
           ctx.fill();
 
           ctx.fillStyle = '#0f172a';
-          ctx.font = 'bold 26px sans-serif';
+          ctx.font = `bold 32px ${FONT_FAMILY}`;
           ctx.textAlign = 'center';
           ctx.fillText(String(totalSpCases), donutCenterX, donutCenterY + 4);
           ctx.fillStyle = '#64748b';
-          ctx.font = 'bold 11px sans-serif';
-          ctx.fillText('TOTAL SANKSI', donutCenterX, donutCenterY + 22);
+          ctx.font = `bold 13px ${FONT_FAMILY}`;
+          ctx.fillText('TOTAL SANKSI', donutCenterX, donutCenterY + 26);
           ctx.textAlign = 'left';
         }
 
         // Donut Legend Table on Right Side
-        const legTableX = d2x + 320;
-        const legTableY = d2y + 70;
-        const legTableW = colW - 340;
+        const legTableX = d2x + 400;
+        const legTableY = d2y + 85;
+        const legTableW = colW - 430;
 
-        drawRoundedRect(legTableX, legTableY, legTableW, 320, 8, '#f8fafc', '#e2e8f0', 1);
+        drawRoundedRect(legTableX, legTableY, legTableW, 410, 10, '#f8fafc', '#e2e8f0', 1);
         ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('RINCIAN TINGKAT SANKSI', legTableX + 14, legTableY + 24);
+        ctx.font = `bold 14px ${FONT_FAMILY}`;
+        ctx.fillText('RINCIAN TINGKAT SANKSI', legTableX + 18, legTableY + 30);
 
         spList.forEach((sp, idx) => {
-          const sy = legTableY + 50 + idx * 42;
-          ctx.fillStyle = sp.color;
-          ctx.fillRect(legTableX + 14, sy - 10, 12, 12);
+          const sy = legTableY + 68 + idx * 54;
+          drawRoundedRect(legTableX + 18, sy - 12, 14, 14, 3, sp.color);
 
           ctx.fillStyle = '#334155';
-          ctx.font = '12px sans-serif';
-          ctx.fillText(sp.name, legTableX + 34, sy);
+          ctx.font = `14px ${FONT_FAMILY}`;
+          ctx.fillText(sp.name, legTableX + 42, sy);
 
           ctx.fillStyle = sp.count > 0 ? '#0f172a' : '#94a3b8';
-          ctx.font = 'bold 12px sans-serif';
+          ctx.font = `bold 14px ${FONT_FAMILY}`;
           ctx.textAlign = 'right';
           const pct = totalSpCases > 0 ? Math.round((sp.count / totalSpCases) * 100) : 0;
-          ctx.fillText(`${sp.count} (${pct}%)`, legTableX + legTableW - 14, sy);
+          ctx.fillText(`${sp.count} (${pct}%)`, legTableX + legTableW - 18, sy);
           ctx.textAlign = 'left';
 
           ctx.strokeStyle = '#f1f5f9';
           ctx.beginPath();
-          ctx.moveTo(legTableX + 14, sy + 12);
-          ctx.lineTo(legTableX + legTableW - 14, sy + 12);
+          ctx.moveTo(legTableX + 18, sy + 16);
+          ctx.lineTo(legTableX + legTableW - 18, sy + 16);
           ctx.stroke();
         });
 
         // ================= DIAGRAM 3: TOP RANKED HORIZONTAL BAR (IZIN & SAKIT) =================
-        const d3x = 60;
+        const d3x = 70;
         const d3y = row2Y;
-        drawRoundedRect(d3x, d3y, colW, colH, 12, '#ffffff', '#cbd5e1', 1.5);
+        drawRoundedRect(d3x, d3y, colW, colH, 14, '#ffffff', '#cbd5e1', 1.5);
 
         ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.fillText('DIAGRAM 3: Peringkat Karyawan dengan Izin & Sakit Tertinggi', d3x + 20, d3y + 32);
+        ctx.font = `bold 19px ${FONT_FAMILY}`;
+        ctx.fillText('DIAGRAM 3: Peringkat Karyawan dengan Izin Tertinggi', d3x + 24, d3y + 38);
 
         const topCombined = rangeAggregates.izinByEmp.slice(0, 5);
         const maxComb = Math.max(...topCombined.map(d => d.count), 5);
 
         if (topCombined.length === 0) {
           ctx.fillStyle = '#94a3b8';
-          ctx.font = 'italic 13px sans-serif';
-          ctx.fillText('Tidak ada rekaman izin khusus dalam periode pelaporan ini.', d3x + 40, d3y + 120);
+          ctx.font = `italic 15px ${FONT_FAMILY}`;
+          ctx.fillText('Tidak ada rekaman izin khusus dalam periode pelaporan ini.', d3x + 50, d3y + 150);
         } else {
           topCombined.forEach((item, idx) => {
-            const by = d3y + 65 + idx * 65;
-            // Rank Number
-            drawRoundedRect(d3x + 20, by + 4, 28, 28, 6, '#f1f5f9', '#cbd5e1', 1);
+            const by = d3y + 80 + idx * 82;
+            // Rank Number Badge
+            drawRoundedRect(d3x + 24, by + 4, 36, 36, 8, '#f1f5f9', '#cbd5e1', 1);
             ctx.fillStyle = '#0f172a';
-            ctx.font = 'bold 13px sans-serif';
+            ctx.font = `bold 16px ${FONT_FAMILY}`;
             ctx.textAlign = 'center';
-            ctx.fillText(String(idx + 1), d3x + 34, by + 23);
+            ctx.fillText(String(idx + 1), d3x + 42, by + 28);
             ctx.textAlign = 'left';
 
             // Employee Name & Dept
             ctx.fillStyle = '#0f172a';
-            ctx.font = 'bold 13px sans-serif';
-            ctx.fillText(item.name, d3x + 60, by + 16);
+            ctx.font = `bold 15px ${FONT_FAMILY}`;
+            ctx.fillText(item.name, d3x + 72, by + 18);
             ctx.fillStyle = '#64748b';
-            ctx.font = '11px sans-serif';
-            ctx.fillText(`${item.dept} • NIK: ${item.nik}`, d3x + 60, by + 32);
+            ctx.font = `12px ${FONT_FAMILY}`;
+            ctx.fillText(`${item.dept} • NIK: ${item.nik}`, d3x + 72, by + 38);
 
             // Progress Bar
-            const barStartX = d3x + 280;
-            const barMaxW = colW - 370;
-            const bw = Math.max(15, (item.count / maxComb) * barMaxW);
-            drawRoundedRect(barStartX, by + 12, barMaxW, 16, 4, '#f1f5f9');
-            drawRoundedRect(barStartX, by + 12, bw, 16, 4, '#0284c7');
+            const barStartX = d3x + 360;
+            const barMaxW = colW - 480;
+            const bw = Math.max(20, (item.count / maxComb) * barMaxW);
+            drawRoundedRect(barStartX, by + 14, barMaxW, 20, 5, '#f1f5f9');
+            drawRoundedRect(barStartX, by + 14, bw, 20, 5, '#0284c7');
 
             // Count Tag
             ctx.fillStyle = '#0f172a';
-            ctx.font = 'bold 13px sans-serif';
-            ctx.fillText(`${item.count} Hari`, barStartX + barMaxW + 12, by + 25);
+            ctx.font = `bold 15px ${FONT_FAMILY}`;
+            ctx.fillText(`${item.count} Hari`, barStartX + barMaxW + 16, by + 29);
           });
         }
 
         // ================= DIAGRAM 4: EXECUTIVE SUMMARY MATRIX TABLE =================
-        const d4x = 60 + colW + 20;
+        const d4x = 70 + colW + 24;
         const d4y = row2Y;
-        drawRoundedRect(d4x, d4y, colW, colH, 12, '#ffffff', '#cbd5e1', 1.5);
+        drawRoundedRect(d4x, d4y, colW, colH, 14, '#ffffff', '#cbd5e1', 1.5);
 
         ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.fillText('DIAGRAM 4: Matriks Evaluasi & Ringkasan Pelaporan', d4x + 20, d4y + 32);
+        ctx.font = `bold 19px ${FONT_FAMILY}`;
+        ctx.fillText('DIAGRAM 4: Matriks Evaluasi & Ringkasan Pelaporan', d4x + 24, d4y + 38);
 
         // Matrix Table Headers
-        const tX = d4x + 20;
-        const tY = d4y + 55;
-        const tW = colW - 40;
+        const tX = d4x + 24;
+        const tY = d4y + 70;
+        const tW = colW - 48;
         
-        drawRoundedRect(tX, tY, tW, 36, 6, '#0f3a42');
+        drawRoundedRect(tX, tY, tW, 44, 8, '#0f3a42');
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('KOMPONEN PELAPORAN', tX + 14, tY + 22);
-        ctx.fillText('VOLUME', tX + 260, tY + 22);
-        ctx.fillText('STATUS / EVALUASI', tX + 380, tY + 22);
-        ctx.fillText('TINGKAT RISIKO', tX + tW - 130, tY + 22);
+        ctx.font = `bold 13px ${FONT_FAMILY}`;
+        ctx.fillText('KOMPONEN PELAPORAN', tX + 18, tY + 28);
+        ctx.fillText('VOLUME', tX + 320, tY + 28);
+        ctx.fillText('STATUS / EVALUASI', tX + 480, tY + 28);
+        ctx.fillText('TINGKAT RISIKO', tX + tW - 160, tY + 28);
 
         const matrixRows = [
           {
@@ -872,80 +871,80 @@ export function TimeRangeFetchModal({
         ];
 
         matrixRows.forEach((r, idx) => {
-          const ry = tY + 45 + idx * 56;
-          drawRoundedRect(tX, ry, tW, 48, 6, idx % 2 === 0 ? '#ffffff' : '#f8fafc', '#e2e8f0', 1);
+          const ry = tY + 56 + idx * 72;
+          drawRoundedRect(tX, ry, tW, 60, 8, idx % 2 === 0 ? '#ffffff' : '#f8fafc', '#e2e8f0', 1);
 
           ctx.fillStyle = '#0f172a';
-          ctx.font = 'bold 12px sans-serif';
-          ctx.fillText(r.name, tX + 14, ry + 28);
+          ctx.font = `bold 14px ${FONT_FAMILY}`;
+          ctx.fillText(r.name, tX + 18, ry + 36);
 
           ctx.fillStyle = '#0284c7';
-          ctx.font = 'bold 12px sans-serif';
-          ctx.fillText(r.vol, tX + 260, ry + 28);
+          ctx.font = `bold 14px ${FONT_FAMILY}`;
+          ctx.fillText(r.vol, tX + 320, ry + 36);
 
           ctx.fillStyle = '#475569';
-          ctx.font = '11px sans-serif';
-          ctx.fillText(r.stat, tX + 380, ry + 28);
+          ctx.font = `13px ${FONT_FAMILY}`;
+          ctx.fillText(r.stat, tX + 480, ry + 36);
 
           // Risk Badge
-          drawRoundedRect(tX + tW - 135, ry + 12, 120, 24, 4, r.riskBg);
+          drawRoundedRect(tX + tW - 165, ry + 16, 150, 28, 6, r.riskBg);
           ctx.fillStyle = r.riskColor;
-          ctx.font = 'bold 10px sans-serif';
+          ctx.font = `bold 12px ${FONT_FAMILY}`;
           ctx.textAlign = 'center';
-          ctx.fillText(r.risk, tX + tW - 75, ry + 27);
+          ctx.fillText(r.risk, tX + tW - 90, ry + 35);
           ctx.textAlign = 'left';
         });
 
         // --- 4. OFFICIAL SIGNATURE & APPROVAL BLOCK ---
-        const sigY = 1145;
-        const sigBoxW = (width - 120 - 40) / 3;
+        const sigY = 1440;
+        const sigBoxW = (width - 140 - 48) / 3;
 
         // Signer 1: Administrator / Inspector
-        drawRoundedRect(60, sigY, sigBoxW, 140, 8, '#ffffff', '#cbd5e1', 1);
+        drawRoundedRect(70, sigY, sigBoxW, 160, 10, '#ffffff', '#cbd5e1', 1.5);
         ctx.fillStyle = '#475569';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('DIBUAT OLEH (INSPECTOR / ADMIN):', 80, sigY + 26);
+        ctx.font = `bold 13px ${FONT_FAMILY}`;
+        ctx.fillText('DIBUAT OLEH (INSPECTOR / ADMIN):', 95, sigY + 32);
         ctx.strokeStyle = '#94a3b8';
         ctx.beginPath();
-        ctx.moveTo(80, sigY + 105);
-        ctx.lineTo(60 + sigBoxW - 20, sigY + 105);
+        ctx.moveTo(95, sigY + 120);
+        ctx.lineTo(70 + sigBoxW - 25, sigY + 120);
         ctx.stroke();
         ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText(`NIK: ${inspectorNik || 'ADMINISTRATOR'}`, 80, sigY + 124);
+        ctx.font = `bold 14px ${FONT_FAMILY}`;
+        ctx.fillText(`NIK: ${inspectorNik || 'ADMINISTRATOR'}`, 95, sigY + 142);
 
         // Signer 2: Superintendent / Section Head
-        drawRoundedRect(60 + sigBoxW + 20, sigY, sigBoxW, 140, 8, '#ffffff', '#cbd5e1', 1);
+        drawRoundedRect(70 + sigBoxW + 24, sigY, sigBoxW, 160, 10, '#ffffff', '#cbd5e1', 1.5);
         ctx.fillStyle = '#475569';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('DIPERIKSA OLEH (SECTION HEAD):', 60 + sigBoxW + 40, sigY + 26);
+        ctx.font = `bold 13px ${FONT_FAMILY}`;
+        ctx.fillText('DIPERIKSA OLEH (SECTION HEAD):', 70 + sigBoxW + 48, sigY + 32);
         ctx.strokeStyle = '#94a3b8';
         ctx.beginPath();
-        ctx.moveTo(60 + sigBoxW + 40, sigY + 105);
-        ctx.lineTo(60 + sigBoxW * 2, sigY + 105);
+        ctx.moveTo(70 + sigBoxW + 48, sigY + 120);
+        ctx.lineTo(70 + sigBoxW * 2, sigY + 120);
         ctx.stroke();
         ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('SUPERINTENDENT / SECTION HEAD', 60 + sigBoxW + 40, sigY + 124);
+        ctx.font = `bold 14px ${FONT_FAMILY}`;
+        ctx.fillText('SUPERINTENDENT / SECTION HEAD', 70 + sigBoxW + 48, sigY + 142);
 
         // Signer 3: Section Manager
-        drawRoundedRect(60 + (sigBoxW + 20) * 2, sigY, sigBoxW, 140, 8, '#ffffff', '#cbd5e1', 1);
+        drawRoundedRect(70 + (sigBoxW + 24) * 2, sigY, sigBoxW, 160, 10, '#ffffff', '#cbd5e1', 1.5);
         ctx.fillStyle = '#475569';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('DISETUJUI OLEH (SECTION MANAGER):', 60 + (sigBoxW + 20) * 2 + 20, sigY + 26);
+        ctx.font = `bold 13px ${FONT_FAMILY}`;
+        ctx.fillText('DISETUJUI OLEH (SECTION MANAGER):', 70 + (sigBoxW + 24) * 2 + 25, sigY + 32);
         ctx.strokeStyle = '#94a3b8';
         ctx.beginPath();
-        ctx.moveTo(60 + (sigBoxW + 20) * 2 + 20, sigY + 105);
-        ctx.lineTo(width - 80, sigY + 105);
+        ctx.moveTo(70 + (sigBoxW + 24) * 2 + 25, sigY + 120);
+        ctx.lineTo(width - 95, sigY + 120);
         ctx.stroke();
         ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('SECTION MANAGER PREPARATION LAB', 60 + (sigBoxW + 20) * 2 + 20, sigY + 124);
+        ctx.font = `bold 14px ${FONT_FAMILY}`;
+        ctx.fillText('SECTION MANAGER PREPARATION LAB', 70 + (sigBoxW + 24) * 2 + 25, sigY + 142);
 
         // Footer Legal & Authenticity Text
         ctx.fillStyle = '#94a3b8';
-        ctx.font = '11px sans-serif';
-        ctx.fillText('Dokumen ini digenerate secara otomatis oleh PrepLab Portal Enterprise • Bersifat Rahasia Internal Perusahaan • Sah Tanpa Perubahan.', 60, height - 12);
+        ctx.font = `12px ${FONT_FAMILY}`;
+        ctx.fillText('Dokumen ini digenerate secara otomatis oleh PrepLab Portal Enterprise • Bersifat Rahasia Internal Perusahaan • Sah Tanpa Perubahan.', 70, height - 16);
 
         // Download PNG Diagram
         const imgUrl = canvas.toDataURL('image/png', 1.0);
@@ -956,7 +955,7 @@ export function TimeRangeFetchModal({
         link.click();
         document.body.removeChild(link);
 
-        toast.success('Diagram Pelaporan Resmi (PNG) berhasil diunduh!');
+        toast.success('Diagram Pelaporan HD (2400x1680) berhasil diunduh!');
       } catch (err: any) {
         toast.error('Gagal mengekspor diagram pelaporan: ' + err.message);
       } finally {
