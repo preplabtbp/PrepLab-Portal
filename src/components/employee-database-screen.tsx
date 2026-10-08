@@ -4,13 +4,14 @@ import {
   FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, 
   Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud, Camera, Pencil, 
   Plus, Edit3, ShieldAlert, Scale, Gavel, Clock, AlertOctagon, Info, ShieldCheck,
-  HeartHandshake
+  HeartHandshake, CalendarRange
 } from 'lucide-react';
 import { Card, Input, Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
 import { EmployeeImportModal } from './EmployeeImportModal';
 import { EmployeeEditModal } from './EmployeeEditModal';
 import { AddAttendanceEntryModal } from './AddAttendanceEntryModal';
+import { TimeRangeFetchModal } from './TimeRangeFetchModal';
 import { toast } from 'sonner';
 import { formatAvatarUrl } from '../lib/avatarUtils';
 
@@ -45,6 +46,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isTimeRangeModalOpen, setIsTimeRangeModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editModalTab, setEditModalTab] = useState<'job' | 'personal' | 'attendance' | 'reasons' | 'counseling'>('job');
   const [isAddAttendanceModalOpen, setIsAddAttendanceModalOpen] = useState(false);
@@ -773,6 +775,15 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         <div className="flex items-center gap-2">
           {!selectedEmployee && canManageDatabase && (
             <>
+              <Button
+                onClick={() => setIsTimeRangeModalOpen(true)}
+                size="sm"
+                className="bg-white hover:bg-slate-50 text-[#135e69] border border-[#a2e0e8] flex items-center gap-1.5 rounded-xl text-xs font-bold px-3 py-1.5 shadow-xs transition-all cursor-pointer"
+              >
+                <CalendarRange className="w-3.5 h-3.5 text-[#22a7b8]" />
+                <span>Tarik Data Time Range</span>
+              </Button>
+
               <Button
                 onClick={() => setIsImportModalOpen(true)}
                 size="sm"
@@ -2951,6 +2962,18 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             return next;
           });
         }}
+      />
+
+      {/* Modal Penarikan Data Time Range */}
+      <TimeRangeFetchModal
+        isOpen={isTimeRangeModalOpen}
+        onClose={() => setIsTimeRangeModalOpen(false)}
+        inspectorNik={inspectorNik}
+        employees={scopedEmployees}
+        onSuccess={async () => {
+          await fetchEmployees();
+        }}
+        isSectionManager={isSectionManager}
       />
     </div>
   );
