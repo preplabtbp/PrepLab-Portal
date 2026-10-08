@@ -1,18 +1,21 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  Sparkles, ShieldAlert, BookOpen, CheckSquare, 
-  RefreshCw, Smile, Heart, Zap, Volume2, VolumeX,
-  Palette, Dices, X, Check, Lock, Unlock, Trophy,
-  Coffee, Search, MapPin, Footprints, Flame, Play,
-  ChevronRight, Award, Shield, UserCheck, HelpCircle
+  Sparkles, ShieldAlert, RefreshCw, Smile, Heart, Zap, Volume2, VolumeX,
+  Palette, X, Check, Lock, Unlock, Trophy,
+  Coffee, Search, MapPin, Footprints, Flame, MessageSquare,
+  ChevronRight, Award, Shield, UserCheck, HelpCircle, Users, ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { WidgetSize } from './types';
+import { TbpAvatarCharacter } from '../avatar/TbpAvatarCharacter';
+import { TempatNongkrongModal } from './TempatNongkrongModal';
 
 interface Avatar3DWidgetProps {
   size: WidgetSize;
   userNik?: string;
   userName?: string;
+  userSection?: string;
+  userRole?: string;
 }
 
 // -------------------------------------------------------------
@@ -26,104 +29,171 @@ export interface AvatarItem {
   hex?: string;
   shadow?: string;
   accent?: string;
-  details?: any;
 }
 
 export const HEADWEAR_ITEMS: AvatarItem[] = [
-  // 4 Starters
+  // Starter 1: Official White TBP Hard Hat (matching user photo)
+  { id: 'helmet_white', name: 'Helm Putih TBP Resmi (Default Tambang TBP/GPS)', isUnlockedDefault: true, unlockReq: 'Starter Resmi TBP', hex: '#FFFFFF', shadow: '#CBD5E1' },
   { id: 'helmet_yellow', name: 'Helm Safety Kuning (K3)', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#FACC15', shadow: '#CA8A04' },
-  { id: 'cap_navy', name: 'Topi Proyek Navy', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#1E3A8A', shadow: '#172554' },
-  { id: 'hair_spiky', name: 'Rambut Spiky Hitam', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#18181B', shadow: '#09090B' },
-  { id: 'hijab_k3', name: 'Hijab Syari K3 Kuning', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#EAB308', shadow: '#A16207' },
+  { id: 'cap_navy', name: 'Topi Proyek Navy TBP', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#1E3A8A', shadow: '#172554' },
+  { id: 'hijab_k3', name: 'Hijab Syari K3 TBP', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#EAB308', shadow: '#A16207' },
   // Unlockables
-  { id: 'helmet_white', name: 'Helm Putih Pengawas', isUnlockedDefault: false, unlockReq: 'Buka di Level 2 (100 XP)', hex: '#F8FAFC', shadow: '#CBD5E1' },
-  { id: 'helmet_red', name: 'Helm Merah HSE & Safety', isUnlockedDefault: false, unlockReq: 'Buka di Level 3 (250 XP)', hex: '#DC2626', shadow: '#991B1B' },
-  { id: 'helmet_blue', name: 'Helm Biru Teknisi Prep', isUnlockedDefault: false, unlockReq: 'Streak 3 Hari Kerja', hex: '#2563EB', shadow: '#1D4ED8' },
+  { id: 'helmet_red', name: 'Helm Merah HSE & Safety', isUnlockedDefault: false, unlockReq: 'Buka di Level 2 (100 XP)', hex: '#DC2626', shadow: '#991B1B' },
+  { id: 'helmet_blue', name: 'Helm Biru Teknisi Prep', isUnlockedDefault: false, unlockReq: 'Buka di Level 3 (250 XP)', hex: '#2563EB', shadow: '#1D4ED8' },
   { id: 'crown_champion', name: 'Mahkota Analis Teladan', isUnlockedDefault: false, unlockReq: 'Buka di Level 5 (500 XP)', hex: '#F59E0B', shadow: '#B45309' }
 ];
 
 export const OUTFIT_ITEMS: AvatarItem[] = [
-  // 4 Starters
+  // Starter 1: Official TBP Field Uniform (Fluo Lime-Green + Navy + Double Scotlight, matching photo)
+  { id: 'uniform_tbp', name: 'Seragam Standar TBP (Hijau Fluo + Navy)', isUnlockedDefault: true, unlockReq: 'Seragam Resmi TBP/GPS', hex: '#84CC16', shadow: '#4D7C0F', accent: '#E2E8F0' },
+  { id: 'lab_coat', name: 'Jas Laboratorium Kimia PrepLab', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#F8FAFC', shadow: '#CBD5E1', accent: '#0D9488' },
   { id: 'vest_orange', name: 'Rompi K3 Orange Standar', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#EA580C', shadow: '#9A3412', accent: '#F8FAFC' },
   { id: 'vest_green', name: 'Rompi K3 Hijau HSE', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#16A34A', shadow: '#166534', accent: '#F8FAFC' },
-  { id: 'lab_coat', name: 'Jas Laboratorium Kimia', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#F8FAFC', shadow: '#CBD5E1', accent: '#0D9488' },
-  { id: 'wearpack_navy', name: 'Wearpack Lapangan Navy', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#1E3A8A', shadow: '#172554', accent: '#F97316' },
   // Unlockables
-  { id: 'wearpack_red', name: 'Wearpack Fire & Rescue', isUnlockedDefault: false, unlockReq: 'Buka di Level 2 (100 XP)', hex: '#DC2626', shadow: '#991B1B', accent: '#FACC15' },
-  { id: 'suit_spv', name: 'Setelan Jas Formal SPV', isUnlockedDefault: false, unlockReq: 'Buka di Level 3 (250 XP)', hex: '#334155', shadow: '#0F172A', accent: '#EF4444' },
-  { id: 'hoodie_cyber', name: 'Hoodie Developer PrepLab', isUnlockedDefault: false, unlockReq: 'Streak 5 Hari Kerja', hex: '#0F172A', shadow: '#020617', accent: '#06B6D4' },
+  { id: 'wearpack_navy', name: 'Wearpack Lapangan Navy', isUnlockedDefault: false, unlockReq: 'Buka di Level 2 (100 XP)', hex: '#1E3A8A', shadow: '#172554', accent: '#F97316' },
+  { id: 'wearpack_red', name: 'Wearpack Fire & Rescue', isUnlockedDefault: false, unlockReq: 'Buka di Level 3 (250 XP)', hex: '#DC2626', shadow: '#991B1B', accent: '#FACC15' },
+  { id: 'suit_spv', name: 'Setelan SPV / Superintendent', isUnlockedDefault: false, unlockReq: 'Buka di Level 4 (400 XP)', hex: '#334155', shadow: '#0F172A', accent: '#EF4444' },
   { id: 'vest_gold', name: 'Rompi Emas Zero Accident', isUnlockedDefault: false, unlockReq: 'Buka di Level 5 (500 XP)', hex: '#EAB308', shadow: '#854D0E', accent: '#FEF08A' }
 ];
 
 export const EYE_ITEMS: AvatarItem[] = [
   // 4 Starters
-  { id: 'normal', name: 'Mata Pixel Ramah', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
   { id: 'glasses_k3', name: 'Kacamata K3 Bening Anti-Debu', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#0284C7' },
+  { id: 'normal', name: 'Mata Ramah', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
   { id: 'happy', name: 'Mata Senyum Happy (^ ^)', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
   { id: 'wink', name: 'Kedip Mata Ceria ;)', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
   // Unlockables
   { id: 'sunglasses', name: 'Kacamata Hitam Cool', isUnlockedDefault: false, unlockReq: 'Buka di Level 2 (100 XP)', hex: '#0F172A' },
-  { id: 'goggles_furnace', name: 'Goggles Furnace 815°C', isUnlockedDefault: false, unlockReq: 'Buka di Level 3 (250 XP)', hex: '#EA580C' },
-  { id: 'cyber_visor', name: 'Digital AR Visor Sensor', isUnlockedDefault: false, unlockReq: 'Streak 7 Hari Kerja', hex: '#06B6D4' }
+  { id: 'goggles_furnace', name: 'Goggles Furnace 1050°C', isUnlockedDefault: false, unlockReq: 'Buka di Level 3 (250 XP)', hex: '#EA580C' }
 ];
 
 export const ACCESSORY_ITEMS: AvatarItem[] = [
   // 4 Starters
-  { id: 'lanyard', name: 'Lanyard ID Card PrepLab', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#EF4444' },
-  { id: 'mask_k3', name: 'Masker Debu N95 K3', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#06B6D4' },
+  { id: 'lanyard', name: 'Lanyard & ID Card TBP (Gantung)', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#EF4444' },
+  { id: 'mask_k3', name: 'Masker Respirator Debu Nikel N95', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#06B6D4' },
   { id: 'none', name: 'Tanpa Aksesoris', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
-  { id: 'radio_ht', name: 'Handy Talky (HT) K3', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#475569' },
+  { id: 'radio_ht', name: 'Handy Talky (HT) Tambang K3', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#475569' },
   // Unlockables
   { id: 'ear_muff', name: 'Safety Ear Muff Crusher', isUnlockedDefault: false, unlockReq: 'Buka di Level 2 (100 XP)', hex: '#F97316' },
-  { id: 'coffee_mug', name: 'Tumbler Kopi PrepLab', isUnlockedDefault: false, unlockReq: 'Streak 3 Hari Kerja', hex: '#8B5CF6' },
-  { id: 'badge_star', name: 'Pin Bintang Teladan K3', isUnlockedDefault: false, unlockReq: 'Buka di Level 4 (400 XP)', hex: '#FACC15' }
+  { id: 'coffee_mug', name: 'Tumbler Kopi PrepLab', isUnlockedDefault: false, unlockReq: 'Streak 3 Hari Kerja', hex: '#8B5CF6' }
 ];
 
 export const BOOTS_ITEMS: AvatarItem[] = [
-  // 3 Starters
+  // Starters
+  { id: 'boots_brown', name: 'Safety Boots Tambang Cokelat Kulit (Default TBP)', isUnlockedDefault: true, unlockReq: 'Standar TBP', hex: '#A26B38', shadow: '#6D3D14' },
   { id: 'boots_black', name: 'Safety Boots Hitam Steel-Toe', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#1E293B', shadow: '#0F172A' },
-  { id: 'boots_brown', name: 'Safety Boots Cokelat Kulit', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#78350F', shadow: '#451A03' },
   { id: 'boots_grey', name: 'Sepatu Lab Anti-Static', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#64748B', shadow: '#334155' },
   // Unlockables
-  { id: 'boots_yellow', name: 'Boots K3 High-Vis Kuning', isUnlockedDefault: false, unlockReq: 'Buka di Level 2 (100 XP)', hex: '#EAB308', shadow: '#A16207' },
-  { id: 'boots_cyber', name: 'Mag-Boots Cyber Tech', isUnlockedDefault: false, unlockReq: 'Streak 5 Hari Kerja', hex: '#06B6D4', shadow: '#0E7490' }
+  { id: 'boots_yellow', name: 'Boots K3 High-Vis Kuning', isUnlockedDefault: false, unlockReq: 'Buka di Level 2 (100 XP)', hex: '#EAB308', shadow: '#A16207' }
 ];
 
 export const SKIN_TONES = [
-  { id: 'fair', name: 'Kuning Langsat', skin: '#F1C27D', skinShadow: '#C68642' },
   { id: 'tan', name: 'Sawo Matang', skin: '#E0AC69', skinShadow: '#8D5524' },
+  { id: 'fair', name: 'Kuning Langsat', skin: '#F1C27D', skinShadow: '#C68642' },
   { id: 'light', name: 'Putih Cerah', skin: '#FFDBAC', skinShadow: '#E0AC69' },
   { id: 'bronze', name: 'Tan Bronze', skin: '#C68642', skinShadow: '#5C3A21' },
   { id: 'dark', name: 'Eksotis Gelap', skin: '#8D5524', skinShadow: '#3A2010' }
 ];
 
-const DIALOGUES = [
-  { cat: 'p5m', title: 'P5M: K3 Laboratorium', text: 'Safety glasses & masker selalu terpasang sebelum crusher berputar. Zero accident!' },
-  { cat: 'p5m', title: 'P5M: Suhu Furnace Panas', text: 'Suhu furnace bisa 815°C! Gunakan penjepit crucible dan sarung tangan tebal.' },
-  { cat: 'labnote', title: 'Labnote: Kalibrasi Timbangan', text: 'Timbangan 4 desimal harus di-zeroing dan dicek anak timbang sebelum batch pagi!' },
-  { cat: 'labnote', title: 'Labnote: Total Moisture', text: 'Patuhi waktu pengeringan oven ASTM D3302 agar hasil analisa kadar air presisi.' },
-  { cat: 'logbook', title: 'Logbook: Ceklis Subtask', text: 'Ada task logbook yang belum dicentang? Klik judul task di beranda untuk expand!' },
-  { cat: 'quotes', title: 'Motivasi Site Prep', text: 'Batubara boleh hitam pekat, tapi hasil analisa lab kita harus secerah masa depan!' },
-  { cat: 'quotes', title: 'Humor Anak Prep', text: 'Kopi boleh pahit, tapi sample batubara jangan sampai gosong. Semangat shift!' }
+// -------------------------------------------------------------
+// SECTION-AWARE DIALOGUE POOL: TAMBANG NIKEL PREPARATION & LAB
+// -------------------------------------------------------------
+export interface SectionDialogue {
+  sectionKey: 'preparation' | 'laboratory' | 'maintenance' | 'qa' | 'admin' | 'k3_tbp';
+  sectionBadge: string;
+  title: string;
+  text: string;
+}
+
+export const NICKEL_DIALOGUES: SectionDialogue[] = [
+  // 1. SECTION PREPARATION (Preparasi Sample Nikel: Limonite, Saprolite, Crusher, Oven, Pulverizer)
+  { sectionKey: 'preparation', sectionBadge: 'Prep Nikel', title: 'Crusher: Sample Limonite & Saprolite', text: 'Sample Saprolite & Limonite siap di-crush! Cek hopper jaw crusher & roll crusher sebelum batch running.' },
+  { sectionKey: 'preparation', sectionBadge: 'Prep Nikel', title: 'Oven: Pengeringan Suhu 105°C', text: 'Oven pengeringan 105°C menyala stabil. Pastikan kadar air (MC) konstan sebelum proses pulverizing.' },
+  { sectionKey: 'preparation', sectionBadge: 'Prep Nikel', title: 'Pulverizer: 200 Mesh K3', text: 'Pulverizer 200 mesh berputar kencang! Selalu kunci mangkok ring mill & wajib kenakan ear muff K3.' },
+  { sectionKey: 'preparation', sectionBadge: 'Prep Nikel', title: 'Sampling: Jones Riffle Splitter', text: 'Pembagian sample lewat Jones Riffle Splitter harus representatif, homogen, dan teliti.' },
+  { sectionKey: 'preparation', sectionBadge: 'Prep Nikel', title: 'QC Prep: Pembersihan Mangkok', text: 'Bersihkan mangkok ring mill dengan pasir silika & air blow gun sebelum ganti batch nikel berikutnya.' },
+  { sectionKey: 'preparation', sectionBadge: 'Prep Nikel', title: 'APD K3: Masker Respirator N95', text: 'Debu ore nikel pekat kawan! Pastikan respirator N95 terpasang rapat dan pas.' },
+  { sectionKey: 'preparation', sectionBadge: 'Prep Nikel', title: 'Logbook: P2H Alat Preparasi', text: 'P2H crusher & rotary splitter shift ini selesai 100%. Siap running target tonase hari ini!' },
+  { sectionKey: 'preparation', sectionBadge: 'Prep Nikel', title: 'Granulometri: Uji Ayakan Sieve', text: 'Uji ayakan sieve shaker mesh 200 wajib lolos 95% agar representatif saat ditembak XRF.' },
+
+  // 2. SECTION LABORATORY (Laboratorium Analisis: XRF, Fusion Bead, Moisture, LOI, Kimia)
+  { sectionKey: 'laboratory', sectionBadge: 'Lab XRF', title: 'XRF: Kalibrasi Spektrum Ni & Fe', text: 'Spektrum XRF stabil! Kurva kalibrasi kadar Ni, Fe, SiO2, dan MgO lolos verifikasi QC.' },
+  { sectionKey: 'laboratory', sectionBadge: 'Lab XRF', title: 'Furnace: Fusion Bead 1050°C', text: 'Muffle furnace 1050°C siap untuk fusion bead. Wajib gunakan safety tongs & sarung tangan tebal!' },
+  { sectionKey: 'laboratory', sectionBadge: 'Lab Kimia', title: 'Timbangan: Kalibrasi 4 Desimal', text: 'Timbangan analitik 4 desimal ter-leveling dan zeroed. Siap timbang flux litium tetraborat.' },
+  { sectionKey: 'laboratory', sectionBadge: 'Lab K3', title: 'Fume Hood: Exhaust Lemari Asam', text: 'Exhaust lemari asam (fume hood) wajib aktif sebelum mereaksikan larutan asam pekat.' },
+  { sectionKey: 'laboratory', sectionBadge: 'Lab Nikel', title: 'Analisa: Moisture & LOI Nikel', text: 'Analisa Loss on Ignition (LOI) dan Total Moisture batch hari ini selesai dengan presisi tinggi.' },
+  { sectionKey: 'laboratory', sectionBadge: 'Lab XRF', title: 'QA/QC: CRM 2-Sigma Valid', text: 'Standard CRM nikel hari ini masuk garis kontrol 2 Sigma. Hasil analisa valid & akurat!' },
+  { sectionKey: 'laboratory', sectionBadge: 'Lab Nikel', title: 'Rehat: Rehat di Pos Nongkrong', text: 'Sambil tunggu scan XRF 20 channel selesai, ayo seruput kopi dulu di Tempat Nongkrong!' },
+  { sectionKey: 'laboratory', sectionBadge: 'Lab XRF', title: 'Instrumen: Suhu Ruang Detektor', text: 'Suhu ruang instrumen XRF terjaga 20-22°C. Detektor vacuum & gas flow bekerja prima.' },
+
+  // 3. SECTION MAINTENANCE (Mekanik, Elektrikal & Pemeliharaan Alat)
+  { sectionKey: 'maintenance', sectionBadge: 'Mekanik Lab', title: 'Maint: P2H Mesin Preparasi', text: 'P2H crusher & pulverizer aman! Suhu bearing dan level getaran mesin terpantau normal.' },
+  { sectionKey: 'maintenance', sectionBadge: 'Maint K3', title: 'LOTO: Prosedur Lockout/Tagout', text: 'Terapkan aturan emas LOTO (Lockout/Tagout) sebelum membuka panel mesin preparasi!' },
+  { sectionKey: 'maintenance', sectionBadge: 'Mekanik Lab', title: 'Airflow: Filter Dust Collector', text: 'Dust collector prep room airflow hisap 100% optimal, filter cartridge bersih.' },
+  { sectionKey: 'maintenance', sectionBadge: 'Mekanik Lab', title: 'Drive: V-Belt Ring Mill Pulverizer', text: 'V-belt pulverizer baru distel kelurusannya. Mesin siap digeber shift penuh!' },
+  { sectionKey: 'maintenance', sectionBadge: 'Elektrikal', title: 'Sensor: Thermocouple Oven & Furnace', text: 'Cek berkala elemen pemanas drying oven 105°C dan thermocouple muffle furnace.' },
+  { sectionKey: 'maintenance', sectionBadge: 'Mekanik Lab', title: 'Hidrolik: Press Pellet 20 Ton', text: 'Oli hidrolik mesin press pellet 20 Ton pada level aman, tekanan pompa mantap.' },
+
+  // 4. SECTION QUALITY ASSURANCE / QC
+  { sectionKey: 'qa', sectionBadge: 'QA/QC', title: 'QA: Duplicate Sample RPD < 3%', text: 'Duplicate check sample preparasi menunjukkan RPD < 3%! Presisi dan homogenitas mantap.' },
+  { sectionKey: 'qa', sectionBadge: 'QA: Verifikasi CRM Saprolite', title: 'QA/QC: Standard Acuan Nikel', text: 'Batch nikel high-grade saprolite terverifikasi CRM, deviasi standar sangat minim.' },
+  { sectionKey: 'qa', sectionBadge: 'QA/QC', title: 'Audit: Standar ISO/IEC 17025', text: 'Kepatuhan SOP ISO/IEC 17025 di PrepLab TBP terjaga sempurna hari ini.' },
+  { sectionKey: 'qa', sectionBadge: 'QA/QC', title: 'KTA/TTA: Nihil Temuan Fatal', text: 'Inspeksi rutin KTA/TTA di area laboratorium selesai tanpa temuan fatal!' },
+
+  // 5. SECTION ADMINISTRATION & LOGISTICS
+  { sectionKey: 'admin', sectionBadge: 'Admin Prep', title: 'Logistik: Stok Reagen & XRF Cups', text: 'Stok XRF cups, binder tablet, dan flux litium tetraborat di gudang terpantau aman.' },
+  { sectionKey: 'admin', sectionBadge: 'Admin Prep', title: 'Roster: Sinkronisasi Shift Kru', text: 'Sinkronisasi roster kru tambang & logbook administrasi shift selesai rapi.' },
+  { sectionKey: 'admin', sectionBadge: 'Admin Prep', title: 'COA: Certificate of Analysis', text: 'Data COA (Certificate of Analysis) nikel siap di-generate untuk tim mining & shipment!' },
+
+  // 6. K3 & TBP MINING SPIRIT (General Tambang TBP & GPS)
+  { sectionKey: 'k3_tbp', sectionBadge: 'K3 TBP', title: 'K3 Site: Budaya Zero Accident', text: 'Salam K3! Zero Accident bukan slogan, tapi komitmen pulang selamat ke keluarga!' },
+  { sectionKey: 'k3_tbp', sectionBadge: 'Seragam TBP', title: 'APD: Fluo Lime & Double Scotlight', text: 'Seragam hijau fluo TBP dengan double scotlight membuat kita terlihat jelas di area kerja!' },
+  { sectionKey: 'k3_tbp', sectionBadge: 'K3 TBP', title: 'Kesehatan: Hidrasi Cuaca Tambang', text: 'Cuaca site nikel terik, jangan lupa hidrasi air minum yang cukup & jaga stamina!' },
+  { sectionKey: 'k3_tbp', sectionBadge: 'Semangat TBP', title: 'Harita Nickel: Kebersamaan Shift', text: 'Rekan kerja adalah keluarga. Saling peduli dan tegur bila ada kondisi tidak aman (KTA)!' }
 ];
+
+function normalizeUserSection(raw?: string): 'preparation' | 'laboratory' | 'maintenance' | 'qa' | 'admin' | 'k3_tbp' {
+  const s = (raw || '').toLowerCase();
+  if (s.includes('qa') || s.includes('quality') || s.includes('qc') || s.includes('assurance')) return 'qa';
+  if (s.includes('maint') || s.includes('mekanik') || s.includes('teknisi') || s.includes('pemeliharaan') || s.includes('bengkel')) return 'maintenance';
+  if (s.includes('admin') || s.includes('adm') || s.includes('inv') || s.includes('gudang') || s.includes('finance') || s.includes('hr') || s.includes('logistic')) return 'admin';
+  if (s.includes('lab') || s.includes('laboratorium') || s.includes('kimia') || s.includes('xrf') || s.includes('analis') || s.includes('wet')) return 'laboratory';
+  if (s.includes('prep') || s.includes('preparasi') || s.includes('crush') || s.includes('sample') || s.includes('drying')) return 'preparation';
+  return 'preparation';
+}
 
 export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({ 
   size, 
   userNik = 'default',
-  userName = 'Ranger' 
+  userName = 'Ranger',
+  userSection: propUserSection,
+  userRole: propUserRole
 }) => {
-  const unlockedStorageKey = `preplab_pixel_unlocked_items_${userNik}`;
-  const configStorageKey = `preplab_pixel_fullbody_cfg_${userNik}`;
+  // Read profile context
+  const localProfile = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const effectiveNik = userNik !== 'default' ? userNik : (localStorage.getItem('p2h_inspector_nik') || 'default');
+  const effectiveName = userName !== 'Ranger' ? userName : (localProfile.nama || localProfile.name || localStorage.getItem('p2h_inspector_name') || 'Ranger PrepLab');
+  const rawSection = propUserSection || localProfile.section || localProfile.department || 'Preparation';
+  const currentSectionKey = useMemo(() => normalizeUserSection(rawSection), [rawSection]);
+
+  const unlockedStorageKey = `preplab_pixel_unlocked_items_${effectiveNik}`;
+  const configStorageKey = `preplab_pixel_fullbody_cfg_${effectiveNik}`;
 
   // -------------------------------------------------------------
-  // UNLOCKED ITEMS STATE
+  // UNLOCKED ITEMS & EQUIPMENT STATE
   // -------------------------------------------------------------
   const [unlockedIds, setUnlockedIds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(unlockedStorageKey);
       if (saved) return JSON.parse(saved);
     } catch {}
-    // Default unlocked items
     return [
       ...HEADWEAR_ITEMS.filter(i => i.isUnlockedDefault).map(i => i.id),
       ...OUTFIT_ITEMS.filter(i => i.isUnlockedDefault).map(i => i.id),
@@ -146,15 +216,13 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
     toast.success(`🎉 Selamat! Item "${item.name}" berhasil dibuka!`);
   };
 
-  // -------------------------------------------------------------
-  // AVATAR EQUIPMENT STATE
-  // -------------------------------------------------------------
-  const [skin, setSkin] = useState(SKIN_TONES[1]); // tan
-  const [headwear, setHeadwear] = useState(HEADWEAR_ITEMS[0]); // helmet_yellow
-  const [outfit, setOutfit] = useState(OUTFIT_ITEMS[0]); // vest_orange
-  const [eyes, setEyes] = useState(EYE_ITEMS[1]); // glasses_k3
+  // Avatar Appearance State (Defaults to Official TBP White Helmet & Fluo Lime Uniform)
+  const [skin, setSkin] = useState(SKIN_TONES[0]); // tan
+  const [headwear, setHeadwear] = useState(HEADWEAR_ITEMS[0]); // helmet_white (TBP)
+  const [outfit, setOutfit] = useState(OUTFIT_ITEMS[0]); // uniform_tbp (Fluo Lime + Navy)
+  const [eyes, setEyes] = useState(EYE_ITEMS[0]); // glasses_k3
   const [accessory, setAccessory] = useState(ACCESSORY_ITEMS[0]); // lanyard
-  const [boots, setBoots] = useState(BOOTS_ITEMS[0]); // boots_black
+  const [boots, setBoots] = useState(BOOTS_ITEMS[0]); // boots_brown
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   // Load saved appearance
@@ -189,9 +257,8 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
   };
 
   // -------------------------------------------------------------
-  // LIVING WALKING & INTERACTION ENGINE
+  // LIVING ENGINE: POSITION, WALKING & ACTIONS
   // -------------------------------------------------------------
-  // Position as percentage across the floor (10% to 90%)
   const [posX, setPosX] = useState<number>(35);
   const [targetX, setTargetX] = useState<number>(35);
   const [facing, setFacing] = useState<'left' | 'right'>('right');
@@ -200,19 +267,36 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
   const [actionState, setActionState] = useState<'idle' | 'walk' | 'coffee' | 'inspect' | 'jump'>('idle');
   const [clickTargetMarker, setClickTargetMarker] = useState<number | null>(null);
 
-  // Floating dialogue bubble
-  const [speechText, setSpeechText] = useState<string>('Selamat bertugas di Shift Laboratorium!');
-  const [speechVisible, setSpeechVisible] = useState<boolean>(true);
-  const [dialogueIdx, setDialogueIdx] = useState<number>(0);
-
   // Wardrobe / Customization Modal State
   const [showWardrobe, setShowWardrobe] = useState<boolean>(false);
   const [wardrobeTab, setWardrobeTab] = useState<'head' | 'outfit' | 'eyes' | 'acc' | 'boots' | 'skin'>('head');
 
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const wardrobeCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  // TEMPAT NONGKRONG MODAL STATE
+  const [showTempatNongkrong, setShowTempatNongkrong] = useState<boolean>(false);
 
-  // Play retro audio chime
+  // SECTION-SPECIFIC DIALOGUES FILTERED FOR USER
+  const sectionDialogues = useMemo(() => {
+    const primary = NICKEL_DIALOGUES.filter(d => d.sectionKey === currentSectionKey);
+    const k3 = NICKEL_DIALOGUES.filter(d => d.sectionKey === 'k3_tbp');
+    return primary.length > 0 ? [...primary, ...k3] : NICKEL_DIALOGUES;
+  }, [currentSectionKey]);
+
+  const [dialogueIdx, setDialogueIdx] = useState<number>(0);
+  const currentDialogue = sectionDialogues[dialogueIdx % sectionDialogues.length] || sectionDialogues[0];
+  const [speechText, setSpeechText] = useState<string>(currentDialogue.text);
+  const [speechBadge, setSpeechBadge] = useState<string>(currentDialogue.sectionBadge);
+  const [speechVisible, setSpeechVisible] = useState<boolean>(true);
+
+  // Update speech when dialogue index or section dialogues change
+  useEffect(() => {
+    if (sectionDialogues.length > 0) {
+      const d = sectionDialogues[dialogueIdx % sectionDialogues.length];
+      setSpeechText(d.text);
+      setSpeechBadge(d.sectionBadge);
+    }
+  }, [dialogueIdx, sectionDialogues]);
+
+  // Audio chime
   const playRetroSound = (type: 'beep' | 'happy' | 'walk' = 'beep') => {
     if (!soundEnabled) return;
     try {
@@ -247,7 +331,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
     } catch {}
   };
 
-  // Movement Loop: Step towards targetX
+  // Walking Loop: Step towards targetX
   useEffect(() => {
     const moveTimer = setInterval(() => {
       setPosX(current => {
@@ -263,48 +347,57 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
         setWalkFrame(f => (f + 1) % 4);
         const step = diff > 0 ? 1.4 : -1.4;
         setFacing(diff > 0 ? 'right' : 'left');
-        return Math.max(10, Math.min(90, current + step));
+        return Math.max(10, Math.min(88, current + step));
       });
     }, 90);
 
     return () => clearInterval(moveTimer);
   }, [targetX, actionState]);
 
-  // Autonomous Wander Routine: Avatar periodically decides to walk & do site activities
+  // Autonomous Wander Routine: Avatar periodically decides to walk & inspect PrepLab
   useEffect(() => {
     const wanderTimer = setInterval(() => {
-      // If currently idle, 55% chance to wander to a new floor position
       if (!isWalking && actionState === 'idle') {
         const rand = Math.random();
-        if (rand < 0.6) {
-          // Wander to random spot
-          const newTarget = 15 + Math.floor(Math.random() * 70);
+        if (rand < 0.55) {
+          const newTarget = 15 + Math.floor(Math.random() * 68);
           setTargetX(newTarget);
           setActionState('walk');
         } else if (rand < 0.8) {
-          // Do quick inspection
           setActionState('inspect');
-          setSpeechText('🔍 Memeriksa kerapian area sampling & sieve...');
+          setSpeechText('🔍 Memeriksa parameter suhu oven 105°C & cyclone dust collector...');
+          setSpeechBadge('Inspeksi Lab');
           setSpeechVisible(true);
           setTimeout(() => setActionState('idle'), 4000);
         } else {
-          // Sip coffee break
           setActionState('coffee');
-          setSpeechText('☕ Istirahat sejenak seruput kopi hangat!');
+          setSpeechText('☕ Istirahat sejenak seruput kopi hangat di Pos Nongkrong!');
+          setSpeechBadge('Pos Santai');
           setSpeechVisible(true);
           setTimeout(() => setActionState('idle'), 4000);
         }
       }
-    }, 7500);
+    }, 8500);
 
     return () => clearInterval(wanderTimer);
   }, [isWalking, actionState]);
 
-  // User Click on Floor: Avatar walks to that spot!
+  // Click on floor to walk
   const handleStageClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
-    const percent = Math.max(12, Math.min(88, (clickX / rect.width) * 100));
+    const percent = Math.max(12, Math.min(86, (clickX / rect.width) * 100));
+
+    // If clicked near the right edge door (Pos Nongkrong), trigger lounge modal!
+    if (percent > 76) {
+      setTargetX(78);
+      setActionState('walk');
+      playRetroSound('beep');
+      setTimeout(() => {
+        setShowTempatNongkrong(true);
+      }, 600);
+      return;
+    }
 
     setTargetX(percent);
     setClickTargetMarker(percent);
@@ -312,22 +405,22 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
     playRetroSound('beep');
   };
 
-  // User Tap on Avatar: Interacts & cheers up!
+  // Direct Click on Avatar: Friendly salute & reaction
   const handleAvatarDirectClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setActionState('jump');
     playRetroSound('happy');
 
-    // Cycle friendly reaction
     const quotes = [
-      'Siap komandan! Ranger PrepLab selalu siaga K3!',
-      'Zero Accident adalah harga mati di laboratorium!',
-      'Area crusher aman, alat pelindung diri lengkap!',
-      'Jangan lupa ceklis subtask logbook hari ini ya kawan!',
-      'P2H alat preparasi batubara beroperasi 100% prima!'
+      'Siap Komandan! Personil PrepLab TBP selalu siaga APD lengkap!',
+      'Zero Accident adalah harga mati di laboratorium & preparasi nikel!',
+      'Area crusher & oven aman, seragam TBP dengan double scotlight rapi!',
+      'Hasil analisa sample nikel hari ini siap dikawal dengan akurat!',
+      'P2H alat preparasi beroperasi 100% prima, mari jaga keselamatan kerja!'
     ];
     const picked = quotes[Math.floor(Math.random() * quotes.length)];
     setSpeechText(picked);
+    setSpeechBadge('Salam K3');
     setSpeechVisible(true);
 
     setTimeout(() => {
@@ -337,263 +430,63 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
 
   // Next Message button
   const handleNextDialogue = () => {
-    const nextIdx = (dialogueIdx + 1) % DIALOGUES.length;
+    const nextIdx = (dialogueIdx + 1) % sectionDialogues.length;
     setDialogueIdx(nextIdx);
-    setSpeechText(DIALOGUES[nextIdx].text);
+    const d = sectionDialogues[nextIdx];
+    setSpeechText(d.text);
+    setSpeechBadge(d.sectionBadge);
     setSpeechVisible(true);
     playRetroSound('beep');
   };
 
-  // -------------------------------------------------------------
-  // FULL BODY PIXEL CANVAS RENDERING ENGINE
-  // -------------------------------------------------------------
-  const drawFullBodyPixel = (
-    canvas: HTMLCanvasElement, 
-    frame: number, 
-    faceDir: 'left' | 'right', 
-    state: typeof actionState
-  ) => {
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const W = canvas.width;
-    const H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-
-    // 24x32 grid coordinate space
-    const p = Math.floor(W / 24);
-
-    const rect = (x: number, y: number, w: number, h: number, color: string) => {
-      ctx.fillStyle = color;
-      ctx.fillRect(Math.round(x * p), Math.round(y * p), Math.round(w * p), Math.round(h * p));
-    };
-
-    // Flip horizontally if facing left
-    ctx.save();
-    if (faceDir === 'left') {
-      ctx.translate(W, 0);
-      ctx.scale(-1, 1);
-    }
-
-    // Walking animation offsets
-    let legOffsetL = 0;
-    let legOffsetR = 0;
-    let armOffsetL = 0;
-    let armOffsetR = 0;
-    let bodyBob = 0;
-
-    if (state === 'walk') {
-      if (frame === 0) {
-        legOffsetL = -2; legOffsetR = 2;
-        armOffsetL = 2; armOffsetR = -2;
-      } else if (frame === 1) {
-        bodyBob = -1;
-      } else if (frame === 2) {
-        legOffsetL = 2; legOffsetR = -2;
-        armOffsetL = -2; armOffsetR = 2;
-      } else if (frame === 3) {
-        bodyBob = -1;
-      }
-    } else if (state === 'jump') {
-      bodyBob = -4;
-    } else if (state === 'coffee' || state === 'inspect') {
-      bodyBob = (frame % 2 === 0) ? -1 : 0;
-    }
-
-    // 1. FEET SHADOW
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-    ctx.beginPath();
-    ctx.ellipse(12 * p, 31 * p, 7 * p, 2 * p, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 2. LEGS & SAFETY BOOTS K3 (Y: 22 to 30)
-    const pantsCol = outfit.id.includes('wearpack') ? outfit.hex! : '#1E293B';
-    const bCol = boots.hex || '#1E293B';
-    const bShad = boots.shadow || '#0F172A';
-
-    // Left Leg & Boot
-    rect(8, 22 + bodyBob, 3, 5 + legOffsetL, pantsCol);
-    rect(7, 27 + bodyBob + legOffsetL, 4, 3, bCol); // Boot base
-    rect(6, 29 + bodyBob + legOffsetL, 5, 2, bShad); // Steel-toe sole
-
-    // Right Leg & Boot
-    rect(13, 22 + bodyBob, 3, 5 + legOffsetR, pantsCol);
-    rect(13, 27 + bodyBob + legOffsetR, 4, 3, bCol);
-    rect(13, 29 + bodyBob + legOffsetR, 5, 2, bShad);
-
-    // 3. TORSO & APD OUTFIT (Y: 13 to 22)
-    const oBase = outfit.hex || '#EA580C';
-    const oStripe = outfit.accent || '#F8FAFC';
-    const oCollar = outfit.shadow || '#9A3412';
-
-    // Main torso
-    rect(7, 14 + bodyBob, 10, 8, oBase);
-    rect(8, 13 + bodyBob, 8, 1, oBase); // Shoulders
-
-    // Reflective Safety Stripes or Lapel
-    if (outfit.id.includes('vest')) {
-      rect(8, 16 + bodyBob, 2, 5, oStripe);
-      rect(14, 16 + bodyBob, 2, 5, oStripe);
-      rect(7, 19 + bodyBob, 10, 1, oStripe); // Horizontal stripe
-    } else if (outfit.id === 'lab_coat') {
-      rect(11, 14 + bodyBob, 2, 7, '#0D9488'); // PrepLab Tie/Pen
-      rect(8, 15 + bodyBob, 1, 6, oStripe);
-      rect(15, 15 + bodyBob, 1, 6, oStripe);
-    }
-
-    // Belt / Waistline
-    rect(7, 21 + bodyBob, 10, 1, '#0F172A');
-    rect(11, 21 + bodyBob, 2, 1, '#FACC15'); // Belt Buckle
-
-    // 4. ARMS & HANDS (Y: 14 to 21)
-    // Left Arm (Back)
-    rect(5, 14 + bodyBob + armOffsetL, 2, 6, oBase);
-    rect(5, 19 + bodyBob + armOffsetL, 2, 2, skin.skin); // Hand
-
-    // Right Arm (Front)
-    if (state === 'coffee') {
-      // Holding coffee mug up
-      rect(17, 14 + bodyBob, 2, 4, oBase);
-      rect(18, 16 + bodyBob, 3, 2, skin.skin);
-      rect(19, 14 + bodyBob, 3, 3, '#8B5CF6'); // Coffee mug
-      rect(20, 12 + bodyBob, 1, 2, 'rgba(255,255,255,0.7)'); // Steam
-    } else if (state === 'inspect') {
-      // Holding magnifying tool
-      rect(17, 14 + bodyBob, 2, 4, oBase);
-      rect(18, 17 + bodyBob, 3, 2, skin.skin);
-      rect(20, 15 + bodyBob, 3, 3, '#0284C7'); // Lens tool
-    } else {
-      rect(17, 14 + bodyBob + armOffsetR, 2, 6, oBase);
-      rect(17, 19 + bodyBob + armOffsetR, 2, 2, skin.skin);
-    }
-
-    // 5. HEAD & FACE (Y: 5 to 13)
-    // Neck
-    rect(10, 12 + bodyBob, 4, 2, skin.skinShadow);
-
-    // Head base
-    rect(7, 5 + bodyBob, 10, 8, skin.skin);
-    rect(6, 6 + bodyBob, 12, 6, skin.skin);
-
-    // Cheeks
-    rect(7, 9 + bodyBob, 2, 1, 'rgba(244, 63, 94, 0.45)');
-    rect(15, 9 + bodyBob, 2, 1, 'rgba(244, 63, 94, 0.45)');
-
-    // 6. HEADWEAR (Helmet K3 / Cap / Hair / Hijab)
-    const hwCol = headwear.hex || '#FACC15';
-    const hwShad = headwear.shadow || '#CA8A04';
-
-    if (headwear.id.includes('helmet')) {
-      rect(6, 3 + bodyBob, 12, 4, hwCol);
-      rect(5, 6 + bodyBob, 14, 2, hwShad); // Visor brim
-      rect(10, 4 + bodyBob, 4, 2, '#FFFFFF'); // K3 Emblem
-      rect(11, 4 + bodyBob, 2, 2, '#16A34A');
-    } else if (headwear.id.includes('cap')) {
-      rect(6, 3 + bodyBob, 12, 4, hwCol);
-      rect(5, 6 + bodyBob, 15, 1, hwShad);
-      rect(14, 6 + bodyBob, 5, 1, hwShad); // Cap beak
-    } else if (headwear.id === 'hijab_k3') {
-      rect(5, 3 + bodyBob, 14, 4, hwCol);
-      rect(5, 7 + bodyBob, 3, 7, hwCol);
-      rect(16, 7 + bodyBob, 3, 7, hwCol);
-      rect(6, 12 + bodyBob, 12, 2, hwShad);
-    } else if (headwear.id === 'crown_champion') {
-      rect(7, 2 + bodyBob, 10, 4, hwCol);
-      rect(7, 1 + bodyBob, 2, 2, hwShad);
-      rect(11, 1 + bodyBob, 2, 2, hwShad);
-      rect(15, 1 + bodyBob, 2, 2, hwShad);
-      rect(11, 3 + bodyBob, 2, 1, '#EF4444'); // Ruby gem
-    } else {
-      // Hair Spiky
-      rect(6, 2 + bodyBob, 12, 4, hwCol);
-      rect(5, 4 + bodyBob, 14, 3, hwCol);
-      rect(7, 1 + bodyBob, 3, 2, hwCol);
-      rect(12, 1 + bodyBob, 3, 2, hwCol);
-    }
-
-    // 7. EYES & EXPRESSION
-    const eyeCol = '#0F172A';
-    if (eyes.id === 'happy' || state === 'jump') {
-      rect(8, 8 + bodyBob, 2, 1, eyeCol);
-      rect(7, 9 + bodyBob, 1, 1, eyeCol);
-      rect(14, 8 + bodyBob, 2, 1, eyeCol);
-      rect(16, 9 + bodyBob, 1, 1, eyeCol);
-    } else if (eyes.id === 'wink') {
-      rect(8, 8 + bodyBob, 2, 2, eyeCol);
-      rect(8, 8 + bodyBob, 1, 1, '#FFFFFF');
-      rect(14, 9 + bodyBob, 2, 1, eyeCol);
-    } else if (eyes.id === 'glasses_k3') {
-      rect(8, 8 + bodyBob, 2, 2, eyeCol);
-      rect(14, 8 + bodyBob, 2, 2, eyeCol);
-      // Clear glasses frame
-      rect(6, 7 + bodyBob, 5, 4, 'rgba(56, 189, 248, 0.45)');
-      rect(13, 7 + bodyBob, 5, 4, 'rgba(56, 189, 248, 0.45)');
-      rect(6, 7 + bodyBob, 12, 1, '#0284C7');
-    } else if (eyes.id === 'sunglasses') {
-      rect(6, 7 + bodyBob, 5, 4, '#0F172A');
-      rect(13, 7 + bodyBob, 5, 4, '#0F172A');
-      rect(6, 7 + bodyBob, 12, 1, '#334155');
-    } else {
-      rect(8, 8 + bodyBob, 2, 2, eyeCol);
-      rect(14, 8 + bodyBob, 2, 2, eyeCol);
-      rect(8, 8 + bodyBob, 1, 1, '#FFFFFF');
-      rect(14, 8 + bodyBob, 1, 1, '#FFFFFF');
-    }
-
-    // Smile
-    rect(11, 11 + bodyBob, 2, 1, '#8D5524');
-
-    // 8. ACCESSORIES
-    if (accessory.id === 'lanyard') {
-      rect(10, 14 + bodyBob, 1, 6, '#EF4444');
-      rect(13, 14 + bodyBob, 1, 6, '#EF4444');
-      rect(11, 18 + bodyBob, 2, 2, '#F8FAFC'); // ID Badge
-    } else if (accessory.id === 'mask_k3') {
-      rect(8, 10 + bodyBob, 8, 3, '#06B6D4');
-      rect(9, 11 + bodyBob, 6, 1, '#ECFEFF');
-    } else if (accessory.id === 'ear_muff') {
-      rect(5, 5 + bodyBob, 3, 5, '#F97316');
-      rect(16, 5 + bodyBob, 3, 5, '#F97316');
-      rect(6, 3 + bodyBob, 12, 1, '#1E293B');
-    } else if (accessory.id === 'radio_ht') {
-      rect(16, 15 + bodyBob, 2, 4, '#334155');
-      rect(17, 13 + bodyBob, 1, 2, '#0F172A'); // Antenna
-    }
-
-    ctx.restore();
-  };
-
-  // Render main stage canvas
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    drawFullBodyPixel(canvasRef.current, walkFrame, facing, actionState);
-  }, [walkFrame, facing, actionState, headwear, outfit, eyes, accessory, boots, skin]);
-
-  // Render wardrobe preview canvas (idle standing)
-  useEffect(() => {
-    if (!showWardrobe || !wardrobeCanvasRef.current) return;
-    drawFullBodyPixel(wardrobeCanvasRef.current, 0, 'right', 'idle');
-  }, [showWardrobe, headwear, outfit, eyes, accessory, boots, skin]);
-
-  // Sync to main portal profile
+  // Render vector avatar to PNG dataUrl for syncing to Portal profile picture
   const handleSyncToProfile = async () => {
-    if (!canvasRef.current) return;
     try {
-      const dataUrl = canvasRef.current.toDataURL('image/png', 0.95);
-      if (userNik && userNik !== 'default') {
-        localStorage.setItem(`p2h_inspector_avatar_${userNik}`, dataUrl);
-        try {
-          await fetch('/api/employees/avatar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nik: userNik, avatar: dataUrl })
-          });
-        } catch {}
+      const svgElement = document.getElementById('mainTbpAvatarSvg');
+      if (!svgElement) {
+        toast.error('Avatar SVG tidak ditemukan');
+        return;
       }
-      playRetroSound('happy');
-      toast.success('Avatar Full-Body berhasil disinkronkan ke Foto Profil Portal Anda!');
-    } catch {
-      toast.error('Gagal sinkronisasi');
+
+      const svgString = new XMLSerializer().serializeToString(svgElement);
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const blobURL = globalThis.URL.createObjectURL(svgBlob);
+
+      const image = new Image();
+      image.onload = async () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 320;
+        canvas.height = 420;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          // Dark stylish background matching portal theme
+          const grad = ctx.createLinearGradient(0, 0, 320, 420);
+          grad.addColorStop(0, '#0F172A');
+          grad.addColorStop(1, '#1E293B');
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, 320, 420);
+
+          ctx.drawImage(image, 10, 10, 300, 400);
+          const dataUrl = canvas.toDataURL('image/png', 0.95);
+
+          if (effectiveNik && effectiveNik !== 'default') {
+            localStorage.setItem(`p2h_inspector_avatar_${effectiveNik}`, dataUrl);
+            try {
+              await fetch('/api/employees/avatar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nik: effectiveNik, avatar: dataUrl })
+              });
+            } catch {}
+          }
+          playRetroSound('happy');
+          toast.success('Avatar Seragam TBP beresolusi tinggi berhasil dijadikan Foto Profil Portal!');
+        }
+        globalThis.URL.revokeObjectURL(blobURL);
+      };
+      image.src = blobURL;
+    } catch (e) {
+      toast.error('Gagal sinkronisasi avatar');
     }
   };
 
@@ -602,14 +495,14 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
       {/* ----------------- TOP CONTROLS BAR ----------------- */}
       <div className="flex items-center justify-between gap-2 border-b border-[var(--border-main)]/60 pb-2 mb-1.5 z-10">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center justify-center shadow-xs">
+          <div className="w-6 h-6 rounded-lg bg-lime-500/15 text-lime-600 dark:text-lime-400 flex items-center justify-center shadow-xs">
             <Footprints className="w-3.5 h-3.5" />
           </div>
           <div>
             <span className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5">
-              <span>Ranger PrepLab</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/20 font-mono">
-                {isWalking ? '🚶 Patroli' : actionState === 'coffee' ? '☕ Coffee Break' : '🛡️ Siaga K3'}
+              <span>Ranger TBP PrepLab</span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-lime-500/10 text-lime-700 dark:text-lime-400 font-semibold border border-lime-500/20 font-mono">
+                {isWalking ? '🚶 Patroli' : actionState === 'coffee' ? '☕ Rehat Kopi' : '🛡️ Siaga K3'}
               </span>
             </span>
           </div>
@@ -624,22 +517,19 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
             className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
             title={soundEnabled ? 'Suara Aktif' : 'Bisu'}
           >
-            {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-teal-600" /> : <VolumeX className="w-3.5 h-3.5 opacity-40" />}
+            {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-lime-600" /> : <VolumeX className="w-3.5 h-3.5 opacity-40" />}
           </button>
 
-          {/* Quick Call Button */}
+          {/* MASUK TEMPAT NONGKRONG BUTTON */}
           <button
             type="button"
-            onClick={() => {
-              setTargetX(50);
-              setActionState('walk');
-              playRetroSound('beep');
-              toast.info('Ranger dipanggil ke tengah ruang!');
-            }}
-            className="p-1 rounded-lg text-[var(--text-muted)] hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-all cursor-pointer"
-            title="Panggil Ranger ke Tengah"
+            onClick={() => setShowTempatNongkrong(true)}
+            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+            title="Masuk ke Pos Nongkrong PrepLab"
           >
-            <MapPin className="w-3.5 h-3.5" />
+            <Coffee className="w-3 h-3 text-amber-500" />
+            <span>Tempat Nongkrong</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           </button>
 
           {/* Wardrobe Modal Button */}
@@ -649,7 +539,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
             className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-1 shadow-xs transition-all cursor-pointer"
           >
             <Palette className="w-3 h-3" />
-            <span>Kustomisasi &amp; Unlock</span>
+            <span>Kustomisasi</span>
           </button>
         </div>
       </div>
@@ -657,24 +547,43 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
       {/* ----------------- INTERACTIVE SITE ROOM STAGE ----------------- */}
       <div 
         onClick={handleStageClick}
-        className="w-full flex-1 min-h-[160px] relative rounded-2xl border border-[var(--border-main)] overflow-hidden cursor-crosshair group shadow-inner transition-all"
+        className="w-full flex-1 min-h-[175px] relative rounded-2xl border border-[var(--border-main)] overflow-hidden cursor-crosshair group shadow-inner transition-all"
         style={{
-          background: 'linear-gradient(180deg, #09131B 0%, #0F2027 60%, #172D38 100%)'
+          background: 'linear-gradient(180deg, #07151D 0%, #0D2633 60%, #153849 100%)'
         }}
-        title="Klik lantai untuk memerintahkan Ranger berjalan ke sana!"
+        title="Klik lantai untuk memerintahkan personil berjalan ke sana!"
       >
-        {/* Background Room Details: Safety Poster, Control Panel, Floor Grid */}
+        {/* Background Room Details: Nickel Mining Laboratory Setup */}
         <div className="absolute inset-0 pointer-events-none">
           {/* Safety Banner on Wall */}
           <div className="absolute top-2 left-3 px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/30 text-[8px] font-mono font-bold text-amber-300 flex items-center gap-1">
             <ShieldAlert className="w-2.5 h-2.5 text-amber-400" />
-            <span>SAFETY FIRST &bull; PREPLAB ZERO ACCIDENT</span>
+            <span>HARITA NICKEL &bull; PREPLAB TBP ZERO ACCIDENT</span>
           </div>
 
-          {/* Lab Equipment Silhouette (Right Corner) */}
-          <div className="absolute top-4 right-3 text-right opacity-30 text-[8px] font-mono text-cyan-400">
-            <div>CRUSHER-01: READY</div>
-            <div>TEMP: 815°C [FURNACE]</div>
+          {/* Nickel Lab Machine Status Silhouette (Top Center) */}
+          <div className="absolute top-2.5 right-28 opacity-40 text-[8px] font-mono text-cyan-300 hidden sm:block text-right">
+            <div>FURNACE 1050°C: READY</div>
+            <div>XRF-01: OK &bull; OVEN: 105°C</div>
+          </div>
+
+          {/* DOOR TO TEMPAT NONGKRONG / LOUNGE (Right Corner) */}
+          <div 
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowTempatNongkrong(true);
+            }}
+            className="absolute top-3 right-3 pointer-events-auto px-2 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[9px] font-bold flex flex-col items-center gap-0.5 shadow-md backdrop-blur-xs cursor-pointer transition-all hover:scale-105"
+            title="Klik untuk masuk Tempat Nongkrong PrepLab"
+          >
+            <div className="flex items-center gap-1">
+              <Coffee className="w-3 h-3 text-amber-400 animate-bounce" />
+              <span>POS NONGRONG</span>
+            </div>
+            <div className="flex items-center gap-1 text-[7.5px] text-emerald-400 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+              <span>MASUK REHAT ➔</span>
+            </div>
           </div>
 
           {/* Industrial Epoxy Floor Tiles Line */}
@@ -700,7 +609,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
             className="absolute bottom-4 pointer-events-none -translate-x-1/2 animate-ping"
             style={{ left: `${clickTargetMarker}%` }}
           >
-            <div className="w-5 h-2 rounded-full border-2 border-teal-400 bg-teal-400/30" />
+            <div className="w-5 h-2 rounded-full border-2 border-lime-400 bg-lime-400/30" />
           </div>
         )}
 
@@ -709,38 +618,62 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
           className="absolute bottom-2 -translate-x-1/2 transition-all duration-75 flex flex-col items-center cursor-pointer"
           style={{ left: `${posX}%` }}
           onClick={handleAvatarDirectClick}
-          title="Klik Ranger untuk berinteraksi!"
+          title="Klik personil untuk berinteraksi!"
         >
-          {/* Floating Speech Bubble Above Avatar Head */}
+          {/* Floating Section-Aware Speech Balloon */}
           {speechVisible && (
             <div 
-              className="mb-1 max-w-[200px] sm:max-w-[240px] px-2.5 py-1.5 rounded-xl bg-white/95 dark:bg-slate-900/95 text-[10px] font-medium text-[var(--text-main)] shadow-lg border border-teal-500/30 text-center relative animate-in fade-in zoom-in-95"
+              className="mb-1 max-w-[210px] sm:max-w-[260px] px-3 py-1.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 text-[10px] font-medium text-[var(--text-main)] shadow-xl border border-lime-500/40 text-center relative animate-in fade-in zoom-in-95 group/balloon"
               onClick={(e) => {
                 e.stopPropagation();
                 handleNextDialogue();
               }}
             >
-              <span>{speechText}</span>
+              {/* Section Header Pill inside Balloon */}
+              <div className="flex items-center justify-between gap-1 mb-0.5 border-b border-black/5 dark:border-white/5 pb-0.5">
+                <span className="text-[8.5px] font-extrabold uppercase px-1.5 py-0.2 rounded-md bg-lime-500/20 text-lime-700 dark:text-lime-300 font-mono flex items-center gap-1">
+                  <span>⛏️ {speechBadge}</span>
+                </span>
+                <span className="text-[8px] text-[var(--text-muted)] opacity-60">klik ganti ↻</span>
+              </div>
+
+              {/* Message text */}
+              <p className="leading-snug text-slate-800 dark:text-slate-100 font-medium">
+                {speechText}
+              </p>
+
               {/* Bubble pointer tail */}
-              <div className="absolute bottom-[-5px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-inherit border-b border-r border-teal-500/30 rotate-45" />
+              <div className="absolute bottom-[-5px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-inherit border-b border-r border-lime-500/40 rotate-45" />
             </div>
           )}
 
-          {/* Full Body Canvas Sprite */}
-          <div className="relative group">
-            <canvas
-              ref={canvasRef}
-              width={72}
-              height={96}
-              className="w-14 h-18 sm:w-16 sm:h-22 block"
-              style={{
-                imageRendering: 'pixelated'
-              }}
-            />
+          {/* CRISP HIGH-DEFINITION TBP UNIFORM AVATAR */}
+          <div className="relative group/avatar">
+            <div id="mainTbpAvatarSvg" className="w-20 h-28 sm:w-24 sm:h-34 block">
+              <TbpAvatarCharacter
+                actionState={actionState}
+                walkFrame={walkFrame}
+                facing={facing}
+                skinColor={skin.skin}
+                skinShadow={skin.skinShadow}
+                headwearId={headwear.id}
+                headwearColor={headwear.hex}
+                outfitId={outfit.id}
+                outfitColor={outfit.hex}
+                eyeId={eyes.id}
+                accessoryId={accessory.id}
+                bootsId={boots.id}
+                bootsColor={boots.hex}
+                userName={effectiveName}
+                userNik={effectiveNik}
+                width={96}
+                height={132}
+              />
+            </div>
 
             {/* Tap hint emote on hover */}
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/75 text-white px-1 py-0.2 rounded text-[8px] font-mono whitespace-nowrap">
-              👋 Klik Saya!
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 opacity-0 group-hover/avatar:opacity-100 transition-opacity bg-black/80 text-white px-1.5 py-0.2 rounded text-[8px] font-mono whitespace-nowrap shadow-xs">
+              👋 Sapa Ranger!
             </div>
           </div>
         </div>
@@ -763,9 +696,9 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
               setActionState('walk');
               playRetroSound('beep');
             }}
-            className="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-[var(--text-main)] hover:bg-teal-500/10 hover:text-teal-600 transition-all flex items-center gap-1 cursor-pointer"
+            className="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-[var(--text-main)] hover:bg-lime-500/10 hover:text-lime-600 transition-all flex items-center gap-1 cursor-pointer"
           >
-            <Footprints className="w-3 h-3 text-teal-600" />
+            <Footprints className="w-3 h-3 text-lime-600" />
             <span>Patroli</span>
           </button>
 
@@ -774,7 +707,8 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
             type="button"
             onClick={() => {
               setActionState('inspect');
-              setSpeechText('🔍 Memeriksa kerapian crusher & ventilasi lab...');
+              setSpeechText('🔍 Memeriksa kebersihan mangkok pulverizer & ventilasi lab...');
+              setSpeechBadge('Cek Peralatan');
               setSpeechVisible(true);
               playRetroSound('beep');
               setTimeout(() => setActionState('idle'), 4000);
@@ -785,20 +719,14 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
             <span>Cek APD</span>
           </button>
 
-          {/* Action 3: Coffee Break */}
+          {/* Action 3: Coffee Break -> Opens Tempat Nongkrong */}
           <button
             type="button"
-            onClick={() => {
-              setActionState('coffee');
-              setSpeechText('☕ Istirahat kopi 5 menit, segarkan pikiran!');
-              setSpeechVisible(true);
-              playRetroSound('beep');
-              setTimeout(() => setActionState('idle'), 4000);
-            }}
-            className="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-[var(--text-main)] hover:bg-purple-500/10 hover:text-purple-600 transition-all flex items-center gap-1 cursor-pointer"
+            onClick={() => setShowTempatNongkrong(true)}
+            className="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/25 transition-all flex items-center gap-1 cursor-pointer"
           >
-            <Coffee className="w-3 h-3 text-purple-500" />
-            <span>Ngopi</span>
+            <Coffee className="w-3 h-3 text-amber-500" />
+            <span>Nongkrong</span>
           </button>
         </div>
 
@@ -806,15 +734,15 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
         <button
           type="button"
           onClick={handleNextDialogue}
-          className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-teal-700 dark:text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+          className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-lime-700 dark:text-lime-300 bg-lime-500/10 hover:bg-lime-500/20 border border-lime-500/20 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
         >
           <RefreshCw className="w-3 h-3" />
-          <span>Ganti Pesan</span>
+          <span>Ganti Info ({speechBadge})</span>
         </button>
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* MODAL KUSTOMISASI: STARTER GRATIS VS UNLOCKABLES              */}
+      {/* MODAL KUSTOMISASI: WARDROBE AVATAR TBP                        */}
       {/* ------------------------------------------------------------- */}
       {showWardrobe && (
         <div 
@@ -828,18 +756,18 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-main)] bg-slate-50 dark:bg-slate-800/50">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-xs">
+                <div className="w-8 h-8 rounded-xl bg-lime-600 text-white flex items-center justify-center shadow-xs">
                   <Palette className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
-                    <span>Wardrobe &amp; Kustomisasi Avatar Full-Body</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20">
-                      Starter + Unlockables
+                    <span>Wardrobe &amp; Kustomisasi Seragam TBP</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-lime-500/15 text-lime-700 dark:text-lime-300 font-bold border border-lime-500/30">
+                      High-Definition APD TBP
                     </span>
                   </h3>
                   <p className="text-[11px] text-[var(--text-muted)]">
-                    Pilih 3-4 perlengkapan starter gratis atau buka perlengkapan eksklusif K3!
+                    Pilih seragam resmi TBP/GPS atau perlengkapan keselamatan khusus laboratorium.
                   </p>
                 </div>
               </div>
@@ -857,27 +785,42 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
             <div className="p-4 sm:p-5 flex-1 overflow-y-auto space-y-4">
               {/* Preview Box */}
               <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-[var(--border-main)]">
-                {/* Full Body Canvas Preview */}
-                <div className="p-2 rounded-2xl bg-slate-900 shadow-md border border-white/10 flex-shrink-0">
-                  <canvas
-                    ref={wardrobeCanvasRef}
-                    width={96}
-                    height={128}
-                    className="w-20 h-28 sm:w-24 sm:h-32 block"
-                    style={{ imageRendering: 'pixelated' }}
+                {/* SVG Avatar Preview */}
+                <div className="p-2 rounded-2xl bg-slate-900 shadow-md border border-white/10 flex-shrink-0 flex items-center justify-center">
+                  <TbpAvatarCharacter
+                    actionState="idle"
+                    walkFrame={0}
+                    facing="right"
+                    skinColor={skin.skin}
+                    skinShadow={skin.skinShadow}
+                    headwearId={headwear.id}
+                    headwearColor={headwear.hex}
+                    outfitId={outfit.id}
+                    outfitColor={outfit.hex}
+                    eyeId={eyes.id}
+                    accessoryId={accessory.id}
+                    bootsId={boots.id}
+                    bootsColor={boots.hex}
+                    userName={effectiveName}
+                    userNik={effectiveNik}
+                    width={100}
+                    height={140}
                   />
                 </div>
 
                 <div className="flex-1 space-y-1.5">
-                  <div className="text-xs font-bold text-[var(--text-main)]">
-                    {headwear.name}
+                  <div className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5">
+                    <span>{headwear.name}</span>
                   </div>
                   <div className="text-[11px] text-[var(--text-muted)]">
-                    Seragam: <span className="font-semibold text-teal-600">{outfit.name}</span> &bull; {boots.name}
+                    Seragam: <span className="font-semibold text-lime-600 dark:text-lime-400">{outfit.name}</span> &bull; {boots.name}
                   </div>
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex items-center gap-2 pt-1 flex-wrap">
+                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-lime-500/10 text-lime-700 dark:text-lime-300 font-bold border border-lime-500/20">
+                      Terbuka: {unlockedIds.length} Item
+                    </span>
                     <span className="text-[10px] px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-600 font-bold border border-teal-500/20">
-                      Terbuka: {unlockedIds.length} / {HEADWEAR_ITEMS.length + OUTFIT_ITEMS.length + EYE_ITEMS.length + ACCESSORY_ITEMS.length + BOOTS_ITEMS.length} Item
+                      Seksi: {rawSection}
                     </span>
                   </div>
                 </div>
@@ -899,7 +842,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                     onClick={() => setWardrobeTab(tab.id as any)}
                     className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all ${
                       wardrobeTab === tab.id
-                        ? 'bg-teal-600 text-white shadow-xs'
+                        ? 'bg-lime-600 text-white shadow-xs'
                         : 'text-[var(--text-muted)] hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`}
                   >
@@ -908,7 +851,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                 ))}
               </div>
 
-              {/* Tab Item Grid (Split into Starters & Unlockables) */}
+              {/* Tab Item Grid */}
               <div className="space-y-4">
                 {/* 1. HEADWEAR */}
                 {wardrobeTab === 'head' && (
@@ -922,7 +865,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                           key={item.id}
                           className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2.5 ${
                             isSelected 
-                              ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/30 ring-1 ring-teal-500' 
+                              ? 'border-lime-500 bg-lime-50/50 dark:bg-lime-950/30 ring-1 ring-lime-500' 
                               : 'border-[var(--border-main)] bg-white dark:bg-slate-900/60'
                           }`}
                         >
@@ -957,7 +900,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                               }}
                               className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
                                 isSelected 
-                                  ? 'bg-teal-600 text-white' 
+                                  ? 'bg-lime-600 text-white' 
                                   : 'bg-slate-100 dark:bg-slate-800 text-[var(--text-main)] hover:bg-slate-200'
                               }`}
                             >
@@ -970,7 +913,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                               className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
                             >
                               <Unlock className="w-3 h-3" />
-                              <span>Buka Item</span>
+                              <span>Buka</span>
                             </button>
                           )}
                         </div>
@@ -991,7 +934,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                           key={item.id}
                           className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2.5 ${
                             isSelected 
-                              ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/30 ring-1 ring-teal-500' 
+                              ? 'border-lime-500 bg-lime-50/50 dark:bg-lime-950/30 ring-1 ring-lime-500' 
                               : 'border-[var(--border-main)] bg-white dark:bg-slate-900/60'
                           }`}
                         >
@@ -1026,7 +969,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                               }}
                               className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
                                 isSelected 
-                                  ? 'bg-teal-600 text-white' 
+                                  ? 'bg-lime-600 text-white' 
                                   : 'bg-slate-100 dark:bg-slate-800 text-[var(--text-main)] hover:bg-slate-200'
                               }`}
                             >
@@ -1039,7 +982,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                               className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
                             >
                               <Unlock className="w-3 h-3" />
-                              <span>Buka Item</span>
+                              <span>Buka</span>
                             </button>
                           )}
                         </div>
@@ -1060,7 +1003,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                           key={item.id}
                           className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2.5 ${
                             isSelected 
-                              ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/30 ring-1 ring-teal-500' 
+                              ? 'border-lime-500 bg-lime-50/50 dark:bg-lime-950/30 ring-1 ring-lime-500' 
                               : 'border-[var(--border-main)] bg-white dark:bg-slate-900/60'
                           }`}
                         >
@@ -1089,7 +1032,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                               }}
                               className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
                                 isSelected 
-                                  ? 'bg-teal-600 text-white' 
+                                  ? 'bg-lime-600 text-white' 
                                   : 'bg-slate-100 dark:bg-slate-800 text-[var(--text-main)] hover:bg-slate-200'
                               }`}
                             >
@@ -1102,7 +1045,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                               className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
                             >
                               <Unlock className="w-3 h-3" />
-                              <span>Buka Item</span>
+                              <span>Buka</span>
                             </button>
                           )}
                         </div>
@@ -1123,7 +1066,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                           key={item.id}
                           className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2.5 ${
                             isSelected 
-                              ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/30 ring-1 ring-teal-500' 
+                              ? 'border-lime-500 bg-lime-50/50 dark:bg-lime-950/30 ring-1 ring-lime-500' 
                               : 'border-[var(--border-main)] bg-white dark:bg-slate-900/60'
                           }`}
                         >
@@ -1152,7 +1095,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                               }}
                               className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
                                 isSelected 
-                                  ? 'bg-teal-600 text-white' 
+                                  ? 'bg-lime-600 text-white' 
                                   : 'bg-slate-100 dark:bg-slate-800 text-[var(--text-main)] hover:bg-slate-200'
                               }`}
                             >
@@ -1165,7 +1108,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                               className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
                             >
                               <Unlock className="w-3 h-3" />
-                              <span>Buka Item</span>
+                              <span>Buka</span>
                             </button>
                           )}
                         </div>
@@ -1186,28 +1129,22 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                           key={item.id}
                           className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2.5 ${
                             isSelected 
-                              ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/30 ring-1 ring-teal-500' 
+                              ? 'border-lime-500 bg-lime-50/50 dark:bg-lime-950/30 ring-1 ring-lime-500' 
                               : 'border-[var(--border-main)] bg-white dark:bg-slate-900/60'
                           }`}
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div 
-                              className="w-5 h-5 rounded-lg border border-black/20 flex-shrink-0"
-                              style={{ backgroundColor: item.hex }}
-                            />
-                            <div className="min-w-0">
-                              <div className="text-xs font-bold text-[var(--text-main)] truncate">{item.name}</div>
-                              <div className="text-[10px] text-[var(--text-muted)] truncate">
-                                {unlocked ? (
-                                  <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
-                                    <Check className="w-2.5 h-2.5" /> Terbuka
-                                  </span>
-                                ) : (
-                                  <span className="text-amber-600 font-semibold flex items-center gap-0.5">
-                                    <Lock className="w-2.5 h-2.5" /> {item.unlockReq}
-                                  </span>
-                                )}
-                              </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-[var(--text-main)] truncate">{item.name}</div>
+                            <div className="text-[10px] text-[var(--text-muted)] truncate">
+                              {unlocked ? (
+                                <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
+                                  <Check className="w-2.5 h-2.5" /> Terbuka
+                                </span>
+                              ) : (
+                                <span className="text-amber-600 font-semibold flex items-center gap-0.5">
+                                  <Lock className="w-2.5 h-2.5" /> {item.unlockReq}
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -1221,7 +1158,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                               }}
                               className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
                                 isSelected 
-                                  ? 'bg-teal-600 text-white' 
+                                  ? 'bg-lime-600 text-white' 
                                   : 'bg-slate-100 dark:bg-slate-800 text-[var(--text-main)] hover:bg-slate-200'
                               }`}
                             >
@@ -1234,7 +1171,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                               className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
                             >
                               <Unlock className="w-3 h-3" />
-                              <span>Buka Item</span>
+                              <span>Buka</span>
                             </button>
                           )}
                         </div>
@@ -1243,7 +1180,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                   </div>
                 )}
 
-                {/* 6. SKIN TONES */}
+                {/* 6. SKIN TONE */}
                 {wardrobeTab === 'skin' && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     {SKIN_TONES.map(s => (
@@ -1257,7 +1194,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                         }}
                         className={`p-3 rounded-2xl border flex items-center gap-2.5 transition-all text-left ${
                           skin.id === s.id 
-                            ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/30 ring-1 ring-teal-500' 
+                            ? 'border-lime-500 bg-lime-50/50 dark:bg-lime-950/30 ring-1 ring-lime-500' 
                             : 'border-[var(--border-main)] hover:bg-slate-50 dark:hover:bg-slate-800'
                         }`}
                       >
@@ -1290,9 +1227,9 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
                   saveAppearance();
                   setShowWardrobe(false);
                   playRetroSound('happy');
-                  toast.success('Peralatan avatar tersimpan!');
+                  toast.success('Peralatan avatar TBP tersimpan!');
                 }}
-                className="px-5 py-1.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                className="px-5 py-1.5 rounded-xl text-xs font-bold bg-lime-600 hover:bg-lime-700 text-white flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>Selesai</span>
@@ -1301,6 +1238,19 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
           </div>
         </div>
       )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* TEMPAT NONGKRONG / LOUNGE MODAL                               */}
+      {/* ------------------------------------------------------------- */}
+      <TempatNongkrongModal
+        isOpen={showTempatNongkrong}
+        onClose={() => setShowTempatNongkrong(false)}
+        userNik={effectiveNik}
+        userName={effectiveName}
+        userSection={rawSection}
+        userRole={propUserRole || localProfile.role}
+        avatarUrl={localStorage.getItem(`p2h_inspector_avatar_${effectiveNik}`) || undefined}
+      />
     </div>
   );
 };

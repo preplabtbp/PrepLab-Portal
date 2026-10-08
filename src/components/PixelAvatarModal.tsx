@@ -21,12 +21,13 @@ export const SKIN_TONES = [
 ];
 
 export const HAIR_STYLES = [
+  { id: 'helmet_white_tbp', name: 'Helm Putih TBP Resmi' },
   { id: 'spiky', name: 'Short Spiky' },
   { id: 'side', name: 'Side Part' },
   { id: 'curly', name: 'Curly Waves' },
   { id: 'long', name: 'Long Hair' },
   { id: 'hijab', name: 'Hijab Syari' },
-  { id: 'helmet', name: 'Helm Safety K3' },
+  { id: 'helmet', name: 'Helm Safety Kuning K3' },
   { id: 'cap', name: 'Topi Proyek / Cap' },
   { id: 'afro', name: 'Afro Style' },
   { id: 'bald', name: 'Plontos / Short' },
@@ -54,6 +55,7 @@ export const EYE_STYLES = [
 ];
 
 export const OUTFITS = [
+  { id: 'uniform_tbp', name: 'Seragam Standar TBP (Hijau Fluo)', base: '#84CC16', stripe: '#F8FAFC', collar: '#1E3A8A' },
   { id: 'vest_orange', name: 'Rompi K3 Orange', base: '#EA580C', stripe: '#F8FAFC', collar: '#1E293B' },
   { id: 'vest_green', name: 'Rompi K3 Hijau', base: '#16A34A', stripe: '#F8FAFC', collar: '#1E293B' },
   { id: 'lab_coat', name: 'Jas Laboratorium', base: '#F8FAFC', stripe: '#0D9488', collar: '#0F766E' },
@@ -195,7 +197,13 @@ export const PixelAvatarModal: React.FC<PixelAvatarModalProps> = ({
     rect(14, 16, 1, 3, oCollar);
 
     // Safety Vest Reflective Stripes / Accents
-    if (outfit.id.startsWith('vest')) {
+    if (outfit.id === 'uniform_tbp') {
+      // Double horizontal reflective scotlight stripes (silver)
+      rect(3, 19, 18, 1, '#CBD5E1'); // upper scotlight band
+      rect(3, 22, 18, 1, '#CBD5E1'); // lower scotlight band
+      rect(5, 17, 3, 2, '#15803D'); // TBP green logo badge on chest
+      rect(15, 17, 4, 1.5, '#F8FAFC'); // name tag
+    } else if (outfit.id.startsWith('vest')) {
       rect(6, 18, 2, 6, oStripe);
       rect(16, 18, 2, 6, oStripe);
       rect(6, 21, 12, 1, oStripe);
@@ -208,7 +216,15 @@ export const PixelAvatarModal: React.FC<PixelAvatarModalProps> = ({
     }
 
     // 5. Hair Style & Headgear (Front / Bangs Layer)
-    if (hairStyle.id === 'spiky') {
+    if (hairStyle.id === 'helmet_white_tbp') {
+      // Helm Putih TBP Resmi
+      rect(5, 2, 14, 4, '#FFFFFF'); // White Dome
+      rect(4, 5, 16, 2, '#E2E8F0'); // Brim
+      rect(5, 5, 2, 1, '#FACC15'); // Yellow safety sticker
+      rect(17, 5, 2, 1, '#FACC15');
+      rect(10, 3, 4, 3, '#15803D'); // TBP Green Emblem
+      rect(11, 4, 2, 1, '#4ADE80');
+    } else if (hairStyle.id === 'spiky') {
       rect(6, 3, 12, 3, hCol);
       rect(7, 2, 10, 2, hCol);
       rect(5, 4, 14, 2, hCol);

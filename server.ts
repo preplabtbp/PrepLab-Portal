@@ -588,6 +588,17 @@ const app = express();
       }
     });
 
+    // --- REAL-TIME TEMPAT NONGKRONG AVATAR LOUNGE SYNC ---
+    socket.on('lounge:move', (data) => {
+      const room = data?.room || 'lounge';
+      socket.to(room).emit('lounge:user_moved', data);
+    });
+
+    socket.on('lounge:action', (data) => {
+      const room = data?.room || 'lounge';
+      socket.to(room).emit('lounge:user_action', data);
+    });
+
     socket.on('chat:clear', async (data) => {
       try {
         const room = data?.room || 'global';

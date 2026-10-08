@@ -19,9 +19,17 @@ import { WidgetCatalogModal } from './WidgetCatalogModal';
 
 interface HomeWidgetDashboardProps {
   userNik?: string;
+  userName?: string;
+  userSection?: string;
+  userRole?: string;
 }
 
-export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({ userNik = 'default' }) => {
+export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({ 
+  userNik = 'default',
+  userName,
+  userSection,
+  userRole
+}) => {
   const storageKey = `preplab_home_widgets_v2_${userNik}`;
 
   const [configs, setConfigs] = useState<WidgetItemConfig[]>(() => {
@@ -164,7 +172,15 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({ userNi
       case 'canteen':
         return <KantinMenuWidget size={item.size} />;
       case 'avatar_3d':
-        return <Avatar3DWidget size={item.size} userNik={userNik} />;
+        return (
+          <Avatar3DWidget 
+            size={item.size} 
+            userNik={userNik} 
+            userName={userName}
+            userSection={userSection}
+            userRole={userRole}
+          />
+        );
       default:
         return null;
     }
