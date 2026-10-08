@@ -17,6 +17,7 @@ import {
   Sparkles, 
   FileText, 
   ChevronRight, 
+  ChevronLeft,
   ChevronDown, 
   ChevronUp,
   Trash2, 
@@ -3349,37 +3350,40 @@ export function LogbookScreen({
             {/* Date Selector Controls */}
             <div className="flex items-center gap-1.5">
               <button
+                type="button"
                 onClick={() => shiftDate(-1)}
-                className="p-1 rounded-lg border-2 border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
+                className="w-8 h-8 flex items-center justify-center rounded-xl border-2 border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs shrink-0"
                 title="Hari Sebelumnya"
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
+                <ChevronLeft className="w-4 h-4 text-black dark:text-white stroke-[2.5]" />
               </button>
 
               <div 
-                className="flex items-center gap-2 px-3 py-1 rounded-xl border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xs"
+                className="flex items-center gap-2 px-3 py-1 rounded-xl border-2 border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-2xs"
               >
-                <Calendar className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                <Calendar className="w-3.5 h-3.5 text-black dark:text-white shrink-0 stroke-[2.2]" />
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-transparent outline-none font-extrabold text-xs cursor-pointer text-slate-900 dark:text-slate-100"
+                  className="bg-transparent outline-none font-black text-xs cursor-pointer text-black dark:text-white"
                 />
               </div>
 
               <button
+                type="button"
                 onClick={() => shiftDate(1)}
-                className="p-1 rounded-lg border-2 border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
+                className="w-8 h-8 flex items-center justify-center rounded-xl border-2 border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs shrink-0"
                 title="Hari Berikutnya"
               >
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ChevronRight className="w-4 h-4 text-black dark:text-white stroke-[2.5]" />
               </button>
 
               {selectedDate !== getTodayStr() && (
                 <button
+                  type="button"
                   onClick={() => setSelectedDate(getTodayStr())}
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold text-teal-800 dark:text-teal-300 bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/30 transition-colors cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-black text-black dark:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border-2 border-slate-400 dark:border-slate-600 transition-colors cursor-pointer shadow-2xs"
                 >
                   Hari Ini
                 </button>
@@ -3526,33 +3530,34 @@ export function LogbookScreen({
             </div>
 
             {/* Quick Expand / Collapse All Checklists */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={expandAllTasks}
-                className="px-2 py-1 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[11px] font-extrabold text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                className="px-2.5 py-1 rounded-xl border-2 border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-[11px] font-black text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
                 title="Buka semua rincian subtask checklist untuk briefing"
               >
-                <ChevronDown className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                <span className="hidden sm:inline">Buka Semua</span>
+                <ChevronDown className="w-3.5 h-3.5 text-black dark:text-white stroke-[2.5]" />
+                <span className="font-black text-black dark:text-white">Buka Semua</span>
               </button>
               <button
                 type="button"
                 onClick={collapseAllTasks}
-                className="px-2 py-1 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[11px] font-extrabold text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                className="px-2.5 py-1 rounded-xl border-2 border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-[11px] font-black text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
                 title="Tutup semua rincian subtask checklist"
               >
-                <ChevronUp className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
-                <span className="hidden sm:inline">Tutup Semua</span>
+                <ChevronUp className="w-3.5 h-3.5 text-black dark:text-white stroke-[2.5]" />
+                <span className="font-black text-black dark:text-white">Tutup Semua</span>
               </button>
             </div>
 
             <button
+              type="button"
               onClick={fetchTasks}
-              className="p-1 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs"
+              className="w-8 h-8 flex items-center justify-center rounded-xl border-2 border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs shrink-0"
               title="Muat ulang data"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 text-black dark:text-white stroke-[2.2] ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
