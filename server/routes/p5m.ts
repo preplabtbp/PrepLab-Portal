@@ -2254,10 +2254,10 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
     const todayIso = witTime.toISOString().split('T')[0]; // "YYYY-MM-DD"
 
     const URUTAN_HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-    let foundAssignment: any = null;
-    let fallbackPastAssignment: any = null;
+    const allAssignments: any[] = [];
 
-    for (const [day, dayData] of Object.entries(sch)) {
+    for (const day of URUTAN_HARI) {
+      const dayData = sch[day];
       if (!dayData) continue;
 
       // 1. Calculate specific date for this day
@@ -2272,11 +2272,9 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
         assignmentDateIso = `${aY}-${aM}-${aD}`;
       }
 
-      // 2. Check if the briefing day has already passed
+      // 2. Check if the briefing day has already passed or is today
       const isPast = Boolean(assignmentDateIso && todayIso > assignmentDateIso);
-      if (!includePast && isPast) {
-        continue;
-      }
+      const isToday = Boolean(assignmentDateIso && todayIso === assignmentDateIso);
 
       for (const shift of ['pagi', 'malam']) {
         const sData = (dayData as any)[shift];
@@ -2320,7 +2318,9 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
               day,
               assignmentDate: assignmentDateIso,
               isPast,
+              isToday,
               shift: shift === 'pagi' ? 'Day Shift (Pagi)' : 'Night Shift (Malam)',
+              shiftKey: shift,
               zone: slot.zone,
               nama: slot.nama,
               nik: slot.nik,
@@ -2330,24 +2330,44 @@ p5mRouter.get("/schedules/user-assignment", async (req, res) => {
               fileUrl: freshFileUrl,
               isSenam: slot.isSenam,
               isCompleted: Boolean(slot.isCompleted),
-              completedAt: slot.completedAt || null
+              completedAt: slot.completedAt || null,
+              sessionIndex: allAssignments.length + 1
             };
 
-            if (!isPast) {
-              foundAssignment = candidate;
-              break;
-            } else if (!fallbackPastAssignment) {
-              fallbackPastAssignment = candidate;
-            }
+            allAssignments.push(candidate);
           }
         }
-        if (foundAssignment) break;
       }
-      if (foundAssignment) break;
     }
 
-    const finalAssignment = foundAssignment || fallbackPastAssignment;
-    res.json({ success: true, assignment: finalAssignment });
+    // Determine the most relevant single assignment for backwards-compatibility:
+    // 1. If today's assignment exists and pending -> today's
+    // 2. Earliest upcoming assignment (not past and not completed)
+    // 3. Today's assignment even if completed
+    // 4. Earliest upcoming assignment (not past)
+    // 5. Latest assignment in the week
+    let activeAssignment: any = null;
+    if (allAssignments.length > 0) {
+      activeAssignment = allAssignments.find(a => a.isToday && !a.isCompleted) ||
+        allAssignments.find(a => !a.isPast && !a.isCompleted) ||
+        allAssignments.find(a => a.isToday) ||
+        allAssignments.find(a => !a.isPast) ||
+        allAssignments[allAssignments.length - 1];
+    }
+
+    // Filter allAssignments if !includePast is requested, BUT keep full list if nothing non-past
+    const filteredAssignments = includePast
+      ? allAssignments
+      : allAssignments.filter(a => !a.isPast);
+
+    const returnedList = (filteredAssignments.length > 0 ? filteredAssignments : allAssignments);
+
+    res.json({
+      success: true,
+      assignment: activeAssignment || returnedList[0] || null,
+      assignments: allAssignments,
+      totalWeeklySessions: allAssignments.length
+    });
   } catch (error: any) {
     console.error("Error checking user P5M assignment:", error);
     res.status(500).json({ success: false, message: error.message });
@@ -2384,6 +2404,7 @@ p5mRouter.post("/schedules/mark-completed", async (req, res) => {
       if (!dayData) continue;
 
       for (const sShift of ['pagi', 'malam']) {
+        if (shift && sShift.toLowerCase() !== String(shift).toLowerCase() && !String(shift).toLowerCase().includes(sShift)) continue;
         const sData = (dayData as any)[sShift];
         if (!sData) continue;
 

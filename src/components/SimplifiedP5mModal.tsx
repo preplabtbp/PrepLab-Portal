@@ -15,6 +15,7 @@ interface SimplifiedP5mModalProps {
   inspectorNik: string | null;
   inspectorName: string | null;
   p5mAssignment?: any | null;
+  p5mAssignments?: any[] | null;
   onNav?: (tab: any) => void;
 }
 
@@ -24,8 +25,20 @@ export function SimplifiedP5mModal({
   inspectorNik,
   inspectorName,
   p5mAssignment: initialAssignment,
+  p5mAssignments: initialAssignments,
   onNav
 }: SimplifiedP5mModalProps) {
+  const [assignments, setAssignments] = useState<any[]>(() => {
+    if (initialAssignments && initialAssignments.length > 0) return initialAssignments;
+    if (initialAssignment) return [initialAssignment];
+    try {
+      const saved = localStorage.getItem('p2h_cached_p5m_assignments');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [activeIndex, setActiveIndex] = useState<number>(0);
   const [assignment, setAssignment] = useState<any | null>(initialAssignment || null);
   const [loading, setLoading] = useState(false);
   const [showViewer, setShowViewer] = useState(false);
@@ -34,11 +47,20 @@ export function SimplifiedP5mModal({
   const [markingCompleted, setMarkingCompleted] = useState(false);
 
   useEffect(() => {
-    if (initialAssignment) {
+    if (initialAssignments && initialAssignments.length > 0) {
+      setAssignments(initialAssignments);
+      const active = initialAssignment || initialAssignments[0];
+      setAssignment(active);
+      setIsCompleted(Boolean(active?.isCompleted));
+      const idx = initialAssignments.findIndex((a: any) => a.day === active?.day && a.shift === active?.shift);
+      setActiveIndex(idx >= 0 ? idx : 0);
+    } else if (initialAssignment) {
       setAssignment(initialAssignment);
+      setAssignments([initialAssignment]);
       setIsCompleted(Boolean(initialAssignment.isCompleted));
+      setActiveIndex(0);
     }
-  }, [initialAssignment]);
+  }, [initialAssignment, initialAssignments]);
 
   // Fetch assignment if modal opens and no assignment yet
   useEffect(() => {
@@ -54,9 +76,24 @@ export function SimplifiedP5mModal({
       fetch(`/api/p5m/schedules/user-assignment?${queryParams.toString()}`)
         .then(res => res.ok ? res.json() : null)
         .then(data => {
-          if (data?.success && data?.assignment) {
-            setAssignment(data.assignment);
-            setIsCompleted(Boolean(data.assignment.isCompleted));
+          if (data?.success) {
+            const list = Array.isArray(data.assignments) && data.assignments.length > 0
+              ? data.assignments
+              : (data.assignment ? [data.assignment] : []);
+            setAssignments(list);
+
+            const activeItem = data.assignment || list[0] || null;
+            setAssignment(activeItem);
+            setIsCompleted(Boolean(activeItem?.isCompleted));
+
+            if (list.length > 0 && activeItem) {
+              const idx = list.findIndex(
+                (a: any) => a.day === activeItem.day && a.shift === activeItem.shift
+              );
+              setActiveIndex(idx >= 0 ? idx : 0);
+            } else {
+              setActiveIndex(0);
+            }
           }
         })
         .catch(err => {
@@ -88,8 +125,10 @@ export function SimplifiedP5mModal({
 
       if (res.ok) {
         setIsCompleted(true);
-        setAssignment((prev: any) => prev ? { ...prev, isCompleted: true, completedAt: new Date().toISOString() } : prev);
-        toast.success('✅ Materi P5M berhasil ditandai sudah dilakukan! (+60 EXP)', { duration: 4000 });
+        const nowIso = new Date().toISOString();
+        setAssignment((prev: any) => prev ? { ...prev, isCompleted: true, completedAt: nowIso } : prev);
+        setAssignments((prevList: any[]) => prevList.map((a, i) => i === activeIndex ? { ...a, isCompleted: true, completedAt: nowIso } : a));
+        toast.success(`✅ Materi P5M (${assignment.day}) berhasil ditandai sudah dilakukan! (+60 EXP)`, { duration: 4000 });
         triggerExpGain(60, 'Materi P5M Selesai Dibawakan!', 'Briefing Keselamatan Kerja');
         window.dispatchEvent(new Event('gamification_updated'));
         window.dispatchEvent(new CustomEvent('refresh-action-center'));
@@ -185,11 +224,49 @@ export function SimplifiedP5mModal({
             ) : assignment ? (
               /* User memiliki jadwal sebagai PEMATERI */
               <div className="space-y-3.5">
+                {/* Switcher Tab jika personil terjadwal lebih dari 1x dalam sepekan */}
+                {assignments && assignments.length > 1 && (
+                  <div className="p-1 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] flex items-center gap-1.5 overflow-x-auto shadow-2xs">
+                    <div className="px-2 py-1 text-[10px] font-black text-purple-700 dark:text-purple-300 whitespace-nowrap flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>{assignments.length} Sesi Terjadwal:</span>
+                    </div>
+                    {assignments.map((assItem, idx) => {
+                      const isSelected = idx === activeIndex;
+                      return (
+                        <button
+                          key={`modal-tab-${assItem.day}-${idx}`}
+                          type="button"
+                          onClick={() => {
+                            setActiveIndex(idx);
+                            setAssignment(assItem);
+                            setIsCompleted(Boolean(assItem.isCompleted));
+                          }}
+                          className={`flex-1 min-w-[110px] py-1.5 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-purple-600 text-white shadow-xs'
+                              : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-black/5 dark:hover:bg-white/5'
+                          }`}
+                        >
+                          <span>{assItem.day}</span>
+                          {assItem.isCompleted ? (
+                            <span className="text-[10px] text-emerald-300 font-extrabold">✓ Selesai</span>
+                          ) : assItem.isToday ? (
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-amber-400 text-slate-900 font-extrabold">Hari Ini</span>
+                          ) : (
+                            <span className="text-[9px] opacity-75">{assItem.shiftKey === 'malam' ? 'Mlm' : 'Pagi'}</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Status Badge & Sapaan */}
                 <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/25 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-600 text-white flex items-center gap-1 shadow-2xs">
-                      <Sparkles className="w-3 h-3" /> Pemateri Terjadwal
+                      <Sparkles className="w-3 h-3" /> Pemateri Terjadwal {assignments.length > 1 ? `(Sesi ${activeIndex + 1}/${assignments.length})` : ''}
                     </span>
                     <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300">
                       Reward: +60 EXP

@@ -208,7 +208,7 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full max-w-full md:px-8">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full max-w-full md:px-8 pb-36 sm:pb-24">
       <PageHeader 
         title="Checklist Harian"
         description={`Hello, ${inspectorName}`}
@@ -394,9 +394,35 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
               </div>
             ))}
           </div>
-          <Button onClick={handleSubmit} disabled={saving || !isComplete || loading} className={!isComplete ? 'opacity-50' : ''}>
-            {saving ? 'Mengirim Data...' : `Kirim Laporan Section`}
-          </Button>
+          {/* Action Button Container - Elevated & Safe from Mobile Nav / Floating Buttons */}
+          <div className="pt-6 pb-20 sm:pb-8 mt-6 border-t border-slate-200">
+            <Button 
+              onClick={handleSubmit} 
+              disabled={saving || !isComplete || loading} 
+              className={`w-full py-4 text-base font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2 transition-all ${
+                !isComplete 
+                  ? 'opacity-60 bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed border-none' 
+                  : 'bg-teal-700 hover:bg-teal-800 text-white shadow-teal-700/25 active:scale-[0.99] border-none'
+              }`}
+            >
+              {saving ? (
+                <>
+                  <Activity className="w-5 h-5 animate-spin mr-2" />
+                  <span>Mengirim Data...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-5 h-5 mr-2" />
+                  <span>Kirim Laporan Section</span>
+                </>
+              )}
+            </Button>
+            {!isComplete && (
+              <p className="text-center text-xs text-amber-600 dark:text-amber-400 mt-2.5 font-medium flex items-center justify-center gap-1">
+                <span>⚠️ Mohon lengkapi pemeriksaan semua alat di section ini ({progress}%) sebelum mengirim.</span>
+              </p>
+            )}
+          </div>
         </>
       )}
 
