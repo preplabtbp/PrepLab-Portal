@@ -4612,10 +4612,10 @@ export function LogbookScreen({
                                 <button
                                   type="button"
                                   onClick={() => setActiveActionMenuTaskId(activeActionMenuTaskId === task.id ? null : task.id)}
-                                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-lg text-black dark:text-black hover:text-black hover:bg-slate-200 dark:hover:bg-slate-300 transition-colors cursor-pointer"
                                   title="Pilihan Aksi"
                                 >
-                                  <MoreVertical className="w-4 h-4" />
+                                  <MoreVertical className="w-4 h-4 text-black dark:text-black" />
                                 </button>
 
                                 {activeActionMenuTaskId === task.id && (
@@ -5146,10 +5146,10 @@ export function LogbookScreen({
                                 <button
                                   type="button"
                                   onClick={() => setActiveActionMenuTaskId(activeActionMenuTaskId === task.id ? null : task.id)}
-                                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-lg text-black dark:text-black hover:text-black hover:bg-slate-200 dark:hover:bg-slate-300 transition-colors cursor-pointer"
                                   title="Pilihan Aksi"
                                 >
-                                  <MoreVertical className="w-4 h-4" />
+                                  <MoreVertical className="w-4 h-4 text-black dark:text-black" />
                                 </button>
 
                                 {activeActionMenuTaskId === task.id && (

@@ -58,7 +58,7 @@ import { Button } from './ui';
 import { toast } from 'sonner';
 import { uploadPhotoToDrive } from '../sheets-api';
 import { ImageModal } from './image-modal';
-import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, NOTION_COLORS, TasklistProgress, markdownToVisualHtml } from './notion/tasklist-utils';
+import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, NOTION_COLORS, TasklistProgress, markdownToVisualHtml, migrateLegacySubtaskText } from './notion/tasklist-utils';
 import { NotionTasklistView } from './notion/NotionTasklistView';
 import { NotionDropdownCell } from './notion/NotionDropdownCell';
 import { NotionInlineEditor } from './notion/NotionInlineEditor';
@@ -437,7 +437,6 @@ export const CANONICAL_NOTION_COLUMNS = [
   'Priority',
   'Status',
   'Created Time',
-  'Kategori',
   'Activity (routine/non routine)',
   'period'
 ] as const;
@@ -1105,12 +1104,13 @@ export function NotionDatabaseTable({
     return undefined;
   };
 
-  // Ensure Progress and Target Selesai columns are never rendered in displayHeaders
+  // Ensure Progress, Target Selesai, and redundant Kategori columns are never rendered in displayHeaders
   const displayHeaders = useMemo(() => {
     return tableHeaders.filter(h => {
       const l = h.toLowerCase().trim();
       return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
-             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo');
+             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo') &&
+             !l.includes('kategori') && !l.includes('category');
     });
   }, [tableHeaders]);
 
@@ -1783,7 +1783,19 @@ export function NotionDatabaseTable({
   const saveTableToBackend = async (newRows: TableRowData[]): Promise<boolean> => {
     if (!postId) return false;
     try {
-      const updatedMarkdown = serializeMarkdownTable(displayHeaders, newRows, beforeText, afterText);
+      // Normalize any legacy format subtask tags in Keterangan to canonical markdown checklists
+      const normalizedRows = newRows.map(r => {
+        const ket = getRowVal(r, 'Keterangan');
+        if (ket && (ket.includes('**(Done)**') || ket.includes('**(OPEN)**') || ket.includes('**(Closed)**') || ket.includes('**(OP)**'))) {
+          return {
+            ...r,
+            Keterangan: migrateLegacySubtaskText(ket)
+          };
+        }
+        return r;
+      });
+
+      const updatedMarkdown = serializeMarkdownTable(displayHeaders, normalizedRows, beforeText, afterText);
       const res = await fetch(`/api/bulletin/${postId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1791,6 +1803,19 @@ export function NotionDatabaseTable({
       });
       if (res.ok) {
         onPostContentUpdate?.(updatedMarkdown);
+
+        // Instant background sync directly to logbook to guarantee zero delay
+        fetch('/api/logbook/sync-from-bulletin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bulletinPostId: postId,
+            section: section || '',
+            userNik: currentAuthorNik || '',
+            userName: currentAuthorName || ''
+          })
+        }).catch(err => console.warn('Instant logbook sync non-fatal:', err));
+
         return true;
       }
       return false;
@@ -4543,17 +4568,6 @@ export function NotionDatabaseTable({
 
                                   const filteredEmployees = employeesList
                                     .filter((emp) => {
-                                      if (isManajemenMutu) {
-                                        if ((emp.nik || '') === '04D26000015' || (emp.name || '').toUpperCase().includes('GUSTI')) {
-                                          return false;
-                                        }
-                                        const isQA = (emp.section || '').toUpperCase() === 'QA' || 
-                                                     (emp.section || '').toUpperCase().includes('MUTU') || 
-                                                     (emp.jabatan || '').toUpperCase().includes('QA') || 
-                                                     (emp.jabatan || '').toUpperCase().includes('QUALITY') || 
-                                                     (emp.jabatan || '').toUpperCase().includes('MUTU');
-                                        if (!isQA) return false;
-                                      }
                                       const q = inlinePicSearch.toLowerCase().trim();
                                       if (!q) return true;
                                       return (
@@ -4897,10 +4911,10 @@ export function NotionDatabaseTable({
                                        e.stopPropagation();
                                        setActiveActionMenuRowIndex(activeActionMenuRowIndex === actualRowIndex ? null : actualRowIndex);
                                      }}
-                                     className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700/60 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                                     className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-300 text-black dark:text-black hover:text-black transition-colors cursor-pointer"
                                      title="Pilihan Aksi"
                                    >
-                                     <MoreVertical className="w-4 h-4" />
+                                     <MoreVertical className="w-4 h-4 text-black dark:text-black" />
                                    </button>
 
                                    {activeActionMenuRowIndex === actualRowIndex && (
@@ -6084,23 +6098,6 @@ export function NotionDatabaseTable({
                           </span>
                           {employeesList
                             .filter((emp) => {
-                              const isManajemenMutu = (section || '').toUpperCase().includes('QA') || 
-                                                     (section || '').toUpperCase().includes('MUTU') || 
-                                                     (title || '').toUpperCase().includes('MUTU') || 
-                                                     (title || '').toUpperCase().includes('MANAJEMEN MUTU') || 
-                                                     (initialTopicTitle || '').toUpperCase().includes('MUTU');
-                              if (isManajemenMutu) {
-                                // Bersihkan Gusti dari Manajemen Mutu, dan pastikan hanya personil section QA / Manajemen Mutu
-                                if ((emp.nik || '') === '04D26000015' || (emp.name || '').toUpperCase().includes('GUSTI')) {
-                                  return false;
-                                }
-                                const isQA = (emp.section || '').toUpperCase() === 'QA' || 
-                                             (emp.section || '').toUpperCase().includes('MUTU') || 
-                                             (emp.jabatan || '').toUpperCase().includes('QA') || 
-                                             (emp.jabatan || '').toUpperCase().includes('QUALITY') || 
-                                             (emp.jabatan || '').toUpperCase().includes('MUTU');
-                                if (!isQA) return false;
-                              }
                               const q = (rowFormData['PIC'] || '').toLowerCase().trim();
                               if (!q) return true;
                               return (
@@ -6165,110 +6162,94 @@ export function NotionDatabaseTable({
                 </div>
               </div>
 
-              {/* 5. Activity, Period & Kategori */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Activity */}
+              {/* 5. Tipe Aktivitas & Periode (Hanya 2 pilihan utama: Routine vs Non Routine) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Tipe Aktivitas */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Activity
+                    Tipe Aktivitas
                   </label>
                   <select
-                    value={rowFormData['Activity (routine/non routine)'] || 'Daily'}
+                    value={
+                      (rowFormData['Activity (routine/non routine)'] || '').toLowerCase().includes('non') ||
+                      (rowFormData['period'] || '').toLowerCase().includes('non')
+                        ? 'Non Routine'
+                        : 'Routine'
+                    }
                     onChange={(e) => {
                       const val = e.target.value;
-                      const updated: any = { ...rowFormData, 'Activity (routine/non routine)': val };
-                      if (!rowFormData['period'] || rowFormData['period'] === 'Weekly') {
-                        if (val === 'Daily') updated.period = 'Daily';
-                        else if (val === 'Weekly') updated.period = 'Weekly';
-                        else if (val === 'Monthly') updated.period = 'Monthly';
-                        else if (val === 'Quarterly') updated.period = 'Quarterly';
-                        else if (val === 'Biannual') updated.period = 'Biannual';
-                        else if (val === 'Yearly') updated.period = 'Yearly';
+                      if (val === 'Non Routine') {
+                        setRowFormData({
+                          ...rowFormData,
+                          'Activity (routine/non routine)': 'Non Routine',
+                          period: 'Non-Routine'
+                        });
+                      } else {
+                        const currentCad = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Biannual', 'Yearly'].includes(rowFormData['period'] || '')
+                          ? rowFormData['period']
+                          : 'Daily';
+                        setRowFormData({
+                          ...rowFormData,
+                          'Activity (routine/non routine)': currentCad,
+                          period: currentCad
+                        });
                       }
-                      setRowFormData(updated);
                     }}
-                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs"
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs font-semibold"
                     style={{
                       backgroundColor: 'var(--input-bg, #141414)',
                       borderColor: 'var(--border-main, #334155)',
                       color: 'var(--text-main, #f1f5f9)'
                     }}
                   >
-                    <option value="Daily">Daily</option>
-                    <option value="Weekly">Weekly</option>
-                    <option value="Monthly">Monthly</option>
-                    <option value="Quarterly">Quarterly</option>
-                    <option value="Biannual">Biannual</option>
-                    <option value="Yearly">Yearly</option>
-                    <option value="Non-Routine">Non-Routine</option>
+                    <option value="Routine">Routine (Rutin)</option>
+                    <option value="Non Routine">Non Routine (Insidentil)</option>
                   </select>
                 </div>
 
-                {/* Period */}
+                {/* Cadence Periode (Pilihan lanjutan daily s/d yearly jika Routine) */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Period / Periode
+                    Periode / Cadence
                   </label>
-                  <select
-                    value={['Daily', 'Weekly', 'Monthly', '3 Month', '6 Month', 'Yearly', 'Non-Routine'].includes(rowFormData['period'] || '') ? rowFormData['period'] : 'custom'}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === 'custom') {
-                        setRowFormData({ ...rowFormData, period: '' });
-                      } else {
-                        setRowFormData({ ...rowFormData, period: val });
-                      }
-                    }}
-                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #141414)',
-                      borderColor: 'var(--border-main, #334155)',
-                      color: 'var(--text-main, #f1f5f9)'
-                    }}
-                  >
-                    <option value="Daily">Daily</option>
-                    <option value="Weekly">Weekly</option>
-                    <option value="Monthly">Monthly</option>
-                    <option value="3 Month">3 Month / Quarterly</option>
-                    <option value="6 Month">6 Month / Biannual</option>
-                    <option value="Yearly">Yearly</option>
-                    <option value="Non-Routine">Non-Routine</option>
-                    <option value="custom">Kustom / Lainnya...</option>
-                  </select>
-                  {!['Daily', 'Weekly', 'Monthly', '3 Month', '6 Month', 'Yearly', 'Non-Routine'].includes(rowFormData['period'] || '') && (
-                    <input
-                      type="text"
-                      value={rowFormData['period'] || ''}
-                      onChange={(e) => setRowFormData({ ...rowFormData, period: e.target.value })}
-                      className="w-full mt-1.5 p-2 rounded-xl border focus:border-teal-500 outline-none text-xs"
+                  {((rowFormData['Activity (routine/non routine)'] || '').toLowerCase().includes('non') ||
+                    (rowFormData['period'] || '').toLowerCase().includes('non')) ? (
+                    <div 
+                      className="w-full p-2.5 rounded-xl border text-xs font-medium opacity-70 cursor-not-allowed"
+                      style={{
+                        backgroundColor: 'var(--input-bg, #141414)',
+                        borderColor: 'var(--border-main, #334155)',
+                        color: 'var(--text-muted, #94a3b8)'
+                      }}
+                    >
+                      Insidentil (Non-Routine)
+                    </div>
+                  ) : (
+                    <select
+                      value={['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Biannual', 'Yearly'].includes(rowFormData['period'] || '') ? rowFormData['period'] : 'Daily'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setRowFormData({
+                          ...rowFormData,
+                          'Activity (routine/non routine)': val,
+                          period: val
+                        });
+                      }}
+                      className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs font-semibold"
                       style={{
                         backgroundColor: 'var(--input-bg, #141414)',
                         borderColor: 'var(--border-main, #334155)',
                         color: 'var(--text-main, #f1f5f9)'
                       }}
-                      placeholder="Input periode manual..."
-                      autoFocus
-                    />
+                    >
+                      <option value="Daily">Daily (Harian)</option>
+                      <option value="Weekly">Weekly (Mingguan)</option>
+                      <option value="Monthly">Monthly (Bulanan)</option>
+                      <option value="Quarterly">Quarterly (Triwulan)</option>
+                      <option value="Biannual">Biannual (Semesteran)</option>
+                      <option value="Yearly">Yearly (Tahunan)</option>
+                    </select>
                   )}
-                </div>
-
-                {/* Kategori */}
-                <div>
-                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Kategori
-                  </label>
-                  <input
-                    type="text"
-                    value={rowFormData['Kategori'] || ''}
-                    onChange={(e) => setRowFormData({ ...rowFormData, Kategori: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #141414)',
-                      borderColor: 'var(--border-main, #334155)',
-                      color: 'var(--text-main, #f1f5f9)'
-                    }}
-                    placeholder="Laboratorium"
-                  />
                 </div>
               </div>
 
@@ -6370,10 +6351,6 @@ export function NotionDatabaseTable({
                         )}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[11px] text-teal-400 font-mono font-semibold">
-                          {getRowVal(selectedRow, 'Kategori') || 'Laboratorium'}
-                        </span>
-                        <span style={{ color: 'var(--text-muted, #64748b)' }}>•</span>
                         <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                           Aktivitas: {getRowVal(selectedRow, 'Activity (routine/non routine)') || 'Routine'}
                         </span>
@@ -6737,11 +6714,7 @@ export function NotionDatabaseTable({
                       })()}
 
                       {/* Secondary Metadata Info Cards */}
-                      <div className="grid grid-cols-3 gap-2.5 text-[11px]">
-                        <div className="p-3 rounded-xl border" style={{ backgroundColor: 'var(--input-bg, #171717)', borderColor: 'var(--border-main, #334155)' }}>
-                          <span className="text-[9px] uppercase font-bold block mb-0.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Kategori</span>
-                          <span className="font-medium truncate block" style={{ color: 'var(--text-main, #cbd5e1)' }}>{getRowVal(selectedRow, 'Kategori') || '-'}</span>
-                        </div>
+                      <div className="grid grid-cols-2 gap-2.5 text-[11px]">
                         <div className="p-3 rounded-xl border" style={{ backgroundColor: 'var(--input-bg, #171717)', borderColor: 'var(--border-main, #334155)' }}>
                           <span className="text-[9px] uppercase font-bold block mb-0.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Period</span>
                           <span className="font-medium truncate block" style={{ color: 'var(--text-main, #cbd5e1)' }}>{getRowVal(selectedRow, 'period') || '-'}</span>

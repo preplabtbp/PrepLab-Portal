@@ -49,10 +49,30 @@ export function parseTasklist(text?: string | null): TasklistProgress {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    const match = trimmed.match(/^[-*]?\s*\[([ xX])\]\s*(.+)$/);
-    if (match) {
-      const isChecked = match[1].toLowerCase() === 'x';
-      let rawContent = match[2].trim();
+    // First try standard markdown tasklist: - [x] or - [ ]
+    let match = trimmed.match(/^[-*]?\s*\[([ xX])\]\s*(.+)$/);
+    let isLegacyMatch = false;
+    let isCheckedLegacy = false;
+    let legacyText = '';
+
+    if (!match) {
+      // Check legacy subtask tags: - Kegiatan **(Done)** or • Kegiatan **(OPEN)**
+      const legacyDone = trimmed.match(/^[-*•]?\s*(.+?)\s*\*\*\(?(Done|Closed|Close|Finish|Selesai|CL)\)?\*\*\s*$/i);
+      const legacyOpen = trimmed.match(/^[-*•]?\s*(.+?)\s*\*\*\(?(Open|OP|Belum|In Progress|Pending)\)?\*\*\s*$/i);
+      if (legacyDone) {
+        isLegacyMatch = true;
+        isCheckedLegacy = true;
+        legacyText = legacyDone[1].replace(/^[-*•]\s*/, '').trim();
+      } else if (legacyOpen) {
+        isLegacyMatch = true;
+        isCheckedLegacy = false;
+        legacyText = legacyOpen[1].replace(/^[-*•]\s*/, '').trim();
+      }
+    }
+
+    if (match || isLegacyMatch) {
+      const isChecked = match ? match[1].toLowerCase() === 'x' : isCheckedLegacy;
+      let rawContent = match ? match[2].trim() : legacyText;
 
       // Extract notes JSON array if present: <!--notes:[...]-->
       let notes: SubtaskNote[] = [];
@@ -140,6 +160,42 @@ export function parseTasklist(text?: string | null): TasklistProgress {
     items,
     cleanText: nonTaskLines.join('\n')
   };
+}
+
+/**
+ * Migrates text containing legacy subtask tags like "- Task **(Done)**" into standard markdown checklists
+ */
+export function migrateLegacySubtaskText(text?: string | null): string {
+  if (!text || typeof text !== 'string') return '';
+  const delimiter = /<br\s*\/?>/i.test(text) ? '<br/>' : '\n';
+  const normalized = text.replace(/<br\s*\/?>/gi, '\n');
+  const lines = normalized.split(/\r?\n|•/);
+
+  const transformed = lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+
+    // Check if already markdown checklist
+    if (/^[-*]?\s*\[([ xX])\]/.test(trimmed)) {
+      return trimmed.startsWith('-') ? trimmed : `- ${trimmed}`;
+    }
+
+    const legacyDone = trimmed.match(/^[-*•]?\s*(.+?)\s*\*\*\(?(Done|Closed|Close|Finish|Selesai|CL)\)?\*\*\s*$/i);
+    if (legacyDone) {
+      const itemTitle = legacyDone[1].replace(/^[-*•]\s*/, '').trim();
+      return `- [x] ${itemTitle}`;
+    }
+
+    const legacyOpen = trimmed.match(/^[-*•]?\s*(.+?)\s*\*\*\(?(Open|OP|Belum|In Progress|Pending)\)?\*\*\s*$/i);
+    if (legacyOpen) {
+      const itemTitle = legacyOpen[1].replace(/^[-*•]\s*/, '').trim();
+      return `- [ ] ${itemTitle}`;
+    }
+
+    return trimmed;
+  });
+
+  return transformed.join(delimiter);
 }
 
 /**

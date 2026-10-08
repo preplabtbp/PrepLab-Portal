@@ -548,7 +548,7 @@ router.delete("/api/bulletin/comments/:commentId", async (req, res) => {
     }
   });
 
-async function syncBulletinToLogbook(post: any) {
+export async function syncBulletinToLogbook(post: any) {
   try {
     if (!post || !post.id || !post.content || typeof post.content !== 'string') return;
     const { parseMarkdownTableRows } = await import("./logbook.js");
@@ -593,11 +593,21 @@ async function syncBulletinToLogbook(post: any) {
     const findEmployee = (query: string) => {
       if (!query || query.trim() === '' || query.trim() === '-') return null;
       const q = query.trim().toLowerCase();
-      return allEmployees.find(e => 
-        (e.nik && e.nik.toLowerCase() === q) || 
-        (e.name && e.name.toLowerCase() === q) ||
-        (e.name && e.name.toLowerCase().includes(q))
-      );
+      // Priority 1: Exact NIK match
+      const byNik = allEmployees.find(e => e.nik && e.nik.toLowerCase() === q);
+      if (byNik) return byNik;
+      // Priority 2: Exact full name match
+      const byExact = allEmployees.find(e => e.name && e.name.toLowerCase() === q);
+      if (byExact) return byExact;
+      // Priority 3: Word boundary / startsWith match
+      if (q.length >= 3) {
+        return allEmployees.find(e => {
+          const name = (e.name || '').toLowerCase();
+          const words = name.split(/\s+/);
+          return words.includes(q) || name.startsWith(q);
+        });
+      }
+      return null;
     };
 
     // Cutoff: Hanya sinkronisasikan data di labnote yang dibuat sejak fitur log book dibuat (2026-09-25)
@@ -655,6 +665,14 @@ async function syncBulletinToLogbook(post: any) {
         continue;
       }
 
+      // Normalize legacy subtask tags in rowDesc to canonical markdown checkboxes
+      let cleanDesc = rowDesc;
+      if (cleanDesc && (cleanDesc.includes('**(Done)**') || cleanDesc.includes('**(OPEN)**') || cleanDesc.includes('**(Closed)**') || cleanDesc.includes('**(OP)**'))) {
+        cleanDesc = cleanDesc
+          .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Done|Closed|Close|Finish|Selesai|CL)\)?\*\*\s*$/gim, '- [x] $1')
+          .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Open|OP|Belum|In Progress|Pending)\)?\*\*\s*$/gim, '- [ ] $1');
+      }
+
       // Determine effective cadence - ALWAYS prioritize Non-Routine if specified
       let effectiveCadence = defaultCadence;
       const combinedAct = `${rowActivity} ${rowPeriod}`.toLowerCase();
@@ -677,12 +695,12 @@ async function syncBulletinToLogbook(post: any) {
       // Determine effective section
       let rowSection = post.department || 'General';
       const katLower = rowKategori.toLowerCase().trim();
-      if (katLower.includes('prep') || katLower.includes('preparasi')) {
+      if (katLower.includes('qa') || katLower.includes('quality') || katLower.includes('mutu') || postTitle.includes('mutu') || postTitle.includes('qa') || postTitle.includes('quality')) {
+        rowSection = 'Quality Assurance';
+      } else if (katLower.includes('prep') || katLower.includes('preparasi')) {
         rowSection = 'Preparation';
       } else if (katLower.includes('lab')) {
         rowSection = 'Laboratory';
-      } else if (katLower.includes('qa') || katLower.includes('quality')) {
-        rowSection = 'Quality Assurance';
       } else if (katLower.includes('maint')) {
         rowSection = 'Maintenance';
       } else if (rowSection === 'Prep & Lab') {
@@ -692,7 +710,7 @@ async function syncBulletinToLogbook(post: any) {
 
       const matchedEmp = findEmployee(rowPic);
       const targetAssigneeNik = matchedEmp ? matchedEmp.nik : (rowPic && rowPic !== '-' ? rowPic : 'ALL');
-      const targetAssigneeName = matchedEmp ? matchedEmp.name : (rowPic && rowPic !== '-' ? rowPic : 'Personil');
+      const targetAssigneeName = rowPic && rowPic !== '-' ? rowPic : (matchedEmp ? matchedEmp.name : 'Personil');
 
       const existingTask = linkedTasks.find(t => {
         const taskTopic = (t.bulletinTopicTitle || t.title || '').toLowerCase().trim();
@@ -703,8 +721,8 @@ async function syncBulletinToLogbook(post: any) {
       if (existingTask) {
         // Update existing task
         const updatePayload: any = {};
-        if (rowDesc && rowDesc !== '-' && rowDesc !== existingTask.description) {
-          updatePayload.description = rowDesc;
+        if (cleanDesc && cleanDesc !== '-' && cleanDesc !== existingTask.description) {
+          updatePayload.description = cleanDesc;
         }
         if (rowStatus && rowStatus !== existingTask.status) {
           updatePayload.status = rowStatus;
@@ -718,8 +736,13 @@ async function syncBulletinToLogbook(post: any) {
         if (rowSection && rowSection !== 'Prep & Lab' && existingTask.section !== rowSection) {
           updatePayload.section = rowSection;
         }
-        if (effectiveCadence === 'Non Routine' && !existingTask.plannedDate) {
-          updatePayload.plannedDate = todayStr;
+        if (effectiveCadence === 'Non Routine') {
+          if (!existingTask.plannedDate) {
+            updatePayload.plannedDate = todayStr;
+          }
+          if (!existingTask.taskDate) {
+            updatePayload.taskDate = todayStr;
+          }
         }
         if (rowPic && rowPic !== '-' && (existingTask.assigneeName !== targetAssigneeName || existingTask.assigneeNik !== targetAssigneeNik)) {
           updatePayload.assigneeName = targetAssigneeName;
