@@ -404,6 +404,7 @@ export function isGtsEmployee(emp: any): boolean {
 
 employeesRouter.get("/hierarchy/:nik", async (req, res) => {
   try {
+    const { nik } = req.params;
     const cleanNik = (nik || "").trim().toUpperCase();
 
     // Meeting Room, Admin, Super Admin virtual account checks (full access to search all employees)

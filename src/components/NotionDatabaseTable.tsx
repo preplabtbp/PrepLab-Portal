@@ -65,6 +65,7 @@ import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
+import { PicAvatarGroup } from './PicAvatarGroup';
 import {
   normalizeCadence,
   isPeriodicCadence,
@@ -3045,25 +3046,14 @@ export function NotionDatabaseTable({
   };
 
   // Helper for PIC Avatar Badge
-  // Helper for PIC Avatar Badge
-  const renderPicBadge = (picStr: string) => {
+  const renderPicBadge = (picStr: string, size: 'xs' | 'sm' | 'md' = 'sm') => {
     if (!picStr || picStr === '-') return <span className="font-mono text-xs text-slate-400">-</span>;
-    const initial = picStr.charAt(0).toUpperCase();
     return (
-      <div 
-        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs ${
-          isNotionLight
-            ? 'bg-slate-50 border-slate-300 text-slate-950 font-bold shadow-2xs'
-            : 'bg-[#1e293b] border-slate-700 text-slate-200 font-semibold'
-        }`}
-      >
-        <span className={`w-4 h-4 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 ${
-          isNotionLight ? 'bg-slate-200 text-slate-900' : 'bg-teal-800 text-teal-200'
-        }`}>
-          {initial}
-        </span>
-        <span className="truncate max-w-[120px]">{picStr}</span>
-      </div>
+      <PicAvatarGroup
+        pics={picStr}
+        employeesList={employeesList}
+        size={size}
+      />
     );
   };
 
@@ -3153,7 +3143,7 @@ export function NotionDatabaseTable({
 
   return (
     <div 
-      className={`w-full my-0 mb-4 border-b transition-all ${
+      className={`w-full my-0 mb-0 border-b transition-all ${
         isNotionLight 
           ? 'bg-white border-slate-200 text-slate-900' 
           : 'bg-[#181818] border-[#2d2d2d] text-slate-200'
@@ -3163,7 +3153,7 @@ export function NotionDatabaseTable({
       {/* NOTION TOP CONTROLS & HEADER GROUP (Breadcrumbs, Toolbar, Filter)         */}
       {/* ========================================================================= */}
       <div 
-        className={`sticky top-0 z-30 transition-all border-b shadow-md backdrop-blur-md ${
+        className={`sticky top-0 md:top-12 z-30 transition-all border-b shadow-md backdrop-blur-md ${
           isNotionLight ? 'bg-white/98 border-slate-200' : 'bg-[#181818]/98 border-[#2d2d2d]'
         }`}
       >
