@@ -2135,6 +2135,71 @@ export function NotionDatabaseTable({
     toast.success(`Sub-kegiatan "${cleanTitle}" berhasil ditambahkan`);
   };
 
+  // Migrate existing checklists in Keterangan to hierarchical sub-items
+  const handleMigrateChecklistsToSubItems = () => {
+    let migratedCount = 0;
+    const newRows: TableRowData[] = [];
+
+    for (let i = 0; i < localRows.length; i++) {
+      const row = { ...localRows[i] };
+      const isSub = isSubItemRow(row);
+
+      if (isSub) {
+        newRows.push(row);
+        continue;
+      }
+
+      const ketVal = getRowVal(row, 'Keterangan') || '';
+      const taskProg = parseTasklist(ketVal);
+
+      if (taskProg.hasTasklist && taskProg.items.length > 0) {
+        // Strip tasklist lines from parent row's Keterangan, keep non-checklist text
+        row['Keterangan'] = taskProg.cleanText || '';
+        newRows.push(row);
+
+        const parentIndex = newRows.length - 1;
+        const parentCat = getRowVal(row, 'Kategori') || section || 'Laboratorium';
+        const parentPIC = getRowVal(row, 'PIC') || '';
+        const parentAct = getRowVal(row, 'Activity (routine/non routine)') || 'Monthly';
+        const parentPeriod = getRowVal(row, 'period') || 'Monthly';
+        const now = new Date();
+        const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+        // Create a sub-item row for each checklist item
+        taskProg.items.forEach(item => {
+          const subTitle = `↳ ${item.checked ? '[x] ' : '[ ] '}${item.text}`;
+          const subRow: TableRowData = {
+            number: '',
+            'Jenis kegiatan': subTitle,
+            'Jenis Kegiatan': subTitle,
+            Keterangan: item.note || '',
+            PIC: parentPIC,
+            Priority: 'Normal',
+            Status: item.checked ? 'Closed' : 'Open',
+            'Created Time': createdStr,
+            Kategori: parentCat,
+            'Activity (routine/non routine)': parentAct,
+            period: parentPeriod,
+            isSubItem: 'true',
+            parentId: String(parentIndex)
+          };
+          newRows.push(subRow);
+          migratedCount++;
+        });
+      } else {
+        newRows.push(row);
+      }
+    }
+
+    if (migratedCount > 0) {
+      setLocalRows(newRows);
+      saveTableToBackend(newRows);
+      toast.success(`Berhasil memindahkan ${migratedCount} subtask ke model baris sub-kegiatan baru!`);
+    } else {
+      toast.info('Tidak ada checklist di dalam Keterangan yang perlu dipindahkan.');
+    }
+  };
+
   // Toggle Checklist Sub-Item Completed Status
   const handleToggleSubItemCompleted = (subRowIndex: number, currentCompleted: boolean) => {
     const nextCompleted = !currentCompleted;
@@ -2511,8 +2576,9 @@ export function NotionDatabaseTable({
   const handlePostComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submittingComment || isSubmittingCommentRef.current) return;
-    const finalContent = commentText.trim() || (commentFileCaption.trim() ? `📎 ${selectedFile?.name}\n\n${commentFileCaption.trim()}` : (selectedFile ? `📎 Lampiran: ${selectedFile.name}` : ''));
-    if (!finalContent && !selectedFile) return;
+    const hasFiles = selectedFiles.length > 0 || selectedFile !== null;
+    const finalContent = commentText.trim() || (commentFileCaption.trim() ? `📎 ${selectedFile?.name || 'Lampiran'}\n\n${commentFileCaption.trim()}` : (hasFiles ? `📎 Lampiran` : ''));
+    if (!finalContent && !hasFiles) return;
     if (!postId || !selectedRow) return;
 
     const topicTitleVal = selectedTopicTitle || 'Topik';
@@ -2522,13 +2588,23 @@ export function NotionDatabaseTable({
     try {
       isSubmittingCommentRef.current = true;
       setSubmittingComment(true);
-      const fileUrlPayload = selectedFile ? JSON.stringify([{
-        url: selectedFile.url,
-        name: selectedFile.name,
-        caption: commentFileCaption.trim(),
-        directUrl: selectedFile.url,
-        isImage: selectedFile.isImage
-      }]) : null;
+      const allFilesPayload = selectedFiles.length > 0
+        ? selectedFiles.map((f, idx) => ({
+            url: f.url,
+            name: f.name,
+            caption: idx === 0 ? commentFileCaption.trim() : (f.caption || ''),
+            directUrl: f.url,
+            isImage: f.isImage
+          }))
+        : selectedFile ? [{
+            url: selectedFile.url,
+            name: selectedFile.name,
+            caption: commentFileCaption.trim(),
+            directUrl: selectedFile.url,
+            isImage: selectedFile.isImage
+          }] : null;
+
+      const fileUrlPayload = allFilesPayload ? JSON.stringify(allFilesPayload) : null;
 
       const res = await fetch(`/api/bulletin/${postId}/comments`, {
         method: 'POST',
@@ -2546,7 +2622,7 @@ export function NotionDatabaseTable({
           picNik: picVal || null,
           pt: pt || 'TBP',
           fileUrl: fileUrlPayload,
-          fileName: selectedFile?.name || null,
+          fileName: selectedFiles[0]?.name || selectedFile?.name || null,
           replyToId: replyingTo?.id || null,
           replyToNik: replyingTo?.authorNik || null,
           replyToName: replyingTo?.authorName || null,
@@ -2564,6 +2640,7 @@ export function NotionDatabaseTable({
         setCommentText('');
         setStatusUpdateChoice('');
         setSelectedFile(null);
+        setSelectedFiles([]);
         setCommentFileCaption('');
         setReplyingTo(null);
         
@@ -2592,16 +2669,23 @@ export function NotionDatabaseTable({
 
   // Upload file inside discussion comment box with caption
   const handleCommentFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const rawFiles = e.target.files ? Array.from(e.target.files) : [];
+    if (rawFiles.length === 0) return;
 
     setIsUploadingCommentFile(true);
-    toast.loading('Mengompres dan mengunggah lampiran...', { id: 'upload-comment-file' });
+    toast.loading(`Mengompres dan mengunggah ${rawFiles.length} lampiran...`, { id: 'upload-comment-file' });
 
     try {
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const base64Raw = ev.target?.result as string;
+      const uploadedItems: Array<{ name: string; url: string; previewUrl?: string; isImage?: boolean }> = [];
+
+      for (const file of rawFiles) {
+        const reader = new FileReader();
+        const base64Raw = await new Promise<string>((resolve, reject) => {
+          reader.onload = (ev) => resolve(ev.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
         let finalBase64 = base64Raw;
         const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
 
@@ -2655,20 +2739,53 @@ export function NotionDatabaseTable({
           }
         } catch (uErr) {}
 
-        setSelectedFile({
+        uploadedItems.push({
           name: file.name,
           url: uploadedUrl,
           previewUrl: isImg ? finalBase64 : undefined,
           isImage: isImg
         });
-        toast.success('Lampiran berhasil diunggah! Anda dapat menambahkan caption di bawah.', { id: 'upload-comment-file' });
-      };
-      reader.readAsDataURL(file);
+      }
+
+      setSelectedFiles(prev => [...prev, ...uploadedItems]);
+      if (uploadedItems.length > 0) {
+        setSelectedFile(uploadedItems[0]);
+      }
+      toast.success(`${uploadedItems.length} lampiran berhasil diunggah!`, { id: 'upload-comment-file' });
     } catch (err) {
       toast.error('Gagal mengunggah file', { id: 'upload-comment-file' });
     } finally {
       setIsUploadingCommentFile(false);
       if (e.target) e.target.value = '';
+    }
+  };
+
+  // Edit comment
+  const handleSaveEditComment = async (commentId: number) => {
+    if (!editingCommentContent.trim()) {
+      toast.error('Konten komentar tidak boleh kosong');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/bulletin/comments/${commentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          authorNik: currentAuthorNik,
+          content: editingCommentContent.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        toast.success('Komentar berhasil diperbarui');
+        setEditingCommentId(null);
+        setEditingCommentContent('');
+        await fetchComments();
+      } else {
+        toast.error(data.message || 'Gagal memperbarui komentar');
+      }
+    } catch (e) {
+      toast.error('Gagal memperbarui komentar');
     }
   };
 
@@ -3359,6 +3476,19 @@ export function NotionDatabaseTable({
           >
             <Download className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Export</span>
+          </button>
+
+          <button
+            onClick={handleMigrateChecklistsToSubItems}
+            className={`p-1.5 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer ${
+              isNotionLight
+                ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900'
+                : 'bg-amber-950/40 hover:bg-amber-900/60 border-amber-700/60 text-amber-200'
+            }`}
+            title="Pindahkan checklist di Keterangan ke model sub-kegiatan baru"
+          >
+            <CornerDownRight className="w-3.5 h-3.5 text-amber-600" />
+            <span className="hidden md:inline">Migrasi Subtask</span>
           </button>
         </div>
       </div>
@@ -6679,21 +6809,65 @@ export function NotionDatabaseTable({
                                         <span>Balas</span>
                                       </button>
                                       {c.authorNik === currentAuthorNik && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteComment(c.id)}
-                                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
-                                          title="Hapus komentar ini"
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                        </button>
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingCommentId(c.id);
+                                              setEditingCommentContent(c.content);
+                                            }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-500 transition-opacity cursor-pointer"
+                                            title="Edit komentar ini"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteComment(c.id)}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
+                                            title="Hapus komentar ini"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        </>
                                       )}
                                     </div>
                                   </div>
 
-                                  <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
-                                    {c.content}
-                                  </p>
+                                  {editingCommentId === c.id ? (
+                                      <div className="space-y-2 mt-1">
+                                        <textarea
+                                          value={editingCommentContent}
+                                          onChange={(e) => setEditingCommentContent(e.target.value)}
+                                          className="w-full text-xs p-2 rounded-lg border focus:ring-1 focus:ring-sky-500 outline-none leading-relaxed min-h-[60px]"
+                                          style={{
+                                            backgroundColor: 'var(--input-bg, #1a1a1a)',
+                                            borderColor: 'var(--border-main, #334155)',
+                                            color: 'var(--text-main, #f1f5f9)'
+                                          }}
+                                        />
+                                        <div className="flex items-center gap-2 justify-end">
+                                          <button
+                                            type="button"
+                                            onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
+                                            className="px-2 py-1 text-xs rounded border border-slate-600 text-slate-300 hover:bg-slate-700 cursor-pointer"
+                                          >
+                                            Batal
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSaveEditComment(c.id)}
+                                            className="px-2.5 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
+                                          >
+                                            Simpan
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
+                                        {c.content}
+                                      </p>
+                                    )}
 
                                   {atts.length > 0 && (
                                     <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
@@ -6753,6 +6927,18 @@ export function NotionDatabaseTable({
                                           <span>Balas</span>
                                         </button>
                                         {c.authorNik === currentAuthorNik && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingCommentId(c.id);
+                                              setEditingCommentContent(c.content);
+                                            }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-500 transition-opacity cursor-pointer"
+                                            title="Edit komentar ini"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
                                           <button
                                             type="button"
                                             onClick={() => handleDeleteComment(c.id)}
@@ -6761,13 +6947,45 @@ export function NotionDatabaseTable({
                                           >
                                             <Trash2 className="w-3 h-3" />
                                           </button>
-                                        )}
+                                        </>
+                                      )}
                                       </div>
                                     </div>
 
-                                    <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
-                                      {c.content}
-                                    </p>
+                                    {editingCommentId === c.id ? (
+                                      <div className="space-y-2 mt-1">
+                                        <textarea
+                                          value={editingCommentContent}
+                                          onChange={(e) => setEditingCommentContent(e.target.value)}
+                                          className="w-full text-xs p-2 rounded-lg border focus:ring-1 focus:ring-sky-500 outline-none leading-relaxed min-h-[60px]"
+                                          style={{
+                                            backgroundColor: 'var(--input-bg, #1a1a1a)',
+                                            borderColor: 'var(--border-main, #334155)',
+                                            color: 'var(--text-main, #f1f5f9)'
+                                          }}
+                                        />
+                                        <div className="flex items-center gap-2 justify-end">
+                                          <button
+                                            type="button"
+                                            onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
+                                            className="px-2 py-1 text-xs rounded border border-slate-600 text-slate-300 hover:bg-slate-700 cursor-pointer"
+                                          >
+                                            Batal
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSaveEditComment(c.id)}
+                                            className="px-2.5 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
+                                          >
+                                            Simpan
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
+                                        {c.content}
+                                      </p>
+                                    )}
 
                                     {atts.length > 0 && (
                                       <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
@@ -6858,21 +7076,65 @@ export function NotionDatabaseTable({
                                                 <span>Balas</span>
                                               </button>
                                               {c.authorNik === currentAuthorNik && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleDeleteComment(c.id)}
-                                                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
-                                                  title="Hapus komentar ini"
-                                                >
-                                                  <Trash2 className="w-3 h-3" />
-                                                </button>
-                                              )}
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingCommentId(c.id);
+                                              setEditingCommentContent(c.content);
+                                            }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-500 transition-opacity cursor-pointer"
+                                            title="Edit komentar ini"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteComment(c.id)}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
+                                            title="Hapus komentar ini"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        </>
+                                      )}
                                             </div>
                                           </div>
 
-                                          <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
-                                            {c.content}
-                                          </p>
+                                          {editingCommentId === c.id ? (
+                                      <div className="space-y-2 mt-1">
+                                        <textarea
+                                          value={editingCommentContent}
+                                          onChange={(e) => setEditingCommentContent(e.target.value)}
+                                          className="w-full text-xs p-2 rounded-lg border focus:ring-1 focus:ring-sky-500 outline-none leading-relaxed min-h-[60px]"
+                                          style={{
+                                            backgroundColor: 'var(--input-bg, #1a1a1a)',
+                                            borderColor: 'var(--border-main, #334155)',
+                                            color: 'var(--text-main, #f1f5f9)'
+                                          }}
+                                        />
+                                        <div className="flex items-center gap-2 justify-end">
+                                          <button
+                                            type="button"
+                                            onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
+                                            className="px-2 py-1 text-xs rounded border border-slate-600 text-slate-300 hover:bg-slate-700 cursor-pointer"
+                                          >
+                                            Batal
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSaveEditComment(c.id)}
+                                            className="px-2.5 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
+                                          >
+                                            Simpan
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
+                                        {c.content}
+                                      </p>
+                                    )}
 
                                           {atts.length > 0 && (
                                             <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
@@ -6934,6 +7196,18 @@ export function NotionDatabaseTable({
                                           <span>Balas</span>
                                         </button>
                                         {c.authorNik === currentAuthorNik && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingCommentId(c.id);
+                                              setEditingCommentContent(c.content);
+                                            }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-500 transition-opacity cursor-pointer"
+                                            title="Edit komentar ini"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
                                           <button
                                             type="button"
                                             onClick={() => handleDeleteComment(c.id)}
@@ -6942,13 +7216,45 @@ export function NotionDatabaseTable({
                                           >
                                             <Trash2 className="w-3 h-3" />
                                           </button>
-                                        )}
+                                        </>
+                                      )}
                                       </div>
                                     </div>
 
-                                    <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
-                                      {c.content}
-                                    </p>
+                                    {editingCommentId === c.id ? (
+                                      <div className="space-y-2 mt-1">
+                                        <textarea
+                                          value={editingCommentContent}
+                                          onChange={(e) => setEditingCommentContent(e.target.value)}
+                                          className="w-full text-xs p-2 rounded-lg border focus:ring-1 focus:ring-sky-500 outline-none leading-relaxed min-h-[60px]"
+                                          style={{
+                                            backgroundColor: 'var(--input-bg, #1a1a1a)',
+                                            borderColor: 'var(--border-main, #334155)',
+                                            color: 'var(--text-main, #f1f5f9)'
+                                          }}
+                                        />
+                                        <div className="flex items-center gap-2 justify-end">
+                                          <button
+                                            type="button"
+                                            onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
+                                            className="px-2 py-1 text-xs rounded border border-slate-600 text-slate-300 hover:bg-slate-700 cursor-pointer"
+                                          >
+                                            Batal
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSaveEditComment(c.id)}
+                                            className="px-2.5 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
+                                          >
+                                            Simpan
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
+                                        {c.content}
+                                      </p>
+                                    )}
 
                                     {atts.length > 0 && (
                                       <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
@@ -6998,37 +7304,53 @@ export function NotionDatabaseTable({
                         )}
 
                         {/* Selected Attachment Preview with Caption */}
-                        {selectedFile && (
+                        {(selectedFiles.length > 0 || selectedFile) && (
                           <div 
-                            className="p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center gap-2.5 animate-in fade-in shadow-xs"
+                            className="p-2.5 rounded-xl border space-y-2 animate-in fade-in shadow-xs"
                             style={{
                               backgroundColor: 'var(--input-bg, #1a1a1a)',
                               borderColor: 'rgba(20, 184, 166, 0.45)'
                             }}
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              {selectedFile.isImage && (selectedFile.previewUrl || selectedFile.url) ? (
-                                <img 
-                                  src={selectedFile.previewUrl || selectedFile.url} 
-                                  alt={selectedFile.name} 
-                                  className="w-11 h-11 object-cover rounded-lg border border-teal-500/40 shrink-0 shadow-2xs" 
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-lg bg-teal-950/80 border border-teal-700/50 flex items-center justify-center text-teal-400 shrink-0">
-                                  <Paperclip className="w-4 h-4" />
-                                </div>
-                              )}
-                              <div className="min-w-0 flex-1">
-                                <span className="text-xs font-semibold text-teal-300 block truncate max-w-[160px]" title={selectedFile.name}>{selectedFile.name}</span>
-                                <span className="text-[10px] text-teal-400/80 font-medium">Lampiran siap dikirim</span>
-                              </div>
+                            <div className="flex items-center justify-between text-xs font-semibold text-teal-400">
+                              <span>Lampiran ({selectedFiles.length || 1} file siap dikirim):</span>
+                              <button
+                                type="button"
+                                onClick={() => { setSelectedFiles([]); setSelectedFile(null); setCommentFileCaption(''); }}
+                                className="text-[11px] text-rose-400 hover:underline cursor-pointer"
+                              >
+                                Hapus Semua
+                              </button>
                             </div>
-                            <div className="flex-1 flex items-center gap-1.5">
+                            <div className="flex flex-wrap gap-2">
+                              {(selectedFiles.length > 0 ? selectedFiles : (selectedFile ? [selectedFile] : [])).map((f, fIdx) => (
+                                <div key={fIdx} className="relative flex items-center gap-2 p-1.5 pr-2.5 rounded-lg bg-teal-950/40 border border-teal-500/30">
+                                  {f.isImage && (f.previewUrl || f.url) ? (
+                                    <img src={f.previewUrl || f.url} alt={f.name} className="w-8 h-8 object-cover rounded border border-teal-500/40 shrink-0" />
+                                  ) : (
+                                    <Paperclip className="w-4 h-4 text-teal-400 shrink-0" />
+                                  )}
+                                  <span className="text-[11px] font-medium text-teal-200 truncate max-w-[120px]" title={f.name}>{f.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = selectedFiles.filter((_, idx) => idx !== fIdx);
+                                      setSelectedFiles(updated);
+                                      if (updated.length === 0) setSelectedFile(null);
+                                    }}
+                                    className="p-0.5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded cursor-pointer"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex items-center gap-1.5 pt-1">
                               <input
                                 type="text"
                                 value={commentFileCaption}
                                 onChange={(e) => setCommentFileCaption(e.target.value)}
-                                placeholder="Tambahkan caption gambar (opsional)..."
+                                placeholder="Tambahkan caption gambar/lampiran (opsional)..."
                                 className="w-full text-xs px-2.5 py-1.5 rounded-lg border focus:border-teal-500 outline-none leading-relaxed"
                                 style={{
                                   backgroundColor: 'var(--card-bg, #141414)',
@@ -7036,14 +7358,6 @@ export function NotionDatabaseTable({
                                   color: 'var(--text-main, #f1f5f9)'
                                 }}
                               />
-                              <button
-                                type="button"
-                                onClick={() => { setSelectedFile(null); setCommentFileCaption(''); }}
-                                className="p-1.5 hover:bg-slate-700/50 rounded-lg text-slate-400 hover:text-rose-400 transition-colors shrink-0 cursor-pointer"
-                                title="Hapus Lampiran"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
                             </div>
                           </div>
                         )}
@@ -7075,6 +7389,7 @@ export function NotionDatabaseTable({
                               ref={commentFileInputRef}
                               onChange={handleCommentFileSelect}
                               accept="image/*,.pdf,.doc,.docx"
+                              multiple
                               className="hidden"
                             />
                             <button

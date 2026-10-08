@@ -1169,12 +1169,28 @@ export function LogbookScreen({
   const [resizingCol, setResizingCol] = useState<string | null>(null);
   const resizeInfoRef = useRef<{ colHeader: string; startX: number; startWidth: number } | null>(null);
 
-  const handleResizeStart = (e: React.MouseEvent | React.TouchEvent, colHeader: string, currentDomWidth: number) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleResizeStart = (
+    colHeaderOrEvent: string | React.MouseEvent | React.TouchEvent,
+    eventOrColHeader?: string | React.MouseEvent | React.TouchEvent,
+    currentDomWidth?: number
+  ) => {
+    let e: React.MouseEvent | React.TouchEvent;
+    let colHeader: string;
+    if (typeof colHeaderOrEvent === 'string') {
+      colHeader = colHeaderOrEvent;
+      e = eventOrColHeader as React.MouseEvent | React.TouchEvent;
+    } else {
+      e = colHeaderOrEvent as React.MouseEvent | React.TouchEvent;
+      colHeader = eventOrColHeader as string;
+    }
+    if (e && e.preventDefault) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
 
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const initialWidth = columnWidths[colHeader] || currentDomWidth || 180;
+    const clientX = e && 'touches' in e ? e.touches[0].clientX : (e && 'clientX' in e ? (e as React.MouseEvent).clientX : 0);
+    const parentW = (e?.currentTarget as HTMLElement)?.parentElement?.getBoundingClientRect().width;
+    const initialWidth = columnWidths[colHeader] || currentDomWidth || parentW || 180;
     resizeInfoRef.current = { colHeader, startX: clientX, startWidth: initialWidth };
     setResizingCol(colHeader);
     document.body.style.cursor = 'col-resize';
@@ -4056,13 +4072,14 @@ export function LogbookScreen({
                       : 'bg-[#242424] border-[#303030] text-slate-400'
                   }`}
                 >
-                  <th className={`text-center ${fitPageMode ? 'w-[3%] px-1 py-2.5' : 'w-10 px-2 py-3'}`}>
+                  <th className={`text-center ${fitPageMode ? 'w-[3%] px-1 py-2.5' : 'w-10 px-2 py-3'}`} style={getColStyle('drag')}>
                     <GripVertical className="w-3.5 h-3.5 text-slate-400 mx-auto" />
                   </th>
 
                   <th 
                     onClick={() => handleSort('date')}
-                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('number')}
+                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[4%] text-center px-1 py-2.5' : 'w-14 text-center px-2 py-3'
                     }`}
                   >
@@ -4070,11 +4087,17 @@ export function LogbookScreen({
                       <span>#</span>
                       {sortColumn === 'date' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('number', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
                   <th 
                     onClick={() => handleSort('title')}
-                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('title')}
+                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[28%] px-2.5 py-2.5' : 'min-w-[280px] px-3.5 py-3'
                     }`}
                   >
@@ -4083,11 +4106,17 @@ export function LogbookScreen({
                       <span>Kegiatan / Arahan Tugas</span>
                       {sortColumn === 'title' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('title', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
                   <th 
                     onClick={() => handleSort('cadence')}
-                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('cadence')}
+                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[120px] px-3 py-3'
                     }`}
                   >
@@ -4096,11 +4125,17 @@ export function LogbookScreen({
                       <span>Frekuensi</span>
                       {sortColumn === 'cadence' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('cadence', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
                   <th 
                     onClick={() => handleSort('status')}
-                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('status')}
+                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[12%] px-1.5 py-2.5' : 'min-w-[140px] px-3 py-3'
                     }`}
                   >
@@ -4109,11 +4144,17 @@ export function LogbookScreen({
                       <span>Status</span>
                       {sortColumn === 'status' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('status', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
                   <th 
                     onClick={() => handleSort('priority')}
-                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('priority')}
+                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[9%] px-1.5 py-2.5' : 'min-w-[110px] px-3 py-3'
                     }`}
                   >
@@ -4122,11 +4163,17 @@ export function LogbookScreen({
                       <span>Prioritas</span>
                       {sortColumn === 'priority' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('priority', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
                   <th 
                     onClick={() => handleSort('pic')}
-                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('pic')}
+                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[13%] px-2 py-2.5' : 'min-w-[150px] px-3 py-3'
                     }`}
                   >
@@ -4135,18 +4182,32 @@ export function LogbookScreen({
                       <span>PIC Pelaksana</span>
                       {sortColumn === 'pic' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('pic', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
-                  <th className={`font-bold ${fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[130px] px-3 py-3'}`}>
+                  <th 
+                    style={getColStyle('duration')}
+                    className={`relative group/th font-bold select-none ${fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[130px] px-3 py-3'}`}
+                  >
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-slate-400" />
                       <span>Mulai & Durasi</span>
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('duration', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
                   <th 
                     onClick={() => handleSort('progress')}
-                    className={`font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('progress')}
+                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[9%] px-1.5 py-2.5' : 'min-w-[120px] px-3 py-3'
                     }`}
                   >
@@ -4155,10 +4216,23 @@ export function LogbookScreen({
                       <span>Progress</span>
                       {sortColumn === 'progress' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('progress', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
-                  <th className={`text-center font-bold ${fitPageMode ? 'w-[8%] px-1 py-2.5' : 'w-24 px-3 py-3'}`}>
+                  <th 
+                    style={getColStyle('actions')}
+                    className={`relative group/th text-center font-bold select-none ${fitPageMode ? 'w-[8%] px-1 py-2.5' : 'w-24 px-3 py-3'}`}
+                  >
                     Aksi
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('actions', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
                 </tr>
               </thead>
