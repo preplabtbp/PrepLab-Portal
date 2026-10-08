@@ -381,6 +381,27 @@ employeesRouter.get("/", async (req, res) => {
   }
 });
 
+export function isSectionManagerOrAdmin(emp: any): boolean {
+  if (!emp) return false;
+  const jab = (emp.jabatan || '').toLowerCase();
+  const sec = (emp.section || '').toLowerCase();
+  const dept = (emp.department || '').toLowerCase();
+  const nik = (emp.nik || '').toUpperCase();
+  const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
+  if (HARDCODED_DEVS.includes(nik) || emp.isAdmin || emp.isDeveloper) return true;
+  if (jab.includes('section manager') || jab.includes('manager') || jab.includes('superintendent') || jab.includes('head') || jab.includes('spt')) return true;
+  if (sec.includes('administrasi') || dept.includes('administrasi') || sec.includes('qa') || dept.includes('qa') || sec.includes('quality assurance') || dept.includes('quality assurance') || jab.includes('admin')) return true;
+  return false;
+}
+
+export function isGtsEmployee(emp: any): boolean {
+  if (!emp) return false;
+  const ptStr = (emp.pt || '').toString().trim().toUpperCase();
+  const nikStr = (emp.nik || '').toString().trim().toUpperCase();
+  const secStr = (emp.section || '').toString().trim().toUpperCase();
+  return ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03') || secStr.includes('GTS');
+}
+
 employeesRouter.get("/hierarchy/:nik", async (req, res) => {
   try {
     const cleanNik = (nik || "").trim().toUpperCase();
@@ -423,10 +444,11 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     const attMap = await getAttendanceMap();
     const counselMap = await getCounselingMap();
     
-    // Check if user is Admin, Administrasi or QA (Admin can see all)
-    if (sectionLower.includes("administrasi") || deptLower.includes("administrasi") || 
-        sectionLower.includes("qa") || deptLower.includes("qa") || sectionLower.includes("quality assurance") || deptLower.includes("quality assurance") ||
-        jabatanLower.includes("admin")) {
+    const isUserMgr = isSectionManagerOrAdmin(user);
+    const isUserGts = isGtsEmployee(user);
+
+    // Section Manager / Admin / QA dapat mengakses seluruh karyawan (TBP & GTS)
+    if (isUserMgr) {
       const allData = await db.select().from(employees);
       const formatted = allData.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
       cachedHierarchy.set(nik, { data: formatted, timestamp: now });
@@ -435,24 +457,26 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     
     // Determine subordinates based on Jabatan
     let allowedJabatans: string[] = [];
-    if (jabatanLower.includes("manager") || jabatanLower.includes("superintendent")) {
-      allowedJabatans = ["supervisor", "foreman", "crew", "operator", "staff", "analyst", "technician", "admin"];
-    } else if (jabatanLower.includes("supervisor")) {
+    if (jabatanLower.includes("supervisor")) {
       allowedJabatans = ["foreman", "crew", "operator", "staff", "analyst", "technician", "admin"];
     } else if (jabatanLower.includes("foreman")) {
       allowedJabatans = ["crew", "operator", "staff", "analyst", "technician", "admin"];
     }
     
     if (allowedJabatans.length === 0) {
-      // Crew or someone with no subordinates
+      // Crew or someone with no subordinates (only see own profile)
       const formatted = [attachAttendanceToEmployee(user, attMap, counselMap)];
       cachedHierarchy.set(nik, { data: formatted, timestamp: now });
       return res.json({ status: "success", data: formatted });
     }
     
-    // Fetch all employees
+    // Fetch all employees and strictly enforce company universe (GTS only for GTS, TBP only for TBP)
     const allEmployees = await db.select().from(employees);
     const subordinates = allEmployees.filter(e => {
+      const eIsGts = isGtsEmployee(e);
+      if (isUserGts && !eIsGts) return false; // Karyawan GTS hanya bisa akses data GTS
+      if (!isUserGts && eIsGts) return false; // Karyawan TBP hanya bisa akses data TBP
+
       const eSection = (e.section || "").toLowerCase();
       const eDept = (e.department || "").toLowerCase();
       const isSameDept = (deptLower && eDept === deptLower) || (sectionLower && eSection === sectionLower);
@@ -479,14 +503,46 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
 employeesRouter.get("/:nik", async (req, res) => {
   try {
     const { nik } = req.params;
+    const viewerNik = (req.headers['x-user-nik'] || req.query.viewerNik || '').toString().trim().toUpperCase();
+
     const data = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
-    if (data.length > 0) {
-      const attMap = await getAttendanceMap();
-      const counselMap = await getCounselingMap();
-      res.json({ status: "success", employee: attachAttendanceToEmployee(data[0], attMap, counselMap) });
-    } else {
-      res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan" });
+    if (data.length === 0) {
+      return res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan" });
     }
+
+    const targetEmp = data[0];
+    const targetIsGts = isGtsEmployee(targetEmp);
+
+    // Cross-company access validation:
+    // Akun GTS hanya bisa diakses karyawan GTS dan Section Manager TBP.
+    // Akun TBP hanya bisa diakses karyawan TBP dan Section Manager GTS.
+    if (viewerNik && viewerNik !== nik.toUpperCase()) {
+      const viewerResult = await db.select().from(employees).where(eq(employees.nik, viewerNik)).limit(1);
+      if (viewerResult.length > 0) {
+        const viewer = viewerResult[0];
+        const viewerIsMgr = isSectionManagerOrAdmin(viewer);
+        const viewerIsGts = isGtsEmployee(viewer);
+
+        if (!viewerIsMgr) {
+          if (targetIsGts && !viewerIsGts) {
+            return res.status(403).json({ 
+              status: "error", 
+              message: "Akses ditolak: Akun GTS hanya dapat diakses oleh karyawan GTS atau Section Manager TBP." 
+            });
+          }
+          if (!targetIsGts && viewerIsGts) {
+            return res.status(403).json({ 
+              status: "error", 
+              message: "Akses ditolak: Akun TBP hanya dapat diakses oleh karyawan TBP atau Section Manager GTS." 
+            });
+          }
+        }
+      }
+    }
+
+    const attMap = await getAttendanceMap();
+    const counselMap = await getCounselingMap();
+    res.json({ status: "success", employee: attachAttendanceToEmployee(targetEmp, attMap, counselMap) });
   } catch (error) {
     console.error("Error fetching employee:", error);
     res.status(500).json({ status: "error", message: "Failed to fetch employee" });

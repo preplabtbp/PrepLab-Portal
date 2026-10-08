@@ -11,8 +11,18 @@ export const getEmployees = async () => {
       
       const profileStr = typeof localStorage !== 'undefined' ? localStorage.getItem('p2h_inspector_profile') : null;
       let userPt = 'TBP';
+      let isSectionManager = false;
       if (profileStr) {
-        try { userPt = (JSON.parse(profileStr).pt || 'TBP').toUpperCase(); } catch(e){}
+        try { 
+          const parsed = JSON.parse(profileStr);
+          userPt = (parsed.pt || 'TBP').toUpperCase();
+          const jab = (parsed.jabatan || '').toLowerCase();
+          const nik = (parsed.nik || '').toUpperCase();
+          const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
+          if (HARDCODED_DEVS.includes(nik) || jab.includes('section manager') || jab.includes('manager') || jab.includes('superintendent') || jab.includes('head')) {
+            isSectionManager = true;
+          }
+        } catch(e){}
       }
 
       return data.map((d: any) => ({
@@ -24,11 +34,12 @@ export const getEmployees = async () => {
         pt: d.pt || 'TBP'
       })).filter((e: any) => {
         if (!e.nama) return false;
+        if (isSectionManager) return true; // Section Manager TBP/GTS bisa akses semua
         const ptStr = (e.pt || '').toString().trim().toUpperCase();
         const nikStr = (e.nik || '').toString().trim().toUpperCase();
         const isGts = ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
-        if (userPt !== 'GTS' && isGts) return false;
-        return true;
+        if (userPt === 'GTS') return isGts;
+        return !isGts;
       });
     } catch (e) {
       console.error(e); return [];
