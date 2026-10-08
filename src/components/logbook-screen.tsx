@@ -3903,14 +3903,14 @@ export function LogbookScreen({
         {/* ========================================================================= */}
         {viewMode === 'table' && (
           <div 
-            className={`overflow-x-auto transition-all rounded-2xl border shadow-xs ${
-              isNotionLight ? 'bg-white border-slate-200' : 'bg-[#191919] border-[#334155]'
+            className={`overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] transition-all rounded-2xl border shadow-xs notion-table-scroll-freeze ${
+              isNotionLight ? 'bg-white border-slate-300' : 'bg-[#191919] border-[#334155]'
             }`}
             style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
           >
             <table className={`w-full text-left border-collapse ${fitPageMode ? 'table-fixed text-[11px]' : 'text-xs'}`}>
-              {/* Column Headers */}
-              <thead>
+              {/* Column Headers - Sticky Pinned with Controls */}
+              <thead className="sticky top-0 z-20 shadow-xs">
                 <tr 
                   className={`border-b-2 select-none transition-colors ${
                     isNotionLight
@@ -3918,13 +3918,13 @@ export function LogbookScreen({
                       : 'bg-slate-800 border-slate-700 text-slate-100 font-bold'
                   }`}
                 >
-                  <th className={`text-center ${fitPageMode ? 'w-[3%] px-1 py-2.5' : 'w-10 px-2 py-3'}`}>
+                  <th className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 text-center ${fitPageMode ? 'w-[3%] px-1 py-2.5' : 'w-10 px-2 py-3'}`}>
                     <GripVertical className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400 mx-auto" />
                   </th>
 
                   <th 
                     onClick={() => handleSort('date')}
-                    className={`font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
                       fitPageMode ? 'w-[4%] text-center px-1 py-2.5' : 'w-14 text-center px-2 py-3'
                     }`}
                   >
@@ -3936,7 +3936,7 @@ export function LogbookScreen({
 
                   <th 
                     onClick={() => handleSort('title')}
-                    className={`font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
                       fitPageMode ? 'w-[28%] px-2.5 py-2.5' : 'min-w-[280px] px-3.5 py-3'
                     }`}
                   >
@@ -3949,7 +3949,7 @@ export function LogbookScreen({
 
                   <th 
                     onClick={() => handleSort('cadence')}
-                    className={`font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
                       fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[120px] px-3 py-3'
                     }`}
                   >
@@ -3962,7 +3962,7 @@ export function LogbookScreen({
 
                   <th 
                     onClick={() => handleSort('status')}
-                    className={`font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
                       fitPageMode ? 'w-[12%] px-1.5 py-2.5' : 'min-w-[140px] px-3 py-3'
                     }`}
                   >
@@ -3975,7 +3975,7 @@ export function LogbookScreen({
 
                   <th 
                     onClick={() => handleSort('priority')}
-                    className={`font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
                       fitPageMode ? 'w-[9%] px-1.5 py-2.5' : 'min-w-[110px] px-3 py-3'
                     }`}
                   >
@@ -3988,7 +3988,7 @@ export function LogbookScreen({
 
                   <th 
                     onClick={() => handleSort('pic')}
-                    className={`font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
                       fitPageMode ? 'w-[13%] px-2 py-2.5' : 'min-w-[150px] px-3 py-3'
                     }`}
                   >
@@ -3999,7 +3999,7 @@ export function LogbookScreen({
                     </div>
                   </th>
 
-                  <th className={`font-black ${fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[130px] px-3 py-3'}`}>
+                  <th className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black ${fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[130px] px-3 py-3'}`}>
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
                       <span>Mulai & Durasi</span>
@@ -4008,7 +4008,7 @@ export function LogbookScreen({
 
                   <th 
                     onClick={() => handleSort('progress')}
-                    className={`font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
                       fitPageMode ? 'w-[9%] px-1.5 py-2.5' : 'min-w-[120px] px-3 py-3'
                     }`}
                   >
@@ -4019,7 +4019,7 @@ export function LogbookScreen({
                     </div>
                   </th>
 
-                  <th className={`text-center font-black ${fitPageMode ? 'w-[8%] px-1 py-2.5' : 'w-24 px-3 py-3'}`}>
+                  <th className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 text-center font-black ${fitPageMode ? 'w-[8%] px-1 py-2.5' : 'w-24 px-3 py-3'}`}>
                     Aksi
                   </th>
                 </tr>

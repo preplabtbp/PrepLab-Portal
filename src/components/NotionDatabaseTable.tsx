@@ -3163,7 +3163,7 @@ export function NotionDatabaseTable({
       {/* NOTION TOP CONTROLS & HEADER GROUP (Breadcrumbs, Toolbar, Filter)         */}
       {/* ========================================================================= */}
       <div 
-        className={`relative transition-all border-b shadow-2xs backdrop-blur-md ${
+        className={`sticky top-0 z-30 transition-all border-b shadow-md backdrop-blur-md ${
           isNotionLight ? 'bg-white/98 border-slate-200' : 'bg-[#181818]/98 border-[#2d2d2d]'
         }`}
       >
