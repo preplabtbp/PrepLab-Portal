@@ -262,7 +262,7 @@ export function FloatingFeedbackButton({
       }
 
       toast.success('Terima kasih! Masukan Anda berhasil terkirim ke Developer 🎉');
-      triggerExpGain(100, 'Ide / Masukan Terkirim!', 'Kontribusi saran & masukan PrepLab');
+      triggerExpGain(35, 'Ide / Masukan Terkirim!', 'Kontribusi saran & masukan PrepLab');
       window.dispatchEvent(new Event('gamification_updated'));
 
       setIsSuccess(true);
@@ -299,7 +299,7 @@ export function FloatingFeedbackButton({
           type="button"
           onClick={() => setIsOpen(true)}
           className="group relative flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-700 hover:from-teal-500 hover:to-emerald-600 text-white shadow-lg shadow-teal-900/30 hover:shadow-xl hover:shadow-teal-600/35 border border-teal-400/40 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer select-none"
-          title="Kirim Masukan, Ide, atau Laporkan Kendala (+100 EXP)"
+          title="Kirim Masukan, Ide, atau Laporkan Kendala (+35 EXP)"
         >
           {/* Subtle pulse aura */}
           <span className="absolute -inset-0.5 rounded-full bg-teal-400 opacity-20 blur-xs group-hover:opacity-40 transition-opacity" />
@@ -317,7 +317,7 @@ export function FloatingFeedbackButton({
               <span className="hidden sm:inline">Masukan &amp; Saran</span>
             </span>
             <span className="hidden sm:inline-block px-1.5 py-0.2 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-mono font-bold border border-amber-300/30">
-              +100 EXP
+              +35 EXP
             </span>
           </div>
         </button>
@@ -384,7 +384,7 @@ export function FloatingFeedbackButton({
                     Masukan Berhasil Terkirim!
                   </h4>
                   <p className="text-xs text-slate-600 max-w-xs">
-                    Terima kasih atas kontribusi Anda. Poin <strong className="text-teal-700 font-bold">+100 EXP</strong> telah ditambahkan ke profil Anda.
+                    Terima kasih atas kontribusi Anda. Poin <strong className="text-teal-700 font-bold">+35 EXP</strong> telah ditambahkan ke profil Anda.
                   </p>
                 </div>
               ) : (

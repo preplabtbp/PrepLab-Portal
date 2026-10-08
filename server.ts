@@ -588,6 +588,25 @@ const app = express();
       }
     });
 
+    socket.on('chat:clear', async (data) => {
+      try {
+        const room = data?.room || 'global';
+        if (room === 'all') {
+          await db.delete(chatMessages);
+          chatMessagesMemory.length = 0;
+        } else {
+          await db.delete(chatMessages).where(eq(chatMessages.room, room));
+          const kept = chatMessagesMemory.filter(m => m.room !== room);
+          chatMessagesMemory.length = 0;
+          chatMessagesMemory.push(...kept);
+        }
+        io.to(room).emit('chat_cleared', { room });
+        io.emit('chat_cleared', { room });
+      } catch (clearErr) {
+        console.error('Socket chat:clear error:', clearErr);
+      }
+    });
+
     socket.on('send_message', async (msg) => {
       try {
         const room = msg.room || 'global';
@@ -932,6 +951,48 @@ const app = express();
     } catch (err) {
       console.error('Failed to get chat messages:', err);
       res.status(500).json({ error: 'Failed to fetch chat messages' });
+    }
+  });
+
+  app.delete('/api/chat/:room', async (req, res) => {
+    try {
+      const room = req.params.room || 'global';
+      if (room === 'all') {
+        await db.delete(chatMessages);
+        chatMessagesMemory.length = 0;
+      } else {
+        await db.delete(chatMessages).where(eq(chatMessages.room, room));
+        const kept = chatMessagesMemory.filter(m => m.room !== room);
+        chatMessagesMemory.length = 0;
+        chatMessagesMemory.push(...kept);
+      }
+      io.to(room).emit('chat_cleared', { room });
+      io.emit('chat_cleared', { room });
+      res.json({ success: true, message: `Pesan chat room ${room} berhasil dibersihkan` });
+    } catch (err: any) {
+      console.error('Failed to clear chat:', err);
+      res.status(500).json({ error: 'Gagal membersihkan chat: ' + err.message });
+    }
+  });
+
+  app.post('/api/chat/clear', async (req, res) => {
+    try {
+      const { room = 'global' } = req.body || {};
+      if (room === 'all') {
+        await db.delete(chatMessages);
+        chatMessagesMemory.length = 0;
+      } else {
+        await db.delete(chatMessages).where(eq(chatMessages.room, room));
+        const kept = chatMessagesMemory.filter(m => m.room !== room);
+        chatMessagesMemory.length = 0;
+        chatMessagesMemory.push(...kept);
+      }
+      io.to(room).emit('chat_cleared', { room });
+      io.emit('chat_cleared', { room });
+      res.json({ success: true, message: `Pesan chat room ${room} berhasil dibersihkan` });
+    } catch (err: any) {
+      console.error('Failed to clear chat:', err);
+      res.status(500).json({ error: 'Gagal membersihkan chat: ' + err.message });
     }
   });
 

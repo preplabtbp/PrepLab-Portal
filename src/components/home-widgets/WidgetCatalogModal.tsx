@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   X, Plus, Check, Clock, Calendar, SunMedium, 
   StickyNote, Flame, Sparkles, UtensilsCrossed, 
-  RotateCcw, LayoutGrid 
+  RotateCcw, LayoutGrid, Bot 
 } from 'lucide-react';
 import { WIDGET_CATALOG, WidgetItemConfig, WidgetSize, WidgetId } from './types';
 
@@ -22,7 +22,8 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   StickyNote: <StickyNote className="w-5 h-5 text-amber-500" />,
   Flame: <Flame className="w-5 h-5 text-orange-500" />,
   Sparkles: <Sparkles className="w-5 h-5 text-pink-500" />,
-  UtensilsCrossed: <UtensilsCrossed className="w-5 h-5 text-emerald-500" />
+  UtensilsCrossed: <UtensilsCrossed className="w-5 h-5 text-emerald-500" />,
+  Bot: <Bot className="w-5 h-5 text-violet-500" />
 };
 
 export const WidgetCatalogModal: React.FC<WidgetCatalogModalProps> = ({

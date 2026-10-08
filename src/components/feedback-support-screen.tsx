@@ -292,7 +292,7 @@ export function FeedbackSupportScreen({
       }
 
       toast.success('Laporan berhasil dikirim ke tim Developer!');
-      triggerExpGain(100, 'Ide / Masukan Terkirim!', 'Terima kasih atas kontribusi Anda');
+      triggerExpGain(35, 'Ide / Masukan Terkirim!', 'Terima kasih atas kontribusi Anda');
       window.dispatchEvent(new Event('gamification_updated'));
       setSubmitSuccess(true);
       setDescription('');

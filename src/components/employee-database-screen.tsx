@@ -4,15 +4,28 @@ import {
   FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, 
   Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud, Camera, Pencil, 
   Plus, Edit3, ShieldAlert, Scale, Gavel, Clock, AlertOctagon, Info, ShieldCheck,
-  HeartHandshake
+  HeartHandshake, CalendarRange
 } from 'lucide-react';
 import { Card, Input, Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
 import { EmployeeImportModal } from './EmployeeImportModal';
 import { EmployeeEditModal } from './EmployeeEditModal';
 import { AddAttendanceEntryModal } from './AddAttendanceEntryModal';
+import { TimeRangeFetchModal } from './TimeRangeFetchModal';
 import { toast } from 'sonner';
 import { formatAvatarUrl } from '../lib/avatarUtils';
+
+export function normalizeDepartmentOrSection(raw?: string): string {
+  const s = (raw || '').toLowerCase().trim();
+  if (!s) return 'Preparation';
+  if (s.includes('qa') || s.includes('quality')) return 'Quality Assurance';
+  if (s.includes('maint') || s.includes('pemeliharaan') || s.includes('bengkel') || s.includes('teknisi')) return 'Maintenance';
+  if (s.includes('inv') || s.includes('inventory') || s.includes('gudang') || s.includes('logistic')) return 'Inventory Control';
+  if (s.includes('admin') || s.includes('adm') || s.includes('finance') || s.includes('hr')) return 'Administration';
+  if (s.includes('lab') || s.includes('laboratorium') || s.includes('kimia') || s.includes('xrf')) return 'Laboratory';
+  if (s.includes('prep') || s.includes('preparasi') || s.includes('sample') || s.includes('crush') || s.includes('crew')) return 'Preparation';
+  return 'Preparation';
+}
 
 export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik: string, onBack?: () => void }) {
   const cacheKey = `preplab_emp_db_${inspectorNik || 'all'}`;
@@ -45,6 +58,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isTimeRangeModalOpen, setIsTimeRangeModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editModalTab, setEditModalTab] = useState<'job' | 'personal' | 'attendance' | 'reasons' | 'counseling'>('job');
   const [isAddAttendanceModalOpen, setIsAddAttendanceModalOpen] = useState(false);
@@ -105,13 +119,21 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     return false;
   }, [inspectorNik, developerList, employees]);
 
+  const isMeetingRoom = useMemo(() => {
+    const nik = (inspectorNik || '').toUpperCase().trim();
+    return nik === 'MEETINGROOM' || nik === 'MEETING' || nik.includes('MEETING');
+  }, [inspectorNik]);
+
   const fetchEmployees = async (silent = false) => {
     if (!silent && employees.length === 0) {
       setLoading(true);
     }
     try {
-      const url = inspectorNik ? `/api/employees/hierarchy/${encodeURIComponent(inspectorNik)}` : `/api/employees`;
-      const res = await fetch(url);
+      let url = inspectorNik ? `/api/employees/hierarchy/${encodeURIComponent(inspectorNik)}` : `/api/employees`;
+      let res = await fetch(url);
+      if (!res.ok && isMeetingRoom) {
+        res = await fetch('/api/employees');
+      }
       if (!res.ok) throw new Error("Gagal mengambil data karyawan");
       const data = await res.json();
       const list = data.status === 'success' ? (data.data || []) : (Array.isArray(data) ? data : []);
@@ -136,7 +158,394 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   useEffect(() => {
     // Jalankan revalidasi data di background secara instan
     fetchEmployees(employees.length > 0);
+  }, [inspectorNik, isMeetingRoom]);
+
+  const [activeStatDetail, setActiveStatDetail] = useState<'permanent' | 'izin' | 'spdk' | 'active' | null>(null);
+  const [statDetailSearch, setStatDetailSearch] = useState('');
+  const [ptFilter, setPtFilter] = useState<'ALL' | 'TBP' | 'GTS'>('ALL');
+
+  // Deteksi role Section Manager & PT Viewer
+  const isSectionManager = useMemo(() => {
+    if (canManageDatabase) return true;
+    try {
+      const savedProfile = localStorage.getItem('p2h_inspector_profile');
+      if (savedProfile) {
+        const p = JSON.parse(savedProfile);
+        const jab = (p.jabatan || '').toLowerCase();
+        if (jab.includes('section manager') || jab.includes('manager') || jab.includes('superintendent') || jab.includes('head') || jab.includes('spt')) return true;
+      }
+    } catch {}
+    const cleanNik = (inspectorNik || '').toUpperCase();
+    const me = employees.find(e => (e.nik || '').toUpperCase() === cleanNik);
+    if (me) {
+      const jab = (me.jabatan || '').toLowerCase();
+      if (jab.includes('section manager') || jab.includes('manager') || jab.includes('superintendent') || jab.includes('head') || jab.includes('spt')) return true;
+    }
+    return false;
+  }, [inspectorNik, employees, canManageDatabase]);
+
+  const viewerPt = useMemo(() => {
+    try {
+      const savedProfile = localStorage.getItem('p2h_inspector_profile');
+      if (savedProfile) {
+        const p = JSON.parse(savedProfile);
+        if ((p.pt || '').toUpperCase() === 'GTS' || (p.nik || '').startsWith('03') || (p.nik || '').startsWith('M03')) return 'GTS';
+      }
+    } catch {}
+    const cleanNik = (inspectorNik || '').toUpperCase();
+    if (cleanNik.startsWith('03') || cleanNik.startsWith('M03')) return 'GTS';
+    return 'TBP';
   }, [inspectorNik]);
+
+  const isGtsEmp = (e: any) => {
+    if (!e) return false;
+    const ptStr = (e.pt || '').toString().trim().toUpperCase();
+    const nikStr = (e.nik || '').toString().trim().toUpperCase();
+    const secStr = (e.section || '').toString().trim().toUpperCase();
+    return ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03') || secStr.includes('GTS');
+  };
+
+  // Aturan Akses:
+  // - Akun GTS hanya bisa diakses oleh Karyawan GTS dan Section Manager TBP (atau Manager/Admin)
+  // - Akun TBP hanya bisa diakses oleh Karyawan TBP dan Section Manager GTS (atau Manager/Admin)
+  const scopedEmployees = useMemo(() => {
+    if (isSectionManager) {
+      if (ptFilter === 'GTS') return employees.filter(e => isGtsEmp(e));
+      if (ptFilter === 'TBP') return employees.filter(e => !isGtsEmp(e));
+      return employees;
+    }
+    if (viewerPt === 'GTS') {
+      return employees.filter(e => isGtsEmp(e));
+    }
+    return employees.filter(e => !isGtsEmp(e));
+  }, [employees, isSectionManager, ptFilter, viewerPt]);
+
+  // 1. Data & List Karyawan Aktif (Ambil kolom Status Karyawan = "Active" / "Aktif")
+  const activeEmployeesList = useMemo(() => {
+    return scopedEmployees.filter(e => {
+      const st = String(e.statusKaryawan || e.status_karyawan || e.status || e['Status Karyawan'] || e['Status'] || '').toUpperCase().trim();
+      return st === 'ACTIVE' || st === 'AKTIF' || st.startsWith('ACTIVE') || st.startsWith('AKTIF');
+    });
+  }, [scopedEmployees]);
+  const activeEmployeesCount = activeEmployeesList.length;
+
+  // 2. Data & List Karyawan Permanent / PKWTT
+  const permanentEmployeesList = useMemo(() => {
+    return scopedEmployees.filter(e => {
+      const sk = (e.statusKontrak || '').toLowerCase().trim();
+      const skaryawan = (e.statusKaryawan || '').toLowerCase().trim();
+      const tp = (e.tanggalPermanent || '').trim();
+      return sk.includes('pkwtt') || sk.includes('permanent') || sk.includes('tetap') ||
+             skaryawan.includes('pkwtt') || skaryawan.includes('permanent') || skaryawan.includes('tetap') ||
+             (tp && tp !== '-' && tp !== '0');
+    });
+  }, [scopedEmployees]);
+  const permanentEmployeesCount = permanentEmployeesList.length;
+
+  // 3. Data & List Jumlah Izin Karyawan pada Bulan Berjalan (Urut dari terbanyak sampai terkecil)
+  const monthlyIzinData = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // 1-12
+    const currentYear = now.getFullYear();
+
+    const isCurrentMonthDate = (dateStr: string) => {
+      if (!dateStr) return false;
+      const clean = String(dateStr).toLowerCase().trim();
+      const isoMatch = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+      if (isoMatch) {
+        const m = parseInt(isoMatch[2], 10);
+        const y = parseInt(isoMatch[1], 10);
+        return m === currentMonth && (y === currentYear || y === currentYear % 100);
+      }
+      const dmyMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
+      if (dmyMatch) {
+        const m = parseInt(dmyMatch[2], 10);
+        const y = parseInt(dmyMatch[3], 10);
+        return m === currentMonth && (y === currentYear || y === currentYear % 100 || isNaN(y));
+      }
+      if (clean.includes('okt') || clean.includes('oct')) return currentMonth === 10;
+      if (clean.includes('jan')) return currentMonth === 1;
+      if (clean.includes('feb')) return currentMonth === 2;
+      if (clean.includes('mar')) return currentMonth === 3;
+      if (clean.includes('apr')) return currentMonth === 4;
+      if (clean.includes('mei') || clean.includes('may')) return currentMonth === 5;
+      if (clean.includes('jun')) return currentMonth === 6;
+      if (clean.includes('jul')) return currentMonth === 7;
+      if (clean.includes('agu') || clean.includes('aug')) return currentMonth === 8;
+      if (clean.includes('sep')) return currentMonth === 9;
+      if (clean.includes('nov')) return currentMonth === 11;
+      if (clean.includes('des') || clean.includes('dec')) return currentMonth === 12;
+      return false;
+    };
+
+    const parseDates = (raw?: any) => {
+      if (!raw) return [];
+      return String(raw)
+        .split(/[\r\n,;]+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+    };
+
+    const parseReasons = (raw?: any) => {
+      if (!raw) return [];
+      return String(raw)
+        .split(/[\r\n;]+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+    };
+
+    const list: Array<{
+      employee: any;
+      totalIzinBulanIni: number;
+      dates: string[];
+      reasons: string[];
+    }> = [];
+
+    let grandTotalIzin = 0;
+
+    scopedEmployees.forEach(emp => {
+      const att26 = emp.attendance2026 || emp.attendance?.['2026'] || emp.attendance?.[2026] || emp.attendanceData?.['2026'] || {};
+
+      let matchingDates: string[] = [];
+      let reasons: string[] = [];
+      let count = 0;
+
+      // 1. Details array jika tersedia
+      if (Array.isArray(att26.details) && att26.details.length > 0) {
+        const monthDetails = att26.details.filter((d: any) => {
+          if (!d || !d.date) return false;
+          const isIzin = (d.type || d.kategori || '').toLowerCase().includes('izin') || (d.category || '').toLowerCase().includes('izin');
+          if (!isIzin) return false;
+          const dObj = new Date(d.date);
+          return !isNaN(dObj.getTime()) && (dObj.getMonth() + 1) === currentMonth && dObj.getFullYear() === currentYear;
+        });
+        if (monthDetails.length > 0) {
+          count = monthDetails.length;
+          matchingDates = monthDetails.map((d: any) => d.date);
+          reasons = monthDetails.map((d: any) => d.keterangan || d.alasan || d.reason).filter(Boolean);
+        }
+      }
+
+      // 2. Parse string tanggal dari tanggalIzin dan tanggalIzinKhusus
+      if (count === 0) {
+        const regularDates = parseDates(att26.tanggalIzin || att26.tanggal_izin);
+        const khususDates = parseDates(att26.tanggalIzinKhusus || att26.tanggal_izin_khusus);
+        const allDates = [...regularDates, ...khususDates];
+        const filtered = allDates.filter(isCurrentMonthDate);
+        if (filtered.length > 0) {
+          count = filtered.length;
+          matchingDates = filtered;
+        }
+
+        const regularReasons = parseReasons(att26.alasanIzin || att26.alasan_izin);
+        const khususReasons = parseReasons(att26.alasanIzinKhusus || att26.alasan_izin_khusus);
+        reasons = [...regularReasons, ...khususReasons];
+      }
+
+      // 3. Fallback breakdown jika data terstruktur bulanan tersedia
+      if (count === 0) {
+        const monthlyBreakdown = att26.monthlyIzin || att26.izinPerBulan;
+        if (monthlyBreakdown && typeof monthlyBreakdown === 'object') {
+          const c = Number(monthlyBreakdown[currentMonth] || monthlyBreakdown[String(currentMonth)] || 0);
+          if (c > 0) count = c;
+        }
+      }
+
+      if (count > 0) {
+        grandTotalIzin += count;
+        list.push({
+          employee: emp,
+          totalIzinBulanIni: count,
+          dates: matchingDates,
+          reasons: reasons
+        });
+      }
+    });
+
+    // Urutkan dari yang terbanyak sampai yang terkecil
+    list.sort((a, b) => b.totalIzinBulanIni - a.totalIzinBulanIni);
+
+    return {
+      grandTotal: grandTotalIzin,
+      list
+    };
+  }, [scopedEmployees]);
+
+  // 4. Data & List SPDK & Sanksi yang Masih Aktif
+  const activeSpdkData = useMemo(() => {
+    const MONTH_MAP: Record<string, number> = {
+      jan: 0, januari: 0, january: 0,
+      feb: 1, februari: 1, february: 1,
+      mar: 2, maret: 2, march: 2,
+      apr: 3, april: 3,
+      mei: 4, may: 4,
+      jun: 5, juni: 5, june: 5,
+      jul: 6, juli: 6, july: 6,
+      agu: 7, ags: 7, agustus: 7, aug: 7, august: 7,
+      sep: 8, sept: 8, september: 8,
+      okt: 9, oktober: 9, oct: 9, october: 9,
+      nov: 10, november: 10,
+      des: 11, desember: 11, dec: 11, december: 11
+    };
+
+    const parseSanctionDate = (val?: any): Date | null => {
+      if (!val) return null;
+      const str = String(val).trim().split(/[\r\n,;]+/)[0].trim();
+      if (!str || str === '-' || str === '#N/A' || str === '0') return null;
+
+      const dMmmY = str.match(/^(\d{1,2})[-\s/]([a-zA-Z]+)[-\s/](\d{2,4})$/);
+      if (dMmmY) {
+        const day = parseInt(dMmmY[1], 10);
+        const mStr = dMmmY[2].toLowerCase();
+        let year = parseInt(dMmmY[3], 10);
+        if (year < 100) year += 2000;
+        const month = MONTH_MAP[mStr];
+        if (month !== undefined && !isNaN(day) && !isNaN(year)) {
+          return new Date(year, month, day);
+        }
+      }
+
+      const ymd = str.match(/^(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})$/);
+      if (ymd) {
+        const year = parseInt(ymd[1], 10);
+        const month = parseInt(ymd[2], 10) - 1;
+        const day = parseInt(ymd[3], 10);
+        return new Date(year, month, day);
+      }
+
+      const dmy = str.match(/^(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{2,4})$/);
+      if (dmy) {
+        const day = parseInt(dmy[1], 10);
+        const month = parseInt(dmy[2], 10) - 1;
+        let year = parseInt(dmy[3], 10);
+        if (year < 100) year += 2000;
+        return new Date(year, month, day);
+      }
+
+      if (/\d{4}/.test(str)) {
+        const d = new Date(str);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      return null;
+    };
+
+    const now = new Date();
+    const result: Array<{
+      employee: any;
+      jenisSanksi: string;
+      tanggalSanksi: string;
+      masaBerlaku: string;
+      kategori: string;
+      alasan: string;
+      levelBadgeBg: string;
+      levelColor: string;
+    }> = [];
+
+    scopedEmployees.forEach(emp => {
+      const c = emp.counselingSpdk || emp.counseling || {};
+      const st = String(c.st || '').trim();
+      const sp1 = String(c.sp1 || c.sp_1 || '').trim();
+      const sp2 = String(c.sp2 || c.sp_2 || '').trim();
+      const sp3 = String(c.sp3 || c.sp_3 || '').trim();
+      const sppt = String(c.sppt || c.sp_pt || '').trim();
+      const phk = String(c.phk || '').trim();
+      const totalSp = String(c.totalSp || c.total_sp || '').trim();
+      const pernahSpdk = String(c.pernahTerlibatSpdk || c.pernah_terlibat_spdk || '').toLowerCase().trim();
+      const statusSanksi = String(c.statusSanksi || c.status_sanksi || '').toLowerCase().trim();
+
+      const hasSpMajor = (sp1 && sp1 !== '-' && sp1 !== '0') || 
+                         (sp2 && sp2 !== '-' && sp2 !== '0') || 
+                         (sp3 && sp3 !== '-' && sp3 !== '0') || 
+                         (sppt && sppt !== '-' && sppt !== '0');
+      const hasSt = (st && st !== '-' && st !== '0');
+      const hasPhk = (phk && phk !== '-' && phk !== '0');
+      const hasAnySp = hasSpMajor || hasSt || hasPhk || (Number(totalSp) > 0) || pernahSpdk.includes('ya');
+
+      if (!hasAnySp) return;
+
+      // Status explicit check
+      if (statusSanksi.includes('selesai') || statusSanksi.includes('pemutihan') || statusSanksi.includes('kadaluarsa') || statusSanksi.includes('expired') || statusSanksi === 'aman') {
+        return;
+      }
+
+      // Tentukan tanggal dan masa berlaku sanksi
+      const dateStr = [sppt, sp3, sp2, sp1, st, c.tanggalSp, c.tanggal_sp, c.bulanKonseling, c.bulan_konseling, c.masaBerlakuSanksi, c.masa_berlaku_sanksi]
+        .find(s => s && s !== '-' && s !== '0' && (s.includes('-') || s.includes('/') || /[a-zA-Z]{3,}/.test(s))) || '-';
+
+      let isExpired = false;
+      let calculatedMasaBerlaku = c.masaBerlakuSanksi || c.masa_berlaku_sanksi || '';
+
+      if (dateStr && dateStr !== '-') {
+        const baseDate = parseSanctionDate(dateStr);
+        if (baseDate) {
+          const durationMonths = hasSpMajor ? 6 : 3;
+          const expiryDate = new Date(baseDate.getTime());
+          expiryDate.setMonth(expiryDate.getMonth() + durationMonths);
+          if (now > expiryDate) {
+            isExpired = true;
+          }
+          if (!calculatedMasaBerlaku) {
+            calculatedMasaBerlaku = `Aktif s/d ${expiryDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+          }
+        }
+      }
+
+      if (isExpired && !hasPhk) return;
+
+      // Determine label & color
+      let jenisSanksi = 'Sanksi Disiplin';
+      let levelBadgeBg = 'bg-amber-500';
+      let levelColor = 'text-amber-800 bg-amber-50 border-amber-200';
+
+      if (hasPhk) {
+        jenisSanksi = 'PHK';
+        levelBadgeBg = 'bg-rose-900';
+        levelColor = 'text-rose-900 bg-rose-100 border-rose-300';
+      } else if (sppt && sppt !== '-' && sppt !== '0') {
+        jenisSanksi = 'SPPT';
+        levelBadgeBg = 'bg-rose-600';
+        levelColor = 'text-rose-800 bg-rose-50 border-rose-200';
+      } else if (sp3 && sp3 !== '-' && sp3 !== '0') {
+        jenisSanksi = 'SP III';
+        levelBadgeBg = 'bg-rose-600';
+        levelColor = 'text-rose-800 bg-rose-50 border-rose-200';
+      } else if (sp2 && sp2 !== '-' && sp2 !== '0') {
+        jenisSanksi = 'SP II';
+        levelBadgeBg = 'bg-orange-600';
+        levelColor = 'text-orange-800 bg-orange-50 border-orange-200';
+      } else if (sp1 && sp1 !== '-' && sp1 !== '0') {
+        jenisSanksi = 'SP I';
+        levelBadgeBg = 'bg-amber-600';
+        levelColor = 'text-amber-800 bg-amber-50 border-amber-200';
+      } else if (hasSt) {
+        jenisSanksi = 'Surat Teguran (ST)';
+        levelBadgeBg = 'bg-yellow-600';
+        levelColor = 'text-yellow-800 bg-yellow-50 border-yellow-200';
+      } else if (pernahSpdk.includes('ya')) {
+        jenisSanksi = 'Insiden SPDK';
+        levelBadgeBg = 'bg-purple-600';
+        levelColor = 'text-purple-800 bg-purple-50 border-purple-200';
+      }
+
+      const alasan = c.alasanSp || c.alasan_sp || c.kronologiSpdk || c.kronologi_spdk || c.tindakanSpdk || c.tindakan_spdk || '-';
+      const kategori = c.kategoriSpdk || c.kategori_spdk || '-';
+
+      result.push({
+        employee: emp,
+        jenisSanksi,
+        tanggalSanksi: dateStr !== '-' ? dateStr : (c.bulanKonseling || '-'),
+        masaBerlaku: calculatedMasaBerlaku || 'Aktif',
+        kategori,
+        alasan,
+        levelBadgeBg,
+        levelColor
+      });
+    });
+
+    return result;
+  }, [scopedEmployees]);
+
+
 
   const handleManualSync = async () => {
     if (!canManageDatabase) {
@@ -248,14 +657,26 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     }
   };
 
+  const activeSections = useMemo(() => {
+    const set = new Set<string>();
+    employees.forEach(e => {
+      const norm = normalizeDepartmentOrSection(e.department || e.section);
+      if (norm) set.add(norm);
+    });
+    return Array.from(set);
+  }, [employees]);
+
   const filteredSearch = useMemo(() => {
     if (!searchTerm) return [];
-    return employees.filter(e => {
-      const matchesSearch = (e.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (e.nik || '').toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesSearch;
-    }).slice(0, 8);
-  }, [employees, searchTerm]);
+    const term = searchTerm.toLowerCase().trim();
+    return scopedEmployees.filter(e => {
+      const name = (e.name || e.nama || '').toLowerCase();
+      const nik = (e.nik || '').toLowerCase();
+      const jabatan = (e.jabatan || '').toLowerCase();
+      const sec = (e.section || e.department || '').toLowerCase();
+      return name.includes(term) || nik.includes(term) || jabatan.includes(term) || sec.includes(term);
+    }).slice(0, 30);
+  }, [scopedEmployees, searchTerm]);
 
   if (loading) {
     return (
@@ -387,6 +808,15 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
           {!selectedEmployee && canManageDatabase && (
             <>
               <Button
+                onClick={() => setIsTimeRangeModalOpen(true)}
+                size="sm"
+                className="bg-white hover:bg-slate-50 text-[#135e69] border border-[#a2e0e8] flex items-center gap-1.5 rounded-xl text-xs font-bold px-3 py-1.5 shadow-xs transition-all cursor-pointer"
+              >
+                <CalendarRange className="w-3.5 h-3.5 text-[#22a7b8]" />
+                <span>Tarik Data Time Range</span>
+              </Button>
+
+              <Button
                 onClick={() => setIsImportModalOpen(true)}
                 size="sm"
                 className="bg-white hover:bg-slate-50 text-[#135e69] border border-[#a2e0e8] flex items-center gap-1.5 rounded-xl text-xs font-bold px-3 py-1.5 shadow-xs transition-all cursor-pointer"
@@ -452,8 +882,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               <motion.div 
                 initial={{ opacity: 0, y: 20 }} 
                 animate={{ opacity: 1, y: 0 }}
-                className="text-center mb-8 w-full"
+                className="text-center mb-8 w-full flex flex-col items-center"
               >
+                {/* Harita Nickel Official Logo */}
+                <div className="mb-3.5 group">
+                  <img 
+                    src="/harita-nickel-logo.png" 
+                    alt="Harita Nickel" 
+                    className="h-14 sm:h-16 md:h-20 w-auto object-contain filter drop-shadow-sm hover:scale-105 transition-transform duration-300 select-none"
+                  />
+                </div>
+
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#f09b13] text-white text-xs font-extrabold uppercase tracking-wider mb-4 shadow-md ring-2 ring-[#f09b13]/20">
                   <Database className="w-3.5 h-3.5" />
                   <span>Manpower</span>
@@ -464,6 +903,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 <p className="text-slate-600 text-sm md:text-base max-w-2xl mx-auto font-normal leading-relaxed px-2">
                   Manpower Attendance &amp; Database Directory. Ketik NIK atau nama untuk menelusuri profil karyawan, melacak kehadiran, dan memantau riwayat jabatan secara real-time.
                 </p>
+                {isMeetingRoom && (
+                  <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold backdrop-blur-md shadow-sm">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Mode Meeting Room • Akses Penuh Seluruh Karyawan ({employees.length} Data)</span>
+                  </div>
+                )}
               </motion.div>
 
               {/* Big Search Bar */}
@@ -472,48 +917,542 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 {renderSearchBar(false)}
               </div>
 
-              {/* Quick Stats Dashboard */}
+              {/* Quick Stats Dashboard with Interactive Detail Drawers */}
               <motion.div 
                 initial={{ opacity: 0, y: 20 }} 
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4 w-full max-w-4xl px-2"
+                className="w-full max-w-4xl px-2 space-y-4"
               >
-                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center hover:border-[#22a7b8]/60 hover:shadow-lg transition-all shadow-sm">
-                  <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Total Data</div>
-                  <div className="text-2xl md:text-3xl font-black text-[#104b50]">{employees.length}</div>
-                </div>
-                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center hover:border-[#f09b13]/60 hover:shadow-lg transition-all shadow-sm">
-                  <div className="text-[#c77d07] text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Dept. Aktif</div>
-                  <div className="text-2xl md:text-3xl font-black text-slate-800">{new Set(employees.map(e => e.department).filter(Boolean)).size}</div>
-                </div>
-                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center hover:border-teal-400 hover:shadow-lg transition-all shadow-sm">
-                  <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Status PKWTT</div>
-                  <div className="text-2xl md:text-3xl font-black text-teal-700">
-                    {employees.filter(e => e.statusKontrak && e.statusKontrak.toLowerCase().includes('pkwtt')).length}
+                {/* PT Universe Switcher for Section Manager & Admin */}
+                {isSectionManager && (
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <div className="bg-slate-100/95 p-1 rounded-2xl border border-slate-200/90 flex items-center gap-1 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => setPtFilter('ALL')}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          ptFilter === 'ALL'
+                            ? 'bg-white text-slate-800 shadow-xs ring-1 ring-slate-200'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <span>Semua PT</span>
+                        <span className="ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-600 font-mono font-bold">
+                          {employees.length}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPtFilter('TBP')}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          ptFilter === 'TBP'
+                            ? 'bg-[#135e69] text-white shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <span>TBP &amp; GPS</span>
+                        <span className={`ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                          ptFilter === 'TBP' ? 'bg-white/20 text-white' : 'bg-slate-200/70 text-slate-600'
+                        }`}>
+                          {employees.filter(e => !isGtsEmp(e)).length}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPtFilter('GTS')}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          ptFilter === 'GTS'
+                            ? 'bg-[#f09b13] text-white shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <span>PT GTS</span>
+                        <span className={`ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                          ptFilter === 'GTS' ? 'bg-white/20 text-white' : 'bg-slate-200/70 text-slate-600'
+                        }`}>
+                          {employees.filter(e => isGtsEmp(e)).length}
+                        </span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center hover:border-rose-400 hover:shadow-lg transition-all shadow-sm">
-                  <div className="text-rose-600 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Total Sakit</div>
-                  <div className="text-2xl md:text-3xl font-black text-rose-600">
-                    {employees.reduce((acc, emp) => acc + (Number(emp.attendance2026?.sakit) || 0), 0)}
+                )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4 w-full">
+                  {/* Card 1: Total Data */}
+                  <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center shadow-xs transition-all">
+                    <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Total Data</div>
+                    <div className="text-2xl md:text-3xl font-black text-[#104b50]">{scopedEmployees.length}</div>
+                    <div className="text-[10px] text-slate-400 font-medium mt-0.5">Master Database</div>
                   </div>
+
+                  {/* Card 2: Karyawan Aktif */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveStatDetail(prev => prev === 'active' ? null : 'active');
+                      setStatDetailSearch('');
+                    }}
+                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group text-left sm:text-center ${
+                      activeStatDetail === 'active'
+                        ? 'border-[#f09b13] ring-2 ring-[#f09b13]/30 shadow-md bg-amber-50/40'
+                        : 'border-slate-200/90 hover:border-[#f09b13]/60 hover:shadow-md'
+                    }`}
+                  >
+                    <div className="text-[#c77d07] text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 flex items-center justify-center gap-1">
+                      <span>Karyawan Aktif</span>
+                    </div>
+                    <div className="text-2xl md:text-3xl font-black text-slate-800">{activeEmployeesCount}</div>
+                    <div className="text-[10px] text-amber-600/80 font-semibold mt-0.5 group-hover:underline">
+                      {activeStatDetail === 'active' ? '▲ Tutup Rincian' : '▼ Klik Lihat Daftar'}
+                    </div>
+                  </button>
+
+                  {/* Card 3: Karyawan Permanent */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveStatDetail(prev => prev === 'permanent' ? null : 'permanent');
+                      setStatDetailSearch('');
+                    }}
+                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group ${
+                      activeStatDetail === 'permanent'
+                        ? 'border-teal-500 ring-2 ring-teal-500/30 shadow-md bg-teal-50/40'
+                        : 'border-slate-200/90 hover:border-teal-400 hover:shadow-md'
+                    }`}
+                  >
+                    <div className="text-teal-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">
+                      Karyawan Permanent
+                    </div>
+                    <div className="text-2xl md:text-3xl font-black text-teal-700">
+                      {permanentEmployeesCount}
+                    </div>
+                    <div className="text-[10px] text-teal-600/80 font-semibold mt-0.5 group-hover:underline">
+                      {activeStatDetail === 'permanent' ? '▲ Tutup Rincian' : '▼ Klik Lihat Nama'}
+                    </div>
+                  </button>
+
+                  {/* Card 4: Jumlah Izin Karyawan */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveStatDetail(prev => prev === 'izin' ? null : 'izin');
+                      setStatDetailSearch('');
+                    }}
+                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group ${
+                      activeStatDetail === 'izin'
+                        ? 'border-indigo-500 ring-2 ring-indigo-500/30 shadow-md bg-indigo-50/40'
+                        : 'border-slate-200/90 hover:border-indigo-400 hover:shadow-md'
+                    }`}
+                  >
+                    <div className="text-indigo-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">
+                      Jumlah Izin
+                    </div>
+                    <div className="text-2xl md:text-3xl font-black text-indigo-800">
+                      {monthlyIzinData.grandTotal}
+                    </div>
+                    <div className="text-[10px] text-indigo-600/80 font-semibold mt-0.5 group-hover:underline">
+                      {activeStatDetail === 'izin' ? '▲ Tutup Rincian' : '▼ Bulan Ini (Urut)'}
+                    </div>
+                  </button>
+
+                  {/* Card 5: SPDK & Sanksi (Aktif) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveStatDetail(prev => prev === 'spdk' ? null : 'spdk');
+                      setStatDetailSearch('');
+                    }}
+                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group col-span-2 sm:col-span-1 ${
+                      activeStatDetail === 'spdk'
+                        ? 'border-purple-600 ring-2 ring-purple-500/30 shadow-md bg-purple-50/40'
+                        : 'border-purple-200 hover:border-purple-400 hover:shadow-md'
+                    }`}
+                  >
+                    <div className="text-purple-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">
+                      SPDK &amp; Sanksi (Aktif)
+                    </div>
+                    <div className="text-2xl md:text-3xl font-black text-purple-800">
+                      {activeSpdkData.length}
+                    </div>
+                    <div className="text-[10px] text-purple-600/80 font-semibold mt-0.5 group-hover:underline">
+                      {activeStatDetail === 'spdk' ? '▲ Tutup Rincian' : '▼ Klik Lihat Detail'}
+                    </div>
+                  </button>
                 </div>
-                <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-purple-200 text-center hover:border-purple-400 hover:shadow-lg transition-all shadow-sm col-span-2 sm:col-span-1">
-                  <div className="text-purple-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">SPDK &amp; Sanksi</div>
-                  <div className="text-2xl md:text-3xl font-black text-purple-800">
-                    {employees.filter(emp => {
-                      const c = emp.counselingSpdk || emp.counseling || {};
-                      return (c.sp1 && c.sp1 !== '-' && c.sp1 !== '0') || 
-                             (c.sp2 && c.sp2 !== '-' && c.sp2 !== '0') || 
-                             (c.sp3 && c.sp3 !== '-' && c.sp3 !== '0') || 
-                             (c.sppt && c.sppt !== '-' && c.sppt !== '0') || 
-                             (c.st && c.st !== '-' && c.st !== '0') || 
-                             (c.totalSp && c.totalSp !== '0' && c.totalSp !== '-') ||
-                             String(c.pernahTerlibatSpdk || '').toLowerCase().includes('ya');
-                    }).length}
-                  </div>
-                </div>
+
+                {/* EXPANDABLE DETAIL DRAWER / LIST ACCORDION */}
+                <AnimatePresence>
+                  {activeStatDetail && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, height: 'auto', scale: 1 }}
+                      exit={{ opacity: 0, height: 0, scale: 0.98 }}
+                      transition={{ duration: 0.25 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-xl p-4 sm:p-5 relative mt-2">
+                        {/* Header Drawer */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
+                          <div className="flex items-center gap-2.5">
+                            {activeStatDetail === 'permanent' && (
+                              <div className="p-2 rounded-xl bg-teal-100 text-teal-800">
+                                <Briefcase className="w-5 h-5" />
+                              </div>
+                            )}
+                            {activeStatDetail === 'izin' && (
+                              <div className="p-2 rounded-xl bg-indigo-100 text-indigo-800">
+                                <Calendar className="w-5 h-5" />
+                              </div>
+                            )}
+                            {activeStatDetail === 'spdk' && (
+                              <div className="p-2 rounded-xl bg-purple-100 text-purple-800">
+                                <Scale className="w-5 h-5" />
+                              </div>
+                            )}
+                            {activeStatDetail === 'active' && (
+                              <div className="p-2 rounded-xl bg-amber-100 text-amber-800">
+                                <Users className="w-5 h-5" />
+                              </div>
+                            )}
+
+                            <div>
+                              <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
+                                {activeStatDetail === 'permanent' && 'Daftar Karyawan Permanent (PKWTT)'}
+                                {activeStatDetail === 'izin' && 'Daftar Karyawan Izin Bulan Berjalan'}
+                                {activeStatDetail === 'spdk' && 'Daftar Karyawan dengan Sanksi & SPDK Aktif'}
+                                {activeStatDetail === 'active' && 'Daftar Seluruh Karyawan Aktif'}
+                                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                  {activeStatDetail === 'permanent' && `${permanentEmployeesCount} Karyawan`}
+                                  {activeStatDetail === 'izin' && `${monthlyIzinData.list.length} Orang (${monthlyIzinData.grandTotal} Hari)`}
+                                  {activeStatDetail === 'spdk' && `${activeSpdkData.length} Kasus Aktif`}
+                                  {activeStatDetail === 'active' && `${activeEmployeesCount} Karyawan`}
+                                </span>
+                              </h3>
+                              <p className="text-xs text-slate-500">
+                                {activeStatDetail === 'permanent' && 'Klik nama atau baris karyawan untuk membuka profil lengkap & histori kontrak.'}
+                                {activeStatDetail === 'izin' && 'Diurutkan dari frekuensi izin terbanyak ke terkecil pada bulan berjalan.'}
+                                {activeStatDetail === 'spdk' && 'Menampilkan sanksi disiplin dan SPDK yang masih berlaku saat ini.'}
+                                {activeStatDetail === 'active' && 'Karyawan yang berstatus aktif bekerja.'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {/* Filter input */}
+                            <div className="relative w-full sm:w-56">
+                              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                              <input
+                                type="text"
+                                value={statDetailSearch}
+                                onChange={e => setStatDetailSearch(e.target.value)}
+                                placeholder="Cari nama / NIK..."
+                                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#22a7b8]"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setActiveStatDetail(null)}
+                              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                              title="Tutup"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* LIST CONTENT */}
+                        <div className="mt-3">
+                          {/* 1. KARYAWAN PERMANENT (SCROLLABLE LIST) */}
+                          {activeStatDetail === 'permanent' && (() => {
+                            const filtered = permanentEmployeesList.filter(e => {
+                              const q = statDetailSearch.toLowerCase().trim();
+                              if (!q) return true;
+                              return (e.name || '').toLowerCase().includes(q) ||
+                                     (e.nik || '').toLowerCase().includes(q) ||
+                                     (e.jabatan || '').toLowerCase().includes(q) ||
+                                     (e.department || '').toLowerCase().includes(q);
+                            });
+
+                            if (filtered.length === 0) {
+                              return (
+                                <div className="py-8 text-center text-xs text-slate-400">
+                                  Tidak ada data karyawan permanent yang sesuai pencarian.
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
+                                {filtered.map((emp, idx) => (
+                                  <div
+                                    key={emp.nik || idx}
+                                    onClick={() => setSelectedEmployee(emp)}
+                                    className="p-2.5 rounded-xl hover:bg-teal-50/60 transition-all flex items-center justify-between gap-3 cursor-pointer group"
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className="w-9 h-9 rounded-xl bg-teal-100/70 border border-teal-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-teal-800 text-xs">
+                                        {emp.photo ? (
+                                          <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                          (emp.name || 'P').charAt(0).toUpperCase()
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="text-xs font-bold text-slate-800 group-hover:text-teal-700 truncate flex items-center gap-1.5">
+                                          <span>{emp.name}</span>
+                                          <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
+                                            {emp.nik}
+                                          </span>
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 truncate flex items-center gap-2 mt-0.5">
+                                          <span>{emp.jabatan || '-'}</span>
+                                          <span>•</span>
+                                          <span>{emp.department || emp.section || '-'}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {emp.tanggalPermanent && emp.tanggalPermanent !== '-' && (
+                                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg hidden sm:inline-block">
+                                          SK: {emp.tanggalPermanent}
+                                        </span>
+                                      )}
+                                      <span className="text-[10px] font-extrabold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg shadow-2xs">
+                                        PKWTT / Tetap
+                                      </span>
+                                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-teal-600 transition-colors" />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+
+                          {/* 2. JUMLAH IZIN KARYAWAN (URUT DARI TERBANYAK KE TERKECIL) */}
+                          {activeStatDetail === 'izin' && (() => {
+                            const filtered = monthlyIzinData.list.filter(item => {
+                              const q = statDetailSearch.toLowerCase().trim();
+                              if (!q) return true;
+                              return (item.employee.name || '').toLowerCase().includes(q) ||
+                                     (item.employee.nik || '').toLowerCase().includes(q) ||
+                                     (item.employee.jabatan || '').toLowerCase().includes(q);
+                            });
+
+                            if (filtered.length === 0) {
+                              return (
+                                <div className="py-8 text-center text-xs text-slate-400">
+                                  Tidak ada data izin karyawan pada bulan berjalan yang sesuai pencarian.
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
+                                {filtered.map((item, idx) => {
+                                  const emp = item.employee;
+                                  return (
+                                    <div
+                                      key={emp.nik || idx}
+                                      onClick={() => setSelectedEmployee(emp)}
+                                      className="p-2.5 rounded-xl hover:bg-indigo-50/60 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 cursor-pointer group"
+                                    >
+                                      <div className="flex items-center gap-3 min-w-0">
+                                        {/* Rank Badge */}
+                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${
+                                          idx === 0 ? 'bg-amber-400 text-amber-950 shadow-xs' :
+                                          idx === 1 ? 'bg-slate-300 text-slate-800' :
+                                          idx === 2 ? 'bg-amber-700/60 text-white' :
+                                          'bg-slate-100 text-slate-600'
+                                        }`}>
+                                          #{idx + 1}
+                                        </div>
+
+                                        <div className="w-9 h-9 rounded-xl bg-indigo-100/70 border border-indigo-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-indigo-800 text-xs">
+                                          {emp.photo ? (
+                                            <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
+                                          ) : (
+                                            (emp.name || 'I').charAt(0).toUpperCase()
+                                          )}
+                                        </div>
+
+                                        <div className="min-w-0">
+                                          <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-700 truncate flex items-center gap-1.5">
+                                            <span>{emp.name}</span>
+                                            <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
+                                              {emp.nik}
+                                            </span>
+                                          </div>
+                                          <div className="text-[11px] text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+                                            <span>{emp.jabatan || '-'}</span>
+                                            <span>•</span>
+                                            <span>{emp.department || emp.section || '-'}</span>
+                                          </div>
+                                          {item.reasons.length > 0 && (
+                                            <div className="text-[10px] text-slate-500 italic truncate mt-0.5 max-w-md">
+                                              Alasan: {item.reasons.join(', ')}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                        {item.dates.length > 0 && (
+                                          <span className="text-[10px] font-mono text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg hidden md:inline-block max-w-[140px] truncate" title={item.dates.join(', ')}>
+                                            {item.dates.join(', ')}
+                                          </span>
+                                        )}
+                                        <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl shadow-2xs">
+                                          {item.totalIzinBulanIni} Hari Izin
+                                        </span>
+                                        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 transition-colors" />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+
+                          {/* 3. SPDK & SANKSI (AKTIF) */}
+                          {activeStatDetail === 'spdk' && (() => {
+                            const filtered = activeSpdkData.filter(item => {
+                              const q = statDetailSearch.toLowerCase().trim();
+                              if (!q) return true;
+                              return (item.employee.name || '').toLowerCase().includes(q) ||
+                                     (item.employee.nik || '').toLowerCase().includes(q) ||
+                                     (item.jenisSanksi || '').toLowerCase().includes(q) ||
+                                     (item.alasan || '').toLowerCase().includes(q);
+                            });
+
+                            if (filtered.length === 0) {
+                              return (
+                                <div className="py-8 text-center text-xs text-slate-400">
+                                  Tidak ada karyawan dengan sanksi SPDK aktif yang sesuai pencarian.
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
+                                {filtered.map((item, idx) => {
+                                  const emp = item.employee;
+                                  return (
+                                    <div
+                                      key={emp.nik || idx}
+                                      onClick={() => setSelectedEmployee(emp)}
+                                      className="p-3 rounded-xl hover:bg-purple-50/60 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer group"
+                                    >
+                                      <div className="flex items-start gap-3 min-w-0">
+                                        <div className="w-9 h-9 rounded-xl bg-purple-100/80 border border-purple-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-purple-800 text-xs mt-0.5">
+                                          {emp.photo ? (
+                                            <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
+                                          ) : (
+                                            (emp.name || 'S').charAt(0).toUpperCase()
+                                          )}
+                                        </div>
+
+                                        <div className="min-w-0">
+                                          <div className="text-xs font-bold text-slate-800 group-hover:text-purple-700 truncate flex items-center gap-1.5 flex-wrap">
+                                            <span>{emp.name}</span>
+                                            <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
+                                              {emp.nik}
+                                            </span>
+                                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg border shadow-2xs ${item.levelColor}`}>
+                                              {item.jenisSanksi}
+                                            </span>
+                                          </div>
+                                          <div className="text-[11px] text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+                                            <span>{emp.jabatan || '-'}</span>
+                                            <span>•</span>
+                                            <span>{emp.department || emp.section || '-'}</span>
+                                          </div>
+                                          {item.alasan && item.alasan !== '-' && (
+                                            <div className="text-[11px] text-rose-700/90 font-medium bg-rose-50/60 border border-rose-100 rounded-lg p-1.5 mt-1.5 max-w-xl">
+                                              <span className="font-bold">Keterangan:</span> {item.alasan}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                                        <div className="text-right">
+                                          <div className="text-[11px] font-bold font-mono text-slate-700">
+                                            Tgl: {item.tanggalSanksi}
+                                          </div>
+                                          <div className="text-[10px] text-purple-600 font-semibold mt-0.5">
+                                            {item.masaBerlaku}
+                                          </div>
+                                        </div>
+                                        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-purple-600 transition-colors" />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+
+                          {/* 4. KARYAWAN AKTIF */}
+                          {activeStatDetail === 'active' && (() => {
+                            const filtered = activeEmployeesList.filter(e => {
+                              const q = statDetailSearch.toLowerCase().trim();
+                              if (!q) return true;
+                              return (e.name || '').toLowerCase().includes(q) ||
+                                     (e.nik || '').toLowerCase().includes(q) ||
+                                     (e.jabatan || '').toLowerCase().includes(q);
+                            });
+
+                            return (
+                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
+                                {filtered.map((emp, idx) => (
+                                  <div
+                                    key={emp.nik || idx}
+                                    onClick={() => setSelectedEmployee(emp)}
+                                    className="p-2.5 rounded-xl hover:bg-amber-50/60 transition-all flex items-center justify-between gap-3 cursor-pointer group"
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className="w-9 h-9 rounded-xl bg-amber-100/70 border border-amber-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-amber-800 text-xs">
+                                        {emp.photo ? (
+                                          <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                          (emp.name || 'A').charAt(0).toUpperCase()
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="text-xs font-bold text-slate-800 group-hover:text-amber-700 truncate flex items-center gap-1.5">
+                                          <span>{emp.name}</span>
+                                          <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
+                                            {emp.nik}
+                                          </span>
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 truncate flex items-center gap-2 mt-0.5">
+                                          <span>{emp.jabatan || '-'}</span>
+                                          <span>•</span>
+                                          <span>{emp.department || emp.section || '-'}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+                                        Aktif
+                                      </span>
+                                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-amber-600 transition-colors" />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             </div>
           </div>
@@ -2061,6 +3000,18 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             return next;
           });
         }}
+      />
+
+      {/* Modal Penarikan Data Time Range */}
+      <TimeRangeFetchModal
+        isOpen={isTimeRangeModalOpen}
+        onClose={() => setIsTimeRangeModalOpen(false)}
+        inspectorNik={inspectorNik}
+        employees={scopedEmployees}
+        onSuccess={async () => {
+          await fetchEmployees();
+        }}
+        isSectionManager={isSectionManager}
       />
     </div>
   );

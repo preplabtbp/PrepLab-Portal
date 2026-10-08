@@ -105,6 +105,7 @@ const FinanceScreen = lazyWithRetry(() => import('./components/FinanceScreen').t
 const ModulesScreen = lazyWithRetry(() => import('./components/modules-screen').then(m => ({ default: m.ModulesScreen })));
 const LogbookScreen = lazyWithRetry(() => import('./components/logbook-screen').then(m => ({ default: m.LogbookScreen })));
 const ClinicScreen = lazyWithRetry(() => import('./components/clinic-screen').then(m => ({ default: m.ClinicScreen })));
+const GuestMonitoringScreen = lazyWithRetry(() => import('./components/GuestMonitoringScreen').then(m => ({ default: m.GuestMonitoringScreen })));
 import { ModulesDrawer } from './components/ModulesDrawer';
 import { LabBotWidget } from './components/LabBotWidget';
 import { HeaderModuleSearchBar } from './components/HeaderModuleSearchBar';
@@ -1039,6 +1040,24 @@ export default function App() {
     handleNav('home');
   };
 
+  // TIER 0: GUEST & AUDITOR ACCESS (Zero friction, no login required)
+  if (location.pathname.startsWith('/guest')) {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased selection:bg-teal-500 selection:text-white">
+        <Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center bg-slate-50">
+            <div className="animate-spin rounded-full h-10 w-10 border-2 border-teal-600 border-t-transparent" />
+          </div>
+        }>
+          <Routes>
+            <Route path="/guest/monitoring" element={<GuestMonitoringScreen />} />
+            <Route path="*" element={<Navigate to="/guest/monitoring" replace />} />
+          </Routes>
+        </Suspense>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F4F7F6] flex items-center justify-center text-teal-600">
@@ -1838,6 +1857,7 @@ export default function App() {
   />
   <Route path="/pemantauan" element={<PemantauanScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} />} />
   <Route path="/monitoring" element={<MonitoringDashboard inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} />} />
+  <Route path="/guest/monitoring" element={<GuestMonitoringScreen />} />
   <Route path="/quiz-admin" element={<QuizAdminScreen userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
   <Route path="/quiz" element={<QuizScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
   <Route path="/apd" element={<Navigate to="/apd-input" replace />} />

@@ -17,6 +17,7 @@ import {
   Sparkles, 
   FileText, 
   ChevronRight, 
+  ChevronLeft,
   ChevronDown, 
   ChevronUp,
   Trash2, 
@@ -58,6 +59,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui';
+import { PicAvatarGroup } from './PicAvatarGroup';
 import { 
   parseTasklist, 
   toggleTasklistItem, 
@@ -3439,7 +3441,7 @@ export function LogbookScreen({
     <div className="w-full min-h-screen pb-24 font-sans text-xs sm:text-sm" style={{ backgroundColor: 'var(--bg-main, #f8fafc)', color: 'var(--text-main, #0f172a)' }}>
       {/* Top Banner Navigation Header */}
       <div 
-        className="sticky top-0 z-30 border-b shadow-xs transition-colors backdrop-blur-md"
+        className="relative border-b shadow-xs transition-colors"
         style={{ 
           backgroundColor: 'var(--header-bg, var(--card-bg, #ffffff))',
           borderColor: 'var(--border-main, #e2e8f0)'
@@ -3464,7 +3466,7 @@ export function LogbookScreen({
                   <ClipboardCheck className="w-4 h-4" />
                 </span>
                 <h1 className="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
-                  <span>Log Book Section & Morning Briefing Hub</span>
+                  <span>Log Book Section &amp; Morning Briefing Hub</span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/30">
                     Section Log Book
                   </span>
@@ -3494,7 +3496,7 @@ export function LogbookScreen({
             <button
               type="button"
               onClick={() => setShowTemplateModal(true)}
-              title="Kelola & gunakan template kegiatan"
+              title="Kelola &amp; gunakan template kegiatan"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold hover:border-teal-500 hover:text-teal-600 dark:hover:text-teal-400 transition-all cursor-pointer shadow-xs"
               style={{
                 backgroundColor: 'var(--card-bg, #ffffff)',
@@ -3514,76 +3516,76 @@ export function LogbookScreen({
             </button>
           </div>
         </div>
+      </div>
 
+      {/* ── PINNED SECTION: Date, Filters, KPI Summary Bar & Notion Database Toolbar (Sticky Top-0) ── */}
+      <div 
+        className="sticky top-0 z-30 transition-colors shadow-md border-b-2 border-slate-300 dark:border-slate-700 bg-white/98 dark:bg-[#141414]/98 backdrop-blur-md"
+      >
         {/* Date Selector & Filters Bar */}
         <div 
-          className="border-t px-4 py-2 bg-slate-500/5"
-          style={{ borderColor: 'var(--border-main, #e2e8f0)' }}
+          className="px-4 sm:px-8 py-2 border-b border-slate-200 dark:border-slate-800"
         >
-          <div className="w-full px-4 sm:px-8 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="w-full flex flex-wrap items-center justify-between gap-2.5 text-xs">
             {/* Date Selector Controls */}
             <div className="flex items-center gap-1.5">
               <button
+                type="button"
                 onClick={() => shiftDate(-1)}
-                className="p-1 rounded-lg border hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                className="w-8 h-8 flex items-center justify-center rounded-xl border-2 border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs shrink-0"
                 title="Hari Sebelumnya"
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
+                <ChevronLeft className="w-4 h-4 text-black dark:text-white stroke-[2.5]" />
               </button>
 
               <div 
-                className="flex items-center gap-2 px-3 py-1 rounded-xl border shadow-xs"
-                style={{
-                  backgroundColor: 'var(--card-bg, #ffffff)',
-                  borderColor: 'var(--border-main, #cbd5e1)'
-                }}
+                className="flex items-center gap-2 px-3 py-1 rounded-xl border-2 border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-2xs"
               >
-                <Calendar className="w-3.5 h-3.5 text-teal-500 shrink-0" />
+                <Calendar className="w-3.5 h-3.5 text-black dark:text-white shrink-0 stroke-[2.2]" />
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-transparent outline-none font-bold text-xs cursor-pointer"
-                  style={{ color: 'var(--text-main, #0f172a)' }}
+                  className="bg-transparent outline-none font-black text-xs cursor-pointer text-black dark:text-white"
                 />
               </div>
 
               <button
+                type="button"
                 onClick={() => shiftDate(1)}
-                className="p-1 rounded-lg border hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
+                className="w-8 h-8 flex items-center justify-center rounded-xl border-2 border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs shrink-0"
                 title="Hari Berikutnya"
               >
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ChevronRight className="w-4 h-4 text-black dark:text-white stroke-[2.5]" />
               </button>
 
               {selectedDate !== getTodayStr() && (
                 <button
+                  type="button"
                   onClick={() => setSelectedDate(getTodayStr())}
-                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 transition-colors cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-black text-black dark:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border-2 border-slate-400 dark:border-slate-600 transition-colors cursor-pointer shadow-2xs"
                 >
-                  Kembali ke Hari Ini
+                  Hari Ini
                 </button>
               )}
             </div>
 
             {/* Header Module Mode Switcher: Log Book All Task | Log Book Routine | Log Book Non Routine */}
-            <div className="flex items-center p-1 rounded-xl border bg-slate-100/90 dark:bg-slate-800/80 shadow-2xs gap-1 border-slate-200 dark:border-slate-700">
+            <div className="flex items-center p-1 rounded-xl border-2 border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/90 shadow-2xs gap-1">
               <button
                 type="button"
                 onClick={() => setModuleMode('ALL')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
                   moduleMode === 'ALL'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs border border-slate-200/80 dark:border-slate-700'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                    ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-extrabold shadow-xs border border-slate-900 dark:border-slate-100'
+                    : 'text-slate-800 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white font-bold'
                 }`}
                 title="Tampilkan seluruh modul kegiatan (Routine & Non Routine)"
               >
-                <ClipboardCheck className="w-3.5 h-3.5 text-slate-500" />
+                <ClipboardCheck className="w-3.5 h-3.5 text-teal-500" />
                 <span>Log Book All Task</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium ${
-                  moduleMode === 'ALL' ? 'bg-slate-200/80 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                  moduleMode === 'ALL' ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900' : 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600'
                 }`}>
                   {allTasksCount}
                 </span>
@@ -3592,17 +3594,17 @@ export function LogbookScreen({
               <button
                 type="button"
                 onClick={() => setModuleMode('ROUTINE')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
                   moduleMode === 'ROUTINE'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs border border-slate-200/80 dark:border-slate-700'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                    ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-extrabold shadow-xs border border-slate-900 dark:border-slate-100'
+                    : 'text-slate-800 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white font-bold'
                 }`}
                 title="Khusus memantau tugas Routine: Daily, Weekly (D-3), Monthly (D-7), Quarterly (M-1), Biannual (M-2), Yearly (M-3)"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <RotateCcw className="w-3.5 h-3.5 text-sky-500" />
                 <span>Log Book Routine</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium ${
-                  moduleMode === 'ROUTINE' ? 'bg-slate-200/80 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                  moduleMode === 'ROUTINE' ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900' : 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600'
                 }`}>
                   {routineCount}
                 </span>
@@ -3611,187 +3613,154 @@ export function LogbookScreen({
               <button
                 type="button"
                 onClick={() => setModuleMode('NON_ROUTINE')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
                   moduleMode === 'NON_ROUTINE'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs border border-slate-200/80 dark:border-slate-700'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                    ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-extrabold shadow-xs border border-slate-900 dark:border-slate-100'
+                    : 'text-slate-800 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white font-bold'
                 }`}
                 title="Khusus memantau instruksi operasional non rutin / penugasan harian"
               >
-                <Sparkles className="w-3.5 h-3.5 text-slate-500" />
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                 <span>Log Book Non Routine</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium ${
-                  moduleMode === 'NON_ROUTINE' ? 'bg-slate-200/80 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                  moduleMode === 'NON_ROUTINE' ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900' : 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600'
                 }`}>
                   {nonRoutineCount}
                 </span>
               </button>
             </div>
+          </div>
 
-            {/* Section & Universe Filters */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Section Filter / Display */}
-              {(isSuperAdmin || isMeetingRoom || userSection === 'ALL') ? (
-                <select
-                  value={selectedSection}
-                  onChange={(e) => setSelectedSection(e.target.value)}
-                  className="px-2.5 py-1 rounded-xl border text-xs font-semibold outline-none cursor-pointer"
-                  style={{
-                    backgroundColor: 'var(--card-bg, #ffffff)',
-                    borderColor: 'var(--border-main, #cbd5e1)',
-                    color: 'var(--text-main, #0f172a)'
-                  }}
-                >
-                  {SECTION_OPTIONS.map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              ) : (
-                <div 
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs font-bold"
-                  style={{
-                    backgroundColor: 'var(--card-bg, #ffffff)',
-                    borderColor: 'var(--border-main, #cbd5e1)',
-                    color: 'var(--text-main, #0f172a)'
-                  }}
-                  title="Seksi Anda otomatis terdeteksi dari profil"
-                >
-                  <span className="w-2 h-2 rounded-full bg-teal-500" />
-                  <span>Seksi: {userSection}</span>
-                </div>
-              )}
-
-              {/* PT / Universe Filter */}
+          {/* Section & Universe Filters Row */}
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            {/* Section Filter / Display */}
+            {(isSuperAdmin || isMeetingRoom || userSection === 'ALL') ? (
               <select
-                value={selectedPt}
-                onChange={(e) => setSelectedPt(e.target.value)}
-                className="px-2.5 py-1 rounded-xl border text-xs font-semibold outline-none cursor-pointer"
-                style={{
-                  backgroundColor: 'var(--card-bg, #ffffff)',
-                  borderColor: 'var(--border-main, #cbd5e1)',
-                  color: 'var(--text-main, #0f172a)'
-                }}
+                value={selectedSection}
+                onChange={(e) => setSelectedSection(e.target.value)}
+                className="px-2.5 py-1 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-bold outline-none cursor-pointer shadow-2xs hover:border-slate-500 focus:border-teal-600"
               >
-                <option value="TBP">Universe TBP / GPS</option>
-                <option value="GTS">Universe GTS</option>
-                <option value="ALL">Semua Universe</option>
+                {SECTION_OPTIONS.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
               </select>
-
-              {/* Activity / Routine Cadence Filter */}
-              <select
-                value={activityFilter}
-                onChange={(e) => setActivityFilter(e.target.value)}
-                className="px-2.5 py-1 rounded-xl border text-xs font-semibold outline-none cursor-pointer"
-                style={{
-                  backgroundColor: 'var(--card-bg, #ffffff)',
-                  borderColor: 'var(--border-main, #cbd5e1)',
-                  color: 'var(--text-main, #0f172a)'
-                }}
-              >
-                <option value="ALL">Semua Frekuensi</option>
-                <option value="Daily">🔁 Daily (Tiap Hari)</option>
-                <option value="Weekly">📅 Weekly (D-3)</option>
-                <option value="Monthly">🗓️ Monthly (D-7)</option>
-                <option value="Quarterly">📊 Quarterly (M-1)</option>
-                <option value="Biannual">⏳ Biannual (M-2)</option>
-                <option value="Yearly">🎯 Yearly (M-3)</option>
-                <option value="Non Routine">⚡ Non Routine</option>
-              </select>
-
-              {/* PIC Filter (if tasks available) */}
-              {uniquePics.length > 0 && (
-                <select
-                  value={picFilter}
-                  onChange={(e) => setPicFilter(e.target.value)}
-                  className="px-2.5 py-1 rounded-xl border text-xs font-semibold outline-none cursor-pointer"
-                  style={{
-                    backgroundColor: 'var(--card-bg, #ffffff)',
-                    borderColor: 'var(--border-main, #cbd5e1)',
-                    color: 'var(--text-main, #0f172a)'
-                  }}
-                >
-                  <option value="ALL">Semua PIC ({uniquePics.length})</option>
-                  {uniquePics.map(p => (
-                    <option key={p.nik} value={p.nik}>{p.name}</option>
-                  ))}
-                </select>
-              )}
-
-              {/* Search Bar */}
+            ) : (
               <div 
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl border"
-                style={{
-                  backgroundColor: 'var(--card-bg, #ffffff)',
-                  borderColor: 'var(--border-main, #cbd5e1)'
-                }}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-extrabold shadow-2xs"
+                title="Seksi Anda otomatis terdeteksi dari profil"
               >
-                <Search className="w-3.5 h-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Cari kegiatan / PIC..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-transparent outline-none text-xs w-28 sm:w-36 font-medium"
-                  style={{ color: 'var(--text-main, #0f172a)' }}
-                />
+                <span className="w-2 h-2 rounded-full bg-teal-500" />
+                <span>Seksi: {userSection}</span>
               </div>
+            )}
 
-              {/* Quick Expand / Collapse All Checklists */}
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={expandAllTasks}
-                  className="px-2 py-1 rounded-xl border text-[11px] font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
-                  style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
-                  title="Buka semua rincian subtask checklist untuk briefing"
-                >
-                  <ChevronDown className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                  <span className="hidden sm:inline">Buka Semua</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={collapseAllTasks}
-                  className="px-2 py-1 rounded-xl border text-[11px] font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
-                  style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
-                  title="Tutup semua rincian subtask checklist"
-                >
-                  <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="hidden sm:inline">Tutup Semua</span>
-                </button>
-              </div>
+            {/* PT / Universe Filter */}
+            <select
+              value={selectedPt}
+              onChange={(e) => setSelectedPt(e.target.value)}
+              className="px-2.5 py-1 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-bold outline-none cursor-pointer shadow-2xs hover:border-slate-500 focus:border-teal-600"
+            >
+              <option value="TBP">Universe TBP / GPS</option>
+              <option value="GTS">Universe GTS</option>
+              <option value="ALL">Semua Universe</option>
+            </select>
 
+            {/* Activity / Routine Cadence Filter */}
+            <select
+              value={activityFilter}
+              onChange={(e) => setActivityFilter(e.target.value)}
+              className="px-2.5 py-1 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-bold outline-none cursor-pointer shadow-2xs hover:border-slate-500 focus:border-teal-600"
+            >
+              <option value="ALL">Semua Frekuensi</option>
+              <option value="Daily">🔁 Daily (Tiap Hari)</option>
+              <option value="Weekly">📅 Weekly (D-3)</option>
+              <option value="Monthly">🗓️ Monthly (D-7)</option>
+              <option value="Quarterly">📊 Quarterly (M-1)</option>
+              <option value="Biannual">⏳ Biannual (M-2)</option>
+              <option value="Yearly">🎯 Yearly (M-3)</option>
+              <option value="Non Routine">⚡ Non Routine</option>
+            </select>
+
+            {/* PIC Filter (if tasks available) */}
+            {uniquePics.length > 0 && (
+              <select
+                value={picFilter}
+                onChange={(e) => setPicFilter(e.target.value)}
+                className="px-2.5 py-1 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-bold outline-none cursor-pointer shadow-2xs hover:border-slate-500 focus:border-teal-600"
+              >
+                <option value="ALL">Semua PIC ({uniquePics.length})</option>
+                {uniquePics.map(p => (
+                  <option key={p.nik} value={p.nik}>{p.name}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Search Bar */}
+            <div 
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-2xs"
+            >
+              <Search className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
+              <input
+                type="text"
+                placeholder="Cari kegiatan / PIC..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-transparent outline-none text-xs w-28 sm:w-36 font-bold text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400"
+              />
+            </div>
+
+            {/* Quick Expand / Collapse All Checklists */}
+            <div className="flex items-center gap-1.5">
               <button
-                onClick={fetchTasks}
-                className="p-1 rounded-xl border hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                style={{ borderColor: 'var(--border-main, #cbd5e1)' }}
-                title="Muat ulang data"
+                type="button"
+                onClick={expandAllTasks}
+                className="px-2.5 py-1 rounded-xl border-2 border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-[11px] font-black text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                title="Buka semua rincian subtask checklist untuk briefing"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                <ChevronDown className="w-3.5 h-3.5 text-black dark:text-white stroke-[2.5]" />
+                <span className="font-black text-black dark:text-white">Buka Semua</span>
+              </button>
+              <button
+                type="button"
+                onClick={collapseAllTasks}
+                className="px-2.5 py-1 rounded-xl border-2 border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-[11px] font-black text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                title="Tutup semua rincian subtask checklist"
+              >
+                <ChevronUp className="w-3.5 h-3.5 text-black dark:text-white stroke-[2.5]" />
+                <span className="font-black text-black dark:text-white">Tutup Semua</span>
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={fetchTasks}
+              className="w-8 h-8 flex items-center justify-center rounded-xl border-2 border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs shrink-0"
+              title="Muat ulang data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-black dark:text-white stroke-[2.2] ${loading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* Main Content Body */}
-      <div className="w-full px-4 sm:px-8 lg:px-10 py-3 sm:py-4 space-y-4 transition-all duration-300">
         {/* Compact Notion-Style KPI Summary Bar */}
         {summaryData && (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-[#fbfbfa] dark:bg-[#1a1a1a] text-xs">
-              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-slate-800 dark:text-slate-200">
+          <div className="px-4 sm:px-8 py-1.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-[#1a1a1a]/80">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-slate-900 dark:text-slate-100 font-bold">
                 <div 
                   className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
                   onClick={() => setActiveSection('today')}
                   title="Fokus Pekerjaan Hari Ini"
                 >
-                  <Clock className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="font-semibold text-slate-900 dark:text-white">Fokus Hari Ini:</span>
-                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{summaryData.totalToday}</span>
-                  <span className="text-[11px] text-slate-500 hidden sm:inline">({summaryData.openToday} Open, {summaryData.inProgressToday} On Progress)</span>
+                  <Clock className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
+                  <span className="font-extrabold text-slate-950 dark:text-white">Fokus Hari Ini:</span>
+                  <span className="font-mono font-black text-slate-950 dark:text-white">{summaryData.totalToday}</span>
+                  <span className="text-[11px] text-slate-800 dark:text-slate-200 font-semibold hidden sm:inline">
+                    (<strong className="text-amber-800 dark:text-amber-300 font-black">{summaryData.openToday} Open</strong>, <strong className="text-blue-800 dark:text-blue-300 font-black">{summaryData.inProgressToday} On Progress</strong>)
+                  </span>
                 </div>
 
-                <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+                <span className="text-slate-400 dark:text-slate-500 font-black hidden sm:inline">•</span>
 
                 <div 
                   className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
@@ -3799,11 +3768,11 @@ export function LogbookScreen({
                   title="Pekerjaan Selesai Hari Ini"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="font-semibold text-slate-900 dark:text-white">Selesai:</span>
-                  <span className="font-mono font-bold text-emerald-800 dark:text-emerald-400">{summaryData.completedToday}</span>
+                  <span className="font-extrabold text-slate-950 dark:text-white">Selesai:</span>
+                  <span className="font-mono font-black text-emerald-800 dark:text-emerald-400">{summaryData.completedToday}</span>
                 </div>
 
-                <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+                <span className="text-slate-400 dark:text-slate-500 font-black hidden sm:inline">•</span>
 
                 <div 
                   className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
@@ -3814,19 +3783,21 @@ export function LogbookScreen({
                   title="Progres Evaluasi Kemarin (H-1)"
                 >
                   <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="font-semibold text-slate-900 dark:text-white">Progres Kemarin:</span>
-                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{summaryData.completedYesterday || 0}/{summaryData.totalYesterday || 0}</span>
-                  <span className="text-[11px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-900 border border-amber-200/80 font-medium">
+                  <span className="font-extrabold text-slate-950 dark:text-white">Progres Kemarin:</span>
+                  <span className="font-mono font-black text-slate-950 dark:text-white">{summaryData.completedYesterday || 0}/{summaryData.totalYesterday || 0}</span>
+                  <span className="text-[11px] px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-black">
                     {summaryData.yesterdayProgressPercent || 0}%
                   </span>
-                  <span className="text-[11px] text-slate-500 hidden md:inline">({summaryData.totalCarryOver || 0} carry-over)</span>
+                  <span className="text-[11px] text-slate-800 dark:text-slate-200 font-semibold hidden md:inline">
+                    (<strong className="text-rose-800 dark:text-rose-300 font-black">{summaryData.totalCarryOver || 0}</strong> carry-over)
+                  </span>
                 </div>
 
-                <span className="text-slate-300 dark:text-slate-700 hidden md:inline">•</span>
+                <span className="text-slate-400 dark:text-slate-500 font-black hidden md:inline">•</span>
 
                 <div className="flex items-center gap-1.5 hidden md:flex" title="Persentase Target Kegiatan Hari Ini">
-                  <span className="font-semibold text-slate-900 dark:text-white">Target Capaian:</span>
-                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+                  <span className="font-extrabold text-slate-950 dark:text-white">Target Capaian:</span>
+                  <span className="font-mono font-black text-teal-800 dark:text-teal-300">
                     {summaryData.totalToday > 0 ? Math.round((summaryData.completedToday / summaryData.totalToday) * 100) : 0}%
                   </span>
                 </div>
@@ -3835,120 +3806,29 @@ export function LogbookScreen({
               <button 
                 type="button"
                 onClick={() => setShowDetailedKpi(!showDetailedKpi)}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer px-2 py-1 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ml-auto shrink-0"
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-800 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white cursor-pointer px-2 py-1 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ml-auto shrink-0"
               >
                 <span>{showDetailedKpi ? 'Sembunyikan Kartu' : 'Detail Kartu'}</span>
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showDetailedKpi ? 'rotate-180' : ''}`} />
               </button>
             </div>
-
-            {/* Expandable Detailed KPI Cards (Clean Notion Styling) */}
-            {showDetailedKpi && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
-                {/* Card 1: Fokus Hari Ini */}
-                <div 
-                  onClick={() => setActiveSection('today')}
-                  className={`p-3.5 rounded-xl border bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer ${
-                    activeSection === 'today' ? 'border-slate-400 dark:border-slate-600 ring-1 ring-slate-300' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-                    <span>Fokus Hari Ini</span>
-                    <Clock className="w-3.5 h-3.5 text-slate-500" />
-                  </div>
-                  <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">
-                    {summaryData.totalToday} <span className="text-xs font-normal text-slate-500">kegiatan</span>
-                  </p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                    {summaryData.openToday} Open • {summaryData.inProgressToday} In Progress
-                  </p>
-                </div>
-
-                {/* Card 2: Selesai Hari Ini */}
-                <div 
-                  onClick={() => setActiveSection('today')}
-                  className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer hover:border-slate-300"
-                >
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-                    <span>Selesai Hari Ini</span>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  </div>
-                  <p className="text-2xl font-bold mt-1 text-emerald-700 dark:text-emerald-400">
-                    {summaryData.completedToday}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Resolved & Closed
-                  </p>
-                </div>
-
-                {/* Card 3: Progres Kemarin */}
-                <div 
-                  onClick={() => {
-                    setActiveSection('yesterday');
-                    setEvalScope('yesterday');
-                  }}
-                  className={`p-3.5 rounded-xl border bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer ${
-                    activeSection === 'yesterday' ? 'border-slate-400 dark:border-slate-600 ring-1 ring-slate-300' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-                    <span>Progres Kemarin (H-1)</span>
-                    <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
-                  </div>
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                      {summaryData.completedYesterday || 0}/{summaryData.totalYesterday || 0}
-                    </p>
-                    <span className="text-[11px] font-medium text-amber-900 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/80">
-                      {summaryData.yesterdayProgressPercent || 0}%
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {summaryData.totalCarryOver || 0} carry-over berjalan
-                  </p>
-                </div>
-
-                {/* Card 4: Target Penyelesaian */}
-                <div 
-                  onClick={() => setActiveSection('today')}
-                  className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer hover:border-slate-300"
-                >
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-                    <span>Target Penyelesaian</span>
-                    <TrendingUp className="w-3.5 h-3.5 text-slate-500" />
-                  </div>
-                  <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">
-                    {summaryData.totalToday > 0 ? Math.round((summaryData.completedToday / summaryData.totalToday) * 100) : 0}%
-                  </p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Target Kegiatan Seksi
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* NOTION DATABASE TOOLBAR & CONTROLS (Identical to NotionDatabaseTable)      */}
-        {/* ========================================================================= */}
-        <div 
-          className={`p-3 rounded-2xl border shadow-xs transition-colors flex flex-col gap-3 ${
-            isNotionLight ? 'bg-white border-slate-200' : 'bg-[#1e1e1e] border-[#334155]'
-          }`}
-        >
+        {/* Notion Database Toolbar & Status Filter Pills */}
+        <div className="px-4 sm:px-8 py-2">
           <div className="flex flex-wrap items-center justify-between gap-2.5">
             {/* Left: View Switcher (Table / Board / Cards) */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-300 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => setViewMode('table')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
                   viewMode === 'table'
                     ? isNotionLight
-                      ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
-                      : 'bg-slate-900 text-teal-300 shadow-xs border border-slate-700'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                      ? 'bg-white text-teal-900 shadow-xs border border-slate-300'
+                      : 'bg-slate-900 text-teal-200 shadow-xs border border-slate-700'
+                    : 'text-slate-800 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white font-bold'
                 }`}
                 title="Tampilan Tabel Database Notion (Grid Ringkas)"
               >
@@ -3959,12 +3839,12 @@ export function LogbookScreen({
               <button
                 type="button"
                 onClick={() => setViewMode('board')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
                   viewMode === 'board'
                     ? isNotionLight
-                      ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
-                      : 'bg-slate-900 text-teal-300 shadow-xs border border-slate-700'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                      ? 'bg-white text-teal-900 shadow-xs border border-slate-300'
+                      : 'bg-slate-900 text-teal-200 shadow-xs border border-slate-700'
+                    : 'text-slate-800 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white font-bold'
                 }`}
                 title="Tampilan Papan Kanban Berdasarkan Status"
               >
@@ -3975,12 +3855,12 @@ export function LogbookScreen({
               <button
                 type="button"
                 onClick={() => setViewMode('list')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
                   viewMode === 'list'
                     ? isNotionLight
-                      ? 'bg-white text-teal-800 shadow-xs border border-slate-200'
-                      : 'bg-slate-900 text-teal-300 shadow-xs border border-slate-700'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                      ? 'bg-white text-teal-900 shadow-xs border border-slate-300'
+                      : 'bg-slate-900 text-teal-200 shadow-xs border border-slate-700'
+                    : 'text-slate-800 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white font-bold'
                 }`}
                 title="Tampilan Kartu Ringkas (2 Kolom)"
               >
@@ -3992,22 +3872,22 @@ export function LogbookScreen({
             {/* Right: Zoom & View Controls */}
             <div className="flex items-center gap-2">
               {/* Zoom Controls */}
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-300 dark:border-slate-700">
                 <button
                   type="button"
                   onClick={() => setZoomPercent(prev => Math.max(70, prev - 10))}
-                  className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                  className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
                   title="Perkecil Tampilan (Zoom Out)"
                 >
                   <ZoomOut className="w-3.5 h-3.5" />
                 </button>
-                <span className="text-[11px] font-mono font-bold px-1 min-w-[36px] text-center text-slate-700 dark:text-slate-300">
+                <span className="text-[11px] font-mono font-black px-1 min-w-[36px] text-center text-slate-950 dark:text-white">
                   {zoomPercent}%
                 </span>
                 <button
                   type="button"
                   onClick={() => setZoomPercent(prev => Math.min(130, prev + 10))}
-                  className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                  className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
                   title="Perbesar Tampilan (Zoom In)"
                 >
                   <ZoomIn className="w-3.5 h-3.5" />
@@ -4018,12 +3898,12 @@ export function LogbookScreen({
               <button
                 type="button"
                 onClick={() => setFitPageMode(!fitPageMode)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-black transition-all cursor-pointer ${
                   fitPageMode
                     ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
                     : isNotionLight
-                    ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                    ? 'bg-white hover:bg-slate-100 text-slate-900 border-slate-300'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-100 border-slate-700'
                 }`}
                 title="Sesuaikan lebar tabel dengan resolusi layar penuh (Fit Page)"
               >
@@ -4048,7 +3928,7 @@ export function LogbookScreen({
           </div>
 
           {/* Bottom Filter Pills: Status & Priority */}
-          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-200 dark:border-slate-800">
+          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-200 dark:border-slate-800 mt-2">
             {[
               { key: 'ALL', label: 'Semua Status', count: (summaryData?.totalToday || 0) + displayedYesterdayTasks.length },
               { key: 'ACTIVE', label: 'Sedang Aktif', count: (summaryData?.openToday || 0) + (summaryData?.inProgressToday || 0) + displayedYesterdayTasks.filter(t => t.status !== 'Closed' && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Canceled').length },
@@ -4064,23 +3944,23 @@ export function LogbookScreen({
                   key={st.key}
                   type="button"
                   onClick={() => setStatusFilter(st.key)}
-                  className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1.5 border cursor-pointer shrink-0 ${
+                  className={`px-3 py-1 rounded-lg font-black text-[11px] transition-all flex items-center gap-1.5 border cursor-pointer shrink-0 ${
                     isActive
                       ? isNotionLight
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                        : 'bg-teal-500/20 text-teal-300 border-teal-500'
+                        ? 'bg-slate-950 text-white border-slate-950 shadow-xs'
+                        : 'bg-teal-500/25 text-teal-200 border-teal-500 shadow-xs'
                       : isNotionLight
-                      ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-                      : 'bg-[#262626] hover:bg-[#333333] text-slate-400 border-slate-700'
+                      ? 'bg-white hover:bg-slate-100 text-slate-900 border-slate-300'
+                      : 'bg-[#222222] hover:bg-[#2c2c2c] text-slate-100 border-slate-600'
                   }`}
                 >
                   <span>{st.label}</span>
                   {st.count !== undefined && st.count > 0 && (
                     <span 
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-black ${
                         isActive
-                          ? isNotionLight ? 'bg-slate-700 text-white' : 'bg-teal-500/30 text-teal-200'
-                          : isNotionLight ? 'bg-slate-100 text-slate-600' : 'bg-[#1e293b] text-slate-400'
+                          ? isNotionLight ? 'bg-slate-800 text-white' : 'bg-teal-500/40 text-teal-100'
+                          : isNotionLight ? 'bg-slate-200 text-slate-950 border border-slate-300' : 'bg-slate-700 text-white border border-slate-600'
                       }`}
                     >
                       {st.count}
@@ -4094,10 +3974,10 @@ export function LogbookScreen({
             <select
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value)}
-              className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold outline-none cursor-pointer transition-colors ${
+              className={`px-2.5 py-1 rounded-lg border text-[11px] font-black outline-none cursor-pointer transition-colors ${
                 isNotionLight
-                  ? 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'
-                  : 'bg-[#262626] border-[#334155] text-[#cbd5e1]'
+                  ? 'bg-white border-slate-300 text-slate-900 hover:border-slate-400'
+                  : 'bg-[#222222] border-[#444] text-slate-100'
               }`}
             >
               <option value="ALL">Semua Prioritas</option>
@@ -4109,41 +3989,132 @@ export function LogbookScreen({
             </select>
           </div>
         </div>
+      </div>
+
+      {/* Main Content Body */}
+      <div className="w-full px-4 sm:px-8 lg:px-10 py-3 sm:py-4 space-y-4 transition-all duration-300">
+        {/* Expandable Detailed KPI Cards (Clean Notion Styling) */}
+        {showDetailedKpi && summaryData && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
+            {/* Card 1: Fokus Hari Ini */}
+            <div 
+              onClick={() => setActiveSection('today')}
+              className={`p-3.5 rounded-xl border bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer ${
+                activeSection === 'today' ? 'border-slate-400 dark:border-slate-600 ring-2 ring-slate-400' : 'border-slate-300 dark:border-slate-700 hover:border-slate-400'
+              }`}
+            >
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                <span>Fokus Hari Ini</span>
+                <Clock className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+              </div>
+              <p className="text-2xl font-black mt-1 text-slate-950 dark:text-white">
+                {summaryData.totalToday} <span className="text-xs font-bold text-slate-600 dark:text-slate-400">kegiatan</span>
+              </p>
+              <p className="text-xs text-slate-800 dark:text-slate-200 font-semibold mt-0.5">
+                <strong className="text-amber-800 dark:text-amber-400 font-bold">{summaryData.openToday} Open</strong> • <strong className="text-blue-800 dark:text-blue-400 font-bold">{summaryData.inProgressToday} In Progress</strong>
+              </p>
+            </div>
+
+            {/* Card 2: Selesai Hari Ini */}
+            <div 
+              onClick={() => setActiveSection('today')}
+              className="p-3.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer hover:border-slate-400"
+            >
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                <span>Selesai Hari Ini</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              </div>
+              <p className="text-2xl font-black mt-1 text-emerald-700 dark:text-emerald-400">
+                {summaryData.completedToday}
+              </p>
+              <p className="text-xs text-slate-700 dark:text-slate-300 font-semibold mt-0.5">
+                Resolved &amp; Closed
+              </p>
+            </div>
+
+            {/* Card 3: Progres Kemarin */}
+            <div 
+              onClick={() => {
+                setActiveSection('yesterday');
+                setEvalScope('yesterday');
+              }}
+              className={`p-3.5 rounded-xl border bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer ${
+                activeSection === 'yesterday' ? 'border-slate-400 dark:border-slate-600 ring-2 ring-slate-400' : 'border-slate-300 dark:border-slate-700 hover:border-slate-400'
+              }`}
+            >
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                <span>Progres Kemarin (H-1)</span>
+                <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
+              </div>
+              <div className="flex items-baseline gap-2 mt-1">
+                <p className="text-2xl font-black text-slate-950 dark:text-white">
+                  {summaryData.completedYesterday || 0}/{summaryData.totalYesterday || 0}
+                </p>
+                <span className="text-[11px] font-black text-amber-950 bg-amber-100 dark:bg-amber-950/60 dark:text-amber-200 px-1.5 py-0.2 rounded border border-amber-300 dark:border-amber-700">
+                  {summaryData.yesterdayProgressPercent || 0}%
+                </span>
+              </div>
+              <p className="text-xs text-slate-700 dark:text-slate-300 font-semibold mt-0.5">
+                <strong className="text-rose-700 dark:text-rose-400 font-bold">{summaryData.totalCarryOver || 0}</strong> carry-over berjalan
+              </p>
+            </div>
+
+            {/* Card 4: Target Penyelesaian */}
+            <div 
+              onClick={() => setActiveSection('today')}
+              className="p-3.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#1f1f1f] shadow-2xs transition-all cursor-pointer hover:border-slate-400"
+            >
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                <span>Target Penyelesaian</span>
+                <TrendingUp className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+              </div>
+              <p className="text-2xl font-black mt-1 text-slate-950 dark:text-white">
+                {summaryData.totalToday > 0 ? Math.round((summaryData.completedToday / summaryData.totalToday) * 100) : 0}%
+              </p>
+              <p className="text-xs text-slate-700 dark:text-slate-300 font-semibold mt-0.5">
+                Target Kegiatan Seksi
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ========================================================================= */}
         {/* 1. NOTION DATABASE TABLE VIEW (Default & Parity with NotionDatabaseTable)  */}
         {/* ========================================================================= */}
         {viewMode === 'table' && (
           <div 
-            className={`overflow-x-auto transition-all rounded-2xl border shadow-xs ${
-              isNotionLight ? 'bg-white border-slate-200' : 'bg-[#191919] border-[#334155]'
+            className={`overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] transition-all rounded-2xl border shadow-xs notion-table-scroll-freeze ${
+              isNotionLight ? 'bg-white border-slate-300' : 'bg-[#191919] border-[#334155]'
             }`}
             style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
           >
             <table className={`w-full text-left border-collapse ${fitPageMode ? 'table-fixed text-[11px]' : 'text-xs'}`}>
-              {/* Sticky Column Headers */}
-              <thead>
+              {/* Column Headers - Sticky Pinned with Controls */}
+              <thead className="sticky top-0 z-20 shadow-xs">
                 <tr 
-                  className={`border-b select-none transition-colors ${
+                  className={`border-b-2 select-none transition-colors ${
                     isNotionLight
-                      ? 'bg-[#fbfbfa] border-slate-200 text-slate-600'
-                      : 'bg-[#242424] border-[#303030] text-slate-400'
+                      ? 'bg-slate-100 border-slate-300 text-slate-950 font-black'
+                      : 'bg-slate-800 border-slate-700 text-slate-100 font-bold'
                   }`}
                 >
-                  <th className={`text-center ${fitPageMode ? 'w-[3%] px-1 py-2.5' : 'w-10 px-2 py-3'}`} style={getColStyle('drag')}>
-                    <GripVertical className="w-3.5 h-3.5 text-slate-400 mx-auto" />
+                  <th 
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 text-center ${fitPageMode ? 'w-[3%] px-1 py-2.5' : 'w-10 px-2 py-3'}`} 
+                    style={getColStyle('drag')}
+                  >
+                    <GripVertical className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400 mx-auto" />
                   </th>
 
                   <th 
                     onClick={() => handleSort('date')}
                     style={getColStyle('number')}
-                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[4%] text-center px-1 py-2.5' : 'w-14 text-center px-2 py-3'
                     }`}
                   >
                     <div className="flex items-center justify-center gap-1">
                       <span>#</span>
-                      {sortColumn === 'date' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                      {sortColumn === 'date' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
                     <div 
                       onMouseDown={(e) => handleResizeStart('number', e)} 
@@ -4155,14 +4126,14 @@ export function LogbookScreen({
                   <th 
                     onClick={() => handleSort('title')}
                     style={getColStyle('title')}
-                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[28%] px-2.5 py-2.5' : 'min-w-[280px] px-3.5 py-3'
                     }`}
                   >
                     <div className="flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-slate-400" />
+                      <FileText className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
                       <span>Kegiatan / Arahan Tugas</span>
-                      {sortColumn === 'title' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                      {sortColumn === 'title' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
                     <div 
                       onMouseDown={(e) => handleResizeStart('title', e)} 
@@ -4174,14 +4145,14 @@ export function LogbookScreen({
                   <th 
                     onClick={() => handleSort('cadence')}
                     style={getColStyle('cadence')}
-                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[120px] px-3 py-3'
                     }`}
                   >
                     <div className="flex items-center gap-1.5">
-                      <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                      <RotateCcw className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
                       <span>Frekuensi</span>
-                      {sortColumn === 'cadence' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                      {sortColumn === 'cadence' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
                     <div 
                       onMouseDown={(e) => handleResizeStart('cadence', e)} 
@@ -4193,14 +4164,14 @@ export function LogbookScreen({
                   <th 
                     onClick={() => handleSort('status')}
                     style={getColStyle('status')}
-                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[12%] px-1.5 py-2.5' : 'min-w-[140px] px-3 py-3'
                     }`}
                   >
                     <div className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
                       <span>Status</span>
-                      {sortColumn === 'status' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                      {sortColumn === 'status' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
                     <div 
                       onMouseDown={(e) => handleResizeStart('status', e)} 
@@ -4212,14 +4183,14 @@ export function LogbookScreen({
                   <th 
                     onClick={() => handleSort('priority')}
                     style={getColStyle('priority')}
-                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[9%] px-1.5 py-2.5' : 'min-w-[110px] px-3 py-3'
                     }`}
                   >
                     <div className="flex items-center gap-1.5">
-                      <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
+                      <AlertCircle className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
                       <span>Prioritas</span>
-                      {sortColumn === 'priority' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                      {sortColumn === 'priority' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
                     <div 
                       onMouseDown={(e) => handleResizeStart('priority', e)} 
@@ -4231,14 +4202,14 @@ export function LogbookScreen({
                   <th 
                     onClick={() => handleSort('pic')}
                     style={getColStyle('pic')}
-                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[13%] px-2 py-2.5' : 'min-w-[150px] px-3 py-3'
                     }`}
                   >
                     <div className="flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-slate-400" />
+                      <User className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
                       <span>PIC Pelaksana</span>
-                      {sortColumn === 'pic' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                      {sortColumn === 'pic' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
                     <div 
                       onMouseDown={(e) => handleResizeStart('pic', e)} 
@@ -4249,10 +4220,10 @@ export function LogbookScreen({
 
                   <th 
                     style={getColStyle('duration')}
-                    className={`relative group/th font-bold select-none ${fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[130px] px-3 py-3'}`}
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black select-none ${fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[130px] px-3 py-3'}`}
                   >
                     <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <Clock className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
                       <span>Mulai & Durasi</span>
                     </div>
                     <div 
@@ -4265,14 +4236,14 @@ export function LogbookScreen({
                   <th 
                     onClick={() => handleSort('progress')}
                     style={getColStyle('progress')}
-                    className={`relative group/th font-bold cursor-pointer hover:opacity-80 transition-opacity select-none ${
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[9%] px-1.5 py-2.5' : 'min-w-[120px] px-3 py-3'
                     }`}
                   >
                     <div className="flex items-center gap-1.5">
-                      <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                      <TrendingUp className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
                       <span>Progress</span>
-                      {sortColumn === 'progress' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-500" /> : <ArrowDown className="w-3 h-3 text-teal-500" />)}
+                      {sortColumn === 'progress' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
                     <div 
                       onMouseDown={(e) => handleResizeStart('progress', e)} 
@@ -4283,7 +4254,7 @@ export function LogbookScreen({
 
                   <th 
                     style={getColStyle('actions')}
-                    className={`relative group/th text-center font-bold select-none ${fitPageMode ? 'w-[8%] px-1 py-2.5' : 'w-24 px-3 py-3'}`}
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th text-center font-black select-none ${fitPageMode ? 'w-[8%] px-1 py-2.5' : 'w-24 px-3 py-3'}`}
                   >
                     Aksi
                     <div 
@@ -4331,32 +4302,32 @@ export function LogbookScreen({
                       }
                     }
                   }}
-                  className={`cursor-pointer select-none transition-colors border-y font-medium text-xs ${
+                  className={`cursor-pointer select-none transition-colors border-y font-bold text-xs ${
                     isDragOverToday
-                      ? 'bg-slate-200/60 border-slate-400 ring-1 ring-slate-400'
+                      ? 'bg-slate-200/60 border-slate-400 ring-2 ring-slate-400'
                       : isNotionLight
-                      ? 'bg-[#f7f6f5] hover:bg-[#efedea] text-slate-900 border-slate-200'
-                      : 'bg-[#202020] hover:bg-[#282828] text-slate-100 border-slate-800'
+                      ? 'bg-slate-100 hover:bg-slate-200/70 text-slate-950 border-slate-300'
+                      : 'bg-[#222222] hover:bg-[#2a2a2a] text-slate-100 border-slate-700'
                   }`}
                 >
                   <td colSpan={10} className="px-3.5 py-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-500 select-none">
+                        <span className="text-[11px] text-slate-700 dark:text-slate-300 font-black select-none">
                           {collapsedGroups.today ? '▶' : '▼'}
                         </span>
                         <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-xs tracking-tight text-slate-900 dark:text-slate-100">
-                            📌 1. PLANNING & ARAHAN HARI INI
+                          <span className="font-black text-xs tracking-tight text-slate-950 dark:text-slate-100">
+                            📌 1. PLANNING &amp; ARAHAN HARI INI
                           </span>
                         </div>
-                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-medium ${
-                          isNotionLight ? 'bg-slate-200/80 text-slate-800' : 'bg-slate-800 text-slate-200'
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-black ${
+                          isNotionLight ? 'bg-slate-200 text-slate-950 border border-slate-300' : 'bg-slate-700 text-white border border-slate-600'
                         }`}>
                           {tableTodayTasks.length} kegiatan
                         </span>
                         {isDragOverToday && (
-                          <span className="text-xs font-semibold text-teal-700 dark:text-teal-300 animate-pulse pl-2">
+                          <span className="text-xs font-black text-teal-800 dark:text-teal-200 animate-pulse pl-2">
                             ← Lepaskan di sini untuk masukkan ke Planning Hari Ini
                           </span>
                         )}
@@ -4465,7 +4436,7 @@ export function LogbookScreen({
                             </td>
 
                             {/* No */}
-                            <td className="text-center font-mono text-[11px] px-2 py-2.5 text-slate-500">
+                            <td className="text-center font-mono text-[11px] px-2 py-2.5 font-bold text-slate-900 dark:text-slate-100">
                               {idx + 1}
                             </td>
 
@@ -4479,7 +4450,7 @@ export function LogbookScreen({
                                     toggleExpand(task.id);
                                   }}
                                   className={`p-0.5 rounded transition-transform mt-0.5 cursor-pointer ${
-                                    isExpanded ? 'rotate-90 text-teal-600' : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                    isExpanded ? 'rotate-90 text-teal-600' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
                                   }`}
                                   title={isExpanded ? 'Tutup subtask checklist' : 'Buka subtask checklist'}
                                 >
@@ -4494,12 +4465,12 @@ export function LogbookScreen({
                                   >
                                     <span className={isDone ? 'line-through opacity-75' : ''}>{task.title}</span>
                                     {hasSubtasks && (
-                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 font-bold shrink-0">
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-teal-500/15 text-teal-800 dark:text-teal-300 border border-teal-500/30 font-black shrink-0">
                                         ✓ {parsed.completed}/{parsed.total}
                                       </span>
                                     )}
                                     {task.bulletinPostId && (
-                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 shrink-0">
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600 font-bold shrink-0">
                                         Labnote #{task.bulletinPostId}
                                       </span>
                                     )}
@@ -4510,7 +4481,7 @@ export function LogbookScreen({
 
                             {/* Frekuensi / Cadence */}
                             <td className="px-3 py-2.5 whitespace-nowrap">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${routineInfo.color}`}>
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border shadow-2xs ${routineInfo.color}`}>
                                 {routineInfo.label}
                               </span>
                             </td>
@@ -4527,14 +4498,14 @@ export function LogbookScreen({
 
                             {/* Prioritas */}
                             <td className="px-3 py-2.5 whitespace-nowrap">
-                              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
                                 task.priority === 'Urgent'
-                                  ? 'bg-rose-50 text-rose-900 border border-rose-200/80'
+                                  ? 'bg-rose-100 text-rose-950 border border-rose-300'
                                   : task.priority === 'High'
-                                  ? 'bg-amber-50 text-amber-900 border border-amber-200/80'
+                                  ? 'bg-amber-100 text-amber-950 border border-amber-300'
                                   : task.priority === 'Low'
-                                  ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                                  : 'bg-slate-100 text-slate-800 border border-slate-200'
+                                  ? 'bg-slate-200 text-slate-900 border border-slate-300'
+                                  : 'bg-slate-200 text-slate-900 border border-slate-300'
                               }`}>
                                 {task.priority}
                               </span>
@@ -4553,18 +4524,7 @@ export function LogbookScreen({
                                 {picList.length === 0 ? (
                                   <span className="text-[11px] text-slate-400 italic">Pilih PIC...</span>
                                 ) : (
-                                  picList.map((p, pIdx) => (
-                                    <span 
-                                      key={pIdx}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
-                                      title={`${p.name} (${p.nik || '-'})`}
-                                    >
-                                      <span className="w-3.5 h-3.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
-                                        {p.name.charAt(0).toUpperCase()}
-                                      </span>
-                                      <span className="truncate max-w-[90px]">{p.name}</span>
-                                    </span>
-                                  ))
+                                  <PicAvatarGroup pics={picList} employeesList={employeesList} />
                                 )}
                               </div>
 
@@ -4624,23 +4584,23 @@ export function LogbookScreen({
                             {/* Mulai & Durasi */}
                             <td className="px-3 py-2.5 whitespace-nowrap">
                               <div className="text-[11px] font-medium" title={`Mulai: ${durationInfo.displayStartDate}`}>
-                                <p className="font-bold text-slate-700 dark:text-slate-300">{durationInfo.durationLabel}</p>
-                                <p className="text-[10px] text-slate-500">Mulai: {durationInfo.displayStartDate}</p>
+                                <p className="font-extrabold text-slate-900 dark:text-slate-100">{durationInfo.durationLabel}</p>
+                                <p className="text-[10px] font-semibold text-slate-700 dark:text-slate-300">Mulai: {durationInfo.displayStartDate}</p>
                               </div>
                             </td>
 
                             {/* Progress */}
                             <td className="px-3 py-2.5 whitespace-nowrap">
                               <div className="flex items-center gap-1.5 w-24">
-                                <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                <div className="flex-1 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full overflow-hidden">
                                   <div 
                                     className={`h-full rounded-full transition-all duration-300 ${
-                                      isDone ? 'bg-emerald-500' : isInProgress ? 'bg-teal-600' : progressPercent > 0 ? 'bg-sky-500' : 'bg-slate-400'
+                                      isDone ? 'bg-emerald-600' : isInProgress ? 'bg-teal-600' : progressPercent > 0 ? 'bg-sky-600' : 'bg-slate-500'
                                     }`}
                                     style={{ width: `${progressPercent}%` }}
                                   />
                                 </div>
-                                <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-400 min-w-[28px] text-right">
+                                <span className="text-[10px] font-mono font-black text-slate-950 dark:text-slate-50 min-w-[28px] text-right">
                                   {progressPercent}%
                                 </span>
                               </div>
@@ -4883,32 +4843,32 @@ export function LogbookScreen({
                       }
                     }
                   }}
-                  className={`cursor-pointer select-none transition-colors border-y font-medium text-xs ${
+                  className={`cursor-pointer select-none transition-colors border-y font-bold text-xs ${
                     isDragOverYesterday
-                      ? 'bg-slate-200/60 border-slate-400 ring-1 ring-slate-400'
+                      ? 'bg-slate-200/60 border-slate-400 ring-2 ring-slate-400'
                       : isNotionLight
-                      ? 'bg-[#f7f6f5] hover:bg-[#efedea] text-slate-900 border-slate-200'
-                      : 'bg-[#202020] hover:bg-[#282828] text-slate-100 border-slate-800'
+                      ? 'bg-slate-100 hover:bg-slate-200/70 text-slate-950 border-slate-300'
+                      : 'bg-[#222222] hover:bg-[#2a2a2a] text-slate-100 border-slate-700'
                   }`}
                 >
                   <td colSpan={10} className="px-3.5 py-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-500 select-none">
+                        <span className="text-[11px] text-slate-700 dark:text-slate-300 font-black select-none">
                           {collapsedGroups.yesterday ? '▶' : '▼'}
                         </span>
                         <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-xs tracking-tight text-slate-900 dark:text-slate-100">
-                            ⏳ 2. EVALUASI & PROGRES KEMARIN / BACKLOG
+                          <span className="font-black text-xs tracking-tight text-slate-950 dark:text-slate-100">
+                            ⏳ 2. EVALUASI &amp; PROGRES KEMARIN / BACKLOG
                           </span>
                         </div>
-                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-medium ${
-                          isNotionLight ? 'bg-slate-200/80 text-slate-800' : 'bg-slate-800 text-slate-200'
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-black ${
+                          isNotionLight ? 'bg-slate-200 text-slate-950 border border-slate-300' : 'bg-slate-700 text-white border border-slate-600'
                         }`}>
                           {tableYesterdayTasks.length} kegiatan
                         </span>
                         {isDragOverYesterday && (
-                          <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 animate-pulse pl-2">
+                          <span className="text-xs font-black text-amber-800 dark:text-amber-300 animate-pulse pl-2">
                             ← Lepaskan di sini untuk kembalikan ke Backlog Kemarin
                           </span>
                         )}
@@ -4916,14 +4876,14 @@ export function LogbookScreen({
 
                       {/* Scope Switcher & Management Report Copy */}
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center bg-slate-200/60 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-300 dark:border-slate-700">
+                        <div className="flex items-center bg-slate-200 dark:bg-slate-800 p-0.5 rounded-lg border-2 border-slate-300 dark:border-slate-700">
                           <button
                             type="button"
                             onClick={() => setEvalScope('yesterday')}
-                            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer ${
                               evalScope === 'yesterday'
-                                ? 'bg-white text-slate-900 font-semibold shadow-2xs'
-                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                ? 'bg-white text-slate-950 font-black shadow-2xs'
+                                : 'text-slate-800 dark:text-slate-200 hover:text-slate-950 font-bold'
                             }`}
                             title="Tampilkan khusus pekerjaan shift/hari kemarin (H-1)"
                           >
@@ -4932,10 +4892,10 @@ export function LogbookScreen({
                           <button
                             type="button"
                             onClick={() => setEvalScope('all_carryover')}
-                            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer ${
                               evalScope === 'all_carryover'
-                                ? 'bg-white text-slate-900 font-semibold shadow-2xs'
-                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                ? 'bg-white text-slate-950 font-black shadow-2xs'
+                                : 'text-slate-800 dark:text-slate-200 hover:text-slate-950 font-bold'
                             }`}
                             title="Tampilkan seluruh akumulasi carry-over / backlog dari hari-hari sebelumnya"
                           >
@@ -5011,7 +4971,7 @@ export function LogbookScreen({
                             </td>
 
                             {/* No */}
-                            <td className="text-center font-mono text-[11px] px-2 py-2.5 text-slate-500">
+                            <td className="text-center font-mono font-bold text-xs px-2 py-2.5 text-slate-900 dark:text-slate-100">
                               {idx + 1}
                             </td>
 
@@ -5025,7 +4985,7 @@ export function LogbookScreen({
                                     toggleExpand(task.id);
                                   }}
                                   className={`p-0.5 rounded transition-transform mt-0.5 cursor-pointer ${
-                                    isExpanded ? 'rotate-90 text-amber-600' : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                    isExpanded ? 'rotate-90 text-amber-600' : 'text-slate-600 hover:text-slate-950 dark:hover:text-slate-100'
                                   }`}
                                   title={isExpanded ? 'Tutup subtask checklist' : 'Buka subtask checklist'}
                                 >
@@ -5036,7 +4996,7 @@ export function LogbookScreen({
                                   <div 
                                     onClick={() => setSelectedTaskDetail(task)}
                                     className="font-bold text-xs sm:text-sm cursor-pointer hover:text-amber-600 dark:hover:text-amber-400 hover:underline transition-colors flex items-center gap-1.5 flex-wrap"
-                                    style={{ color: isDone ? '#64748b' : isNotionLight ? '#0f172a' : '#f8fafc' }}
+                                    style={{ color: isDone ? '#475569' : isNotionLight ? '#020617' : '#f8fafc' }}
                                   >
                                     <span className={isDone ? 'line-through opacity-75' : ''}>{task.title}</span>
                                     {hasSubtasks && (
@@ -5045,7 +5005,7 @@ export function LogbookScreen({
                                       </span>
                                     )}
                                     {task.bulletinPostId && (
-                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 shrink-0">
+                                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-600 shrink-0">
                                         Labnote #{task.bulletinPostId}
                                       </span>
                                     )}
@@ -5055,7 +5015,7 @@ export function LogbookScreen({
                             </td>
 
                             {/* Frekuensi / Cadence */}
-                            <td className="px-3 py-2.5 whitespace-nowrap">
+                            <td className="px-3.5 py-2.5 whitespace-nowrap">
                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${routineInfo.color}`}>
                                 {routineInfo.label}
                               </span>
@@ -5072,14 +5032,14 @@ export function LogbookScreen({
 
                             {/* Prioritas */}
                             <td className="px-3 py-2.5 whitespace-nowrap">
-                              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
                                 task.priority === 'Urgent'
-                                  ? 'bg-rose-50 text-rose-900 border border-rose-200/80'
+                                  ? 'bg-rose-100 text-rose-950 border border-rose-300'
                                   : task.priority === 'High'
-                                  ? 'bg-amber-50 text-amber-900 border border-amber-200/80'
+                                  ? 'bg-amber-100 text-amber-950 border border-amber-300'
                                   : task.priority === 'Low'
-                                  ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                                  : 'bg-slate-100 text-slate-800 border border-slate-200'
+                                  ? 'bg-slate-100 text-slate-800 border border-slate-300'
+                                  : 'bg-slate-100 text-slate-900 border border-slate-300'
                               }`}>
                                 {task.priority}
                               </span>
@@ -5098,18 +5058,7 @@ export function LogbookScreen({
                                 {picList.length === 0 ? (
                                   <span className="text-[11px] text-slate-400 italic">Pilih PIC...</span>
                                 ) : (
-                                  picList.map((p, pIdx) => (
-                                    <span 
-                                      key={pIdx}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
-                                      title={`${p.name} (${p.nik || '-'})`}
-                                    >
-                                      <span className="w-3.5 h-3.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
-                                        {p.name.charAt(0).toUpperCase()}
-                                      </span>
-                                      <span className="truncate max-w-[90px]">{p.name}</span>
-                                    </span>
-                                  ))
+                                  <PicAvatarGroup pics={picList} employeesList={employeesList} />
                                 )}
                               </div>
 
@@ -5169,8 +5118,8 @@ export function LogbookScreen({
                             {/* Mulai & Durasi */}
                             <td className="px-3 py-2.5 whitespace-nowrap">
                               <div className="text-[11px] font-medium" title={`Mulai: ${durationInfo.displayStartDate}`}>
-                                <p className="font-bold text-slate-700 dark:text-slate-300">{durationInfo.durationLabel}</p>
-                                <p className="text-[10px] text-slate-500">Mulai: {durationInfo.displayStartDate}</p>
+                                <p className="font-black text-slate-950 dark:text-slate-100">{durationInfo.durationLabel}</p>
+                                <p className="text-[10px] font-semibold text-slate-700 dark:text-slate-300">Mulai: {durationInfo.displayStartDate}</p>
                               </div>
                             </td>
 
@@ -5185,7 +5134,7 @@ export function LogbookScreen({
                                     style={{ width: `${progressPercent}%` }}
                                   />
                                 </div>
-                                <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-400 min-w-[28px] text-right">
+                                <span className="text-[10px] font-mono font-black text-slate-900 dark:text-slate-100 min-w-[28px] text-right">
                                   {progressPercent}%
                                 </span>
                               </div>
@@ -5388,17 +5337,17 @@ export function LogbookScreen({
                   }`}
                 >
                   <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-                    <span className="font-bold text-xs tracking-tight text-slate-800 dark:text-slate-200 uppercase">
+                    <span className="font-black text-xs tracking-tight text-slate-950 dark:text-slate-100 uppercase">
                       {label}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100">
                       {colTasks.length}
                     </span>
                   </div>
 
                   <div className="space-y-2.5 max-h-[70vh] overflow-y-auto pr-1">
                     {colTasks.length === 0 ? (
-                      <div className="py-8 text-center text-xs text-slate-400 italic">
+                      <div className="py-8 text-center text-xs text-slate-500 italic">
                         Tidak ada kegiatan
                       </div>
                     ) : (
@@ -5420,23 +5369,23 @@ export function LogbookScreen({
                               <span className={`text-[10px] font-black px-1.5 py-0.2 rounded uppercase ${
                                 task.priority === 'Urgent' ? 'bg-rose-100 text-rose-950 border border-rose-300' :
                                 task.priority === 'High' ? 'bg-amber-100 text-amber-950 border border-amber-300' :
-                                'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+                                'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600 font-bold'
                               }`}>
                                 {task.priority}
                               </span>
-                              <span className="text-[10px] font-mono text-slate-500">
+                              <span className="text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300">
                                 {task.section}
                               </span>
                             </div>
 
-                            <p className={`font-bold text-xs leading-snug line-clamp-2 ${isDone ? 'line-through text-slate-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                            <p className={`font-bold text-xs leading-snug line-clamp-2 ${isDone ? 'line-through text-slate-500' : 'text-slate-950 dark:text-slate-50'}`}>
                               {task.title}
                             </p>
 
-                            <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-500">
-                              <span>PIC: {task.assigneeName.split(' ')[0]}</span>
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-700 dark:text-slate-300 font-semibold">
+                              <PicAvatarGroup pics={task.assigneeName} employeesList={employeesList} size="xs" />
                               {hasSub && (
-                                <span className="font-mono font-bold text-teal-600 dark:text-teal-400">
+                                <span className="font-mono font-bold text-teal-700 dark:text-teal-400">
                                   ✓ {parsed.completed}/{parsed.total}
                                 </span>
                               )}
@@ -5617,13 +5566,12 @@ export function LogbookScreen({
                       <User className="w-3.5 h-3.5 text-slate-400" />
                       PIC Pelaksana
                     </span>
-                    <div className="col-span-2 flex flex-wrap gap-1.5">
-                      {parsePicList(selectedTaskDetail.assigneeNik, selectedTaskDetail.assigneeName).map((p, i) => (
-                        <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20 font-bold text-xs">
-                          <span>{p.name}</span>
-                          {p.nik && <span className="opacity-75 font-mono text-[10px]">({p.nik})</span>}
-                        </span>
-                      ))}
+                    <div className="col-span-2 flex items-center">
+                      <PicAvatarGroup 
+                        pics={parsePicList(selectedTaskDetail.assigneeNik, selectedTaskDetail.assigneeName)} 
+                        employeesList={employeesList}
+                        size="md"
+                      />
                     </div>
                   </div>
 
