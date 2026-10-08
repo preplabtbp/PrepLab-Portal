@@ -518,7 +518,37 @@ router.delete("/api/bulletin/comments/:commentId", async (req, res) => {
     }
   });
 
-async function syncBulletinToLogbook(post: any) {
+  router.put("/api/bulletin/comments/:commentId", async (req, res) => {
+    try {
+      const commentId = parseInt(req.params.commentId);
+      const { content, authorNik } = req.body;
+      if (!content || !content.trim()) {
+        return res.status(400).json({ status: "error", message: "Konten komentar tidak boleh kosong" });
+      }
+
+      const commentArray = await db.select().from(bulletinComments).where(eq(bulletinComments.id, commentId)).limit(1);
+      if (commentArray.length === 0) {
+        return res.status(404).json({ status: "error", message: "Komentar tidak ditemukan" });
+      }
+      const comment = commentArray[0];
+
+      if (authorNik && comment.authorNik && comment.authorNik !== authorNik) {
+        return res.status(403).json({ status: "error", message: "Hanya pembuat komentar yang dapat mengedit komentar ini" });
+      }
+
+      const [updated] = await db.update(bulletinComments)
+        .set({ content: content.trim() })
+        .where(eq(bulletinComments.id, commentId))
+        .returning();
+
+      res.json({ status: "success", comment: updated });
+    } catch (error: any) {
+      console.error('[Edit Comment Error]', error);
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
+export async function syncBulletinToLogbook(post: any) {
   try {
     if (!post || !post.id || !post.content || typeof post.content !== 'string') return;
     const { parseMarkdownTableRows } = await import("./logbook.js");
@@ -528,7 +558,8 @@ async function syncBulletinToLogbook(post: any) {
     // Detect default cadence from bulletin post title
     const postTitle = (post.title || '').toLowerCase();
     let defaultCadence = 'Daily';
-    if (postTitle.includes('monthly') || postTitle.includes('bulanan')) defaultCadence = 'Monthly';
+    if (postTitle.includes('non')) defaultCadence = 'Non Routine';
+    else if (postTitle.includes('monthly') || postTitle.includes('bulanan')) defaultCadence = 'Monthly';
     else if (postTitle.includes('weekly') || postTitle.includes('mingguan')) defaultCadence = 'Weekly';
     else if (postTitle.includes('quarterly') || postTitle.includes('triwulan')) defaultCadence = 'Quarterly';
     else if (postTitle.includes('biannual') || postTitle.includes('semester')) defaultCadence = 'Biannual';
@@ -554,6 +585,34 @@ async function syncBulletinToLogbook(post: any) {
       .from(logbookTasks)
       .where(eq(logbookTasks.bulletinPostId, post.id));
 
+    // Fetch employee lookup list to map rowPic to full name and NIK
+    const allEmployees = await db
+      .select({ nik: employees.nik, name: employees.name })
+      .from(employees);
+
+    const findEmployee = (query: string) => {
+      if (!query || query.trim() === '' || query.trim() === '-') return null;
+      const q = query.trim().toLowerCase();
+      // Priority 1: Exact NIK match
+      const byNik = allEmployees.find(e => e.nik && e.nik.toLowerCase() === q);
+      if (byNik) return byNik;
+      // Priority 2: Exact full name match
+      const byExact = allEmployees.find(e => e.name && e.name.toLowerCase() === q);
+      if (byExact) return byExact;
+      // Priority 3: Word boundary / startsWith match
+      if (q.length >= 3) {
+        return allEmployees.find(e => {
+          const name = (e.name || '').toLowerCase();
+          const words = name.split(/\s+/);
+          return words.includes(q) || name.startsWith(q);
+        });
+      }
+      return null;
+    };
+
+    // Cutoff: Hanya sinkronisasikan data di labnote yang dibuat sejak fitur log book dibuat (2026-09-25)
+    const LOGBOOK_FEATURE_START_DATE = '2026-09-25';
+
     for (const r of parsed.rows) {
       let rTitle = '';
       let rowDesc = '';
@@ -562,6 +621,8 @@ async function syncBulletinToLogbook(post: any) {
       let rowPic = '';
       let rowActivity = '';
       let rowPeriod = '';
+      let rowKategori = '';
+      let rowCreatedTime = '';
 
       Object.keys(r).forEach(k => {
         const kl = k.toLowerCase().trim();
@@ -579,21 +640,77 @@ async function syncBulletinToLogbook(post: any) {
           rowActivity = (r[k] || '').trim();
         } else if (kl.includes('period') || kl.includes('periode')) {
           rowPeriod = (r[k] || '').trim();
+        } else if (kl.includes('kategori') || kl.includes('seksi') || kl.includes('section')) {
+          rowKategori = (r[k] || '').trim();
+        } else if (kl.includes('created time') || kl === 'created' || kl === 'tanggal' || kl === 'date' || kl.includes('created_time')) {
+          rowCreatedTime = (r[k] || '').trim();
         }
       });
 
       if (!rTitle || rTitle === '-' || rTitle.length < 2) continue;
 
-      // Determine effective cadence
+      // Filter: Hanya sinkronisasikan data yang dibuat sejak fitur log book dibuat
+      let rowCreatedDate = '';
+      const dateMatch = rowCreatedTime.match(/(\d{4}-\d{2}-\d{2})/);
+      if (dateMatch) {
+        rowCreatedDate = dateMatch[1];
+      } else if (post.createdAt) {
+        try {
+          rowCreatedDate = new Date(post.createdAt).toISOString().split('T')[0];
+        } catch (e) {}
+      }
+
+      // Jika tanggal pembuatan baris/postingan sebelum fitur logbook dibuat, abaikan sinkronisasi
+      if (rowCreatedDate && rowCreatedDate < LOGBOOK_FEATURE_START_DATE) {
+        continue;
+      }
+
+      // Normalize legacy subtask tags in rowDesc to canonical markdown checkboxes
+      let cleanDesc = rowDesc;
+      if (cleanDesc && (cleanDesc.includes('**(Done)**') || cleanDesc.includes('**(OPEN)**') || cleanDesc.includes('**(Closed)**') || cleanDesc.includes('**(OP)**'))) {
+        cleanDesc = cleanDesc
+          .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Done|Closed|Close|Finish|Selesai|CL)\)?\*\*\s*$/gim, '- [x] $1')
+          .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Open|OP|Belum|In Progress|Pending)\)?\*\*\s*$/gim, '- [ ] $1');
+      }
+
+      // Determine effective cadence - ALWAYS prioritize Non-Routine if specified
       let effectiveCadence = defaultCadence;
       const combinedAct = `${rowActivity} ${rowPeriod}`.toLowerCase();
-      if (combinedAct.includes('monthly') || combinedAct.includes('bulanan')) effectiveCadence = 'Monthly';
-      else if (combinedAct.includes('weekly') || combinedAct.includes('mingguan')) effectiveCadence = 'Weekly';
-      else if (combinedAct.includes('daily') || combinedAct.includes('harian')) effectiveCadence = 'Daily';
-      else if (combinedAct.includes('quarterly') || combinedAct.includes('triwulan')) effectiveCadence = 'Quarterly';
-      else if (combinedAct.includes('biannual') || combinedAct.includes('semester')) effectiveCadence = 'Biannual';
-      else if (combinedAct.includes('yearly') || combinedAct.includes('tahunan')) effectiveCadence = 'Yearly';
-      else if (combinedAct.includes('non')) effectiveCadence = 'Non Routine';
+      if (combinedAct.includes('non') || rowActivity.toLowerCase().includes('non') || defaultCadence === 'Non Routine') {
+        effectiveCadence = 'Non Routine';
+      } else if (combinedAct.includes('monthly') || combinedAct.includes('bulanan')) {
+        effectiveCadence = 'Monthly';
+      } else if (combinedAct.includes('weekly') || combinedAct.includes('mingguan')) {
+        effectiveCadence = 'Weekly';
+      } else if (combinedAct.includes('daily') || combinedAct.includes('harian')) {
+        effectiveCadence = 'Daily';
+      } else if (combinedAct.includes('quarterly') || combinedAct.includes('triwulan')) {
+        effectiveCadence = 'Quarterly';
+      } else if (combinedAct.includes('biannual') || combinedAct.includes('semester')) {
+        effectiveCadence = 'Biannual';
+      } else if (combinedAct.includes('yearly') || combinedAct.includes('tahunan')) {
+        effectiveCadence = 'Yearly';
+      }
+
+      // Determine effective section
+      let rowSection = post.department || 'General';
+      const katLower = rowKategori.toLowerCase().trim();
+      if (katLower.includes('qa') || katLower.includes('quality') || katLower.includes('mutu') || postTitle.includes('mutu') || postTitle.includes('qa') || postTitle.includes('quality')) {
+        rowSection = 'Quality Assurance';
+      } else if (katLower.includes('prep') || katLower.includes('preparasi')) {
+        rowSection = 'Preparation';
+      } else if (katLower.includes('lab')) {
+        rowSection = 'Laboratory';
+      } else if (katLower.includes('maint')) {
+        rowSection = 'Maintenance';
+      } else if (rowSection === 'Prep & Lab') {
+        if (postTitle.includes('lab')) rowSection = 'Laboratory';
+        else if (postTitle.includes('prep')) rowSection = 'Preparation';
+      }
+
+      const matchedEmp = findEmployee(rowPic);
+      const targetAssigneeNik = matchedEmp ? matchedEmp.nik : (rowPic && rowPic !== '-' ? rowPic : 'ALL');
+      const targetAssigneeName = rowPic && rowPic !== '-' ? rowPic : (matchedEmp ? matchedEmp.name : 'Personil');
 
       const existingTask = linkedTasks.find(t => {
         const taskTopic = (t.bulletinTopicTitle || t.title || '').toLowerCase().trim();
@@ -604,8 +721,8 @@ async function syncBulletinToLogbook(post: any) {
       if (existingTask) {
         // Update existing task
         const updatePayload: any = {};
-        if (rowDesc && rowDesc !== '-' && rowDesc !== existingTask.description) {
-          updatePayload.description = rowDesc;
+        if (cleanDesc && cleanDesc !== '-' && cleanDesc !== existingTask.description) {
+          updatePayload.description = cleanDesc;
         }
         if (rowStatus && rowStatus !== existingTask.status) {
           updatePayload.status = rowStatus;
@@ -613,8 +730,23 @@ async function syncBulletinToLogbook(post: any) {
         if (rowPriority && rowPriority !== existingTask.priority) {
           updatePayload.priority = rowPriority;
         }
-        if (effectiveCadence && existingTask.activityType !== effectiveCadence && existingTask.activityType === 'Routine') {
+        if (effectiveCadence && existingTask.activityType !== effectiveCadence) {
           updatePayload.activityType = effectiveCadence;
+        }
+        if (rowSection && rowSection !== 'Prep & Lab' && existingTask.section !== rowSection) {
+          updatePayload.section = rowSection;
+        }
+        if (effectiveCadence === 'Non Routine') {
+          if (!existingTask.plannedDate) {
+            updatePayload.plannedDate = todayStr;
+          }
+          if (!existingTask.taskDate) {
+            updatePayload.taskDate = todayStr;
+          }
+        }
+        if (rowPic && rowPic !== '-' && (existingTask.assigneeName !== targetAssigneeName || existingTask.assigneeNik !== targetAssigneeNik)) {
+          updatePayload.assigneeName = targetAssigneeName;
+          updatePayload.assigneeNik = targetAssigneeNik;
         }
         if (Object.keys(updatePayload).length > 0) {
           await db
@@ -629,9 +761,9 @@ async function syncBulletinToLogbook(post: any) {
           const inserted = await db.insert(logbookTasks).values({
             title: rTitle,
             description: rowDesc || '',
-            section: post.department || 'General',
-            assigneeNik: rowPic || 'ALL',
-            assigneeName: rowPic || 'Personil',
+            section: rowSection,
+            assigneeNik: targetAssigneeNik,
+            assigneeName: targetAssigneeName,
             assignedByNik: post.authorNik || 'SYSTEM',
             assignedByName: post.authorName || 'Buletin',
             priority: rowPriority || 'Normal',
@@ -639,6 +771,7 @@ async function syncBulletinToLogbook(post: any) {
             status: rowStatus || 'Open',
             progressPercent: 0,
             taskDate: todayStr,
+            plannedDate: effectiveCadence === 'Non Routine' ? todayStr : null,
             targetDate: defaultTargetDate,
             targetTime: '23:59',
             pt: post.pt || 'TBP',

@@ -97,14 +97,32 @@ export function PicAvatarGroup({
     const picNik = (pic.nik || '').trim();
     const picName = (pic.name || '').trim().toLowerCase();
 
-    return employeesList.find(emp => {
-      if (picNik && (emp.nik === picNik || String(emp.nik) === picNik)) return true;
-      const empName = (emp.name || emp.nama || '').trim().toLowerCase();
-      if (empName && (empName === picName || empName.includes(picName) || picName.includes(empName))) {
-        return true;
+    // Priority 1: Match strictly by NIK
+    if (picNik) {
+      const byNik = employeesList.find(emp => emp.nik === picNik || String(emp.nik) === picNik);
+      if (byNik) return byNik;
+    }
+
+    // Priority 2: Match strictly by exact Name
+    if (picName) {
+      const byExact = employeesList.find(emp => {
+        const empName = (emp.name || emp.nama || '').trim().toLowerCase();
+        return empName === picName;
+      });
+      if (byExact) return byExact;
+
+      // Priority 3: Match whole word (e.g. "Gusti" matches "Gusti Nur Firdaus", but NOT partial substring in middle of unrelated word)
+      if (picName.length >= 3) {
+        const byWords = employeesList.find(emp => {
+          const empName = (emp.name || emp.nama || '').trim().toLowerCase();
+          const words = empName.split(/\s+/);
+          return words.includes(picName) || empName.startsWith(picName);
+        });
+        if (byWords) return byWords;
       }
-      return false;
-    });
+    }
+
+    return null;
   };
 
   if (parsedPics.length === 0) {
@@ -125,7 +143,8 @@ export function PicAvatarGroup({
     <div className={`inline-flex items-center -space-x-1.5 hover:space-x-0.5 transition-all duration-200 select-none py-0.5 ${className}`}>
       {visiblePics.map((p, idx) => {
         const emp = getEmployeeData(p);
-        const resolvedName = emp?.name || emp?.nama || p.name;
+        // Prioritize original pic name so custom or exact name is never hijacked
+        const resolvedName = p.name && p.name !== '-' ? p.name : (emp?.name || emp?.nama || 'PIC');
         const initial = resolvedName ? resolvedName.charAt(0).toUpperCase() : '?';
         const photoUrl = emp?.avatar || emp?.photo || (emp?.nik ? `/api/employees/photo/${emp.nik}` : null);
         const imgKey = emp?.nik || p.nik || p.name;

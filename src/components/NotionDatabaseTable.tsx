@@ -50,21 +50,22 @@ import {
   ChevronUp,
   ChevronLeft,
   CheckSquare,
-  Square,
-  CalendarDays
+  CalendarDays,
+  MoreVertical
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
 import { toast } from 'sonner';
 import { uploadPhotoToDrive } from '../sheets-api';
 import { ImageModal } from './image-modal';
-import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, NOTION_COLORS, TasklistProgress } from './notion/tasklist-utils';
+import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, NOTION_COLORS, TasklistProgress, markdownToVisualHtml, migrateLegacySubtaskText } from './notion/tasklist-utils';
 import { NotionTasklistView } from './notion/NotionTasklistView';
 import { NotionDropdownCell } from './notion/NotionDropdownCell';
 import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
+import { FloatingSelectionToolbar, FormatAction, formatSelectedText } from './notion/FloatingSelectionToolbar';
 import { PicAvatarGroup } from './PicAvatarGroup';
 import {
   normalizeCadence,
@@ -436,7 +437,6 @@ export const CANONICAL_NOTION_COLUMNS = [
   'Priority',
   'Status',
   'Created Time',
-  'Kategori',
   'Activity (routine/non routine)',
   'period'
 ] as const;
@@ -638,6 +638,97 @@ export function NotionDatabaseTable({
     multiline: boolean;
   } | null>(null);
 
+  // Direct Inline Click-to-Edit for PIC Column
+  const [activeInlinePicCell, setActiveInlinePicCell] = useState<{ rowIndex: number; colName: string } | null>(null);
+  const [inlinePicSearch, setInlinePicSearch] = useState<string>('');
+
+  // Row Action 3-Dots Dropdown Menu State
+  const [activeActionMenuRowIndex, setActiveActionMenuRowIndex] = useState<number | null>(null);
+
+  // Floating Selection Toolbar State for "Edit Data Kegiatan" Modal
+  const [activeModalSelection, setActiveModalSelection] = useState<{
+    field: 'jenisKegiatan' | 'keterangan';
+    start: number;
+    end: number;
+    selectedText: string;
+  } | null>(null);
+
+  const handleModalSelectText = (
+    e: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>,
+    field: 'jenisKegiatan' | 'keterangan'
+  ) => {
+    const target = e.currentTarget;
+    const start = target.selectionStart ?? 0;
+    const end = target.selectionEnd ?? 0;
+    if (end > start) {
+      const selectedText = target.value.substring(start, end);
+      setActiveModalSelection({ field, start, end, selectedText });
+    } else {
+      setActiveModalSelection(null);
+    }
+  };
+
+  const handleApplyModalFormat = (
+    field: 'jenisKegiatan' | 'keterangan',
+    action: FormatAction
+  ) => {
+    if (!activeModalSelection) return;
+    const { start, end } = activeModalSelection;
+
+    if (field === 'jenisKegiatan') {
+      const currentVal = rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || '';
+      const res = formatSelectedText(currentVal, start, end, action);
+      setRowFormData(prev => ({
+        ...prev,
+        'Jenis kegiatan': res.newText,
+        'Jenis Kegiatan': res.newText
+      }));
+      setActiveModalSelection({
+        field,
+        start: res.newStart,
+        end: res.newEnd,
+        selectedText: res.newText.substring(res.newStart, res.newEnd)
+      });
+    } else if (field === 'keterangan') {
+      const currentVal = rowFormData['Keterangan'] || '';
+      const res = formatSelectedText(currentVal, start, end, action);
+      setRowFormData(prev => ({
+        ...prev,
+        Keterangan: res.newText
+      }));
+      setActiveModalSelection({
+        field,
+        start: res.newStart,
+        end: res.newEnd,
+        selectedText: res.newText.substring(res.newStart, res.newEnd)
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.group\\/pic') && !target.closest('.notion-pic-popover')) {
+        setActiveInlinePicCell(null);
+      }
+      if (!target.closest('.notion-row-action-menu-container')) {
+        setActiveActionMenuRowIndex(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveActionMenuRowIndex(null);
+        setActiveModalSelection(null);
+      }
+    };
+    window.addEventListener('click', handleOutsideClick);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleOutsideClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   useEffect(() => {
     if (rows) {
       setLocalRows(rows);
@@ -785,6 +876,9 @@ export function NotionDatabaseTable({
   const isSubmittingCommentRef = useRef(false);
   const isUploadingGalleryRef = useRef(false);
   const [selectedFile, setSelectedFile] = useState<{ name: string; url: string; previewUrl?: string; isImage?: boolean } | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Array<{ name: string; url: string; previewUrl?: string; isImage?: boolean; caption?: string }>>([]);
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editingCommentContent, setEditingCommentContent] = useState<string>('');
   const [commentFileCaption, setCommentFileCaption] = useState('');
   const [isUploadingCommentFile, setIsUploadingCommentFile] = useState(false);
   const commentFileInputRef = useRef<HTMLInputElement>(null);
@@ -1010,12 +1104,13 @@ export function NotionDatabaseTable({
     return undefined;
   };
 
-  // Ensure Progress and Target Selesai columns are never rendered in displayHeaders
+  // Ensure Progress, Target Selesai, and redundant Kategori columns are never rendered in displayHeaders
   const displayHeaders = useMemo(() => {
     return tableHeaders.filter(h => {
       const l = h.toLowerCase().trim();
       return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
-             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo');
+             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo') &&
+             !l.includes('kategori') && !l.includes('category');
     });
   }, [tableHeaders]);
 
@@ -1688,7 +1783,19 @@ export function NotionDatabaseTable({
   const saveTableToBackend = async (newRows: TableRowData[]): Promise<boolean> => {
     if (!postId) return false;
     try {
-      const updatedMarkdown = serializeMarkdownTable(displayHeaders, newRows, beforeText, afterText);
+      // Normalize any legacy format subtask tags in Keterangan to canonical markdown checklists
+      const normalizedRows = newRows.map(r => {
+        const ket = getRowVal(r, 'Keterangan');
+        if (ket && (ket.includes('**(Done)**') || ket.includes('**(OPEN)**') || ket.includes('**(Closed)**') || ket.includes('**(OP)**'))) {
+          return {
+            ...r,
+            Keterangan: migrateLegacySubtaskText(ket)
+          };
+        }
+        return r;
+      });
+
+      const updatedMarkdown = serializeMarkdownTable(displayHeaders, normalizedRows, beforeText, afterText);
       const res = await fetch(`/api/bulletin/${postId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1696,6 +1803,19 @@ export function NotionDatabaseTable({
       });
       if (res.ok) {
         onPostContentUpdate?.(updatedMarkdown);
+
+        // Instant background sync directly to logbook to guarantee zero delay
+        fetch('/api/logbook/sync-from-bulletin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bulletinPostId: postId,
+            section: section || '',
+            userNik: currentAuthorNik || '',
+            userName: currentAuthorName || ''
+          })
+        }).catch(err => console.warn('Instant logbook sync non-fatal:', err));
+
         return true;
       }
       return false;
@@ -2119,6 +2239,71 @@ export function NotionDatabaseTable({
     toast.success(`Sub-kegiatan "${cleanTitle}" berhasil ditambahkan`);
   };
 
+  // Migrate existing checklists in Keterangan to hierarchical sub-items
+  const handleMigrateChecklistsToSubItems = () => {
+    let migratedCount = 0;
+    const newRows: TableRowData[] = [];
+
+    for (let i = 0; i < localRows.length; i++) {
+      const row = { ...localRows[i] };
+      const isSub = isSubItemRow(row);
+
+      if (isSub) {
+        newRows.push(row);
+        continue;
+      }
+
+      const ketVal = getRowVal(row, 'Keterangan') || '';
+      const taskProg = parseTasklist(ketVal);
+
+      if (taskProg.hasTasklist && taskProg.items.length > 0) {
+        // Strip tasklist lines from parent row's Keterangan, keep non-checklist text
+        row['Keterangan'] = taskProg.cleanText || '';
+        newRows.push(row);
+
+        const parentIndex = newRows.length - 1;
+        const parentCat = getRowVal(row, 'Kategori') || section || 'Laboratorium';
+        const parentPIC = getRowVal(row, 'PIC') || '';
+        const parentAct = getRowVal(row, 'Activity (routine/non routine)') || 'Monthly';
+        const parentPeriod = getRowVal(row, 'period') || 'Monthly';
+        const now = new Date();
+        const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+        // Create a sub-item row for each checklist item
+        taskProg.items.forEach(item => {
+          const subTitle = `↳ ${item.checked ? '[x] ' : '[ ] '}${item.text}`;
+          const subRow: TableRowData = {
+            number: '',
+            'Jenis kegiatan': subTitle,
+            'Jenis Kegiatan': subTitle,
+            Keterangan: item.note || '',
+            PIC: parentPIC,
+            Priority: 'Normal',
+            Status: item.checked ? 'Closed' : 'Open',
+            'Created Time': createdStr,
+            Kategori: parentCat,
+            'Activity (routine/non routine)': parentAct,
+            period: parentPeriod,
+            isSubItem: 'true',
+            parentId: String(parentIndex)
+          };
+          newRows.push(subRow);
+          migratedCount++;
+        });
+      } else {
+        newRows.push(row);
+      }
+    }
+
+    if (migratedCount > 0) {
+      setLocalRows(newRows);
+      saveTableToBackend(newRows);
+      toast.success(`Berhasil memindahkan ${migratedCount} subtask ke model baris sub-kegiatan baru!`);
+    } else {
+      toast.info('Tidak ada checklist di dalam Keterangan yang perlu dipindahkan.');
+    }
+  };
+
   // Toggle Checklist Sub-Item Completed Status
   const handleToggleSubItemCompleted = (subRowIndex: number, currentCompleted: boolean) => {
     const nextCompleted = !currentCompleted;
@@ -2495,8 +2680,9 @@ export function NotionDatabaseTable({
   const handlePostComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submittingComment || isSubmittingCommentRef.current) return;
-    const finalContent = commentText.trim() || (commentFileCaption.trim() ? `📎 ${selectedFile?.name}\n\n${commentFileCaption.trim()}` : (selectedFile ? `📎 Lampiran: ${selectedFile.name}` : ''));
-    if (!finalContent && !selectedFile) return;
+    const hasFiles = selectedFiles.length > 0 || selectedFile !== null;
+    const finalContent = commentText.trim() || (commentFileCaption.trim() ? `📎 ${selectedFile?.name || 'Lampiran'}\n\n${commentFileCaption.trim()}` : (hasFiles ? `📎 Lampiran` : ''));
+    if (!finalContent && !hasFiles) return;
     if (!postId || !selectedRow) return;
 
     const topicTitleVal = selectedTopicTitle || 'Topik';
@@ -2506,13 +2692,23 @@ export function NotionDatabaseTable({
     try {
       isSubmittingCommentRef.current = true;
       setSubmittingComment(true);
-      const fileUrlPayload = selectedFile ? JSON.stringify([{
-        url: selectedFile.url,
-        name: selectedFile.name,
-        caption: commentFileCaption.trim(),
-        directUrl: selectedFile.url,
-        isImage: selectedFile.isImage
-      }]) : null;
+      const allFilesPayload = selectedFiles.length > 0
+        ? selectedFiles.map((f, idx) => ({
+            url: f.url,
+            name: f.name,
+            caption: idx === 0 ? commentFileCaption.trim() : (f.caption || ''),
+            directUrl: f.url,
+            isImage: f.isImage
+          }))
+        : selectedFile ? [{
+            url: selectedFile.url,
+            name: selectedFile.name,
+            caption: commentFileCaption.trim(),
+            directUrl: selectedFile.url,
+            isImage: selectedFile.isImage
+          }] : null;
+
+      const fileUrlPayload = allFilesPayload ? JSON.stringify(allFilesPayload) : null;
 
       const res = await fetch(`/api/bulletin/${postId}/comments`, {
         method: 'POST',
@@ -2530,7 +2726,7 @@ export function NotionDatabaseTable({
           picNik: picVal || null,
           pt: pt || 'TBP',
           fileUrl: fileUrlPayload,
-          fileName: selectedFile?.name || null,
+          fileName: selectedFiles[0]?.name || selectedFile?.name || null,
           replyToId: replyingTo?.id || null,
           replyToNik: replyingTo?.authorNik || null,
           replyToName: replyingTo?.authorName || null,
@@ -2548,6 +2744,7 @@ export function NotionDatabaseTable({
         setCommentText('');
         setStatusUpdateChoice('');
         setSelectedFile(null);
+        setSelectedFiles([]);
         setCommentFileCaption('');
         setReplyingTo(null);
         
@@ -2576,16 +2773,23 @@ export function NotionDatabaseTable({
 
   // Upload file inside discussion comment box with caption
   const handleCommentFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const rawFiles = e.target.files ? Array.from(e.target.files) : [];
+    if (rawFiles.length === 0) return;
 
     setIsUploadingCommentFile(true);
-    toast.loading('Mengompres dan mengunggah lampiran...', { id: 'upload-comment-file' });
+    toast.loading(`Mengompres dan mengunggah ${rawFiles.length} lampiran...`, { id: 'upload-comment-file' });
 
     try {
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const base64Raw = ev.target?.result as string;
+      const uploadedItems: Array<{ name: string; url: string; previewUrl?: string; isImage?: boolean }> = [];
+
+      for (const file of rawFiles) {
+        const reader = new FileReader();
+        const base64Raw = await new Promise<string>((resolve, reject) => {
+          reader.onload = (ev) => resolve(ev.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
         let finalBase64 = base64Raw;
         const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
 
@@ -2639,20 +2843,53 @@ export function NotionDatabaseTable({
           }
         } catch (uErr) {}
 
-        setSelectedFile({
+        uploadedItems.push({
           name: file.name,
           url: uploadedUrl,
           previewUrl: isImg ? finalBase64 : undefined,
           isImage: isImg
         });
-        toast.success('Lampiran berhasil diunggah! Anda dapat menambahkan caption di bawah.', { id: 'upload-comment-file' });
-      };
-      reader.readAsDataURL(file);
+      }
+
+      setSelectedFiles(prev => [...prev, ...uploadedItems]);
+      if (uploadedItems.length > 0) {
+        setSelectedFile(uploadedItems[0]);
+      }
+      toast.success(`${uploadedItems.length} lampiran berhasil diunggah!`, { id: 'upload-comment-file' });
     } catch (err) {
       toast.error('Gagal mengunggah file', { id: 'upload-comment-file' });
     } finally {
       setIsUploadingCommentFile(false);
       if (e.target) e.target.value = '';
+    }
+  };
+
+  // Edit comment
+  const handleSaveEditComment = async (commentId: number) => {
+    if (!editingCommentContent.trim()) {
+      toast.error('Konten komentar tidak boleh kosong');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/bulletin/comments/${commentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          authorNik: currentAuthorNik,
+          content: editingCommentContent.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        toast.success('Komentar berhasil diperbarui');
+        setEditingCommentId(null);
+        setEditingCommentContent('');
+        await fetchComments();
+      } else {
+        toast.error(data.message || 'Gagal memperbarui komentar');
+      }
+    } catch (e) {
+      toast.error('Gagal memperbarui komentar');
     }
   };
 
@@ -2938,39 +3175,39 @@ export function NotionDatabaseTable({
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
       if (diffDays <= 0) {
-        if (diffHours > 1) {
+        if (diffHours >= 1) {
           return {
-            label: `Tuntas ${diffHours} jam`,
-            short: `${diffHours} jam`,
+            label: `${diffHours} Jam`,
+            short: `${diffHours} Jam`,
             detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
           };
         }
         return {
-          label: 'Selesai di hari yg sama',
-          short: '1 hari',
+          label: '1 Hari',
+          short: '1 Hari',
           detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
         };
       }
 
       const totalDays = diffDays + 1;
       return {
-        label: `Tuntas dlm ${totalDays} hari`,
-        short: `${totalDays} hari`,
+        label: `${totalDays} Hari`,
+        short: `${totalDays} Hari`,
         detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
       };
     }
 
     if (completedStr) {
       return {
-        label: `Selesai ${completedStr}`,
+        label: completedStr,
         short: completedStr,
         detail: `Waktu selesai: ${completedStr}`
       };
     }
 
     return {
-      label: 'Tuntas (Closed)',
-      short: 'Tuntas',
+      label: 'Selesai',
+      short: 'Selesai',
       detail: 'Tugas telah selesai'
     };
   };
@@ -3332,6 +3569,19 @@ export function NotionDatabaseTable({
           >
             <Download className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Export</span>
+          </button>
+
+          <button
+            onClick={handleMigrateChecklistsToSubItems}
+            className={`p-1.5 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer ${
+              isNotionLight
+                ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900'
+                : 'bg-amber-950/40 hover:bg-amber-900/60 border-amber-700/60 text-amber-200'
+            }`}
+            title="Pindahkan checklist di Keterangan ke model sub-kegiatan baru"
+          >
+            <CornerDownRight className="w-3.5 h-3.5 text-amber-600" />
+            <span className="hidden md:inline">Migrasi Subtask</span>
           </button>
         </div>
       </div>
@@ -4193,8 +4443,8 @@ export function NotionDatabaseTable({
                                         />
                                       ) : (!isSubItem && taskProgress.hasTasklist) ? (
                                         <div 
-                                          className="relative group/cell"
-                                          onDoubleClick={(e) => {
+                                          className="relative group/cell cursor-pointer"
+                                          onClick={(e) => {
                                             e.stopPropagation();
                                             setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
                                           }}
@@ -4221,8 +4471,8 @@ export function NotionDatabaseTable({
                                         </div>
                                       ) : (
                                         <div 
-                                          className="relative group/cell flex items-start justify-between gap-1"
-                                          onDoubleClick={(e) => {
+                                          className="relative group/cell flex items-start justify-between gap-1 cursor-pointer"
+                                          onClick={(e) => {
                                             e.stopPropagation();
                                             setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
                                           }}
@@ -4307,11 +4557,80 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
-                                // 5. PIC Column
+                                // 5. PIC Column (Interactive Inline Click-to-Edit)
                                 if (colLower === 'pic' || colLower.includes('assignee')) {
+                                  const isEditingPic = activeInlinePicCell?.rowIndex === actualRowIndex && activeInlinePicCell?.colName === colName;
+                                  const isManajemenMutu = (section || '').toUpperCase().includes('QA') || 
+                                                         (section || '').toUpperCase().includes('MUTU') || 
+                                                         (title || '').toUpperCase().includes('MUTU') || 
+                                                         (title || '').toUpperCase().includes('MANAJEMEN MUTU') || 
+                                                         (initialTopicTitle || '').toUpperCase().includes('MUTU');
+
+                                  const filteredEmployees = employeesList
+                                    .filter((emp) => {
+                                      const q = inlinePicSearch.toLowerCase().trim();
+                                      if (!q) return true;
+                                      return (
+                                        (emp.name || '').toLowerCase().includes(q) ||
+                                        (emp.nik || '').toLowerCase().includes(q) ||
+                                        (emp.jabatan || '').toLowerCase().includes(q) ||
+                                        (emp.section || '').toLowerCase().includes(q)
+                                      );
+                                    });
+
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1.5 py-2 overflow-hidden' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
-                                      {renderPicBadge(val)}
+                                    <td 
+                                      key={colName} 
+                                      style={getColStyle(colName)} 
+                                      className={`relative ${fitPageMode ? 'px-1.5 py-2 overflow-visible' : 'px-3.5 py-2.5 whitespace-nowrap overflow-visible'}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <div 
+                                        onClick={() => {
+                                          setActiveInlinePicCell(isEditingPic ? null : { rowIndex: actualRowIndex, colName });
+                                          setInlinePicSearch('');
+                                        }}
+                                        className="cursor-pointer inline-block group/pic transition-transform hover:scale-105"
+                                        title="Klik langsung untuk mengganti PIC"
+                                      >
+                                        {renderPicBadge(val)}
+                                      </div>
+
+                                      {isEditingPic && (
+                                        <div 
+                                          className={`notion-pic-popover absolute left-0 top-full mt-1 w-64 max-h-60 overflow-y-auto rounded-xl shadow-2xl border p-2 z-50 text-left ${
+                                            isNotionLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-[#1e293b] border-slate-700 text-slate-100'
+                                          }`}
+                                        >
+                                          <div className="relative mb-2">
+                                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400 pointer-events-none" />
+                                            <input
+                                              type="text"
+                                              autoFocus
+                                              value={inlinePicSearch}
+                                              onChange={(e) => setInlinePicSearch(e.target.value)}
+                                              placeholder="Cari nama / NIK..."
+                                              className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                            />
+                                          </div>
+                                          <div className="space-y-1">
+                                            {filteredEmployees.slice(0, 15).map((emp) => (
+                                              <button
+                                                key={emp.id || emp.nik}
+                                                type="button"
+                                                onClick={() => {
+                                                  handleUpdateCellDirect(actualRowIndex, colName, emp.name || emp.nik);
+                                                  setActiveInlinePicCell(null);
+                                                }}
+                                                className="w-full px-2 py-1.5 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-left flex items-center justify-between transition-colors cursor-pointer"
+                                              >
+                                                <span className="font-medium truncate">{emp.name}</span>
+                                                <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-1">{emp.section || emp.nik}</span>
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
                                     </td>
                                   );
                                 }
@@ -4583,52 +4902,75 @@ export function NotionDatabaseTable({
                               {/* Spacer cell for Add Column (+) header */}
                               <td className="w-10 px-1 py-2 text-center" />
 
-                              {/* Row Action Buttons */}
-                              <td className={`text-center whitespace-nowrap ${fitPageMode ? 'px-1 py-2' : 'px-3 py-2.5'}`}>
-                                {!isSubItem ? (
-                                  <div className="flex items-center justify-center gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setExpandedParents(prev => ({ ...prev, [actualRowIndex]: true }));
-                                        setCreatingSubItemForParent(actualRowIndex);
-                                        setNewSubItemTitle('');
-                                      }}
-                                      className="p-1 rounded-lg hover:bg-teal-500/15 hover:text-teal-500 text-slate-400 transition-colors cursor-pointer"
-                                      title="Tambah Sub-kegiatan di bawah kegiatan ini"
-                                    >
-                                      <Plus className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => handleOpenEditModal(row, actualRowIndex, e)}
-                                      className="p-1.5 rounded-lg hover:text-amber-500 text-slate-400 transition-colors cursor-pointer"
-                                      title="Edit Data Kegiatan Ini"
-                                    >
-                                      <Edit2 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => handleDeleteRow(actualRowIndex, e)}
-                                      className="p-1.5 rounded-lg hover:text-rose-500 text-slate-400 transition-colors cursor-pointer"
-                                      title="Hapus Baris Ini"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center justify-center">
-                                    {/* Tombol hapus sub-item cepat saat hover jika diperlukan */}
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleDeleteRow(actualRowIndex, e)}
-                                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:text-rose-500 text-slate-400 transition-all cursor-pointer"
-                                      title="Hapus Sub-kegiatan Ini"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                )}
-                              </td>
+                               {/* Row Action Buttons - Menu Titik Tiga */}
+                               <td className={`text-center whitespace-nowrap relative notion-row-action-menu-container ${fitPageMode ? 'px-1 py-2' : 'px-2 py-2.5'}`} onClick={(e) => e.stopPropagation()}>
+                                 <div className="relative inline-block">
+                                   <button
+                                     type="button"
+                                     onClick={(e) => {
+                                       e.stopPropagation();
+                                       setActiveActionMenuRowIndex(activeActionMenuRowIndex === actualRowIndex ? null : actualRowIndex);
+                                     }}
+                                     className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-300 text-black dark:text-black hover:text-black transition-colors cursor-pointer"
+                                     title="Pilihan Aksi"
+                                   >
+                                     <MoreVertical className="w-4 h-4 text-black dark:text-black" />
+                                   </button>
+
+                                   {activeActionMenuRowIndex === actualRowIndex && (
+                                     <div 
+                                       className={`absolute right-0 top-full mt-1 w-52 rounded-xl shadow-2xl border p-1 z-50 text-left transition-all ${
+                                         isNotionLight ? 'bg-white border-slate-200 text-slate-800 shadow-slate-300/60' : 'bg-[#202020] border-slate-700 text-slate-100 shadow-black/80'
+                                       }`}
+                                       onClick={(e) => e.stopPropagation()}
+                                     >
+                                       {!isSubItem && (
+                                         <button
+                                           type="button"
+                                           onClick={(e) => {
+                                             e.stopPropagation();
+                                             setExpandedParents(prev => ({ ...prev, [actualRowIndex]: true }));
+                                             setCreatingSubItemForParent(actualRowIndex);
+                                             setNewSubItemTitle('');
+                                             setActiveActionMenuRowIndex(null);
+                                           }}
+                                           className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-400 font-medium transition-colors cursor-pointer"
+                                           title="Tambah Sub-kegiatan di bawah kegiatan ini"
+                                         >
+                                           <Plus className="w-3.5 h-3.5 shrink-0 text-teal-500" />
+                                           <span>Tambah Sub-kegiatan</span>
+                                         </button>
+                                       )}
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           handleOpenEditModal(row, actualRowIndex, e);
+                                           setActiveActionMenuRowIndex(null);
+                                         }}
+                                         className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-medium transition-colors cursor-pointer"
+                                         title="Edit Data Kegiatan Ini"
+                                       >
+                                         <Edit2 className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                                         <span>Edit Data Kegiatan</span>
+                                       </button>
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           handleDeleteRow(actualRowIndex, e);
+                                           setActiveActionMenuRowIndex(null);
+                                         }}
+                                         className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-medium transition-colors cursor-pointer"
+                                         title={isSubItem ? "Hapus Sub-kegiatan Ini" : "Hapus Baris Ini"}
+                                       >
+                                         <Trash2 className="w-3.5 h-3.5 shrink-0 text-rose-500" />
+                                         <span>{isSubItem ? "Hapus Sub-kegiatan" : "Hapus Baris Ini"}</span>
+                                       </button>
+                                     </div>
+                                   )}
+                                 </div>
+                               </td>
                             </tr>
                           );
                         };
@@ -4636,7 +4978,7 @@ export function NotionDatabaseTable({
                         return hierarchicalItems.map((hItem) => {
                           const parentRow = hItem.parentRow;
                           const parentIndex = hItem.parentIndex;
-                          const isParentExpanded = expandedParents[parentIndex] !== false; // Default expanded
+                          const isParentExpanded = Boolean(expandedParents[parentIndex]); // Default collapsed (tertutup), baru terbuka jika diklik
 
                           return (
                             <React.Fragment key={`parent-${parentIndex}`}>
@@ -5509,30 +5851,65 @@ export function NotionDatabaseTable({
             {/* Modal Form */}
             <form onSubmit={handleSaveRow} className="p-5 overflow-y-auto space-y-4 flex-1 text-xs">
               {/* 1. Jenis kegiatan */}
-              <div>
-                <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                  Jenis Kegiatan <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setRowFormData({ 
-                      ...rowFormData, 
-                      'Jenis kegiatan': val,
-                      'Jenis Kegiatan': val 
-                    });
-                  }}
-                  className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-medium text-xs shadow-2xs"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #141414)',
-                    borderColor: 'var(--border-main, #334155)',
-                    color: 'var(--text-main, #f1f5f9)'
-                  }}
-                  placeholder="Contoh: Kalibrasi XRF, Analisis Sampel Harian, dsb..."
-                />
+              <div className="relative">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                    Jenis Kegiatan <span className="text-rose-500">*</span>
+                  </label>
+                  {(rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan']) && (
+                    <span className="text-[10px] text-teal-400 font-sans">
+                      Blok teks untuk styling
+                    </span>
+                  )}
+                </div>
+
+                <div className="relative">
+                  {activeModalSelection?.field === 'jenisKegiatan' && (
+                    <FloatingSelectionToolbar
+                      onFormat={(action) => handleApplyModalFormat('jenisKegiatan', action)}
+                      onClose={() => setActiveModalSelection(null)}
+                    />
+                  )}
+                  <input
+                    type="text"
+                    required
+                    value={rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setRowFormData({ 
+                        ...rowFormData, 
+                        'Jenis kegiatan': val,
+                        'Jenis Kegiatan': val 
+                      });
+                    }}
+                    onSelect={(e) => handleModalSelectText(e, 'jenisKegiatan')}
+                    onKeyUp={(e) => handleModalSelectText(e, 'jenisKegiatan')}
+                    onMouseUp={(e) => handleModalSelectText(e, 'jenisKegiatan')}
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-medium text-xs shadow-2xs"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
+                    placeholder="Contoh: Kalibrasi XRF, Analisis Sampel Harian, dsb..."
+                  />
+                </div>
+
+                {/* Live visual preview if formatting tags or colors exist */}
+                {(() => {
+                  const val = rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || '';
+                  const hasFormat = /(\*\*|\*|~~|`|\[color|\[biru|\[merah|\[hijau|\[kuning|\[ungu|\[abu|\[orange|\[pink)/i.test(val);
+                  if (!hasFormat) return null;
+                  return (
+                    <div className="mt-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-[11px] flex items-center gap-1.5">
+                      <span className="text-[9.5px] uppercase font-bold text-teal-600 dark:text-teal-400 shrink-0">Pratinjau:</span>
+                      <span 
+                        className="truncate text-slate-900 dark:text-slate-100 font-medium"
+                        dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(val)) }}
+                      />
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* 2. Number & Priority */}
@@ -5581,27 +5958,55 @@ export function NotionDatabaseTable({
               </div>
 
               {/* 3. Keterangan / Catatan Ringkas */}
-              <div>
+              <div className="relative">
                 <div className="flex items-center justify-between mb-1">
                   <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Keterangan / Catatan Ringkas
                   </label>
                   <span className="text-[10px] text-slate-400 font-sans">
-                    (Opsional)
+                    (Opsional - blok teks untuk styling)
                   </span>
                 </div>
-                <textarea
-                  rows={3}
-                  value={rowFormData['Keterangan'] || ''}
-                  onChange={(e) => setRowFormData({ ...rowFormData, Keterangan: e.target.value })}
-                  className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs leading-relaxed resize-y"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #141414)',
-                    borderColor: 'var(--border-main, #334155)',
-                    color: 'var(--text-main, #f1f5f9)'
-                  }}
-                  placeholder="Catatan, rincian teknis, parameter khusus, atau instruksi kerja..."
-                />
+
+                <div className="relative">
+                  {activeModalSelection?.field === 'keterangan' && (
+                    <FloatingSelectionToolbar
+                      onFormat={(action) => handleApplyModalFormat('keterangan', action)}
+                      onClose={() => setActiveModalSelection(null)}
+                    />
+                  )}
+                  <textarea
+                    rows={3}
+                    value={rowFormData['Keterangan'] || ''}
+                    onChange={(e) => setRowFormData({ ...rowFormData, Keterangan: e.target.value })}
+                    onSelect={(e) => handleModalSelectText(e, 'keterangan')}
+                    onKeyUp={(e) => handleModalSelectText(e, 'keterangan')}
+                    onMouseUp={(e) => handleModalSelectText(e, 'keterangan')}
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs leading-relaxed resize-y"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
+                    placeholder="Catatan, rincian teknis, parameter khusus, atau instruksi kerja..."
+                  />
+                </div>
+
+                {/* Live visual preview if formatting tags or colors exist */}
+                {(() => {
+                  const val = rowFormData['Keterangan'] || '';
+                  const hasFormat = /(\*\*|\*|~~|`|\[color|\[biru|\[merah|\[hijau|\[kuning|\[ungu|\[abu|\[orange|\[pink)/i.test(val);
+                  if (!hasFormat) return null;
+                  return (
+                    <div className="mt-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-[11px]">
+                      <span className="text-[9.5px] uppercase font-bold text-teal-600 dark:text-teal-400 block mb-0.5">Pratinjau Keterangan:</span>
+                      <div 
+                        className="line-clamp-3 leading-relaxed text-slate-900 dark:text-slate-100 font-medium"
+                        dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(val)) }}
+                      />
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* 4. PIC & Status */}
@@ -5757,110 +6162,94 @@ export function NotionDatabaseTable({
                 </div>
               </div>
 
-              {/* 5. Activity, Period & Kategori */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Activity */}
+              {/* 5. Tipe Aktivitas & Periode (Hanya 2 pilihan utama: Routine vs Non Routine) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Tipe Aktivitas */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Activity
+                    Tipe Aktivitas
                   </label>
                   <select
-                    value={rowFormData['Activity (routine/non routine)'] || 'Daily'}
+                    value={
+                      (rowFormData['Activity (routine/non routine)'] || '').toLowerCase().includes('non') ||
+                      (rowFormData['period'] || '').toLowerCase().includes('non')
+                        ? 'Non Routine'
+                        : 'Routine'
+                    }
                     onChange={(e) => {
                       const val = e.target.value;
-                      const updated: any = { ...rowFormData, 'Activity (routine/non routine)': val };
-                      if (!rowFormData['period'] || rowFormData['period'] === 'Weekly') {
-                        if (val === 'Daily') updated.period = 'Daily';
-                        else if (val === 'Weekly') updated.period = 'Weekly';
-                        else if (val === 'Monthly') updated.period = 'Monthly';
-                        else if (val === 'Quarterly') updated.period = 'Quarterly';
-                        else if (val === 'Biannual') updated.period = 'Biannual';
-                        else if (val === 'Yearly') updated.period = 'Yearly';
+                      if (val === 'Non Routine') {
+                        setRowFormData({
+                          ...rowFormData,
+                          'Activity (routine/non routine)': 'Non Routine',
+                          period: 'Non-Routine'
+                        });
+                      } else {
+                        const currentCad = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Biannual', 'Yearly'].includes(rowFormData['period'] || '')
+                          ? rowFormData['period']
+                          : 'Daily';
+                        setRowFormData({
+                          ...rowFormData,
+                          'Activity (routine/non routine)': currentCad,
+                          period: currentCad
+                        });
                       }
-                      setRowFormData(updated);
                     }}
-                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs"
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs font-semibold"
                     style={{
                       backgroundColor: 'var(--input-bg, #141414)',
                       borderColor: 'var(--border-main, #334155)',
                       color: 'var(--text-main, #f1f5f9)'
                     }}
                   >
-                    <option value="Daily">Daily</option>
-                    <option value="Weekly">Weekly</option>
-                    <option value="Monthly">Monthly</option>
-                    <option value="Quarterly">Quarterly</option>
-                    <option value="Biannual">Biannual</option>
-                    <option value="Yearly">Yearly</option>
-                    <option value="Non-Routine">Non-Routine</option>
+                    <option value="Routine">Routine (Rutin)</option>
+                    <option value="Non Routine">Non Routine (Insidentil)</option>
                   </select>
                 </div>
 
-                {/* Period */}
+                {/* Cadence Periode (Pilihan lanjutan daily s/d yearly jika Routine) */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Period / Periode
+                    Periode / Cadence
                   </label>
-                  <select
-                    value={['Daily', 'Weekly', 'Monthly', '3 Month', '6 Month', 'Yearly', 'Non-Routine'].includes(rowFormData['period'] || '') ? rowFormData['period'] : 'custom'}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === 'custom') {
-                        setRowFormData({ ...rowFormData, period: '' });
-                      } else {
-                        setRowFormData({ ...rowFormData, period: val });
-                      }
-                    }}
-                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #141414)',
-                      borderColor: 'var(--border-main, #334155)',
-                      color: 'var(--text-main, #f1f5f9)'
-                    }}
-                  >
-                    <option value="Daily">Daily</option>
-                    <option value="Weekly">Weekly</option>
-                    <option value="Monthly">Monthly</option>
-                    <option value="3 Month">3 Month / Quarterly</option>
-                    <option value="6 Month">6 Month / Biannual</option>
-                    <option value="Yearly">Yearly</option>
-                    <option value="Non-Routine">Non-Routine</option>
-                    <option value="custom">Kustom / Lainnya...</option>
-                  </select>
-                  {!['Daily', 'Weekly', 'Monthly', '3 Month', '6 Month', 'Yearly', 'Non-Routine'].includes(rowFormData['period'] || '') && (
-                    <input
-                      type="text"
-                      value={rowFormData['period'] || ''}
-                      onChange={(e) => setRowFormData({ ...rowFormData, period: e.target.value })}
-                      className="w-full mt-1.5 p-2 rounded-xl border focus:border-teal-500 outline-none text-xs"
+                  {((rowFormData['Activity (routine/non routine)'] || '').toLowerCase().includes('non') ||
+                    (rowFormData['period'] || '').toLowerCase().includes('non')) ? (
+                    <div 
+                      className="w-full p-2.5 rounded-xl border text-xs font-medium opacity-70 cursor-not-allowed"
+                      style={{
+                        backgroundColor: 'var(--input-bg, #141414)',
+                        borderColor: 'var(--border-main, #334155)',
+                        color: 'var(--text-muted, #94a3b8)'
+                      }}
+                    >
+                      Insidentil (Non-Routine)
+                    </div>
+                  ) : (
+                    <select
+                      value={['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Biannual', 'Yearly'].includes(rowFormData['period'] || '') ? rowFormData['period'] : 'Daily'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setRowFormData({
+                          ...rowFormData,
+                          'Activity (routine/non routine)': val,
+                          period: val
+                        });
+                      }}
+                      className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs font-semibold"
                       style={{
                         backgroundColor: 'var(--input-bg, #141414)',
                         borderColor: 'var(--border-main, #334155)',
                         color: 'var(--text-main, #f1f5f9)'
                       }}
-                      placeholder="Input periode manual..."
-                      autoFocus
-                    />
+                    >
+                      <option value="Daily">Daily (Harian)</option>
+                      <option value="Weekly">Weekly (Mingguan)</option>
+                      <option value="Monthly">Monthly (Bulanan)</option>
+                      <option value="Quarterly">Quarterly (Triwulan)</option>
+                      <option value="Biannual">Biannual (Semesteran)</option>
+                      <option value="Yearly">Yearly (Tahunan)</option>
+                    </select>
                   )}
-                </div>
-
-                {/* Kategori */}
-                <div>
-                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Kategori
-                  </label>
-                  <input
-                    type="text"
-                    value={rowFormData['Kategori'] || ''}
-                    onChange={(e) => setRowFormData({ ...rowFormData, Kategori: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #141414)',
-                      borderColor: 'var(--border-main, #334155)',
-                      color: 'var(--text-main, #f1f5f9)'
-                    }}
-                    placeholder="Laboratorium"
-                  />
                 </div>
               </div>
 
@@ -5962,10 +6351,6 @@ export function NotionDatabaseTable({
                         )}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[11px] text-teal-400 font-mono font-semibold">
-                          {getRowVal(selectedRow, 'Kategori') || 'Laboratorium'}
-                        </span>
-                        <span style={{ color: 'var(--text-muted, #64748b)' }}>•</span>
                         <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                           Aktivitas: {getRowVal(selectedRow, 'Activity (routine/non routine)') || 'Routine'}
                         </span>
@@ -6329,11 +6714,7 @@ export function NotionDatabaseTable({
                       })()}
 
                       {/* Secondary Metadata Info Cards */}
-                      <div className="grid grid-cols-3 gap-2.5 text-[11px]">
-                        <div className="p-3 rounded-xl border" style={{ backgroundColor: 'var(--input-bg, #171717)', borderColor: 'var(--border-main, #334155)' }}>
-                          <span className="text-[9px] uppercase font-bold block mb-0.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Kategori</span>
-                          <span className="font-medium truncate block" style={{ color: 'var(--text-main, #cbd5e1)' }}>{getRowVal(selectedRow, 'Kategori') || '-'}</span>
-                        </div>
+                      <div className="grid grid-cols-2 gap-2.5 text-[11px]">
                         <div className="p-3 rounded-xl border" style={{ backgroundColor: 'var(--input-bg, #171717)', borderColor: 'var(--border-main, #334155)' }}>
                           <span className="text-[9px] uppercase font-bold block mb-0.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Period</span>
                           <span className="font-medium truncate block" style={{ color: 'var(--text-main, #cbd5e1)' }}>{getRowVal(selectedRow, 'period') || '-'}</span>
@@ -6581,21 +6962,65 @@ export function NotionDatabaseTable({
                                         <span>Balas</span>
                                       </button>
                                       {c.authorNik === currentAuthorNik && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteComment(c.id)}
-                                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
-                                          title="Hapus komentar ini"
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                        </button>
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingCommentId(c.id);
+                                              setEditingCommentContent(c.content);
+                                            }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-500 transition-opacity cursor-pointer"
+                                            title="Edit komentar ini"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteComment(c.id)}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
+                                            title="Hapus komentar ini"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        </>
                                       )}
                                     </div>
                                   </div>
 
-                                  <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
-                                    {c.content}
-                                  </p>
+                                  {editingCommentId === c.id ? (
+                                      <div className="space-y-2 mt-1">
+                                        <textarea
+                                          value={editingCommentContent}
+                                          onChange={(e) => setEditingCommentContent(e.target.value)}
+                                          className="w-full text-xs p-2 rounded-lg border focus:ring-1 focus:ring-sky-500 outline-none leading-relaxed min-h-[60px]"
+                                          style={{
+                                            backgroundColor: 'var(--input-bg, #1a1a1a)',
+                                            borderColor: 'var(--border-main, #334155)',
+                                            color: 'var(--text-main, #f1f5f9)'
+                                          }}
+                                        />
+                                        <div className="flex items-center gap-2 justify-end">
+                                          <button
+                                            type="button"
+                                            onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
+                                            className="px-2 py-1 text-xs rounded border border-slate-600 text-slate-300 hover:bg-slate-700 cursor-pointer"
+                                          >
+                                            Batal
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSaveEditComment(c.id)}
+                                            className="px-2.5 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
+                                          >
+                                            Simpan
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
+                                        {c.content}
+                                      </p>
+                                    )}
 
                                   {atts.length > 0 && (
                                     <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
@@ -6655,6 +7080,18 @@ export function NotionDatabaseTable({
                                           <span>Balas</span>
                                         </button>
                                         {c.authorNik === currentAuthorNik && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingCommentId(c.id);
+                                              setEditingCommentContent(c.content);
+                                            }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-500 transition-opacity cursor-pointer"
+                                            title="Edit komentar ini"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
                                           <button
                                             type="button"
                                             onClick={() => handleDeleteComment(c.id)}
@@ -6663,13 +7100,45 @@ export function NotionDatabaseTable({
                                           >
                                             <Trash2 className="w-3 h-3" />
                                           </button>
-                                        )}
+                                        </>
+                                      )}
                                       </div>
                                     </div>
 
-                                    <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
-                                      {c.content}
-                                    </p>
+                                    {editingCommentId === c.id ? (
+                                      <div className="space-y-2 mt-1">
+                                        <textarea
+                                          value={editingCommentContent}
+                                          onChange={(e) => setEditingCommentContent(e.target.value)}
+                                          className="w-full text-xs p-2 rounded-lg border focus:ring-1 focus:ring-sky-500 outline-none leading-relaxed min-h-[60px]"
+                                          style={{
+                                            backgroundColor: 'var(--input-bg, #1a1a1a)',
+                                            borderColor: 'var(--border-main, #334155)',
+                                            color: 'var(--text-main, #f1f5f9)'
+                                          }}
+                                        />
+                                        <div className="flex items-center gap-2 justify-end">
+                                          <button
+                                            type="button"
+                                            onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
+                                            className="px-2 py-1 text-xs rounded border border-slate-600 text-slate-300 hover:bg-slate-700 cursor-pointer"
+                                          >
+                                            Batal
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSaveEditComment(c.id)}
+                                            className="px-2.5 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
+                                          >
+                                            Simpan
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
+                                        {c.content}
+                                      </p>
+                                    )}
 
                                     {atts.length > 0 && (
                                       <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
@@ -6760,21 +7229,65 @@ export function NotionDatabaseTable({
                                                 <span>Balas</span>
                                               </button>
                                               {c.authorNik === currentAuthorNik && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleDeleteComment(c.id)}
-                                                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
-                                                  title="Hapus komentar ini"
-                                                >
-                                                  <Trash2 className="w-3 h-3" />
-                                                </button>
-                                              )}
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingCommentId(c.id);
+                                              setEditingCommentContent(c.content);
+                                            }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-500 transition-opacity cursor-pointer"
+                                            title="Edit komentar ini"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteComment(c.id)}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
+                                            title="Hapus komentar ini"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        </>
+                                      )}
                                             </div>
                                           </div>
 
-                                          <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
-                                            {c.content}
-                                          </p>
+                                          {editingCommentId === c.id ? (
+                                      <div className="space-y-2 mt-1">
+                                        <textarea
+                                          value={editingCommentContent}
+                                          onChange={(e) => setEditingCommentContent(e.target.value)}
+                                          className="w-full text-xs p-2 rounded-lg border focus:ring-1 focus:ring-sky-500 outline-none leading-relaxed min-h-[60px]"
+                                          style={{
+                                            backgroundColor: 'var(--input-bg, #1a1a1a)',
+                                            borderColor: 'var(--border-main, #334155)',
+                                            color: 'var(--text-main, #f1f5f9)'
+                                          }}
+                                        />
+                                        <div className="flex items-center gap-2 justify-end">
+                                          <button
+                                            type="button"
+                                            onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
+                                            className="px-2 py-1 text-xs rounded border border-slate-600 text-slate-300 hover:bg-slate-700 cursor-pointer"
+                                          >
+                                            Batal
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSaveEditComment(c.id)}
+                                            className="px-2.5 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
+                                          >
+                                            Simpan
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
+                                        {c.content}
+                                      </p>
+                                    )}
 
                                           {atts.length > 0 && (
                                             <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
@@ -6836,6 +7349,18 @@ export function NotionDatabaseTable({
                                           <span>Balas</span>
                                         </button>
                                         {c.authorNik === currentAuthorNik && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingCommentId(c.id);
+                                              setEditingCommentContent(c.content);
+                                            }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-500 transition-opacity cursor-pointer"
+                                            title="Edit komentar ini"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
                                           <button
                                             type="button"
                                             onClick={() => handleDeleteComment(c.id)}
@@ -6844,13 +7369,45 @@ export function NotionDatabaseTable({
                                           >
                                             <Trash2 className="w-3 h-3" />
                                           </button>
-                                        )}
+                                        </>
+                                      )}
                                       </div>
                                     </div>
 
-                                    <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
-                                      {c.content}
-                                    </p>
+                                    {editingCommentId === c.id ? (
+                                      <div className="space-y-2 mt-1">
+                                        <textarea
+                                          value={editingCommentContent}
+                                          onChange={(e) => setEditingCommentContent(e.target.value)}
+                                          className="w-full text-xs p-2 rounded-lg border focus:ring-1 focus:ring-sky-500 outline-none leading-relaxed min-h-[60px]"
+                                          style={{
+                                            backgroundColor: 'var(--input-bg, #1a1a1a)',
+                                            borderColor: 'var(--border-main, #334155)',
+                                            color: 'var(--text-main, #f1f5f9)'
+                                          }}
+                                        />
+                                        <div className="flex items-center gap-2 justify-end">
+                                          <button
+                                            type="button"
+                                            onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
+                                            className="px-2 py-1 text-xs rounded border border-slate-600 text-slate-300 hover:bg-slate-700 cursor-pointer"
+                                          >
+                                            Batal
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSaveEditComment(c.id)}
+                                            className="px-2.5 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
+                                          >
+                                            Simpan
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
+                                        {c.content}
+                                      </p>
+                                    )}
 
                                     {atts.length > 0 && (
                                       <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
@@ -6900,37 +7457,53 @@ export function NotionDatabaseTable({
                         )}
 
                         {/* Selected Attachment Preview with Caption */}
-                        {selectedFile && (
+                        {(selectedFiles.length > 0 || selectedFile) && (
                           <div 
-                            className="p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center gap-2.5 animate-in fade-in shadow-xs"
+                            className="p-2.5 rounded-xl border space-y-2 animate-in fade-in shadow-xs"
                             style={{
                               backgroundColor: 'var(--input-bg, #1a1a1a)',
                               borderColor: 'rgba(20, 184, 166, 0.45)'
                             }}
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              {selectedFile.isImage && (selectedFile.previewUrl || selectedFile.url) ? (
-                                <img 
-                                  src={selectedFile.previewUrl || selectedFile.url} 
-                                  alt={selectedFile.name} 
-                                  className="w-11 h-11 object-cover rounded-lg border border-teal-500/40 shrink-0 shadow-2xs" 
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-lg bg-teal-950/80 border border-teal-700/50 flex items-center justify-center text-teal-400 shrink-0">
-                                  <Paperclip className="w-4 h-4" />
-                                </div>
-                              )}
-                              <div className="min-w-0 flex-1">
-                                <span className="text-xs font-semibold text-teal-300 block truncate max-w-[160px]" title={selectedFile.name}>{selectedFile.name}</span>
-                                <span className="text-[10px] text-teal-400/80 font-medium">Lampiran siap dikirim</span>
-                              </div>
+                            <div className="flex items-center justify-between text-xs font-semibold text-teal-400">
+                              <span>Lampiran ({selectedFiles.length || 1} file siap dikirim):</span>
+                              <button
+                                type="button"
+                                onClick={() => { setSelectedFiles([]); setSelectedFile(null); setCommentFileCaption(''); }}
+                                className="text-[11px] text-rose-400 hover:underline cursor-pointer"
+                              >
+                                Hapus Semua
+                              </button>
                             </div>
-                            <div className="flex-1 flex items-center gap-1.5">
+                            <div className="flex flex-wrap gap-2">
+                              {(selectedFiles.length > 0 ? selectedFiles : (selectedFile ? [selectedFile] : [])).map((f, fIdx) => (
+                                <div key={fIdx} className="relative flex items-center gap-2 p-1.5 pr-2.5 rounded-lg bg-teal-950/40 border border-teal-500/30">
+                                  {f.isImage && (f.previewUrl || f.url) ? (
+                                    <img src={f.previewUrl || f.url} alt={f.name} className="w-8 h-8 object-cover rounded border border-teal-500/40 shrink-0" />
+                                  ) : (
+                                    <Paperclip className="w-4 h-4 text-teal-400 shrink-0" />
+                                  )}
+                                  <span className="text-[11px] font-medium text-teal-200 truncate max-w-[120px]" title={f.name}>{f.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = selectedFiles.filter((_, idx) => idx !== fIdx);
+                                      setSelectedFiles(updated);
+                                      if (updated.length === 0) setSelectedFile(null);
+                                    }}
+                                    className="p-0.5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded cursor-pointer"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex items-center gap-1.5 pt-1">
                               <input
                                 type="text"
                                 value={commentFileCaption}
                                 onChange={(e) => setCommentFileCaption(e.target.value)}
-                                placeholder="Tambahkan caption gambar (opsional)..."
+                                placeholder="Tambahkan caption gambar/lampiran (opsional)..."
                                 className="w-full text-xs px-2.5 py-1.5 rounded-lg border focus:border-teal-500 outline-none leading-relaxed"
                                 style={{
                                   backgroundColor: 'var(--card-bg, #141414)',
@@ -6938,14 +7511,6 @@ export function NotionDatabaseTable({
                                   color: 'var(--text-main, #f1f5f9)'
                                 }}
                               />
-                              <button
-                                type="button"
-                                onClick={() => { setSelectedFile(null); setCommentFileCaption(''); }}
-                                className="p-1.5 hover:bg-slate-700/50 rounded-lg text-slate-400 hover:text-rose-400 transition-colors shrink-0 cursor-pointer"
-                                title="Hapus Lampiran"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
                             </div>
                           </div>
                         )}
@@ -6977,6 +7542,7 @@ export function NotionDatabaseTable({
                               ref={commentFileInputRef}
                               onChange={handleCommentFileSelect}
                               accept="image/*,.pdf,.doc,.docx"
+                              multiple
                               className="hidden"
                             />
                             <button

@@ -124,13 +124,33 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
       }
     }
     if (section && section !== 'ALL' && section !== 'Semua' && section !== 'Semua Seksi') {
-      if (section.toLowerCase().includes('quality') || section.toLowerCase().includes('qa')) {
+      const secLower = section.toLowerCase().trim();
+      if (secLower.includes('quality') || secLower.includes('qa') || secLower.includes('mutu')) {
         conditions.push(or(
           ilike(logbookTasks.section, '%quality%'),
-          ilike(logbookTasks.section, '%qa%')
+          ilike(logbookTasks.section, '%qa%'),
+          ilike(logbookTasks.section, '%mutu%'),
+          ilike(logbookTasks.section, '%prep & lab%')
         ));
+      } else if (secLower.includes('lab')) {
+        conditions.push(or(
+          ilike(logbookTasks.section, '%lab%'),
+          ilike(logbookTasks.section, '%prep & lab%'),
+          ilike(logbookTasks.section, '%preparasi & lab%')
+        ));
+      } else if (secLower.includes('prep')) {
+        conditions.push(or(
+          ilike(logbookTasks.section, '%prep%'),
+          ilike(logbookTasks.section, '%preparasi%'),
+          ilike(logbookTasks.section, '%prep & lab%')
+        ));
+      } else if (secLower.includes('maint')) {
+        conditions.push(ilike(logbookTasks.section, '%maintenance%'));
       } else {
-        conditions.push(eq(logbookTasks.section, section));
+        conditions.push(or(
+          eq(logbookTasks.section, section),
+          ilike(logbookTasks.section, `%${section}%`)
+        ));
       }
     }
     if (assigneeNik) {
@@ -248,6 +268,18 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
 
       if (isTaskPlannedForDate(t, targetDateStr)) return true;
       if (isRoutineEligibleForDate(t, targetDateStr) && t.taskDate <= targetDateStr) return true;
+
+      // Ensure Non-Routine tasks active today are included:
+      if (!isRoutineTask(t)) {
+        if (t.taskDate === targetDateStr) return true;
+        if (t.createdAt) {
+          try {
+            const cDate = formatDateStr(new Date(t.createdAt));
+            if (cDate === targetDateStr) return true;
+          } catch (e) {}
+        }
+      }
+
       return false;
     });
 
@@ -308,8 +340,8 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
     const carryOverTasks = allMatching.filter(t => {
       const isUnfinished = t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed' && t.status !== 'Canceled' && t.status !== 'Cancelled';
       if (!isUnfinished) return false;
-      // All past unfinished tasks
-      if (t.taskDate < targetDateStr) return true;
+      // All past or undated unfinished tasks
+      if (!t.taskDate || t.taskDate < targetDateStr) return true;
       // Active routine backlogs that belong to current backlog
       if (isRoutineTask(t)) return true;
       return false;
@@ -1182,66 +1214,12 @@ logbookRouter.post("/api/logbook/sync-from-bulletin", async (req, res) => {
     }
 
     const post = postArr[0];
-    const parsed = parseMarkdownTableRows(post.content);
-    if (!parsed || parsed.rows.length === 0) {
-      return res.json({ status: "success", message: "Tidak ada tabel kegiatan di dokumen ini", importedCount: 0 });
-    }
-
-    const todayDateStr = formatDateStr(new Date());
-    let importedCount = 0;
-
-    for (const r of parsed.rows) {
-      const title = r['Jenis kegiatan'] || r['task'] || r['judul'] || '';
-      if (!title || title.trim() === '-' || title.trim().length < 2) continue;
-
-      const picName = r['PIC'] || r['pic'] || r['Assignee'] || '';
-      const status = r['Status'] || r['status'] || 'Open';
-      const priority = r['Priority'] || r['priority'] || 'Normal';
-      const desc = r['Keterangan'] || r['keterangan'] || '';
-      const targetDate = r['Target Selesai'] || r['Deadline'] || '-';
-
-      // Check if task already exists
-      const existing = await db
-        .select()
-        .from(logbookTasks)
-        .where(
-          and(
-            eq(logbookTasks.bulletinPostId, post.id),
-            eq(logbookTasks.title, title.trim())
-          )
-        )
-        .limit(1);
-
-      if (existing.length === 0) {
-        await db.insert(logbookTasks).values({
-          title: title.trim(),
-          description: desc.trim(),
-          section: section || post.category || post.department || 'General',
-          assigneeNik: 'PIC_' + picName.replace(/[^a-zA-Z0-9]/g, '_'),
-          assigneeName: picName || 'Personil Section',
-          assignedByNik: userNik || post.authorNik || 'SUPERVISOR',
-          assignedByName: userName || post.authorName || 'Atasan / Manajemen',
-          priority: priority || 'Normal',
-          activityType: 'Routine',
-          status: status || 'Open',
-          progressPercent: 0,
-          taskDate: todayDateStr,
-          targetDate: targetDate || '-',
-          pt: post.pt || 'TBP',
-          universe: (post.pt || 'TBP') === 'GTS' ? 'GTS' : 'TBP_GPS',
-          bulletinPostId: post.id,
-          bulletinTopicTitle: title.trim(),
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-        importedCount++;
-      }
-    }
+    const { syncBulletinToLogbook } = await import("./bulletin.js");
+    await syncBulletinToLogbook(post);
 
     res.json({
       status: "success",
-      message: `Berhasil menyinkronkan ${importedCount} tugas dari Buletin ke Log Book Section`,
-      importedCount
+      message: `Berhasil menyinkronkan tugas dari Buletin ke Log Book Section`
     });
   } catch (error: any) {
     console.error("[Logbook Sync Bulletin] Error:", error);

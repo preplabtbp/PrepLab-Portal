@@ -168,14 +168,14 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
         {/* Calendar Matrix */}
         <div className={`${size === '2x' ? 'sm:col-span-7' : 'w-full'}`}>
           {/* Days of week header */}
-          <div className="grid grid-cols-7 gap-1 text-center mb-1 text-[10px] font-bold text-[var(--text-muted)]">
-            <span className="text-rose-500">Min</span>
-            <span>Sen</span>
-            <span>Sel</span>
-            <span>Rab</span>
-            <span>Kam</span>
-            <span>Jum</span>
-            <span>Sab</span>
+          <div className="grid grid-cols-7 gap-1 text-center mb-1 text-[10px] font-extrabold text-black dark:text-black">
+            <span className="text-rose-600 font-black">Min</span>
+            <span className="text-black dark:text-black font-extrabold">Sen</span>
+            <span className="text-black dark:text-black font-extrabold">Sel</span>
+            <span className="text-black dark:text-black font-extrabold">Rab</span>
+            <span className="text-black dark:text-black font-extrabold">Kam</span>
+            <span className="text-black dark:text-black font-extrabold">Jum</span>
+            <span className="text-black dark:text-black font-extrabold">Sab</span>
           </div>
 
           {/* Days grid */}
@@ -184,7 +184,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
             {prevMonthDays.map((d, i) => (
               <div
                 key={`prev-${i}`}
-                className="h-6 sm:h-7 flex items-center justify-center text-[10px] text-slate-300 dark:text-slate-600 rounded-md"
+                className="h-6 sm:h-7 flex items-center justify-center text-[10px] text-slate-500 dark:text-slate-400 font-medium rounded-md"
               >
                 {d}
               </div>
@@ -201,12 +201,12 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
                   key={`day-${d}`}
                   type="button"
                   onClick={() => handleSelectDay(d)}
-                  className={`h-6 sm:h-7 relative flex items-center justify-center text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`h-6 sm:h-7 relative flex items-center justify-center text-[11px] font-extrabold rounded-lg transition-all cursor-pointer ${
                     selectedFlag
                       ? 'bg-indigo-600 text-white shadow-xs scale-105 z-10'
                       : todayFlag
-                        ? 'bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/40 font-black'
-                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-[var(--text-main)]'
+                        ? 'bg-teal-500/20 text-teal-800 dark:text-teal-900 border border-teal-500/50 font-black'
+                        : 'hover:bg-slate-200 dark:hover:bg-slate-200 text-black dark:text-black'
                   }`}
                 >
                   <span>{d}</span>

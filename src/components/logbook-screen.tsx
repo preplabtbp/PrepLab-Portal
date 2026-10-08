@@ -52,7 +52,10 @@ import {
   ArrowDown,
   ExternalLink,
   Sun,
-  Moon
+  Moon,
+  MoreVertical,
+  CornerUpRight,
+  CornerDownRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui';
@@ -996,11 +999,28 @@ export function LogbookScreen({
     let badgeClass = 'bg-teal-100 text-teal-950 border-teal-300 font-bold';
 
     if (isDone) {
-      if (rawDays <= 0) {
-        durationLabel = 'Selesai di Hari yang Sama';
+      let calculatedHours = 0;
+      if (task.createdAt && task.actualCompletedDate) {
+        try {
+          const dC = new Date(task.createdAt);
+          const dComp = new Date(task.actualCompletedDate);
+          if (!isNaN(dC.getTime()) && !isNaN(dComp.getTime()) && dComp.getTime() >= dC.getTime()) {
+            const h = Math.floor((dComp.getTime() - dC.getTime()) / (1000 * 60 * 60));
+            if (h >= 1 && h < 24 && rawDays <= 0) {
+              calculatedHours = h;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (calculatedHours > 0) {
+        durationLabel = `${calculatedHours} Jam`;
+        durationShort = `${calculatedHours} Jam`;
+      } else if (rawDays <= 0) {
+        durationLabel = '1 Hari';
         durationShort = '1 Hari';
       } else {
-        durationLabel = `Tuntas dalam ${dayCount} Hari`;
+        durationLabel = `${dayCount} Hari`;
         durationShort = `${dayCount} Hari`;
       }
       badgeClass = 'bg-emerald-50 text-emerald-900 border-emerald-200/80 font-medium';
@@ -1135,6 +1155,116 @@ export function LogbookScreen({
   const [newPendingPicNik, setNewPendingPicNik] = useState('');
   const [newPendingPicName, setNewPendingPicName] = useState('');
   const [newPendingReason, setNewPendingReason] = useState('');
+  // Three-dots Action Menu Popover State
+  const [activeActionMenuTaskId, setActiveActionMenuTaskId] = useState<number | null>(null);
+
+  // 1-Click Inline PIC Selection Popover State
+  const [activeInlinePicTaskId, setActiveInlinePicTaskId] = useState<number | null>(null);
+  const [inlinePicSearchTerm, setInlinePicSearchTerm] = useState('');
+
+  // Interactive Column Widths & Resizer State in Logbook
+  const logbookStorageKey = 'preplab_logbook_col_widths';
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('preplab_logbook_col_widths');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [resizingCol, setResizingCol] = useState<string | null>(null);
+  const resizeInfoRef = useRef<{ colHeader: string; startX: number; startWidth: number } | null>(null);
+
+  const handleResizeStart = (
+    colHeaderOrEvent: string | React.MouseEvent | React.TouchEvent,
+    eventOrColHeader?: string | React.MouseEvent | React.TouchEvent,
+    currentDomWidth?: number
+  ) => {
+    let e: React.MouseEvent | React.TouchEvent;
+    let colHeader: string;
+    if (typeof colHeaderOrEvent === 'string') {
+      colHeader = colHeaderOrEvent;
+      e = eventOrColHeader as React.MouseEvent | React.TouchEvent;
+    } else {
+      e = colHeaderOrEvent as React.MouseEvent | React.TouchEvent;
+      colHeader = eventOrColHeader as string;
+    }
+    if (e && e.preventDefault) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    const clientX = e && 'touches' in e ? e.touches[0].clientX : (e && 'clientX' in e ? (e as React.MouseEvent).clientX : 0);
+    const parentW = (e?.currentTarget as HTMLElement)?.parentElement?.getBoundingClientRect().width;
+    const initialWidth = columnWidths[colHeader] || currentDomWidth || parentW || 180;
+    resizeInfoRef.current = { colHeader, startX: clientX, startWidth: initialWidth };
+    setResizingCol(colHeader);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
+      if (!resizeInfoRef.current) return;
+      const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
+      const deltaX = currentX - resizeInfoRef.current.startX;
+      const newWidth = Math.max(50, Math.min(1200, Math.round(resizeInfoRef.current.startWidth + deltaX)));
+
+      setColumnWidths((prev) => ({
+        ...prev,
+        [resizeInfoRef.current!.colHeader]: newWidth
+      }));
+    };
+
+    const handleMouseUp = () => {
+      if (resizeInfoRef.current) {
+        setColumnWidths((prev) => {
+          try {
+            localStorage.setItem(logbookStorageKey, JSON.stringify(prev));
+          } catch {}
+          return prev;
+        });
+      }
+      resizeInfoRef.current = null;
+      setResizingCol(null);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('touchmove', handleMouseMove, { passive: false });
+    window.addEventListener('touchend', handleMouseUp);
+  };
+
+  const getColStyle = (colName: string): React.CSSProperties | undefined => {
+    const customW = columnWidths[colName];
+    if (customW) {
+      return {
+        width: `${customW}px`,
+        minWidth: `${customW}px`,
+        maxWidth: `${customW}px`
+      };
+    }
+    return undefined;
+  };
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.logbook-action-menu-container')) {
+        setActiveActionMenuTaskId(null);
+      }
+      if (!target.closest('.logbook-inline-pic-container')) {
+        setActiveInlinePicTaskId(null);
+        setInlinePicSearchTerm('');
+      }
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, []);
 
   const openAssignModal = () => {
     setNewTitle('');
@@ -2151,6 +2281,55 @@ export function LogbookScreen({
       toast.error('Gagal terhubung ke server');
       fetchTasks();
     }
+  };
+
+  // Handle 1-Click Inline PIC Reassignment
+  const handleInlinePicChange = async (taskId: number, newNik: string, newName: string) => {
+    try {
+      const res = await fetch(`/api/logbook/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updaterNik: inspectorNik || 'system',
+          assigneeNik: newNik,
+          assigneeName: newName
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'success') {
+        toast.success(`PIC berhasil diubah ke ${newName}`);
+        setActiveInlinePicTaskId(null);
+        setInlinePicSearchTerm('');
+        fetchTasks();
+      } else {
+        toast.error(json.message || 'Gagal mengubah PIC');
+      }
+    } catch (err) {
+      toast.error('Terjadi kesalahan saat mengubah PIC');
+    }
+  };
+
+  const getFilteredPicEmployees = (task: LogbookTask) => {
+    const isQa = (task.section || '').toLowerCase().includes('qa') || (task.section || '').toLowerCase().includes('mutu');
+    let list = Array.isArray(employeesList) ? employeesList : [];
+    if (isQa) {
+      list = list.filter(emp => {
+        if ((emp.nik || '') === '04D26000015' || (emp.name || '').toUpperCase().includes('GUSTI')) {
+          return false;
+        }
+        return true;
+      });
+    }
+    if (!inlinePicSearchTerm.trim()) {
+      return list.slice(0, 40);
+    }
+    const q = inlinePicSearchTerm.toLowerCase();
+    return list.filter(emp => {
+      const name = (emp.name || '').toLowerCase();
+      const nik = (emp.nik || '').toLowerCase();
+      const sec = (emp.section || emp.department || emp.jabatan || '').toLowerCase();
+      return name.includes(q) || nik.includes(q) || sec.includes(q);
+    }).slice(0, 40);
   };
 
   // Copy Meeting & Operational Summary to WhatsApp / Clipboard (Section Centric)
@@ -3919,13 +4098,17 @@ export function LogbookScreen({
                       : 'bg-slate-800 border-slate-700 text-slate-100 font-bold'
                   }`}
                 >
-                  <th className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 text-center ${fitPageMode ? 'w-[3%] px-1 py-2.5' : 'w-10 px-2 py-3'}`}>
+                  <th 
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 text-center ${fitPageMode ? 'w-[3%] px-1 py-2.5' : 'w-10 px-2 py-3'}`} 
+                    style={getColStyle('drag')}
+                  >
                     <GripVertical className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400 mx-auto" />
                   </th>
 
                   <th 
                     onClick={() => handleSort('date')}
-                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('number')}
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[4%] text-center px-1 py-2.5' : 'w-14 text-center px-2 py-3'
                     }`}
                   >
@@ -3933,11 +4116,17 @@ export function LogbookScreen({
                       <span>#</span>
                       {sortColumn === 'date' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('number', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
                   <th 
                     onClick={() => handleSort('title')}
-                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('title')}
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[28%] px-2.5 py-2.5' : 'min-w-[280px] px-3.5 py-3'
                     }`}
                   >
@@ -3946,11 +4135,17 @@ export function LogbookScreen({
                       <span>Kegiatan / Arahan Tugas</span>
                       {sortColumn === 'title' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('title', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
                   <th 
                     onClick={() => handleSort('cadence')}
-                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('cadence')}
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[120px] px-3 py-3'
                     }`}
                   >
@@ -3959,11 +4154,17 @@ export function LogbookScreen({
                       <span>Frekuensi</span>
                       {sortColumn === 'cadence' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('cadence', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
                   <th 
                     onClick={() => handleSort('status')}
-                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('status')}
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[12%] px-1.5 py-2.5' : 'min-w-[140px] px-3 py-3'
                     }`}
                   >
@@ -3972,11 +4173,17 @@ export function LogbookScreen({
                       <span>Status</span>
                       {sortColumn === 'status' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('status', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
                   <th 
                     onClick={() => handleSort('priority')}
-                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('priority')}
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[9%] px-1.5 py-2.5' : 'min-w-[110px] px-3 py-3'
                     }`}
                   >
@@ -3985,11 +4192,17 @@ export function LogbookScreen({
                       <span>Prioritas</span>
                       {sortColumn === 'priority' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('priority', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
                   <th 
                     onClick={() => handleSort('pic')}
-                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('pic')}
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[13%] px-2 py-2.5' : 'min-w-[150px] px-3 py-3'
                     }`}
                   >
@@ -3998,18 +4211,32 @@ export function LogbookScreen({
                       <span>PIC Pelaksana</span>
                       {sortColumn === 'pic' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('pic', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
-                  <th className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black ${fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[130px] px-3 py-3'}`}>
+                  <th 
+                    style={getColStyle('duration')}
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black select-none ${fitPageMode ? 'w-[10%] px-1.5 py-2.5' : 'min-w-[130px] px-3 py-3'}`}
+                  >
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
                       <span>Mulai & Durasi</span>
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('duration', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
                   <th 
                     onClick={() => handleSort('progress')}
-                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 font-black cursor-pointer hover:opacity-80 transition-opacity ${
+                    style={getColStyle('progress')}
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th font-black cursor-pointer hover:opacity-80 transition-opacity select-none ${
                       fitPageMode ? 'w-[9%] px-1.5 py-2.5' : 'min-w-[120px] px-3 py-3'
                     }`}
                   >
@@ -4018,10 +4245,23 @@ export function LogbookScreen({
                       <span>Progress</span>
                       {sortColumn === 'progress' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400" />)}
                     </div>
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('progress', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
 
-                  <th className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 text-center font-black ${fitPageMode ? 'w-[8%] px-1 py-2.5' : 'w-24 px-3 py-3'}`}>
+                  <th 
+                    style={getColStyle('actions')}
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 relative group/th text-center font-black select-none ${fitPageMode ? 'w-[8%] px-1 py-2.5' : 'w-24 px-3 py-3'}`}
+                  >
                     Aksi
+                    <div 
+                      onMouseDown={(e) => handleResizeStart('actions', e)} 
+                      onClick={(e) => e.stopPropagation()} 
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-teal-500 transition-colors z-10" 
+                    />
                   </th>
                 </tr>
               </thead>
@@ -4271,9 +4511,74 @@ export function LogbookScreen({
                               </span>
                             </td>
 
-                            {/* PIC Pelaksana */}
-                            <td className="px-3 py-2.5">
-                              <PicAvatarGroup pics={picList} employeesList={employeesList} />
+                            {/* PIC Pelaksana (1-Click Inline Edit) */}
+                            <td className="px-3 py-2.5 relative logbook-inline-pic-container" onClick={(e) => e.stopPropagation()}>
+                              <div 
+                                onClick={() => {
+                                  setActiveInlinePicTaskId(activeInlinePicTaskId === task.id ? null : task.id);
+                                  setInlinePicSearchTerm('');
+                                }}
+                                className="flex flex-wrap gap-1 items-center max-w-[180px] p-1 rounded-md transition-all cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:ring-1 hover:ring-amber-400/50 group/pic"
+                                title="Klik untuk ubah PIC langsung"
+                              >
+                                {picList.length === 0 ? (
+                                  <span className="text-[11px] text-slate-400 italic">Pilih PIC...</span>
+                                ) : (
+                                  <PicAvatarGroup pics={picList} employeesList={employeesList} />
+                                )}
+                              </div>
+
+                              {/* Inline PIC Popover Dropdown */}
+                              {activeInlinePicTaskId === task.id && (
+                                <div 
+                                  className={`absolute left-2 top-full mt-1 w-64 rounded-xl shadow-2xl border p-2 z-50 text-left transition-all ${
+                                    isNotionLight ? 'bg-white border-slate-200 text-slate-800 shadow-slate-300/60' : 'bg-[#202020] border-slate-700 text-slate-100 shadow-black/80'
+                                  }`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold">
+                                    <span className="text-slate-700 dark:text-slate-300">Pilih PIC Pelaksana</span>
+                                    <span className="text-[10px] text-slate-400 font-normal">{task.section}</span>
+                                  </div>
+                                  <div className="relative mb-2">
+                                    <Search className="w-3 h-3 absolute left-2 top-2 text-slate-400" />
+                                    <input 
+                                      type="text" 
+                                      value={inlinePicSearchTerm}
+                                      onChange={(e) => setInlinePicSearchTerm(e.target.value)}
+                                      placeholder="Cari nama atau NIK..."
+                                      className="w-full pl-6 pr-2 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                                      autoFocus
+                                    />
+                                  </div>
+                                  <div className="max-h-48 overflow-y-auto space-y-0.5 custom-scrollbar">
+                                    {getFilteredPicEmployees(task).map(emp => {
+                                      const isSelected = task.assigneeNik === emp.nik || (task.assigneeName || '').includes(emp.name);
+                                      return (
+                                        <button
+                                          key={emp.nik || emp.id}
+                                          type="button"
+                                          onClick={() => handleInlinePicChange(task.id, emp.nik, emp.name)}
+                                          className={`w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer text-left ${
+                                            isSelected 
+                                              ? 'bg-amber-100/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold'
+                                              : 'hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-300'
+                                          }`}
+                                        >
+                                          <div className="min-w-0 pr-1">
+                                            <p className="truncate font-medium">{emp.name}</p>
+                                            <p className="text-[10px] text-slate-400 font-mono truncate">{emp.nik} • {emp.section || emp.department || '-'}</p>
+                                          </div>
+                                          {isSelected && <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
+                                        </button>
+                                      );
+                                    })}
+                                    {getFilteredPicEmployees(task).length === 0 && (
+                                      <p className="text-center py-2 text-[11px] text-slate-400 italic">Personil tidak ditemukan</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </td>
 
                             {/* Mulai & Durasi */}
@@ -4301,49 +4606,88 @@ export function LogbookScreen({
                               </div>
                             </td>
 
-                            {/* Aksi */}
-                            <td className="text-center px-2 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-center gap-1">
+                            {/* Aksi - Dropdown Menu Titik Tiga */}
+                            <td className="text-center px-2 py-2.5 whitespace-nowrap relative logbook-action-menu-container" onClick={(e) => e.stopPropagation()}>
+                              <div className="relative inline-block">
                                 <button
                                   type="button"
-                                  onClick={() => handleMoveTaskToBacklog(task.id)}
-                                  className="p-1 rounded-lg text-slate-700 dark:text-slate-300 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors cursor-pointer"
-                                  title="Kembalikan kegiatan ini ke Evaluasi & Backlog Kemarin"
+                                  onClick={() => setActiveActionMenuTaskId(activeActionMenuTaskId === task.id ? null : task.id)}
+                                  className="p-1.5 rounded-lg text-black dark:text-black hover:text-black hover:bg-slate-200 dark:hover:bg-slate-300 transition-colors cursor-pointer"
+                                  title="Pilihan Aksi"
                                 >
-                                  <ArrowLeft className="w-3.5 h-3.5" />
+                                  <MoreVertical className="w-4 h-4 text-black dark:text-black" />
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => openJobPendingModal(task)}
-                                  className="p-1 rounded-lg text-slate-700 dark:text-slate-300 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-colors cursor-pointer"
-                                  title="Alihkan PIC / Set Job Pending"
-                                >
-                                  <Clock className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyToNewTask(task)}
-                                  className="p-1 rounded-lg text-slate-700 dark:text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
-                                  title="Salin tugas ini ke penugasan baru"
-                                >
-                                  <Copy className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => openEditModal(task)}
-                                  className="p-1 rounded-lg text-slate-700 dark:text-slate-300 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors cursor-pointer"
-                                  title="Edit Rincian Tugas"
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setTaskToDelete(task)}
-                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                                  title="Hapus Tugas"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+
+                                {activeActionMenuTaskId === task.id && (
+                                  <div 
+                                    className={`absolute right-0 top-full mt-1 w-56 rounded-xl shadow-xl border p-1 z-50 text-left transition-all ${
+                                      isNotionLight ? 'bg-white border-slate-200 text-slate-800' : 'bg-[#202020] border-slate-700 text-slate-100'
+                                    }`}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleMoveTaskToBacklog(task.id);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-semibold transition-colors cursor-pointer"
+                                      title="Keluarkan dari planning hari ini dan kembalikan ke backlog"
+                                    >
+                                      <CornerDownRight className="w-4 h-4 shrink-0 text-amber-600" />
+                                      <span>Unplanning (Kembalikan)</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        openJobPendingModal(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/40 text-purple-700 dark:text-purple-400 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Clock className="w-4 h-4 shrink-0 text-purple-600" />
+                                      <span>Alihkan PIC / Pending</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleCopyToNewTask(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Copy className="w-4 h-4 shrink-0 text-indigo-600" />
+                                      <span>Salin ke Tugas Baru</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        openEditModal(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-400 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Edit3 className="w-4 h-4 shrink-0 text-teal-600" />
+                                      <span>Edit Rincian Tugas</span>
+                                    </button>
+
+                                    <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setTaskToDelete(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-semibold transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4 shrink-0 text-rose-500" />
+                                      <span>Hapus Tugas</span>
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -4701,9 +5045,74 @@ export function LogbookScreen({
                               </span>
                             </td>
 
-                            {/* PIC Pelaksana */}
-                            <td className="px-3 py-2.5">
-                              <PicAvatarGroup pics={picList} employeesList={employeesList} />
+                            {/* PIC Pelaksana (1-Click Inline Edit) */}
+                            <td className="px-3 py-2.5 relative logbook-inline-pic-container" onClick={(e) => e.stopPropagation()}>
+                              <div 
+                                onClick={() => {
+                                  setActiveInlinePicTaskId(activeInlinePicTaskId === task.id ? null : task.id);
+                                  setInlinePicSearchTerm('');
+                                }}
+                                className="flex flex-wrap gap-1 items-center max-w-[180px] p-1 rounded-md transition-all cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:ring-1 hover:ring-amber-400/50 group/pic"
+                                title="Klik untuk ubah PIC langsung"
+                              >
+                                {picList.length === 0 ? (
+                                  <span className="text-[11px] text-slate-400 italic">Pilih PIC...</span>
+                                ) : (
+                                  <PicAvatarGroup pics={picList} employeesList={employeesList} />
+                                )}
+                              </div>
+
+                              {/* Inline PIC Popover Dropdown */}
+                              {activeInlinePicTaskId === task.id && (
+                                <div 
+                                  className={`absolute left-2 top-full mt-1 w-64 rounded-xl shadow-2xl border p-2 z-50 text-left transition-all ${
+                                    isNotionLight ? 'bg-white border-slate-200 text-slate-800 shadow-slate-300/60' : 'bg-[#202020] border-slate-700 text-slate-100 shadow-black/80'
+                                  }`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold">
+                                    <span className="text-slate-700 dark:text-slate-300">Pilih PIC Pelaksana</span>
+                                    <span className="text-[10px] text-slate-400 font-normal">{task.section}</span>
+                                  </div>
+                                  <div className="relative mb-2">
+                                    <Search className="w-3 h-3 absolute left-2 top-2 text-slate-400" />
+                                    <input 
+                                      type="text" 
+                                      value={inlinePicSearchTerm}
+                                      onChange={(e) => setInlinePicSearchTerm(e.target.value)}
+                                      placeholder="Cari nama atau NIK..."
+                                      className="w-full pl-6 pr-2 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                                      autoFocus
+                                    />
+                                  </div>
+                                  <div className="max-h-48 overflow-y-auto space-y-0.5 custom-scrollbar">
+                                    {getFilteredPicEmployees(task).map(emp => {
+                                      const isSelected = task.assigneeNik === emp.nik || (task.assigneeName || '').includes(emp.name);
+                                      return (
+                                        <button
+                                          key={emp.nik || emp.id}
+                                          type="button"
+                                          onClick={() => handleInlinePicChange(task.id, emp.nik, emp.name)}
+                                          className={`w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer text-left ${
+                                            isSelected 
+                                              ? 'bg-amber-100/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold'
+                                              : 'hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-300'
+                                          }`}
+                                        >
+                                          <div className="min-w-0 pr-1">
+                                            <p className="truncate font-medium">{emp.name}</p>
+                                            <p className="text-[10px] text-slate-400 font-mono truncate">{emp.nik} • {emp.section || emp.department || '-'}</p>
+                                          </div>
+                                          {isSelected && <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
+                                        </button>
+                                      );
+                                    })}
+                                    {getFilteredPicEmployees(task).length === 0 && (
+                                      <p className="text-center py-2 text-[11px] text-slate-400 italic">Personil tidak ditemukan</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </td>
 
                             {/* Mulai & Durasi */}
@@ -4731,34 +5140,88 @@ export function LogbookScreen({
                               </div>
                             </td>
 
-                            {/* Aksi */}
-                            <td className="text-center px-2 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-center gap-1">
+                            {/* Aksi - Dropdown Menu Titik Tiga */}
+                            <td className="text-center px-2 py-2.5 whitespace-nowrap relative logbook-action-menu-container" onClick={(e) => e.stopPropagation()}>
+                              <div className="relative inline-block">
                                 <button
                                   type="button"
-                                  onClick={() => handleMoveTaskToToday(task.id)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white transition-all cursor-pointer shadow-2xs"
-                                  title="Jadwalkan kegiatan ini ke Planning Hari Ini"
+                                  onClick={() => setActiveActionMenuTaskId(activeActionMenuTaskId === task.id ? null : task.id)}
+                                  className="p-1.5 rounded-lg text-black dark:text-black hover:text-black hover:bg-slate-200 dark:hover:bg-slate-300 transition-colors cursor-pointer"
+                                  title="Pilihan Aksi"
                                 >
-                                  <ArrowRight className="w-3.5 h-3.5" />
-                                  <span>Planning</span>
+                                  <MoreVertical className="w-4 h-4 text-black dark:text-black" />
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyToNewTask(task)}
-                                  className="p-1 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
-                                  title="Salin tugas ini ke penugasan baru"
-                                >
-                                  <Copy className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setTaskToDelete(task)}
-                                  className="p-1 rounded-lg text-slate-600 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                                  title="Hapus Tugas"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+
+                                {activeActionMenuTaskId === task.id && (
+                                  <div 
+                                    className={`absolute right-0 top-full mt-1 w-56 rounded-xl shadow-xl border p-1 z-50 text-left transition-all ${
+                                      isNotionLight ? 'bg-white border-slate-200 text-slate-800' : 'bg-[#202020] border-slate-700 text-slate-100'
+                                    }`}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleMoveTaskToToday(task.id);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-400 font-semibold transition-colors cursor-pointer"
+                                      title="Jadwalkan kegiatan ini ke Planning Hari Ini"
+                                    >
+                                      <CornerUpRight className="w-4 h-4 shrink-0 text-teal-600" />
+                                      <span>Planning (Jadwalkan)</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        openJobPendingModal(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/40 text-purple-700 dark:text-purple-400 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Clock className="w-4 h-4 shrink-0 text-purple-600" />
+                                      <span>Alihkan PIC / Pending</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleCopyToNewTask(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Copy className="w-4 h-4 shrink-0 text-indigo-600" />
+                                      <span>Salin ke Tugas Baru</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        openEditModal(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-400 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Edit3 className="w-4 h-4 shrink-0 text-teal-600" />
+                                      <span>Edit Rincian Tugas</span>
+                                    </button>
+
+                                    <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setTaskToDelete(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-semibold transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4 shrink-0 text-rose-500" />
+                                      <span>Hapus Tugas</span>
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </td>
                           </tr>
