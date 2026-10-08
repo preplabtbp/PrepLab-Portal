@@ -1218,11 +1218,34 @@ logbookRouter.post("/api/logbook/sync-from-bulletin", async (req, res) => {
     }
 
     const todayDateStr = formatDateStr(new Date());
+    const LOGBOOK_FEATURE_START_DATE = '2026-09-25';
     let importedCount = 0;
 
     for (const r of parsed.rows) {
       const title = r['Jenis kegiatan'] || r['task'] || r['judul'] || '';
       if (!title || title.trim() === '-' || title.trim().length < 2) continue;
+
+      let rowCreatedTime = '';
+      Object.keys(r).forEach(k => {
+        const kl = k.toLowerCase().trim();
+        if (kl.includes('created time') || kl === 'created' || kl === 'tanggal' || kl === 'date' || kl.includes('created_time')) {
+          rowCreatedTime = (r[k] || '').trim();
+        }
+      });
+
+      let rowCreatedDate = '';
+      const dateMatch = rowCreatedTime.match(/(\d{4}-\d{2}-\d{2})/);
+      if (dateMatch) {
+        rowCreatedDate = dateMatch[1];
+      } else if (post.createdAt) {
+        try {
+          rowCreatedDate = new Date(post.createdAt).toISOString().split('T')[0];
+        } catch (e) {}
+      }
+
+      if (rowCreatedDate && rowCreatedDate < LOGBOOK_FEATURE_START_DATE) {
+        continue;
+      }
 
       const picName = r['PIC'] || r['pic'] || r['Assignee'] || '';
       const status = r['Status'] || r['status'] || 'Open';

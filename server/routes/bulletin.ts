@@ -600,6 +600,9 @@ async function syncBulletinToLogbook(post: any) {
       );
     };
 
+    // Cutoff: Hanya sinkronisasikan data di labnote yang dibuat sejak fitur log book dibuat (2026-09-25)
+    const LOGBOOK_FEATURE_START_DATE = '2026-09-25';
+
     for (const r of parsed.rows) {
       let rTitle = '';
       let rowDesc = '';
@@ -609,6 +612,7 @@ async function syncBulletinToLogbook(post: any) {
       let rowActivity = '';
       let rowPeriod = '';
       let rowKategori = '';
+      let rowCreatedTime = '';
 
       Object.keys(r).forEach(k => {
         const kl = k.toLowerCase().trim();
@@ -628,10 +632,28 @@ async function syncBulletinToLogbook(post: any) {
           rowPeriod = (r[k] || '').trim();
         } else if (kl.includes('kategori') || kl.includes('seksi') || kl.includes('section')) {
           rowKategori = (r[k] || '').trim();
+        } else if (kl.includes('created time') || kl === 'created' || kl === 'tanggal' || kl === 'date' || kl.includes('created_time')) {
+          rowCreatedTime = (r[k] || '').trim();
         }
       });
 
       if (!rTitle || rTitle === '-' || rTitle.length < 2) continue;
+
+      // Filter: Hanya sinkronisasikan data yang dibuat sejak fitur log book dibuat
+      let rowCreatedDate = '';
+      const dateMatch = rowCreatedTime.match(/(\d{4}-\d{2}-\d{2})/);
+      if (dateMatch) {
+        rowCreatedDate = dateMatch[1];
+      } else if (post.createdAt) {
+        try {
+          rowCreatedDate = new Date(post.createdAt).toISOString().split('T')[0];
+        } catch (e) {}
+      }
+
+      // Jika tanggal pembuatan baris/postingan sebelum fitur logbook dibuat, abaikan sinkronisasi
+      if (rowCreatedDate && rowCreatedDate < LOGBOOK_FEATURE_START_DATE) {
+        continue;
+      }
 
       // Determine effective cadence - ALWAYS prioritize Non-Routine if specified
       let effectiveCadence = defaultCadence;
