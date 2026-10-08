@@ -10,7 +10,7 @@ import {
   mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi,
   developerUsers, communityQuotes, rekapManualOverrides, ktaReports, inspectionProofs
 } from "../../src/db/schema.js";
-import { generatePdfFromTemplate, generateMonitoringPdfWithDynamicTable, drive } from '../../google-services.js';
+import { generatePdfFromTemplate, generateMonitoringPdfWithDynamicTable, listExistingMonitoringPdfs, drive } from '../../google-services.js';
 import { 
   sendWebPush, getUniverse, uploadFileToDrive, syncBulletinToAgenda, 
   getNotificationTargets, getTableObj, sanitizePayload 
@@ -2295,6 +2295,8 @@ router.get("/api/gallery", async (req, res) => {
     }
   });
 
+let cachedMonitoringDrivePdfs: { timestamp: number; files: any[] } | null = null;
+
 router.post("/api/pdf/generate", async (req, res) => {
     try {
       const { tglMulai, tglAkhir, tipeLaporan, periodeLabel, targetLokasi } = req.body;
@@ -2540,6 +2542,9 @@ router.post("/api/pdf/generate", async (req, res) => {
         });
       }
 
+      // Invalidate cache so new PDF is instantly detected
+      cachedMonitoringDrivePdfs = null;
+
       res.json({
         status: "success",
         message: "OK",
@@ -2551,6 +2556,126 @@ router.post("/api/pdf/generate", async (req, res) => {
       res.status(500).json({ status: "error", message: error.message });
     }
   });
+
+router.post("/api/pdf/check-period", async (req, res) => {
+  try {
+    const { tglMulai, tglAkhir, tipeLaporan, periodeLabel, targetLokasi } = req.body;
+
+    const settingsObj: Record<string, string> = {};
+    const allSettings = await db.select().from(appSettings);
+    allSettings.forEach(s => {
+      settingsObj[s.settingKey] = s.settingValue || '';
+    });
+    const FOLDER_ID = settingsObj['INSPECTION_PDF_DRIVE_FOLDER_ID'] || process.env.GOOGLE_DRIVE_FOLDER_ID || '1mit_4h0qI80mLOa-uE8TBGo6RY-_-PKW';
+
+    // 45 seconds TTL cache
+    const now = Date.now();
+    let files: any[] = [];
+    if (cachedMonitoringDrivePdfs && (now - cachedMonitoringDrivePdfs.timestamp < 45000)) {
+      files = cachedMonitoringDrivePdfs.files;
+    } else {
+      files = await listExistingMonitoringPdfs(FOLDER_ID);
+      cachedMonitoringDrivePdfs = { timestamp: now, files };
+    }
+
+    const cleanTipe = (tipeLaporan || '').toUpperCase().trim();
+    const namaBulan = ["januari", "februari", "maret", "april", "mei", "juni", "juli", "agustus", "september", "oktober", "november", "desember"];
+    const periodKeywords: string[] = [];
+
+    if (tglMulai) {
+      const parts = tglMulai.split('-');
+      if (parts.length >= 2) {
+        const mIdx = parseInt(parts[1], 10) - 1;
+        if (namaBulan[mIdx]) periodKeywords.push(namaBulan[mIdx]);
+        periodKeywords.push(`${parts[0]}_${parts[1]}`);
+        periodKeywords.push(`${parts[0]}-${parts[1]}`);
+      }
+    }
+    if (periodeLabel && typeof periodeLabel === 'string') {
+      const pClean = periodeLabel.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      if (pClean) periodKeywords.push(pClean);
+      const wMatch = periodeLabel.match(/w(\d{1,2})/i);
+      if (wMatch) {
+        periodKeywords.push(`w${wMatch[1]}`);
+        periodKeywords.push(`w${wMatch[1].padStart(2, '0')}`);
+      }
+    }
+
+    // Filter files for this period
+    const matchingPeriodFiles = files.filter(f => {
+      const fn = (f.name || '').toLowerCase();
+      if (!fn.includes('laporan_pemantauan') && !fn.includes('pemantauan')) return false;
+      if (cleanTipe === 'SUHU' && !fn.includes('suhu')) return false;
+      if (cleanTipe === 'GAS' && !fn.includes('gas')) return false;
+
+      if (periodKeywords.length > 0) {
+        const matchedKw = periodKeywords.some(kw => {
+          if (!kw || kw.length < 2) return false;
+          return fn.includes(kw);
+        });
+        if (!matchedKw) return false;
+      }
+      return true;
+    });
+
+    const filesByLocation: Record<string, { name: string; url: string; createdTime: string }> = {};
+
+    matchingPeriodFiles.forEach(f => {
+      const fn = (f.name || '').toLowerCase();
+      const item = {
+        name: f.name,
+        url: f.webViewLink || f.webContentLink || '',
+        createdTime: f.createdTime
+      };
+
+      if (fn.includes('balance') || fn.includes('timbang')) filesByLocation['Balance Room'] = item;
+      if (fn.includes('xrf') || fn.includes('spektro')) filesByLocation['XRF Room'] = item;
+      if (fn.includes('chiller')) filesByLocation['Chiller Room'] = item;
+      if (fn.includes('fusion') || fn.includes('peleburan')) filesByLocation['Fusion Room'] = item;
+      if (fn.includes('chemical') || fn.includes('asam')) filesByLocation['Chemical Room'] = item;
+
+      if (fn.includes('zetium') && (fn.includes('_a_') || fn.includes('_a.') || fn.includes(' a '))) filesByLocation['Tabung Gas Zetium A (Argon)'] = item;
+      if (fn.includes('zetium') && (fn.includes('_b_') || fn.includes('_b.') || fn.includes(' b '))) filesByLocation['Tabung Gas Zetium B (Argon)'] = item;
+      if (fn.includes('epsilon') || fn.includes('helium')) filesByLocation['Tabung Gas Epsilon C (Helium)'] = item;
+
+      if (!filesByLocation['general']) {
+        filesByLocation['general'] = item;
+      }
+    });
+
+    let targetFile: { name: string; url: string; createdTime: string } | null = null;
+    if (targetLokasi && typeof targetLokasi === 'string' && targetLokasi.trim()) {
+      targetFile = filesByLocation[targetLokasi] || null;
+      if (!targetFile) {
+        const cleanT = targetLokasi.toLowerCase();
+        const found = matchingPeriodFiles.find(f => f.name.toLowerCase().includes(cleanT));
+        if (found) {
+          targetFile = {
+            name: found.name,
+            url: found.webViewLink || found.webContentLink || '',
+            createdTime: found.createdTime
+          };
+        }
+      }
+    }
+
+    res.json({
+      status: "success",
+      hasAny: matchingPeriodFiles.length > 0,
+      totalFound: matchingPeriodFiles.length,
+      targetFile,
+      filesByLocation,
+      allFiles: matchingPeriodFiles.map(f => ({
+        name: f.name,
+        url: f.webViewLink || f.webContentLink || '',
+        createdTime: f.createdTime
+      }))
+    });
+  } catch (error: any) {
+    console.error('Error checking period PDF:', error);
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
 
 function parseQuestionsCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);

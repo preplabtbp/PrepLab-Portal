@@ -14,6 +14,18 @@ import { AddAttendanceEntryModal } from './AddAttendanceEntryModal';
 import { toast } from 'sonner';
 import { formatAvatarUrl } from '../lib/avatarUtils';
 
+export function normalizeDepartmentOrSection(raw?: string): string {
+  const s = (raw || '').toLowerCase().trim();
+  if (!s) return 'Preparation';
+  if (s.includes('qa') || s.includes('quality')) return 'Quality Assurance';
+  if (s.includes('maint') || s.includes('pemeliharaan') || s.includes('bengkel') || s.includes('teknisi')) return 'Maintenance';
+  if (s.includes('inv') || s.includes('inventory') || s.includes('gudang') || s.includes('logistic')) return 'Inventory Control';
+  if (s.includes('admin') || s.includes('adm') || s.includes('finance') || s.includes('hr')) return 'Administration';
+  if (s.includes('lab') || s.includes('laboratorium') || s.includes('kimia') || s.includes('xrf')) return 'Laboratory';
+  if (s.includes('prep') || s.includes('preparasi') || s.includes('sample') || s.includes('crush') || s.includes('crew')) return 'Preparation';
+  return 'Preparation';
+}
+
 export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik: string, onBack?: () => void }) {
   const cacheKey = `preplab_emp_db_${inspectorNik || 'all'}`;
 
@@ -105,13 +117,21 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     return false;
   }, [inspectorNik, developerList, employees]);
 
+  const isMeetingRoom = useMemo(() => {
+    const nik = (inspectorNik || '').toUpperCase().trim();
+    return nik === 'MEETINGROOM' || nik === 'MEETING' || nik.includes('MEETING');
+  }, [inspectorNik]);
+
   const fetchEmployees = async (silent = false) => {
     if (!silent && employees.length === 0) {
       setLoading(true);
     }
     try {
-      const url = inspectorNik ? `/api/employees/hierarchy/${encodeURIComponent(inspectorNik)}` : `/api/employees`;
-      const res = await fetch(url);
+      let url = inspectorNik ? `/api/employees/hierarchy/${encodeURIComponent(inspectorNik)}` : `/api/employees`;
+      let res = await fetch(url);
+      if (!res.ok && isMeetingRoom) {
+        res = await fetch('/api/employees');
+      }
       if (!res.ok) throw new Error("Gagal mengambil data karyawan");
       const data = await res.json();
       const list = data.status === 'success' ? (data.data || []) : (Array.isArray(data) ? data : []);
@@ -136,7 +156,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   useEffect(() => {
     // Jalankan revalidasi data di background secara instan
     fetchEmployees(employees.length > 0);
-  }, [inspectorNik]);
+  }, [inspectorNik, isMeetingRoom]);
 
   const handleManualSync = async () => {
     if (!canManageDatabase) {
@@ -248,13 +268,25 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     }
   };
 
+  const activeSections = useMemo(() => {
+    const set = new Set<string>();
+    employees.forEach(e => {
+      const norm = normalizeDepartmentOrSection(e.department || e.section);
+      if (norm) set.add(norm);
+    });
+    return Array.from(set);
+  }, [employees]);
+
   const filteredSearch = useMemo(() => {
     if (!searchTerm) return [];
+    const term = searchTerm.toLowerCase().trim();
     return employees.filter(e => {
-      const matchesSearch = (e.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (e.nik || '').toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesSearch;
-    }).slice(0, 8);
+      const name = (e.name || e.nama || '').toLowerCase();
+      const nik = (e.nik || '').toLowerCase();
+      const jabatan = (e.jabatan || '').toLowerCase();
+      const sec = (e.section || e.department || '').toLowerCase();
+      return name.includes(term) || nik.includes(term) || jabatan.includes(term) || sec.includes(term);
+    }).slice(0, 30);
   }, [employees, searchTerm]);
 
   if (loading) {
@@ -464,6 +496,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 <p className="text-slate-600 text-sm md:text-base max-w-2xl mx-auto font-normal leading-relaxed px-2">
                   Manpower Attendance &amp; Database Directory. Ketik NIK atau nama untuk menelusuri profil karyawan, melacak kehadiran, dan memantau riwayat jabatan secara real-time.
                 </p>
+                {isMeetingRoom && (
+                  <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold backdrop-blur-md shadow-sm">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Mode Meeting Room • Akses Penuh Seluruh Karyawan ({employees.length} Data)</span>
+                  </div>
+                )}
               </motion.div>
 
               {/* Big Search Bar */}

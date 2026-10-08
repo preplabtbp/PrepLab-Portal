@@ -58,6 +58,8 @@ function parseAssignmentFromNotification(notif: any, fallbackNik?: string, fallb
 
 export function P5MNotificationModal({ inspectorNik, inspectorName, onNavigateToP5M }: P5MNotificationModalProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [activeAssignmentIndex, setActiveAssignmentIndex] = useState<number>(0);
   const [assignment, setAssignment] = useState<any | null>(null);
   const [previewFlyer, setPreviewFlyer] = useState<{ url: string; title: string } | null>(null);
   const [pdfViewerMode, setPdfViewerMode] = useState<'drive' | 'stream'>('stream');
@@ -71,13 +73,31 @@ export function P5MNotificationModal({ inspectorNik, inspectorName, onNavigateTo
         const queryParams = new URLSearchParams();
         if (nik) queryParams.set('nik', nik);
         if (name) queryParams.set('name', name);
+        queryParams.set('includePast', 'true');
 
         const res = await fetch(`/api/p5m/schedules/user-assignment?${queryParams.toString()}`);
         if (res.ok) {
           const data = await res.json();
-          if (data.success && data.assignment) {
-            const ass = data.assignment;
+          if (data.success && (data.assignment || (Array.isArray(data.assignments) && data.assignments.length > 0))) {
+            const list = Array.isArray(data.assignments) && data.assignments.length > 0
+              ? data.assignments
+              : [data.assignment];
+            setAssignments(list);
+
+            let chosen = data.assignment || list[0];
+            if (notifData) {
+              const msg = notifData.message || '';
+              const match = list.find((a: any) => 
+                (a.materi && msg.includes(a.materi)) ||
+                (a.day && msg.toLowerCase().includes(a.day.toLowerCase()))
+              );
+              if (match) chosen = match;
+            }
+
+            const ass = chosen;
             setAssignment(ass);
+            const idx = list.findIndex((a: any) => a.day === ass?.day && a.shift === ass?.shift);
+            setActiveAssignmentIndex(idx >= 0 ? idx : 0);
 
             if (forceOpen) {
               setIsOpen(true);
@@ -220,6 +240,43 @@ export function P5MNotificationModal({ inspectorNik, inspectorName, onNavigateTo
               <p className="text-[var(--text-muted)] text-sm leading-relaxed">
                 Halo <span className="font-bold text-amber-600 dark:text-amber-400">{assignment.nama}</span>, Anda telah dijadwalkan sebagai <span className="font-semibold text-[var(--text-main)]">pembawa materi briefing keselamatan kerja P5M</span> minggu ini:
               </p>
+
+              {/* Session Switcher if multiple weekly assignments */}
+              {assignments && assignments.length > 1 && (
+                <div className="p-1 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] flex items-center gap-1.5 overflow-x-auto shadow-2xs">
+                  <div className="px-2 py-1 text-[10px] font-black text-amber-700 dark:text-amber-400 whitespace-nowrap flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>{assignments.length} Sesi Terjadwal:</span>
+                  </div>
+                  {assignments.map((assItem, idx) => {
+                    const isSelected = idx === activeAssignmentIndex;
+                    return (
+                      <button
+                        key={`notif-tab-${assItem.day}-${idx}`}
+                        type="button"
+                        onClick={() => {
+                          setActiveAssignmentIndex(idx);
+                          setAssignment(assItem);
+                        }}
+                        className={`flex-1 min-w-[100px] py-1.5 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                            : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-black/5 dark:hover:bg-white/5'
+                        }`}
+                      >
+                        <span>{assItem.day}</span>
+                        {assItem.isCompleted ? (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold">✓ Selesai</span>
+                        ) : assItem.isToday ? (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-amber-400 text-slate-900 font-extrabold">Hari Ini</span>
+                        ) : (
+                          <span className="text-[9px] opacity-75">{assItem.shiftKey === 'malam' ? 'Mlm' : 'Pagi'}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Assignment Details Card */}
               <div className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-2xl p-4 space-y-3 shadow-xs">

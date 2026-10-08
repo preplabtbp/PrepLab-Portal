@@ -383,7 +383,27 @@ employeesRouter.get("/", async (req, res) => {
 
 employeesRouter.get("/hierarchy/:nik", async (req, res) => {
   try {
-    const { nik } = req.params;
+    const cleanNik = (nik || "").trim().toUpperCase();
+
+    // Meeting Room, Admin, Super Admin virtual account checks (full access to search all employees)
+    if (
+      cleanNik === 'MEETINGROOM' || 
+      cleanNik === 'MEETING' || 
+      cleanNik === 'RUANGMEETING' || 
+      cleanNik === 'RUANG_MEETING' ||
+      cleanNik.includes('MEETING') ||
+      cleanNik === 'PREPLABADMIN'
+    ) {
+      let allData = await db.select().from(employees);
+      // Strictly exclude demo, staging, admin accounts
+      allData = allData.filter(e => {
+        const eNik = (e.nik || '').toString().toUpperCase();
+        const eName = (e.name || '').toString().toLowerCase();
+        return !eNik.includes('DEMO') && !eName.includes('demo') && eNik !== 'PREPLABADMIN';
+      });
+      return res.json({ status: "success", data: allData.map(e => toPublicEmployee(e)) });
+    }
+
     const now = Date.now();
     const cached = cachedHierarchy.get(nik);
     if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {

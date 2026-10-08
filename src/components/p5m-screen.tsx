@@ -1868,6 +1868,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                   triggerExpGain(60, 'Materi P5M Selesai Dibawakan!', 'Briefing Keselamatan Kerja');
                                   window.dispatchEvent(new Event('gamification_updated'));
                                   window.dispatchEvent(new CustomEvent('refresh-action-center'));
+                                  window.dispatchEvent(new CustomEvent('p5m-status-updated'));
                                   fetchScheduleForWeek();
                                 }
                               } catch {

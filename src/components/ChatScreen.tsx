@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, User, Users, Globe, Building2, X, Sparkles, 
   ShieldCheck, CheckCheck, MessageSquare, Flame, Filter, ChevronDown, AtSign,
-  Trophy, Award, Megaphone
+  Trophy, Award, Megaphone, Trash2
 } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import { toast } from 'sonner';
@@ -82,9 +82,31 @@ export default function ChatScreen({
   const [mentionCursorIndex, setMentionCursorIndex] = useState(-1);
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
 
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+
   const activeRoomRef = useRef(activeRoom);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleClearChat = async () => {
+    setIsClearing(true);
+    try {
+      const res = await fetch(`/api/chat/${activeRoom}`, { method: 'DELETE' });
+      if (res.ok) {
+        setMessages([]);
+        toast.success(`Semua pesan chat berhasil dibersihkan`);
+        setShowClearConfirm(false);
+      } else {
+        toast.error('Gagal membersihkan pesan chat');
+      }
+    } catch (err) {
+      console.error('Error clearing chat:', err);
+      toast.error('Gagal membersihkan pesan chat');
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   // Sync activeRoomRef for event listener closures
   useEffect(() => {
@@ -215,11 +237,19 @@ export default function ChatScreen({
       });
     };
 
+    const handleChatCleared = (data: any) => {
+      if (!data?.room || data.room === 'all' || data.room === activeRoomRef.current) {
+        setMessages([]);
+        toast.info('💬 Pesan chat telah dibersihkan');
+      }
+    };
+
     socket.on('online_users', handleRoomUsers);
     socket.on('presence:update', handlePresence);
     socket.on('presence:init', handlePresence);
     socket.on('new_message', handleIncomingMessage);
     socket.on('chat:mention', handleMention);
+    socket.on('chat_cleared', handleChatCleared);
 
     return () => {
       socket.off('online_users', handleRoomUsers);
@@ -227,6 +257,7 @@ export default function ChatScreen({
       socket.off('presence:init', handlePresence);
       socket.off('new_message', handleIncomingMessage);
       socket.off('chat:mention', handleMention);
+      socket.off('chat_cleared', handleChatCleared);
     };
   }, []);
 
@@ -516,15 +547,28 @@ export default function ChatScreen({
             </div>
           </div>
 
-          {onClose && (
+          <div className="flex items-center gap-1.5">
             <button
-              onClick={onClose}
-              className="p-2 rounded-xl border border-[var(--border-main)] hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
-              title="Tutup Chat"
+              type="button"
+              onClick={() => setShowClearConfirm(true)}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border border-[var(--border-main)] hover:bg-rose-500/10 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+              title="Bersihkan Semua Pesan Chat di Room Ini"
             >
-              <X className="w-5 h-5" />
+              <Trash2 className="w-4 h-4 text-rose-500" />
+              <span className="hidden sm:inline">Bersihkan Chat</span>
             </button>
-          )}
+
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 rounded-xl border border-[var(--border-main)] hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
+                title="Tutup Chat"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── CHAT CHANNEL TABS (GLOBAL VS SECTION) ── */}
@@ -954,6 +998,51 @@ export default function ChatScreen({
           </button>
         </form>
       </div>
+
+      {/* Modal Dialog Konfirmasi Bersihkan Chat */}
+      <AnimatePresence>
+        {showClearConfirm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4 text-slate-900 dark:text-slate-100"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base">Bersihkan Riwayat Chat?</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Semua pesan di room <strong>{activeRoom === 'global' ? 'Global' : getSectionDisplayName(userSectionId)}</strong> akan dihapus permanen.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isClearing}
+                  onClick={() => setShowClearConfirm(false)}
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isClearing}
+                  onClick={handleClearChat}
+                  className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer"
+                >
+                  {isClearing ? 'Membersihkan...' : 'Ya, Bersihkan'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

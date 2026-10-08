@@ -98,6 +98,14 @@ export function ActionCenterBar({
     return null;
   });
 
+  const [p5mAssignments, setP5mAssignments] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('p2h_cached_p5m_assignments');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+
   const [p5mAssignment, setP5mAssignment] = useState<any | null>(() => {
     try {
       const saved = localStorage.getItem('p2h_cached_p5m_assignment');
@@ -264,11 +272,22 @@ export function ActionCenterBar({
       }
 
       // Process P5M Assignment
-      if (p5mData && p5mData.success && p5mData.assignment) {
-        setP5mAssignment(p5mData.assignment);
-        try { localStorage.setItem('p2h_cached_p5m_assignment', JSON.stringify(p5mData.assignment)); } catch {}
+      if (p5mData && p5mData.success && (p5mData.assignment || (Array.isArray(p5mData.assignments) && p5mData.assignments.length > 0))) {
+        const list = Array.isArray(p5mData.assignments) && p5mData.assignments.length > 0
+          ? p5mData.assignments
+          : (p5mData.assignment ? [p5mData.assignment] : []);
+        setP5mAssignments(list);
+        const activeItem = p5mData.assignment || list[0] || null;
+        setP5mAssignment(activeItem);
+        try {
+          if (activeItem) {
+            localStorage.setItem('p2h_cached_p5m_assignment', JSON.stringify(activeItem));
+            localStorage.setItem('p2h_cached_p5m_assignments', JSON.stringify(list));
+          }
+        } catch {}
       } else {
         setP5mAssignment(null);
+        setP5mAssignments([]);
       }
 
       // Process Daily Tasks Status (P2H & Pemantauan)
@@ -441,16 +460,28 @@ export function ActionCenterBar({
     });
 
     // 3. Penugasan Pemateri P5M
-    const isP5mPending = Boolean(p5mAssignment && !p5mAssignment.isCompleted);
+    const pendingP5mList = p5mAssignments.filter((a: any) => !a.isCompleted && !a.isPast);
+    const isP5mPending = pendingP5mList.length > 0 || Boolean(p5mAssignment && !p5mAssignment.isCompleted);
+    const completedCount = p5mAssignments.filter((a: any) => a.isCompleted).length;
+    let p5mSubtitle = 'Tidak ada jadwal pemateri minggu ini';
+    if (p5mAssignments.length > 1) {
+      if (completedCount === p5mAssignments.length) {
+        p5mSubtitle = `Semua ${p5mAssignments.length} sesi P5M selesai dibawakan ✓ (+60 EXP)`;
+      } else {
+        const nextPending = p5mAssignments.find((a: any) => !a.isCompleted) || p5mAssignment;
+        p5mSubtitle = `${p5mAssignments.length} Sesi (${p5mAssignments.map((a: any) => a.day).join(' & ')}) • ${nextPending?.day}: ${nextPending?.materi || 'Safety Talk'}`;
+      }
+    } else if (p5mAssignment) {
+      p5mSubtitle = p5mAssignment.isCompleted 
+        ? 'Materi P5M sudah selesai dibawakan hari ini ✓ (+60 EXP)'
+        : `${p5mAssignment.day || 'Hari Ini'}: ${p5mAssignment.materi || 'Safety Talk'}`;
+    }
+
     list.push({
       id: 'p5m',
-      title: 'Penugasan Pemateri P5M',
-      subtitle: p5mAssignment 
-        ? (p5mAssignment.isCompleted 
-            ? 'Materi P5M sudah selesai dibawakan hari ini ✓ (+60 EXP)'
-            : `${p5mAssignment.day || 'Hari Ini'}: ${p5mAssignment.materi || 'Safety Talk'}`)
-        : 'Tidak ada jadwal pemateri minggu ini',
-      count: isP5mPending ? 1 : 0,
+      title: p5mAssignments.length > 1 ? `Penugasan Pemateri P5M (${p5mAssignments.length} Sesi)` : 'Penugasan Pemateri P5M',
+      subtitle: p5mSubtitle,
+      count: isP5mPending ? (pendingP5mList.length || 1) : 0,
       isPending: isP5mPending,
       icon: <Users className="w-4 h-4" />,
       iconColor: 'text-sky-600 dark:text-sky-400',
