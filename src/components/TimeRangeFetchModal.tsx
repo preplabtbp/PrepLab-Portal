@@ -4,7 +4,7 @@ import {
   CheckCircle2, AlertTriangle, FileSpreadsheet, Filter, 
   Layers, Clock, ArrowRight, Sparkles, Building2,
   FileImage, BarChart3, Activity, ShieldAlert, HeartHandshake,
-  PieChart, Users, AlertOctagon
+  PieChart, Users, AlertOctagon, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -166,6 +166,9 @@ export function TimeRangeFetchModal({
     const sakitByEmp: { nik: string; name: string; dept: string; siteCount: number; luarCount: number; total: number }[] = [];
     const alpaByEmp: { nik: string; name: string; dept: string; count: number; dates: string[] }[] = [];
     
+    // Dept breakdown for comparative clustered chart
+    const deptMap: Record<string, { izin: number; sakit: number; alpa: number; count: number }> = {};
+
     const spdkCounts = {
       st: 0,
       sp1: 0,
@@ -176,6 +179,12 @@ export function TimeRangeFetchModal({
     };
 
     filteredEmployees.forEach(emp => {
+      const deptKey = emp.department || emp.section || 'General';
+      if (!deptMap[deptKey]) {
+        deptMap[deptKey] = { izin: 0, sakit: 0, alpa: 0, count: 0 };
+      }
+      deptMap[deptKey].count++;
+
       const att26 = emp.attendance2026 || emp.attendance?.['2026'] || emp.attendance?.[2026] || emp.attendanceData?.['2026'] || {};
       
       // Izin
@@ -183,10 +192,11 @@ export function TimeRangeFetchModal({
       const filteredIzin = rawIzin.filter(isDateInRange);
       if (filteredIzin.length > 0) {
         totalIzinDays += filteredIzin.length;
+        deptMap[deptKey].izin += filteredIzin.length;
         izinByEmp.push({
           nik: emp.nik,
           name: emp.name || emp.nama || emp.nik,
-          dept: emp.department || emp.section || 'General',
+          dept: deptKey,
           count: filteredIzin.length,
           dates: filteredIzin
         });
@@ -201,10 +211,11 @@ export function TimeRangeFetchModal({
       if (totalSakit > 0) {
         totalSakitSiteDays += filteredSS.length;
         totalSakitLuarDays += filteredSL.length;
+        deptMap[deptKey].sakit += totalSakit;
         sakitByEmp.push({
           nik: emp.nik,
           name: emp.name || emp.nama || emp.nik,
-          dept: emp.department || emp.section || 'General',
+          dept: deptKey,
           siteCount: filteredSS.length,
           luarCount: filteredSL.length,
           total: totalSakit
@@ -216,10 +227,11 @@ export function TimeRangeFetchModal({
       const filteredAlpa = rawAlpa.filter(isDateInRange);
       if (filteredAlpa.length > 0) {
         totalAlpaDays += filteredAlpa.length;
+        deptMap[deptKey].alpa += filteredAlpa.length;
         alpaByEmp.push({
           nik: emp.nik,
           name: emp.name || emp.nama || emp.nik,
-          dept: emp.department || emp.section || 'General',
+          dept: deptKey,
           count: filteredAlpa.length,
           dates: filteredAlpa
         });
@@ -264,7 +276,8 @@ export function TimeRangeFetchModal({
       izinByEmp,
       sakitByEmp,
       alpaByEmp,
-      spdkCounts
+      spdkCounts,
+      deptBreakdown: Object.entries(deptMap).map(([dept, data]) => ({ dept, ...data }))
     };
   }, [filteredEmployees, startDate, endDate]);
 
@@ -318,7 +331,7 @@ export function TimeRangeFetchModal({
     setIsExportingExcel(true);
     try {
       const rows: string[][] = [
-        ['REKAP DATA MANPOWER & ABSENSI PREPLAB PORTAL'],
+        ['LAPORAN DATA REKAPITULASI MANPOWER & ABSENSI - PREPLAB PORTAL'],
         [`Periode: ${startDate} s/d ${endDate}`, `Cakupan PT: ${selectedPt}`, `Total Karyawan: ${filteredEmployees.length}`],
         [''],
         [
@@ -400,44 +413,31 @@ export function TimeRangeFetchModal({
     }
   };
 
-  // 2. Export High-Resolution PNG Grafik (Semua Grafik: Izin, SPDK, Sakit, Alpa)
+  // 2. Export Official Management Reporting Diagram (PNG Formal Pelaporan)
   const handleExportPngChart = () => {
     setIsExportingPng(true);
-    toast.info('Menyiapkan grafik beresolusi tinggi...');
+    toast.info('Menyusun Diagram Pelaporan Resmi...');
 
     setTimeout(() => {
       try {
-        const width = 1600;
-        const height = 1150;
+        const width = 1920;
+        const height = 1350;
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('Canvas context tidak tersedia');
 
-        // Background
-        const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
-        bgGrad.addColorStop(0, '#0f172a');
-        bgGrad.addColorStop(0.5, '#1e293b');
-        bgGrad.addColorStop(1, '#0f172a');
-        ctx.fillStyle = bgGrad;
+        // Document Paper Background (Clean Formal Executive White)
+        ctx.fillStyle = '#f8fafc';
         ctx.fillRect(0, 0, width, height);
 
-        // Grid Accent Pattern
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-        ctx.lineWidth = 1;
-        for (let x = 0; x < width; x += 40) {
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, height);
-          ctx.stroke();
-        }
-        for (let y = 0; y < height; y += 40) {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(width, y);
-          ctx.stroke();
-        }
+        // Document Border Frame
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(30, 30, width - 60, height - 60);
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(30, 30, width - 60, height - 60);
 
         // Helper: Rounded Rectangle
         const drawRoundedRect = (
@@ -470,264 +470,497 @@ export function TimeRangeFetchModal({
           }
         };
 
-        // --- HEADER SECTION ---
-        drawRoundedRect(40, 30, width - 80, 100, 16, 'rgba(30, 41, 59, 0.85)', 'rgba(56, 189, 248, 0.3)', 1.5);
-        
-        // Header Accent Badge
-        drawRoundedRect(60, 48, 64, 64, 14, 'rgba(34, 197, 94, 0.15)', '#22c55e', 2);
-        ctx.fillStyle = '#22c55e';
-        ctx.font = 'bold 30px sans-serif';
-        ctx.fillText('📊', 76, 90);
+        // --- 1. OFFICIAL CORPORATE HEADER ---
+        // Top Corporate Stripe
+        const headGrad = ctx.createLinearGradient(30, 30, width - 30, 30);
+        headGrad.addColorStop(0, '#0f3a42');
+        headGrad.addColorStop(0.5, '#135e69');
+        headGrad.addColorStop(1, '#0f766e');
+        ctx.fillStyle = headGrad;
+        ctx.fillRect(30, 30, width - 60, 110);
+
+        // Header Company Logo Box
+        drawRoundedRect(55, 48, 74, 74, 12, '#ffffff', '#e2e8f0', 1);
+        ctx.fillStyle = '#135e69';
+        ctx.font = 'bold 36px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('PL', 92, 98);
+        ctx.textAlign = 'left';
 
         // Header Titles
-        ctx.fillStyle = '#f8fafc';
-        ctx.font = 'bold 26px sans-serif';
-        ctx.fillText('LAPORAN GRAFIK ANALISIS MANPOWER & ABSENSI', 140, 68);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 28px sans-serif';
+        ctx.fillText('DIAGRAM & LAPORAN ANALISIS ABSENSI, KEDISIPLINAN & MANPOWER', 145, 78);
 
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '14px sans-serif';
-        ctx.fillText(`Rentang Periode: ${startDate} s/d ${endDate} (${calculateDays()} Hari)   •   Cakupan PT: ${selectedPt === 'ALL' ? 'Semua PT (TBP, GPS, GTS)' : 'PT ' + selectedPt}   •   Total Manpower: ${rangeAggregates.totalEmployees} Orang`, 140, 96);
+        ctx.fillStyle = '#ccfbf1';
+        ctx.font = '15px sans-serif';
+        ctx.fillText('PREPLAB PORTAL ENTERPRISE • PT TRIMEGAH BANGUN PERSADA Tbk & PT GANE PERMAI SENTOSA', 145, 106);
 
-        // Generated Watermark Badge
-        drawRoundedRect(width - 290, 52, 230, 56, 10, 'rgba(15, 23, 42, 0.8)', 'rgba(148, 163, 184, 0.3)');
-        ctx.fillStyle = '#38bdf8';
+        // Metadata Header Table Box (Right Side)
+        drawRoundedRect(width - 450, 45, 400, 80, 8, 'rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.3)', 1);
+        ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('PREPLAB PORTAL ANALYTICS', width - 275, 74);
-        ctx.fillStyle = '#64748b';
-        ctx.font = '11px sans-serif';
-        ctx.fillText(`Export: ${now.toLocaleDateString('id-ID')} ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`, width - 275, 94);
+        ctx.fillText(`NO. LAPORAN : RPT/PLP/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${Math.floor(1000 + Math.random() * 9000)}`, width - 435, 68);
+        ctx.font = '12px sans-serif';
+        ctx.fillText(`PERIODE        : ${startDate} s/d ${endDate} (${calculateDays()} Hari Kerja)`, width - 435, 88);
+        ctx.fillText(`CAKUPAN PT : ${selectedPt === 'ALL' ? 'Semua PT (TBP & GTS)' : 'PT ' + selectedPt} | Cetak: ${now.toLocaleDateString('id-ID')}`, width - 435, 108);
 
-        // --- TOP KPI CARDS SECTION ---
+        // --- 2. EXECUTIVE SUMMARY KPI INDICATOR STRIP ---
         const kpis = [
-          { label: 'TOTAL KARYAWAN', value: rangeAggregates.totalEmployees, unit: 'Orang', color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.1)', border: 'rgba(56, 189, 248, 0.3)' },
-          { label: 'TOTAL IZIN KARYAWAN', value: rangeAggregates.totalIzinDays, unit: 'Hari', color: '#2dd4bf', bg: 'rgba(45, 212, 191, 0.1)', border: 'rgba(45, 212, 191, 0.3)' },
-          { label: 'TOTAL SAKIT (SITE+LUAR)', value: rangeAggregates.totalSakitDays, unit: 'Hari', color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.1)', border: 'rgba(251, 191, 36, 0.3)' },
-          { label: 'TOTAL ALPA / MANGKIR', value: rangeAggregates.totalAlpaDays, unit: 'Hari', color: '#f43f5e', bg: 'rgba(244, 63, 94, 0.1)', border: 'rgba(244, 63, 94, 0.3)' },
-          { label: 'SPDK & SANKSI AKTIF', value: rangeAggregates.totalActiveSpdk, unit: 'Kasus', color: '#c084fc', bg: 'rgba(192, 132, 252, 0.1)', border: 'rgba(192, 132, 252, 0.3)' }
+          { label: 'TOTAL TENAGA KERJA', val: `${rangeAggregates.totalEmployees}`, unit: 'Karyawan', color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4' },
+          { label: 'TOTAL HARI IZIN', val: `${rangeAggregates.totalIzinDays}`, unit: 'Hari Kerja', color: '#0284c7', bg: '#f0f9ff', border: '#bae6fd' },
+          { label: 'TOTAL HARI SAKIT', val: `${rangeAggregates.totalSakitDays}`, unit: `SS: ${rangeAggregates.totalSakitSiteDays} | SL: ${rangeAggregates.totalSakitLuarDays}`, color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+          { label: 'TOTAL ALPA (MANGKIR)', val: `${rangeAggregates.totalAlpaDays}`, unit: 'Hari Kerja', color: '#e11d48', bg: '#fff1f2', border: '#fecdd3' },
+          { label: 'SPDK & SANKSI AKTIF', val: `${rangeAggregates.totalActiveSpdk}`, unit: 'Kasus Berjalan', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' }
         ];
 
-        const cardW = (width - 80 - 40) / 5;
-        kpis.forEach((kpi, i) => {
-          const cx = 40 + i * (cardW + 10);
-          const cy = 145;
-          drawRoundedRect(cx, cy, cardW, 85, 12, kpi.bg, kpi.border, 1.5);
+        const kpiW = (width - 120 - 40) / 5;
+        kpis.forEach((kpi, idx) => {
+          const kx = 60 + idx * (kpiW + 10);
+          const ky = 155;
+          drawRoundedRect(kx, ky, kpiW, 82, 10, kpi.bg, kpi.border, 1.5);
 
-          ctx.fillStyle = '#94a3b8';
+          ctx.fillStyle = '#64748b';
           ctx.font = 'bold 11px sans-serif';
-          ctx.fillText(kpi.label, cx + 14, cy + 26);
+          ctx.fillText(kpi.label, kx + 14, ky + 24);
 
           ctx.fillStyle = kpi.color;
-          ctx.font = 'bold 28px sans-serif';
-          ctx.fillText(String(kpi.value), cx + 14, cy + 62);
+          ctx.font = 'bold 26px sans-serif';
+          ctx.fillText(kpi.val, kx + 14, ky + 56);
 
-          ctx.fillStyle = '#64748b';
-          ctx.font = '12px sans-serif';
-          const valWidth = ctx.measureText(String(kpi.value)).width;
-          ctx.fillText(kpi.unit, cx + 20 + valWidth, cy + 62);
+          ctx.fillStyle = '#475569';
+          ctx.font = 'bold 11px sans-serif';
+          const valW = ctx.measureText(kpi.val).width;
+          ctx.fillText(kpi.unit, kx + 22 + valW, ky + 54);
         });
 
-        // --- 4 MAIN CHARTS (2x2 GRID) ---
-        const gridW = (width - 80 - 20) / 2;
-        const gridH = 410;
-        const topY = 245;
-        const bottomY = 675;
+        // --- 3. 4 REPORTING DIAGRAM BLOCKS (2x2 GRID) ---
+        const colW = (width - 120 - 20) / 2;
+        const colH = 430;
+        const row1Y = 250;
+        const row2Y = 695;
 
-        // ================= CHART 1: IZIN KARYAWAN (TOP LEFT) =================
-        const c1x = 40;
-        const c1y = topY;
-        drawRoundedRect(c1x, c1y, gridW, gridH, 16, 'rgba(30, 41, 59, 0.7)', 'rgba(45, 212, 191, 0.3)', 1.5);
+        // ================= DIAGRAM 1: CLUSTERED COLUMN CHART (KOMPARASI PER DEPARTEMEN) =================
+        const d1x = 60;
+        const d1y = row1Y;
+        drawRoundedRect(d1x, d1y, colW, colH, 12, '#ffffff', '#cbd5e1', 1.5);
+
+        // Diagram 1 Header
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText('DIAGRAM 1: Komparasi Absensi per Departemen / Section (Hari)', d1x + 20, d1y + 32);
         
-        ctx.fillStyle = '#2dd4bf';
-        ctx.font = 'bold 18px sans-serif';
-        ctx.fillText('📋 Distribusi & Top Izin Karyawan', c1x + 20, c1y + 36);
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '12px sans-serif';
-        ctx.fillText(`Total: ${rangeAggregates.totalIzinDays} Hari Kejadian pada Periode Terpilih`, c1x + 20, c1y + 58);
-
-        // Chart 1 Bars (Top 5 Izin)
-        const topIzin = rangeAggregates.izinByEmp.slice(0, 5);
-        const maxIzin = Math.max(...topIzin.map(d => d.count), 5);
-        if (topIzin.length === 0) {
-          ctx.fillStyle = '#64748b';
-          ctx.font = 'italic 14px sans-serif';
-          ctx.fillText('Tidak ada data izin pada rentang tanggal ini.', c1x + 20, c1y + 120);
-        } else {
-          topIzin.forEach((item, idx) => {
-            const barY = c1y + 85 + idx * 60;
-            ctx.fillStyle = '#f8fafc';
-            ctx.font = 'bold 13px sans-serif';
-            ctx.fillText(`${idx + 1}. ${item.name}`, c1x + 20, barY + 12);
-            ctx.fillStyle = '#64748b';
-            ctx.font = '11px sans-serif';
-            ctx.fillText(`${item.dept} • NIK: ${item.nik}`, c1x + 20, barY + 28);
-
-            // Bar background & progress
-            const maxBarWidth = gridW - 240;
-            const barWidth = Math.max(12, (item.count / maxIzin) * maxBarWidth);
-            drawRoundedRect(c1x + 180, barY + 4, maxBarWidth, 20, 6, 'rgba(15, 23, 42, 0.6)');
-            drawRoundedRect(c1x + 180, barY + 4, barWidth, 20, 6, '#14b8a6');
-
-            ctx.fillStyle = '#f8fafc';
-            ctx.font = 'bold 12px sans-serif';
-            ctx.fillText(`${item.count} Hari`, c1x + 190 + maxBarWidth, barY + 18);
-          });
-        }
-
-        // ================= CHART 2: SPDK & SANKSI AKTIF (TOP RIGHT) =================
-        const c2x = 40 + gridW + 20;
-        const c2y = topY;
-        drawRoundedRect(c2x, c2y, gridW, gridH, 16, 'rgba(30, 41, 59, 0.7)', 'rgba(192, 132, 252, 0.3)', 1.5);
-
-        ctx.fillStyle = '#c084fc';
-        ctx.font = 'bold 18px sans-serif';
-        ctx.fillText('⚖️ Rekapitulasi SPDK & Sanksi Disiplin', c2x + 20, c2y + 36);
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '12px sans-serif';
-        ctx.fillText(`Total Kasus Aktif: ${rangeAggregates.totalActiveSpdk} Karyawan Terkena Sanksi`, c2x + 20, c2y + 58);
-
-        const spData = [
-          { label: 'Surat Teguran (ST)', count: rangeAggregates.spdkCounts.st, color: '#facc15' },
-          { label: 'Surat Peringatan 1 (SP1)', count: rangeAggregates.spdkCounts.sp1, color: '#fb923c' },
-          { label: 'Surat Peringatan 2 (SP2)', count: rangeAggregates.spdkCounts.sp2, color: '#f87171' },
-          { label: 'Surat Peringatan 3 (SP3)', count: rangeAggregates.spdkCounts.sp3, color: '#ef4444' },
-          { label: 'Sanksi SP-PT', count: rangeAggregates.spdkCounts.sppt, color: '#e11d48' },
-          { label: 'Pemutusan Hub. Kerja (PHK)', count: rangeAggregates.spdkCounts.phk, color: '#881337' }
+        // Legend
+        const d1Legends = [
+          { label: 'Izin', color: '#0284c7' },
+          { label: 'Sakit', color: '#d97706' },
+          { label: 'Alpa', color: '#e11d48' }
         ];
-        const maxSp = Math.max(...spData.map(d => d.count), 5);
-
-        spData.forEach((sp, idx) => {
-          const barY = c2y + 85 + idx * 50;
-          ctx.fillStyle = '#f8fafc';
-          ctx.font = 'bold 12px sans-serif';
-          ctx.fillText(sp.label, c2x + 20, barY + 16);
-
-          const maxBarWidth = gridW - 250;
-          const barWidth = sp.count > 0 ? Math.max(10, (sp.count / maxSp) * maxBarWidth) : 0;
-          drawRoundedRect(c2x + 190, barY + 2, maxBarWidth, 18, 5, 'rgba(15, 23, 42, 0.6)');
-          if (barWidth > 0) {
-            drawRoundedRect(c2x + 190, barY + 2, barWidth, 18, 5, sp.color);
-          }
-
-          ctx.fillStyle = sp.count > 0 ? sp.color : '#64748b';
-          ctx.font = 'bold 12px sans-serif';
-          ctx.fillText(`${sp.count} Kasus`, c2x + 200 + maxBarWidth, barY + 16);
+        d1Legends.forEach((leg, i) => {
+          const lx = d1x + colW - 220 + i * 70;
+          ctx.fillStyle = leg.color;
+          ctx.fillRect(lx, d1y + 20, 12, 12);
+          ctx.fillStyle = '#475569';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText(leg.label, lx + 18, d1y + 30);
         });
 
-        // ================= CHART 3: SAKIT SITE VS LUAR (BOTTOM LEFT) =================
-        const c3x = 40;
-        const c3y = bottomY;
-        drawRoundedRect(c3x, c3y, gridW, gridH, 16, 'rgba(30, 41, 59, 0.7)', 'rgba(251, 191, 36, 0.3)', 1.5);
+        // Diagram 1 Chart Plot Area
+        const chartPlotX = d1x + 50;
+        const chartPlotY = d1y + 60;
+        const chartPlotW = colW - 70;
+        const chartPlotH = colH - 120;
 
-        ctx.fillStyle = '#fbbf24';
-        ctx.font = 'bold 18px sans-serif';
-        ctx.fillText('🏥 Analisis Sakit Karyawan (Site vs Luar)', c3x + 20, c3y + 36);
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '12px sans-serif';
-        ctx.fillText(`Total: ${rangeAggregates.totalSakitDays} Hari (Sakit Site: ${rangeAggregates.totalSakitSiteDays} | Sakit Luar: ${rangeAggregates.totalSakitLuarDays})`, c3x + 20, c3y + 58);
+        // Grid lines Y
+        const maxValD1 = Math.max(
+          ...rangeAggregates.deptBreakdown.map(d => Math.max(d.izin, d.sakit, d.alpa)),
+          5
+        );
+        ctx.strokeStyle = '#f1f5f9';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+          const gy = chartPlotY + chartPlotH - (i / 4) * chartPlotH;
+          ctx.beginPath();
+          ctx.moveTo(chartPlotX, gy);
+          ctx.lineTo(chartPlotX + chartPlotW, gy);
+          ctx.stroke();
 
-        // Mini Comparison Badges
-        drawRoundedRect(c3x + 20, c3y + 80, (gridW - 60) / 2, 50, 10, 'rgba(245, 158, 11, 0.15)', '#f59e0b');
-        ctx.fillStyle = '#f59e0b';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('SAKIT SITE (SS)', c3x + 35, c3y + 100);
-        ctx.font = 'bold 20px sans-serif';
-        ctx.fillText(`${rangeAggregates.totalSakitSiteDays} Hari`, c3x + 35, c3y + 122);
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = '10px sans-serif';
+          ctx.textAlign = 'right';
+          ctx.fillText(String(Math.round((i / 4) * maxValD1)), chartPlotX - 8, gy + 4);
+        }
+        ctx.textAlign = 'left';
 
-        drawRoundedRect(c3x + 30 + (gridW - 60) / 2, c3y + 80, (gridW - 60) / 2, 50, 10, 'rgba(249, 115, 22, 0.15)', '#f97316');
-        ctx.fillStyle = '#f97316';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('SAKIT LUAR (SL)', c3x + 45 + (gridW - 60) / 2, c3y + 100);
-        ctx.font = 'bold 20px sans-serif';
-        ctx.fillText(`${rangeAggregates.totalSakitLuarDays} Hari`, c3x + 45 + (gridW - 60) / 2, c3y + 122);
-
-        // Top Sakit List
-        const topSakit = rangeAggregates.sakitByEmp.slice(0, 4);
-        if (topSakit.length === 0) {
-          ctx.fillStyle = '#64748b';
-          ctx.font = 'italic 14px sans-serif';
-          ctx.fillText('Tidak ada rekap sakit pada rentang tanggal ini.', c3x + 20, c3y + 170);
+        // Plot Clustered Bars
+        const deptsToShow = rangeAggregates.deptBreakdown.slice(0, 5);
+        if (deptsToShow.length === 0) {
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = 'italic 13px sans-serif';
+          ctx.fillText('Tidak ada data absensi departemen pada rentang waktu ini.', d1x + 100, d1y + 200);
         } else {
-          topSakit.forEach((item, idx) => {
-            const barY = c3y + 145 + idx * 55;
-            ctx.fillStyle = '#f8fafc';
-            ctx.font = 'bold 13px sans-serif';
-            ctx.fillText(`${idx + 1}. ${item.name}`, c3x + 20, barY + 14);
+          const groupW = chartPlotW / deptsToShow.length;
+          const barW = Math.min(22, (groupW - 20) / 3);
+
+          deptsToShow.forEach((d, idx) => {
+            const gx = chartPlotX + idx * groupW + (groupW - barW * 3 - 6) / 2;
+            const baseY = chartPlotY + chartPlotH;
+
+            // Bar 1: Izin
+            const hIzin = (d.izin / maxValD1) * chartPlotH;
+            ctx.fillStyle = '#0284c7';
+            ctx.fillRect(gx, baseY - hIzin, barW, hIzin);
+            if (d.izin > 0) {
+              ctx.fillStyle = '#0f172a';
+              ctx.font = 'bold 10px sans-serif';
+              ctx.textAlign = 'center';
+              ctx.fillText(String(d.izin), gx + barW / 2, baseY - hIzin - 4);
+            }
+
+            // Bar 2: Sakit
+            const hSakit = (d.sakit / maxValD1) * chartPlotH;
+            ctx.fillStyle = '#d97706';
+            ctx.fillRect(gx + barW + 3, baseY - hSakit, barW, hSakit);
+            if (d.sakit > 0) {
+              ctx.fillStyle = '#0f172a';
+              ctx.font = 'bold 10px sans-serif';
+              ctx.textAlign = 'center';
+              ctx.fillText(String(d.sakit), gx + barW + 3 + barW / 2, baseY - hSakit - 4);
+            }
+
+            // Bar 3: Alpa
+            const hAlpa = (d.alpa / maxValD1) * chartPlotH;
+            ctx.fillStyle = '#e11d48';
+            ctx.fillRect(gx + (barW + 3) * 2, baseY - hAlpa, barW, hAlpa);
+            if (d.alpa > 0) {
+              ctx.fillStyle = '#0f172a';
+              ctx.font = 'bold 10px sans-serif';
+              ctx.textAlign = 'center';
+              ctx.fillText(String(d.alpa), gx + (barW + 3) * 2 + barW / 2, baseY - hAlpa - 4);
+            }
+
+            // X Axis Label
+            ctx.fillStyle = '#334155';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'center';
+            const shortDept = d.dept.length > 14 ? d.dept.substring(0, 12) + '..' : d.dept;
+            ctx.fillText(shortDept, gx + (barW * 3 + 6) / 2, baseY + 22);
             ctx.fillStyle = '#94a3b8';
-            ctx.font = '11px sans-serif';
-            ctx.fillText(`${item.dept} • SS: ${item.siteCount}h, SL: ${item.luarCount}h`, c3x + 20, barY + 30);
-
-            const maxBarWidth = gridW - 240;
-            const barWidth = Math.max(10, (item.total / Math.max(topSakit[0].total, 5)) * maxBarWidth);
-            drawRoundedRect(c3x + 180, barY + 4, maxBarWidth, 18, 5, 'rgba(15, 23, 42, 0.6)');
-            drawRoundedRect(c3x + 180, barY + 4, barWidth, 18, 5, '#f59e0b');
-
-            ctx.fillStyle = '#f8fafc';
-            ctx.font = 'bold 12px sans-serif';
-            ctx.fillText(`${item.total} Hari`, c3x + 190 + maxBarWidth, barY + 18);
+            ctx.font = '10px sans-serif';
+            ctx.fillText(`(${d.count} Org)`, gx + (barW * 3 + 6) / 2, baseY + 36);
           });
+          ctx.textAlign = 'left';
         }
 
-        // ================= CHART 4: ALPA & PELANGGARAN KEHADIRAN (BOTTOM RIGHT) =================
-        const c4x = 40 + gridW + 20;
-        const c4y = bottomY;
-        drawRoundedRect(c4x, c4y, gridW, gridH, 16, 'rgba(30, 41, 59, 0.7)', 'rgba(244, 63, 94, 0.3)', 1.5);
+        // ================= DIAGRAM 2: DONUT CHART (DISTRIBUSI SPDK & TINGKAT SANKSI) =================
+        const d2x = 60 + colW + 20;
+        const d2y = row1Y;
+        drawRoundedRect(d2x, d2y, colW, colH, 12, '#ffffff', '#cbd5e1', 1.5);
 
-        ctx.fillStyle = '#f43f5e';
-        ctx.font = 'bold 18px sans-serif';
-        ctx.fillText('⚠️ Rekapitulasi Alpa & Pelanggaran Kehadiran', c4x + 20, c4y + 36);
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '12px sans-serif';
-        ctx.fillText(`Total: ${rangeAggregates.totalAlpaDays} Hari Mangkir Tanpa Keterangan`, c4x + 20, c4y + 58);
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText('DIAGRAM 2: Distribusi Sanksi Disiplin & SPDK Berjalan', d2x + 20, d2y + 32);
 
-        const topAlpa = rangeAggregates.alpaByEmp.slice(0, 5);
-        const maxAlpa = Math.max(...topAlpa.map(d => d.count), 5);
+        const spList = [
+          { name: 'Surat Teguran (ST)', count: rangeAggregates.spdkCounts.st, color: '#eab308' },
+          { name: 'Surat Peringatan 1 (SP1)', count: rangeAggregates.spdkCounts.sp1, color: '#f97316' },
+          { name: 'Surat Peringatan 2 (SP2)', count: rangeAggregates.spdkCounts.sp2, color: '#f43f5e' },
+          { name: 'Surat Peringatan 3 (SP3)', count: rangeAggregates.spdkCounts.sp3, color: '#dc2626' },
+          { name: 'Sanksi SP-PT', count: rangeAggregates.spdkCounts.sppt, color: '#be123c' },
+          { name: 'Pemutusan Hub. Kerja (PHK)', count: rangeAggregates.spdkCounts.phk, color: '#881337' }
+        ];
 
-        if (topAlpa.length === 0) {
-          drawRoundedRect(c4x + 20, c4y + 90, gridW - 40, 100, 12, 'rgba(34, 197, 94, 0.1)', 'rgba(34, 197, 94, 0.3)');
+        const totalSpCases = spList.reduce((sum, s) => sum + s.count, 0);
+        const donutCenterX = d2x + 170;
+        const donutCenterY = d2y + 225;
+        const outerR = 120;
+        const innerR = 70;
+
+        if (totalSpCases === 0) {
+          // Zero case green circle
+          ctx.beginPath();
+          ctx.arc(donutCenterX, donutCenterY, outerR, 0, Math.PI * 2);
           ctx.fillStyle = '#22c55e';
-          ctx.font = 'bold 16px sans-serif';
-          ctx.fillText('✨ DISIPLIN 100% - TIDAK ADA ALPA', c4x + 40, c4y + 130);
-          ctx.fillStyle = '#94a3b8';
-          ctx.font = '13px sans-serif';
-          ctx.fillText('Seluruh karyawan hadir sesuai jadwal kerja pada rentang tanggal ini.', c4x + 40, c4y + 155);
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(donutCenterX, donutCenterY, innerR, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+
+          ctx.fillStyle = '#15803d';
+          ctx.font = 'bold 15px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('NIHIL SPDK', donutCenterX, donutCenterY - 4);
+          ctx.font = '11px sans-serif';
+          ctx.fillText('100% Kondusif', donutCenterX, donutCenterY + 16);
+          ctx.textAlign = 'left';
         } else {
-          topAlpa.forEach((item, idx) => {
-            const barY = c4y + 85 + idx * 60;
-            ctx.fillStyle = '#f8fafc';
+          let startAngle = -Math.PI / 2;
+          spList.forEach(sp => {
+            if (sp.count > 0) {
+              const sliceAngle = (sp.count / totalSpCases) * Math.PI * 2;
+              ctx.beginPath();
+              ctx.arc(donutCenterX, donutCenterY, outerR, startAngle, startAngle + sliceAngle);
+              ctx.arc(donutCenterX, donutCenterY, innerR, startAngle + sliceAngle, startAngle, true);
+              ctx.closePath();
+              ctx.fillStyle = sp.color;
+              ctx.fill();
+              startAngle += sliceAngle;
+            }
+          });
+
+          // Inner white hole
+          ctx.beginPath();
+          ctx.arc(donutCenterX, donutCenterY, innerR, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold 26px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(String(totalSpCases), donutCenterX, donutCenterY + 4);
+          ctx.fillStyle = '#64748b';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText('TOTAL SANKSI', donutCenterX, donutCenterY + 22);
+          ctx.textAlign = 'left';
+        }
+
+        // Donut Legend Table on Right Side
+        const legTableX = d2x + 320;
+        const legTableY = d2y + 70;
+        const legTableW = colW - 340;
+
+        drawRoundedRect(legTableX, legTableY, legTableW, 320, 8, '#f8fafc', '#e2e8f0', 1);
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('RINCIAN TINGKAT SANKSI', legTableX + 14, legTableY + 24);
+
+        spList.forEach((sp, idx) => {
+          const sy = legTableY + 50 + idx * 42;
+          ctx.fillStyle = sp.color;
+          ctx.fillRect(legTableX + 14, sy - 10, 12, 12);
+
+          ctx.fillStyle = '#334155';
+          ctx.font = '12px sans-serif';
+          ctx.fillText(sp.name, legTableX + 34, sy);
+
+          ctx.fillStyle = sp.count > 0 ? '#0f172a' : '#94a3b8';
+          ctx.font = 'bold 12px sans-serif';
+          ctx.textAlign = 'right';
+          const pct = totalSpCases > 0 ? Math.round((sp.count / totalSpCases) * 100) : 0;
+          ctx.fillText(`${sp.count} (${pct}%)`, legTableX + legTableW - 14, sy);
+          ctx.textAlign = 'left';
+
+          ctx.strokeStyle = '#f1f5f9';
+          ctx.beginPath();
+          ctx.moveTo(legTableX + 14, sy + 12);
+          ctx.lineTo(legTableX + legTableW - 14, sy + 12);
+          ctx.stroke();
+        });
+
+        // ================= DIAGRAM 3: TOP RANKED HORIZONTAL BAR (IZIN & SAKIT) =================
+        const d3x = 60;
+        const d3y = row2Y;
+        drawRoundedRect(d3x, d3y, colW, colH, 12, '#ffffff', '#cbd5e1', 1.5);
+
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText('DIAGRAM 3: Peringkat Karyawan dengan Izin & Sakit Tertinggi', d3x + 20, d3y + 32);
+
+        const topCombined = rangeAggregates.izinByEmp.slice(0, 5);
+        const maxComb = Math.max(...topCombined.map(d => d.count), 5);
+
+        if (topCombined.length === 0) {
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = 'italic 13px sans-serif';
+          ctx.fillText('Tidak ada rekaman izin khusus dalam periode pelaporan ini.', d3x + 40, d3y + 120);
+        } else {
+          topCombined.forEach((item, idx) => {
+            const by = d3y + 65 + idx * 65;
+            // Rank Number
+            drawRoundedRect(d3x + 20, by + 4, 28, 28, 6, '#f1f5f9', '#cbd5e1', 1);
+            ctx.fillStyle = '#0f172a';
             ctx.font = 'bold 13px sans-serif';
-            ctx.fillText(`${idx + 1}. ${item.name}`, c4x + 20, barY + 12);
+            ctx.textAlign = 'center';
+            ctx.fillText(String(idx + 1), d3x + 34, by + 23);
+            ctx.textAlign = 'left';
+
+            // Employee Name & Dept
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.fillText(item.name, d3x + 60, by + 16);
             ctx.fillStyle = '#64748b';
             ctx.font = '11px sans-serif';
-            ctx.fillText(`${item.dept} • NIK: ${item.nik}`, c4x + 20, barY + 28);
+            ctx.fillText(`${item.dept} • NIK: ${item.nik}`, d3x + 60, by + 32);
 
-            const maxBarWidth = gridW - 240;
-            const barWidth = Math.max(12, (item.count / maxAlpa) * maxBarWidth);
-            drawRoundedRect(c4x + 180, barY + 4, maxBarWidth, 20, 6, 'rgba(15, 23, 42, 0.6)');
-            drawRoundedRect(c4x + 180, barY + 4, barWidth, 20, 6, '#f43f5e');
+            // Progress Bar
+            const barStartX = d3x + 280;
+            const barMaxW = colW - 370;
+            const bw = Math.max(15, (item.count / maxComb) * barMaxW);
+            drawRoundedRect(barStartX, by + 12, barMaxW, 16, 4, '#f1f5f9');
+            drawRoundedRect(barStartX, by + 12, bw, 16, 4, '#0284c7');
 
-            ctx.fillStyle = '#f43f5e';
-            ctx.font = 'bold 12px sans-serif';
-            ctx.fillText(`${item.count} Hari`, c4x + 190 + maxBarWidth, barY + 18);
+            // Count Tag
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.fillText(`${item.count} Hari`, barStartX + barMaxW + 12, by + 25);
           });
         }
 
-        // --- FOOTER SECTION ---
-        ctx.fillStyle = '#64748b';
-        ctx.font = '12px sans-serif';
-        ctx.fillText('Laporan Grafik Resmi PrepLab Portal • PT Trimegah Bangun Persada & PT Gane Permai Sentosa • Confidential Internal Report', 40, height - 20);
+        // ================= DIAGRAM 4: EXECUTIVE SUMMARY MATRIX TABLE =================
+        const d4x = 60 + colW + 20;
+        const d4y = row2Y;
+        drawRoundedRect(d4x, d4y, colW, colH, 12, '#ffffff', '#cbd5e1', 1.5);
 
-        // Download PNG
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText('DIAGRAM 4: Matriks Evaluasi & Ringkasan Pelaporan', d4x + 20, d4y + 32);
+
+        // Matrix Table Headers
+        const tX = d4x + 20;
+        const tY = d4y + 55;
+        const tW = colW - 40;
+        
+        drawRoundedRect(tX, tY, tW, 36, 6, '#0f3a42');
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('KOMPONEN PELAPORAN', tX + 14, tY + 22);
+        ctx.fillText('VOLUME', tX + 260, tY + 22);
+        ctx.fillText('STATUS / EVALUASI', tX + 380, tY + 22);
+        ctx.fillText('TINGKAT RISIKO', tX + tW - 130, tY + 22);
+
+        const matrixRows = [
+          {
+            name: 'Kehadiran & Manpower Aktif',
+            vol: `${rangeAggregates.totalEmployees} Orang`,
+            stat: 'Tercatat Sesuai Master',
+            risk: 'NORMAL (A)',
+            riskColor: '#16a34a',
+            riskBg: '#dcfce7'
+          },
+          {
+            name: 'Ketidakhadiran Karena Izin',
+            vol: `${rangeAggregates.totalIzinDays} Hari`,
+            stat: `${rangeAggregates.izinByEmp.length} Karyawan Terdata`,
+            risk: rangeAggregates.totalIzinDays > 20 ? 'PERHATIAN' : 'TERKENDALI',
+            riskColor: rangeAggregates.totalIzinDays > 20 ? '#d97706' : '#16a34a',
+            riskBg: rangeAggregates.totalIzinDays > 20 ? '#fef3c7' : '#dcfce7'
+          },
+          {
+            name: 'Sakit Site (SS) & Luar (SL)',
+            vol: `${rangeAggregates.totalSakitDays} Hari`,
+            stat: `SS: ${rangeAggregates.totalSakitSiteDays}h, SL: ${rangeAggregates.totalSakitLuarDays}h`,
+            risk: rangeAggregates.totalSakitDays > 15 ? 'EVALUASI MEDIS' : 'TERKENDALI',
+            riskColor: rangeAggregates.totalSakitDays > 15 ? '#d97706' : '#16a34a',
+            riskBg: rangeAggregates.totalSakitDays > 15 ? '#fef3c7' : '#dcfce7'
+          },
+          {
+            name: 'Pelanggaran Alpa (Mangkir)',
+            vol: `${rangeAggregates.totalAlpaDays} Hari`,
+            stat: rangeAggregates.totalAlpaDays === 0 ? 'Disiplin Sempurna' : 'Perlu Konseling',
+            risk: rangeAggregates.totalAlpaDays === 0 ? 'AMAT BAIK' : 'KRITIS (SPDK)',
+            riskColor: rangeAggregates.totalAlpaDays === 0 ? '#16a34a' : '#dc2626',
+            riskBg: rangeAggregates.totalAlpaDays === 0 ? '#dcfce7' : '#fee2e2'
+          },
+          {
+            name: 'Sanksi Disiplin & SPDK Berjalan',
+            vol: `${rangeAggregates.totalActiveSpdk} Kasus`,
+            stat: rangeAggregates.totalActiveSpdk === 0 ? 'Kondusif 100%' : 'Dalam Pembinaan',
+            risk: rangeAggregates.totalActiveSpdk > 5 ? 'PERHATIAN KHUSUS' : 'TERKONTROL',
+            riskColor: rangeAggregates.totalActiveSpdk > 5 ? '#dc2626' : '#16a34a',
+            riskBg: rangeAggregates.totalActiveSpdk > 5 ? '#fee2e2' : '#dcfce7'
+          }
+        ];
+
+        matrixRows.forEach((r, idx) => {
+          const ry = tY + 45 + idx * 56;
+          drawRoundedRect(tX, ry, tW, 48, 6, idx % 2 === 0 ? '#ffffff' : '#f8fafc', '#e2e8f0', 1);
+
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold 12px sans-serif';
+          ctx.fillText(r.name, tX + 14, ry + 28);
+
+          ctx.fillStyle = '#0284c7';
+          ctx.font = 'bold 12px sans-serif';
+          ctx.fillText(r.vol, tX + 260, ry + 28);
+
+          ctx.fillStyle = '#475569';
+          ctx.font = '11px sans-serif';
+          ctx.fillText(r.stat, tX + 380, ry + 28);
+
+          // Risk Badge
+          drawRoundedRect(tX + tW - 135, ry + 12, 120, 24, 4, r.riskBg);
+          ctx.fillStyle = r.riskColor;
+          ctx.font = 'bold 10px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(r.risk, tX + tW - 75, ry + 27);
+          ctx.textAlign = 'left';
+        });
+
+        // --- 4. OFFICIAL SIGNATURE & APPROVAL BLOCK ---
+        const sigY = 1145;
+        const sigBoxW = (width - 120 - 40) / 3;
+
+        // Signer 1: Administrator / Inspector
+        drawRoundedRect(60, sigY, sigBoxW, 140, 8, '#ffffff', '#cbd5e1', 1);
+        ctx.fillStyle = '#475569';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('DIBUAT OLEH (INSPECTOR / ADMIN):', 80, sigY + 26);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.beginPath();
+        ctx.moveTo(80, sigY + 105);
+        ctx.lineTo(60 + sigBoxW - 20, sigY + 105);
+        ctx.stroke();
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(`NIK: ${inspectorNik || 'ADMINISTRATOR'}`, 80, sigY + 124);
+
+        // Signer 2: Superintendent / Section Head
+        drawRoundedRect(60 + sigBoxW + 20, sigY, sigBoxW, 140, 8, '#ffffff', '#cbd5e1', 1);
+        ctx.fillStyle = '#475569';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('DIPERIKSA OLEH (SECTION HEAD):', 60 + sigBoxW + 40, sigY + 26);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.beginPath();
+        ctx.moveTo(60 + sigBoxW + 40, sigY + 105);
+        ctx.lineTo(60 + sigBoxW * 2, sigY + 105);
+        ctx.stroke();
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('SUPERINTENDENT / SECTION HEAD', 60 + sigBoxW + 40, sigY + 124);
+
+        // Signer 3: Section Manager
+        drawRoundedRect(60 + (sigBoxW + 20) * 2, sigY, sigBoxW, 140, 8, '#ffffff', '#cbd5e1', 1);
+        ctx.fillStyle = '#475569';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('DISETUJUI OLEH (SECTION MANAGER):', 60 + (sigBoxW + 20) * 2 + 20, sigY + 26);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.beginPath();
+        ctx.moveTo(60 + (sigBoxW + 20) * 2 + 20, sigY + 105);
+        ctx.lineTo(width - 80, sigY + 105);
+        ctx.stroke();
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('SECTION MANAGER PREPARATION LAB', 60 + (sigBoxW + 20) * 2 + 20, sigY + 124);
+
+        // Footer Legal & Authenticity Text
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('Dokumen ini digenerate secara otomatis oleh PrepLab Portal Enterprise • Bersifat Rahasia Internal Perusahaan • Sah Tanpa Perubahan.', 60, height - 12);
+
+        // Download PNG Diagram
         const imgUrl = canvas.toDataURL('image/png', 1.0);
         const link = document.createElement('a');
         link.href = imgUrl;
-        link.download = `Laporan_Grafik_Manpower_${selectedPt}_${startDate}_sd_${endDate}.png`;
+        link.download = `Diagram_Pelaporan_Manpower_${selectedPt}_${startDate}_sd_${endDate}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
-        toast.success('Grafik PNG (High Resolution) berhasil diunduh!');
+        toast.success('Diagram Pelaporan Resmi (PNG) berhasil diunduh!');
       } catch (err: any) {
-        toast.error('Gagal mengekspor grafik PNG: ' + err.message);
+        toast.error('Gagal mengekspor diagram pelaporan: ' + err.message);
       } finally {
         setIsExportingPng(false);
       }
@@ -757,7 +990,7 @@ export function TimeRangeFetchModal({
                   </span>
                 </h3>
                 <p className="text-xs text-teal-100/90 mt-0.5">
-                  Tentukan rentang tanggal untuk sinkronisasi data atau ekspor laporan Excel &amp; PNG grafik.
+                  Tentukan rentang tanggal untuk sinkronisasi data atau ekspor laporan Excel &amp; Diagram Pelaporan PNG.
                 </p>
               </div>
             </div>
@@ -935,7 +1168,7 @@ export function TimeRangeFetchModal({
           )}
         </div>
 
-        {/* Footer Actions (2 Pilihan Ekspor: Excel & PNG Grafik + Tarik Data) */}
+        {/* Footer Actions (2 Pilihan Ekspor: Excel & Diagram Pelaporan PNG + Tarik Data) */}
         <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200/80 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2.5">
             {/* 2 Opsi Ekspor */}
@@ -956,10 +1189,10 @@ export function TimeRangeFetchModal({
                 onClick={handleExportPngChart}
                 disabled={isExportingPng || isFetching}
                 className="flex-1 sm:flex-none px-3.5 py-2.5 rounded-xl bg-white hover:bg-indigo-50 text-indigo-800 border border-indigo-300 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
-                title="Ekspor Grafik Analisis (Izin, SPDK, Sakit, Alpa) ke Gambar PNG High Resolution"
+                title="Ekspor Diagram Pelaporan Lengkap (Komparasi Absensi, SPDK, Evaluasi Matrix, Approval)"
               >
                 <FileImage className="w-4 h-4 text-indigo-600" />
-                <span>{isExportingPng ? 'Memproses...' : 'Ekspor PNG Grafik'}</span>
+                <span>{isExportingPng ? 'Menyusun Diagram...' : 'Ekspor PNG Diagram'}</span>
               </button>
             </div>
 
