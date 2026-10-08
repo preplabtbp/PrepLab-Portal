@@ -50,21 +50,22 @@ import {
   ChevronUp,
   ChevronLeft,
   CheckSquare,
-  Square,
-  CalendarDays
+  CalendarDays,
+  MoreVertical
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
 import { toast } from 'sonner';
 import { uploadPhotoToDrive } from '../sheets-api';
 import { ImageModal } from './image-modal';
-import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, NOTION_COLORS, TasklistProgress } from './notion/tasklist-utils';
+import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, NOTION_COLORS, TasklistProgress, markdownToVisualHtml } from './notion/tasklist-utils';
 import { NotionTasklistView } from './notion/NotionTasklistView';
 import { NotionDropdownCell } from './notion/NotionDropdownCell';
 import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
+import { FloatingSelectionToolbar, FormatAction, formatSelectedText } from './notion/FloatingSelectionToolbar';
 import { PicAvatarGroup } from './PicAvatarGroup';
 import {
   normalizeCadence,
@@ -642,14 +643,91 @@ export function NotionDatabaseTable({
   const [activeInlinePicCell, setActiveInlinePicCell] = useState<{ rowIndex: number; colName: string } | null>(null);
   const [inlinePicSearch, setInlinePicSearch] = useState<string>('');
 
+  // Row Action 3-Dots Dropdown Menu State
+  const [activeActionMenuRowIndex, setActiveActionMenuRowIndex] = useState<number | null>(null);
+
+  // Floating Selection Toolbar State for "Edit Data Kegiatan" Modal
+  const [activeModalSelection, setActiveModalSelection] = useState<{
+    field: 'jenisKegiatan' | 'keterangan';
+    start: number;
+    end: number;
+    selectedText: string;
+  } | null>(null);
+
+  const handleModalSelectText = (
+    e: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>,
+    field: 'jenisKegiatan' | 'keterangan'
+  ) => {
+    const target = e.currentTarget;
+    const start = target.selectionStart ?? 0;
+    const end = target.selectionEnd ?? 0;
+    if (end > start) {
+      const selectedText = target.value.substring(start, end);
+      setActiveModalSelection({ field, start, end, selectedText });
+    } else {
+      setActiveModalSelection(null);
+    }
+  };
+
+  const handleApplyModalFormat = (
+    field: 'jenisKegiatan' | 'keterangan',
+    action: FormatAction
+  ) => {
+    if (!activeModalSelection) return;
+    const { start, end } = activeModalSelection;
+
+    if (field === 'jenisKegiatan') {
+      const currentVal = rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || '';
+      const res = formatSelectedText(currentVal, start, end, action);
+      setRowFormData(prev => ({
+        ...prev,
+        'Jenis kegiatan': res.newText,
+        'Jenis Kegiatan': res.newText
+      }));
+      setActiveModalSelection({
+        field,
+        start: res.newStart,
+        end: res.newEnd,
+        selectedText: res.newText.substring(res.newStart, res.newEnd)
+      });
+    } else if (field === 'keterangan') {
+      const currentVal = rowFormData['Keterangan'] || '';
+      const res = formatSelectedText(currentVal, start, end, action);
+      setRowFormData(prev => ({
+        ...prev,
+        Keterangan: res.newText
+      }));
+      setActiveModalSelection({
+        field,
+        start: res.newStart,
+        end: res.newEnd,
+        selectedText: res.newText.substring(res.newStart, res.newEnd)
+      });
+    }
+  };
+
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest('.group\\/pic') && !(e.target as HTMLElement).closest('.notion-pic-popover')) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.group\\/pic') && !target.closest('.notion-pic-popover')) {
         setActiveInlinePicCell(null);
+      }
+      if (!target.closest('.notion-row-action-menu-container')) {
+        setActiveActionMenuRowIndex(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveActionMenuRowIndex(null);
+        setActiveModalSelection(null);
       }
     };
     window.addEventListener('click', handleOutsideClick);
-    return () => window.removeEventListener('click', handleOutsideClick);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleOutsideClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   useEffect(() => {
@@ -4810,52 +4888,75 @@ export function NotionDatabaseTable({
                               {/* Spacer cell for Add Column (+) header */}
                               <td className="w-10 px-1 py-2 text-center" />
 
-                              {/* Row Action Buttons */}
-                              <td className={`text-center whitespace-nowrap ${fitPageMode ? 'px-1 py-2' : 'px-3 py-2.5'}`}>
-                                {!isSubItem ? (
-                                  <div className="flex items-center justify-center gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setExpandedParents(prev => ({ ...prev, [actualRowIndex]: true }));
-                                        setCreatingSubItemForParent(actualRowIndex);
-                                        setNewSubItemTitle('');
-                                      }}
-                                      className="p-1 rounded-lg hover:bg-teal-500/15 hover:text-teal-500 text-slate-400 transition-colors cursor-pointer"
-                                      title="Tambah Sub-kegiatan di bawah kegiatan ini"
-                                    >
-                                      <Plus className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => handleOpenEditModal(row, actualRowIndex, e)}
-                                      className="p-1.5 rounded-lg hover:text-amber-500 text-slate-400 transition-colors cursor-pointer"
-                                      title="Edit Data Kegiatan Ini"
-                                    >
-                                      <Edit2 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => handleDeleteRow(actualRowIndex, e)}
-                                      className="p-1.5 rounded-lg hover:text-rose-500 text-slate-400 transition-colors cursor-pointer"
-                                      title="Hapus Baris Ini"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center justify-center">
-                                    {/* Tombol hapus sub-item cepat saat hover jika diperlukan */}
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleDeleteRow(actualRowIndex, e)}
-                                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:text-rose-500 text-slate-400 transition-all cursor-pointer"
-                                      title="Hapus Sub-kegiatan Ini"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                )}
-                              </td>
+                               {/* Row Action Buttons - Menu Titik Tiga */}
+                               <td className={`text-center whitespace-nowrap relative notion-row-action-menu-container ${fitPageMode ? 'px-1 py-2' : 'px-2 py-2.5'}`} onClick={(e) => e.stopPropagation()}>
+                                 <div className="relative inline-block">
+                                   <button
+                                     type="button"
+                                     onClick={(e) => {
+                                       e.stopPropagation();
+                                       setActiveActionMenuRowIndex(activeActionMenuRowIndex === actualRowIndex ? null : actualRowIndex);
+                                     }}
+                                     className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700/60 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                                     title="Pilihan Aksi"
+                                   >
+                                     <MoreVertical className="w-4 h-4" />
+                                   </button>
+
+                                   {activeActionMenuRowIndex === actualRowIndex && (
+                                     <div 
+                                       className={`absolute right-0 top-full mt-1 w-52 rounded-xl shadow-2xl border p-1 z-50 text-left transition-all ${
+                                         isNotionLight ? 'bg-white border-slate-200 text-slate-800 shadow-slate-300/60' : 'bg-[#202020] border-slate-700 text-slate-100 shadow-black/80'
+                                       }`}
+                                       onClick={(e) => e.stopPropagation()}
+                                     >
+                                       {!isSubItem && (
+                                         <button
+                                           type="button"
+                                           onClick={(e) => {
+                                             e.stopPropagation();
+                                             setExpandedParents(prev => ({ ...prev, [actualRowIndex]: true }));
+                                             setCreatingSubItemForParent(actualRowIndex);
+                                             setNewSubItemTitle('');
+                                             setActiveActionMenuRowIndex(null);
+                                           }}
+                                           className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-400 font-medium transition-colors cursor-pointer"
+                                           title="Tambah Sub-kegiatan di bawah kegiatan ini"
+                                         >
+                                           <Plus className="w-3.5 h-3.5 shrink-0 text-teal-500" />
+                                           <span>Tambah Sub-kegiatan</span>
+                                         </button>
+                                       )}
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           handleOpenEditModal(row, actualRowIndex, e);
+                                           setActiveActionMenuRowIndex(null);
+                                         }}
+                                         className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-medium transition-colors cursor-pointer"
+                                         title="Edit Data Kegiatan Ini"
+                                       >
+                                         <Edit2 className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                                         <span>Edit Data Kegiatan</span>
+                                       </button>
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           handleDeleteRow(actualRowIndex, e);
+                                           setActiveActionMenuRowIndex(null);
+                                         }}
+                                         className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-medium transition-colors cursor-pointer"
+                                         title={isSubItem ? "Hapus Sub-kegiatan Ini" : "Hapus Baris Ini"}
+                                       >
+                                         <Trash2 className="w-3.5 h-3.5 shrink-0 text-rose-500" />
+                                         <span>{isSubItem ? "Hapus Sub-kegiatan" : "Hapus Baris Ini"}</span>
+                                       </button>
+                                     </div>
+                                   )}
+                                 </div>
+                               </td>
                             </tr>
                           );
                         };
@@ -5736,30 +5837,65 @@ export function NotionDatabaseTable({
             {/* Modal Form */}
             <form onSubmit={handleSaveRow} className="p-5 overflow-y-auto space-y-4 flex-1 text-xs">
               {/* 1. Jenis kegiatan */}
-              <div>
-                <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                  Jenis Kegiatan <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setRowFormData({ 
-                      ...rowFormData, 
-                      'Jenis kegiatan': val,
-                      'Jenis Kegiatan': val 
-                    });
-                  }}
-                  className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-medium text-xs shadow-2xs"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #141414)',
-                    borderColor: 'var(--border-main, #334155)',
-                    color: 'var(--text-main, #f1f5f9)'
-                  }}
-                  placeholder="Contoh: Kalibrasi XRF, Analisis Sampel Harian, dsb..."
-                />
+              <div className="relative">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                    Jenis Kegiatan <span className="text-rose-500">*</span>
+                  </label>
+                  {(rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan']) && (
+                    <span className="text-[10px] text-teal-400 font-sans">
+                      Blok teks untuk styling
+                    </span>
+                  )}
+                </div>
+
+                <div className="relative">
+                  {activeModalSelection?.field === 'jenisKegiatan' && (
+                    <FloatingSelectionToolbar
+                      onFormat={(action) => handleApplyModalFormat('jenisKegiatan', action)}
+                      onClose={() => setActiveModalSelection(null)}
+                    />
+                  )}
+                  <input
+                    type="text"
+                    required
+                    value={rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setRowFormData({ 
+                        ...rowFormData, 
+                        'Jenis kegiatan': val,
+                        'Jenis Kegiatan': val 
+                      });
+                    }}
+                    onSelect={(e) => handleModalSelectText(e, 'jenisKegiatan')}
+                    onKeyUp={(e) => handleModalSelectText(e, 'jenisKegiatan')}
+                    onMouseUp={(e) => handleModalSelectText(e, 'jenisKegiatan')}
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-medium text-xs shadow-2xs"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
+                    placeholder="Contoh: Kalibrasi XRF, Analisis Sampel Harian, dsb..."
+                  />
+                </div>
+
+                {/* Live visual preview if formatting tags or colors exist */}
+                {(() => {
+                  const val = rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || '';
+                  const hasFormat = /(\*\*|\*|~~|`|\[color|\[biru|\[merah|\[hijau|\[kuning|\[ungu|\[abu|\[orange|\[pink)/i.test(val);
+                  if (!hasFormat) return null;
+                  return (
+                    <div className="mt-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-[11px] flex items-center gap-1.5">
+                      <span className="text-[9.5px] uppercase font-bold text-teal-600 dark:text-teal-400 shrink-0">Pratinjau:</span>
+                      <span 
+                        className="truncate text-slate-900 dark:text-slate-100 font-medium"
+                        dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(val)) }}
+                      />
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* 2. Number & Priority */}
@@ -5808,27 +5944,55 @@ export function NotionDatabaseTable({
               </div>
 
               {/* 3. Keterangan / Catatan Ringkas */}
-              <div>
+              <div className="relative">
                 <div className="flex items-center justify-between mb-1">
                   <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Keterangan / Catatan Ringkas
                   </label>
                   <span className="text-[10px] text-slate-400 font-sans">
-                    (Opsional)
+                    (Opsional - blok teks untuk styling)
                   </span>
                 </div>
-                <textarea
-                  rows={3}
-                  value={rowFormData['Keterangan'] || ''}
-                  onChange={(e) => setRowFormData({ ...rowFormData, Keterangan: e.target.value })}
-                  className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs leading-relaxed resize-y"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #141414)',
-                    borderColor: 'var(--border-main, #334155)',
-                    color: 'var(--text-main, #f1f5f9)'
-                  }}
-                  placeholder="Catatan, rincian teknis, parameter khusus, atau instruksi kerja..."
-                />
+
+                <div className="relative">
+                  {activeModalSelection?.field === 'keterangan' && (
+                    <FloatingSelectionToolbar
+                      onFormat={(action) => handleApplyModalFormat('keterangan', action)}
+                      onClose={() => setActiveModalSelection(null)}
+                    />
+                  )}
+                  <textarea
+                    rows={3}
+                    value={rowFormData['Keterangan'] || ''}
+                    onChange={(e) => setRowFormData({ ...rowFormData, Keterangan: e.target.value })}
+                    onSelect={(e) => handleModalSelectText(e, 'keterangan')}
+                    onKeyUp={(e) => handleModalSelectText(e, 'keterangan')}
+                    onMouseUp={(e) => handleModalSelectText(e, 'keterangan')}
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs leading-relaxed resize-y"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
+                    placeholder="Catatan, rincian teknis, parameter khusus, atau instruksi kerja..."
+                  />
+                </div>
+
+                {/* Live visual preview if formatting tags or colors exist */}
+                {(() => {
+                  const val = rowFormData['Keterangan'] || '';
+                  const hasFormat = /(\*\*|\*|~~|`|\[color|\[biru|\[merah|\[hijau|\[kuning|\[ungu|\[abu|\[orange|\[pink)/i.test(val);
+                  if (!hasFormat) return null;
+                  return (
+                    <div className="mt-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-[11px]">
+                      <span className="text-[9.5px] uppercase font-bold text-teal-600 dark:text-teal-400 block mb-0.5">Pratinjau Keterangan:</span>
+                      <div 
+                        className="line-clamp-3 leading-relaxed text-slate-900 dark:text-slate-100 font-medium"
+                        dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(val)) }}
+                      />
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* 4. PIC & Status */}
