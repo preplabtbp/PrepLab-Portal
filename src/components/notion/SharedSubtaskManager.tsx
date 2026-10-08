@@ -35,6 +35,11 @@ import {
   detectLineColor,
   applyColorToText
 } from './tasklist-utils';
+import { 
+  FloatingSelectionToolbar, 
+  formatSelectedText, 
+  FormatAction 
+} from './FloatingSelectionToolbar';
 import { toast } from 'sonner';
 
 export interface SharedSubtaskManagerProps {
@@ -103,6 +108,55 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
   // Color Picker State
   const [selectedNewColor, setSelectedNewColor] = useState<string>('default');
   const [activeColorPickerIdx, setActiveColorPickerIdx] = useState<number | null>(null);
+
+  // Floating Selection Toolbar State (muncul otomatis ketika teks diseleksi)
+  const [activeSelection, setActiveSelection] = useState<{
+    field: 'extraNotes' | 'freeformText' | 'newSubtask' | 'editTitle';
+    itemIndex?: number;
+    start: number;
+    end: number;
+    selectedText: string;
+  } | null>(null);
+
+  const handleSelectText = (
+    e: React.SyntheticEvent<HTMLTextAreaElement | HTMLInputElement>,
+    field: 'extraNotes' | 'freeformText' | 'newSubtask' | 'editTitle',
+    itemIndex?: number
+  ) => {
+    const target = e.currentTarget;
+    const start = target.selectionStart ?? 0;
+    const end = target.selectionEnd ?? 0;
+    if (end > start) {
+      const selectedText = target.value.substring(start, end);
+      setActiveSelection({ field, itemIndex, start, end, selectedText });
+    } else {
+      setActiveSelection(null);
+    }
+  };
+
+  const handleApplyFormat = (action: FormatAction) => {
+    if (!activeSelection) return;
+    const { field, itemIndex, start, end } = activeSelection;
+
+    if (field === 'extraNotes') {
+      const res = formatSelectedText(extraNotes, start, end, action);
+      handleExtraNotesChange(res.newText);
+      setActiveSelection({ ...activeSelection, start: res.newStart, end: res.newEnd, selectedText: res.newText.substring(res.newStart, res.newEnd) });
+    } else if (field === 'freeformText') {
+      const res = formatSelectedText(freeformText, start, end, action);
+      setFreeformText(res.newText);
+      onChange(res.newText);
+      setActiveSelection({ ...activeSelection, start: res.newStart, end: res.newEnd, selectedText: res.newText.substring(res.newStart, res.newEnd) });
+    } else if (field === 'newSubtask') {
+      const res = formatSelectedText(newSubtaskInput, start, end, action);
+      setNewSubtaskInput(res.newText);
+      setActiveSelection({ ...activeSelection, start: res.newStart, end: res.newEnd, selectedText: res.newText.substring(res.newStart, res.newEnd) });
+    } else if (field === 'editTitle' && itemIndex !== undefined) {
+      const res = formatSelectedText(editingTitleValue, start, end, action);
+      setEditingTitleValue(res.newText);
+      setActiveSelection({ ...activeSelection, start: res.newStart, end: res.newEnd, selectedText: res.newText.substring(res.newStart, res.newEnd) });
+    }
+  };
 
   // 1. Toggle Checkbox
   const handleToggle = (itemIndex: number) => {
@@ -422,12 +476,21 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                     {/* Subtask Text / Inline Title Editor */}
                     <div className="flex-1 min-w-0">
                       {isEditingThisTitle ? (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 relative">
+                          {activeSelection?.field === 'editTitle' && activeSelection?.itemIndex === item.index && (
+                            <FloatingSelectionToolbar
+                              onFormat={handleApplyFormat}
+                              onClose={() => setActiveSelection(null)}
+                            />
+                          )}
                           <input
                             type="text"
                             autoFocus
                             value={editingTitleValue}
                             onChange={(e) => setEditingTitleValue(e.target.value)}
+                            onSelect={(e) => handleSelectText(e, 'editTitle', item.index)}
+                            onKeyUp={(e) => handleSelectText(e, 'editTitle', item.index)}
+                            onMouseUp={(e) => handleSelectText(e, 'editTitle', item.index)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') handleCommitTitle(item.index);
                               if (e.key === 'Escape') setEditingTitleIdx(null);
@@ -558,12 +621,21 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
 
           {/* Add Subtask Input Form */}
           {!isReadOnly && (
-            <div className="space-y-1.5 pt-1">
-              <div className="flex items-center gap-2">
+            <div className="pt-1">
+              <div className="flex items-center gap-2 relative">
+                {activeSelection?.field === 'newSubtask' && (
+                  <FloatingSelectionToolbar
+                    onFormat={handleApplyFormat}
+                    onClose={() => setActiveSelection(null)}
+                  />
+                )}
                 <input
                   type="text"
                   value={newSubtaskInput}
                   onChange={(e) => setNewSubtaskInput(e.target.value)}
+                  onSelect={(e) => handleSelectText(e, 'newSubtask')}
+                  onKeyUp={(e) => handleSelectText(e, 'newSubtask')}
+                  onMouseUp={(e) => handleSelectText(e, 'newSubtask')}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -582,27 +654,6 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                   <span>Tambah</span>
                 </button>
               </div>
-
-              {/* Color selector for next subtask */}
-              <div className="flex items-center gap-2 px-1">
-                <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
-                  <Palette className="w-3 h-3 text-slate-400" /> Warna teks butir baru:
-                </span>
-                <div className="flex items-center gap-1">
-                  {Object.entries(NOTION_COLORS).map(([cKey, cVal]) => (
-                    <button
-                      key={cKey}
-                      type="button"
-                      onClick={() => setSelectedNewColor(cKey)}
-                      title={cVal.label}
-                      className={`w-4 h-4 rounded-full transition-all cursor-pointer border ${
-                        selectedNewColor === cKey ? 'ring-2 ring-teal-500 ring-offset-1 scale-110 border-slate-400' : 'opacity-70 hover:opacity-100 border-slate-300'
-                      }`}
-                      style={{ backgroundColor: cVal.hex }}
-                    />
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 
@@ -612,75 +663,55 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
               <label className="text-[10px] font-black uppercase tracking-wider block text-black">
                 Catatan Umum / Instruksi Khusus (Opsional)
               </label>
-              {/* Color toolbar for extraNotes */}
-              <div className="flex items-center gap-1">
-                {Object.entries(NOTION_COLORS).filter(([k]) => k !== 'default').map(([cKey, cVal]) => (
-                  <button
-                    key={cKey}
-                    type="button"
-                    onClick={() => {
-                      const sample = `[${cKey}]Catatan[/${cKey}]`;
-                      const updated = extraNotes ? `${extraNotes} ${sample}` : sample;
-                      handleExtraNotesChange(updated);
-                    }}
-                    title={`Tambahkan tag warna ${cVal.label}`}
-                    className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-100 transition-all cursor-pointer"
-                    style={{ color: cVal.hex }}
-                  >
-                    {cVal.label}
-                  </button>
-                ))}
-              </div>
             </div>
-            <textarea
-              rows={2}
-              disabled={isReadOnly}
-              value={extraNotes}
-              onChange={(e) => handleExtraNotesChange(e.target.value)}
-              placeholder="Instruksi tambahan, parameter khusus, atau keterangan ringkas..."
-              className="w-full text-xs font-sans font-bold p-2.5 rounded-xl border-2 outline-none resize-none focus:border-teal-500 bg-white text-black border-slate-400 placeholder:text-slate-500 shadow-2xs"
-            />
+            <div className="relative">
+              {activeSelection?.field === 'extraNotes' && (
+                <FloatingSelectionToolbar
+                  onFormat={handleApplyFormat}
+                  onClose={() => setActiveSelection(null)}
+                />
+              )}
+              <textarea
+                rows={2}
+                disabled={isReadOnly}
+                value={extraNotes}
+                onChange={(e) => handleExtraNotesChange(e.target.value)}
+                onSelect={(e) => handleSelectText(e, 'extraNotes')}
+                onKeyUp={(e) => handleSelectText(e, 'extraNotes')}
+                onMouseUp={(e) => handleSelectText(e, 'extraNotes')}
+                placeholder="Instruksi tambahan, parameter khusus, atau keterangan ringkas..."
+                className="w-full text-xs font-sans font-bold p-2.5 rounded-xl border-2 outline-none resize-none focus:border-teal-500 bg-white text-black border-slate-400 placeholder:text-slate-500 shadow-2xs"
+              />
+            </div>
           </div>
         </div>
       ) : (
         /* Mode Freeform Text View */
         <div className="space-y-2">
-          {/* Color tag toolbar for freeform text */}
-          <div className="flex items-center justify-between pb-1">
-            <span className="text-[11px] font-bold text-slate-700">Pewarnaan Teks Cepat:</span>
-            <div className="flex items-center gap-1 flex-wrap">
-              {Object.entries(NOTION_COLORS).filter(([k]) => k !== 'default').map(([cKey, cVal]) => (
-                <button
-                  key={cKey}
-                  type="button"
-                  onClick={() => {
-                    const sample = `[${cKey}]Teks Berwarna[/${cKey}]`;
-                    const updated = freeformText ? `${freeformText} ${sample}` : sample;
-                    setFreeformText(updated);
-                    onChange(updated);
-                  }}
-                  title={`Tambahkan tag warna ${cVal.label}`}
-                  className="text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-100 transition-all cursor-pointer"
-                  style={{ color: cVal.hex }}
-                >
-                  {cVal.label}
-                </button>
-              ))}
-            </div>
+          <div className="relative">
+            {activeSelection?.field === 'freeformText' && (
+              <FloatingSelectionToolbar
+                onFormat={handleApplyFormat}
+                onClose={() => setActiveSelection(null)}
+              />
+            )}
+            <textarea
+              rows={5}
+              disabled={isReadOnly}
+              value={freeformText}
+              onChange={(e) => {
+                setFreeformText(e.target.value);
+                onChange(e.target.value);
+              }}
+              onSelect={(e) => handleSelectText(e, 'freeformText')}
+              onKeyUp={(e) => handleSelectText(e, 'freeformText')}
+              onMouseUp={(e) => handleSelectText(e, 'freeformText')}
+              placeholder="Tuliskan keterangan naratif atau laporan detail..."
+              className="w-full text-xs font-sans font-bold p-3 rounded-xl border-2 outline-none resize-y focus:border-teal-500 leading-relaxed bg-white text-black border-slate-400 placeholder:text-slate-500 shadow-2xs"
+            />
           </div>
-          <textarea
-            rows={5}
-            disabled={isReadOnly}
-            value={freeformText}
-            onChange={(e) => {
-              setFreeformText(e.target.value);
-              onChange(e.target.value);
-            }}
-            placeholder="Tuliskan keterangan naratif atau laporan detail..."
-            className="w-full text-xs font-sans font-bold p-3 rounded-xl border-2 outline-none resize-y focus:border-teal-500 leading-relaxed bg-white text-black border-slate-400 placeholder:text-slate-500 shadow-2xs"
-          />
-          <p className="text-[11px] font-bold text-slate-700">
-            Tip: Teks dengan format [blue]...[/blue], [green]...[/green], [orange]...[/orange], atau [red]...[/red] akan otomatis tampil dengan warna Notion pada tabel database.
+          <p className="text-[11px] font-bold text-slate-500">
+            Tip: Sorot / seleksi teks apa saja untuk memunculkan toolbar editing melayang (Warna, Bold, Italic, Strikethrough, Code).
           </p>
         </div>
       )}

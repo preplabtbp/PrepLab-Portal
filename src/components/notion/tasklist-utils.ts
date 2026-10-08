@@ -525,6 +525,17 @@ export const NOTION_COLORS: Record<string, { label: string; textClass: string; h
   gray: { label: 'Abu-abu', textClass: 'text-slate-500', hex: '#64748b', bgClass: 'bg-slate-50', borderClass: 'border-slate-300' }
 };
 
+const COLOR_ALIASES: Record<string, string> = {
+  biru: 'blue',
+  hijau: 'green',
+  oranye: 'orange',
+  merah: 'red',
+  ungu: 'purple',
+  kuning: 'amber',
+  'abu-abu': 'gray',
+  abu: 'gray'
+};
+
 /**
  * Replaces Notion color tags like [blue]text[/blue] or [color:blue]text[/color] with styled HTML spans
  */
@@ -533,8 +544,9 @@ export function formatColorTagsToHtml(text?: string | null): string {
   let out = text;
 
   // Generic tag: [color:blue]...[/color] or [color:#hex]...[/color]
-  out = out.replace(/\[color:\s*([#a-zA-Z0-9]+)\]([\s\S]*?)\[\/color\]/gi, (_, colorKey, content) => {
-    const key = colorKey.toLowerCase();
+  out = out.replace(/\[color:\s*([#a-zA-Z0-9_-]+)\]([\s\S]*?)\[\/color\]/gi, (_, colorKey, content) => {
+    const rawKey = colorKey.toLowerCase();
+    const key = COLOR_ALIASES[rawKey] || rawKey;
     const hex = NOTION_COLORS[key]?.hex || colorKey;
     return `<span style="color: ${hex}; font-weight: 600;">${content}</span>`;
   });
@@ -546,6 +558,15 @@ export function formatColorTagsToHtml(text?: string | null): string {
     out = out.replace(regex, `<span style="color: ${conf.hex}; font-weight: 600;">$1</span>`);
   }
 
+  // Indonesian shorthand aliases: [biru]...[/biru], [merah]...[/merah], etc.
+  for (const [idKey, enKey] of Object.entries(COLOR_ALIASES)) {
+    const conf = NOTION_COLORS[enKey];
+    if (conf) {
+      const regex = new RegExp(`\\[${idKey}\\]([\\s\\S]*?)\\[\\/${idKey}\\]`, 'gi');
+      out = out.replace(regex, `<span style="color: ${conf.hex}; font-weight: 600;">$1</span>`);
+    }
+  }
+
   return out;
 }
 
@@ -554,9 +575,13 @@ export function formatColorTagsToHtml(text?: string | null): string {
  */
 export function stripColorTags(text?: string | null): string {
   if (!text || typeof text !== 'string') return '';
-  let out = text.replace(/\[color:\s*([#a-zA-Z0-9]+)\]([\s\S]*?)\[\/color\]/gi, '$2');
+  let out = text.replace(/\[color:\s*([#a-zA-Z0-9_-]+)\]([\s\S]*?)\[\/color\]/gi, '$2');
   for (const key of Object.keys(NOTION_COLORS)) {
     const regex = new RegExp(`\\[${key}\\]([\\s\\S]*?)\\[\\/${key}\\]`, 'gi');
+    out = out.replace(regex, '$1');
+  }
+  for (const idKey of Object.keys(COLOR_ALIASES)) {
+    const regex = new RegExp(`\\[${idKey}\\]([\\s\\S]*?)\\[\\/${idKey}\\]`, 'gi');
     out = out.replace(regex, '$1');
   }
   return out;
