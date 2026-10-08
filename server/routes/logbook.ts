@@ -124,13 +124,31 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
       }
     }
     if (section && section !== 'ALL' && section !== 'Semua' && section !== 'Semua Seksi') {
-      if (section.toLowerCase().includes('quality') || section.toLowerCase().includes('qa')) {
+      const secLower = section.toLowerCase().trim();
+      if (secLower.includes('quality') || secLower.includes('qa')) {
         conditions.push(or(
           ilike(logbookTasks.section, '%quality%'),
           ilike(logbookTasks.section, '%qa%')
         ));
+      } else if (secLower.includes('lab')) {
+        conditions.push(or(
+          ilike(logbookTasks.section, '%lab%'),
+          ilike(logbookTasks.section, '%prep & lab%'),
+          ilike(logbookTasks.section, '%preparasi & lab%')
+        ));
+      } else if (secLower.includes('prep')) {
+        conditions.push(or(
+          ilike(logbookTasks.section, '%prep%'),
+          ilike(logbookTasks.section, '%preparasi%'),
+          ilike(logbookTasks.section, '%prep & lab%')
+        ));
+      } else if (secLower.includes('maint')) {
+        conditions.push(ilike(logbookTasks.section, '%maintenance%'));
       } else {
-        conditions.push(eq(logbookTasks.section, section));
+        conditions.push(or(
+          eq(logbookTasks.section, section),
+          ilike(logbookTasks.section, `%${section}%`)
+        ));
       }
     }
     if (assigneeNik) {
@@ -248,6 +266,18 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
 
       if (isTaskPlannedForDate(t, targetDateStr)) return true;
       if (isRoutineEligibleForDate(t, targetDateStr) && t.taskDate <= targetDateStr) return true;
+
+      // Ensure Non-Routine tasks active today are included:
+      if (!isRoutineTask(t)) {
+        if (t.taskDate === targetDateStr) return true;
+        if (t.createdAt) {
+          try {
+            const cDate = formatDateStr(new Date(t.createdAt));
+            if (cDate === targetDateStr) return true;
+          } catch (e) {}
+        }
+      }
+
       return false;
     });
 
@@ -308,8 +338,8 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
     const carryOverTasks = allMatching.filter(t => {
       const isUnfinished = t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed' && t.status !== 'Canceled' && t.status !== 'Cancelled';
       if (!isUnfinished) return false;
-      // All past unfinished tasks
-      if (t.taskDate < targetDateStr) return true;
+      // All past or undated unfinished tasks
+      if (!t.taskDate || t.taskDate < targetDateStr) return true;
       // Active routine backlogs that belong to current backlog
       if (isRoutineTask(t)) return true;
       return false;

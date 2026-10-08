@@ -558,7 +558,8 @@ async function syncBulletinToLogbook(post: any) {
     // Detect default cadence from bulletin post title
     const postTitle = (post.title || '').toLowerCase();
     let defaultCadence = 'Daily';
-    if (postTitle.includes('monthly') || postTitle.includes('bulanan')) defaultCadence = 'Monthly';
+    if (postTitle.includes('non')) defaultCadence = 'Non Routine';
+    else if (postTitle.includes('monthly') || postTitle.includes('bulanan')) defaultCadence = 'Monthly';
     else if (postTitle.includes('weekly') || postTitle.includes('mingguan')) defaultCadence = 'Weekly';
     else if (postTitle.includes('quarterly') || postTitle.includes('triwulan')) defaultCadence = 'Quarterly';
     else if (postTitle.includes('biannual') || postTitle.includes('semester')) defaultCadence = 'Biannual';
@@ -607,6 +608,7 @@ async function syncBulletinToLogbook(post: any) {
       let rowPic = '';
       let rowActivity = '';
       let rowPeriod = '';
+      let rowKategori = '';
 
       Object.keys(r).forEach(k => {
         const kl = k.toLowerCase().trim();
@@ -624,21 +626,47 @@ async function syncBulletinToLogbook(post: any) {
           rowActivity = (r[k] || '').trim();
         } else if (kl.includes('period') || kl.includes('periode')) {
           rowPeriod = (r[k] || '').trim();
+        } else if (kl.includes('kategori') || kl.includes('seksi') || kl.includes('section')) {
+          rowKategori = (r[k] || '').trim();
         }
       });
 
       if (!rTitle || rTitle === '-' || rTitle.length < 2) continue;
 
-      // Determine effective cadence
+      // Determine effective cadence - ALWAYS prioritize Non-Routine if specified
       let effectiveCadence = defaultCadence;
       const combinedAct = `${rowActivity} ${rowPeriod}`.toLowerCase();
-      if (combinedAct.includes('monthly') || combinedAct.includes('bulanan')) effectiveCadence = 'Monthly';
-      else if (combinedAct.includes('weekly') || combinedAct.includes('mingguan')) effectiveCadence = 'Weekly';
-      else if (combinedAct.includes('daily') || combinedAct.includes('harian')) effectiveCadence = 'Daily';
-      else if (combinedAct.includes('quarterly') || combinedAct.includes('triwulan')) effectiveCadence = 'Quarterly';
-      else if (combinedAct.includes('biannual') || combinedAct.includes('semester')) effectiveCadence = 'Biannual';
-      else if (combinedAct.includes('yearly') || combinedAct.includes('tahunan')) effectiveCadence = 'Yearly';
-      else if (combinedAct.includes('non')) effectiveCadence = 'Non Routine';
+      if (combinedAct.includes('non') || rowActivity.toLowerCase().includes('non') || defaultCadence === 'Non Routine') {
+        effectiveCadence = 'Non Routine';
+      } else if (combinedAct.includes('monthly') || combinedAct.includes('bulanan')) {
+        effectiveCadence = 'Monthly';
+      } else if (combinedAct.includes('weekly') || combinedAct.includes('mingguan')) {
+        effectiveCadence = 'Weekly';
+      } else if (combinedAct.includes('daily') || combinedAct.includes('harian')) {
+        effectiveCadence = 'Daily';
+      } else if (combinedAct.includes('quarterly') || combinedAct.includes('triwulan')) {
+        effectiveCadence = 'Quarterly';
+      } else if (combinedAct.includes('biannual') || combinedAct.includes('semester')) {
+        effectiveCadence = 'Biannual';
+      } else if (combinedAct.includes('yearly') || combinedAct.includes('tahunan')) {
+        effectiveCadence = 'Yearly';
+      }
+
+      // Determine effective section
+      let rowSection = post.department || 'General';
+      const katLower = rowKategori.toLowerCase().trim();
+      if (katLower.includes('prep') || katLower.includes('preparasi')) {
+        rowSection = 'Preparation';
+      } else if (katLower.includes('lab')) {
+        rowSection = 'Laboratory';
+      } else if (katLower.includes('qa') || katLower.includes('quality')) {
+        rowSection = 'Quality Assurance';
+      } else if (katLower.includes('maint')) {
+        rowSection = 'Maintenance';
+      } else if (rowSection === 'Prep & Lab') {
+        if (postTitle.includes('lab')) rowSection = 'Laboratory';
+        else if (postTitle.includes('prep')) rowSection = 'Preparation';
+      }
 
       const matchedEmp = findEmployee(rowPic);
       const targetAssigneeNik = matchedEmp ? matchedEmp.nik : (rowPic && rowPic !== '-' ? rowPic : 'ALL');
@@ -662,8 +690,14 @@ async function syncBulletinToLogbook(post: any) {
         if (rowPriority && rowPriority !== existingTask.priority) {
           updatePayload.priority = rowPriority;
         }
-        if (effectiveCadence && existingTask.activityType !== effectiveCadence && existingTask.activityType === 'Routine') {
+        if (effectiveCadence && existingTask.activityType !== effectiveCadence) {
           updatePayload.activityType = effectiveCadence;
+        }
+        if (rowSection && rowSection !== 'Prep & Lab' && existingTask.section !== rowSection) {
+          updatePayload.section = rowSection;
+        }
+        if (effectiveCadence === 'Non Routine' && !existingTask.plannedDate) {
+          updatePayload.plannedDate = todayStr;
         }
         if (rowPic && rowPic !== '-' && (existingTask.assigneeName !== targetAssigneeName || existingTask.assigneeNik !== targetAssigneeNik)) {
           updatePayload.assigneeName = targetAssigneeName;
@@ -682,7 +716,7 @@ async function syncBulletinToLogbook(post: any) {
           const inserted = await db.insert(logbookTasks).values({
             title: rTitle,
             description: rowDesc || '',
-            section: post.department || 'General',
+            section: rowSection,
             assigneeNik: targetAssigneeNik,
             assigneeName: targetAssigneeName,
             assignedByNik: post.authorNik || 'SYSTEM',
@@ -692,6 +726,7 @@ async function syncBulletinToLogbook(post: any) {
             status: rowStatus || 'Open',
             progressPercent: 0,
             taskDate: todayStr,
+            plannedDate: effectiveCadence === 'Non Routine' ? todayStr : null,
             targetDate: defaultTargetDate,
             targetTime: '23:59',
             pt: post.pt || 'TBP',
