@@ -51,7 +51,10 @@ import {
   ArrowDown,
   ExternalLink,
   Sun,
-  Moon
+  Moon,
+  MoreVertical,
+  CornerUpRight,
+  CornerDownRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui';
@@ -994,11 +997,28 @@ export function LogbookScreen({
     let badgeClass = 'bg-teal-100 text-teal-950 border-teal-300 font-bold';
 
     if (isDone) {
-      if (rawDays <= 0) {
-        durationLabel = 'Selesai di Hari yang Sama';
+      let calculatedHours = 0;
+      if (task.createdAt && task.actualCompletedDate) {
+        try {
+          const dC = new Date(task.createdAt);
+          const dComp = new Date(task.actualCompletedDate);
+          if (!isNaN(dC.getTime()) && !isNaN(dComp.getTime()) && dComp.getTime() >= dC.getTime()) {
+            const h = Math.floor((dComp.getTime() - dC.getTime()) / (1000 * 60 * 60));
+            if (h >= 1 && h < 24 && rawDays <= 0) {
+              calculatedHours = h;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (calculatedHours > 0) {
+        durationLabel = `${calculatedHours} Jam`;
+        durationShort = `${calculatedHours} Jam`;
+      } else if (rawDays <= 0) {
+        durationLabel = '1 Hari';
         durationShort = '1 Hari';
       } else {
-        durationLabel = `Tuntas dalam ${dayCount} Hari`;
+        durationLabel = `${dayCount} Hari`;
         durationShort = `${dayCount} Hari`;
       }
       badgeClass = 'bg-emerald-50 text-emerald-900 border-emerald-200/80 font-medium';
@@ -1133,6 +1153,91 @@ export function LogbookScreen({
   const [newPendingPicNik, setNewPendingPicNik] = useState('');
   const [newPendingPicName, setNewPendingPicName] = useState('');
   const [newPendingReason, setNewPendingReason] = useState('');
+  // Three-dots Action Menu Popover State
+  const [activeActionMenuTaskId, setActiveActionMenuTaskId] = useState<number | null>(null);
+
+  // Interactive Column Widths & Resizer State in Logbook
+  const logbookStorageKey = 'preplab_logbook_col_widths';
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('preplab_logbook_col_widths');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [resizingCol, setResizingCol] = useState<string | null>(null);
+  const resizeInfoRef = useRef<{ colHeader: string; startX: number; startWidth: number } | null>(null);
+
+  const handleResizeStart = (e: React.MouseEvent | React.TouchEvent, colHeader: string, currentDomWidth: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const initialWidth = columnWidths[colHeader] || currentDomWidth || 180;
+    resizeInfoRef.current = { colHeader, startX: clientX, startWidth: initialWidth };
+    setResizingCol(colHeader);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
+      if (!resizeInfoRef.current) return;
+      const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
+      const deltaX = currentX - resizeInfoRef.current.startX;
+      const newWidth = Math.max(50, Math.min(1200, Math.round(resizeInfoRef.current.startWidth + deltaX)));
+
+      setColumnWidths((prev) => ({
+        ...prev,
+        [resizeInfoRef.current!.colHeader]: newWidth
+      }));
+    };
+
+    const handleMouseUp = () => {
+      if (resizeInfoRef.current) {
+        setColumnWidths((prev) => {
+          try {
+            localStorage.setItem(logbookStorageKey, JSON.stringify(prev));
+          } catch {}
+          return prev;
+        });
+      }
+      resizeInfoRef.current = null;
+      setResizingCol(null);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('touchmove', handleMouseMove, { passive: false });
+    window.addEventListener('touchend', handleMouseUp);
+  };
+
+  const getColStyle = (colName: string): React.CSSProperties | undefined => {
+    const customW = columnWidths[colName];
+    if (customW) {
+      return {
+        width: `${customW}px`,
+        minWidth: `${customW}px`,
+        maxWidth: `${customW}px`
+      };
+    }
+    return undefined;
+  };
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.logbook-action-menu-container')) {
+        setActiveActionMenuTaskId(null);
+      }
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, []);
 
   const openAssignModal = () => {
     setNewTitle('');
@@ -4346,49 +4451,88 @@ export function LogbookScreen({
                               </div>
                             </td>
 
-                            {/* Aksi */}
-                            <td className="text-center px-2 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-center gap-1">
+                            {/* Aksi - Dropdown Menu Titik Tiga */}
+                            <td className="text-center px-2 py-2.5 whitespace-nowrap relative logbook-action-menu-container" onClick={(e) => e.stopPropagation()}>
+                              <div className="relative inline-block">
                                 <button
                                   type="button"
-                                  onClick={() => handleMoveTaskToBacklog(task.id)}
-                                  className="p-1 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors cursor-pointer"
-                                  title="Kembalikan kegiatan ini ke Evaluasi & Backlog Kemarin"
+                                  onClick={() => setActiveActionMenuTaskId(activeActionMenuTaskId === task.id ? null : task.id)}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                  title="Pilihan Aksi"
                                 >
-                                  <ArrowLeft className="w-3.5 h-3.5" />
+                                  <MoreVertical className="w-4 h-4" />
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => openJobPendingModal(task)}
-                                  className="p-1 rounded-lg text-slate-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-colors cursor-pointer"
-                                  title="Alihkan PIC / Set Job Pending"
-                                >
-                                  <Clock className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyToNewTask(task)}
-                                  className="p-1 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
-                                  title="Salin tugas ini ke penugasan baru"
-                                >
-                                  <Copy className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => openEditModal(task)}
-                                  className="p-1 rounded-lg text-slate-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors cursor-pointer"
-                                  title="Edit Rincian Tugas"
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setTaskToDelete(task)}
-                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                                  title="Hapus Tugas"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+
+                                {activeActionMenuTaskId === task.id && (
+                                  <div 
+                                    className={`absolute right-0 top-full mt-1 w-56 rounded-xl shadow-xl border p-1 z-50 text-left transition-all ${
+                                      isNotionLight ? 'bg-white border-slate-200 text-slate-800' : 'bg-[#202020] border-slate-700 text-slate-100'
+                                    }`}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleMoveTaskToBacklog(task.id);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-semibold transition-colors cursor-pointer"
+                                      title="Keluarkan dari planning hari ini dan kembalikan ke backlog"
+                                    >
+                                      <CornerDownRight className="w-4 h-4 shrink-0 text-amber-600" />
+                                      <span>Unplanning (Kembalikan)</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        openJobPendingModal(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/40 text-purple-700 dark:text-purple-400 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Clock className="w-4 h-4 shrink-0 text-purple-600" />
+                                      <span>Alihkan PIC / Pending</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleCopyToNewTask(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Copy className="w-4 h-4 shrink-0 text-indigo-600" />
+                                      <span>Salin ke Tugas Baru</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        openEditModal(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-400 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Edit3 className="w-4 h-4 shrink-0 text-teal-600" />
+                                      <span>Edit Rincian Tugas</span>
+                                    </button>
+
+                                    <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setTaskToDelete(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-semibold transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4 shrink-0 text-rose-500" />
+                                      <span>Hapus Tugas</span>
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -4789,34 +4933,88 @@ export function LogbookScreen({
                               </div>
                             </td>
 
-                            {/* Aksi */}
-                            <td className="text-center px-2 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-center gap-1">
+                            {/* Aksi - Dropdown Menu Titik Tiga */}
+                            <td className="text-center px-2 py-2.5 whitespace-nowrap relative logbook-action-menu-container" onClick={(e) => e.stopPropagation()}>
+                              <div className="relative inline-block">
                                 <button
                                   type="button"
-                                  onClick={() => handleMoveTaskToToday(task.id)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white transition-all cursor-pointer shadow-2xs"
-                                  title="Jadwalkan kegiatan ini ke Planning Hari Ini"
+                                  onClick={() => setActiveActionMenuTaskId(activeActionMenuTaskId === task.id ? null : task.id)}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                  title="Pilihan Aksi"
                                 >
-                                  <ArrowRight className="w-3.5 h-3.5" />
-                                  <span>Planning</span>
+                                  <MoreVertical className="w-4 h-4" />
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyToNewTask(task)}
-                                  className="p-1 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
-                                  title="Salin tugas ini ke penugasan baru"
-                                >
-                                  <Copy className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setTaskToDelete(task)}
-                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                                  title="Hapus Tugas"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+
+                                {activeActionMenuTaskId === task.id && (
+                                  <div 
+                                    className={`absolute right-0 top-full mt-1 w-56 rounded-xl shadow-xl border p-1 z-50 text-left transition-all ${
+                                      isNotionLight ? 'bg-white border-slate-200 text-slate-800' : 'bg-[#202020] border-slate-700 text-slate-100'
+                                    }`}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleMoveTaskToToday(task.id);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-400 font-semibold transition-colors cursor-pointer"
+                                      title="Jadwalkan kegiatan ini ke Planning Hari Ini"
+                                    >
+                                      <CornerUpRight className="w-4 h-4 shrink-0 text-teal-600" />
+                                      <span>Planning (Jadwalkan)</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        openJobPendingModal(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/40 text-purple-700 dark:text-purple-400 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Clock className="w-4 h-4 shrink-0 text-purple-600" />
+                                      <span>Alihkan PIC / Pending</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleCopyToNewTask(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Copy className="w-4 h-4 shrink-0 text-indigo-600" />
+                                      <span>Salin ke Tugas Baru</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        openEditModal(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-400 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Edit3 className="w-4 h-4 shrink-0 text-teal-600" />
+                                      <span>Edit Rincian Tugas</span>
+                                    </button>
+
+                                    <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setTaskToDelete(task);
+                                        setActiveActionMenuTaskId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-semibold transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4 shrink-0 text-rose-500" />
+                                      <span>Hapus Tugas</span>
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </td>
                           </tr>

@@ -637,6 +637,20 @@ export function NotionDatabaseTable({
     multiline: boolean;
   } | null>(null);
 
+  // Direct Inline Click-to-Edit for PIC Column
+  const [activeInlinePicCell, setActiveInlinePicCell] = useState<{ rowIndex: number; colName: string } | null>(null);
+  const [inlinePicSearch, setInlinePicSearch] = useState<string>('');
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.group\\/pic') && !(e.target as HTMLElement).closest('.notion-pic-popover')) {
+        setActiveInlinePicCell(null);
+      }
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, []);
+
   useEffect(() => {
     if (rows) {
       setLocalRows(rows);
@@ -784,6 +798,9 @@ export function NotionDatabaseTable({
   const isSubmittingCommentRef = useRef(false);
   const isUploadingGalleryRef = useRef(false);
   const [selectedFile, setSelectedFile] = useState<{ name: string; url: string; previewUrl?: string; isImage?: boolean } | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Array<{ name: string; url: string; previewUrl?: string; isImage?: boolean; caption?: string }>>([]);
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editingCommentContent, setEditingCommentContent] = useState<string>('');
   const [commentFileCaption, setCommentFileCaption] = useState('');
   const [isUploadingCommentFile, setIsUploadingCommentFile] = useState(false);
   const commentFileInputRef = useRef<HTMLInputElement>(null);
@@ -2937,39 +2954,39 @@ export function NotionDatabaseTable({
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
       if (diffDays <= 0) {
-        if (diffHours > 1) {
+        if (diffHours >= 1) {
           return {
-            label: `Tuntas ${diffHours} jam`,
-            short: `${diffHours} jam`,
+            label: `${diffHours} Jam`,
+            short: `${diffHours} Jam`,
             detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
           };
         }
         return {
-          label: 'Selesai di hari yg sama',
-          short: '1 hari',
+          label: '1 Hari',
+          short: '1 Hari',
           detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
         };
       }
 
       const totalDays = diffDays + 1;
       return {
-        label: `Tuntas dlm ${totalDays} hari`,
-        short: `${totalDays} hari`,
+        label: `${totalDays} Hari`,
+        short: `${totalDays} Hari`,
         detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
       };
     }
 
     if (completedStr) {
       return {
-        label: `Selesai ${completedStr}`,
+        label: completedStr,
         short: completedStr,
         detail: `Waktu selesai: ${completedStr}`
       };
     }
 
     return {
-      label: 'Tuntas (Closed)',
-      short: 'Tuntas',
+      label: 'Selesai',
+      short: 'Selesai',
       detail: 'Tugas telah selesai'
     };
   };
@@ -4194,8 +4211,8 @@ export function NotionDatabaseTable({
                                         />
                                       ) : (!isSubItem && taskProgress.hasTasklist) ? (
                                         <div 
-                                          className="relative group/cell"
-                                          onDoubleClick={(e) => {
+                                          className="relative group/cell cursor-pointer"
+                                          onClick={(e) => {
                                             e.stopPropagation();
                                             setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
                                           }}
@@ -4222,8 +4239,8 @@ export function NotionDatabaseTable({
                                         </div>
                                       ) : (
                                         <div 
-                                          className="relative group/cell flex items-start justify-between gap-1"
-                                          onDoubleClick={(e) => {
+                                          className="relative group/cell flex items-start justify-between gap-1 cursor-pointer"
+                                          onClick={(e) => {
                                             e.stopPropagation();
                                             setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
                                           }}
@@ -4308,11 +4325,91 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
-                                // 5. PIC Column
+                                // 5. PIC Column (Interactive Inline Click-to-Edit)
                                 if (colLower === 'pic' || colLower.includes('assignee')) {
+                                  const isEditingPic = activeInlinePicCell?.rowIndex === actualRowIndex && activeInlinePicCell?.colName === colName;
+                                  const isManajemenMutu = (section || '').toUpperCase().includes('QA') || 
+                                                         (section || '').toUpperCase().includes('MUTU') || 
+                                                         (title || '').toUpperCase().includes('MUTU') || 
+                                                         (title || '').toUpperCase().includes('MANAJEMEN MUTU') || 
+                                                         (initialTopicTitle || '').toUpperCase().includes('MUTU');
+
+                                  const filteredEmployees = employeesList
+                                    .filter((emp) => {
+                                      if (isManajemenMutu) {
+                                        if ((emp.nik || '') === '04D26000015' || (emp.name || '').toUpperCase().includes('GUSTI')) {
+                                          return false;
+                                        }
+                                        const isQA = (emp.section || '').toUpperCase() === 'QA' || 
+                                                     (emp.section || '').toUpperCase().includes('MUTU') || 
+                                                     (emp.jabatan || '').toUpperCase().includes('QA') || 
+                                                     (emp.jabatan || '').toUpperCase().includes('QUALITY') || 
+                                                     (emp.jabatan || '').toUpperCase().includes('MUTU');
+                                        if (!isQA) return false;
+                                      }
+                                      const q = inlinePicSearch.toLowerCase().trim();
+                                      if (!q) return true;
+                                      return (
+                                        (emp.name || '').toLowerCase().includes(q) ||
+                                        (emp.nik || '').toLowerCase().includes(q) ||
+                                        (emp.jabatan || '').toLowerCase().includes(q) ||
+                                        (emp.section || '').toLowerCase().includes(q)
+                                      );
+                                    });
+
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1.5 py-2 overflow-hidden' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
-                                      {renderPicBadge(val)}
+                                    <td 
+                                      key={colName} 
+                                      style={getColStyle(colName)} 
+                                      className={`relative ${fitPageMode ? 'px-1.5 py-2 overflow-visible' : 'px-3.5 py-2.5 whitespace-nowrap overflow-visible'}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <div 
+                                        onClick={() => {
+                                          setActiveInlinePicCell(isEditingPic ? null : { rowIndex: actualRowIndex, colName });
+                                          setInlinePicSearch('');
+                                        }}
+                                        className="cursor-pointer inline-block group/pic transition-transform hover:scale-105"
+                                        title="Klik langsung untuk mengganti PIC"
+                                      >
+                                        {renderPicBadge(val)}
+                                      </div>
+
+                                      {isEditingPic && (
+                                        <div 
+                                          className={`notion-pic-popover absolute left-0 top-full mt-1 w-64 max-h-60 overflow-y-auto rounded-xl shadow-2xl border p-2 z-50 text-left ${
+                                            isNotionLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-[#1e293b] border-slate-700 text-slate-100'
+                                          }`}
+                                        >
+                                          <div className="relative mb-2">
+                                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400 pointer-events-none" />
+                                            <input
+                                              type="text"
+                                              autoFocus
+                                              value={inlinePicSearch}
+                                              onChange={(e) => setInlinePicSearch(e.target.value)}
+                                              placeholder="Cari nama / NIK..."
+                                              className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                            />
+                                          </div>
+                                          <div className="space-y-1">
+                                            {filteredEmployees.slice(0, 15).map((emp) => (
+                                              <button
+                                                key={emp.id || emp.nik}
+                                                type="button"
+                                                onClick={() => {
+                                                  handleUpdateCellDirect(actualRowIndex, colName, emp.name || emp.nik);
+                                                  setActiveInlinePicCell(null);
+                                                }}
+                                                className="w-full px-2 py-1.5 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-left flex items-center justify-between transition-colors cursor-pointer"
+                                              >
+                                                <span className="font-medium truncate">{emp.name}</span>
+                                                <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-1">{emp.section || emp.nik}</span>
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
                                     </td>
                                   );
                                 }
@@ -4637,7 +4734,7 @@ export function NotionDatabaseTable({
                         return hierarchicalItems.map((hItem) => {
                           const parentRow = hItem.parentRow;
                           const parentIndex = hItem.parentIndex;
-                          const isParentExpanded = expandedParents[parentIndex] !== false; // Default expanded
+                          const isParentExpanded = Boolean(expandedParents[parentIndex]); // Default collapsed (tertutup), baru terbuka jika diklik
 
                           return (
                             <React.Fragment key={`parent-${parentIndex}`}>
@@ -5682,6 +5779,23 @@ export function NotionDatabaseTable({
                           </span>
                           {employeesList
                             .filter((emp) => {
+                              const isManajemenMutu = (section || '').toUpperCase().includes('QA') || 
+                                                     (section || '').toUpperCase().includes('MUTU') || 
+                                                     (title || '').toUpperCase().includes('MUTU') || 
+                                                     (title || '').toUpperCase().includes('MANAJEMEN MUTU') || 
+                                                     (initialTopicTitle || '').toUpperCase().includes('MUTU');
+                              if (isManajemenMutu) {
+                                // Bersihkan Gusti dari Manajemen Mutu, dan pastikan hanya personil section QA / Manajemen Mutu
+                                if ((emp.nik || '') === '04D26000015' || (emp.name || '').toUpperCase().includes('GUSTI')) {
+                                  return false;
+                                }
+                                const isQA = (emp.section || '').toUpperCase() === 'QA' || 
+                                             (emp.section || '').toUpperCase().includes('MUTU') || 
+                                             (emp.jabatan || '').toUpperCase().includes('QA') || 
+                                             (emp.jabatan || '').toUpperCase().includes('QUALITY') || 
+                                             (emp.jabatan || '').toUpperCase().includes('MUTU');
+                                if (!isQA) return false;
+                              }
                               const q = (rowFormData['PIC'] || '').toLowerCase().trim();
                               if (!q) return true;
                               return (

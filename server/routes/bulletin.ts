@@ -518,6 +518,36 @@ router.delete("/api/bulletin/comments/:commentId", async (req, res) => {
     }
   });
 
+  router.put("/api/bulletin/comments/:commentId", async (req, res) => {
+    try {
+      const commentId = parseInt(req.params.commentId);
+      const { content, authorNik } = req.body;
+      if (!content || !content.trim()) {
+        return res.status(400).json({ status: "error", message: "Konten komentar tidak boleh kosong" });
+      }
+
+      const commentArray = await db.select().from(bulletinComments).where(eq(bulletinComments.id, commentId)).limit(1);
+      if (commentArray.length === 0) {
+        return res.status(404).json({ status: "error", message: "Komentar tidak ditemukan" });
+      }
+      const comment = commentArray[0];
+
+      if (authorNik && comment.authorNik && comment.authorNik !== authorNik) {
+        return res.status(403).json({ status: "error", message: "Hanya pembuat komentar yang dapat mengedit komentar ini" });
+      }
+
+      const [updated] = await db.update(bulletinComments)
+        .set({ content: content.trim() })
+        .where(eq(bulletinComments.id, commentId))
+        .returning();
+
+      res.json({ status: "success", comment: updated });
+    } catch (error: any) {
+      console.error('[Edit Comment Error]', error);
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
 async function syncBulletinToLogbook(post: any) {
   try {
     if (!post || !post.id || !post.content || typeof post.content !== 'string') return;
