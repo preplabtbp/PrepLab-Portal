@@ -839,8 +839,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               <motion.div 
                 initial={{ opacity: 0, y: 20 }} 
                 animate={{ opacity: 1, y: 0 }}
-                className="text-center mb-8 w-full"
+                className="text-center mb-8 w-full flex flex-col items-center"
               >
+                {/* Harita Nickel Official Logo */}
+                <div className="mb-3.5 group">
+                  <img 
+                    src="/harita-nickel-logo.png" 
+                    alt="Harita Nickel" 
+                    className="h-14 sm:h-16 md:h-20 w-auto object-contain filter drop-shadow-sm hover:scale-105 transition-transform duration-300 select-none"
+                  />
+                </div>
+
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#f09b13] text-white text-xs font-extrabold uppercase tracking-wider mb-4 shadow-md ring-2 ring-[#f09b13]/20">
                   <Database className="w-3.5 h-3.5" />
                   <span>Manpower</span>
