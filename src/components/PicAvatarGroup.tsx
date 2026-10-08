@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { User } from 'lucide-react';
 
+import { splitPicNames } from '../utils/picParser';
+
 export interface PicItem {
   nik?: string;
   name: string;
@@ -52,9 +54,7 @@ export function PicAvatarGroup({
     if (typeof pics === 'string') {
       const trimmed = pics.trim();
       if (!trimmed || trimmed === '-' || trimmed === '•') return [];
-      return trimmed
-        .split(/[,;\n]+/)
-        .map(s => s.trim())
+      return splitPicNames(trimmed)
         .filter(s => s && s !== '-' && s !== '•')
         .map(raw => {
           // Check if string contains NIK in parenthesis e.g. "Name (12345)"

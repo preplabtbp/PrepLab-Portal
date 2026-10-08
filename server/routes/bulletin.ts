@@ -613,7 +613,47 @@ export async function syncBulletinToLogbook(post: any) {
     // Cutoff: Hanya sinkronisasikan data di labnote yang dibuat sejak fitur log book dibuat (2026-09-25)
     const LOGBOOK_FEATURE_START_DATE = '2026-09-25';
 
+    // Group rows hierarchically: Parent Row -> Sub-items
+    interface BulletinTaskGroup {
+      parentRow: Record<string, string>;
+      subItems: Array<{ text: string; checked: boolean; note?: string }>;
+    }
+
+    const taskGroups: BulletinTaskGroup[] = [];
+    let currentTaskGroup: BulletinTaskGroup | null = null;
+
     for (const r of parsed.rows) {
+      let rTitle = '';
+      let rowDesc = '';
+      Object.keys(r).forEach(k => {
+        const kl = k.toLowerCase().trim();
+        if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') {
+          rTitle = (r[k] || '').trim();
+        } else if (kl.includes('keterangan') || kl.includes('catatan') || kl.includes('deskripsi')) {
+          rowDesc = (r[k] || '').trim();
+        }
+      });
+
+      const isSub = r.isSubItem === 'true' || (r as any).isSubItem === true || r.parentId ||
+        rTitle.startsWith('↳') || rTitle.startsWith('->') || rTitle.startsWith('↪') || rTitle.startsWith('– ') || rTitle.startsWith('- ');
+
+      if (isSub) {
+        if (currentTaskGroup) {
+          const isChecked = rTitle.startsWith('↳ [x]') || rTitle.startsWith('↳ [X]') || rTitle.startsWith('[x]') || rTitle.startsWith('[X]') ||
+            (r['Status'] || '').toLowerCase().includes('close') || (r['Status'] || '').toLowerCase().includes('done') || (r['Status'] || '').toLowerCase().includes('selesai');
+          const cleanSubText = rTitle.replace(/^[↳↪\->\s–]+/, '').replace(/^\[[ xX]\]\s*/, '').trim();
+          if (cleanSubText) {
+            currentTaskGroup.subItems.push({ text: cleanSubText, checked: isChecked, note: rowDesc });
+          }
+        }
+      } else if (rTitle && rTitle !== '-' && rTitle.length >= 2) {
+        currentTaskGroup = { parentRow: r, subItems: [] };
+        taskGroups.push(currentTaskGroup);
+      }
+    }
+
+    for (const group of taskGroups) {
+      const r = group.parentRow;
       let rTitle = '';
       let rowDesc = '';
       let rowStatus = 'Open';
@@ -665,12 +705,22 @@ export async function syncBulletinToLogbook(post: any) {
         continue;
       }
 
-      // Normalize legacy subtask tags in rowDesc to canonical markdown checkboxes
+      // Normalize subtasks: prioritize sub-items from child rows, or inline checklists in rowDesc
       let cleanDesc = rowDesc;
-      if (cleanDesc && (cleanDesc.includes('**(Done)**') || cleanDesc.includes('**(OPEN)**') || cleanDesc.includes('**(Closed)**') || cleanDesc.includes('**(OP)**'))) {
-        cleanDesc = cleanDesc
-          .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Done|Closed|Close|Finish|Selesai|CL)\)?\*\*\s*$/gim, '- [x] $1')
-          .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Open|OP|Belum|In Progress|Pending)\)?\*\*\s*$/gim, '- [ ] $1');
+      if (group.subItems.length > 0) {
+        const subtaskLines = group.subItems.map(item => `- [${item.checked ? 'x' : ' '}] ${item.text}`);
+        const nonChecklistDesc = rowDesc
+          ? rowDesc.split(/<br\s*\/?>|\n/).filter(line => !line.match(/^[-*•]?\s*\[[ xX]\]/i) && !line.includes('**(Done)**') && !line.includes('**(OPEN)**')).join('\n').trim()
+          : '';
+        cleanDesc = nonChecklistDesc ? `${nonChecklistDesc}\n${subtaskLines.join('\n')}` : subtaskLines.join('\n');
+      } else if (cleanDesc) {
+        cleanDesc = cleanDesc.replace(/<br\s*\/?>/gi, '\n');
+        if (cleanDesc.includes('**(Done)**') || cleanDesc.includes('**(OPEN)**') || cleanDesc.includes('**(Closed)**') || cleanDesc.includes('**(OP)**')) {
+          cleanDesc = cleanDesc
+            .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Done|Closed|Close|Finish|Selesai|CL)\)?\*\*\s*$/gim, '- [x] $1')
+            .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Open|OP|Belum|In Progress|Pending)\)?\*\*\s*$/gim, '- [ ] $1');
+        }
+        cleanDesc = cleanDesc.replace(/^[•*]\s*\[([ xX])\]/gm, '- [$1]');
       }
 
       // Determine effective cadence - ALWAYS prioritize Non-Routine if specified

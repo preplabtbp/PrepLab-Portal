@@ -535,6 +535,67 @@ export function serializeMarkdownTable(
   return parts.join('\n\n');
 }
 
+export function migrateChecklistsInRows(
+  inputRows: TableRowData[],
+  defaultSection?: string
+): { migratedCount: number; rows: TableRowData[] } {
+  let migratedCount = 0;
+  const newRows: TableRowData[] = [];
+
+  for (let i = 0; i < inputRows.length; i++) {
+    const row = { ...inputRows[i] };
+    const isSub = isSubItemRow(row);
+
+    if (isSub) {
+      newRows.push(row);
+      continue;
+    }
+
+    const ketVal = getCellValue(row, 'Keterangan') || '';
+    const taskProg = parseTasklist(ketVal);
+
+    if (taskProg.hasTasklist && taskProg.items.length > 0) {
+      // Strip tasklist lines from parent row's Keterangan, keep non-checklist text
+      row['Keterangan'] = taskProg.cleanText || '';
+      newRows.push(row);
+
+      const parentIndex = newRows.length - 1;
+      const parentCat = getCellValue(row, 'Kategori') || defaultSection || 'Laboratorium';
+      const parentPIC = getCellValue(row, 'PIC') || '';
+      const parentAct = getCellValue(row, 'Activity (routine/non routine)') || 'Monthly';
+      const parentPeriod = getCellValue(row, 'period') || 'Monthly';
+      const now = new Date();
+      const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      // Create a sub-item row for each checklist item
+      taskProg.items.forEach(item => {
+        const subTitle = `↳ ${item.checked ? '[x] ' : '[ ] '}${item.text}`;
+        const subRow: TableRowData = {
+          number: '',
+          'Jenis kegiatan': subTitle,
+          'Jenis Kegiatan': subTitle,
+          Keterangan: item.note || '',
+          PIC: parentPIC,
+          Priority: 'Normal',
+          Status: item.checked ? 'Closed' : 'Open',
+          'Created Time': createdStr,
+          Kategori: parentCat,
+          'Activity (routine/non routine)': parentAct,
+          period: parentPeriod,
+          isSubItem: 'true',
+          parentId: String(parentIndex)
+        };
+        newRows.push(subRow);
+        migratedCount++;
+      });
+    } else {
+      newRows.push(row);
+    }
+  }
+
+  return { migratedCount, rows: newRows };
+}
+
 export function splitMarkdownRow(line: string): string[] {
   const trimmed = line.trim();
   const inner = trimmed.replace(/^\|/, '').replace(/\|$/, '');
@@ -626,7 +687,11 @@ export function NotionDatabaseTable({
   onNavigateToPost
 }: NotionDatabaseTableProps) {
   // Local table rows for responsive instant CRUD
-  const [localRows, setLocalRows] = useState<TableRowData[]>(() => rows || []);
+  const [localRows, setLocalRows] = useState<TableRowData[]>(() => {
+    if (!rows || rows.length === 0) return [];
+    const { rows: prepped } = migrateChecklistsInRows(rows, section);
+    return prepped;
+  });
   const [dirtyRowIndices, setDirtyRowIndices] = useState<Set<number>>(new Set());
   const [originalRowsBackup, setOriginalRowsBackup] = useState<TableRowData[]>(() => rows ? JSON.parse(JSON.stringify(rows)) : []);
   const [showSaveConfirmModal, setShowSaveConfirmModal] = useState<boolean>(false);
@@ -731,8 +796,15 @@ export function NotionDatabaseTable({
 
   useEffect(() => {
     if (rows) {
-      setLocalRows(rows);
-      setOriginalRowsBackup(JSON.parse(JSON.stringify(rows)));
+      const { migratedCount, rows: prepped } = migrateChecklistsInRows(rows, section);
+      if (migratedCount > 0) {
+        setLocalRows(prepped);
+        setOriginalRowsBackup(JSON.parse(JSON.stringify(prepped)));
+        saveTableToBackend(prepped);
+      } else {
+        setLocalRows(rows);
+        setOriginalRowsBackup(JSON.parse(JSON.stringify(rows)));
+      }
       setDirtyRowIndices(new Set());
     }
   }, [rows]);
@@ -1783,8 +1855,9 @@ export function NotionDatabaseTable({
   const saveTableToBackend = async (newRows: TableRowData[]): Promise<boolean> => {
     if (!postId) return false;
     try {
+      const { rows: preppedRows } = migrateChecklistsInRows(newRows, section);
       // Normalize any legacy format subtask tags in Keterangan to canonical markdown checklists
-      const normalizedRows = newRows.map(r => {
+      const normalizedRows = preppedRows.map(r => {
         const ket = getRowVal(r, 'Keterangan');
         if (ket && (ket.includes('**(Done)**') || ket.includes('**(OPEN)**') || ket.includes('**(Closed)**') || ket.includes('**(OP)**'))) {
           return {
@@ -2241,59 +2314,7 @@ export function NotionDatabaseTable({
 
   // Migrate existing checklists in Keterangan to hierarchical sub-items
   const handleMigrateChecklistsToSubItems = () => {
-    let migratedCount = 0;
-    const newRows: TableRowData[] = [];
-
-    for (let i = 0; i < localRows.length; i++) {
-      const row = { ...localRows[i] };
-      const isSub = isSubItemRow(row);
-
-      if (isSub) {
-        newRows.push(row);
-        continue;
-      }
-
-      const ketVal = getRowVal(row, 'Keterangan') || '';
-      const taskProg = parseTasklist(ketVal);
-
-      if (taskProg.hasTasklist && taskProg.items.length > 0) {
-        // Strip tasklist lines from parent row's Keterangan, keep non-checklist text
-        row['Keterangan'] = taskProg.cleanText || '';
-        newRows.push(row);
-
-        const parentIndex = newRows.length - 1;
-        const parentCat = getRowVal(row, 'Kategori') || section || 'Laboratorium';
-        const parentPIC = getRowVal(row, 'PIC') || '';
-        const parentAct = getRowVal(row, 'Activity (routine/non routine)') || 'Monthly';
-        const parentPeriod = getRowVal(row, 'period') || 'Monthly';
-        const now = new Date();
-        const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-        // Create a sub-item row for each checklist item
-        taskProg.items.forEach(item => {
-          const subTitle = `↳ ${item.checked ? '[x] ' : '[ ] '}${item.text}`;
-          const subRow: TableRowData = {
-            number: '',
-            'Jenis kegiatan': subTitle,
-            'Jenis Kegiatan': subTitle,
-            Keterangan: item.note || '',
-            PIC: parentPIC,
-            Priority: 'Normal',
-            Status: item.checked ? 'Closed' : 'Open',
-            'Created Time': createdStr,
-            Kategori: parentCat,
-            'Activity (routine/non routine)': parentAct,
-            period: parentPeriod,
-            isSubItem: 'true',
-            parentId: String(parentIndex)
-          };
-          newRows.push(subRow);
-          migratedCount++;
-        });
-      } else {
-        newRows.push(row);
-      }
-    }
+    const { migratedCount, rows: newRows } = migrateChecklistsInRows(localRows, section);
 
     if (migratedCount > 0) {
       setLocalRows(newRows);
@@ -2314,6 +2335,17 @@ export function NotionDatabaseTable({
     const updatedRow = { ...subRow };
     updatedRow.isCompleted = nextCompleted ? 'true' : 'false';
     updatedRow.Status = nextCompleted ? 'Closed' : 'Open';
+
+    // Also update sub-item title prefix ↳ [x] vs ↳ [ ]
+    const currentTitle = getRowVal(subRow, 'Jenis kegiatan') || getRowVal(subRow, 'Jenis Kegiatan') || '';
+    if (currentTitle) {
+      const cleanTitle = getDisplayTitle(currentTitle);
+      const newTitle = `↳ [${nextCompleted ? 'x' : ' '}] ${cleanTitle}`;
+      if (updatedRow['Jenis kegiatan'] !== undefined) updatedRow['Jenis kegiatan'] = newTitle;
+      if (updatedRow['Jenis Kegiatan'] !== undefined) updatedRow['Jenis Kegiatan'] = newTitle;
+      if (updatedRow['Name'] !== undefined) updatedRow['Name'] = newTitle;
+      if (updatedRow['Judul'] !== undefined) updatedRow['Judul'] = newTitle;
+    }
     
     // Sinkronisasi tanggal selesai jika ada kolomnya
     displayHeaders.forEach(h => {
@@ -2332,10 +2364,7 @@ export function NotionDatabaseTable({
     setDirtyRowIndices(updatedDirty);
 
     if (onRowsChange) onRowsChange(nextRows);
-    if (postId && onPostContentUpdate) {
-      const newMd = serializeMarkdownTable(headers, nextRows, beforeText, afterText);
-      onPostContentUpdate(newMd);
-    }
+    saveTableToBackend(nextRows);
   };
 
   // Edit Row Handler

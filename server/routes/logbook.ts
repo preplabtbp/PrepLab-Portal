@@ -129,8 +129,7 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
         conditions.push(or(
           ilike(logbookTasks.section, '%quality%'),
           ilike(logbookTasks.section, '%qa%'),
-          ilike(logbookTasks.section, '%mutu%'),
-          ilike(logbookTasks.section, '%prep & lab%')
+          ilike(logbookTasks.section, '%mutu%')
         ));
       } else if (secLower.includes('lab')) {
         conditions.push(or(
@@ -878,6 +877,23 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
 
             if (targetIdx !== -1) {
               const targetRow = { ...parsed.rows[targetIdx] };
+              const desc = updatePayload.description !== undefined ? (updatePayload.description || '') : '';
+              const descLines = desc.split('\n');
+              const tasklistItems: Array<{ checked: boolean; text: string }> = [];
+              const nonChecklistLines: string[] = [];
+
+              for (const line of descLines) {
+                const m = line.match(/^[-*•]?\s*\[([ xX])\]\s*(.*)$/);
+                if (m) {
+                  const itemText = m[2].replace(/<!--.*?-->/g, '').trim();
+                  if (itemText) {
+                    tasklistItems.push({ checked: m[1].toLowerCase() === 'x', text: itemText });
+                  }
+                } else if (line.trim()) {
+                  nonChecklistLines.push(line.trim());
+                }
+              }
+
               Object.keys(targetRow).forEach(k => {
                 const kl = k.toLowerCase().trim();
                 if (kl.includes('status')) {
@@ -887,7 +903,8 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
                   if (updatePayload.title) targetRow[k] = updatePayload.title;
                 }
                 if (kl.includes('keterangan') && updatePayload.description !== undefined) {
-                  targetRow[k] = updatePayload.description;
+                  // Keep Keterangan clean of checklist markup if subtasks exist
+                  targetRow[k] = tasklistItems.length > 0 ? (nonChecklistLines.join(' ') || '-') : (desc || '-');
                 }
                 if ((kl.includes('priority') || kl.includes('prioritas')) && updatePayload.priority) {
                   targetRow[k] = updatePayload.priority;
@@ -910,6 +927,63 @@ logbookRouter.put("/api/logbook/tasks/:id", async (req, res) => {
                 }
               });
               parsed.rows[targetIdx] = targetRow;
+
+              // Check if child sub-item rows exist immediately below targetIdx
+              let subStart = targetIdx + 1;
+              let existingSubCount = 0;
+              while (subStart + existingSubCount < parsed.rows.length) {
+                const nextRow = parsed.rows[subStart + existingSubCount];
+                const nextTitle = Object.keys(nextRow).reduce((acc, k) => {
+                  const kl = k.toLowerCase().trim();
+                  if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') return (nextRow[k] || '').trim();
+                  return acc;
+                }, '');
+                const isSub = nextRow.isSubItem === 'true' || (nextRow as any).isSubItem === true || nextRow.parentId ||
+                  nextTitle.startsWith('↳') || nextTitle.startsWith('->') || nextTitle.startsWith('↪');
+                if (isSub) {
+                  existingSubCount++;
+                } else {
+                  break;
+                }
+              }
+
+              if (tasklistItems.length > 0) {
+                const createdDateStr = targetRow['Created Time'] || targetRow['created'] || formatDateStr(new Date());
+                const subRowsToInsert: Record<string, string>[] = tasklistItems.map(item => {
+                  const subR: Record<string, string> = {
+                    number: '',
+                    isSubItem: 'true',
+                    parentId: String(targetIdx)
+                  };
+                  parsed.headers.forEach(h => {
+                    const hl = h.toLowerCase().trim();
+                    if (hl === 'number' || hl === 'no' || hl === '#') {
+                      subR[h] = '';
+                    } else if (hl.includes('jenis kegiatan') || hl === 'task' || hl === 'judul') {
+                      subR[h] = `↳ ${item.checked ? '[x] ' : '[ ] '}${item.text}`;
+                    } else if (hl.includes('keterangan') || hl.includes('catatan') || hl.includes('deskripsi')) {
+                      subR[h] = '-';
+                    } else if (hl === 'pic' || hl.includes('assignee')) {
+                      subR[h] = targetRow[h] || targetRow['PIC'] || targetRow['pic'] || '-';
+                    } else if (hl.includes('status')) {
+                      subR[h] = item.checked ? 'Closed' : 'Open';
+                    } else if (hl.includes('priority') || hl.includes('prioritas')) {
+                      subR[h] = 'Normal';
+                    } else if (hl.includes('tanggal selesai') || hl.includes('completed') || hl.includes('aktual')) {
+                      subR[h] = item.checked ? formatDateStr(new Date()) : '-';
+                    } else if (hl.includes('created')) {
+                      subR[h] = createdDateStr;
+                    } else {
+                      subR[h] = targetRow[h] || '-';
+                    }
+                  });
+                  return subR;
+                });
+
+                // Replace existing sub-items or insert new ones
+                parsed.rows.splice(subStart, existingSubCount, ...subRowsToInsert);
+              }
+
               const updatedContent = serializeMarkdownTable(parsed.headers, parsed.rows, parsed.beforeText, parsed.afterText);
               await db.update(bulletinPosts).set({ content: updatedContent }).where(eq(bulletinPosts.id, post.id));
               console.log(`[Logbook Sync] Synced update of task #${taskResult.id} to row #${targetIdx} of bulletin post #${post.id}`);

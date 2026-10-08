@@ -80,6 +80,7 @@ import {
   resetAllTasklistItems,
   normalizeCadence
 } from './notion/period-utils';
+import { parsePicList, splitPicNames } from '../utils/picParser';
 
 interface LogbookTask {
   id: number;
@@ -252,21 +253,6 @@ function isTaskOverdue(targetDate?: string | null, targetTime?: string | null, s
   } catch (e) {
     return false;
   }
-}
-// Helper to split comma-separated PICs
-function parsePicList(nikStr?: string | null, nameStr?: string | null): Array<{ nik: string; name: string }> {
-  if (!nameStr && !nikStr) return [];
-  const names = (nameStr || '').split(',').map(s => s.trim()).filter(Boolean);
-  const niks = (nikStr || '').split(',').map(s => s.trim()).filter(Boolean);
-  const len = Math.max(names.length, niks.length);
-  const list: Array<{ nik: string; name: string }> = [];
-  for (let i = 0; i < len; i++) {
-    list.push({
-      nik: niks[i] || '',
-      name: names[i] || niks[i] || 'Personil'
-    });
-  }
-  return list;
 }
 
 // ============================================================================
@@ -1317,7 +1303,7 @@ export function LogbookScreen({
     setSelectedBulletinPostId(task.bulletinPostId ? String(task.bulletinPostId) : '');
     if (task.assigneeNik) {
       const niks = task.assigneeNik.split(',').map(s => s.trim()).filter(Boolean);
-      const names = (task.assigneeName || '').split(',').map(s => s.trim()).filter(Boolean);
+      const names = splitPicNames(task.assigneeName);
       setNewAssigneeNiks(niks);
       setNewAssigneeNames(names);
     } else {
@@ -6317,7 +6303,7 @@ export function LogbookScreen({
               {(editingTask.assignedByNik === inspectorNik || isSupervisor) ? (
                 <SearchableMultiPicSelect
                   selectedNiks={String(editAssigneeNik || '').split(',').map(s => s.trim()).filter(Boolean)}
-                  selectedNames={String(editAssigneeName || '').split(',').map(s => s.trim()).filter(Boolean)}
+                  selectedNames={splitPicNames(editAssigneeName)}
                   onChange={(niks, names) => {
                     setEditAssigneeNik(niks.join(', '));
                     setEditAssigneeName(names.join(', '));
