@@ -141,14 +141,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   const [activeStatDetail, setActiveStatDetail] = useState<'permanent' | 'izin' | 'spdk' | 'active' | null>(null);
   const [statDetailSearch, setStatDetailSearch] = useState('');
 
-  // 1. Data & List Karyawan Aktif
+  // 1. Data & List Karyawan Aktif (Ambil kolom Status Karyawan = "Active" / "Aktif")
   const activeEmployeesList = useMemo(() => {
     return employees.filter(e => {
-      const st = (e.statusKaryawan || '').toUpperCase().trim();
-      const effDate = (e.tanggalEfektifTidakBekerja || '').trim();
-      if (st.includes('RESIGN') || st.includes('PHK') || st.includes('KELUAR') || st.includes('INACTIVE') || st.includes('NON AKTIF') || st.includes('NON-AKTIF') || st.includes('TIDAK AKTIF')) return false;
-      if (effDate && effDate !== '-' && effDate !== '0') return false;
-      return true;
+      const st = String(e.statusKaryawan || e.status_karyawan || e.status || e['Status Karyawan'] || e['Status'] || '').toUpperCase().trim();
+      return st === 'ACTIVE' || st === 'AKTIF' || st.startsWith('ACTIVE') || st.startsWith('AKTIF');
     });
   }, [employees]);
   const activeEmployeesCount = activeEmployeesList.length;
