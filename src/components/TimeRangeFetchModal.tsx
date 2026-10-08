@@ -41,8 +41,6 @@ export function TimeRangeFetchModal({
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [fetchSuccess, setFetchSuccess] = useState<string | null>(null);
 
-  if (!isOpen) return null;
-
   // Preset Handlers
   const handlePreset = (type: 'thisMonth' | 'lastMonth' | 'last30' | 'thisQuarter' | 'thisYear') => {
     const d = new Date();
@@ -966,6 +964,8 @@ export function TimeRangeFetchModal({
       }
     }, 200);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
