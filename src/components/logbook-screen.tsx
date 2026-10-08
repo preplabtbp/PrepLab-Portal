@@ -1156,6 +1156,10 @@ export function LogbookScreen({
   // Three-dots Action Menu Popover State
   const [activeActionMenuTaskId, setActiveActionMenuTaskId] = useState<number | null>(null);
 
+  // 1-Click Inline PIC Selection Popover State
+  const [activeInlinePicTaskId, setActiveInlinePicTaskId] = useState<number | null>(null);
+  const [inlinePicSearchTerm, setInlinePicSearchTerm] = useState('');
+
   // Interactive Column Widths & Resizer State in Logbook
   const logbookStorageKey = 'preplab_logbook_col_widths';
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
@@ -1247,8 +1251,13 @@ export function LogbookScreen({
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest('.logbook-action-menu-container')) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.logbook-action-menu-container')) {
         setActiveActionMenuTaskId(null);
+      }
+      if (!target.closest('.logbook-inline-pic-container')) {
+        setActiveInlinePicTaskId(null);
+        setInlinePicSearchTerm('');
       }
     };
     window.addEventListener('click', handleOutsideClick);
@@ -2270,6 +2279,55 @@ export function LogbookScreen({
       toast.error('Gagal terhubung ke server');
       fetchTasks();
     }
+  };
+
+  // Handle 1-Click Inline PIC Reassignment
+  const handleInlinePicChange = async (taskId: number, newNik: string, newName: string) => {
+    try {
+      const res = await fetch(`/api/logbook/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updaterNik: inspectorNik || 'system',
+          assigneeNik: newNik,
+          assigneeName: newName
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'success') {
+        toast.success(`PIC berhasil diubah ke ${newName}`);
+        setActiveInlinePicTaskId(null);
+        setInlinePicSearchTerm('');
+        fetchTasks();
+      } else {
+        toast.error(json.message || 'Gagal mengubah PIC');
+      }
+    } catch (err) {
+      toast.error('Terjadi kesalahan saat mengubah PIC');
+    }
+  };
+
+  const getFilteredPicEmployees = (task: LogbookTask) => {
+    const isQa = (task.section || '').toLowerCase().includes('qa') || (task.section || '').toLowerCase().includes('mutu');
+    let list = Array.isArray(employeesList) ? employeesList : [];
+    if (isQa) {
+      list = list.filter(emp => {
+        if ((emp.nik || '') === '04D26000015' || (emp.name || '').toUpperCase().includes('GUSTI')) {
+          return false;
+        }
+        return true;
+      });
+    }
+    if (!inlinePicSearchTerm.trim()) {
+      return list.slice(0, 40);
+    }
+    const q = inlinePicSearchTerm.toLowerCase();
+    return list.filter(emp => {
+      const name = (emp.name || '').toLowerCase();
+      const nik = (emp.nik || '').toLowerCase();
+      const sec = (emp.section || emp.department || emp.jabatan || '').toLowerCase();
+      return name.includes(q) || nik.includes(q) || sec.includes(q);
+    }).slice(0, 40);
   };
 
   // Copy Meeting & Operational Summary to WhatsApp / Clipboard (Section Centric)
@@ -4482,22 +4540,85 @@ export function LogbookScreen({
                               </span>
                             </td>
 
-                            {/* PIC Pelaksana */}
-                            <td className="px-3 py-2.5">
-                              <div className="flex flex-wrap gap-1 items-center max-w-[180px]">
-                                {picList.map((p, pIdx) => (
-                                  <span 
-                                    key={pIdx}
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
-                                    title={`${p.name} (${p.nik || '-'})`}
-                                  >
-                                    <span className="w-3.5 h-3.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
-                                      {p.name.charAt(0).toUpperCase()}
+                            {/* PIC Pelaksana (1-Click Inline Edit) */}
+                            <td className="px-3 py-2.5 relative logbook-inline-pic-container" onClick={(e) => e.stopPropagation()}>
+                              <div 
+                                onClick={() => {
+                                  setActiveInlinePicTaskId(activeInlinePicTaskId === task.id ? null : task.id);
+                                  setInlinePicSearchTerm('');
+                                }}
+                                className="flex flex-wrap gap-1 items-center max-w-[180px] p-1 rounded-md transition-all cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:ring-1 hover:ring-amber-400/50 group/pic"
+                                title="Klik untuk ubah PIC langsung"
+                              >
+                                {picList.length === 0 ? (
+                                  <span className="text-[11px] text-slate-400 italic">Pilih PIC...</span>
+                                ) : (
+                                  picList.map((p, pIdx) => (
+                                    <span 
+                                      key={pIdx}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
+                                      title={`${p.name} (${p.nik || '-'})`}
+                                    >
+                                      <span className="w-3.5 h-3.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
+                                        {p.name.charAt(0).toUpperCase()}
+                                      </span>
+                                      <span className="truncate max-w-[90px]">{p.name}</span>
                                     </span>
-                                    <span className="truncate max-w-[90px]">{p.name}</span>
-                                  </span>
-                                ))}
+                                  ))
+                                )}
                               </div>
+
+                              {/* Inline PIC Popover Dropdown */}
+                              {activeInlinePicTaskId === task.id && (
+                                <div 
+                                  className={`absolute left-2 top-full mt-1 w-64 rounded-xl shadow-2xl border p-2 z-50 text-left transition-all ${
+                                    isNotionLight ? 'bg-white border-slate-200 text-slate-800 shadow-slate-300/60' : 'bg-[#202020] border-slate-700 text-slate-100 shadow-black/80'
+                                  }`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold">
+                                    <span className="text-slate-700 dark:text-slate-300">Pilih PIC Pelaksana</span>
+                                    <span className="text-[10px] text-slate-400 font-normal">{task.section}</span>
+                                  </div>
+                                  <div className="relative mb-2">
+                                    <Search className="w-3 h-3 absolute left-2 top-2 text-slate-400" />
+                                    <input 
+                                      type="text" 
+                                      value={inlinePicSearchTerm}
+                                      onChange={(e) => setInlinePicSearchTerm(e.target.value)}
+                                      placeholder="Cari nama atau NIK..."
+                                      className="w-full pl-6 pr-2 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                                      autoFocus
+                                    />
+                                  </div>
+                                  <div className="max-h-48 overflow-y-auto space-y-0.5 custom-scrollbar">
+                                    {getFilteredPicEmployees(task).map(emp => {
+                                      const isSelected = task.assigneeNik === emp.nik || (task.assigneeName || '').includes(emp.name);
+                                      return (
+                                        <button
+                                          key={emp.nik || emp.id}
+                                          type="button"
+                                          onClick={() => handleInlinePicChange(task.id, emp.nik, emp.name)}
+                                          className={`w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer text-left ${
+                                            isSelected 
+                                              ? 'bg-amber-100/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold'
+                                              : 'hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-300'
+                                          }`}
+                                        >
+                                          <div className="min-w-0 pr-1">
+                                            <p className="truncate font-medium">{emp.name}</p>
+                                            <p className="text-[10px] text-slate-400 font-mono truncate">{emp.nik} • {emp.section || emp.department || '-'}</p>
+                                          </div>
+                                          {isSelected && <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
+                                        </button>
+                                      );
+                                    })}
+                                    {getFilteredPicEmployees(task).length === 0 && (
+                                      <p className="text-center py-2 text-[11px] text-slate-400 italic">Personil tidak ditemukan</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </td>
 
                             {/* Mulai & Durasi */}
@@ -4964,22 +5085,85 @@ export function LogbookScreen({
                               </span>
                             </td>
 
-                            {/* PIC Pelaksana */}
-                            <td className="px-3 py-2.5">
-                              <div className="flex flex-wrap gap-1 items-center max-w-[180px]">
-                                {picList.map((p, pIdx) => (
-                                  <span 
-                                    key={pIdx}
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
-                                    title={`${p.name} (${p.nik || '-'})`}
-                                  >
-                                    <span className="w-3.5 h-3.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
-                                      {p.name.charAt(0).toUpperCase()}
+                            {/* PIC Pelaksana (1-Click Inline Edit) */}
+                            <td className="px-3 py-2.5 relative logbook-inline-pic-container" onClick={(e) => e.stopPropagation()}>
+                              <div 
+                                onClick={() => {
+                                  setActiveInlinePicTaskId(activeInlinePicTaskId === task.id ? null : task.id);
+                                  setInlinePicSearchTerm('');
+                                }}
+                                className="flex flex-wrap gap-1 items-center max-w-[180px] p-1 rounded-md transition-all cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:ring-1 hover:ring-amber-400/50 group/pic"
+                                title="Klik untuk ubah PIC langsung"
+                              >
+                                {picList.length === 0 ? (
+                                  <span className="text-[11px] text-slate-400 italic">Pilih PIC...</span>
+                                ) : (
+                                  picList.map((p, pIdx) => (
+                                    <span 
+                                      key={pIdx}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 truncate"
+                                      title={`${p.name} (${p.nik || '-'})`}
+                                    >
+                                      <span className="w-3.5 h-3.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-[9px] flex items-center justify-center font-mono font-bold shrink-0">
+                                        {p.name.charAt(0).toUpperCase()}
+                                      </span>
+                                      <span className="truncate max-w-[90px]">{p.name}</span>
                                     </span>
-                                    <span className="truncate max-w-[90px]">{p.name}</span>
-                                  </span>
-                                ))}
+                                  ))
+                                )}
                               </div>
+
+                              {/* Inline PIC Popover Dropdown */}
+                              {activeInlinePicTaskId === task.id && (
+                                <div 
+                                  className={`absolute left-2 top-full mt-1 w-64 rounded-xl shadow-2xl border p-2 z-50 text-left transition-all ${
+                                    isNotionLight ? 'bg-white border-slate-200 text-slate-800 shadow-slate-300/60' : 'bg-[#202020] border-slate-700 text-slate-100 shadow-black/80'
+                                  }`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold">
+                                    <span className="text-slate-700 dark:text-slate-300">Pilih PIC Pelaksana</span>
+                                    <span className="text-[10px] text-slate-400 font-normal">{task.section}</span>
+                                  </div>
+                                  <div className="relative mb-2">
+                                    <Search className="w-3 h-3 absolute left-2 top-2 text-slate-400" />
+                                    <input 
+                                      type="text" 
+                                      value={inlinePicSearchTerm}
+                                      onChange={(e) => setInlinePicSearchTerm(e.target.value)}
+                                      placeholder="Cari nama atau NIK..."
+                                      className="w-full pl-6 pr-2 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                                      autoFocus
+                                    />
+                                  </div>
+                                  <div className="max-h-48 overflow-y-auto space-y-0.5 custom-scrollbar">
+                                    {getFilteredPicEmployees(task).map(emp => {
+                                      const isSelected = task.assigneeNik === emp.nik || (task.assigneeName || '').includes(emp.name);
+                                      return (
+                                        <button
+                                          key={emp.nik || emp.id}
+                                          type="button"
+                                          onClick={() => handleInlinePicChange(task.id, emp.nik, emp.name)}
+                                          className={`w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer text-left ${
+                                            isSelected 
+                                              ? 'bg-amber-100/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold'
+                                              : 'hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-300'
+                                          }`}
+                                        >
+                                          <div className="min-w-0 pr-1">
+                                            <p className="truncate font-medium">{emp.name}</p>
+                                            <p className="text-[10px] text-slate-400 font-mono truncate">{emp.nik} • {emp.section || emp.department || '-'}</p>
+                                          </div>
+                                          {isSelected && <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
+                                        </button>
+                                      );
+                                    })}
+                                    {getFilteredPicEmployees(task).length === 0 && (
+                                      <p className="text-center py-2 text-[11px] text-slate-400 italic">Personil tidak ditemukan</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </td>
 
                             {/* Mulai & Durasi */}

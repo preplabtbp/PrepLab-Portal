@@ -584,6 +584,21 @@ async function syncBulletinToLogbook(post: any) {
       .from(logbookTasks)
       .where(eq(logbookTasks.bulletinPostId, post.id));
 
+    // Fetch employee lookup list to map rowPic to full name and NIK
+    const allEmployees = await db
+      .select({ nik: employees.nik, name: employees.name })
+      .from(employees);
+
+    const findEmployee = (query: string) => {
+      if (!query || query.trim() === '' || query.trim() === '-') return null;
+      const q = query.trim().toLowerCase();
+      return allEmployees.find(e => 
+        (e.nik && e.nik.toLowerCase() === q) || 
+        (e.name && e.name.toLowerCase() === q) ||
+        (e.name && e.name.toLowerCase().includes(q))
+      );
+    };
+
     for (const r of parsed.rows) {
       let rTitle = '';
       let rowDesc = '';
@@ -625,6 +640,10 @@ async function syncBulletinToLogbook(post: any) {
       else if (combinedAct.includes('yearly') || combinedAct.includes('tahunan')) effectiveCadence = 'Yearly';
       else if (combinedAct.includes('non')) effectiveCadence = 'Non Routine';
 
+      const matchedEmp = findEmployee(rowPic);
+      const targetAssigneeNik = matchedEmp ? matchedEmp.nik : (rowPic && rowPic !== '-' ? rowPic : 'ALL');
+      const targetAssigneeName = matchedEmp ? matchedEmp.name : (rowPic && rowPic !== '-' ? rowPic : 'Personil');
+
       const existingTask = linkedTasks.find(t => {
         const taskTopic = (t.bulletinTopicTitle || t.title || '').toLowerCase().trim();
         const cleanR = rTitle.toLowerCase().trim();
@@ -646,6 +665,10 @@ async function syncBulletinToLogbook(post: any) {
         if (effectiveCadence && existingTask.activityType !== effectiveCadence && existingTask.activityType === 'Routine') {
           updatePayload.activityType = effectiveCadence;
         }
+        if (rowPic && rowPic !== '-' && (existingTask.assigneeName !== targetAssigneeName || existingTask.assigneeNik !== targetAssigneeNik)) {
+          updatePayload.assigneeName = targetAssigneeName;
+          updatePayload.assigneeNik = targetAssigneeNik;
+        }
         if (Object.keys(updatePayload).length > 0) {
           await db
             .update(logbookTasks)
@@ -660,8 +683,8 @@ async function syncBulletinToLogbook(post: any) {
             title: rTitle,
             description: rowDesc || '',
             section: post.department || 'General',
-            assigneeNik: rowPic || 'ALL',
-            assigneeName: rowPic || 'Personil',
+            assigneeNik: targetAssigneeNik,
+            assigneeName: targetAssigneeName,
             assignedByNik: post.authorNik || 'SYSTEM',
             assignedByName: post.authorName || 'Buletin',
             priority: rowPriority || 'Normal',
