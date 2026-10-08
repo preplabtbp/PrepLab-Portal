@@ -14,6 +14,7 @@ import { StickyNotesWidget } from './StickyNotesWidget';
 import { GamificationStreakWidget } from './GamificationStreakWidget';
 import { SudutSantaiWidget } from './SudutSantaiWidget';
 import { KantinMenuWidget } from './KantinMenuWidget';
+import { Avatar3DWidget } from './Avatar3DWidget';
 import { WidgetCatalogModal } from './WidgetCatalogModal';
 
 interface HomeWidgetDashboardProps {
@@ -162,6 +163,8 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({ userNi
         return <SudutSantaiWidget size={item.size} />;
       case 'canteen':
         return <KantinMenuWidget size={item.size} />;
+      case 'avatar_3d':
+        return <Avatar3DWidget size={item.size} userNik={userNik} />;
       default:
         return null;
     }

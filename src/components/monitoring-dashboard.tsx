@@ -16,8 +16,9 @@ import {
   PlusCircle, AlertTriangle, CheckCircle2, XCircle, Clock, User, 
   FileText, X, ChevronRight, Filter, Sparkles, RefreshCw, AlertCircle, Edit3,
   Check, Info, Copy, ArrowRight, ArrowLeft, PenTool, Trash2, CheckSquare,
-  Search, Database, Shield
+  Search, Database, Shield, QrCode
 } from 'lucide-react';
+import { GuestBarcodeModal } from './GuestBarcodeModal';
 import { 
   getISOWeek, 
   getISOWeekYear, 
@@ -107,6 +108,7 @@ export function MonitoringDashboard({
   const [dataGas, setDataGas] = useState<Record<string, any>>({});
   const [rawRecords, setRawRecords] = useState<any[]>([]);
   const [pdfLinks, setPdfLinks] = useState<any[]>([]);
+  const [showGuestQrModal, setShowGuestQrModal] = useState<boolean>(false);
 
   // Verifikasi akun dev: tabel DB dan fitur edit DB langsung hanya muncul jika akun adalah dev
   const isDev = Boolean(
@@ -759,10 +761,18 @@ export function MonitoringDashboard({
     });
   }, [rawRecords, tglMulai, tglAkhir, rawCategoryFilter, rawSearchQuery]);
 
-  const createChartTooltipOptions = (metaList: any[]) => ({
+  const createChartTooltipOptions = (metaList: any[], yTitle?: string) => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
+      legend: {
+        position: 'top' as const,
+        labels: {
+          boxWidth: 12,
+          font: { size: 11, weight: 'bold' as const },
+          color: '#334155'
+        }
+      },
       tooltip: {
         backgroundColor: 'rgba(15, 23, 42, 0.95)',
         titleFont: { size: 12, weight: 'bold' as const },
@@ -805,7 +815,16 @@ export function MonitoringDashboard({
       }
     },
     scales: {
-      y: { beginAtZero: true }
+      y: { 
+        beginAtZero: false,
+        title: yTitle ? { display: true, text: yTitle, color: '#0284c7', font: { weight: 'bold' as const } } : undefined,
+        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+        ticks: { font: { weight: 'bold' as const }, color: '#475569' }
+      },
+      x: {
+        grid: { display: false },
+        ticks: { font: { size: 10 }, color: '#64748b' }
+      }
     }
   });
 
@@ -1179,13 +1198,24 @@ export function MonitoringDashboard({
           <h2 className="text-lg font-display font-bold text-slate-800 leading-tight">Dashboard Monitoring</h2>
           <p className="text-xs text-slate-500">Rekap Suhu, Kelembapan, Tekanan Gas & Status Kelengkapan</p>
         </div>
-        <Button 
-          onClick={() => handleOpenManualModal()} 
-          className="bg-cyan-600 hover:bg-cyan-700 text-white font-semibold text-xs px-3 py-2 flex items-center gap-1.5 shadow-sm"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>Input Manual Susulan</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            onClick={() => setShowGuestQrModal(true)} 
+            className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 dark:text-slate-200 font-semibold text-xs px-3 py-2 flex items-center gap-1.5 shadow-2xs"
+            title="Cetak Barcode / QR Code Khusus Tamu & Auditor"
+          >
+            <QrCode className="w-4 h-4 text-cyan-600" />
+            <span>QR Code Tamu / Auditor</span>
+          </Button>
+
+          <Button 
+            onClick={() => handleOpenManualModal()} 
+            className="bg-cyan-600 hover:bg-cyan-700 text-white font-semibold text-xs px-3 py-2 flex items-center gap-1.5 shadow-sm"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Input Manual Susulan</span>
+          </Button>
+        </div>
       </div>
 
       {/* Filter Card */}
@@ -1355,23 +1385,77 @@ export function MonitoringDashboard({
               const std = ACCEPTABLE_RANGES[lok];
 
               const suhuDatasets: any[] = [
-                { label: "Suhu (°C)", data: d.suhu, borderColor: "orange", backgroundColor: "orange", tension: 0.3 }
+                { 
+                  label: "Suhu (°C)", 
+                  data: d.suhu, 
+                  borderColor: "#0284c7", 
+                  backgroundColor: "rgba(2, 132, 199, 0.08)", 
+                  tension: 0.35,
+                  pointRadius: 4,
+                  pointHoverRadius: 6,
+                  pointBackgroundColor: "#0284c7",
+                  borderWidth: 2.5,
+                  fill: true
+                }
               ];
               if (d.sUp && d.sUp.some((v: any) => v !== null && v !== undefined)) {
-                suhuDatasets.push({ label: "Limit Atas", data: d.sUp, borderColor: "rgba(255,99,132,0.8)", borderDash: [5,5], pointRadius: 0 });
+                suhuDatasets.push({ 
+                  label: `Limit Atas (${std?.sUp ?? 'Max'}°C)`, 
+                  data: d.sUp, 
+                  borderColor: "rgba(239, 68, 68, 0.85)", 
+                  borderDash: [6, 6], 
+                  pointRadius: 0, 
+                  borderWidth: 2, 
+                  fill: false 
+                });
               }
               if (d.sLow && d.sLow.some((v: any) => v !== null && v !== undefined)) {
-                suhuDatasets.push({ label: "Limit Bawah", data: d.sLow, borderColor: "rgba(54,162,235,0.8)", borderDash: [5,5], pointRadius: 0 });
+                suhuDatasets.push({ 
+                  label: `Limit Bawah (${std?.sLow ?? 'Min'}°C)`, 
+                  data: d.sLow, 
+                  borderColor: "rgba(59, 130, 246, 0.85)", 
+                  borderDash: [6, 6], 
+                  pointRadius: 0, 
+                  borderWidth: 2, 
+                  fill: false 
+                });
               }
 
               const kelDatasets: any[] = [
-                { label: "Kelembapan (%)", data: d.kelembapan, borderColor: "#1F497D", backgroundColor: "#1F497D", tension: 0.3 }
+                { 
+                  label: "Kelembapan (%)", 
+                  data: d.kelembapan, 
+                  borderColor: "#059669", 
+                  backgroundColor: "rgba(5, 150, 105, 0.08)", 
+                  tension: 0.35,
+                  pointRadius: 4,
+                  pointHoverRadius: 6,
+                  pointBackgroundColor: "#059669",
+                  borderWidth: 2.5,
+                  fill: true
+                }
               ];
               if (d.kUp && d.kUp.some((v: any) => v !== null && v !== undefined)) {
-                kelDatasets.push({ label: "Limit Atas", data: d.kUp, borderColor: "rgba(255,99,132,0.8)", borderDash: [5,5], pointRadius: 0 });
+                kelDatasets.push({ 
+                  label: `Limit Atas (${std?.kUp ?? 'Max'}%)`, 
+                  data: d.kUp, 
+                  borderColor: "rgba(245, 158, 11, 0.85)", 
+                  borderDash: [6, 6], 
+                  pointRadius: 0, 
+                  borderWidth: 2, 
+                  fill: false 
+                });
               }
               if (d.kLow && d.kLow.some((v: any) => v !== null && v !== undefined)) {
-                kelDatasets.push({ label: "Limit Bawah", data: d.kLow, borderColor: "rgba(54,162,235,0.8)", borderDash: [5,5], pointRadius: 0 });
+                kelDatasets.push({ 
+                  label: `Limit Bawah (${std?.kLow ?? 'Min'}%)`, 
+                  data: d.kLow, 
+                  borderColor: "rgba(16, 185, 129, 0.85)", 
+                  borderDash: [6, 6], 
+                  pointRadius: 0, 
+                  borderWidth: 2, 
+                  fill: false 
+                });
               }
 
               const suhuData = {
@@ -1384,7 +1468,7 @@ export function MonitoringDashboard({
               };
 
               return (
-                <Card key={lok} className="border-l-4 border-l-blue-500 shadow-sm p-4">
+                <Card key={lok} className="border-l-4 border-l-blue-500 shadow-sm p-4 bg-white">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-bold text-blue-700 flex items-center gap-2">
@@ -1411,17 +1495,17 @@ export function MonitoringDashboard({
                       Cetak PDF {lok}
                     </Button>
                   </div>
-                  <div className="space-y-6">
-                    <div className="h-64">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="h-64 sm:h-72 p-2 bg-slate-50/50 rounded-xl border border-slate-100">
                       <Line 
                         data={suhuData as any} 
-                        options={createChartTooltipOptions(d.meta || []) as any} 
+                        options={createChartTooltipOptions(d.meta || [], 'Suhu (°C)') as any} 
                       />
                     </div>
-                    <div className="h-64">
+                    <div className="h-64 sm:h-72 p-2 bg-slate-50/50 rounded-xl border border-slate-100">
                       <Line 
                         data={kelData as any} 
-                        options={createChartTooltipOptions(d.meta || []) as any} 
+                        options={createChartTooltipOptions(d.meta || [], 'Kelembapan (%)') as any} 
                       />
                     </div>
                   </div>
@@ -1434,15 +1518,37 @@ export function MonitoringDashboard({
               const d = dataGas[lok];
               const flowData = {
                 labels: d.labels,
-                datasets: [{ label: "Flow (L/min)", data: d.flow, borderColor: "#ffc107", backgroundColor: "#ffc107", tension: 0.3 }]
+                datasets: [{ 
+                  label: "Flow Rate (L/min)", 
+                  data: d.flow, 
+                  borderColor: "#059669", 
+                  backgroundColor: "rgba(5, 150, 105, 0.08)", 
+                  tension: 0.35,
+                  pointRadius: 4,
+                  pointHoverRadius: 6,
+                  borderWidth: 2.5,
+                  fill: true
+                }]
               };
               const presData = {
                 labels: d.labels,
-                datasets: [{ label: "Pressure (psi)", data: d.pressure, borderColor: "#198754", backgroundColor: "#198754", tension: 0.3 }]
+                datasets: [
+                  { 
+                    label: "Tekanan (psi / Bar)", 
+                    data: d.pressure, 
+                    borderColor: "#0284c7", 
+                    backgroundColor: "rgba(2, 132, 199, 0.08)", 
+                    tension: 0.35,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderWidth: 2.5,
+                    fill: true
+                  }
+                ]
               };
 
               return (
-                <Card key={lok} className="border-l-4 border-l-emerald-500 shadow-sm p-4">
+                <Card key={lok} className="border-l-4 border-l-emerald-500 shadow-sm p-4 bg-white">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                     <h4 className="font-bold text-emerald-700 flex items-center gap-2">
                       <Wind className="w-4 h-4" /> {lok}
@@ -1462,17 +1568,17 @@ export function MonitoringDashboard({
                       Cetak PDF {lok}
                     </Button>
                   </div>
-                  <div className="space-y-6">
-                    <div className="h-64">
-                      <Line 
-                        data={flowData as any} 
-                        options={createChartTooltipOptions(d.meta || []) as any} 
-                      />
-                    </div>
-                    <div className="h-64">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="h-64 sm:h-72 p-2 bg-slate-50/50 rounded-xl border border-slate-100">
                       <Line 
                         data={presData as any} 
-                        options={createChartTooltipOptions(d.meta || []) as any} 
+                        options={createChartTooltipOptions(d.meta || [], 'Tekanan (psi/Bar)') as any} 
+                      />
+                    </div>
+                    <div className="h-64 sm:h-72 p-2 bg-slate-50/50 rounded-xl border border-slate-100">
+                      <Line 
+                        data={flowData as any} 
+                        options={createChartTooltipOptions(d.meta || [], 'Flow (L/min)') as any} 
                       />
                     </div>
                   </div>
@@ -2847,6 +2953,12 @@ export function MonitoringDashboard({
           </div>
         </div>
       )}
+
+      {/* Guest & Auditor Master Barcode Modal */}
+      <GuestBarcodeModal 
+        isOpen={showGuestQrModal} 
+        onClose={() => setShowGuestQrModal(false)} 
+      />
     </div>
   );
 }

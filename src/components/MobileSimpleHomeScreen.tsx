@@ -45,6 +45,13 @@ export function MobileSimpleHomeScreen({
   const [dailyTasks, setDailyTasks] = useState<any>(null);
   const [mySchedule, setMySchedule] = useState<any>(null);
   const [p5mAssignment, setP5mAssignment] = useState<any>(null);
+  const [p5mAssignments, setP5mAssignments] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('p2h_cached_p5m_assignments');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
   const [loading, setLoading] = useState(true);
 
   // Dev Roleplay & Leadership state
@@ -203,9 +210,19 @@ export function MobileSimpleHomeScreen({
 
         if (p5mRes.status === 'fulfilled') {
           const pJson = await safeJson(p5mRes.value);
-          if (pJson && pJson.success && pJson.assignment) {
-            setP5mAssignment(pJson.assignment);
-            try { localStorage.setItem('p2h_cached_p5m_assignment', JSON.stringify(pJson.assignment)); } catch {}
+          if (pJson && pJson.success && (pJson.assignment || (Array.isArray(pJson.assignments) && pJson.assignments.length > 0))) {
+            const list = Array.isArray(pJson.assignments) && pJson.assignments.length > 0
+              ? pJson.assignments
+              : (pJson.assignment ? [pJson.assignment] : []);
+            setP5mAssignments(list);
+            const activeItem = pJson.assignment || list[0] || null;
+            setP5mAssignment(activeItem);
+            try {
+              if (activeItem) {
+                localStorage.setItem('p2h_cached_p5m_assignment', JSON.stringify(activeItem));
+                localStorage.setItem('p2h_cached_p5m_assignments', JSON.stringify(list));
+              }
+            } catch {}
           }
         }
 
@@ -735,6 +752,7 @@ export function MobileSimpleHomeScreen({
         inspectorNik={inspectorNik}
         inspectorName={inspectorName}
         p5mAssignment={p5mAssignment}
+        p5mAssignments={p5mAssignments}
         onNav={onNav}
       />
 

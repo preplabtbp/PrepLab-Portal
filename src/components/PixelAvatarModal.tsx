@@ -12,7 +12,7 @@ interface PixelAvatarModalProps {
 }
 
 // Pixel Art Feature Options & Palettes
-const SKIN_TONES = [
+export const SKIN_TONES = [
   { id: 'light', name: 'Putih Cerah', base: '#FDE047', shadow: '#EAB308', skin: '#FFDBAC', skinShadow: '#E0AC69' },
   { id: 'fair', name: 'Kuning Langsat', base: '#F1C27D', shadow: '#E0AC69', skin: '#F1C27D', skinShadow: '#C68642' },
   { id: 'tan', name: 'Sawo Matang', base: '#E0AC69', shadow: '#C68642', skin: '#E0AC69', skinShadow: '#8D5524' },
@@ -20,7 +20,7 @@ const SKIN_TONES = [
   { id: 'dark', name: 'Eksotis Gelap', base: '#8D5524', shadow: '#5C3A21', skin: '#8D5524', skinShadow: '#3A2010' },
 ];
 
-const HAIR_STYLES = [
+export const HAIR_STYLES = [
   { id: 'spiky', name: 'Short Spiky' },
   { id: 'side', name: 'Side Part' },
   { id: 'curly', name: 'Curly Waves' },
@@ -32,7 +32,7 @@ const HAIR_STYLES = [
   { id: 'bald', name: 'Plontos / Short' },
 ];
 
-const HAIR_COLORS = [
+export const HAIR_COLORS = [
   { id: 'black', name: 'Hitam', hex: '#18181B', shadow: '#09090B' },
   { id: 'brown', name: 'Cokelat Gelap', hex: '#451A03', shadow: '#270E02' },
   { id: 'blonde', name: 'Pirang / Gold', hex: '#D97706', shadow: '#92400E' },
@@ -44,7 +44,7 @@ const HAIR_COLORS = [
   { id: 'hijab_white', name: 'Hijab Putih', hex: '#F8FAFC', shadow: '#CBD5E1' },
 ];
 
-const EYE_STYLES = [
+export const EYE_STYLES = [
   { id: 'normal', name: 'Pixel Biasa' },
   { id: 'glasses_k3', name: 'Kacamata K3 Bening' },
   { id: 'sunglasses', name: 'Kacamata Hitam' },
@@ -53,7 +53,7 @@ const EYE_STYLES = [
   { id: 'cool_specs', name: 'Kacamata Formal' },
 ];
 
-const OUTFITS = [
+export const OUTFITS = [
   { id: 'vest_orange', name: 'Rompi K3 Orange', base: '#EA580C', stripe: '#F8FAFC', collar: '#1E293B' },
   { id: 'vest_green', name: 'Rompi K3 Hijau', base: '#16A34A', stripe: '#F8FAFC', collar: '#1E293B' },
   { id: 'lab_coat', name: 'Jas Laboratorium', base: '#F8FAFC', stripe: '#0D9488', collar: '#0F766E' },
@@ -63,7 +63,7 @@ const OUTFITS = [
   { id: 'hoodie_dark', name: 'Hoodie Developer', base: '#1E293B', stripe: '#38BDF8', collar: '#0F172A' },
 ];
 
-const ACCESSORIES = [
+export const ACCESSORIES = [
   { id: 'none', name: 'Tanpa Aksesoris' },
   { id: 'lanyard', name: 'Lanyard ID Card' },
   { id: 'mask', name: 'Masker K3' },
@@ -71,7 +71,7 @@ const ACCESSORIES = [
   { id: 'ear_muff', name: 'Ear Protector K3' },
 ];
 
-const BACKGROUNDS = [
+export const BACKGROUNDS = [
   { id: 'cyber_dark', name: 'Cyber Slate', bg1: '#0F172A', bg2: '#1E293B' },
   { id: 'preplab_teal', name: 'PrepLab Teal', bg1: '#042F2E', bg2: '#0D9488' },
   { id: 'sunset_orange', name: 'Sunset Orange', bg1: '#431407', bg2: '#EA580C' },

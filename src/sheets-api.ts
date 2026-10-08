@@ -379,6 +379,27 @@ export const buatPdfRekapan = async (tglMulai: string, tglAkhir: string, tipeLap
   }
 };
 
+export const cekPdfRekapanPeriode = async (
+  tglMulai: string, 
+  tglAkhir: string, 
+  tipeLaporan: string, 
+  periodeLabel?: string, 
+  targetLokasi?: string
+) => {
+  try {
+    const res = await fetch('/api/pdf/check-period', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tglMulai, tglAkhir, tipeLaporan, periodeLabel, targetLokasi })
+    });
+    if (!res.ok) return { status: 'error', hasAny: false, filesByLocation: {} };
+    return await res.json();
+  } catch (err: any) {
+    console.error('cekPdfRekapanPeriode error:', err);
+    return { status: 'error', hasAny: false, filesByLocation: {} };
+  }
+};
+
 export const getDowntimeRecords = async () => {
   const res = await fetch('/api/downtime');
   return await res.json();

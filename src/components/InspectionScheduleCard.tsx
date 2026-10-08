@@ -162,6 +162,15 @@ export function InspectionScheduleCard({
   });
 
   // Status P5M (Cached)
+  const [p5mAssignments, setP5mAssignments] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('p2h_cached_p5m_assignments');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [selectedP5mIndex, setSelectedP5mIndex] = useState<number>(0);
   const [p5mAssignment, setP5mAssignment] = useState<any | null>(() => {
     try {
       const saved = localStorage.getItem('p2h_cached_p5m_assignment');
@@ -387,7 +396,10 @@ export function InspectionScheduleCard({
       p5mAssignment?.isPast || 
       (p5mAssignment?.assignmentDate && new Date().toISOString().split('T')[0] >= p5mAssignment.assignmentDate)
     );
-    const p5mDone = hasP5mAssignment ? isP5mPassed : true;
+    const allP5mDone = p5mAssignments.length > 0
+      ? p5mAssignments.every((a: any) => a.isCompleted || a.isPast || (a.assignmentDate && new Date().toISOString().split('T')[0] >= a.assignmentDate))
+      : isP5mPassed;
+    const p5mDone = hasP5mAssignment ? allP5mDone : true;
     if (p5mDone) completed++;
 
     const weeklyTotal = 3;
@@ -432,7 +444,7 @@ export function InspectionScheduleCard({
       isRosterCutiToday,
       isTransitionFromCuti
     };
-  }, [mySchedule, hasSsProof, myKtaRecord, p5mAssignment, hasP5mAssignment, dailyTasks, isPrepOrLabOrCrew, isLabOrQA, isRosterCutiToday, isWeeklyInspectionExempt, isRosterOnsiteToday, isTransitionFromCuti]);
+  }, [mySchedule, hasSsProof, myKtaRecord, p5mAssignment, p5mAssignments, hasP5mAssignment, dailyTasks, isPrepOrLabOrCrew, isLabOrQA, isRosterCutiToday, isWeeklyInspectionExempt, isRosterOnsiteToday, isTransitionFromCuti]);
 
   // Fetch SS Proof directly from /api/inspection-proofs
   const fetchSsProof = async () => {
@@ -699,12 +711,30 @@ export function InspectionScheduleCard({
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
-          setP5mAssignment(data.assignment || null);
+          const list = Array.isArray(data.assignments) && data.assignments.length > 0
+            ? data.assignments
+            : (data.assignment ? [data.assignment] : []);
+          setP5mAssignments(list);
+
+          const activeItem = data.assignment || list[0] || null;
+          setP5mAssignment(activeItem);
+
+          if (list.length > 0 && activeItem) {
+            const idx = list.findIndex(
+              (a: any) => a.day === activeItem.day && a.shift === activeItem.shift
+            );
+            setSelectedP5mIndex(idx >= 0 ? idx : 0);
+          } else {
+            setSelectedP5mIndex(0);
+          }
+
           try {
-            if (data.assignment) {
-              localStorage.setItem('p2h_cached_p5m_assignment', JSON.stringify(data.assignment));
+            if (activeItem) {
+              localStorage.setItem('p2h_cached_p5m_assignment', JSON.stringify(activeItem));
+              localStorage.setItem('p2h_cached_p5m_assignments', JSON.stringify(list));
             } else {
               localStorage.removeItem('p2h_cached_p5m_assignment');
+              localStorage.removeItem('p2h_cached_p5m_assignments');
             }
           } catch {}
         }
@@ -1809,7 +1839,7 @@ export function InspectionScheduleCard({
                   {hasP5mAssignment ? (
                     <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 whitespace-nowrap shrink-0 shadow-2xs">
-                        🎙️ Pemateri
+                        🎙️ Pemateri {p5mAssignments.length > 1 ? `(${p5mAssignments.length}x Sesi)` : ''}
                       </span>
                       {isUserCuti && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 whitespace-nowrap shrink-0 shadow-2xs">
@@ -1840,6 +1870,43 @@ export function InspectionScheduleCard({
                 {/* Body Details */}
                 {hasP5mAssignment ? (
                   <div className="space-y-1.5 my-3 p-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-main)] text-xs">
+                    {/* Session Switcher Tabs if scheduled multiple times */}
+                    {p5mAssignments.length > 1 && (
+                      <div className="mb-2 p-1 rounded-xl bg-purple-500/10 dark:bg-purple-950/30 border border-purple-500/20 flex items-center gap-1.5 overflow-x-auto">
+                        <div className="px-1.5 py-0.5 text-[10px] font-black text-purple-700 dark:text-purple-300 whitespace-nowrap flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          <span>{p5mAssignments.length} Sesi:</span>
+                        </div>
+                        {p5mAssignments.map((item, idx) => {
+                          const isSelected = idx === selectedP5mIndex;
+                          return (
+                            <button
+                              key={`p5m-tab-${idx}-${item.day}`}
+                              type="button"
+                              onClick={() => {
+                                setSelectedP5mIndex(idx);
+                                setP5mAssignment(item);
+                              }}
+                              className={`flex-1 min-w-[95px] py-1 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-purple-600 text-white shadow-xs'
+                                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-black/5 dark:hover:bg-white/5'
+                              }`}
+                            >
+                              <span>{item.day}</span>
+                              {item.isCompleted ? (
+                                <span className="text-[10px] text-emerald-300">✓</span>
+                              ) : item.isToday ? (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-400 text-slate-900 font-extrabold">Hari Ini</span>
+                              ) : (
+                                <span className="text-[9px] opacity-75">{item.shiftKey === 'malam' ? 'Mlm' : 'Pagi'}</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
                     <div>
                       <span className="text-[10px] text-[var(--text-muted)] block font-medium">Jadwal Tugas Anda:</span>
                       <p className="font-bold text-[var(--text-main)] text-xs">
