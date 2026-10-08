@@ -1593,8 +1593,8 @@ async function syncBulletinToAgenda(post: any) {
   // Mulai pelayan (server) di port 3000
   initRosterCron();
 
-  httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server backend siap berjalan di http://localhost:${PORT}`);
+  httpServer.listen(PORT, () => {
+    console.log(`🚀 Server backend siap berjalan di http://localhost:${PORT} (http://127.0.0.1:${PORT})`);
   });
 }
 
