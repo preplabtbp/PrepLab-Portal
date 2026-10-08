@@ -191,11 +191,11 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
       {/* Dashboard Section Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-1">
         <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse" />
+          <div className="w-2.5 h-2.5 rounded-full bg-teal-600 animate-pulse" />
           <div>
-            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-[var(--text-main)] font-display flex items-center gap-1.5">
+            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-black font-display flex items-center gap-1.5">
               <span>Ruang Personalisasi &amp; Kenyamanan</span>
-              <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20 font-sans normal-case">
+              <span className="text-[10px] font-black px-2 py-0.2 rounded-full bg-teal-100 text-black border border-teal-300 font-sans normal-case">
                 {enabledWidgets.length} Widget Aktif
               </span>
             </h3>
@@ -209,21 +209,21 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
             <button
               type="button"
               onClick={() => setIsEditMode(!isEditMode)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer ${
                 isEditMode
-                  ? 'bg-amber-500 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-800 text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+                  ? 'bg-amber-300 text-black border border-amber-400 shadow-xs'
+                  : 'bg-white text-black hover:bg-slate-100 border border-slate-300 shadow-2xs'
               }`}
             >
               {isEditMode ? (
                 <>
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Selesai Atur</span>
+                  <Check className="w-3.5 h-3.5 text-black" />
+                  <span className="text-black">Selesai Atur</span>
                 </>
               ) : (
                 <>
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                  <span>Atur Posisi &amp; Ukuran</span>
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-slate-700" />
+                  <span className="text-black">Atur Posisi &amp; Ukuran</span>
                 </>
               )}
             </button>
@@ -234,10 +234,10 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
             id="home-add-widget-btn"
             type="button"
             onClick={() => setShowCatalogModal(true)}
-            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-3 py-1.5 rounded-xl text-xs font-black bg-teal-100 hover:bg-teal-200 text-black border border-teal-300 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Tambah Widget</span>
+            <Plus className="w-3.5 h-3.5 text-teal-800" />
+            <span className="text-black">Tambah Widget</span>
           </button>
         </div>
       </div>

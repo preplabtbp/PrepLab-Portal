@@ -524,22 +524,22 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
           <button
             type="button"
             onClick={() => setShowTempatNongkrong(true)}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+            className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-100 hover:bg-amber-200 text-black border border-amber-300 flex items-center gap-1 shadow-xs transition-all cursor-pointer"
             title="Masuk ke Pos Nongkrong PrepLab"
           >
-            <Coffee className="w-3 h-3 text-amber-500" />
-            <span>Tempat Nongkrong</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <Coffee className="w-3 h-3 text-amber-700" />
+            <span className="text-black">Tempat Nongkrong</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
           </button>
 
           {/* Wardrobe Modal Button */}
           <button
             type="button"
             onClick={() => setShowWardrobe(true)}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+            className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-teal-100 hover:bg-teal-200 text-black border border-teal-300 flex items-center gap-1 shadow-xs transition-all cursor-pointer"
           >
-            <Palette className="w-3 h-3" />
-            <span>Kustomisasi</span>
+            <Palette className="w-3 h-3 text-teal-700" />
+            <span className="text-black">Kustomisasi</span>
           </button>
         </div>
       </div>
@@ -549,22 +549,22 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
         onClick={handleStageClick}
         className="w-full flex-1 min-h-[175px] relative rounded-2xl border border-[var(--border-main)] overflow-hidden cursor-crosshair group shadow-inner transition-all"
         style={{
-          background: 'linear-gradient(180deg, #07151D 0%, #0D2633 60%, #153849 100%)'
+          background: 'linear-gradient(180deg, #E2E8F0 0%, #CBD5E1 50%, #94A3B8 100%)'
         }}
         title="Klik lantai untuk memerintahkan personil berjalan ke sana!"
       >
         {/* Background Room Details: Nickel Mining Laboratory Setup */}
         <div className="absolute inset-0 pointer-events-none">
           {/* Safety Banner on Wall */}
-          <div className="absolute top-2 left-3 px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/30 text-[8px] font-mono font-bold text-amber-300 flex items-center gap-1">
-            <ShieldAlert className="w-2.5 h-2.5 text-amber-400" />
-            <span>HARITA NICKEL &bull; PREPLAB TBP ZERO ACCIDENT</span>
+          <div className="absolute top-2 left-3 px-2 py-0.5 rounded-md bg-amber-100/95 border border-amber-400 text-[8px] font-mono font-black text-black flex items-center gap-1 shadow-xs">
+            <ShieldAlert className="w-2.5 h-2.5 text-amber-600" />
+            <span className="text-black font-black">HARITA NICKEL &bull; PREPLAB TBP ZERO ACCIDENT</span>
           </div>
 
           {/* Nickel Lab Machine Status Silhouette (Top Center) */}
-          <div className="absolute top-2.5 right-28 opacity-40 text-[8px] font-mono text-cyan-300 hidden sm:block text-right">
-            <div>FURNACE 1050°C: READY</div>
-            <div>XRF-01: OK &bull; OVEN: 105°C</div>
+          <div className="absolute top-2.5 right-28 px-2 py-0.5 rounded-md bg-white/90 border border-slate-300 text-[8px] font-mono text-black font-bold hidden sm:block text-right shadow-2xs">
+            <div className="text-black font-bold">FURNACE 1050°C: READY</div>
+            <div className="text-black font-bold">XRF-01: OK &bull; OVEN: 105°C</div>
           </div>
 
           {/* DOOR TO TEMPAT NONGKRONG / LOUNGE (Right Corner) */}
@@ -573,30 +573,30 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
               e.stopPropagation();
               setShowTempatNongkrong(true);
             }}
-            className="absolute top-3 right-3 pointer-events-auto px-2 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[9px] font-bold flex flex-col items-center gap-0.5 shadow-md backdrop-blur-xs cursor-pointer transition-all hover:scale-105"
+            className="absolute top-2.5 right-3 pointer-events-auto px-2 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 border-2 border-amber-400 text-black text-[9px] font-black flex flex-col items-center gap-0.5 shadow-md backdrop-blur-xs cursor-pointer transition-all hover:scale-105"
             title="Klik untuk masuk Tempat Nongkrong PrepLab"
           >
             <div className="flex items-center gap-1">
-              <Coffee className="w-3 h-3 text-amber-400 animate-bounce" />
-              <span>POS NONGRONG</span>
+              <Coffee className="w-3 h-3 text-amber-700 animate-bounce" />
+              <span className="text-black font-black">POS NONGKRONG</span>
             </div>
-            <div className="flex items-center gap-1 text-[7.5px] text-emerald-400 font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+            <div className="flex items-center gap-1 text-[7.5px] text-emerald-800 font-mono font-black">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping" />
               <span>MASUK REHAT ➔</span>
             </div>
           </div>
 
           {/* Industrial Epoxy Floor Tiles Line */}
           <div 
-            className="absolute bottom-0 left-0 right-0 h-10 border-t border-cyan-500/20"
+            className="absolute bottom-0 left-0 right-0 h-10 border-t border-slate-400/40"
             style={{
-              background: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 24px), linear-gradient(180deg, rgba(13,148,136,0.15) 0%, rgba(15,23,42,0.6) 100%)'
+              background: 'repeating-linear-gradient(90deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 24px), linear-gradient(180deg, #F8FAFC 0%, #E2E8F0 100%)'
             }}
           />
 
           {/* Yellow Safety Warning Strip on Floor Edge */}
           <div 
-            className="absolute bottom-9 left-0 right-0 h-1 opacity-40"
+            className="absolute bottom-9 left-0 right-0 h-1 opacity-70"
             style={{
               background: 'repeating-linear-gradient(45deg, #EAB308, #EAB308 6px, #0F172A 6px, #0F172A 12px)'
             }}
@@ -623,27 +623,27 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
           {/* Floating Section-Aware Speech Balloon */}
           {speechVisible && (
             <div 
-              className="mb-1 max-w-[210px] sm:max-w-[260px] px-3 py-1.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 text-[10px] font-medium text-[var(--text-main)] shadow-xl border border-lime-500/40 text-center relative animate-in fade-in zoom-in-95 group/balloon"
+              className="mb-1 max-w-[210px] sm:max-w-[260px] px-3 py-1.5 rounded-2xl bg-white text-[10px] font-medium text-black shadow-xl border border-lime-400 text-center relative animate-in fade-in zoom-in-95 group/balloon"
               onClick={(e) => {
                 e.stopPropagation();
                 handleNextDialogue();
               }}
             >
               {/* Section Header Pill inside Balloon */}
-              <div className="flex items-center justify-between gap-1 mb-0.5 border-b border-black/5 dark:border-white/5 pb-0.5">
-                <span className="text-[8.5px] font-extrabold uppercase px-1.5 py-0.2 rounded-md bg-lime-500/20 text-lime-700 dark:text-lime-300 font-mono flex items-center gap-1">
+              <div className="flex items-center justify-between gap-1 mb-0.5 border-b border-black/10 pb-0.5">
+                <span className="text-[8.5px] font-black uppercase px-1.5 py-0.2 rounded-md bg-lime-200 text-black font-mono flex items-center gap-1 border border-lime-300">
                   <span>⛏️ {speechBadge}</span>
                 </span>
-                <span className="text-[8px] text-[var(--text-muted)] opacity-60">klik ganti ↻</span>
+                <span className="text-[8px] text-slate-700 font-bold opacity-80">klik ganti ↻</span>
               </div>
 
               {/* Message text */}
-              <p className="leading-snug text-slate-800 dark:text-slate-100 font-medium">
+              <p className="leading-snug text-black font-bold">
                 {speechText}
               </p>
 
               {/* Bubble pointer tail */}
-              <div className="absolute bottom-[-5px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-inherit border-b border-r border-lime-500/40 rotate-45" />
+              <div className="absolute bottom-[-5px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-inherit border-b border-r border-lime-400 rotate-45" />
             </div>
           )}
 
@@ -672,14 +672,14 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
             </div>
 
             {/* Tap hint emote on hover */}
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 opacity-0 group-hover/avatar:opacity-100 transition-opacity bg-black/80 text-white px-1.5 py-0.2 rounded text-[8px] font-mono whitespace-nowrap shadow-xs">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 opacity-0 group-hover/avatar:opacity-100 transition-opacity bg-black text-white px-1.5 py-0.2 rounded text-[8px] font-mono font-bold whitespace-nowrap shadow-xs">
               👋 Sapa Ranger!
             </div>
           </div>
         </div>
 
         {/* Floor Click Instruction overlay */}
-        <div className="absolute bottom-1 right-2 pointer-events-none opacity-40 text-[9px] font-mono text-slate-300">
+        <div className="absolute bottom-1 right-2 pointer-events-none px-2 py-0.5 rounded-md bg-white/95 border border-slate-300 text-[9px] font-mono font-black text-black shadow-2xs">
           Klik lantai untuk berjalan ➔
         </div>
       </div>
@@ -696,10 +696,10 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
               setActionState('walk');
               playRetroSound('beep');
             }}
-            className="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-[var(--text-main)] hover:bg-lime-500/10 hover:text-lime-600 transition-all flex items-center gap-1 cursor-pointer"
+            className="px-2 py-1 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-black border border-slate-300 transition-all flex items-center gap-1 cursor-pointer"
           >
-            <Footprints className="w-3 h-3 text-lime-600" />
-            <span>Patroli</span>
+            <Footprints className="w-3 h-3 text-lime-700" />
+            <span className="text-black">Patroli</span>
           </button>
 
           {/* Action 2: Inspect K3 */}
@@ -713,20 +713,20 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
               playRetroSound('beep');
               setTimeout(() => setActionState('idle'), 4000);
             }}
-            className="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-[var(--text-main)] hover:bg-amber-500/10 hover:text-amber-600 transition-all flex items-center gap-1 cursor-pointer"
+            className="px-2 py-1 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-black border border-slate-300 transition-all flex items-center gap-1 cursor-pointer"
           >
-            <Search className="w-3 h-3 text-amber-500" />
-            <span>Cek APD</span>
+            <Search className="w-3 h-3 text-amber-600" />
+            <span className="text-black">Cek APD</span>
           </button>
 
           {/* Action 3: Coffee Break -> Opens Tempat Nongkrong */}
           <button
             type="button"
             onClick={() => setShowTempatNongkrong(true)}
-            className="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/25 transition-all flex items-center gap-1 cursor-pointer"
+            className="px-2 py-1 rounded-lg text-[10px] font-black bg-amber-100 hover:bg-amber-200 text-black border border-amber-300 transition-all flex items-center gap-1 cursor-pointer"
           >
-            <Coffee className="w-3 h-3 text-amber-500" />
-            <span>Nongkrong</span>
+            <Coffee className="w-3 h-3 text-amber-700" />
+            <span className="text-black">Nongkrong</span>
           </button>
         </div>
 
@@ -734,10 +734,10 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
         <button
           type="button"
           onClick={handleNextDialogue}
-          className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-lime-700 dark:text-lime-300 bg-lime-500/10 hover:bg-lime-500/20 border border-lime-500/20 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+          className="px-2.5 py-1 rounded-lg text-[10px] font-black text-black bg-lime-100 hover:bg-lime-200 border border-lime-300 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
         >
-          <RefreshCw className="w-3 h-3" />
-          <span>Ganti Info ({speechBadge})</span>
+          <RefreshCw className="w-3 h-3 text-lime-800" />
+          <span className="text-black">Ganti Info ({speechBadge})</span>
         </button>
       </div>
 
