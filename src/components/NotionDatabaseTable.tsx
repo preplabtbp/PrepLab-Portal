@@ -3497,18 +3497,27 @@ export function NotionDatabaseTable({
         <div 
           ref={tableScrollRef}
           onScroll={handleTableScroll}
-          className="overflow-x-auto w-full transition-all notion-table-scroll-hide"
+          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] w-full transition-all notion-table-scroll-freeze rounded-b-xl border-t border-slate-200 dark:border-[#2d2d2d]"
           style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
         >
           <style>{`
-            .notion-table-scroll-hide {
-              scrollbar-width: none;
-              -ms-overflow-style: none;
+            .notion-table-scroll-freeze {
+              scrollbar-width: thin;
+              scrollbar-color: rgba(13, 148, 136, 0.4) transparent;
             }
-            .notion-table-scroll-hide::-webkit-scrollbar {
-              display: none;
-              width: 0;
-              height: 0;
+            .notion-table-scroll-freeze::-webkit-scrollbar {
+              width: 6px;
+              height: 0px;
+            }
+            .notion-table-scroll-freeze::-webkit-scrollbar-track {
+              background: transparent;
+            }
+            .notion-table-scroll-freeze::-webkit-scrollbar-thumb {
+              background: rgba(13, 148, 136, 0.4);
+              border-radius: 9999px;
+            }
+            .notion-table-scroll-freeze::-webkit-scrollbar-thumb:hover {
+              background: rgba(13, 148, 136, 0.7);
             }
 
             .notion-floating-scroll-light {
@@ -3563,7 +3572,7 @@ export function NotionDatabaseTable({
               >
                 {/* Select All Checkbox Column */}
                 <th 
-                  className={`sticky top-12 z-20 text-center shadow-2xs ${
+                  className={`sticky top-0 z-20 text-center shadow-2xs ${
                     isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#202020] text-slate-300 border-b border-[#303030]'
                   } ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}
                 >
@@ -3616,7 +3625,7 @@ export function NotionDatabaseTable({
                     <th
                       key={colHeader}
                       style={getColStyle(colHeader)}
-                      className={`sticky top-12 z-20 shadow-2xs font-bold hover:opacity-90 transition-opacity group/th relative ${
+                      className={`sticky top-0 z-20 shadow-2xs font-bold hover:opacity-90 transition-opacity group/th relative ${
                         isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#202020] text-slate-300 border-b border-[#303030]'
                       } ${widthClass}`}
                     >
@@ -3710,7 +3719,7 @@ export function NotionDatabaseTable({
 
                 {/* Add Column Header Button (+) */}
                 <th 
-                  className={`sticky top-12 z-20 w-10 text-center px-1 py-2 relative shadow-2xs ${
+                  className={`sticky top-0 z-20 w-10 text-center px-1 py-2 relative shadow-2xs ${
                     isNotionLight ? 'bg-[#fbfbfa] border-b border-slate-200' : 'bg-[#202020] border-b border-[#303030]'
                   }`} 
                   ref={addColumnRef}
@@ -3838,7 +3847,7 @@ export function NotionDatabaseTable({
                 </th>
 
                 <th 
-                  className={`sticky top-12 z-20 text-center shadow-2xs ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${
+                  className={`sticky top-0 z-20 text-center shadow-2xs ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${
                     isNotionLight ? 'bg-[#fbfbfa] text-slate-500 font-semibold border-b border-slate-200' : 'bg-[#202020] text-slate-400 font-bold border-b border-[#303030]'
                   }`}
                 >
@@ -5509,7 +5518,35 @@ export function NotionDatabaseTable({
 
             {/* Modal Form */}
             <form onSubmit={handleSaveRow} className="p-5 overflow-y-auto space-y-4 flex-1 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* 1. Jenis kegiatan */}
+              <div>
+                <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                  Jenis Kegiatan <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setRowFormData({ 
+                      ...rowFormData, 
+                      'Jenis kegiatan': val,
+                      'Jenis Kegiatan': val 
+                    });
+                  }}
+                  className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-medium text-xs shadow-2xs"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #141414)',
+                    borderColor: 'var(--border-main, #334155)',
+                    color: 'var(--text-main, #f1f5f9)'
+                  }}
+                  placeholder="Contoh: Kalibrasi XRF, Analisis Sampel Harian, dsb..."
+                />
+              </div>
+
+              {/* 2. Number & Priority */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Number */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
@@ -5519,7 +5556,7 @@ export function NotionDatabaseTable({
                     type="text"
                     value={rowFormData['number'] || ''}
                     onChange={(e) => setRowFormData({ ...rowFormData, number: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none"
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs"
                     style={{
                       backgroundColor: 'var(--input-bg, #141414)',
                       borderColor: 'var(--border-main, #334155)',
@@ -5537,7 +5574,7 @@ export function NotionDatabaseTable({
                   <select
                     value={rowFormData['Priority'] || 'Normal'}
                     onChange={(e) => setRowFormData({ ...rowFormData, Priority: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer"
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs"
                     style={{
                       backgroundColor: 'var(--input-bg, #141414)',
                       borderColor: 'var(--border-main, #334155)',
@@ -5553,49 +5590,33 @@ export function NotionDatabaseTable({
                 </div>
               </div>
 
-              {/* Jenis kegiatan */}
+              {/* 3. Keterangan / Catatan Ringkas */}
               <div>
-                <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                  Jenis Kegiatan *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setRowFormData({ 
-                      ...rowFormData, 
-                      'Jenis kegiatan': val,
-                      'Jenis Kegiatan': val 
-                    });
-                  }}
-                  className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-medium"
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                    Keterangan / Catatan Ringkas
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-sans">
+                    (Opsional)
+                  </span>
+                </div>
+                <textarea
+                  rows={3}
+                  value={rowFormData['Keterangan'] || ''}
+                  onChange={(e) => setRowFormData({ ...rowFormData, Keterangan: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs leading-relaxed resize-y"
                   style={{
                     backgroundColor: 'var(--input-bg, #141414)',
                     borderColor: 'var(--border-main, #334155)',
                     color: 'var(--text-main, #f1f5f9)'
                   }}
-                  placeholder="Contoh: Kalibrasi XRF, Analisis Sampel Harian, dsb..."
+                  placeholder="Catatan, rincian teknis, parameter khusus, atau instruksi kerja..."
                 />
               </div>
 
-              {/* Keterangan & Rincian (Shared Subtask Manager - Sinergi Log Book & Buletin) */}
-              <div>
-                <SharedSubtaskManager
-                  value={rowFormData['Keterangan'] || ''}
-                  onChange={(val) => setRowFormData({ ...rowFormData, Keterangan: val })}
-                  label="Keterangan & Checklist Subtask"
-                  allowModeSwitch={true}
-                  defaultMode="checklist"
-                  currentUser={{ nik: currentAuthorNik || '', name: currentAuthorName || rowFormData['PIC'] || 'PIC' }}
-                  selectedDate={new Date().toISOString().split('T')[0]}
-                  placeholder="Ketik butir subtask baru lalu tekan Enter..."
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {/* PIC Field with Special Role & Searchable Employee Dropdown */}
+              {/* 4. PIC & Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* PIC Field with Searchable Suggestion Dropdown */}
                 <div className="relative">
                   <div className="flex items-center justify-between mb-1">
                     <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
@@ -5746,45 +5767,9 @@ export function NotionDatabaseTable({
                 </div>
               </div>
 
+              {/* 5. Activity, Period & Kategori */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Created Time */}
-                <div>
-                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Created Time
-                  </label>
-                  <input
-                    type="text"
-                    value={rowFormData['Created Time'] || ''}
-                    onChange={(e) => setRowFormData({ ...rowFormData, 'Created Time': e.target.value })}
-                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-mono text-[11px]"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #141414)',
-                      borderColor: 'var(--border-main, #334155)',
-                      color: 'var(--text-main, #f1f5f9)'
-                    }}
-                  />
-                </div>
-
-                {/* Kategori */}
-                <div>
-                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Kategori
-                  </label>
-                  <input
-                    type="text"
-                    value={rowFormData['Kategori'] || ''}
-                    onChange={(e) => setRowFormData({ ...rowFormData, Kategori: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #141414)',
-                      borderColor: 'var(--border-main, #334155)',
-                      color: 'var(--text-main, #f1f5f9)'
-                    }}
-                    placeholder="Laboratorium"
-                  />
-                </div>
-
-                {/* Activity (routine/non routine) */}
+                {/* Activity */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Activity
@@ -5818,22 +5803,22 @@ export function NotionDatabaseTable({
                     <option value="Biannual">Biannual</option>
                     <option value="Yearly">Yearly</option>
                     <option value="Non-Routine">Non-Routine</option>
-                    <option value="Routine">Routine (Legacy)</option>
                   </select>
                 </div>
-              </div>
 
-              {/* Period Dropdown */}
-              <div>
-                <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                  Period / Periode
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* Period */}
+                <div>
+                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                    Period / Periode
+                  </label>
                   <select
-                    value={['Daily', 'Weekly', 'Monthly', '3 Month', '6 Month', 'Yearly'].includes(rowFormData['period'] || '') ? rowFormData['period'] : 'custom'}
+                    value={['Daily', 'Weekly', 'Monthly', '3 Month', '6 Month', 'Yearly', 'Non-Routine'].includes(rowFormData['period'] || '') ? rowFormData['period'] : 'custom'}
                     onChange={(e) => {
-                      if (e.target.value !== 'custom') {
-                        setRowFormData({ ...rowFormData, period: e.target.value });
+                      const val = e.target.value;
+                      if (val === 'custom') {
+                        setRowFormData({ ...rowFormData, period: '' });
+                      } else {
+                        setRowFormData({ ...rowFormData, period: val });
                       }
                     }}
                     className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none cursor-pointer text-xs"
@@ -5846,25 +5831,66 @@ export function NotionDatabaseTable({
                     <option value="Daily">Daily</option>
                     <option value="Weekly">Weekly</option>
                     <option value="Monthly">Monthly</option>
-                    <option value="3 Month">3 Month</option>
-                    <option value="6 Month">6 Month</option>
+                    <option value="3 Month">3 Month / Quarterly</option>
+                    <option value="6 Month">6 Month / Biannual</option>
                     <option value="Yearly">Yearly</option>
+                    <option value="Non-Routine">Non-Routine</option>
                     <option value="custom">Kustom / Lainnya...</option>
                   </select>
+                  {!['Daily', 'Weekly', 'Monthly', '3 Month', '6 Month', 'Yearly', 'Non-Routine'].includes(rowFormData['period'] || '') && (
+                    <input
+                      type="text"
+                      value={rowFormData['period'] || ''}
+                      onChange={(e) => setRowFormData({ ...rowFormData, period: e.target.value })}
+                      className="w-full mt-1.5 p-2 rounded-xl border focus:border-teal-500 outline-none text-xs"
+                      style={{
+                        backgroundColor: 'var(--input-bg, #141414)',
+                        borderColor: 'var(--border-main, #334155)',
+                        color: 'var(--text-main, #f1f5f9)'
+                      }}
+                      placeholder="Input periode manual..."
+                      autoFocus
+                    />
+                  )}
+                </div>
 
+                {/* Kategori */}
+                <div>
+                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                    Kategori
+                  </label>
                   <input
                     type="text"
-                    value={rowFormData['period'] || ''}
-                    onChange={(e) => setRowFormData({ ...rowFormData, period: e.target.value })}
+                    value={rowFormData['Kategori'] || ''}
+                    onChange={(e) => setRowFormData({ ...rowFormData, Kategori: e.target.value })}
                     className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs"
                     style={{
                       backgroundColor: 'var(--input-bg, #141414)',
                       borderColor: 'var(--border-main, #334155)',
                       color: 'var(--text-main, #f1f5f9)'
                     }}
-                    placeholder="Input periode manual jika kustom..."
+                    placeholder="Laboratorium"
                   />
                 </div>
+              </div>
+
+              {/* 6. Created Time */}
+              <div>
+                <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                  Created Time
+                </label>
+                <input
+                  type="text"
+                  value={rowFormData['Created Time'] || ''}
+                  onChange={(e) => setRowFormData({ ...rowFormData, 'Created Time': e.target.value })}
+                  className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-mono text-[11px]"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #141414)',
+                    borderColor: 'var(--border-main, #334155)',
+                    color: 'var(--text-main, #f1f5f9)'
+                  }}
+                  placeholder="YYYY-MM-DD HH:mm"
+                />
               </div>
 
               {/* Modal Footer Buttons */}

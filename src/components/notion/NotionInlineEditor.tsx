@@ -204,7 +204,7 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         // Prevent blur of contentEditable so selection isn't destroyed
         e.preventDefault();
       }}
-      className="fixed z-[99999] p-1 rounded-xl bg-white border border-slate-200 shadow-xl text-slate-700 text-xs animate-in fade-in zoom-in-95 duration-100 select-none font-sans flex items-center gap-0.5"
+      className="fixed z-[99999] p-1.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700 shadow-2xl text-slate-700 dark:text-slate-200 text-xs animate-in fade-in zoom-in-95 duration-100 select-none font-sans flex items-center gap-1"
       style={{
         top: `${bubblePos.top}px`,
         left: `${bubblePos.left}px`
@@ -214,45 +214,76 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
       <div className="relative">
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => setIsColorMenuOpen(!isColorMenuOpen)}
-          className="px-1.5 py-1 rounded hover:bg-slate-100 transition-colors text-slate-800 cursor-pointer font-bold flex items-center gap-0.5"
+          className={`px-2 py-1 rounded-lg transition-colors cursor-pointer font-bold flex items-center gap-1 ${
+            isColorMenuOpen
+              ? 'bg-teal-500/20 text-teal-600 dark:text-teal-400'
+              : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100'
+          }`}
           title="Pilih Warna Teks"
         >
-          <span className="underline decoration-pink-500 font-bold text-xs">A</span>
+          <span className="underline decoration-teal-500 font-extrabold text-xs">A</span>
           <ChevronDown className="w-2.5 h-2.5 opacity-60" />
         </button>
 
         {/* Notion Color Swatches Menu */}
         {isColorMenuOpen && (
           <div 
-            className="absolute top-full left-0 mt-1 p-2 rounded-xl bg-white border border-slate-200 shadow-2xl z-[100000] grid grid-cols-3 gap-1 min-w-[200px]"
+            className="absolute top-full left-0 mt-2 p-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl z-[100000] grid grid-cols-3 gap-1.5 min-w-[230px] animate-in fade-in zoom-in-95 duration-100"
             onMouseDown={(e) => e.preventDefault()}
           >
+            <div className="col-span-3 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800 mb-1">
+              Warna Teks Notion
+            </div>
             {Object.entries(NOTION_COLORS).map(([key, conf]) => (
               <button
                 key={key}
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => onApplyColor(conf.hex, key)}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium hover:bg-slate-100 transition-colors text-left cursor-pointer"
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[11px] font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer active:scale-95"
               >
                 <span 
-                  className="w-3 h-3 rounded-full shrink-0 border border-slate-200 shadow-2xs" 
+                  className="w-3.5 h-3.5 rounded-full shrink-0 border border-slate-200 dark:border-slate-700 shadow-2xs" 
                   style={{ backgroundColor: conf.hex }} 
                 />
-                <span className="truncate" style={{ color: conf.hex }}>{conf.label}</span>
+                <span className="truncate text-xs font-semibold" style={{ color: conf.hex }}>{conf.label}</span>
               </button>
             ))}
           </div>
         )}
       </div>
 
-      <div className="w-[1px] h-3.5 bg-slate-200 my-auto mx-0.5" />
+      <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-700 my-auto mx-0.5" />
+
+      {/* Quick Color Swatches directly on bar */}
+      <div className="flex items-center gap-1">
+        {['red', 'amber', 'green', 'blue', 'purple'].map((cKey) => {
+          const conf = NOTION_COLORS[cKey];
+          if (!conf) return null;
+          return (
+            <button
+              key={cKey}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onApplyColor(conf.hex, cKey)}
+              title={`Beri warna ${conf.label}`}
+              className="w-4 h-4 rounded-full border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs"
+              style={{ backgroundColor: conf.hex }}
+            />
+          );
+        })}
+      </div>
+
+      <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-700 my-auto mx-0.5" />
 
       {/* B (Bold) */}
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onExecCmd('bold')}
-        className="px-1.5 py-1 rounded hover:bg-slate-100 font-bold text-xs cursor-pointer text-slate-800"
+        className="px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 font-extrabold text-xs cursor-pointer text-slate-800 dark:text-slate-100"
         title="Tebal (Ctrl+B)"
       >
         B
@@ -261,8 +292,9 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
       {/* I (Italic) */}
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onExecCmd('italic')}
-        className="px-1.5 py-1 rounded hover:bg-slate-100 italic font-serif text-xs cursor-pointer text-slate-800"
+        className="px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 italic font-serif text-xs cursor-pointer text-slate-800 dark:text-slate-100"
         title="Miring (Ctrl+I)"
       >
         I
@@ -271,8 +303,9 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
       {/* U (Underline) */}
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onExecCmd('underline')}
-        className="px-1.5 py-1 rounded hover:bg-slate-100 underline text-xs cursor-pointer text-slate-800"
+        className="px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 underline text-xs cursor-pointer text-slate-800 dark:text-slate-100"
         title="Garis Bawah (Ctrl+U)"
       >
         U
@@ -281,8 +314,9 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
       {/* S (Strikethrough) */}
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onExecCmd('strikeThrough')}
-        className="px-1.5 py-1 rounded hover:bg-slate-100 line-through text-xs cursor-pointer text-slate-800"
+        className="px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 line-through text-xs cursor-pointer text-slate-800 dark:text-slate-100"
         title="Coret"
       >
         S
@@ -291,20 +325,22 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
       {/* Tx (Clear format) */}
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={onClearFormat}
-        className="px-1.5 py-1 rounded hover:bg-slate-100 font-medium text-[11px] text-slate-400 hover:text-slate-700 cursor-pointer"
+        className="px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-[11px] text-slate-400 hover:text-rose-500 cursor-pointer"
         title="Hapus Warna & Format"
       >
         Tx
       </button>
 
-      <div className="w-[1px] h-3.5 bg-slate-200 my-auto mx-0.5" />
+      <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-700 my-auto mx-0.5" />
 
       {/* Link */}
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={onInsertLink}
-        className="p-1 rounded hover:bg-slate-100 cursor-pointer text-slate-600"
+        className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-slate-600 dark:text-slate-300"
         title="Tautan / Link"
       >
         <LinkIcon className="w-3.5 h-3.5" />
@@ -313,8 +349,9 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
       {/* Code */}
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onExecCmd('code')}
-        className="px-1 py-0.5 rounded font-mono text-[10px] hover:bg-slate-100 cursor-pointer text-slate-600"
+        className="px-1.5 py-0.5 rounded-lg font-mono text-[10px] hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-slate-600 dark:text-slate-300 font-semibold"
         title="Kode"
       >
         &lt;/&gt;
@@ -415,9 +452,12 @@ const NotionTasklistInlineEditor: React.FC<{
     lastSavedRangeRef.current = range.cloneRange();
 
     const rect = range.getBoundingClientRect();
-    const bubbleWidth = 260;
-    const left = Math.max(12, Math.min(window.innerWidth - bubbleWidth - 12, rect.right - 60));
-    const top = rect.bottom + 6;
+    const bubbleWidth = 320;
+    const bubbleHeight = 40;
+    const left = Math.max(16, Math.min(window.innerWidth - bubbleWidth - 16, rect.left + rect.width / 2 - bubbleWidth / 2));
+    const top = rect.top >= bubbleHeight + 14 
+      ? rect.top - bubbleHeight - 8 
+      : rect.bottom + 8;
 
     setBubblePos({ top, left });
   }, [isColorMenuOpen]);
@@ -456,10 +496,25 @@ const NotionTasklistInlineEditor: React.FC<{
 
     if (!range) return;
 
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
     if (colorKey === 'default') {
-      document.execCommand('styleWithCSS', false, 'true');
-      document.execCommand('foreColor', false, '#0f172a');
-      document.execCommand('removeFormat');
+      try {
+        const span = document.createElement('span');
+        const contents = range.extractContents();
+        span.appendChild(contents);
+        span.removeAttribute('data-color');
+        span.style.color = '';
+        span.style.fontWeight = '';
+        range.insertNode(span);
+      } catch (e) {
+        document.execCommand('styleWithCSS', false, 'true');
+        document.execCommand('foreColor', false, '#0f172a');
+        document.execCommand('removeFormat');
+      }
     } else {
       const span = document.createElement('span');
       span.style.color = hex;
@@ -467,8 +522,17 @@ const NotionTasklistInlineEditor: React.FC<{
       span.setAttribute('data-color', colorKey);
 
       try {
-        span.appendChild(range.extractContents());
+        const contents = range.extractContents();
+        span.appendChild(contents);
         range.insertNode(span);
+
+        if (sel) {
+          const newRange = document.createRange();
+          newRange.selectNodeContents(span);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+          lastSavedRangeRef.current = newRange.cloneRange();
+        }
       } catch (err) {
         document.execCommand('styleWithCSS', false, 'true');
         document.execCommand('foreColor', false, hex);
@@ -476,7 +540,6 @@ const NotionTasklistInlineEditor: React.FC<{
     }
 
     setIsColorMenuOpen(false);
-    setBubblePos(null);
   };
 
   const handleClearFormat = () => {
@@ -893,9 +956,12 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
     lastSavedRangeRef.current = range.cloneRange();
 
     const rect = range.getBoundingClientRect();
-    const bubbleWidth = 260;
-    const left = Math.max(12, Math.min(window.innerWidth - bubbleWidth - 12, rect.right - 60));
-    const top = rect.bottom + 6;
+    const bubbleWidth = 320;
+    const bubbleHeight = 40;
+    const left = Math.max(16, Math.min(window.innerWidth - bubbleWidth - 16, rect.left + rect.width / 2 - bubbleWidth / 2));
+    const top = rect.top >= bubbleHeight + 14 
+      ? rect.top - bubbleHeight - 8 
+      : rect.bottom + 8;
 
     setBubblePos({ top, left });
   }, [isColorMenuOpen]);
@@ -954,10 +1020,25 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
 
     if (!range) return;
 
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
     if (colorKey === 'default') {
-      document.execCommand('styleWithCSS', false, 'true');
-      document.execCommand('foreColor', false, '#0f172a');
-      document.execCommand('removeFormat');
+      try {
+        const span = document.createElement('span');
+        const contents = range.extractContents();
+        span.appendChild(contents);
+        span.removeAttribute('data-color');
+        span.style.color = '';
+        span.style.fontWeight = '';
+        range.insertNode(span);
+      } catch (e) {
+        document.execCommand('styleWithCSS', false, 'true');
+        document.execCommand('foreColor', false, '#0f172a');
+        document.execCommand('removeFormat');
+      }
     } else {
       const span = document.createElement('span');
       span.style.color = hex;
@@ -965,8 +1046,17 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       span.setAttribute('data-color', colorKey);
 
       try {
-        span.appendChild(range.extractContents());
+        const contents = range.extractContents();
+        span.appendChild(contents);
         range.insertNode(span);
+
+        if (sel) {
+          const newRange = document.createRange();
+          newRange.selectNodeContents(span);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+          lastSavedRangeRef.current = newRange.cloneRange();
+        }
       } catch (err) {
         document.execCommand('styleWithCSS', false, 'true');
         document.execCommand('foreColor', false, hex);
@@ -974,7 +1064,6 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
     }
 
     setIsColorMenuOpen(false);
-    setBubblePos(null);
   };
 
   // Clear format
