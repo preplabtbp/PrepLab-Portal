@@ -140,19 +140,76 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
   const [activeStatDetail, setActiveStatDetail] = useState<'permanent' | 'izin' | 'spdk' | 'active' | null>(null);
   const [statDetailSearch, setStatDetailSearch] = useState('');
+  const [ptFilter, setPtFilter] = useState<'ALL' | 'TBP' | 'GTS'>('ALL');
+
+  // Deteksi role Section Manager & PT Viewer
+  const isSectionManager = useMemo(() => {
+    if (canManageDatabase) return true;
+    try {
+      const savedProfile = localStorage.getItem('p2h_inspector_profile');
+      if (savedProfile) {
+        const p = JSON.parse(savedProfile);
+        const jab = (p.jabatan || '').toLowerCase();
+        if (jab.includes('section manager') || jab.includes('manager') || jab.includes('superintendent') || jab.includes('head') || jab.includes('spt')) return true;
+      }
+    } catch {}
+    const cleanNik = (inspectorNik || '').toUpperCase();
+    const me = employees.find(e => (e.nik || '').toUpperCase() === cleanNik);
+    if (me) {
+      const jab = (me.jabatan || '').toLowerCase();
+      if (jab.includes('section manager') || jab.includes('manager') || jab.includes('superintendent') || jab.includes('head') || jab.includes('spt')) return true;
+    }
+    return false;
+  }, [inspectorNik, employees, canManageDatabase]);
+
+  const viewerPt = useMemo(() => {
+    try {
+      const savedProfile = localStorage.getItem('p2h_inspector_profile');
+      if (savedProfile) {
+        const p = JSON.parse(savedProfile);
+        if ((p.pt || '').toUpperCase() === 'GTS' || (p.nik || '').startsWith('03') || (p.nik || '').startsWith('M03')) return 'GTS';
+      }
+    } catch {}
+    const cleanNik = (inspectorNik || '').toUpperCase();
+    if (cleanNik.startsWith('03') || cleanNik.startsWith('M03')) return 'GTS';
+    return 'TBP';
+  }, [inspectorNik]);
+
+  const isGtsEmp = (e: any) => {
+    if (!e) return false;
+    const ptStr = (e.pt || '').toString().trim().toUpperCase();
+    const nikStr = (e.nik || '').toString().trim().toUpperCase();
+    const secStr = (e.section || '').toString().trim().toUpperCase();
+    return ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03') || secStr.includes('GTS');
+  };
+
+  // Aturan Akses:
+  // - Akun GTS hanya bisa diakses oleh Karyawan GTS dan Section Manager TBP (atau Manager/Admin)
+  // - Akun TBP hanya bisa diakses oleh Karyawan TBP dan Section Manager GTS (atau Manager/Admin)
+  const scopedEmployees = useMemo(() => {
+    if (isSectionManager) {
+      if (ptFilter === 'GTS') return employees.filter(e => isGtsEmp(e));
+      if (ptFilter === 'TBP') return employees.filter(e => !isGtsEmp(e));
+      return employees;
+    }
+    if (viewerPt === 'GTS') {
+      return employees.filter(e => isGtsEmp(e));
+    }
+    return employees.filter(e => !isGtsEmp(e));
+  }, [employees, isSectionManager, ptFilter, viewerPt]);
 
   // 1. Data & List Karyawan Aktif (Ambil kolom Status Karyawan = "Active" / "Aktif")
   const activeEmployeesList = useMemo(() => {
-    return employees.filter(e => {
+    return scopedEmployees.filter(e => {
       const st = String(e.statusKaryawan || e.status_karyawan || e.status || e['Status Karyawan'] || e['Status'] || '').toUpperCase().trim();
       return st === 'ACTIVE' || st === 'AKTIF' || st.startsWith('ACTIVE') || st.startsWith('AKTIF');
     });
-  }, [employees]);
+  }, [scopedEmployees]);
   const activeEmployeesCount = activeEmployeesList.length;
 
   // 2. Data & List Karyawan Permanent / PKWTT
   const permanentEmployeesList = useMemo(() => {
-    return employees.filter(e => {
+    return scopedEmployees.filter(e => {
       const sk = (e.statusKontrak || '').toLowerCase().trim();
       const skaryawan = (e.statusKaryawan || '').toLowerCase().trim();
       const tp = (e.tanggalPermanent || '').trim();
@@ -160,7 +217,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
              skaryawan.includes('pkwtt') || skaryawan.includes('permanent') || skaryawan.includes('tetap') ||
              (tp && tp !== '-' && tp !== '0');
     });
-  }, [employees]);
+  }, [scopedEmployees]);
   const permanentEmployeesCount = permanentEmployeesList.length;
 
   // 3. Data & List Jumlah Izin Karyawan pada Bulan Berjalan (Urut dari terbanyak sampai terkecil)
@@ -224,7 +281,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
     let grandTotalIzin = 0;
 
-    employees.forEach(emp => {
+    scopedEmployees.forEach(emp => {
       const att26 = emp.attendance2026 || emp.attendance?.['2026'] || emp.attendance?.[2026] || emp.attendanceData?.['2026'] || {};
 
       let matchingDates: string[] = [];
@@ -290,7 +347,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       grandTotal: grandTotalIzin,
       list
     };
-  }, [employees]);
+  }, [scopedEmployees]);
 
   // 4. Data & List SPDK & Sanksi yang Masih Aktif
   const activeSpdkData = useMemo(() => {
@@ -362,7 +419,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       levelColor: string;
     }> = [];
 
-    employees.forEach(emp => {
+    scopedEmployees.forEach(emp => {
       const c = emp.counselingSpdk || emp.counseling || {};
       const st = String(c.st || '').trim();
       const sp1 = String(c.sp1 || c.sp_1 || '').trim();
@@ -464,7 +521,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     });
 
     return result;
-  }, [employees]);
+  }, [scopedEmployees]);
 
 
 
@@ -580,12 +637,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
   const filteredSearch = useMemo(() => {
     if (!searchTerm) return [];
-    return employees.filter(e => {
+    return scopedEmployees.filter(e => {
       const matchesSearch = (e.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (e.nik || '').toLowerCase().includes(searchTerm.toLowerCase());
       return matchesSearch;
     }).slice(0, 8);
-  }, [employees, searchTerm]);
+  }, [scopedEmployees, searchTerm]);
 
   if (loading) {
     return (
@@ -809,11 +866,67 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 transition={{ delay: 0.1 }}
                 className="w-full max-w-4xl px-2 space-y-4"
               >
+                {/* PT Universe Switcher for Section Manager & Admin */}
+                {isSectionManager && (
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <div className="bg-slate-100/95 p-1 rounded-2xl border border-slate-200/90 flex items-center gap-1 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => setPtFilter('ALL')}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          ptFilter === 'ALL'
+                            ? 'bg-white text-slate-800 shadow-xs ring-1 ring-slate-200'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <span>Semua PT</span>
+                        <span className="ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-600 font-mono font-bold">
+                          {employees.length}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPtFilter('TBP')}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          ptFilter === 'TBP'
+                            ? 'bg-[#135e69] text-white shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <span>TBP &amp; GPS</span>
+                        <span className={`ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                          ptFilter === 'TBP' ? 'bg-white/20 text-white' : 'bg-slate-200/70 text-slate-600'
+                        }`}>
+                          {employees.filter(e => !isGtsEmp(e)).length}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPtFilter('GTS')}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          ptFilter === 'GTS'
+                            ? 'bg-[#f09b13] text-white shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <span>PT GTS</span>
+                        <span className={`ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                          ptFilter === 'GTS' ? 'bg-white/20 text-white' : 'bg-slate-200/70 text-slate-600'
+                        }`}>
+                          {employees.filter(e => isGtsEmp(e)).length}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4 w-full">
                   {/* Card 1: Total Data */}
                   <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center shadow-xs transition-all">
                     <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Total Data</div>
-                    <div className="text-2xl md:text-3xl font-black text-[#104b50]">{employees.length}</div>
+                    <div className="text-2xl md:text-3xl font-black text-[#104b50]">{scopedEmployees.length}</div>
                     <div className="text-[10px] text-slate-400 font-medium mt-0.5">Master Database</div>
                   </div>
 
