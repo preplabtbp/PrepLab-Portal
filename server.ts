@@ -476,6 +476,58 @@ const app = express();
   const onlineSockets = new Map(); // socket.id -> { socketId, nik, name, department, section, avatar, room, isQuiz, node, lastActive }
   const chatMessagesMemory: any[] = [];
 
+  // --- TEMPAT NONGKRONG / LOUNGE REAL-TIME STATE ---
+  interface LoungeAvatarState {
+    socketId: string;
+    nik: string;
+    name: string;
+    username: string;
+    pangkat: string;
+    pangkatIcon?: string;
+    section: string;
+    avatar?: string;
+    posX: number;
+    posY: number;
+    facing: 'left' | 'right';
+    actionState: string;
+    speechText?: string;
+    speechExpiry?: number;
+    lastActive: number;
+  }
+  const loungeAvatars = new Map<string, LoungeAvatarState>(); // nik -> LoungeAvatarState
+
+  let cachedTodayActiveUsers: any[] = [];
+  let lastTodayUsersFetch = 0;
+
+  async function getTodayActivePortalUsers() {
+    const now = Date.now();
+    if (now - lastTodayUsersFetch < 15000 && cachedTodayActiveUsers.length > 0) {
+      return cachedTodayActiveUsers;
+    }
+    try {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const rows = await db.select({
+        nik: employees.nik,
+        name: employees.name,
+        section: employees.section,
+        department: employees.department,
+        jabatan: employees.jabatan,
+        avatar: employees.avatar
+      })
+      .from(portalLogins)
+      .innerJoin(employees, sql`UPPER(${employees.nik}) = UPPER(${portalLogins.nik})`)
+      .where(eq(portalLogins.loginDate, todayStr))
+      .orderBy(desc(portalLogins.createdAt))
+      .limit(60);
+
+      cachedTodayActiveUsers = rows;
+      lastTodayUsersFetch = now;
+      return rows;
+    } catch (e) {
+      return cachedTodayActiveUsers;
+    }
+  }
+
   const getUniqueOnlineUsers = () => {
     const userMap = new Map<string, any>();
     for (const u of onlineSockets.values()) {
@@ -605,14 +657,76 @@ const app = express();
     });
 
     // --- REAL-TIME TEMPAT NONGKRONG AVATAR LOUNGE SYNC ---
+    socket.on('lounge:join', (data) => {
+      if (!data || !data.nik) return;
+      socket.join('lounge');
+      const avatarState: LoungeAvatarState = {
+        socketId: socket.id,
+        nik: data.nik,
+        name: data.name || data.nik,
+        username: data.username || data.name || data.nik,
+        pangkat: data.pangkat || 'Frontline Trainee',
+        pangkatIcon: data.pangkatIcon || '/assets/ranks/rank_01_trainee.svg',
+        section: data.section || 'Prep-Lab',
+        avatar: data.avatar || null,
+        posX: typeof data.posX === 'number' ? data.posX : 13,
+        posY: typeof data.posY === 'number' ? data.posY : 79,
+        facing: data.facing || 'right',
+        actionState: data.actionState || 'smoke_sit',
+        speechText: data.speechText,
+        speechExpiry: data.speechExpiry,
+        lastActive: Date.now()
+      };
+
+      loungeAvatars.set(data.nik, avatarState);
+
+      // 1. Immediately send current lounge avatar snapshot to joining client
+      socket.emit('lounge:sync_state', Array.from(loungeAvatars.values()));
+
+      // 2. Broadcast to all other lounge members that someone joined
+      socket.to('lounge').emit('lounge:user_joined', avatarState);
+
+      emitRoomUsers('lounge');
+      broadcastPresence();
+    });
+
     socket.on('lounge:move', (data) => {
       const room = data?.room || 'lounge';
+      if (data?.nik && loungeAvatars.has(data.nik)) {
+        const current = loungeAvatars.get(data.nik)!;
+        current.posX = data.x;
+        current.posY = data.y;
+        current.facing = data.facing || current.facing;
+        current.actionState = data.actionState || 'walk';
+        current.lastActive = Date.now();
+      }
       socket.to(room).emit('lounge:user_moved', data);
     });
 
     socket.on('lounge:action', (data) => {
       const room = data?.room || 'lounge';
+      if (data?.nik && loungeAvatars.has(data.nik)) {
+        const current = loungeAvatars.get(data.nik)!;
+        current.actionState = data.actionState;
+        if (data.speechText) {
+          current.speechText = data.speechText;
+          current.speechExpiry = Date.now() + 7500;
+        }
+        current.lastActive = Date.now();
+      }
       socket.to(room).emit('lounge:user_action', data);
+    });
+
+    socket.on('lounge:leave', (data) => {
+      const nik = data?.nik;
+      if (nik && loungeAvatars.has(nik)) {
+        const uState = loungeAvatars.get(nik);
+        loungeAvatars.delete(nik);
+        socket.leave('lounge');
+        io.to('lounge').emit('lounge:user_left', { nik, name: uState?.name, username: uState?.username });
+        emitRoomUsers('lounge');
+        broadcastPresence();
+      }
     });
 
     socket.on('chat:clear', async (data) => {
@@ -827,6 +941,16 @@ const app = express();
           io.to('quiz_room').emit('quiz:state', quizPlayers);
         }
       }
+
+      // Clean up from loungeAvatars if matching socketId
+      for (const [nik, avatar] of loungeAvatars.entries()) {
+        if (avatar.socketId === socket.id) {
+          loungeAvatars.delete(nik);
+          io.to('lounge').emit('lounge:user_left', { nik, name: avatar.name, username: avatar.username });
+          emitRoomUsers('lounge');
+          break;
+        }
+      }
     });
   });
 
@@ -949,13 +1073,38 @@ const app = express();
   app.use(galleryRouter);
 
   // --- PRESENCE ROUTES ---
-  app.get('/api/presence/online', (req, res) => {
+  app.get('/api/presence/online', async (req, res) => {
     try {
-      const onlineUsers = getUniqueOnlineUsers();
+      const liveSockets = getUniqueOnlineUsers();
+      const liveNiks = new Set(liveSockets.map(u => (u.nik || '').toUpperCase()));
+
+      const todayUsers = await getTodayActivePortalUsers();
+      const combinedUsers = [...liveSockets.map(u => ({ ...u, isLive: true }))];
+
+      // Add personnel who logged in / are on shift today
+      for (const emp of todayUsers) {
+        const cleanNik = (emp.nik || '').toUpperCase();
+        if (!liveNiks.has(cleanNik)) {
+          combinedUsers.push({
+            nik: emp.nik,
+            name: emp.name,
+            department: emp.department || 'Prep-Lab',
+            section: emp.section || emp.department || 'General',
+            avatar: emp.avatar || null,
+            room: null,
+            isLive: false,
+            isDuty: true,
+            lastActive: Date.now() - 300000
+          });
+        }
+      }
+
       res.json({
         success: true,
-        onlineUsers,
-        totalOnline: onlineUsers.length
+        onlineUsers: combinedUsers,
+        totalOnline: combinedUsers.length,
+        totalLive: liveSockets.length,
+        loungeMembers: Array.from(loungeAvatars.values())
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
