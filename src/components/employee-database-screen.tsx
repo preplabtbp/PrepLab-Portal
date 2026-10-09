@@ -2404,40 +2404,40 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   <p className="text-slate-600 font-semibold text-sm sm:text-base mt-0.5">{selectedEmployee.jabatan || 'Karyawan'}</p>
                 </div>
                 
-                <div className="flex items-center gap-3 flex-wrap">
-                  {canManageDatabase && (
-                    <>
-                      <Button
-                        onClick={() => {
-                          setEditModalMode('edit');
-                          setSelectedEmployeeForEdit(selectedEmployee);
-                          setEditModalTab('job');
-                          setIsEditModalOpen(true);
-                        }}
-                        size="sm"
-                        className="bg-teal-50 hover:bg-teal-100 text-teal-800 flex items-center gap-1.5 rounded-xl text-xs font-bold px-4 py-2.5 shadow-2xs border border-teal-200 active:scale-95 transition-all cursor-pointer"
-                        title="Edit data karyawan ini"
-                      >
-                        <Pencil className="w-3.5 h-3.5 text-teal-600" />
-                        <span>Edit Data Karyawan</span>
-                      </Button>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {canManageDatabase && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditModalMode('edit');
+                            setSelectedEmployeeForEdit(selectedEmployee);
+                            setEditModalTab('job');
+                            setIsEditModalOpen(true);
+                          }}
+                          className="bg-[#eaf6ee] hover:bg-[#d9f0df] text-[#1c603a] border border-[#bce5ca] flex items-center gap-2 rounded-2xl text-xs font-black px-4 py-2.5 shadow-2xs active:scale-95 transition-all cursor-pointer"
+                          title="Edit data karyawan ini"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-[#1c603a]" />
+                          <span>Edit Data Karyawan</span>
+                        </button>
 
-                      <Button
-                        onClick={() => {
-                          setEditModalMode('add');
-                          setSelectedEmployeeForEdit(null);
-                          setEditModalTab('job');
-                          setIsEditModalOpen(true);
-                        }}
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 rounded-xl text-xs font-bold px-4 py-2.5 shadow-sm shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
-                        title="Tambah karyawan baru"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>+ Tambah Karyawan</span>
-                      </Button>
-                    </>
-                  )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditModalMode('add');
+                            setSelectedEmployeeForEdit(null);
+                            setEditModalTab('job');
+                            setIsEditModalOpen(true);
+                          }}
+                          className="bg-[#e2f3f6] hover:bg-[#d0ecf2] text-[#125864] border border-[#b1e1e8] flex items-center gap-2 rounded-2xl text-xs font-black px-4 py-2.5 shadow-2xs active:scale-95 transition-all cursor-pointer"
+                          title="Tambah karyawan baru"
+                        >
+                          <Plus className="w-3.5 h-3.5 text-[#125864]" />
+                          <span>Tambah Karyawan</span>
+                        </button>
+                      </>
+                    )}
                   
                   <div className="p-3.5 bg-gradient-to-br from-amber-50/80 via-orange-50/40 to-white shadow-xs border border-amber-200/80 rounded-2xl flex items-center gap-3 min-w-[200px]">
                     <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
