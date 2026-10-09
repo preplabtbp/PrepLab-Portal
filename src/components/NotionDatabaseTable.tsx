@@ -5848,7 +5848,7 @@ export function NotionDatabaseTable({
                                         <NotionInlineEditor
                                           initialValue={val}
                                           fieldLabel="Keterangan"
-                                          multiline={true}
+                                          multiline={false}
                                           isNotionLight={isNotionLight}
                                           allowTasklistMode={false}
                                           onSave={(newVal) => {
@@ -5862,7 +5862,7 @@ export function NotionDatabaseTable({
                                           className="relative group/cell flex items-start justify-between gap-1 cursor-pointer font-sans w-full min-w-0 overflow-hidden"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
+                                            setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: false });
                                           }}
                                         >
                                           <div className={`flex-1 min-w-0 overflow-hidden font-sans ${fitPageMode ? 'text-xs break-words' : 'text-[13px]'} leading-normal`}>
@@ -5872,7 +5872,7 @@ export function NotionDatabaseTable({
                                             type="button"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
+                                              setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: false });
                                             }}
                                             title="Edit keterangan langsung"
                                             className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"

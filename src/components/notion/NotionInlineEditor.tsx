@@ -1247,54 +1247,18 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
         suppressContentEditableWarning
         onKeyDown={handleKeyDown}
         onMouseUp={updateBubblePosition}
-        onKeyUp={updateBubblePosition}
-        className="outline-none min-h-[44px] max-h-[360px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-sans selection:bg-[#cce2ff] p-1.5"
+        onBlur={(e) => {
+          if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node) && !isColorMenuOpen) {
+            onSave(getCleanMarkdown());
+          }
+        }}
+        className="outline-none min-h-[36px] max-h-[360px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-sans selection:bg-[#cce2ff] p-1.5"
         style={{
-          color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)',
+          color: isNotionLight ? '#0f172a' : '#f8fafc',
           caretColor: isNotionLight ? '#0f172a' : '#38bdf8',
           lineHeight: '1.6'
         }}
       />
-
-      {/* Mini Bottom Toolbar */}
-      <div className="mt-1 pt-1 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 text-[10px] select-none px-1">
-        {allowTasklistMode ? (
-          <button
-            type="button"
-            onClick={handleConvertToTasklist}
-            className="inline-flex items-center gap-1 font-medium text-teal-600 hover:text-teal-700 transition-colors cursor-pointer py-0.5 px-1 rounded hover:bg-teal-50"
-            title="Ubah teks ini menjadi daftar checklist"
-          >
-            <ListTodo className="w-3 h-3" />
-            <span>Ubah ke Checklist</span>
-          </button>
-        ) : (
-          <span className="text-[10px] text-slate-400 font-mono">
-            Ctrl+Enter ↵ Simpan · Esc Batal
-          </span>
-        )}
-
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-2 py-0.5 rounded text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer font-medium"
-            title="Batal edit (Esc)"
-          >
-            Batal
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onSave(getCleanMarkdown())}
-            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-teal-600 hover:bg-teal-500 text-white font-semibold transition-all cursor-pointer shadow-xs active:scale-95"
-            title="Simpan perubahan (Ctrl+Enter)"
-          >
-            <Check className="w-3 h-3" />
-            <span>Simpan</span>
-          </button>
-        </div>
-      </div>
 
       {/* Floating Notion Bubble Toolbar in Freeform Mode */}
       <FloatingNotionBubbleToolbar
