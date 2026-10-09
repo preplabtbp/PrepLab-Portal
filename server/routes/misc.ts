@@ -304,14 +304,17 @@ async function fetchAllGroupReports(filterWeek?: string) {
         const parts = textStr.split(/[,&/|]/).map(p => p.trim()).filter(Boolean);
         parts.forEach(part => {
           const nm = part.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/i);
-          if (nm) niksSet.add(nm[0].toUpperCase());
-          const cleanPart = part.toLowerCase();
-          allEmps.forEach(e => {
-            const eName = (e.name || '').trim().toLowerCase();
-            if (eName && (cleanPart === eName || cleanPart.includes(eName))) {
-              niksSet.add(e.nik);
-            }
-          });
+          if (nm) {
+            const matchedNik = nm[0].toUpperCase();
+            niksSet.add(matchedNik);
+            const empByNik = empMapByNik.get(matchedNik);
+            if (empByNik) niksSet.add(empByNik.nik);
+          }
+          const cleanPart = part.trim().toLowerCase();
+          const empByName = empMapByName.get(cleanPart);
+          if (empByName) {
+            niksSet.add(empByName.nik);
+          }
         });
       });
 
@@ -985,25 +988,28 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       return res.json(cachedRekap.data);
     }
     
-    // Start group report aggregation immediately so it runs concurrently with other queries
-    const groupReportsPromise = fetchAllGroupReports(selectedWeek).catch((e: any) => {
-      console.error('Error in fetchAllGroupReports for rekap:', e);
-      return [] as any[];
-    });
+    // Target week dates for optimal SQL filtering
+    const targetWeekDates = getDateStringsForWeek(selectedWeek);
 
-    // Start heavy table scans concurrently as well (Promise.resolve forces single execution of the drizzle query)
+    // Start heavy table scans concurrently (Promise.resolve forces single execution of the drizzle query)
     const inspectionsPromise = Promise.resolve(db.select().from(inspections).orderBy(desc(inspections.id)));
     const proofsPromise = Promise.resolve(selectedWeek === 'ALL'
       ? db.select().from(inspectionProofs)
       : db.select().from(inspectionProofs).where(eq(inspectionProofs.week, selectedWeek)));
+    const rosterPromise = Promise.resolve(
+      selectedWeek === 'ALL' || !targetWeekDates || targetWeekDates.length === 0
+        ? db.select().from(roster)
+        : db.select().from(roster).where(inArray(roster.date, targetWeekDates))
+    );
     // Prevent unhandled rejection warnings; errors are handled where awaited
     inspectionsPromise.catch(() => {});
     proofsPromise.catch(() => {});
+    rosterPromise.catch(() => {});
 
     // Run initial DB queries in parallel
     const [allEmployees, allRoster] = await Promise.all([
       db.select().from(employees),
-      db.select().from(roster)
+      rosterPromise
     ]);
 
     // Pre-build employee lookup maps for O(1) matching (instead of nested O(n*m) loops)
@@ -1044,56 +1050,52 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       }
     };
 
-    // 1. Scan all aggregated reports (including memory and DB parsed reports)
-    try {
-      const allGroupReports = await groupReportsPromise;
-      allGroupReports.forEach(msg => {
-        const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
-        if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
-          let cleanPdfUrl = msg.pdfUrl;
-          let pdfUrlTbp: string | null = null;
-          let pdfUrlGps: string | null = null;
-          if (cleanPdfUrl && typeof cleanPdfUrl === 'string' && cleanPdfUrl.startsWith('{')) {
-            try {
-              const parsed = JSON.parse(cleanPdfUrl);
-              pdfUrlTbp = parsed.tbp || null;
-              pdfUrlGps = parsed.gps || null;
-              cleanPdfUrl = pdfUrlTbp || pdfUrlGps || (Object.values(parsed)[0] as string) || null;
-            } catch (e) {}
-          }
+    // 1. Scan in-memory session reports directly (instant O(1), eliminates redundant full DB scan)
+    groupReportsMemory.forEach(msg => {
+      if (deletedReportIds.has(msg.id)) return;
+      const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
+      if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
+        let cleanPdfUrl = msg.pdfUrl;
+        let pdfUrlTbp: string | null = null;
+        let pdfUrlGps: string | null = null;
+        if (cleanPdfUrl && typeof cleanPdfUrl === 'string' && cleanPdfUrl.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(cleanPdfUrl);
+            pdfUrlTbp = parsed.tbp || null;
+            pdfUrlGps = parsed.gps || null;
+            cleanPdfUrl = pdfUrlTbp || pdfUrlGps || (Object.values(parsed)[0] as string) || null;
+          } catch (e) {}
+        }
 
-          const info = {
-            timestamp: msg.timestamp,
-            pdfUrl: cleanPdfUrl,
-            pdfUrlTbp,
-            pdfUrlGps,
-            pdfTitle: msg.pdfTitle || 'Laporan Inspeksi',
-            week: msgWeek
-          };
+        const info = {
+          timestamp: msg.timestamp,
+          pdfUrl: cleanPdfUrl,
+          pdfUrlTbp,
+          pdfUrlGps,
+          pdfTitle: msg.pdfTitle || 'Laporan Inspeksi',
+          week: msgWeek
+        };
 
-          if (msg.senderNik) registerCompletedUser(msg.senderNik, info);
-          if (msg.senderName) registerCompletedUser(msg.senderName, info);
+        if (msg.senderNik) registerCompletedUser(msg.senderNik, info);
+        if (msg.senderName) registerCompletedUser(msg.senderName, info);
 
-          if (Array.isArray(msg.allInspectorNiks)) {
-            msg.allInspectorNiks.forEach((item: string) => {
-              if (item) registerCompletedUser(item, info);
-            });
-          }
+        if (Array.isArray(msg.allInspectorNiks)) {
+          msg.allInspectorNiks.forEach((item: string) => {
+            if (item) registerCompletedUser(item, info);
+          });
+        }
 
-          // Strict match senderName against allEmployees (full name exact match)
-          if (msg.senderName) {
-            const senderClean = msg.senderName.trim().toLowerCase();
-            const matchedEmp = empByNameLower.get(senderClean);
-            if (matchedEmp) {
-              registerCompletedUser(matchedEmp.nik, info);
-              registerCompletedUser(matchedEmp.name, info);
-            }
+        // Strict match senderName against allEmployees (full name exact match)
+        if (msg.senderName) {
+          const senderClean = msg.senderName.trim().toLowerCase();
+          const matchedEmp = empByNameLower.get(senderClean);
+          if (matchedEmp) {
+            registerCompletedUser(matchedEmp.nik, info);
+            registerCompletedUser(matchedEmp.name, info);
           }
         }
-      });
-    } catch (e) {
-      console.error('Error in fetchAllGroupReports for rekap:', e);
-    }
+      }
+    });
 
     const partialMatchMemo = new Map<string, typeof allEmployees>();
     const matchEmployeeAndRegister = (part: string, info: any) => {
@@ -1670,10 +1672,17 @@ router.get('/api/rekap-kta', async (req, res) => {
     const ktaQueryPromise = Promise.resolve(selectedWeek === 'ALL'
       ? db.select().from(ktaReports)
       : db.select().from(ktaReports).where(eq(ktaReports.week, selectedWeek)));
-    ktaQueryPromise.catch(() => {});
+    const targetWeekDates = getDateStringsForWeek(selectedWeek);
+    const rosterQueryPromise = Promise.resolve(
+      selectedWeek === 'ALL' || !targetWeekDates || targetWeekDates.length === 0
+        ? db.select().from(roster)
+        : db.select().from(roster).where(inArray(roster.date, targetWeekDates))
+    );
+    rosterQueryPromise.catch(() => {});
+
     const [allEmployees, allRoster] = await Promise.all([
       db.select().from(employees),
-      db.select().from(roster)
+      rosterQueryPromise
     ]);
 
     const {

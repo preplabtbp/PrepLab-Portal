@@ -552,11 +552,30 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     setSelectedWeek(currentActiveWeek);
   }, [currentActiveWeek]);
 
+  const loadedFeedWeek = useRef<string | null>(null);
+  const loadedRekapWeek = useRef<string | null>(null);
+  const loadedRekapKtaWeek = useRef<string | null>(null);
+
   useEffect(() => {
-    fetchGroupFeed(selectedWeek);
-    fetchRekapData(selectedWeek, false);
-    fetchRekapKtaData(selectedWeek);
-  }, [selectedWeek]);
+    if (activeTab === 'feed') {
+      if (loadedFeedWeek.current !== selectedWeek) {
+        loadedFeedWeek.current = selectedWeek;
+        fetchGroupFeed(selectedWeek);
+      }
+    } else if (activeTab === 'rekap') {
+      if (rekapSubTab === 'INSPEKSI') {
+        if (loadedRekapWeek.current !== selectedWeek) {
+          loadedRekapWeek.current = selectedWeek;
+          fetchRekapData(selectedWeek, false);
+        }
+      } else if (rekapSubTab === 'KTA_TTA') {
+        if (loadedRekapKtaWeek.current !== selectedWeek) {
+          loadedRekapKtaWeek.current = selectedWeek;
+          fetchRekapKtaData(selectedWeek);
+        }
+      }
+    }
+  }, [selectedWeek, activeTab, rekapSubTab]);
 
   const fetchGroupFeed = async (week: string = selectedWeek) => {
     try {
