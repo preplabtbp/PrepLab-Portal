@@ -54,7 +54,8 @@ import {
   MoreVertical,
   MoreHorizontal,
   Sun,
-  Moon
+  Moon,
+  RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -568,7 +569,7 @@ export function migrateChecklistsInRows(
       const parentAct = getCellValue(row, 'Activity (routine/non routine)') || 'Monthly';
       const parentPeriod = getCellValue(row, 'period') || 'Monthly';
       const now = new Date();
-      const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
       // Create a sub-item row for each checklist item
       taskProg.items.forEach(item => {
@@ -2400,7 +2401,7 @@ export function NotionDatabaseTable({
     setSelectedRow(null);
     const nextNum = String(localRows.length + 1);
     const now = new Date();
-    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
     const inheritedCadence = currentCadence || normalizeCadence(title) || 'Monthly';
     const inheritedPeriod = (inheritedCadence && inheritedCadence !== 'Non-Routine')
@@ -2458,7 +2459,7 @@ export function NotionDatabaseTable({
     const parentPeriod = getRowVal(parentRow, 'period') || 'Monthly';
     
     const now = new Date();
-    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
     const parentId = parentRow.id || `parent-${actualParentIdx}-${parentRow['Jenis kegiatan'] || ''}`;
     const formattedTitle = `↳ ${cleanTitle}`;
@@ -2539,7 +2540,7 @@ export function NotionDatabaseTable({
         const parentAct = getRowVal(row, 'Activity (routine/non routine)') || 'Monthly';
         const parentPeriod = getRowVal(row, 'period') || 'Monthly';
         const now = new Date();
-        const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
         // Create a sub-item row for each checklist item
         taskProg.items.forEach(item => {
@@ -3617,54 +3618,79 @@ export function NotionDatabaseTable({
 
     if (s.includes('PROGRESS') || s.includes('PROSES')) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-950/70 text-amber-300 border border-amber-600/50 shadow-xs">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
+          style={{ backgroundColor: '#FDECC8', color: '#8F6B12' }}
+        >
+          <RotateCcw className="w-2.5 h-2.5 shrink-0" style={{ color: '#8F6B12' }} />
           ON PROGRESS
         </span>
       );
     }
-    if (s.includes('CLOSE') || s.includes('SELESAI') || s.includes('DONE') || s.includes('RESOLVED')) {
+    if (s.includes('CLOSE') || s.includes('SELESAI') || s.includes('RESOLVED')) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-950/70 text-emerald-300 border border-emerald-600/50 shadow-xs">
-          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-          CLOSED
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
+          style={{ backgroundColor: '#D3E5EF', color: '#235A80' }}
+        >
+          <CheckCircle2 className="w-2.5 h-2.5 shrink-0" style={{ color: '#235A80' }} />
+          CLOSE
+        </span>
+      );
+    }
+    if (s.includes('DONE')) {
+      return (
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
+          style={{ backgroundColor: '#DBEDDB', color: '#286641' }}
+        >
+          <Check className="w-2.5 h-2.5 shrink-0" style={{ color: '#286641' }} />
+          DONE
         </span>
       );
     }
     if (s.includes('CANCEL') || s.includes('BATAL')) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-950/70 text-rose-300 border border-rose-600/50 shadow-xs">
-          <AlertCircle className="w-3 h-3 text-rose-400" />
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
+          style={{ backgroundColor: '#FFE2DD', color: '#9B3E37' }}
+        >
+          <AlertCircle className="w-2.5 h-2.5 shrink-0" style={{ color: '#9B3E37' }} />
           CANCELED
         </span>
       );
     }
     if (s.includes('OPEN') || s.includes('BARU')) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-blue-950/70 text-blue-300 border border-blue-600/50 shadow-xs">
-          <Clock className="w-3 h-3 text-blue-400" />
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
+          style={{ backgroundColor: '#E3E2E0', color: '#5A5A58' }}
+        >
+          <Clock className="w-2.5 h-2.5 shrink-0" style={{ color: '#5A5A58' }} />
           OPEN
         </span>
       );
     }
     if (s.includes('PENDING') || s.includes('HOLD') || s.includes('DELAY')) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-purple-950/70 text-purple-300 border border-purple-600/50 shadow-xs">
-          <AlertCircle className="w-3 h-3 text-purple-400" />
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
+          style={{ backgroundColor: '#E8DEEE', color: '#6940A5' }}
+        >
+          <AlertCircle className="w-2.5 h-2.5 shrink-0" style={{ color: '#6940A5' }} />
           PENDING
         </span>
       );
     }
     return (
       <span 
-        className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border"
+        className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
         style={{
-          backgroundColor: 'var(--input-bg, #334155)',
-          borderColor: 'var(--border-main, #475569)',
-          color: 'var(--text-main, #cbd5e1)'
+          backgroundColor: '#E3E2E0',
+          color: '#5A5A58'
         }}
       >
-        {statusStr}
+        {s}
       </span>
     );
   };
@@ -3840,7 +3866,8 @@ export function NotionDatabaseTable({
 
   // Helper to format multiline notes with text color support, bold, italic, code, and bullet formatting
   // Default font size, font family, and color match Created Time column (#475569, font-sans, font-normal, 13px / 12px)
-  // When collapsed (!isExpanded), clamped so table row height strictly follows the main task title
+  // When collapsed (!isExpanded), clamped strictly with ellipsis (...) right at cell boundary
+  // When expanded, preserves bullet points and lines separated by enter as distinct points
   const renderFormattedNotes = (text: string, isExpanded: boolean = true) => {
     if (!text || text === '-' || text === '•') return <span className="font-sans text-xs text-slate-400">-</span>;
     // Normalize <br/>, <br>, <br /> to newlines
@@ -3848,35 +3875,50 @@ export function NotionDatabaseTable({
     const cleanText = normalized.trim();
 
     if (!isExpanded) {
+      // Build clean single-line preview for collapsed rows:
+      // strips HTML comments, status tags, checklists, and joins bullets/lines with ' • '
+      const singleLine = cleanText
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/\*\*\(Done\)\*\*|\[Done\]|\(Done\)/gi, '')
+        .replace(/\*\*\(OPEN\)\*\*|\[OPEN\]|\(OPEN\)/gi, '')
+        .replace(/^[-*•]?\s*\[[ xX]\]\s*/gm, '')
+        .replace(/\[\/?(?:red|blue|green|orange|yellow|purple|pink|gray|brown|default)\]/gi, '')
+        .replace(/\*\*|__/g, '')
+        .replace(/[*_~`]/g, '')
+        .split('\n')
+        .map(line => line.trim().replace(/^[•\-\*]\s*/, ''))
+        .filter(Boolean)
+        .join(' • ');
+
       return (
         <div 
-          className={`leading-normal font-sans font-normal overflow-hidden ${fitPageMode ? 'text-xs' : 'text-[13px]'} ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
+          className={`w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap block ${fitPageMode ? 'text-xs' : 'text-[13px]'} ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
           style={{ 
             fontSize: fitPageMode ? '12px' : '13px',
             fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
             color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)',
             lineHeight: '1.5',
-            maxHeight: '22px',
-            display: '-webkit-box',
-            WebkitLineClamp: 1,
-            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
             textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
+            display: 'block',
+            maxWidth: '100%'
           }}
-          title="Klik pada judul kegiatan untuk melihat keterangan lengkap"
-          dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(cleanText) }}
-        />
+          title={cleanText}
+        >
+          {singleLine || cleanText}
+        </div>
       );
     }
 
     return (
       <div 
-        className={`leading-normal whitespace-pre-wrap font-sans font-normal ${fitPageMode ? 'text-xs' : 'text-[13px]'} ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
+        className={`leading-relaxed font-sans font-normal space-y-1 block w-full ${fitPageMode ? 'text-xs' : 'text-[13px]'} ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
         style={{ 
           fontSize: fitPageMode ? '12px' : '13px',
           fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
           color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)',
-          lineHeight: '1.5'
+          lineHeight: '1.6'
         }}
         dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(cleanText) }}
       />
@@ -4947,7 +4989,7 @@ export function NotionDatabaseTable({
                   } else {
                     if (isNum) widthClass = 'w-16 text-center px-3.5 py-3 whitespace-nowrap';
                     else if (isJudul) widthClass = 'min-w-[260px] px-3.5 py-3 whitespace-nowrap';
-                    else if (colLower.includes('keterangan')) widthClass = 'min-w-[300px] px-3.5 py-3';
+                    else if (colLower.includes('keterangan')) widthClass = 'w-[360px] min-w-[280px] max-w-[450px] px-3.5 py-3 overflow-hidden';
                     else widthClass = 'px-3.5 py-3 whitespace-nowrap';
                   }
 
@@ -5627,7 +5669,7 @@ export function NotionDatabaseTable({
                                       className={`font-sans border-r ${
                                         isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
                                       } ${
-                                        fitPageMode ? 'px-2 py-2 text-xs overflow-hidden' : 'px-3.5 py-2.5 max-w-md text-[13px]'
+                                        fitPageMode ? 'px-2 py-2 text-xs overflow-hidden' : 'px-3.5 py-2.5 w-[360px] min-w-[280px] max-w-[450px] overflow-hidden text-[13px]'
                                       }`}
                                     >
                                       {isEditingThis ? (
@@ -5645,13 +5687,13 @@ export function NotionDatabaseTable({
                                         />
                                       ) : (
                                         <div 
-                                          className="relative group/cell flex items-start justify-between gap-1 cursor-pointer font-sans"
+                                          className="relative group/cell flex items-start justify-between gap-1 cursor-pointer font-sans w-full min-w-0 overflow-hidden"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
                                           }}
                                         >
-                                          <div className={`flex-1 font-sans ${fitPageMode ? 'text-xs break-words' : 'text-[13px]'} leading-normal`}>
+                                          <div className={`flex-1 min-w-0 overflow-hidden font-sans ${fitPageMode ? 'text-xs break-words' : 'text-[13px]'} leading-normal`}>
                                             {renderFormattedNotes(val, isExpanded)}
                                           </div>
                                           <button
@@ -6055,18 +6097,29 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
-                                // 8. Created Time Column
+                                // 8. Created Time Column (Tanggal saja, tanpa jam dan menit)
                                 if (colLower.includes('created')) {
+                                  const displayDate = (() => {
+                                    if (!val || val === '-') return '-';
+                                    const trimmed = String(val).trim();
+                                    const match = trimmed.match(/^(\d{4}[-/]\d{1,2}[-/]\d{1,2})/);
+                                    if (match) return match[1];
+                                    if (trimmed.includes(' ') || trimmed.includes('T')) {
+                                      return trimmed.split(/[ T]/)[0];
+                                    }
+                                    return trimmed;
+                                  })();
+
                                   return (
                                     <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} className={`font-sans border-r ${
                                       isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
                                     } ${
                                       fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
                                     }`}>
-                                      {val && val !== '-' ? (
+                                      {displayDate !== '-' ? (
                                         <span className="inline-flex items-center gap-1.5 font-sans">
                                           <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                          <span>{val}</span>
+                                          <span>{displayDate}</span>
                                         </span>
                                       ) : (
                                         <span className="font-mono text-slate-400">-</span>

@@ -15,67 +15,100 @@ export type DropdownType = 'status' | 'activity' | 'priority' | 'period';
 export interface DropdownOption {
   value: string;
   label: string;
-  badgeClass: string;
+  badgeClass?: string;
+  bgColor?: string;
+  textColor?: string;
   icon?: React.ReactNode;
 }
 
 export const STATUS_OPTIONS: DropdownOption[] = [
   {
     value: 'Open',
-    label: 'Open',
-    badgeClass: 'bg-slate-100 text-slate-900 border-slate-200 font-medium hover:bg-slate-200',
-    icon: <Clock className="w-2.5 h-2.5 text-slate-700" />
+    label: 'OPEN',
+    bgColor: '#E3E2E0',
+    textColor: '#5A5A58',
+    icon: <Clock className="w-2.5 h-2.5" style={{ color: '#5A5A58' }} />
   },
   {
     value: 'On Progress',
-    label: 'On Progress',
-    badgeClass: 'bg-amber-50 text-amber-900 border-amber-200/80 font-medium hover:bg-amber-100',
-    icon: <RotateCcw className="w-2.5 h-2.5 text-amber-700" />
+    label: 'ON PROGRESS',
+    bgColor: '#FDECC8',
+    textColor: '#8F6B12',
+    icon: <RotateCcw className="w-2.5 h-2.5" style={{ color: '#8F6B12' }} />
   },
   {
     value: 'Closed',
-    label: 'Closed',
-    badgeClass: 'bg-emerald-50 text-emerald-900 border-emerald-200/80 font-medium hover:bg-emerald-100',
-    icon: <CheckCircle2 className="w-2.5 h-2.5 text-emerald-700" />
+    label: 'CLOSE',
+    bgColor: '#D3E5EF',
+    textColor: '#235A80',
+    icon: <CheckCircle2 className="w-2.5 h-2.5" style={{ color: '#235A80' }} />
+  },
+  {
+    value: 'Close',
+    label: 'CLOSE',
+    bgColor: '#D3E5EF',
+    textColor: '#235A80',
+    icon: <CheckCircle2 className="w-2.5 h-2.5" style={{ color: '#235A80' }} />
+  },
+  {
+    value: 'Done',
+    label: 'DONE',
+    bgColor: '#DBEDDB',
+    textColor: '#286641',
+    icon: <Check className="w-2.5 h-2.5" style={{ color: '#286641' }} />
   },
   {
     value: 'Canceled',
-    label: 'Canceled',
-    badgeClass: 'bg-rose-50 text-rose-900 border-rose-200/80 font-medium hover:bg-rose-100',
-    icon: <AlertCircle className="w-2.5 h-2.5 text-rose-700" />
+    label: 'CANCELED',
+    bgColor: '#FFE2DD',
+    textColor: '#9B3E37',
+    icon: <AlertCircle className="w-2.5 h-2.5" style={{ color: '#9B3E37' }} />
+  },
+  {
+    value: 'Pending',
+    label: 'PENDING',
+    bgColor: '#E8DEEE',
+    textColor: '#6940A5',
+    icon: <AlertCircle className="w-2.5 h-2.5" style={{ color: '#6940A5' }} />
   }
 ];
 
 export const ROUTINE_CADENCE_OPTIONS: DropdownOption[] = [
   {
     value: 'Daily',
-    label: 'Daily',
-    badgeClass: 'bg-teal-50 text-teal-900 font-medium border-teal-200/80 hover:bg-teal-100'
+    label: 'DAILY',
+    bgColor: '#DBEDDB',
+    textColor: '#286641'
   },
   {
     value: 'Weekly',
-    label: 'Weekly',
-    badgeClass: 'bg-sky-50 text-sky-900 font-medium border-sky-200/80 hover:bg-sky-100'
+    label: 'WEEKLY',
+    bgColor: '#D3E5EF',
+    textColor: '#235A80'
   },
   {
     value: 'Monthly',
-    label: 'Monthly',
-    badgeClass: 'bg-indigo-50 text-indigo-900 font-medium border-indigo-200/80 hover:bg-indigo-100'
+    label: 'MONTHLY',
+    bgColor: '#E8DEEE',
+    textColor: '#6940A5'
   },
   {
     value: 'Quarterly',
-    label: 'Quarterly',
-    badgeClass: 'bg-purple-50 text-purple-900 font-medium border-purple-200/80 hover:bg-purple-100'
+    label: 'QUARTERLY',
+    bgColor: '#F5E0E9',
+    textColor: '#96386C'
   },
   {
     value: 'Biannual',
-    label: 'Biannual',
-    badgeClass: 'bg-amber-50 text-amber-900 font-medium border-amber-200/80 hover:bg-amber-100'
+    label: 'BIANNUAL',
+    bgColor: '#FDECC8',
+    textColor: '#8F6B12'
   },
   {
     value: 'Yearly',
-    label: 'Yearly',
-    badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80 hover:bg-rose-100'
+    label: 'YEARLY',
+    bgColor: '#FFE2DD',
+    textColor: '#9B3E37'
   }
 ];
 
@@ -83,50 +116,56 @@ const ACTIVITY_OPTIONS: DropdownOption[] = [
   ...ROUTINE_CADENCE_OPTIONS,
   {
     value: 'Non Routine',
-    label: 'Non Routine',
-    badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
+    label: 'NON ROUTINE',
+    bgColor: '#E3E2E0',
+    textColor: '#5A5A58'
   }
 ];
 
 const PRIORITY_OPTIONS: DropdownOption[] = [
   {
     value: 'Low',
-    label: 'Low',
-    badgeClass: 'bg-slate-100 text-slate-700 font-medium border-slate-200 hover:bg-slate-200'
+    label: 'LOW',
+    bgColor: '#E3E2E0',
+    textColor: '#5A5A58'
   },
   {
     value: 'Normal',
-    label: 'Normal',
-    badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
+    label: 'NORMAL',
+    bgColor: '#D3E5EF',
+    textColor: '#235A80'
   },
   {
     value: 'Medium',
-    label: 'Medium',
-    badgeClass: 'bg-sky-50 text-sky-900 font-medium border-sky-200/80 hover:bg-sky-100'
+    label: 'MEDIUM',
+    bgColor: '#FDECC8',
+    textColor: '#8F6B12'
   },
   {
     value: 'High',
-    label: 'High',
-    badgeClass: 'bg-amber-50 text-amber-900 font-medium border-amber-200/80 hover:bg-amber-100',
-    icon: <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+    label: 'HIGH',
+    bgColor: '#FADEC9',
+    textColor: '#9A5826',
+    icon: <AlertTriangle className="w-2.5 h-2.5" style={{ color: '#9A5826' }} />
   },
   {
     value: 'Urgent',
-    label: 'Urgent',
-    badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80 hover:bg-rose-100',
-    icon: <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
+    label: 'URGENT',
+    bgColor: '#FFE2DD',
+    textColor: '#9B3E37',
+    icon: <AlertCircle className="w-2.5 h-2.5" style={{ color: '#9B3E37' }} />
   }
 ];
 
 const PERIOD_OPTIONS: DropdownOption[] = [
-  { value: 'Daily', label: 'Daily', badgeClass: 'bg-teal-50 text-teal-900 font-medium border-teal-200/80' },
-  { value: 'Weekly', label: 'Weekly', badgeClass: 'bg-sky-50 text-sky-900 font-medium border-sky-200/80' },
-  { value: 'Monthly', label: 'Monthly', badgeClass: 'bg-indigo-50 text-indigo-900 font-medium border-indigo-200/80' },
-  { value: 'Quarterly', label: 'Quarterly', badgeClass: 'bg-purple-50 text-purple-900 font-medium border-purple-200/80' },
-  { value: 'Biannual', label: 'Biannual', badgeClass: 'bg-amber-50 text-amber-900 font-medium border-amber-200/80' },
-  { value: 'Yearly', label: 'Yearly', badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80' },
-  { value: 'Non-Routine', label: 'Non-Routine', badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200' },
-  { value: 'Ad-hoc', label: 'Ad-hoc', badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200' }
+  { value: 'Daily', label: 'DAILY', bgColor: '#DBEDDB', textColor: '#286641' },
+  { value: 'Weekly', label: 'WEEKLY', bgColor: '#D3E5EF', textColor: '#235A80' },
+  { value: 'Monthly', label: 'MONTHLY', bgColor: '#E8DEEE', textColor: '#6940A5' },
+  { value: 'Quarterly', label: 'QUARTERLY', bgColor: '#F5E0E9', textColor: '#96386C' },
+  { value: 'Biannual', label: 'BIANNUAL', bgColor: '#FDECC8', textColor: '#8F6B12' },
+  { value: 'Yearly', label: 'YEARLY', bgColor: '#FFE2DD', textColor: '#9B3E37' },
+  { value: 'Non-Routine', label: 'NON-ROUTINE', bgColor: '#E3E2E0', textColor: '#5A5A58' },
+  { value: 'Ad-hoc', label: 'AD-HOC', bgColor: '#E3E2E0', textColor: '#5A5A58' }
 ];
 
 interface NotionDropdownCellProps {
@@ -177,8 +216,9 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
   if (!currentOpt) {
     currentOpt = {
       value: value || '-',
-      label: value || '-',
-      badgeClass: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 hover:bg-slate-500/20'
+      label: (value || '-').toUpperCase(),
+      bgColor: '#E3E2E0',
+      textColor: '#5A5A58'
     };
   }
 
@@ -248,15 +288,19 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
         type="button"
         onClick={handleToggle}
         title="Klik untuk ubah langsung"
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-semibold leading-normal transition-all group/btn cursor-pointer ${currentOpt.badgeClass} ${
-          compact ? 'text-[11.5px] px-2 py-0.5' : ''
+        style={{
+          backgroundColor: currentOpt.bgColor,
+          color: currentOpt.textColor
+        }}
+        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold tracking-wide uppercase select-none transition-opacity hover:opacity-90 cursor-pointer shadow-2xs ${
+          compact ? 'text-[11px] px-1.5 py-0.5' : ''
         }`}
       >
         {currentOpt.icon}
         <span className="truncate max-w-[120px]">
           {(type === 'activity' || type === 'period') ? currentOpt.label.replace(/\s*\([^)]*\)/g, '').trim() : currentOpt.label}
         </span>
-        <ChevronDown className="w-2.5 h-2.5 opacity-70 group-hover/btn:opacity-100 group-hover/btn:translate-y-0.2 transition-all shrink-0" />
+        <ChevronDown className="w-2.5 h-2.5 opacity-70 group-hover/btn:opacity-100 group-hover/btn:translate-y-0.2 transition-all shrink-0" style={{ color: currentOpt.textColor }} />
       </button>
 
       {/* Popover Menu Rendered in Body via React Portal (Never Covered by Sibling Rows, 100% Solid) */}
@@ -264,20 +308,20 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
         <div
           ref={menuRef}
           onClick={(e) => e.stopPropagation()}
-          className="fixed rounded-xl border p-1 font-sans animate-in fade-in zoom-in-95 duration-100 bg-white border-slate-300"
+          className="fixed rounded-xl border p-1.5 font-sans animate-in fade-in zoom-in-95 duration-100 bg-white border-slate-200 shadow-xl"
           style={{
             top: position.openUpwards ? undefined : `${position.top}px`,
             bottom: position.openUpwards ? `${window.innerHeight - position.top}px` : undefined,
             left: `${position.left}px`,
-            minWidth: '150px',
-            maxWidth: '220px',
+            minWidth: '160px',
+            maxWidth: '240px',
             zIndex: 99999,
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.15)'
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
           }}
         >
           {/* Header Title */}
           <div 
-            className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider border-b mb-1 font-black text-slate-800 border-slate-200"
+            className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider border-b mb-1 font-bold text-slate-500 border-slate-100"
           >
             Pilih {type}
           </div>
@@ -287,29 +331,25 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
             {type === 'activity' ? (
               <>
                 {/* Choice 1: Routine (with expand/collapse for cadences Daily - Yearly) */}
-                <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <div className="rounded-lg border border-slate-100 overflow-hidden">
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsRoutineExpanded(!isRoutineExpanded);
                     }}
-                    className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                      ROUTINE_CADENCE_OPTIONS.some(o => o.value.toLowerCase() === currentValLower)
-                        ? 'bg-teal-50 text-teal-950 font-black'
-                        : 'hover:bg-slate-100 text-black font-bold'
-                    }`}
+                    className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-left text-xs transition-colors cursor-pointer hover:bg-slate-50 text-slate-700 font-semibold"
                   >
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-teal-500"></span>
                       <span>Routine (Rutin)</span>
                     </div>
-                    <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isRoutineExpanded ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isRoutineExpanded ? 'rotate-180' : ''}`} />
                   </button>
 
                   {/* Expanded Cadence Options (Daily s/d Yearly) */}
                   {isRoutineExpanded && (
-                    <div className="bg-slate-50/80 p-1 space-y-0.5 border-t border-slate-200">
+                    <div className="bg-slate-50/60 p-1 space-y-0.5 border-t border-slate-100">
                       {ROUTINE_CADENCE_OPTIONS.map((opt) => {
                         const isSelected = opt.value.toLowerCase() === currentValLower;
                         return (
@@ -317,14 +357,18 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
                             key={opt.value}
                             type="button"
                             onClick={(e) => handleSelect(opt.value, e)}
-                            className={`w-full flex items-center justify-between gap-2 pl-4 pr-2 py-1 rounded text-left text-[11px] transition-colors cursor-pointer ${
-                              isSelected
-                                ? 'bg-teal-100 text-teal-950 font-black'
-                                : 'hover:bg-slate-200 text-slate-800 font-semibold'
-                            }`}
+                            className="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs transition-colors cursor-pointer hover:bg-slate-100"
                           >
-                            <span>{opt.label}</span>
-                            {isSelected && <Check className="w-3 h-3 text-teal-700 shrink-0" />}
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none"
+                              style={{
+                                backgroundColor: opt.bgColor,
+                                color: opt.textColor
+                              }}
+                            >
+                              {opt.label}
+                            </span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-slate-700 shrink-0" />}
                           </button>
                         );
                       })}
@@ -339,17 +383,18 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
                     <button
                       type="button"
                       onClick={(e) => handleSelect('Non Routine', e)}
-                      className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer border ${
-                        isSelected
-                          ? 'bg-slate-200 text-slate-900 font-black border-slate-300'
-                          : 'hover:bg-slate-100 text-black font-bold border-transparent'
-                      }`}
+                      className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer hover:bg-slate-50"
                     >
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-                        <span>Non Routine</span>
-                      </div>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-slate-800 shrink-0" />}
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none"
+                        style={{
+                          backgroundColor: '#E3E2E0',
+                          color: '#5A5A58'
+                        }}
+                      >
+                        NON ROUTINE
+                      </span>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-slate-700 shrink-0" />}
                     </button>
                   );
                 })()}
@@ -362,17 +407,21 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
                     key={opt.value}
                     type="button"
                     onClick={(e) => handleSelect(opt.value, e)}
-                    className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer ${
-                      isSelected 
-                        ? 'bg-teal-50 text-teal-950 font-black border border-teal-300' 
-                        : 'hover:bg-slate-100 text-black font-bold'
-                    }`}
+                    className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer hover:bg-slate-50"
                   >
-                    <div className="flex items-center gap-2">
-                      {opt.icon}
-                      <span>{opt.label}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none"
+                        style={{
+                          backgroundColor: opt.bgColor || '#E3E2E0',
+                          color: opt.textColor || '#5A5A58'
+                        }}
+                      >
+                        {opt.icon}
+                        <span>{opt.label}</span>
+                      </span>
                     </div>
-                    {isSelected && <Check className="w-3.5 h-3.5 text-teal-700 shrink-0" />}
+                    {isSelected && <Check className="w-3.5 h-3.5 text-slate-700 shrink-0" />}
                   </button>
                 );
               })

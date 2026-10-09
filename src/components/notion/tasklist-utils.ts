@@ -694,7 +694,12 @@ export function applyColorToText(text: string, colorKey: string): string {
 export function markdownToVisualHtml(text?: string | null): string {
   if (!text || typeof text !== 'string') return '';
 
-  let html = text.replace(/\r\n/g, '\n');
+  // 1. Normalize line endings and <br/> tags to newlines
+  let html = text.replace(/\r\n/g, '\n').replace(/<br\s*\/?>/gi, '\n');
+
+  // 2. Separate inline bullet points and numbered points into individual lines
+  html = html.replace(/([^\n])\s*•\s*/g, '$1\n• ');
+  html = html.replace(/([^\n])\s+(\d+\.\s+)/g, '$1\n$2');
 
   // Normalize bullet prefixes missing spaces (e.g. -**text** or •text or *text or _**text**)
   html = html.replace(/^(\s*[-*•])(?=[^\s])/gm, '$1 ');
@@ -732,18 +737,18 @@ export function markdownToVisualHtml(text?: string | null): string {
       const content = trimmed.replace(/^[•\-\*]\s*/, '');
       if (!inUl) {
         if (inOl) { processedLines.push('</ol>'); inOl = false; }
-        processedLines.push('<ul class="list-disc pl-5 space-y-1">');
+        processedLines.push('<ul class="list-disc pl-5 my-1 space-y-1" style="list-style-type: disc; padding-left: 1.25rem;">');
         inUl = true;
       }
-      processedLines.push(`<li>${content}</li>`);
+      processedLines.push(`<li style="display: list-item;">${content}</li>`);
     } else if (/^\d+\.\s/.test(trimmed)) {
       const content = trimmed.replace(/^\d+\.\s+/, '');
       if (!inOl) {
         if (inUl) { processedLines.push('</ul>'); inUl = false; }
-        processedLines.push('<ol class="list-decimal pl-5 space-y-1">');
+        processedLines.push('<ol class="list-decimal pl-5 my-1 space-y-1" style="list-style-type: decimal; padding-left: 1.25rem;">');
         inOl = true;
       }
-      processedLines.push(`<li>${content}</li>`);
+      processedLines.push(`<li style="display: list-item;">${content}</li>`);
     } else {
       if (inUl) { processedLines.push('</ul>'); inUl = false; }
       if (inOl) { processedLines.push('</ol>'); inOl = false; }
@@ -755,9 +760,9 @@ export function markdownToVisualHtml(text?: string | null): string {
         }
         processedLines.push(`<blockquote class="border-l-4 border-teal-500 pl-3 italic text-slate-600 my-1">${bqContent}</blockquote>`);
       } else if (trimmed) {
-        processedLines.push(`<div>${trimmed}</div>`);
+        processedLines.push(`<div class="min-h-[1.25rem] my-0.5 leading-relaxed">${trimmed}</div>`);
       } else {
-        processedLines.push('<div><br></div>');
+        processedLines.push('<div class="h-2"></div>');
       }
     }
   }
