@@ -94,6 +94,21 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS sisa_ct TEXT;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS jatuh_tempo_ct TEXT;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS first_login_complete BOOLEAN DEFAULT false;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS masa_kerja_jabatan_sebelumnya TEXT;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS achievements JSONB;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS catatan TEXT;`);
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS employee_achievements (
+      id SERIAL PRIMARY KEY,
+      nik TEXT NOT NULL,
+      name TEXT,
+      title TEXT NOT NULL,
+      category TEXT,
+      date TEXT,
+      description TEXT,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_employee_achievements_nik ON employee_achievements(nik);`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_id INTEGER;`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_nik TEXT;`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_name TEXT;`);
@@ -1525,6 +1540,7 @@ async function syncBulletinToAgenda(post: any) {
   // Ensure critical DB columns exist
   try {
     await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS tanggal_efektif_tidak_bekerja text;');
+    await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS masa_kerja_jabatan_sebelumnya text;');
   } catch (e: any) {
     console.warn('Auto migration note:', e.message);
   }

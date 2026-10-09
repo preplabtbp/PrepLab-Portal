@@ -17,17 +17,20 @@ import {
   Scale,
   ShieldAlert,
   Gavel,
-  AlertOctagon
+  AlertOctagon,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { parseIndoDate, calculateDateDiffString } from '../lib/tenureUtils';
 
 interface EmployeeEditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  employee: any;
+  employee?: any;
   inspectorNik: string;
   initialTab?: 'job' | 'personal' | 'attendance' | 'reasons' | 'counseling';
   onSuccess: (updatedEmployee: any) => void;
+  mode?: 'edit' | 'add';
 }
 
 export function EmployeeEditModal({
@@ -36,7 +39,8 @@ export function EmployeeEditModal({
   employee,
   inspectorNik,
   initialTab = 'job',
-  onSuccess
+  onSuccess,
+  mode = 'edit'
 }: EmployeeEditModalProps) {
   const [activeTab, setActiveTab] = useState<'job' | 'personal' | 'attendance' | 'reasons' | 'counseling'>(initialTab);
   const [isSaving, setIsSaving] = useState(false);
@@ -53,6 +57,88 @@ export function EmployeeEditModal({
   }, [isOpen, initialTab]);
 
   useEffect(() => {
+    if (!isOpen) return;
+
+    if (mode === 'add') {
+      setFormData({
+        name: '',
+        nik: '',
+        ktp: '',
+        pt: 'TBP',
+        poh: 'Kawasi',
+        sponsor: '',
+        statusKaryawan: 'Active',
+        statusKontrak: 'Permanent',
+        tanggalEfektifTidakBekerja: '',
+        tanggalAwalBergabung: '',
+        tanggalJabatanBaru: '',
+        masaKerja: '',
+        masaKerjaJabatanTerakhir: '',
+        masaKerjaJabatanSebelumnya: '',
+        department: 'Preparation & Laboratory',
+        section: 'Preparation',
+        jobGrade: '',
+        gol: 'I',
+        jabatan: 'Crew, Preparation & Laboratory',
+        tanggalPermanent: '',
+        tempatLahir: '',
+        tanggalLahir: '',
+        phone: '',
+        keluargaKandung: '',
+        phoneKeluarga: '',
+        orangTerdekat: '',
+        phoneDarurat: '',
+        alamatKtp: '',
+        alamatDomisili: '',
+        sisaCt: '0',
+        jatuhTempoCt: ''
+      });
+
+      setAttData({
+        izin: '0',
+        izinKhusus: '0',
+        sakit: '0',
+        alpa: '0',
+        tanggalIzin: '',
+        tanggalIzinKhusus: '',
+        tanggalSakitSite: '',
+        tanggalSakitLuar: '',
+        tanggalAlpa: '',
+        alasanIzin: '',
+        alasanIzinKhusus: '',
+        alasanSakitSite: '',
+        alasanSakitLuar: ''
+      });
+
+      setCounselData({
+        totalSp: '0',
+        bulanKonseling: '',
+        konseling1: '',
+        konseling2: '',
+        konseling3: '',
+        st: '',
+        sp1: '',
+        sp2: '',
+        sp3: '',
+        sppt: '',
+        tanggalSp: '',
+        phk: '',
+        masaBerlakuSanksi: '',
+        masaPemulihan1: '',
+        masaPemulihan2: '',
+        alasanKonseling: '',
+        alasanSp: '',
+        keterangan: '',
+        pernahSpSebelumnya: 'Tidak',
+        pernahTerlibatSpdk: 'Tidak',
+        kronologiSpdk: '',
+        kategoriSpdk: '',
+        tindakanSpdk: '',
+        statusSanksi: 'Aman'
+      });
+      return;
+    }
+
     if (employee && isOpen) {
       setFormData({
         name: employee.name || '',
@@ -68,6 +154,7 @@ export function EmployeeEditModal({
         tanggalJabatanBaru: employee.tanggalJabatanBaru || '',
         masaKerja: employee.masaKerja || '',
         masaKerjaJabatanTerakhir: employee.masaKerjaJabatanTerakhir || '',
+        masaKerjaJabatanSebelumnya: employee.masaKerjaJabatanSebelumnya || '',
         department: employee.department || '',
         section: employee.section || '',
         jobGrade: employee.jobGrade || '',
@@ -134,12 +221,45 @@ export function EmployeeEditModal({
         statusSanksi: rawCounsel.statusSanksi ?? rawCounsel.status_sanksi ?? 'Aman'
       });
     }
-  }, [employee, isOpen, initialTab]);
+  }, [employee, isOpen, initialTab, mode]);
 
-  if (!isOpen || !employee) return null;
+  if (!isOpen || (mode !== 'add' && !employee)) return null;
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAutoCalculateTenure = () => {
+    const dohDate = parseIndoDate(formData.tanggalAwalBergabung);
+    if (!dohDate) {
+      toast.error('Isi Tanggal Awal Bergabung (DOH) terlebih dahulu untuk menghitung masa kerja.');
+      return;
+    }
+    const now = new Date();
+    const tglBaruDate = parseIndoDate(formData.tanggalJabatanBaru);
+
+    // 1. Total Masa Kerja
+    const total = calculateDateDiffString(dohDate, now);
+    
+    // 2. Masa Kerja Jabatan Sekarang & Sebelumnya
+    let sekarang = total;
+    let sebelumnya = '-';
+
+    if (tglBaruDate && tglBaruDate.getTime() > dohDate.getTime()) {
+      sekarang = calculateDateDiffString(tglBaruDate, now);
+      sebelumnya = calculateDateDiffString(dohDate, tglBaruDate);
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      masaKerja: total,
+      masaKerjaJabatanTerakhir: sekarang,
+      masaKerjaJabatanSebelumnya: sebelumnya
+    }));
+
+    toast.success('Masa kerja berhasil dihitung otomatis!', {
+      description: `Total: ${total} | Sekarang: ${sekarang} | Sebelumnya: ${sebelumnya}`
+    });
   };
 
   const handleAttChange = (field: string, value: string) => {
@@ -154,6 +274,8 @@ export function EmployeeEditModal({
     e.preventDefault();
     setIsSaving(true);
 
+    const isAdd = mode === 'add';
+
     try {
       const payload = {
         ...formData,
@@ -166,8 +288,11 @@ export function EmployeeEditModal({
         editorNik: inspectorNik
       };
 
-      const res = await fetch(`/api/employees/${employee.nik}`, {
-        method: 'PUT',
+      const url = isAdd ? '/api/employees' : `/api/employees/${employee.nik}`;
+      const method = isAdd ? 'POST' : 'PUT';
+
+      const res = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           'x-user-nik': inspectorNik
@@ -178,11 +303,13 @@ export function EmployeeEditModal({
       const json = await res.json();
 
       if (!res.ok || json.status === 'error') {
-        throw new Error(json.message || 'Gagal menyimpan perubahan data karyawan');
+        throw new Error(json.message || `Gagal ${isAdd ? 'menambahkan' : 'menyimpan perubahan'} data karyawan`);
       }
 
-      toast.success('Data karyawan & Konseling/SPDK berhasil diperbarui!', {
-        description: `Perubahan untuk ${formData.name || employee.name} telah disimpan di database.`
+      toast.success(isAdd ? 'Karyawan baru berhasil ditambahkan!' : 'Data karyawan berhasil diperbarui!', {
+        description: isAdd
+          ? `Karyawan ${formData.name} (${formData.nik}) berhasil tersimpan di database.`
+          : `Perubahan untuk ${formData.name || employee?.name} telah disimpan di database.`
       });
 
       if (json.data) {
@@ -190,7 +317,7 @@ export function EmployeeEditModal({
       }
       onClose();
     } catch (err: any) {
-      toast.error('Gagal menyimpan data: ' + err.message);
+      toast.error('Gagal memproses data: ' + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -204,19 +331,21 @@ export function EmployeeEditModal({
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-teal-50/40">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-[#22a7b8] text-white flex items-center justify-center font-black text-sm shadow-md">
-              {employee.name ? employee.name.charAt(0).toUpperCase() : 'E'}
+              {mode === 'add' ? '+' : ((employee?.name || formData.name || 'E').charAt(0).toUpperCase())}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-black text-slate-800">
-                  Edit Data Karyawan
+                  {mode === 'add' ? 'Tambah Karyawan Baru' : 'Edit Data Karyawan'}
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#fef6e7] text-[#9a5b02] border border-[#fad79a]">
-                  Khusus Admin
+                  Admin
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-mono">
-                {employee.name} • NIK: {employee.nik}
+                {mode === 'add' 
+                  ? 'Input master data karyawan baru sesuai struktur data.csv'
+                  : `${employee?.name || formData.name} • NIK: ${employee?.nik || formData.nik}`}
               </p>
             </div>
           </div>
@@ -320,20 +449,28 @@ export function EmployeeEditModal({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    NIK Karyawan (Read-Only)
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>NIK Karyawan {mode === 'add' ? '*' : '(Terkunci)'}</span>
+                    {mode === 'add' && <span className="text-[10px] text-emerald-600 font-normal">Wajib Unik</span>}
                   </label>
                   <input
                     type="text"
                     value={formData.nik || ''}
-                    disabled
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 font-mono text-xs font-bold cursor-not-allowed"
+                    disabled={mode !== 'add'}
+                    required={mode === 'add'}
+                    onChange={(e) => handleInputChange('nik', e.target.value.toUpperCase())}
+                    placeholder="Contoh: M0403240177"
+                    className={`w-full px-3.5 py-2 rounded-xl border font-mono text-xs font-bold ${
+                      mode === 'add'
+                        ? 'border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#22a7b8]'
+                        : 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
+                    }`}
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Jabatan Baru
+                    Jabatan
                   </label>
                   <input
                     type="text"
@@ -487,30 +624,65 @@ export function EmployeeEditModal({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Masa Kerja
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.masaKerja || ''}
-                    onChange={(e) => handleInputChange('masaKerja', e.target.value)}
-                    placeholder="Contoh: 4 Tahun 7 Bulan"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#22a7b8]"
-                  />
-                </div>
+                <div className="col-span-1 sm:col-span-2 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <label className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-[#22a7b8]" />
+                      <span>Masa Kerja Jabatan (Sekarang & Sebelumnya)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAutoCalculateTenure}
+                      className="text-[11px] font-bold text-[#135e69] bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-1 rounded-xl transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+                      title="Hitung otomatis berdasarkan DOH Awal dan Tgl Jabatan Baru"
+                    >
+                      <RefreshCw className="w-3 h-3 text-[#22a7b8]" />
+                      <span>Hitung Otomatis dari Tanggal</span>
+                    </button>
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Masa Kerja Jabatan Terakhir
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.masaKerjaJabatanTerakhir || ''}
-                    onChange={(e) => handleInputChange('masaKerjaJabatanTerakhir', e.target.value)}
-                    placeholder="Contoh: 1 Tahun 2 Bulan"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#22a7b8]"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        Masa Kerja Total
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.masaKerja || ''}
+                        onChange={(e) => handleInputChange('masaKerja', e.target.value)}
+                        placeholder="Contoh: 4 Tahun 7 Bulan"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#22a7b8]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center justify-between">
+                        <span>Jabatan Sekarang</span>
+                        <span className="text-[10px] text-emerald-600 font-bold">Terakhir</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.masaKerjaJabatanTerakhir || ''}
+                        onChange={(e) => handleInputChange('masaKerjaJabatanTerakhir', e.target.value)}
+                        placeholder="Contoh: 2 Tahun 11 Bulan"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#22a7b8]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center justify-between">
+                        <span>Jabatan Sebelumnya</span>
+                        <span className="text-[10px] text-amber-600 font-bold">Riwayat</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.masaKerjaJabatanSebelumnya || ''}
+                        onChange={(e) => handleInputChange('masaKerjaJabatanSebelumnya', e.target.value)}
+                        placeholder="Contoh: 1 Tahun 8 Bulan atau -"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#22a7b8]"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div>
@@ -1233,7 +1405,7 @@ export function EmployeeEditModal({
               className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-[#22a7b8] hover:bg-[#1b8f9e] transition-all flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
-              <span>{isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+              <span>{isSaving ? 'Menyimpan...' : (mode === 'add' ? 'Simpan Karyawan Baru' : 'Simpan Perubahan')}</span>
             </button>
           </div>
         </div>

@@ -35,6 +35,7 @@ export const employees = pgTable('employees', {
   tanggalJabatanBaru: text('tanggal_jabatan_baru'),
   masaKerja: text('masa_kerja'),
   masaKerjaJabatanTerakhir: text('masa_kerja_jabatan_terakhir'),
+  masaKerjaJabatanSebelumnya: text('masa_kerja_jabatan_sebelumnya'),
   tanggalPermanent: text('tanggal_permanent'),
   tempatLahir: text('tempat_lahir'),
   phone: text('phone'),
@@ -57,10 +58,27 @@ export const employees = pgTable('employees', {
   sisaCt: text('sisa_ct'),
   jatuhTempoCt: text('jatuh_tempo_ct'),
   attendanceData: json('attendance_data'),
+  achievements: json('achievements'),
+  catatan: text('catatan'),
   firstLoginComplete: boolean('first_login_complete').default(false),
   homeTutorialCompleted: boolean('home_tutorial_completed').default(false),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+// Define 'employee_achievements' table (Data Pencapaian & Prestasi Karyawan dari Sheet Achievements)
+export const employeeAchievements = pgTable('employee_achievements', {
+  id: serial('id').primaryKey(),
+  nik: text('nik').notNull(),
+  name: text('name'),
+  title: text('title').notNull(),
+  category: text('category'),
+  date: text('date'),
+  description: text('description'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (t) => [
+  index('idx_employee_achievements_nik').on(t.nik),
+]);
 
 // Define 'employee_attendance' table (Rekap Absensi Karyawan: Izin, Sakit, Alpa, Tanggal & Alasan)
 export const employeeAttendance = pgTable('employee_attendance', {
