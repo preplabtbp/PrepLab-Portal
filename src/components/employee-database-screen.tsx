@@ -2199,21 +2199,21 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             </div>
           </div>
         ) : (
-          /* PROFILE MODE (PURE WHITE CANVAS WITH FLOATING TIMBUL CARDS) */
+          /* PROFILE MODE (HARMONIOUS PASTEL GREEN CANVAS WITH FLOATING EXECUTIVE CARDS) */
           <motion.div 
             initial={{ opacity: 0, y: 15 }} 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="flex flex-col lg:flex-row h-full w-full p-3 sm:p-4 lg:p-6 bg-slate-50/70 gap-4 lg:gap-6 overflow-hidden relative"
+            className="flex flex-col lg:flex-row h-full w-full p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-[#f4faf5] via-[#edf6f0] to-[#e6f3eb] gap-4 lg:gap-6 overflow-hidden relative"
           >
-            {/* SIDEBAR (Profile Info) - CLEAN EXECUTIVE WHITE CARD (MATCHING LOCAL HOST THEME) */}
-            <div className="lg:w-80 xl:w-92 h-full max-h-full bg-white text-slate-800 shrink-0 shadow-xs rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative overflow-hidden border border-slate-200/80 ring-1 ring-slate-900/5 transition-all">
-              {/* Subtle Ambient Depth Lights */}
-              <div className="absolute -top-20 -left-20 w-44 h-44 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute -bottom-20 -right-20 w-44 h-44 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+            {/* SIDEBAR (Profile Info) - LUXURY EXECUTIVE PASTEL GREEN CARD */}
+            <div className="lg:w-80 xl:w-92 h-full max-h-full bg-gradient-to-br from-[#eaf6ee] via-[#dff2e5] to-[#cfead7] text-slate-800 shrink-0 shadow-xl shadow-emerald-950/5 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative overflow-hidden border border-emerald-300/60 ring-1 ring-emerald-500/10 transition-all">
+              {/* Decorative Ambient Depth Lights */}
+              <div className="absolute -top-20 -left-20 w-44 h-44 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-20 -right-20 w-44 h-44 bg-teal-300/25 rounded-full blur-3xl pointer-events-none" />
 
               <div className="flex flex-col items-center text-center mb-3.5 w-full shrink-0 relative z-10">
-                <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-44 xl:h-44 rounded-3xl bg-slate-100 border-2 border-slate-200/80 overflow-hidden flex items-center justify-center shrink-0 shadow-sm relative ring-4 ring-slate-100 ring-offset-2 ring-offset-white group mx-auto">
+                <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-44 xl:h-44 rounded-3xl bg-white/90 border-2 border-emerald-300/70 overflow-hidden flex items-center justify-center shrink-0 shadow-md relative ring-4 ring-emerald-200/50 ring-offset-2 ring-offset-[#dff2e5] group mx-auto">
                   {selectedEmployee.photo ? (
                     <img 
                       src={formatAvatarUrl(selectedEmployee.photo)} 
@@ -2225,10 +2225,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       }}
                     />
                   ) : (
-                    <User className="w-16 h-16 lg:w-20 lg:h-20 text-slate-400 drop-shadow-xs" />
+                    <User className="w-16 h-16 lg:w-20 lg:h-20 text-emerald-700/60 drop-shadow-sm" />
                   )}
                   {isUploadingPhoto && (
-                    <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white z-20">
+                    <div className="absolute inset-0 bg-emerald-950/80 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white z-20">
                       <RefreshCw className="w-6 h-6 animate-spin text-white mb-1.5" />
                       <span>Mengunggah...</span>
                     </div>
@@ -2249,10 +2249,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         type="button"
                         onClick={() => photoInputRef.current?.click()}
                         disabled={isUploadingPhoto}
-                        className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 active:scale-95 text-slate-700 flex items-center gap-1.5 transition-all shadow-2xs border border-slate-200 cursor-pointer"
+                        className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white/80 hover:bg-white active:scale-95 text-emerald-900 flex items-center gap-1.5 transition-all shadow-xs border border-emerald-300/60 backdrop-blur-md cursor-pointer"
                         title="Perbarui atau unggah foto karyawan di database"
                       >
-                        <Camera className="w-3.5 h-3.5 text-slate-600" />
+                        <Camera className="w-3.5 h-3.5 text-emerald-700" />
                         <span>{selectedEmployee.photo ? 'Ganti Foto' : 'Unggah Foto'}</span>
                       </button>
 
@@ -2274,63 +2274,63 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   </>
                 )}
 
-                <h2 className="text-lg lg:text-xl font-black mt-3 mb-1 leading-tight text-slate-900 text-center w-full tracking-tight">
+                <h2 className="text-lg lg:text-xl font-black mt-3 mb-1 leading-tight text-emerald-950 drop-shadow-xs text-center w-full tracking-tight">
                   {selectedEmployee.name}
                 </h2>
                 <div className="w-full flex justify-center">
-                  <p className="text-slate-700 inline-flex items-center bg-slate-100/90 px-3 py-0.5 rounded-full text-[11px] font-black shadow-2xs border border-slate-200/80 font-mono tracking-wider">
-                    <Fingerprint className="w-3.5 h-3.5 mr-1.5 text-teal-600" />
+                  <p className="text-emerald-900 inline-flex items-center bg-white/85 backdrop-blur-md px-3 py-0.5 rounded-full text-[11px] font-black shadow-xs border border-emerald-300/60 font-mono tracking-wider">
+                    <Fingerprint className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
                     NIK: {selectedEmployee.nik}
                   </p>
                 </div>
               </div>
 
               {/* Detail Profil Sidebar */}
-              <div className="w-full flex-1 overflow-y-auto pr-1 space-y-2 text-slate-800 divide-y divide-slate-100 custom-scrollbar text-left relative z-10">
+              <div className="w-full flex-1 overflow-y-auto pr-1 space-y-2 text-slate-800 divide-y divide-emerald-200/60 custom-scrollbar-pastel text-left relative z-10">
                 <div className="pt-2 first:pt-0">
-                  <p className="text-slate-500 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Jabatan</p>
+                  <p className="text-emerald-700 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Jabatan</p>
                   <p className="font-bold text-slate-900 text-xs sm:text-sm leading-snug">{selectedEmployee.jabatan || '-'}</p>
                 </div>
                 
                 <div className="pt-2">
-                  <p className="text-slate-500 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Perusahaan</p>
+                  <p className="text-emerald-700 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Perusahaan</p>
                   <p className="font-bold text-slate-900 text-xs">{selectedEmployee.pt || '-'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
-                  <div className="bg-slate-50 hover:bg-slate-100/80 p-2.5 rounded-2xl border border-slate-200/70 transition-colors shadow-2xs">
-                    <p className="text-slate-500 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Job Grade</p>
+                  <div className="bg-white/70 hover:bg-white/95 p-2.5 rounded-2xl border border-emerald-200/70 transition-colors shadow-2xs backdrop-blur-xs">
+                    <p className="text-emerald-700 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Job Grade</p>
                     <p className="font-extrabold text-slate-900 text-xs">{selectedEmployee.jobGrade || '-'}</p>
                   </div>
-                  <div className="bg-slate-50 hover:bg-slate-100/80 p-2.5 rounded-2xl border border-slate-200/70 transition-colors shadow-2xs">
-                    <p className="text-slate-500 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Golongan</p>
+                  <div className="bg-white/70 hover:bg-white/95 p-2.5 rounded-2xl border border-emerald-200/70 transition-colors shadow-2xs backdrop-blur-xs">
+                    <p className="text-emerald-700 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Golongan</p>
                     <p className="font-extrabold text-slate-900 text-xs">{selectedEmployee.gol || '-'}</p>
                   </div>
                 </div>
 
                 <div className="pt-2">
-                  <p className="text-slate-500 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Bagian (Section)</p>
+                  <p className="text-emerald-700 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Bagian (Section)</p>
                   <p className="font-bold text-slate-900 text-xs">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
-                  <div className="bg-slate-50 hover:bg-slate-100/80 p-2.5 rounded-2xl border border-slate-200/70 transition-colors shadow-2xs">
-                    <p className="text-slate-500 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">DOH Awal</p>
+                  <div className="bg-white/70 hover:bg-white/95 p-2.5 rounded-2xl border border-emerald-200/70 transition-colors shadow-2xs backdrop-blur-xs">
+                    <p className="text-emerald-700 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">DOH Awal</p>
                     <p className="font-bold text-slate-900 text-xs font-mono">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
                   </div>
-                  <div className="bg-slate-50 hover:bg-slate-100/80 p-2.5 rounded-2xl border border-slate-200/70 transition-colors shadow-2xs">
-                    <p className="text-slate-500 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
+                  <div className="bg-white/70 hover:bg-white/95 p-2.5 rounded-2xl border border-emerald-200/70 transition-colors shadow-2xs backdrop-blur-xs">
+                    <p className="text-emerald-700 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
                     <p className="font-bold text-slate-900 text-xs font-mono">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
                   </div>
                 </div>
 
                 {/* MASA KERJA JABATAN DENGAN DROPDOWN LIST */}
                 <div className="pt-2.5 pb-1 space-y-1.5">
-                  <div className="bg-slate-50 hover:bg-slate-100/80 p-3 rounded-2xl border border-slate-200/80 transition-all shadow-2xs">
+                  <div className="bg-white/80 hover:bg-white/95 p-3 rounded-2xl border border-emerald-300/70 transition-all shadow-xs backdrop-blur-xs">
                     <div className="flex items-center justify-between gap-1 mb-1.5">
                       <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-teal-600" />
-                        <span className="text-slate-700 text-[10px] font-black uppercase tracking-wider">
+                        <Clock className="w-3.5 h-3.5 text-emerald-700" />
+                        <span className="text-emerald-800 text-[10px] font-black uppercase tracking-wider">
                           Masa Kerja Jabatan
                         </span>
                       </div>
@@ -2340,13 +2340,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         <select
                           value={tenureDropdownPeriod}
                           onChange={(e) => setTenureDropdownPeriod(e.target.value as 'sekarang' | 'sebelumnya')}
-                          className="bg-white hover:bg-slate-50 text-slate-800 text-[10.5px] font-extrabold pl-2.5 pr-6 py-0.5 rounded-lg border border-slate-200 shadow-2xs focus:outline-none focus:ring-1 focus:ring-teal-500 appearance-none cursor-pointer"
+                          className="bg-emerald-50 hover:bg-white text-emerald-950 text-[10.5px] font-extrabold pl-2.5 pr-6 py-0.5 rounded-lg border border-emerald-300/80 cursor-pointer shadow-2xs focus:outline-none focus:ring-1 focus:ring-emerald-500 appearance-none"
                           title="Pilih masa kerja jabatan sekarang atau sebelumnya"
                         >
                           <option value="sekarang">Sekarang</option>
                           <option value="sebelumnya">Sebelumnya</option>
                         </select>
-                        <ChevronDown className="w-3 h-3 text-slate-500 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <ChevronDown className="w-3 h-3 text-emerald-700 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
                     </div>
 
@@ -2357,18 +2357,18 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       </p>
                       <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-2xs ${
                         tenureDropdownPeriod === 'sekarang'
-                          ? 'bg-teal-50 text-teal-700 border border-teal-200'
-                          : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300/60'
+                          : 'bg-amber-100 text-amber-800 border border-amber-300/60'
                       }`}>
                         {tenureDropdownPeriod === 'sekarang' ? 'Jabatan Sekarang' : 'Jabatan Sebelumnya'}
                       </span>
                     </div>
 
                     {/* Keterangan */}
-                    <div className="mt-2 text-[9.5px] text-slate-600 leading-tight flex items-start gap-1.5 font-medium bg-white p-2 rounded-xl border border-slate-200/80">
-                      <Info className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
+                    <div className="mt-2 text-[9.5px] text-emerald-900 leading-tight flex items-start gap-1.5 font-medium bg-emerald-50/70 p-2 rounded-xl border border-emerald-200/80">
+                      <Info className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" />
                       <span>
-                        <strong className="text-slate-900 mr-1">
+                        <strong className="text-emerald-950 mr-1">
                           Keterangan {tenureDropdownPeriod === 'sekarang' ? 'Sekarang:' : 'Sebelumnya:'}
                         </strong>
                         {tenureInfo[tenureDropdownPeriod].keterangan}
@@ -2376,8 +2376,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
 
                     {/* Informasi Total Masa Kerja */}
-                    <div className="mt-2 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px]">
-                      <span className="text-slate-500 font-medium">Masa Kerja Total (DOH):</span>
+                    <div className="mt-2 pt-2 border-t border-emerald-200/80 flex items-center justify-between text-[10px]">
+                      <span className="text-emerald-700 font-medium">Masa Kerja Total (DOH):</span>
                       <span className="font-extrabold text-slate-900 font-mono">{tenureInfo.total.value}</span>
                     </div>
                   </div>
@@ -2385,8 +2385,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               </div>
             </div>
 
-            {/* MAIN CONTENT AREA (CLEAN EXECUTIVE WHITE CANVAS) */}
-            <div className="flex-1 h-full max-h-full p-5 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50/50 rounded-3xl shadow-xs border border-slate-200/80 pb-24 ring-1 ring-slate-900/5 transition-all custom-scrollbar">
+            {/* MAIN CONTENT AREA (CLEAN EXECUTIVE WHITE CANVAS ON PASTEL GREEN BACKDROP) */}
+            <div className="flex-1 h-full max-h-full p-5 sm:p-6 lg:p-8 overflow-y-auto bg-white/70 backdrop-blur-xs rounded-3xl shadow-xs border border-emerald-200/60 pb-24 ring-1 ring-emerald-500/5 transition-all custom-scrollbar">
               
               {/* HEADER W/ SPONSOR & EDIT BUTTON */}
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs">
