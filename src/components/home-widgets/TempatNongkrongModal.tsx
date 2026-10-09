@@ -570,16 +570,15 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     return () => clearInterval(speechCleaner);
   }, [mySpeech]);
 
-  // Synchronize presence data from server (STRICTLY live real-time users)
+  // Synchronize presence data from server (STRICTLY real-time live users inside lounge)
   const syncOnlinePresence = useCallback((data: any) => {
     if (!data) return;
-    const rawOnline = Array.isArray(data.onlineUsers) ? data.onlineUsers : [];
     const rawLounge = Array.isArray(data.loungeMembers) ? data.loungeMembers : [];
 
     setOtherAvatars(prev => {
       const next = new Map<string, InRoomAvatar>();
 
-      // 1. Process Lounge Members (Real-time live avatars currently inside lounge)
+      // ONLY process Lounge Members (Real-time live avatars currently inside lounge)
       rawLounge.forEach((lm: any) => {
         if (!lm.nik || lm.nik === userNik) return;
         const existing = prev.get(lm.nik);
@@ -600,31 +599,6 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           speechText: lm.speechText || existing?.speechText,
           speechExpiry: lm.speechExpiry || existing?.speechExpiry,
           avatarUrl: lm.avatar || existing?.avatarUrl,
-          isLive: true
-        });
-      });
-
-      // 2. Process other live online users in portal (only if currently connected via socket)
-      const liveOthers = rawOnline.filter((u: any) => u.nik && u.nik !== userNik && !next.has(u.nik) && u.isLive !== false);
-      liveOthers.forEach((u: any, idx: number) => {
-        const spotIdx = (idx + 1) % LOUNGE_SEATS.length;
-        const spot = LOUNGE_SEATS[spotIdx];
-        const existing = prev.get(u.nik);
-        const cleanUname = getCleanUsername(u.nik, u.name, u.username);
-        const rankData = getPangkatData(u.nik, u.pangkat, u.role || u.jabatan);
-        next.set(u.nik, {
-          nik: u.nik,
-          name: cleanUname,
-          username: cleanUname,
-          pangkat: rankData.name,
-          pangkatIcon: rankData.icon,
-          section: u.section || u.department || 'Prep-Lab',
-          posX: existing?.posX ?? spot.x,
-          posY: existing?.posY ?? spot.y,
-          facing: existing?.facing ?? spot.facing,
-          actionState: existing?.actionState ?? spot.action,
-          walkFrame: existing?.walkFrame ?? 0,
-          avatarUrl: u.avatar,
           isLive: true
         });
       });
@@ -677,15 +651,15 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     joinLounge(userPayload);
 
     // Initial lounge avatar snapshot from server
+    // Initial lounge avatar snapshot from server (authoritative sync)
     const handleLoungeSync = (avatarList: any[]) => {
       if (Array.isArray(avatarList)) {
-        setOtherAvatars(prev => {
-          const next = new Map(prev);
+        setOtherAvatars(() => {
+          const next = new Map<string, InRoomAvatar>();
           avatarList.forEach((av: any) => {
             if (!av || !av.nik || av.nik === userNik) return;
             const cleanUname = getCleanUsername(av.nik, av.name, av.username);
             const rankData = getPangkatData(av.nik, av.pangkat);
-            const existing = next.get(av.nik);
             next.set(av.nik, {
               nik: av.nik,
               name: cleanUname,
@@ -693,16 +667,15 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
               pangkat: av.pangkat || rankData.name,
               pangkatIcon: av.pangkatIcon || rankData.icon,
               section: av.section || 'Prep-Lab',
-              posX: typeof av.posX === 'number' ? av.posX : (existing?.posX ?? 13),
-              posY: typeof av.posY === 'number' ? av.posY : (existing?.posY ?? 79),
-              facing: av.facing || existing?.facing || 'right',
-              actionState: av.actionState || existing?.actionState || 'idle',
-              walkFrame: existing?.walkFrame ?? 0,
-              speechText: av.speechText || existing?.speechText,
-              speechExpiry: av.speechExpiry || existing?.speechExpiry,
-              avatarUrl: av.avatar || existing?.avatarUrl,
-              isLive: true,
-              isDuty: false
+              posX: typeof av.posX === 'number' ? av.posX : 13,
+              posY: typeof av.posY === 'number' ? av.posY : 79,
+              facing: av.facing || 'right',
+              actionState: av.actionState || 'idle',
+              walkFrame: 0,
+              speechText: av.speechText,
+              speechExpiry: av.speechExpiry,
+              avatarUrl: av.avatar,
+              isLive: true
             });
           });
           return next;
@@ -731,8 +704,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           actionState: data.actionState || existing?.actionState || 'idle',
           walkFrame: 0,
           avatarUrl: data.avatar || existing?.avatarUrl,
-          isLive: true,
-          isDuty: false
+          isLive: true
         });
         return next;
       });
@@ -744,12 +716,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       if (!data || !data.nik) return;
       setOtherAvatars(prev => {
         const next = new Map(prev);
-        const existing = next.get(data.nik);
-        if (existing && existing.isDuty) {
-          next.set(data.nik, { ...existing, isLive: false, actionState: 'sit' });
-        } else {
-          next.delete(data.nik);
-        }
+        next.delete(data.nik);
         return next;
       });
     };
@@ -762,41 +729,23 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           setMySpeech({ text: msg.text, expiry: Date.now() + 7500 });
         } else {
           setOtherAvatars(prev => {
+            const existing = prev.get(msg.senderNik);
+            if (!existing) {
+              // Sender is not in the lounge - do not spawn a phantom avatar!
+              return prev;
+            }
             const next = new Map(prev);
-            const existing = next.get(msg.senderNik);
             const senderUname = getCleanUsername(msg.senderNik, msg.senderName, msg.senderUsername);
             const senderRank = getPangkatData(msg.senderNik, msg.senderPangkat);
-            if (existing) {
-              next.set(msg.senderNik, {
-                ...existing,
-                username: existing.username || senderUname,
-                pangkat: existing.pangkat || senderRank.name,
-                pangkatIcon: existing.pangkatIcon || msg.senderPangkatIcon || senderRank.icon,
-                speechText: msg.text,
-                speechExpiry: Date.now() + 7500,
-                isLive: true
-              });
-            } else {
-              const spot = LOUNGE_SEATS[next.size % LOUNGE_SEATS.length];
-              next.set(msg.senderNik, {
-                nik: msg.senderNik,
-                name: senderUname,
-                username: senderUname,
-                pangkat: senderRank.name,
-                pangkatIcon: msg.senderPangkatIcon || senderRank.icon,
-                section: msg.senderSection || 'Prep-Lab',
-                posX: spot.x,
-                posY: spot.y,
-                facing: spot.facing,
-                actionState: spot.action,
-                walkFrame: 0,
-                avatarUrl: msg.senderAvatar,
-                speechText: msg.text,
-                speechExpiry: Date.now() + 7500,
-                isLive: true,
-                isDuty: false
-              });
-            }
+            next.set(msg.senderNik, {
+              ...existing,
+              username: existing.username || senderUname,
+              pangkat: existing.pangkat || senderRank.name,
+              pangkatIcon: existing.pangkatIcon || msg.senderPangkatIcon || senderRank.icon,
+              speechText: msg.text,
+              speechExpiry: Date.now() + 7500,
+              isLive: true
+            });
             return next;
           });
           playChime('msg');
@@ -807,23 +756,22 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     const handleUserMoved = (data: any) => {
       if (data && data.nik && data.nik !== userNik) {
         setOtherAvatars(prev => {
+          const existing = prev.get(data.nik);
+          if (!existing) return prev;
           const next = new Map(prev);
-          const existing = next.get(data.nik);
           const movedUname = getCleanUsername(data.nik, data.name, data.username);
           const movedRank = getPangkatData(data.nik, data.pangkat);
-          if (existing) {
-            next.set(data.nik, {
-              ...existing,
-              username: data.username || existing.username || movedUname,
-              pangkat: data.pangkat || existing.pangkat || movedRank.name,
-              pangkatIcon: data.pangkatIcon || existing.pangkatIcon || movedRank.icon,
-              posX: data.x,
-              posY: data.y,
-              facing: data.facing || existing.facing,
-              actionState: data.actionState || 'idle',
-              isLive: true
-            });
-          }
+          next.set(data.nik, {
+            ...existing,
+            username: data.username || existing.username || movedUname,
+            pangkat: data.pangkat || existing.pangkat || movedRank.name,
+            pangkatIcon: data.pangkatIcon || existing.pangkatIcon || movedRank.icon,
+            posX: data.x,
+            posY: data.y,
+            facing: data.facing || existing.facing,
+            actionState: data.actionState || 'idle',
+            isLive: true
+          });
           return next;
         });
       }
@@ -832,22 +780,21 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     const handleUserAction = (data: any) => {
       if (data && data.nik && data.nik !== userNik) {
         setOtherAvatars(prev => {
+          const existing = prev.get(data.nik);
+          if (!existing) return prev;
           const next = new Map(prev);
-          const existing = next.get(data.nik);
           const actionUname = getCleanUsername(data.nik, data.name, data.username);
           const actionRank = getPangkatData(data.nik, data.pangkat);
-          if (existing) {
-            next.set(data.nik, {
-              ...existing,
-              username: data.username || existing.username || actionUname,
-              pangkat: data.pangkat || existing.pangkat || actionRank.name,
-              pangkatIcon: data.pangkatIcon || existing.pangkatIcon || actionRank.icon,
-              actionState: data.actionState || existing.actionState,
-              speechText: data.speechText || existing.speechText,
-              speechExpiry: data.speechText ? Date.now() + 7500 : existing.speechExpiry,
-              isLive: true
-            });
-          }
+          next.set(data.nik, {
+            ...existing,
+            username: data.username || existing.username || actionUname,
+            pangkat: data.pangkat || existing.pangkat || actionRank.name,
+            pangkatIcon: data.pangkatIcon || existing.pangkatIcon || actionRank.icon,
+            actionState: data.actionState || existing.actionState,
+            speechText: data.speechText || existing.speechText,
+            speechExpiry: data.speechText ? Date.now() + 7500 : existing.speechExpiry,
+            isLive: true
+          });
           return next;
         });
         playChime('cheer');
@@ -855,15 +802,13 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     };
 
     const handlePresenceUpdate = (data: any) => {
-      if (data && Array.isArray(data.onlineUsers)) {
-        syncOnlinePresence({ onlineUsers: data.onlineUsers });
+      if (data && Array.isArray(data.loungeMembers)) {
+        syncOnlinePresence({ loungeMembers: data.loungeMembers });
       }
     };
 
-    const handleRoomUsers = (users: any[]) => {
-      if (Array.isArray(users)) {
-        syncOnlinePresence({ onlineUsers: users.map(u => ({ ...u, isLive: true })) });
-      }
+    const handleRoomUsers = () => {
+      fetchPresenceOnline();
     };
 
     socket.on('lounge:sync_state', handleLoungeSync);
@@ -1117,7 +1062,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
                 <div className="flex items-center gap-1.5">
                   <span className="px-3 py-0.5 rounded-full bg-emerald-400 text-slate-950 font-black text-xs shadow-md font-mono flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping" />
-                    <span>{allRenderAvatars.length} Personil Online Realtime</span>
+                    <span>{allRenderAvatars.length} Personil di Tempat Nongkrong</span>
                   </span>
                 </div>
               </div>

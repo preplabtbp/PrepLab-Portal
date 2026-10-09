@@ -521,10 +521,26 @@ const app = express();
     return Array.from(userMap.values());
   };
 
+  const cleanupStaleLoungeAvatars = () => {
+    const activeSocketIds = new Set(onlineSockets.keys());
+    for (const [nik, avatar] of loungeAvatars.entries()) {
+      if (!activeSocketIds.has(avatar.socketId)) {
+        loungeAvatars.delete(nik);
+        io.to('lounge').emit('lounge:user_left', { nik, name: avatar.name, username: avatar.username });
+      }
+    }
+  };
+
   const broadcastPresence = () => {
+    cleanupStaleLoungeAvatars();
     const onlineUsers = getUniqueOnlineUsers();
     const onlineNiks = onlineUsers.map((u: any) => u.nik);
-    io.emit("presence:update", { onlineNiks, onlineUsers, totalOnline: onlineUsers.length });
+    io.emit("presence:update", { 
+      onlineNiks, 
+      onlineUsers, 
+      totalOnline: onlineUsers.length,
+      loungeMembers: Array.from(loungeAvatars.values())
+    });
   };
 
   const emitRoomUsers = (room: string) => {
@@ -687,14 +703,15 @@ const app = express();
 
     socket.on('lounge:leave', (data) => {
       const nik = data?.nik;
-      if (nik && loungeAvatars.has(nik)) {
-        const uState = loungeAvatars.get(nik);
-        loungeAvatars.delete(nik);
-        socket.leave('lounge');
-        io.to('lounge').emit('lounge:user_left', { nik, name: uState?.name, username: uState?.username });
-        emitRoomUsers('lounge');
-        broadcastPresence();
+      for (const [lNik, avatar] of loungeAvatars.entries()) {
+        if ((nik && lNik === nik) || avatar.socketId === socket.id) {
+          loungeAvatars.delete(lNik);
+          socket.leave('lounge');
+          io.to('lounge').emit('lounge:user_left', { nik: lNik, name: avatar.name, username: avatar.username });
+        }
       }
+      emitRoomUsers('lounge');
+      broadcastPresence();
     });
 
     socket.on('chat:clear', async (data) => {
@@ -910,15 +927,14 @@ const app = express();
         }
       }
 
-      // Clean up from loungeAvatars if matching socketId
+      // Clean up from loungeAvatars if matching socketId or user.nik
       for (const [nik, avatar] of loungeAvatars.entries()) {
-        if (avatar.socketId === socket.id) {
+        if (avatar.socketId === socket.id || (user?.nik && nik === user.nik)) {
           loungeAvatars.delete(nik);
           io.to('lounge').emit('lounge:user_left', { nik, name: avatar.name, username: avatar.username });
-          emitRoomUsers('lounge');
-          break;
         }
       }
+      emitRoomUsers('lounge');
     });
   });
 
@@ -1043,6 +1059,7 @@ const app = express();
   // --- PRESENCE ROUTES ---
   app.get('/api/presence/online', async (req, res) => {
     try {
+      cleanupStaleLoungeAvatars();
       const liveSockets = getUniqueOnlineUsers().map(u => ({ ...u, isLive: true }));
       res.json({
         success: true,
