@@ -1601,7 +1601,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                         {/* LIST CONTENT */}
                         <div className="mt-3">
-                          {/* 1. KARYAWAN PERMANENT (SCROLLABLE LIST) */}
+                          {/* 1. KARYAWAN PERMANENT (GROUPED BY JABATAN) */}
                           {activeStatDetail === 'permanent' && (() => {
                             const filtered = permanentEmployeesList.filter(e => {
                               const q = statDetailSearch.toLowerCase().trim();
@@ -1620,55 +1620,85 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               );
                             }
 
-                            return (
-                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
-                                {filtered.map((emp, idx) => (
-                                  <div
-                                    key={emp.nik || idx}
-                                    onClick={() => setSelectedEmployee(emp)}
-                                    className="p-2.5 rounded-xl hover:bg-teal-50/60 transition-all flex items-center justify-between gap-3 cursor-pointer group"
-                                  >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="w-9 h-9 rounded-xl bg-teal-100/70 border border-teal-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-teal-800 text-xs">
-                                        {emp.photo ? (
-                                          <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
-                                        ) : (
-                                          (emp.name || 'P').charAt(0).toUpperCase()
-                                        )}
-                                      </div>
-                                      <div className="min-w-0">
-                                        <div className="text-xs font-bold text-slate-800 group-hover:text-teal-700 truncate flex items-center gap-1.5">
-                                          <span>{emp.name}</span>
-                                          <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
-                                            {emp.nik}
-                                          </span>
-                                        </div>
-                                        <div className="text-[11px] text-slate-500 truncate flex items-center gap-2 mt-0.5">
-                                          <span>{emp.jabatan || '-'}</span>
-                                          <span>•</span>
-                                          <span>{emp.department || emp.section || '-'}</span>
-                                        </div>
-                                      </div>
-                                    </div>
+                            // Group by jabatan level
+                            const jabatanLevels = [
+                              { key: 'manager', label: 'Manager', icon: '👔', color: 'bg-violet-100 text-violet-800 border-violet-200' },
+                              { key: 'superintendent', label: 'Superintendent', icon: '🏅', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+                              { key: 'supervisor', label: 'Supervisor', icon: '📋', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
+                              { key: 'foreman', label: 'Foreman', icon: '🔧', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+                              { key: 'admin', label: 'Admin / Staff', icon: '💼', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+                              { key: 'crew', label: 'Crew / Operator', icon: '⛑️', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+                              { key: 'other', label: 'Lainnya', icon: '👤', color: 'bg-gray-100 text-gray-700 border-gray-200' },
+                            ];
 
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      {emp.tanggalPermanent && emp.tanggalPermanent !== '-' && (
-                                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg hidden sm:inline-block">
-                                          SK: {formatShortDate(emp.tanggalPermanent)}
-                                        </span>
-                                      )}
-                                      <span className="text-[10px] font-extrabold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg shadow-2xs">
-                                        PKWTT / Tetap
-                                      </span>
-                                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-teal-600 transition-colors" />
-                                    </div>
-                                  </div>
-                                ))}
+                            const getJabatanGroup = (jabatan: string) => {
+                              const j = (jabatan || '').toLowerCase();
+                              if (j.includes('manager')) return 'manager';
+                              if (j.includes('superintendent') || j.includes('spt')) return 'superintendent';
+                              if (j.includes('supervisor') || j.includes('specialist')) return 'supervisor';
+                              if (j.includes('foreman')) return 'foreman';
+                              if (j.includes('admin') || j.includes('staff') || j.includes('officer')) return 'admin';
+                              if (j.includes('crew') || j.includes('operator') || j.includes('technician') || j.includes('helper')) return 'crew';
+                              return 'other';
+                            };
+
+                            const grouped: Record<string, any[]> = {};
+                            filtered.forEach(emp => {
+                              const grp = getJabatanGroup(emp.jabatan);
+                              if (!grouped[grp]) grouped[grp] = [];
+                              grouped[grp].push(emp);
+                            });
+
+                            return (
+                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 space-y-2">
+                                {jabatanLevels.filter(lv => grouped[lv.key] && grouped[lv.key].length > 0).map(lv => {
+                                  const members = grouped[lv.key];
+                                  return (
+                                    <details key={lv.key} open className="group/jab">
+                                      <summary className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer select-none border ${lv.color} hover:shadow-sm transition-all`}>
+                                        <span className="text-base">{lv.icon}</span>
+                                        <span className="text-xs font-extrabold flex-1">{lv.label}</span>
+                                        <span className="text-[11px] font-black bg-white/60 px-2 py-0.5 rounded-lg border border-black/5">{members.length} Orang</span>
+                                        <ChevronDown className="w-3.5 h-3.5 transition-transform group-open/jab:rotate-180" />
+                                      </summary>
+                                      <div className="mt-1 ml-3 pl-3 border-l-2 border-teal-100 space-y-0.5">
+                                        {members.map((emp, idx) => (
+                                          <div
+                                            key={emp.nik || idx}
+                                            onClick={() => setSelectedEmployee(emp)}
+                                            className="p-2 rounded-xl hover:bg-teal-50/60 transition-all flex items-center justify-between gap-3 cursor-pointer group"
+                                          >
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                              <div className="w-8 h-8 rounded-lg bg-teal-100/70 border border-teal-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-teal-800 text-[10px]">
+                                                {emp.photo ? (
+                                                  <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                  (emp.name || 'P').charAt(0).toUpperCase()
+                                                )}
+                                              </div>
+                                              <div className="min-w-0">
+                                                <div className="text-xs font-bold text-slate-800 group-hover:text-teal-700 truncate flex items-center gap-1.5">
+                                                  <span>{emp.name}</span>
+                                                  <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">{emp.nik}</span>
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 truncate mt-0.5">{emp.jabatan || '-'}</div>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                              <span className="text-[10px] font-extrabold text-teal-800 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded-lg shadow-2xs">PKWTT</span>
+                                              <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-teal-600 transition-colors" />
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </details>
+                                  );
+                                })}
                               </div>
                             );
                           })()}
 
-                          {/* 2. KARYAWAN KONTRAK (SCROLLABLE LIST) */}
+                          {/* 2. KARYAWAN KONTRAK (GROUPED BY JABATAN) */}
                           {activeStatDetail === 'kontrak' && (() => {
                             const filtered = contractEmployeesList.filter(e => {
                               const q = statDetailSearch.toLowerCase().trim();
@@ -1687,45 +1717,79 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               );
                             }
 
-                            return (
-                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
-                                {filtered.map((emp, idx) => (
-                                  <div
-                                    key={emp.nik || idx}
-                                    onClick={() => setSelectedEmployee(emp)}
-                                    className="p-2.5 rounded-xl hover:bg-sky-50/60 transition-all flex items-center justify-between gap-3 cursor-pointer group"
-                                  >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="w-9 h-9 rounded-xl bg-sky-100/70 border border-sky-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-sky-800 text-xs">
-                                        {emp.photo ? (
-                                          <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
-                                        ) : (
-                                          (emp.name || 'K').charAt(0).toUpperCase()
-                                        )}
-                                      </div>
-                                      <div className="min-w-0">
-                                        <div className="text-xs font-bold text-slate-800 group-hover:text-sky-700 truncate flex items-center gap-1.5">
-                                          <span>{emp.name}</span>
-                                          <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
-                                            {emp.nik}
-                                          </span>
-                                        </div>
-                                        <div className="text-[11px] text-slate-500 truncate flex items-center gap-2 mt-0.5">
-                                          <span className="font-semibold text-slate-700">{emp.jabatan || '-'}</span>
-                                          <span>•</span>
-                                          <span>{emp.department || emp.section || '-'}</span>
-                                        </div>
-                                      </div>
-                                    </div>
+                            const jabatanLevels = [
+                              { key: 'manager', label: 'Manager', icon: '👔', color: 'bg-violet-100 text-violet-800 border-violet-200' },
+                              { key: 'superintendent', label: 'Superintendent', icon: '🏅', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+                              { key: 'supervisor', label: 'Supervisor', icon: '📋', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
+                              { key: 'foreman', label: 'Foreman', icon: '🔧', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+                              { key: 'admin', label: 'Admin / Staff', icon: '💼', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+                              { key: 'crew', label: 'Crew / Operator', icon: '⛑️', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+                              { key: 'other', label: 'Lainnya', icon: '👤', color: 'bg-gray-100 text-gray-700 border-gray-200' },
+                            ];
 
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      <span className="text-[10px] font-extrabold text-sky-800 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-lg shadow-2xs">
-                                        PKWT / Kontrak
-                                      </span>
-                                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-sky-600 transition-colors" />
-                                    </div>
-                                  </div>
-                                ))}
+                            const getJabatanGroup = (jabatan: string) => {
+                              const j = (jabatan || '').toLowerCase();
+                              if (j.includes('manager')) return 'manager';
+                              if (j.includes('superintendent') || j.includes('spt')) return 'superintendent';
+                              if (j.includes('supervisor') || j.includes('specialist')) return 'supervisor';
+                              if (j.includes('foreman')) return 'foreman';
+                              if (j.includes('admin') || j.includes('staff') || j.includes('officer')) return 'admin';
+                              if (j.includes('crew') || j.includes('operator') || j.includes('technician') || j.includes('helper')) return 'crew';
+                              return 'other';
+                            };
+
+                            const grouped: Record<string, any[]> = {};
+                            filtered.forEach(emp => {
+                              const grp = getJabatanGroup(emp.jabatan);
+                              if (!grouped[grp]) grouped[grp] = [];
+                              grouped[grp].push(emp);
+                            });
+
+                            return (
+                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 space-y-2">
+                                {jabatanLevels.filter(lv => grouped[lv.key] && grouped[lv.key].length > 0).map(lv => {
+                                  const members = grouped[lv.key];
+                                  return (
+                                    <details key={lv.key} open className="group/jab">
+                                      <summary className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer select-none border ${lv.color} hover:shadow-sm transition-all`}>
+                                        <span className="text-base">{lv.icon}</span>
+                                        <span className="text-xs font-extrabold flex-1">{lv.label}</span>
+                                        <span className="text-[11px] font-black bg-white/60 px-2 py-0.5 rounded-lg border border-black/5">{members.length} Orang</span>
+                                        <ChevronDown className="w-3.5 h-3.5 transition-transform group-open/jab:rotate-180" />
+                                      </summary>
+                                      <div className="mt-1 ml-3 pl-3 border-l-2 border-sky-100 space-y-0.5">
+                                        {members.map((emp, idx) => (
+                                          <div
+                                            key={emp.nik || idx}
+                                            onClick={() => setSelectedEmployee(emp)}
+                                            className="p-2 rounded-xl hover:bg-sky-50/60 transition-all flex items-center justify-between gap-3 cursor-pointer group"
+                                          >
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                              <div className="w-8 h-8 rounded-lg bg-sky-100/70 border border-sky-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-sky-800 text-[10px]">
+                                                {emp.photo ? (
+                                                  <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                  (emp.name || 'K').charAt(0).toUpperCase()
+                                                )}
+                                              </div>
+                                              <div className="min-w-0">
+                                                <div className="text-xs font-bold text-slate-800 group-hover:text-sky-700 truncate flex items-center gap-1.5">
+                                                  <span>{emp.name}</span>
+                                                  <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">{emp.nik}</span>
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 truncate mt-0.5">{emp.jabatan || '-'}</div>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                              <span className="text-[10px] font-extrabold text-sky-800 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded-lg shadow-2xs">PKWT</span>
+                                              <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-sky-600 transition-colors" />
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </details>
+                                  );
+                                })}
                               </div>
                             );
                           })()}
@@ -1759,14 +1823,14 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       className="p-2.5 rounded-xl hover:bg-indigo-50/60 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 cursor-pointer group"
                                     >
                                       <div className="flex items-center gap-3 min-w-0">
-                                        {/* Rank Badge */}
-                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${
-                                          idx === 0 ? 'bg-amber-400 text-amber-950 shadow-xs' :
-                                          idx === 1 ? 'bg-slate-300 text-slate-800' :
-                                          idx === 2 ? 'bg-amber-700/60 text-white' :
-                                          'bg-slate-100 text-slate-600'
+                                        {/* Bad Habit Badge */}
+                                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm shrink-0 ${
+                                          idx === 0 ? 'bg-red-500 text-white shadow-md ring-2 ring-red-300 animate-pulse' :
+                                          idx === 1 ? 'bg-orange-400 text-white shadow-sm ring-1 ring-orange-200' :
+                                          idx === 2 ? 'bg-amber-400 text-amber-950 shadow-sm' :
+                                          'bg-slate-100 text-slate-500'
                                         }`}>
-                                          #{idx + 1}
+                                          {idx === 0 ? '🚨' : idx === 1 ? '⚠️' : idx === 2 ? '🔻' : <span className="text-[10px] font-bold">{idx + 1}</span>}
                                         </div>
 
                                         <div className="w-9 h-9 rounded-xl bg-indigo-100/70 border border-indigo-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-indigo-800 text-xs">
@@ -1894,7 +1958,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             );
                           })()}
 
-                          {/* 4. KARYAWAN AKTIF */}
+                          {/* 4. KARYAWAN AKTIF (GROUPED BY JABATAN) */}
                           {activeStatDetail === 'active' && (() => {
                             const filtered = activeEmployeesList.filter(e => {
                               const q = statDetailSearch.toLowerCase().trim();
@@ -1904,45 +1968,87 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                      (e.jabatan || '').toLowerCase().includes(q);
                             });
 
-                            return (
-                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
-                                {filtered.map((emp, idx) => (
-                                  <div
-                                    key={emp.nik || idx}
-                                    onClick={() => setSelectedEmployee(emp)}
-                                    className="p-2.5 rounded-xl hover:bg-amber-50/60 transition-all flex items-center justify-between gap-3 cursor-pointer group"
-                                  >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="w-9 h-9 rounded-xl bg-amber-100/70 border border-amber-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-amber-800 text-xs">
-                                        {emp.photo ? (
-                                          <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
-                                        ) : (
-                                          (emp.name || 'A').charAt(0).toUpperCase()
-                                        )}
-                                      </div>
-                                      <div className="min-w-0">
-                                        <div className="text-xs font-bold text-slate-800 group-hover:text-amber-700 truncate flex items-center gap-1.5">
-                                          <span>{emp.name}</span>
-                                          <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
-                                            {emp.nik}
-                                          </span>
-                                        </div>
-                                        <div className="text-[11px] text-slate-500 truncate flex items-center gap-2 mt-0.5">
-                                          <span>{emp.jabatan || '-'}</span>
-                                          <span>•</span>
-                                          <span>{emp.department || emp.section || '-'}</span>
-                                        </div>
-                                      </div>
-                                    </div>
+                            const jabatanLevels = [
+                              { key: 'manager', label: 'Manager', icon: '👔', color: 'bg-violet-100 text-violet-800 border-violet-200' },
+                              { key: 'superintendent', label: 'Superintendent', icon: '🏅', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+                              { key: 'supervisor', label: 'Supervisor', icon: '📋', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
+                              { key: 'foreman', label: 'Foreman', icon: '🔧', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+                              { key: 'admin', label: 'Admin / Staff', icon: '💼', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+                              { key: 'crew', label: 'Crew / Operator', icon: '⛑️', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+                              { key: 'other', label: 'Lainnya', icon: '👤', color: 'bg-gray-100 text-gray-700 border-gray-200' },
+                            ];
 
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
-                                        Aktif
-                                      </span>
-                                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-amber-600 transition-colors" />
-                                    </div>
-                                  </div>
-                                ))}
+                            const getJabatanGroup = (jabatan: string) => {
+                              const j = (jabatan || '').toLowerCase();
+                              if (j.includes('manager')) return 'manager';
+                              if (j.includes('superintendent') || j.includes('spt')) return 'superintendent';
+                              if (j.includes('supervisor') || j.includes('specialist')) return 'supervisor';
+                              if (j.includes('foreman')) return 'foreman';
+                              if (j.includes('admin') || j.includes('staff') || j.includes('officer')) return 'admin';
+                              if (j.includes('crew') || j.includes('operator') || j.includes('technician') || j.includes('helper')) return 'crew';
+                              return 'other';
+                            };
+
+                            const grouped: Record<string, any[]> = {};
+                            filtered.forEach(emp => {
+                              const grp = getJabatanGroup(emp.jabatan);
+                              if (!grouped[grp]) grouped[grp] = [];
+                              grouped[grp].push(emp);
+                            });
+
+                            if (filtered.length === 0) {
+                              return (
+                                <div className="py-8 text-center text-xs text-slate-400">
+                                  Tidak ada data karyawan aktif yang sesuai pencarian.
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 space-y-2">
+                                {jabatanLevels.filter(lv => grouped[lv.key] && grouped[lv.key].length > 0).map(lv => {
+                                  const members = grouped[lv.key];
+                                  return (
+                                    <details key={lv.key} open className="group/jab">
+                                      <summary className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer select-none border ${lv.color} hover:shadow-sm transition-all`}>
+                                        <span className="text-base">{lv.icon}</span>
+                                        <span className="text-xs font-extrabold flex-1">{lv.label}</span>
+                                        <span className="text-[11px] font-black bg-white/60 px-2 py-0.5 rounded-lg border border-black/5">{members.length} Orang</span>
+                                        <ChevronDown className="w-3.5 h-3.5 transition-transform group-open/jab:rotate-180" />
+                                      </summary>
+                                      <div className="mt-1 ml-3 pl-3 border-l-2 border-amber-100 space-y-0.5">
+                                        {members.map((emp, idx) => (
+                                          <div
+                                            key={emp.nik || idx}
+                                            onClick={() => setSelectedEmployee(emp)}
+                                            className="p-2 rounded-xl hover:bg-amber-50/60 transition-all flex items-center justify-between gap-3 cursor-pointer group"
+                                          >
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                              <div className="w-8 h-8 rounded-lg bg-amber-100/70 border border-amber-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-amber-800 text-[10px]">
+                                                {emp.photo ? (
+                                                  <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                  (emp.name || 'A').charAt(0).toUpperCase()
+                                                )}
+                                              </div>
+                                              <div className="min-w-0">
+                                                <div className="text-xs font-bold text-slate-800 group-hover:text-amber-700 truncate flex items-center gap-1.5">
+                                                  <span>{emp.name}</span>
+                                                  <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">{emp.nik}</span>
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 truncate mt-0.5">{emp.jabatan || '-'}</div>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                              <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-lg">Aktif</span>
+                                              <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-amber-600 transition-colors" />
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </details>
+                                  );
+                                })}
                               </div>
                             );
                           })()}
