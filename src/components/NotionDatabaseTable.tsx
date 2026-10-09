@@ -2512,7 +2512,7 @@ export function NotionDatabaseTable({
     }
   };
 
-  // Toggle Checklist Sub-Item Completed Status
+  // Toggle Checklist Sub-Item Completed Status & Sinkronkan Progres Task Utama
   const handleToggleSubItemCompleted = (subRowIndex: number, currentCompleted: boolean) => {
     const nextCompleted = !currentCompleted;
     const subRow = localRows[subRowIndex];
@@ -2523,7 +2523,7 @@ export function NotionDatabaseTable({
     updatedRow.isCompleted = nextCompleted ? 'true' : 'false';
     updatedRow.Status = nextCompleted ? 'Closed' : 'Open';
     
-    // Sinkronisasi tanggal selesai jika ada kolomnya
+    // Sinkronisasi tanggal selesai sub-item jika ada kolomnya
     displayHeaders.forEach(h => {
       const hLower = h.toLowerCase().trim();
       if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
@@ -2533,6 +2533,62 @@ export function NotionDatabaseTable({
 
     const nextRows = [...localRows];
     nextRows[subRowIndex] = updatedRow;
+
+    // Temukan baris kegiatan utama (parent) untuk sub-item ini
+    let parentIdx = -1;
+    for (let i = subRowIndex - 1; i >= 0; i--) {
+      if (!isSubItemRow(nextRows[i])) {
+        parentIdx = i;
+        break;
+      }
+    }
+
+    if (parentIdx !== -1) {
+      const siblingSubIndices: number[] = [];
+      for (let i = parentIdx + 1; i < nextRows.length; i++) {
+        if (isSubItemRow(nextRows[i])) {
+          siblingSubIndices.push(i);
+        } else {
+          break;
+        }
+      }
+
+      const totalSubs = siblingSubIndices.length;
+      const completedSubs = siblingSubIndices.filter(idx => isSubItemCompleted(nextRows[idx])).length;
+
+      const parentRow = { ...nextRows[parentIdx] };
+      const currentParentStatus = (getRowVal(parentRow, 'Status') || '').toUpperCase();
+
+      if (!currentParentStatus.includes('CANCEL')) {
+        if (totalSubs > 0 && completedSubs === totalSubs) {
+          parentRow.Status = 'Closed';
+          displayHeaders.forEach(h => {
+            const hLower = h.toLowerCase().trim();
+            if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
+              parentRow[h] = todayStr;
+            }
+          });
+        } else if (completedSubs > 0) {
+          parentRow.Status = 'On Progress';
+          displayHeaders.forEach(h => {
+            const hLower = h.toLowerCase().trim();
+            if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
+              parentRow[h] = '-';
+            }
+          });
+        } else {
+          parentRow.Status = 'Open';
+          displayHeaders.forEach(h => {
+            const hLower = h.toLowerCase().trim();
+            if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
+              parentRow[h] = '-';
+            }
+          });
+        }
+        nextRows[parentIdx] = parentRow;
+      }
+    }
+
     setLocalRows(nextRows);
     onRowsChange?.(nextRows);
     saveTableToBackend(nextRows);
@@ -2702,6 +2758,22 @@ export function NotionDatabaseTable({
     }
   };
 
+  // Map setiap baris sub-item ke baris parent-nya di localRows
+  const rowToParentMap = useMemo(() => {
+    const map = new Map<TableRowData, TableRowData>();
+    let activeParentRef: TableRowData | null = null;
+    localRows.forEach(r => {
+      if (isSubItemRow(r)) {
+        if (activeParentRef) {
+          map.set(r, activeParentRef);
+        }
+      } else {
+        activeParentRef = r;
+      }
+    });
+    return map;
+  }, [localRows]);
+
   // Filter and sort rows
   const filteredRows = useMemo(() => {
     let result = [...localRows];
@@ -2715,54 +2787,108 @@ export function NotionDatabaseTable({
     // 1. Search Query Filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      result = result.filter((row) => {
-        return Object.values(row).some((val) => 
+      // Simpan parent atau subtask yang cocok
+      const matchingRows = new Set<TableRowData>();
+      result.forEach((row) => {
+        const matches = Object.values(row).some((val) => 
           (val || '').toLowerCase().includes(q)
         );
+        if (matches) {
+          matchingRows.add(row);
+          if (isSubItemRow(row)) {
+            const p = rowToParentMap.get(row);
+            if (p) matchingRows.add(p);
+          }
+        }
+      });
+      result = result.filter((row) => {
+        if (matchingRows.has(row)) return true;
+        if (isSubItemRow(row)) {
+          const p = rowToParentMap.get(row);
+          return p ? matchingRows.has(p) : false;
+        }
+        return false;
       });
     }
 
-    // 2. Status Multi-Select Filter
+    // 2. Status Multi-Select Filter (Subtask tak terpisahkan dari parent-nya)
     if (selectedStatuses.length > 0 && !selectedStatuses.includes('ALL')) {
+      const passingParentRows = new Set<TableRowData>();
+      localRows.forEach((row) => {
+        if (!isSubItemRow(row)) {
+          const val = (getRowVal(row, 'Status') || '').toUpperCase().trim();
+          const matches = selectedStatuses.some((st) => {
+            if (st === 'ACTIVE') return !val.includes('CLOSE') && !val.includes('SELESAI') && !val.includes('DONE') && !val.includes('CANCEL') && !val.includes('BATAL');
+            if (st === 'ON PROGRESS') return val.includes('PROGRESS') || val.includes('PROSES');
+            if (st === 'CLOSE') return val.includes('CLOSE') || val.includes('SELESAI') || val.includes('DONE');
+            if (st === 'OPEN') return val.includes('OPEN') || val.includes('BARU');
+            if (st === 'CANCELED') return val.includes('CANCEL') || val.includes('BATAL');
+            if (st === 'PENDING') return val.includes('PENDING') || val.includes('HOLD') || val.includes('DELAY');
+            return val === st;
+          });
+          if (matches) passingParentRows.add(row);
+        }
+      });
+
       result = result.filter((row) => {
-        const val = (getRowVal(row, 'Status') || '').toUpperCase().trim();
-        return selectedStatuses.some((st) => {
-          if (st === 'ACTIVE') return !val.includes('CLOSE') && !val.includes('SELESAI') && !val.includes('DONE') && !val.includes('CANCEL') && !val.includes('BATAL');
-          if (st === 'ON PROGRESS') return val.includes('PROGRESS') || val.includes('PROSES');
-          if (st === 'CLOSE') return val.includes('CLOSE') || val.includes('SELESAI') || val.includes('DONE');
-          if (st === 'OPEN') return val.includes('OPEN') || val.includes('BARU');
-          if (st === 'CANCELED') return val.includes('CANCEL') || val.includes('BATAL');
-          if (st === 'PENDING') return val.includes('PENDING') || val.includes('HOLD') || val.includes('DELAY');
-          return val === st;
-        });
+        if (!isSubItemRow(row)) {
+          return passingParentRows.has(row);
+        }
+        // Sub-item selalu mengikuti parent-nya agar tidak terpisah/hilang saat diceklis
+        const parent = rowToParentMap.get(row);
+        return parent ? passingParentRows.has(parent) : true;
       });
     }
 
     // 3. Priority Multi-Select Filter
     if (selectedPriorities.length > 0 && !selectedPriorities.includes('ALL')) {
+      const passingParentRows = new Set<TableRowData>();
+      localRows.forEach((row) => {
+        if (!isSubItemRow(row)) {
+          const val = (getRowVal(row, 'Priority') || '').toUpperCase().trim();
+          const matches = selectedPriorities.some((pKey) => {
+            if (pKey === 'URGENT') return val.includes('URGENT') || val.includes('KRITIS') || val.includes('CRITICAL');
+            if (pKey === 'HIGH') return (val.includes('HIGH') || val.includes('TINGGI')) && !val.includes('URGENT');
+            if (pKey === 'MEDIUM') return val.includes('MEDIUM') || val.includes('SEDANG');
+            if (pKey === 'NORMAL') return (val.includes('NORMAL') || val.includes('BIASA')) && !val.includes('MEDIUM');
+            if (pKey === 'LOW') return val.includes('LOW') || val.includes('RENDAH');
+            return val.includes(pKey);
+          });
+          if (matches) passingParentRows.add(row);
+        }
+      });
+
       result = result.filter((row) => {
-        const val = (getRowVal(row, 'Priority') || '').toUpperCase().trim();
-        return selectedPriorities.some((pKey) => {
-          if (pKey === 'URGENT') return val.includes('URGENT') || val.includes('KRITIS') || val.includes('CRITICAL');
-          if (pKey === 'HIGH') return (val.includes('HIGH') || val.includes('TINGGI')) && !val.includes('URGENT');
-          if (pKey === 'MEDIUM') return val.includes('MEDIUM') || val.includes('SEDANG');
-          if (pKey === 'NORMAL') return (val.includes('NORMAL') || val.includes('BIASA')) && !val.includes('MEDIUM');
-          if (pKey === 'LOW') return val.includes('LOW') || val.includes('RENDAH');
-          return val.includes(pKey);
-        });
+        if (!isSubItemRow(row)) {
+          return passingParentRows.has(row);
+        }
+        const parent = rowToParentMap.get(row);
+        return parent ? passingParentRows.has(parent) : true;
       });
     }
 
     // 3b. PIC Multi-Select Filter
     if (selectedPics.length > 0 && !selectedPics.includes('ALL')) {
+      const passingParentRows = new Set<TableRowData>();
+      localRows.forEach((row) => {
+        if (!isSubItemRow(row)) {
+          const rawPic = (getRowVal(row, 'PIC') || getRowVal(row, 'pic') || '').trim();
+          const matches = selectedPics.some((p) => {
+            if (p === '(Tanpa PIC)') {
+              return !rawPic || rawPic === '-';
+            }
+            return rawPic.toLowerCase() === p.toLowerCase() || rawPic.toLowerCase().includes(p.toLowerCase());
+          });
+          if (matches) passingParentRows.add(row);
+        }
+      });
+
       result = result.filter((row) => {
-        const rawPic = (getRowVal(row, 'PIC') || getRowVal(row, 'pic') || '').trim();
-        return selectedPics.some((p) => {
-          if (p === '(Tanpa PIC)') {
-            return !rawPic || rawPic === '-';
-          }
-          return rawPic.toLowerCase() === p.toLowerCase() || rawPic.toLowerCase().includes(p.toLowerCase());
-        });
+        if (!isSubItemRow(row)) {
+          return passingParentRows.has(row);
+        }
+        const parent = rowToParentMap.get(row);
+        return parent ? passingParentRows.has(parent) : true;
       });
     }
 
@@ -5067,19 +5193,7 @@ export function NotionDatabaseTable({
 
                       {/* Group Rows (Hierarchical Parent & Sub-items) */}
                       {!isCollapsed && (() => {
-                        // Susun baris hierarkis: Parent -> SubItems
-                        // Pre-compute map dari sub-item ke parent aslinya di localRows agar relasi stabil
-                        const rowToParentMap = new Map<TableRowData, TableRowData>();
-                        let activeParentRef: TableRowData | null = null;
-                        localRows.forEach(r => {
-                          if (isSubItemRow(r)) {
-                            if (activeParentRef) {
-                              rowToParentMap.set(r, activeParentRef);
-                            }
-                          } else {
-                            activeParentRef = r;
-                          }
-                        });
+                        // Susun baris hierarkis: Parent -> SubItems (menggunakan rowToParentMap yang stabil)
 
                         const hierarchicalItems: Array<{
                           parentRow: TableRowData;
