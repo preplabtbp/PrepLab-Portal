@@ -3837,8 +3837,8 @@ export function NotionDatabaseTable({
     return <span className="text-slate-400 mr-1 text-xs">≡</span>;
   };
 
-  // Helper for PIC Avatar Badge
-  const renderPicBadge = (picStr: string, size: 'xs' | 'sm' | 'md' = 'sm') => {
+  // Helper for PIC Avatar Badge (Hanya menampilkan avatar lingkaran di dalam cell, nama muncul saat hover)
+  const renderPicBadge = (picStr: string, size: 'xs' | 'sm' | 'md' = 'sm', showNameText: boolean = false) => {
     if (!picStr || picStr === '-') return <span className="font-mono text-xs text-slate-400">-</span>;
     const names = smartSplitPicString(picStr);
     const displayName = names.length > 0 
@@ -3846,20 +3846,22 @@ export function NotionDatabaseTable({
       : picStr;
 
     return (
-      <div className="flex items-center gap-1.5 min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0" title={picStr}>
         <PicAvatarGroup
           pics={picStr}
           employeesList={employeesList}
           size={size}
         />
-        <span 
-          className={`truncate font-medium max-w-[130px] ${
-            isNotionLight ? 'text-slate-800' : 'text-slate-200'
-          } ${fitPageMode ? 'text-[11.5px]' : 'text-xs'}`}
-          title={picStr}
-        >
-          {displayName}
-        </span>
+        {showNameText && (
+          <span 
+            className={`truncate font-medium max-w-[130px] ${
+              isNotionLight ? 'text-slate-800' : 'text-slate-200'
+            } ${fitPageMode ? 'text-[11.5px]' : 'text-xs'}`}
+            title={picStr}
+          >
+            {displayName}
+          </span>
+        )}
       </div>
     );
   };
@@ -5796,6 +5798,10 @@ export function NotionDatabaseTable({
                                       );
                                     });
 
+                                  const picTooltip = val && val !== '-' 
+                                    ? `PIC: ${val} (Klik untuk mengganti)` 
+                                    : 'Belum ada PIC (Klik untuk menetapkan)';
+
                                   return (
                                     <td 
                                       key={colName} 
@@ -5811,9 +5817,9 @@ export function NotionDatabaseTable({
                                           setInlinePicSearch('');
                                         }}
                                         className="cursor-pointer inline-block group/pic transition-transform hover:scale-105"
-                                        title="Klik langsung untuk mengganti PIC"
+                                        title={picTooltip}
                                       >
-                                        {renderPicBadge(val)}
+                                        {renderPicBadge(val, 'sm', false)}
                                       </div>
 
                                       {isEditingPic && (
@@ -7851,7 +7857,7 @@ export function NotionDatabaseTable({
                         </div>
                         <div>
                           <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>PIC</span>
-                          {renderPicBadge(getRowVal(selectedRow, 'PIC'))}
+                          {renderPicBadge(getRowVal(selectedRow, 'PIC'), 'sm', true)}
                         </div>
                         <div>
                           <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Activity Type</span>
