@@ -57,7 +57,8 @@ import {
   Moon,
   RotateCcw,
   TableProperties,
-  GripVertical
+  GripVertical,
+  Pin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -1118,8 +1119,24 @@ export function NotionDatabaseTable({
     { name: 'Estimasi Biaya', icon: '💰', defaultValue: '-', desc: 'Anggaran atau estimasi biaya (opsional)' },
   ];
 
-  // Helper to establish logical Notion canonical order for database columns:
-  // number -> jenis kegiatan -> keterangan -> Created Time -> Completed Time -> Status -> PIC -> Priority -> Aktivitas
+  // Canonical order weight for explicitly resetting column order via 'Rapikan Urutan Kolom'
+  const getColOrder = (colName: string): number => {
+    const l = colName.toLowerCase().trim();
+    if (l === 'number' || l === 'no' || l === 'no.' || l === '#') return 0;
+    if (l.includes('jenis kegiatan') || l === 'task' || l === 'judul' || l === 'name' || l === 'nama') return 1;
+    if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('rincian') || l.includes('notes')) return 2;
+    if (l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat')) return 3;
+    if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) return 4;
+    if (l.includes('status')) return 5;
+    if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 6;
+    if (l.includes('priority') || l.includes('prioritas')) return 7;
+    if (l.includes('activity') || l.includes('aktivitas')) return 8;
+    if (l.includes('period') || l.includes('periode')) return 9;
+    if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 10;
+    return 20; // other custom columns
+  };
+
+  // Helper to normalize headers while preserving user-defined column order
   const normalizeAndOrderHeaders = useCallback((inputHeaders: string[]): string[] => {
     // 1. Remove redundant 'Progress' / 'progres' and 'Target Selesai' / 'target' column
     const filtered = (inputHeaders || []).filter(h => {
@@ -1149,7 +1166,7 @@ export function NotionDatabaseTable({
       ];
     }
 
-    // Ensure 'number' exists
+    // Ensure 'Number' exists at the beginning
     const hasNumber = filtered.some(h => {
       const l = h.toLowerCase().trim();
       return l === 'number' || l === 'no' || l === 'no.' || l === '#';
@@ -1165,33 +1182,8 @@ export function NotionDatabaseTable({
 
     const headersWithMeta = hasCompleted ? headersWithNumber : [...headersWithNumber, 'Tanggal Selesai'];
 
-    // Priority ordering weight:
-    // 0: Number
-    // 1: Jenis Kegiatan
-    // 2: Keterangan
-    // 3: Created Time
-    // 4: Tanggal Selesai
-    // 5: Status
-    // 6: PIC
-    // 7: Priority
-    // 8: Aktivitas
-    const getColOrder = (colName: string): number => {
-      const l = colName.toLowerCase().trim();
-      if (l === 'number' || l === 'no' || l === 'no.' || l === '#') return 0;
-      if (l.includes('jenis kegiatan') || l === 'task' || l === 'judul' || l === 'name' || l === 'nama') return 1;
-      if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('rincian') || l.includes('notes')) return 2;
-      if (l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat')) return 3;
-      if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) return 4;
-      if (l.includes('status')) return 5;
-      if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 6;
-      if (l.includes('priority') || l.includes('prioritas')) return 7;
-      if (l.includes('activity') || l.includes('aktivitas')) return 8;
-      if (l.includes('period') || l.includes('periode')) return 9;
-      if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 10;
-      return 20; // other custom columns
-    };
-
-    return [...headersWithMeta].sort((a, b) => getColOrder(a) - getColOrder(b));
+    // Jaga urutan custom/manual pengguna, jangan dipaksa disortir otomatis ulang
+    return headersWithMeta;
   }, []);
 
   // Dynamic Table Headers State (Allows Adding, Deleting, and Reordering Columns)
@@ -1201,7 +1193,14 @@ export function NotionDatabaseTable({
 
   useEffect(() => {
     if (headers && headers.length > 0) {
-      setTableHeaders(normalizeAndOrderHeaders(headers));
+      const normalized = normalizeAndOrderHeaders(headers);
+      setTableHeaders(prev => {
+        // Jangan timpa urutan jika jumlah dan nama kolom sama
+        if (prev.length === normalized.length && prev.every(p => normalized.includes(p))) {
+          return prev;
+        }
+        return normalized;
+      });
     }
   }, [headers, normalizeAndOrderHeaders]);
 
@@ -1481,17 +1480,26 @@ export function NotionDatabaseTable({
       return;
     }
 
-    setTableHeaders(prev => [...prev, trimmed]);
+    const updatedHeaders = [...tableHeaders, trimmed];
+    setTableHeaders(updatedHeaders);
     const updated = localRows.map(r => ({ ...r, [trimmed]: defaultValue }));
     setLocalRows(updated);
+
+    const updatedDisplayHeaders = updatedHeaders.filter(h => {
+      const l = h.toLowerCase().trim();
+      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
+             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo') &&
+             !l.includes('kategori') && !l.includes('category');
+    });
+
     onRowsChange?.(updated);
-    saveTableToBackend(updated);
+    saveTableToBackend(updated, updatedDisplayHeaders);
     setShowAddColumnPopover(false);
     setCustomColumnName('');
     toast.success(`Kolom "${trimmed}" berhasil ditambahkan ke tabel!`);
   };
 
-  const handleDeleteColumn = (colName: string) => {
+  const handleDeleteColumn = async (colName: string) => {
     const colLower = colName.toLowerCase();
     if (colLower === 'number' || colLower === 'no') {
       toast.error('Kolom Nomor (#) tidak dapat dihapus');
@@ -1508,12 +1516,28 @@ export function NotionDatabaseTable({
 
     const updatedHeaders = tableHeaders.filter(h => h !== colName);
     setTableHeaders(updatedHeaders);
-    onRowsChange?.(localRows);
-    saveTableToBackend(localRows);
+
+    // Hapus juga kunci kolom ini dari setiap baris di localRows
+    const updatedRows = localRows.map(r => {
+      const copy = { ...r };
+      delete copy[colName];
+      return copy;
+    });
+    setLocalRows(updatedRows);
+
+    const updatedDisplayHeaders = updatedHeaders.filter(h => {
+      const l = h.toLowerCase().trim();
+      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
+             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo') &&
+             !l.includes('kategori') && !l.includes('category');
+    });
+
+    onRowsChange?.(updatedRows);
+    await saveTableToBackend(updatedRows, updatedDisplayHeaders);
     toast.info(`Kolom "${colName}" telah dihapus.`);
   };
 
-  const handleMoveColumn = (colName: string, direction: 'left' | 'right') => {
+  const handleMoveColumn = async (colName: string, direction: 'left' | 'right') => {
     const idx = tableHeaders.indexOf(colName);
     if (idx === -1) return;
 
@@ -1526,20 +1550,37 @@ export function NotionDatabaseTable({
     newHeaders.splice(targetIdx, 0, moved);
 
     setTableHeaders(newHeaders);
+
+    const newDisplayHeaders = newHeaders.filter(h => {
+      const l = h.toLowerCase().trim();
+      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
+             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo') &&
+             !l.includes('kategori') && !l.includes('category');
+    });
+
     onRowsChange?.(localRows);
-    saveTableToBackend(localRows);
+    await saveTableToBackend(localRows, newDisplayHeaders);
     toast.success(`Kolom "${colName}" digeser ke ${direction === 'left' ? 'kiri' : 'kanan'}`);
   };
 
-  const handleResetColumnOrder = () => {
-    const normalized = normalizeAndOrderHeaders(tableHeaders);
+  const handleResetColumnOrder = async () => {
+    // Terapkan standard Notion order hanya ketika tombol ini ditekan secara eksplisit
+    const normalized = [...tableHeaders].sort((a, b) => getColOrder(a) - getColOrder(b));
     setTableHeaders(normalized);
     setColumnWidths({});
     try {
       localStorage.removeItem(tableStorageKey);
     } catch {}
+
+    const newDisplayHeaders = normalized.filter(h => {
+      const l = h.toLowerCase().trim();
+      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
+             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo') &&
+             !l.includes('kategori') && !l.includes('category');
+    });
+
     onRowsChange?.(localRows);
-    saveTableToBackend(localRows);
+    await saveTableToBackend(localRows, newDisplayHeaders);
     toast.success('Urutan dan lebar kolom berhasil dirapikan sesuai standar Notion!');
   };
 
@@ -2046,7 +2087,7 @@ export function NotionDatabaseTable({
   };
 
   // Save changes to database
-  const saveTableToBackend = async (newRows: TableRowData[]): Promise<boolean> => {
+  const saveTableToBackend = async (newRows: TableRowData[], headersToSave?: string[]): Promise<boolean> => {
     if (!postId) return false;
     try {
       const { rows: preppedRows } = migrateChecklistsInRows(newRows, section);
@@ -2062,7 +2103,8 @@ export function NotionDatabaseTable({
         return r;
       });
 
-      const updatedMarkdown = serializeMarkdownTable(displayHeaders, normalizedRows, beforeText, afterText);
+      const targetHeaders = headersToSave || displayHeaders;
+      const updatedMarkdown = serializeMarkdownTable(targetHeaders, normalizedRows, beforeText, afterText);
       const res = await fetch(`/api/bulletin/${postId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -3754,6 +3796,19 @@ export function NotionDatabaseTable({
 
   // Helper to calculate duration for closed/completed tasks in Notion Table
   const getRowDurationInfo = (row: TableRowData, taskProgress?: TasklistProgress) => {
+    // 1. Data hasil migrasi dari Notion tidak perlu dikalkulasi waktu selesainya
+    const isMigratedFromNotion = 
+      row.isMigrated === 'true' || 
+      row.isNotionMigration === 'true' || 
+      row.source === 'notion' || 
+      (getRowVal(row, 'Keterangan') || '').includes('<!--notion-migrated-->') ||
+      (getRowVal(row, 'Source') || '').toLowerCase().includes('notion') ||
+      (row.id && String(row.id).startsWith('notion-'));
+
+    if (isMigratedFromNotion) {
+      return null;
+    }
+
     const createdStr = getRowVal(row, 'Created Time') || getRowVal(row, 'Tanggal Dibuat') || getRowVal(row, 'Waktu Dibuat') || getRowVal(row, 'Created') || getRowVal(row, 'Tanggal') || '';
     let completedStr = getRowVal(row, 'Tanggal Selesai') || getRowVal(row, 'Completed Time') || getRowVal(row, 'Aktual Selesai') || getRowVal(row, 'Waktu Selesai') || getRowVal(row, 'Selesai') || getRowVal(row, 'Completed') || '';
 
@@ -3781,6 +3836,9 @@ export function NotionDatabaseTable({
     const dStart = parseDateVal(createdStr);
     const dEnd = parseDateVal(completedStr) || new Date();
 
+    // Akumulasi pending freeze (hari)
+    const pendingDays = parseFloat(getRowVal(row, 'Pending Days') || (row as any).pendingDays || '0') || 0;
+
     if (dStart && dEnd) {
       const diffMs = dEnd.getTime() - dStart.getTime();
       const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -3791,21 +3849,22 @@ export function NotionDatabaseTable({
           return {
             label: `${diffHours} Jam`,
             short: `${diffHours} Jam`,
-            detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
+            detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}${pendingDays > 0 ? ` • Freeze: ${pendingDays} Hari` : ''}`
           };
         }
         return {
           label: '1 Hari',
           short: '1 Hari',
-          detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
+          detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}${pendingDays > 0 ? ` • Freeze: ${pendingDays} Hari` : ''}`
         };
       }
 
       const totalDays = diffDays + 1;
+      const workingDays = Math.max(1, Math.round(totalDays - pendingDays));
       return {
-        label: `${totalDays} Hari`,
-        short: `${totalDays} Hari`,
-        detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
+        label: pendingDays > 0 ? `${workingDays} Hari (Freeze: ${pendingDays}h)` : `${totalDays} Hari`,
+        short: `${workingDays} Hari`,
+        detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}${pendingDays > 0 ? ` • Freeze Pending: ${pendingDays} Hari` : ''}`
       };
     }
 
@@ -3933,46 +3992,11 @@ export function NotionDatabaseTable({
     const normalized = text.replace(/<br\s*\/?>/gi, '\n');
     const cleanText = normalized.trim();
 
-    if (!isExpanded) {
-      // Build clean single-line preview for collapsed rows:
-      // strips HTML comments, status tags, checklists, and joins bullets/lines with ' • '
-      const singleLine = cleanText
-        .replace(/<!--[\s\S]*?-->/g, '')
-        .replace(/\*\*\(Done\)\*\*|\[Done\]|\(Done\)/gi, '')
-        .replace(/\*\*\(OPEN\)\*\*|\[OPEN\]|\(OPEN\)/gi, '')
-        .replace(/^[-*•]?\s*\[[ xX]\]\s*/gm, '')
-        .replace(/\[\/?(?:red|blue|green|orange|yellow|purple|pink|gray|brown|default)\]/gi, '')
-        .replace(/\*\*|__/g, '')
-        .replace(/[*_~`]/g, '')
-        .split('\n')
-        .map(line => line.trim().replace(/^[•\-\*]\s*/, ''))
-        .filter(Boolean)
-        .join(' • ');
-
-      return (
-        <div 
-          className={`w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap block ${fitPageMode ? 'text-xs' : 'text-[13px]'} ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
-          style={{ 
-            fontSize: fitPageMode ? '12px' : '13px',
-            fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
-            color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)',
-            lineHeight: '1.5',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            display: 'block',
-            maxWidth: '100%'
-          }}
-          title={cleanText}
-        >
-          {singleLine || cleanText}
-        </div>
-      );
-    }
-
     return (
       <div 
-        className={`leading-relaxed font-sans font-normal space-y-1 block w-full ${fitPageMode ? 'text-xs' : 'text-[13px]'} ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
+        className={`leading-relaxed font-sans font-normal block w-full transition-all ${
+          !isExpanded ? 'max-h-[36px] overflow-hidden line-clamp-1' : 'space-y-1'
+        } ${fitPageMode ? 'text-xs' : 'text-[13px]'} ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
         style={{ 
           fontSize: fitPageMode ? '12px' : '13px',
           fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
@@ -3980,6 +4004,7 @@ export function NotionDatabaseTable({
           lineHeight: '1.6'
         }}
         dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(cleanText) }}
+        title={cleanText}
       />
     );
   };

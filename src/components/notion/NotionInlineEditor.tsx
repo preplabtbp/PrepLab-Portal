@@ -1239,21 +1239,25 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
         }
       }
 
-      if (!insideLi) {
-        // Belum mode bullet -> jadikan text saat ini sebagai bullet pertama, lalu buat bullet kedua di baris 2
+      // Cek apakah kursor sudah berada di dalam daftar bullet
+      const isAlreadyList = Boolean(insideLi) || document.queryCommandState('insertUnorderedList');
+
+      if (!isAlreadyList) {
+        // Belum mode bullet: jadikan baris saat ini sebagai bullet pertama, lalu buat bullet kedua di baris 2
         e.preventDefault();
         document.execCommand('insertUnorderedList');
         document.execCommand('insertParagraph');
         return;
       } else {
-        // Sudah di dalam bullet list -> jika bullet saat ini kosong, tekan enter untuk keluar dari mode bullet
-        const textContent = (insideLi.textContent || '').trim();
-        if (!textContent) {
+        // Sudah di dalam bullet list:
+        const currentText = (insideLi?.textContent || sel?.anchorNode?.textContent || '').replace(/^[•\-\*]\s*/, '').trim();
+        if (!currentText) {
+          // Bullet saat ini kosong -> tekan enter untuk keluar dari mode bullet
           e.preventDefault();
           document.execCommand('insertUnorderedList');
           return;
         }
-        // Jika ada isi, biarkan enter normal membuat bullet berikutnya
+        // Jika bullet memiliki teks, Enter biasa secara native akan membuat bullet berikutnya
       }
     }
   };

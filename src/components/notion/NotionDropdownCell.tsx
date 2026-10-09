@@ -38,31 +38,10 @@ export const STATUS_OPTIONS: DropdownOption[] = [
   },
   {
     value: 'Closed',
-    label: 'CLOSE',
+    label: 'CLOSED',
     bgColor: '#D3E5EF',
     textColor: '#235A80',
     icon: <CheckCircle2 className="w-2.5 h-2.5" style={{ color: '#235A80' }} />
-  },
-  {
-    value: 'Close',
-    label: 'CLOSE',
-    bgColor: '#D3E5EF',
-    textColor: '#235A80',
-    icon: <CheckCircle2 className="w-2.5 h-2.5" style={{ color: '#235A80' }} />
-  },
-  {
-    value: 'Done',
-    label: 'DONE',
-    bgColor: '#DBEDDB',
-    textColor: '#286641',
-    icon: <Check className="w-2.5 h-2.5" style={{ color: '#286641' }} />
-  },
-  {
-    value: 'Canceled',
-    label: 'CANCELED',
-    bgColor: '#FFE2DD',
-    textColor: '#9B3E37',
-    icon: <AlertCircle className="w-2.5 h-2.5" style={{ color: '#9B3E37' }} />
   },
   {
     value: 'Pending',
@@ -70,6 +49,13 @@ export const STATUS_OPTIONS: DropdownOption[] = [
     bgColor: '#E8DEEE',
     textColor: '#6940A5',
     icon: <AlertCircle className="w-2.5 h-2.5" style={{ color: '#6940A5' }} />
+  },
+  {
+    value: 'Canceled',
+    label: 'CANCELED',
+    bgColor: '#FFE2DD',
+    textColor: '#9B3E37',
+    icon: <AlertCircle className="w-2.5 h-2.5" style={{ color: '#9B3E37' }} />
   }
 ];
 
