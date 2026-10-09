@@ -4,6 +4,7 @@ import { SectionHubDashboard, COVER_PRESETS } from "./SectionHubDashboard";
 import { NotionDatabaseTable, TableRowData } from "./NotionDatabaseTable";
 import { EnterpriseWysiwygEditor } from "./notion/EnterpriseWysiwygEditor";
 import { PortalImagePickerModal } from "./PortalImagePickerModal";
+import { BannerCover } from "./BannerCover";
 import { Card, Button, Input } from "./ui";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -330,24 +331,59 @@ export function BulletinBoard({
   // Handle URL deep link (e.g. from notifications /bulletin/TBP?postId=411&topic=...)
   const [deepLinkTopic, setDeepLinkTopic] = useState<string | undefined>(undefined);
 
+  // Handle URL persistence on refresh and deep link (e.g. ?page=123 or ?postId=123)
   useEffect(() => {
     if (posts.length === 0) return;
     try {
       const params = new URLSearchParams(window.location.search);
-      const urlPostId = params.get("postId");
+      const urlPostId = params.get("page") || params.get("postId") || params.get("id");
+      const savedPageId = localStorage.getItem("preplab_active_bulletin_page");
+      const targetId = urlPostId || savedPageId;
       const urlTopic = params.get("topic");
       if (urlTopic) {
         setDeepLinkTopic(urlTopic);
       }
-      if (urlPostId) {
-        const target = posts.find((p) => String(p.id) === urlPostId);
+      if (targetId && !selectedPost) {
+        const target = posts.find((p) => String(p.id) === String(targetId));
         if (target) {
           setSelectedPost(target);
           addRecentPost(target.id);
         }
       }
     } catch (e) {}
-  }, [posts, addRecentPost]);
+  }, [posts, addRecentPost, selectedPost]);
+
+  // Real-time synchronization: poll active post every 6 seconds so updates from mobile (HP) reflect on PC
+  useEffect(() => {
+    if (!selectedPost?.id || isEditing) return;
+
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const res = await fetch(`/api/bulletin/${selectedPost.id}?_t=${Date.now()}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json.status === "success" && json.data && isMounted) {
+          const remotePost = json.data;
+          if (
+            remotePost.content !== selectedPost.content ||
+            remotePost.title !== selectedPost.title ||
+            remotePost.coverImage !== selectedPost.coverImage
+          ) {
+            console.log("[Bulletin Auto-Sync] Updated from remote device for post", selectedPost.id);
+            setSelectedPost(remotePost);
+            setPosts((prev) => prev.map((p) => (p.id === remotePost.id ? remotePost : p)));
+          }
+        }
+      } catch (err) {}
+    }, 6000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [selectedPost?.id, selectedPost?.content, selectedPost?.title, selectedPost?.coverImage, isEditing]);
 
   const getPostTitle = (post: any): string => {
     if (!post) return "Untitled";
@@ -521,6 +557,15 @@ export function BulletinBoard({
 
     setSelectedPost(post);
     setIsEditing(false);
+
+    try {
+      const url = new URL(window.location.href);
+      if (post?.id) {
+        url.searchParams.set("page", String(post.id));
+        localStorage.setItem("preplab_active_bulletin_page", String(post.id));
+      }
+      window.history.replaceState({}, "", url.toString());
+    } catch {}
   };
 
   // Go back to previous history or parent
@@ -535,11 +580,26 @@ export function BulletinBoard({
       const previousPost = newHistory[newHistory.length - 1];
       setNavHistory(newHistory);
       setSelectedPost(previousPost);
+      try {
+        const url = new URL(window.location.href);
+        if (previousPost?.id) {
+          url.searchParams.set("page", String(previousPost.id));
+          localStorage.setItem("preplab_active_bulletin_page", String(previousPost.id));
+        }
+        window.history.replaceState({}, "", url.toString());
+      } catch {}
     } else {
       // Go directly back to dashboard
       setNavHistory([]);
       setSelectedPost(null);
       setIsEditing(false);
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("page");
+        url.searchParams.delete("postId");
+        localStorage.removeItem("preplab_active_bulletin_page");
+        window.history.replaceState({}, "", url.toString());
+      } catch {}
     }
   };
 
@@ -848,6 +908,23 @@ export function BulletinBoard({
     const content = getRenderableContent(selectedPost);
     return extractMarkdownTable(content);
   }, [selectedPost, isEditing, extractMarkdownTable, getRenderableContent]);
+
+  // Clean beforeText to strip redundant document titles and empty headings
+  const cleanBeforeTableText = useMemo(() => {
+    if (!parsedTableData?.beforeText) return '';
+    const postTitle = (selectedPost?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+    const lines = parsedTableData.beforeText.split('\n');
+    const filteredLines = lines.filter(line => {
+      const cleanLine = line.replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+      if (!cleanLine) return false;
+      // If line duplicates document/table title
+      if (cleanLine === postTitle || (cleanLine.length > 3 && (postTitle === cleanLine || postTitle.includes(cleanLine) || cleanLine.includes(postTitle)))) {
+        return false;
+      }
+      return true;
+    });
+    return filteredLines.join('\n').trim();
+  }, [parsedTableData, selectedPost]);
 
   // Compute upcoming meetings from agenda
   const upcomingMeetings = useMemo(() => {
@@ -1862,62 +1939,50 @@ ${aiMeetingNotes
               />
             </div>
           ) : parsedTableData ? (
-            <div className="w-full max-w-none animate-in fade-in duration-200">
-              {/* Cover Image & Customizer */}
-              {selectedPost.coverImage ? (
-                <div 
-                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-3 border border-slate-200/80 shadow-xs relative group"
-                >
-                  <img
-                    src={selectedPost.coverImage}
-                    alt="Cover"
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-3">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenCoverModal(selectedPost.coverImage)}
-                      className="px-3 py-1.5 rounded-lg bg-black/80 hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xs shadow-md transition-all cursor-pointer"
-                    >
-                      <Camera className="w-3.5 h-3.5 text-lime-400" />
-                      <span>Ganti Cover Banner</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mb-3 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenCoverModal('')}
-                    className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5 text-teal-600" />
-                    <span>+ Tambah Cover Banner</span>
-                  </button>
-                </div>
-              )}
+            <div 
+              className="w-full max-w-none animate-in fade-in duration-200"
+              style={{
+                fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+              }}
+            >
+              {/* Cover Image & Customizer with Adjustable Position */}
+              <BannerCover
+                coverImage={selectedPost.coverImage}
+                postId={selectedPost.id}
+                alt={selectedPost.title || 'Cover'}
+                onOpenChangeModal={() => handleOpenCoverModal(selectedPost.coverImage)}
+                onSavePosition={(newPos) => {
+                  const cleanUrl = (selectedPost.coverImage || '').replace(/#pos=\d+/, '');
+                  if (cleanUrl) {
+                    const urlWithPos = `${cleanUrl}#pos=${newPos}`;
+                    fetch(`/api/bulletin/${selectedPost.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ coverImage: urlWithPos })
+                    }).catch(() => {});
+                  }
+                }}
+              />
 
               {/* Content Before Table */}
-              {parsedTableData.beforeText.trim() && (
+              {cleanBeforeTableText && (
                 <div 
-                  className="prose max-w-none text-sm md:text-base leading-relaxed"
-                  style={{ color: 'var(--text-main, #f8fafc)' }}
+                  className="prose max-w-none text-[15px] md:text-base leading-relaxed tracking-normal font-sans mb-3"
+                  style={{ color: 'var(--text-main, #0f172a)' }}
                 >
                   <ReactMarkdown 
                     components={{
                       h1: ({ node, children }: any) => {
                         const text = extractTextFromReactNode(children).trim();
                         const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
+                        const curTitle = (selectedPost?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+                        if (clean === curTitle || (curTitle.length > 3 && curTitle.includes(clean))) {
+                          return null;
+                        }
                         const targetPost = posts.find(
-                          (p) =>
-                            p.title &&
-                            (p.title.trim().toLowerCase() === clean ||
-                              p.title.trim().toLowerCase().replace(/^[#\s\-*]+/, "") === clean ||
-                              (clean.length >= 4 &&
-                                (p.title.toLowerCase().includes(clean) ||
-                                  clean.includes(p.title.toLowerCase().trim()))))
+                          (p) => p.title && p.id !== selectedPost?.id && p.title.trim().toLowerCase() === clean
                         );
-                        if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
+                        if (targetPost && text.length > 3) {
                           return (
                             <div
                               onClick={() => navigateToPost(targetPost)}
@@ -1945,21 +2010,19 @@ ${aiMeetingNotes
                             </div>
                           );
                         }
-                        return <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>;
+                        return <h1 className="text-2xl font-bold mt-6 mb-3 text-slate-900 dark:text-slate-100" style={{ color: 'var(--text-main, currentColor)' }}>{children}</h1>;
                       },
                       h2: ({ node, children }: any) => {
                         const text = extractTextFromReactNode(children).trim();
                         const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
+                        const curTitle = (selectedPost?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+                        if (clean === curTitle || (curTitle.length > 3 && curTitle.includes(clean))) {
+                          return null;
+                        }
                         const targetPost = posts.find(
-                          (p) =>
-                            p.title &&
-                            (p.title.trim().toLowerCase() === clean ||
-                              p.title.trim().toLowerCase().replace(/^[#\s\-*]+/, "") === clean ||
-                              (clean.length >= 4 &&
-                                (p.title.toLowerCase().includes(clean) ||
-                                  clean.includes(p.title.toLowerCase().trim()))))
+                          (p) => p.title && p.id !== selectedPost?.id && p.title.trim().toLowerCase() === clean
                         );
-                        if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
+                        if (targetPost && text.length > 3) {
                           return (
                             <div
                               onClick={() => navigateToPost(targetPost)}
@@ -1967,7 +2030,7 @@ ${aiMeetingNotes
                               style={{
                                 backgroundColor: 'var(--card-bg, #242424)',
                                 borderColor: 'var(--border-main, #334155)',
-                                color: 'var(--text-main, #cbd5e1)'
+                                color: 'var(--text-main, currentColor)'
                               }}
                             >
                               <div className="flex items-center gap-3">
@@ -1975,7 +2038,7 @@ ${aiMeetingNotes
                                   <Folder className="w-5 h-5" />
                                 </div>
                                 <div>
-                                  <span className="font-bold block text-sm group-hover:text-teal-400" style={{ color: 'var(--text-main, #cbd5e1)' }}>
+                                  <span className="font-bold block text-sm group-hover:text-teal-400" style={{ color: 'var(--text-main, currentColor)' }}>
                                     {text}
                                   </span>
                                   <span className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
@@ -1987,21 +2050,19 @@ ${aiMeetingNotes
                             </div>
                           );
                         }
-                        return <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>;
+                        return <h2 className="text-xl font-bold mt-5 mb-2 text-slate-900 dark:text-slate-100" style={{ color: 'var(--text-main, currentColor)' }}>{children}</h2>;
                       },
                       h3: ({ node, children }: any) => {
                         const text = extractTextFromReactNode(children).trim();
                         const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
+                        const curTitle = (selectedPost?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+                        if (clean === curTitle || (curTitle.length > 3 && curTitle.includes(clean))) {
+                          return null;
+                        }
                         const targetPost = posts.find(
-                          (p) =>
-                            p.title &&
-                            (p.title.trim().toLowerCase() === clean ||
-                              p.title.trim().toLowerCase().replace(/^[#\s\-*]+/, "") === clean ||
-                              (clean.length >= 4 &&
-                                (p.title.toLowerCase().includes(clean) ||
-                                  clean.includes(p.title.toLowerCase().trim()))))
+                          (p) => p.title && p.id !== selectedPost?.id && p.title.trim().toLowerCase() === clean
                         );
-                        if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
+                        if (targetPost && text.length > 3) {
                           return (
                             <div
                               onClick={() => navigateToPost(targetPost)}
@@ -2009,14 +2070,14 @@ ${aiMeetingNotes
                               style={{
                                 backgroundColor: 'var(--card-bg, #242424)',
                                 borderColor: 'var(--border-main, #334155)',
-                                color: 'var(--text-main, #cbd5e1)'
+                                color: 'var(--text-main, currentColor)'
                               }}
                             >
                               <div className="flex items-center gap-3">
                                 <div className="p-1.5 rounded-lg text-teal-400" style={{ backgroundColor: 'var(--input-bg, #181818)' }}>
                                   <FileText className="w-4 h-4" />
                                 </div>
-                                <span className="font-semibold text-xs group-hover:text-teal-400" style={{ color: 'var(--text-main, #cbd5e1)' }}>
+                                <span className="font-semibold text-xs group-hover:text-teal-400" style={{ color: 'var(--text-main, currentColor)' }}>
                                   {text}
                                 </span>
                               </div>
@@ -2024,7 +2085,7 @@ ${aiMeetingNotes
                             </div>
                           );
                         }
-                        return <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>;
+                        return <h3 className="text-lg font-bold mt-4 mb-2 text-slate-900 dark:text-slate-100" style={{ color: 'var(--text-main, currentColor)' }}>{children}</h3>;
                       },
                       blockquote: ({ node, children }: any) => {
                         const text = extractTextFromReactNode(children)
@@ -2036,8 +2097,8 @@ ${aiMeetingNotes
                           <blockquote 
                             className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
                             style={{
-                              backgroundColor: 'var(--input-bg, #222)',
-                              color: 'var(--text-main, #cbd5e1)',
+                              backgroundColor: 'var(--input-bg, rgba(0,0,0,0.03))',
+                              color: 'var(--text-main, currentColor)',
                               borderColor: 'var(--primary, #2A9D8F)'
                             }}
                           >
@@ -2051,7 +2112,7 @@ ${aiMeetingNotes
                           .trim()
                           .toLowerCase();
                         if (text.includes("menu info")) return null;
-                        return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
+                        return <p className="mb-3 leading-relaxed text-slate-800 dark:text-slate-200" style={{ color: 'var(--text-main, currentColor)' }}>{children}</p>;
                       },
                       a: ({ href, children }: any) => {
                         const url = href || "";
@@ -2105,7 +2166,7 @@ ${aiMeetingNotes
                     }}
                     remarkPlugins={[remarkGfm]}
                   >
-                    {parsedTableData.beforeText}
+                    {cleanBeforeTableText}
                   </ReactMarkdown>
                 </div>
               )}
@@ -2138,14 +2199,14 @@ ${aiMeetingNotes
               {/* Content After Table */}
               {parsedTableData.afterText.trim() && (
                 <div 
-                  className="prose max-w-none text-sm md:text-base leading-relaxed pt-4"
-                  style={{ color: 'var(--text-main, #f8fafc)' }}
+                  className="prose max-w-none text-[15px] md:text-base leading-relaxed tracking-normal font-sans pt-4"
+                  style={{ color: 'var(--text-main, #0f172a)' }}
                 >
                   <ReactMarkdown 
                     components={{
-                      h1: ({ node, children }: any) => <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>,
-                      h2: ({ node, children }: any) => <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>,
-                      h3: ({ node, children }: any) => <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>,
+                      h1: ({ node, children }: any) => <h1 className="text-2xl font-bold mt-6 mb-3 text-slate-900 dark:text-slate-100" style={{ color: 'var(--text-main, currentColor)' }}>{children}</h1>,
+                      h2: ({ node, children }: any) => <h2 className="text-xl font-bold mt-5 mb-2 text-slate-900 dark:text-slate-100" style={{ color: 'var(--text-main, currentColor)' }}>{children}</h2>,
+                      h3: ({ node, children }: any) => <h3 className="text-lg font-bold mt-4 mb-2 text-slate-900 dark:text-slate-100" style={{ color: 'var(--text-main, currentColor)' }}>{children}</h3>,
                       blockquote: ({ node, children }: any) => {
                         const text = extractTextFromReactNode(children)
                           .replace(/["*_]/g, "")
@@ -2156,8 +2217,8 @@ ${aiMeetingNotes
                           <blockquote 
                             className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
                             style={{
-                              backgroundColor: 'var(--input-bg, #222)',
-                              color: 'var(--text-main, #cbd5e1)',
+                              backgroundColor: 'var(--input-bg, rgba(0,0,0,0.03))',
+                              color: 'var(--text-main, currentColor)',
                               borderColor: 'var(--primary, #2A9D8F)'
                             }}
                           >
@@ -2171,7 +2232,7 @@ ${aiMeetingNotes
                           .trim()
                           .toLowerCase();
                         if (text.includes("menu info")) return null;
-                        return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
+                        return <p className="mb-3 leading-relaxed text-slate-800 dark:text-slate-200" style={{ color: 'var(--text-main, currentColor)' }}>{children}</p>;
                       },
                       a: ({ href, children }: any) => (
                         <a
@@ -2220,39 +2281,24 @@ ${aiMeetingNotes
                 </div>
               </div>
 
-              {/* Cover Image & Customizer */}
-              {selectedPost.coverImage ? (
-                <div 
-                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border border-slate-200/80 shadow-xs relative group"
-                >
-                  <img
-                    src={selectedPost.coverImage}
-                    alt="Cover"
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-3">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenCoverModal(selectedPost.coverImage)}
-                      className="px-3 py-1.5 rounded-lg bg-black/80 hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xs shadow-md transition-all cursor-pointer"
-                    >
-                      <Camera className="w-3.5 h-3.5 text-lime-400" />
-                      <span>Ganti Cover Banner</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mb-4 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenCoverModal('')}
-                    className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5 text-teal-600" />
-                    <span>+ Tambah Cover Banner</span>
-                  </button>
-                </div>
-              )}
+              {/* Cover Image & Customizer with Adjustable Position */}
+              <BannerCover
+                coverImage={selectedPost.coverImage}
+                postId={selectedPost.id}
+                alt={selectedPost.title || 'Cover'}
+                onOpenChangeModal={() => handleOpenCoverModal(selectedPost.coverImage)}
+                onSavePosition={(newPos) => {
+                  const cleanUrl = (selectedPost.coverImage || '').replace(/#pos=\d+/, '');
+                  if (cleanUrl) {
+                    const urlWithPos = `${cleanUrl}#pos=${newPos}`;
+                    fetch(`/api/bulletin/${selectedPost.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ coverImage: urlWithPos })
+                    }).catch(() => {});
+                  }
+                }}
+              />
 
               {/* Title & Metadata */}
               <div>

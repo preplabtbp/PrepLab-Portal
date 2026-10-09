@@ -49,32 +49,32 @@ export const STATUS_OPTIONS: DropdownOption[] = [
 export const ROUTINE_CADENCE_OPTIONS: DropdownOption[] = [
   {
     value: 'Daily',
-    label: 'Daily (Harian)',
+    label: 'Daily',
     badgeClass: 'bg-teal-50 text-teal-900 font-medium border-teal-200/80 hover:bg-teal-100'
   },
   {
     value: 'Weekly',
-    label: 'Weekly (Mingguan)',
+    label: 'Weekly',
     badgeClass: 'bg-sky-50 text-sky-900 font-medium border-sky-200/80 hover:bg-sky-100'
   },
   {
     value: 'Monthly',
-    label: 'Monthly (Bulanan)',
+    label: 'Monthly',
     badgeClass: 'bg-indigo-50 text-indigo-900 font-medium border-indigo-200/80 hover:bg-indigo-100'
   },
   {
     value: 'Quarterly',
-    label: 'Quarterly (Triwulan)',
+    label: 'Quarterly',
     badgeClass: 'bg-purple-50 text-purple-900 font-medium border-purple-200/80 hover:bg-purple-100'
   },
   {
     value: 'Biannual',
-    label: 'Biannual (Semesteran)',
+    label: 'Biannual',
     badgeClass: 'bg-amber-50 text-amber-900 font-medium border-amber-200/80 hover:bg-amber-100'
   },
   {
     value: 'Yearly',
-    label: 'Yearly (Tahunan)',
+    label: 'Yearly',
     badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80 hover:bg-rose-100'
   }
 ];
@@ -83,7 +83,7 @@ const ACTIVITY_OPTIONS: DropdownOption[] = [
   ...ROUTINE_CADENCE_OPTIONS,
   {
     value: 'Non Routine',
-    label: 'Non Routine (Insidentil)',
+    label: 'Non Routine',
     badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
   }
 ];
@@ -248,12 +248,14 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
         type="button"
         onClick={handleToggle}
         title="Klik untuk ubah langsung"
-        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-black transition-all group/btn cursor-pointer ${currentOpt.badgeClass} ${
-          compact ? 'text-[10px] px-1.5 py-0.2' : ''
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-semibold leading-normal transition-all group/btn cursor-pointer ${currentOpt.badgeClass} ${
+          compact ? 'text-[11.5px] px-2 py-0.5' : ''
         }`}
       >
         {currentOpt.icon}
-        <span className="truncate max-w-[120px]">{currentOpt.label}</span>
+        <span className="truncate max-w-[120px]">
+          {(type === 'activity' || type === 'period') ? currentOpt.label.replace(/\s*\([^)]*\)/g, '').trim() : currentOpt.label}
+        </span>
         <ChevronDown className="w-2.5 h-2.5 opacity-70 group-hover/btn:opacity-100 group-hover/btn:translate-y-0.2 transition-all shrink-0" />
       </button>
 
@@ -345,7 +347,7 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
                     >
                       <div className="flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-                        <span>Non Routine (Insidentil)</span>
+                        <span>Non Routine</span>
                       </div>
                       {isSelected && <Check className="w-3.5 h-3.5 text-slate-800 shrink-0" />}
                     </button>
